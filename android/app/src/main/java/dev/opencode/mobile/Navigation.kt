@@ -127,13 +127,15 @@ fun MainNavigation() {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Box(modifier = Modifier.fillMaxSize()) {
                 when (rootState) {
-                    AppRootState.Loading ->
+                    AppRootState.Loading -> {
+                        ProductRouteScreenViewEffect(screenId = ProductAnalytics.Screen.APP_LOADING)
                         OpenCodeStatusStack(
                             title = "Loading sessions",
                             subtitle = "Checking server…",
                             testTag = "appRootLoading",
                             modifier = Modifier.fillMaxSize(),
                         )
+                    }
                     AppRootState.AppOnboarding ->
                         Box(
                             modifier =
@@ -162,6 +164,9 @@ fun MainNavigation() {
                                 entryProvider {
                                     entry<ProjectListHome> {
                                         RouteSurface {
+                                            ProductRouteScreenViewEffect(
+                                                screenId = ProductAnalytics.Screen.HOME,
+                                            )
                                             MainScreen(
                                                 onSettingsClick = { backStack.add(SettingsHome) },
                                                 onSessionClick = { target ->
@@ -176,6 +181,9 @@ fun MainNavigation() {
                                     }
                                     entry<SettingsHome> {
                                         RouteSurface {
+                                            ProductRouteScreenViewEffect(
+                                                screenId = ProductAnalytics.Screen.SETTINGS,
+                                            )
                                             SettingsScreen(
                                                 onComponentGalleryClick = { backStack.add(ComponentGalleryHome) },
                                                 onTextMateLanguagesClick = { backStack.add(TextMateLanguagesHome) },
@@ -215,6 +223,9 @@ fun MainNavigation() {
                                     }
                                     entry<ConnectionSetupHome> {
                                         RouteSurface {
+                                            ProductRouteScreenViewEffect(
+                                                screenId = ProductAnalytics.Screen.CONNECTION_SETUP,
+                                            )
                                             ConnectionSetupScreen(
                                                 uiState = setupUiState,
                                                 onNavigateBack = { backStack.removeLastOrNull() },
@@ -342,6 +353,9 @@ fun MainNavigation() {
                                     }
                                     entry<SessionChat> { key ->
                                         RouteSurface {
+                                            ProductRouteScreenViewEffect(
+                                                screenId = ProductAnalytics.Screen.SESSION_CHAT,
+                                            )
                                             SessionChatScreen(
                                                 sessionId = key.sessionId,
                                                 sessionTitle = key.sessionTitle,
@@ -385,6 +399,9 @@ fun MainNavigation() {
                                     }
                                     entry<SessionContext> { key ->
                                         RouteSurface {
+                                            ProductRouteScreenViewEffect(
+                                                screenId = ProductAnalytics.Screen.SESSION_CONTEXT,
+                                            )
                                             SessionContextScreen(
                                                 sessionId = key.sessionId,
                                                 worktree = key.worktree,

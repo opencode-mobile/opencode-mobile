@@ -141,6 +141,9 @@ final class ProjectListHomeViewModel {
     private var homeFocusedWorktree: String?
     private var forkGateTask: Task<Void, Never>?
     private var forkedSessionOpenTarget: SessionListItem?
+    /// Title-edit Analytics fires once per dialog so keystrokes are not events.
+    private var loggedRenameTitleEdit = false
+    private var loggedForkTitleEdit = false
 
     init(
         projectRepository: any ProjectRepository,
@@ -204,6 +207,10 @@ final class ProjectListHomeViewModel {
         switch state {
         case .loaded, .empty:
             guard !isRefreshing else { return }
+            ProductAnalytics.logUserAction(
+                screenId: ProductAnalytics.Screen.home,
+                actionId: ProductAnalytics.Action.homePullToRefresh
+            )
             isRefreshing = true
             defer { isRefreshing = false }
             await runHomeLoad(skipProbe: true, preserveContent: true)
@@ -213,10 +220,23 @@ final class ProjectListHomeViewModel {
     }
 
     func retryProbe() async {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.homeProbeFailed,
+            actionId: ProductAnalytics.Action.homeRetryProbe
+        )
         await refresh()
     }
 
     func showAddProjectSheet() async {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.home,
+            actionId: ProductAnalytics.Action.homeAddProject
+        )
+        ProductAnalytics.logScreenView(
+            screenId: ProductAnalytics.Screen.homeAddProject,
+            presentation: ProductAnalytics.Presentation.sheet,
+            trigger: ProductAnalytics.Trigger.present
+        )
         await openDirectoryNavigator()
     }
 
@@ -244,15 +264,18 @@ final class ProjectListHomeViewModel {
         guard let navigator = currentNavigator(),
               let parent = DirectoryListingPolicy.parentPath(navigator.currentPath)
         else { return }
+        logAddProjectAction(ProductAnalytics.Action.addProjectGoUp)
         await loadDirectoryNavigator(path: parent)
     }
 
     func navigateAddProjectInto(path: String) async {
+        logAddProjectAction(ProductAnalytics.Action.addProjectEnterDirectory)
         await loadDirectoryNavigator(path: path)
     }
 
     func retryAddProjectNavigator() async {
         guard let navigator = currentNavigator() else { return }
+        logAddProjectAction(ProductAnalytics.Action.addProjectRetryNavigator)
         await loadDirectoryNavigator(path: navigator.currentPath)
     }
 
@@ -262,7 +285,16 @@ final class ProjectListHomeViewModel {
               !navigator.isLoading,
               !navigator.isValidating
         else { return }
+        logAddProjectAction(ProductAnalytics.Action.addProjectSelectCurrent)
         await addProject(worktree: navigator.currentPath)
+    }
+
+    /// Add-project navigation never carries the browsed path into Analytics.
+    private func logAddProjectAction(_ actionId: String) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.homeAddProject,
+            actionId: actionId
+        )
     }
 
     func addProject(worktree: String) async {
@@ -301,6 +333,10 @@ final class ProjectListHomeViewModel {
         guard case let .loaded(sections, showAdd, navigator, seeAll, _, _) = state,
               sections.contains(where: { $0.worktree == worktree })
         else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.home,
+            actionId: ProductAnalytics.Action.homeFocusProject
+        )
         homeFocusedWorktree = worktree
         state = .loaded(
             sections: sections,
@@ -315,6 +351,15 @@ final class ProjectListHomeViewModel {
     func showSeeAllSessions(worktree: String) {
         guard case let .loaded(sections, showAdd, navigator, _, focused, createError) = state else { return }
         guard let section = sections.first(where: { $0.worktree == worktree }) else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.home,
+            actionId: ProductAnalytics.Action.homeSeeAllSessions
+        )
+        ProductAnalytics.logScreenView(
+            screenId: ProductAnalytics.Screen.homeSeeAllSessions,
+            presentation: ProductAnalytics.Presentation.sheet,
+            trigger: ProductAnalytics.Trigger.present
+        )
         let sheet = SeeAllSessionsSheetState(
             worktree: worktree,
             projectName: section.displayName,
@@ -353,6 +398,7 @@ final class ProjectListHomeViewModel {
         // Read the live stream, not `liveUpdatesConnectionState` (UI mirror). That
         // mirror can lag or stay Idle when nothing has collected updates yet.
         guard foregroundEventStream.connectionState == .connected else {
+            logCreateSession(outcome: ProductAnalytics.Outcome.blocked)
             setProjectSessionCreateError("Reconnect to create a session")
             return
         }
@@ -373,11 +419,21 @@ final class ProjectListHomeViewModel {
                     selection: selection
                 )
             }
+            logCreateSession(outcome: ProductAnalytics.Outcome.success)
             pendingSessionOpen =
                 SessionListItem(id: session.id, title: session.title, worktree: worktree)
         } catch {
+            logCreateSession(outcome: ProductAnalytics.Outcome.failure)
             setProjectSessionCreateError(error.localizedDescription)
         }
+    }
+
+    private func logCreateSession(outcome: String) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.home,
+            actionId: ProductAnalytics.Action.homeCreateSession,
+            parameters: [ProductAnalytics.Param.outcome: outcome]
+        )
     }
 
     private(set) var pendingSessionOpen: SessionListItem?
@@ -390,27 +446,59 @@ final class ProjectListHomeViewModel {
         guard case let .loaded(sections, _, _, _, _, _) = state,
               let section = sections.first(where: { $0.worktree == worktree })
         else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.home,
+            actionId: ProductAnalytics.Action.homeRemoveProject
+        )
+        ProductAnalytics.logScreenView(
+            screenId: ProductAnalytics.Screen.homeRemoveProjectConfirm,
+            presentation: ProductAnalytics.Presentation.dialog,
+            trigger: ProductAnalytics.Trigger.present
+        )
         pendingProjectRemoval = ProjectRemovalItem(worktree: worktree, displayName: section.displayName)
     }
 
     func dismissProjectRemoval() {
+        guard pendingProjectRemoval != nil else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.homeRemoveProjectConfirm,
+            actionId: ProductAnalytics.Action.homeRemoveProjectCancel
+        )
         pendingProjectRemoval = nil
     }
 
     func confirmRemoveProject() async {
         guard let pending = pendingProjectRemoval else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.homeRemoveProjectConfirm,
+            actionId: ProductAnalytics.Action.homeRemoveProjectConfirm
+        )
         await connectionProfileStore.removeWorktree(serverBaseURL: serverBaseURL, worktree: pending.worktree)
         await sessionCache.purgeWorktree(serverBaseURL: serverBaseURL, worktree: pending.worktree)
-        dismissProjectRemoval()
+        pendingProjectRemoval = nil
         await runHomeLoad(skipProbe: true)
         removalSnackbar = OpenCodeSnackbarMessage(text: "Removed \"\(pending.displayName)\" from home")
     }
 
     func consumeProjectRemovalSnackbar() {
+        guard removalSnackbar != nil else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.home,
+            actionId: ProductAnalytics.Action.homeDismissRemovalSnackbar
+        )
         removalSnackbar = nil
     }
 
     func onSessionLongPress(sessionId: String, title: String, worktree: String) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.home,
+            actionId: ProductAnalytics.Action.homeLongPressSession
+        )
+        ProductAnalytics.logScreenView(
+            screenId: ProductAnalytics.Screen.homeSessionActions,
+            presentation: ProductAnalytics.Presentation.sheet,
+            trigger: ProductAnalytics.Trigger.present
+        )
         let target = HomeSessionActionTarget(sessionId: sessionId, title: title, worktree: worktree)
         sessionActionsTarget = target
         sessionActionsSheetVisible = true
@@ -422,6 +510,12 @@ final class ProjectListHomeViewModel {
     /// Dismissal from the sheet chrome. Action handlers hide the sheet themselves and
     /// keep the target alive for the dialog they open.
     func dismissSessionActions() {
+        if sessionActionsSheetVisible {
+            ProductAnalytics.logUserAction(
+                screenId: ProductAnalytics.Screen.homeSessionActions,
+                actionId: ProductAnalytics.Action.sessionActionsDismiss
+            )
+        }
         sessionActionsSheetVisible = false
         guard !hasOpenSessionActionDialog else { return }
         clearSessionActionsTarget()
@@ -429,17 +523,43 @@ final class ProjectListHomeViewModel {
 
     func openSessionRename() {
         guard let target = sessionActionsTarget else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.homeSessionActions,
+            actionId: ProductAnalytics.Action.sessionActionsRename
+        )
+        ProductAnalytics.logScreenView(
+            screenId: ProductAnalytics.Screen.homeRenameSession,
+            presentation: ProductAnalytics.Presentation.dialog,
+            trigger: ProductAnalytics.Trigger.present
+        )
+        loggedRenameTitleEdit = false
         sessionActionsSheetVisible = false
         sessionRenameDialog = HomeSessionTitleDialogState(isVisible: true, draftTitle: target.title)
     }
 
     func updateSessionRenameDraft(_ text: String) {
+        // Once per dialog: the title text itself must never reach Analytics.
+        if !loggedRenameTitleEdit {
+            loggedRenameTitleEdit = true
+            ProductAnalytics.logUserAction(
+                screenId: ProductAnalytics.Screen.homeRenameSession,
+                actionId: ProductAnalytics.Action.homeRenameEditTitle
+            )
+        }
         sessionRenameDialog.draftTitle = text
         sessionRenameDialog.errorMessage = nil
     }
 
     func cancelSessionRename() {
         guard !sessionRenameDialog.isSubmitting else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.homeRenameSession,
+            actionId: ProductAnalytics.Action.homeRenameCancel
+        )
+        closeSessionRename()
+    }
+
+    private func closeSessionRename() {
         sessionRenameDialog = HomeSessionTitleDialogState()
         clearSessionActionsTarget()
     }
@@ -448,11 +568,13 @@ final class ProjectListHomeViewModel {
         guard let target = sessionActionsTarget, !sessionRenameDialog.isSubmitting else { return }
         let trimmed = sessionRenameDialog.draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
+            logHomeRename(outcome: ProductAnalytics.Outcome.blocked)
             sessionRenameDialog.errorMessage = Self.emptyTitleError
             return
         }
         if trimmed == target.title {
-            cancelSessionRename()
+            logHomeRename(outcome: ProductAnalytics.Outcome.blocked)
+            closeSessionRename()
             return
         }
         sessionRenameDialog.isSubmitting = true
@@ -466,20 +588,39 @@ final class ProjectListHomeViewModel {
             )
             guard sessionActionsTarget == target else { return }
             OpenCodeLog.sessionChat.info("home rename success session=\(target.sessionId, privacy: .public)")
-            sessionRenameDialog = HomeSessionTitleDialogState()
-            clearSessionActionsTarget()
+            logHomeRename(outcome: ProductAnalytics.Outcome.success)
+            closeSessionRename()
         } catch {
             guard sessionActionsTarget == target else { return }
             OpenCodeLog.sessionChat.warning(
                 "home rename failed session=\(target.sessionId, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
             )
+            logHomeRename(outcome: ProductAnalytics.Outcome.failure)
             sessionRenameDialog.isSubmitting = false
             sessionRenameDialog.errorMessage = sessionMutationErrorMessage(error)
         }
     }
 
+    private func logHomeRename(outcome: String) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.homeRenameSession,
+            actionId: ProductAnalytics.Action.homeRenameSave,
+            parameters: [ProductAnalytics.Param.outcome: outcome]
+        )
+    }
+
     func openSessionFork() {
         guard let target = sessionActionsTarget else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.homeSessionActions,
+            actionId: ProductAnalytics.Action.sessionActionsFork
+        )
+        ProductAnalytics.logScreenView(
+            screenId: ProductAnalytics.Screen.homeForkSession,
+            presentation: ProductAnalytics.Presentation.dialog,
+            trigger: ProductAnalytics.Trigger.present
+        )
+        loggedForkTitleEdit = false
         sessionActionsSheetVisible = false
         sessionForkDialog = HomeSessionTitleDialogState(
             isVisible: true,
@@ -488,12 +629,23 @@ final class ProjectListHomeViewModel {
     }
 
     func updateSessionForkDraft(_ text: String) {
+        if !loggedForkTitleEdit {
+            loggedForkTitleEdit = true
+            ProductAnalytics.logUserAction(
+                screenId: ProductAnalytics.Screen.homeForkSession,
+                actionId: ProductAnalytics.Action.homeForkEditTitle
+            )
+        }
         sessionForkDialog.draftTitle = text
         sessionForkDialog.errorMessage = nil
     }
 
     func cancelSessionFork() {
         guard !sessionForkDialog.isSubmitting else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.homeForkSession,
+            actionId: ProductAnalytics.Action.homeForkCancel
+        )
         sessionForkDialog = HomeSessionTitleDialogState()
         clearSessionActionsTarget()
     }
@@ -502,6 +654,7 @@ final class ProjectListHomeViewModel {
         guard let target = sessionActionsTarget, !sessionForkDialog.isSubmitting else { return }
         let trimmed = sessionForkDialog.draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
+            logHomeFork(outcome: ProductAnalytics.Outcome.blocked)
             sessionForkDialog.errorMessage = Self.emptyTitleError
             return
         }
@@ -518,6 +671,7 @@ final class ProjectListHomeViewModel {
             OpenCodeLog.sessionChat.info(
                 "home fork success sourceSession=\(target.sessionId, privacy: .public) forkedSession=\(updated.id, privacy: .public)"
             )
+            logHomeFork(outcome: ProductAnalytics.Outcome.success)
             forkedSessionOpenTarget = SessionListItem(
                 id: updated.id,
                 title: updated.title,
@@ -525,17 +679,35 @@ final class ProjectListHomeViewModel {
             )
             sessionForkDialog = HomeSessionTitleDialogState()
             sessionForkResult = HomeSessionForkResultState(isVisible: true, forkedTitle: updated.title)
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.homeForkResult,
+                presentation: ProductAnalytics.Presentation.dialog,
+                trigger: ProductAnalytics.Trigger.present
+            )
         } catch {
             guard sessionActionsTarget == target else { return }
             OpenCodeLog.sessionChat.warning(
                 "home fork failed session=\(target.sessionId, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
             )
+            logHomeFork(outcome: ProductAnalytics.Outcome.failure)
             sessionForkDialog.isSubmitting = false
             sessionForkDialog.errorMessage = sessionMutationErrorMessage(error)
         }
     }
 
+    private func logHomeFork(outcome: String) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.homeForkSession,
+            actionId: ProductAnalytics.Action.homeForkConfirm,
+            parameters: [ProductAnalytics.Param.outcome: outcome]
+        )
+    }
+
     func chooseSessionForkOpen() {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.homeForkResult,
+            actionId: ProductAnalytics.Action.homeForkOpen
+        )
         let target = forkedSessionOpenTarget
         forkedSessionOpenTarget = nil
         sessionForkResult = HomeSessionForkResultState()
@@ -544,6 +716,12 @@ final class ProjectListHomeViewModel {
     }
 
     func chooseSessionForkStay() {
+        if sessionForkResult.isVisible {
+            ProductAnalytics.logUserAction(
+                screenId: ProductAnalytics.Screen.homeForkResult,
+                actionId: ProductAnalytics.Action.homeForkStay
+            )
+        }
         forkedSessionOpenTarget = nil
         sessionForkResult = HomeSessionForkResultState()
         clearSessionActionsTarget()
@@ -551,6 +729,10 @@ final class ProjectListHomeViewModel {
 
     func archiveSessionAction() async {
         guard let target = sessionActionsTarget, !sessionActionInFlight else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.homeSessionActions,
+            actionId: ProductAnalytics.Action.sessionActionsArchive
+        )
         sessionActionsSheetVisible = false
         sessionActionInFlight = true
         OpenCodeLog.sessionChat.info("home archive start session=\(target.sessionId, privacy: .public)")
@@ -571,18 +753,37 @@ final class ProjectListHomeViewModel {
 
     func requestDeleteSessionAction() {
         guard sessionActionsTarget != nil else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.homeSessionActions,
+            actionId: ProductAnalytics.Action.sessionActionsDelete
+        )
+        ProductAnalytics.logScreenView(
+            screenId: ProductAnalytics.Screen.homeDeleteSessionConfirm,
+            presentation: ProductAnalytics.Presentation.dialog,
+            trigger: ProductAnalytics.Trigger.present
+        )
         sessionActionsSheetVisible = false
         sessionDeleteConfirmVisible = true
     }
 
     func cancelDeleteSessionAction() {
         guard !sessionActionInFlight else { return }
+        if sessionDeleteConfirmVisible {
+            ProductAnalytics.logUserAction(
+                screenId: ProductAnalytics.Screen.homeDeleteSessionConfirm,
+                actionId: ProductAnalytics.Action.homeDeleteCancel
+            )
+        }
         sessionDeleteConfirmVisible = false
         clearSessionActionsTarget()
     }
 
     func confirmDeleteSessionAction() async {
         guard let target = sessionActionsTarget, !sessionActionInFlight else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.homeDeleteSessionConfirm,
+            actionId: ProductAnalytics.Action.homeDeleteConfirm
+        )
         sessionDeleteConfirmVisible = false
         sessionActionInFlight = true
         OpenCodeLog.sessionChat.info("home delete start session=\(target.sessionId, privacy: .public)")

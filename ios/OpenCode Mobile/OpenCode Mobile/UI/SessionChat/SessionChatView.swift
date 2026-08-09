@@ -64,6 +64,10 @@ struct SessionChatView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .task(id: session.id) {
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.sessionChat,
+                presentation: ProductAnalytics.Presentation.route
+            )
             if viewModelStorage == nil {
                 viewModelStorage = injectedViewModel ?? Container.makeSessionChatViewModel(
                     sessionID: session.id,
@@ -86,9 +90,18 @@ struct SessionChatView: View {
                 OpenCodeTopBar(
                     title: viewModel.uiState.sessionTitle.isEmpty ? session.title : viewModel.uiState.sessionTitle,
                     subtitleAccessory: .statusDot(viewModel.uiState.connectionStatus.openCodeStatus),
-                    leading: .back(action: leaveSession),
+                    leading: .back(action: {
+                        logChatAction(ProductAnalytics.Action.chatBack)
+                        leaveSession()
+                    }),
                     actions: [
                         .icon(.moreVert, accessibilityLabel: "More options") {
+                            logChatAction(ProductAnalytics.Action.chatOpenOverflow)
+                            ProductAnalytics.logScreenView(
+                                screenId: ProductAnalytics.Screen.sessionOverflow,
+                                presentation: ProductAnalytics.Presentation.overlay,
+                                trigger: ProductAnalytics.Trigger.present
+                            )
                             menuExpanded = true
                         },
                     ],
@@ -101,7 +114,10 @@ struct SessionChatView: View {
             if Self.showsSessionStatusBar {
                 OpenCodeSessionStatusBar(
                     contextUsageFraction: viewModel.uiState.contextUsageFraction,
-                    onContextClick: { showSessionContext = true }
+                    onContextClick: {
+                        logChatAction(ProductAnalytics.Action.chatOpenSessionContext)
+                        showSessionContext = true
+                    }
                 )
             }
 
@@ -138,15 +154,39 @@ struct SessionChatView: View {
                         bottomOverlayInset: sessionChatTimelineBottomInset(composerOverlayHeight),
                         onRefresh: { await viewModel.refreshMessages() },
                         onReviewChangesTap: {
+                            logChatAction(ProductAnalytics.Action.chatOpenChanges)
                             changesTarget = viewModel.uiState.reviewChangesNavigationTarget(worktree: session.worktree)
                         },
                         onSessionTodosTap: {
                             guard !blocksSessionTodosSheet else { return }
+                            logChatAction(ProductAnalytics.Action.chatOpenTodos)
+                            ProductAnalytics.logScreenView(
+                                screenId: ProductAnalytics.Screen.sessionTodos,
+                                presentation: ProductAnalytics.Presentation.sheet,
+                                trigger: ProductAnalytics.Trigger.present
+                            )
                             showSessionTodosSheet = true
                         },
-                        onMessageActionsTap: { messageActionsTarget = $0 },
-                        onToolDetailTap: { toolDetailTarget = $0 },
+                        onMessageActionsTap: { target in
+                            logChatAction(ProductAnalytics.Action.chatOpenMessageActions)
+                            ProductAnalytics.logScreenView(
+                                screenId: ProductAnalytics.Screen.sessionMessageActions,
+                                presentation: ProductAnalytics.Presentation.sheet,
+                                trigger: ProductAnalytics.Trigger.present
+                            )
+                            messageActionsTarget = target
+                        },
+                        onToolDetailTap: { target in
+                            logChatAction(ProductAnalytics.Action.chatOpenToolDetail)
+                            ProductAnalytics.logScreenView(
+                                screenId: ProductAnalytics.Screen.sessionToolDetail,
+                                presentation: ProductAnalytics.Presentation.sheet,
+                                trigger: ProductAnalytics.Trigger.present
+                            )
+                            toolDetailTarget = target
+                        },
                         onChildSessionTap: { sessionID, title in
+                            logChatAction(ProductAnalytics.Action.chatOpenChildSession)
                             childSessionTarget = ChildSessionNavigationTarget(
                                 sessionID: sessionID,
                                 sessionTitle: title,
@@ -154,6 +194,7 @@ struct SessionChatView: View {
                             )
                         },
                         onChangesReviewTap: { assistantMessageID, initialFilePath in
+                            logChatAction(ProductAnalytics.Action.chatOpenChangesFromTool)
                             changesTarget = viewModel.uiState.fileChangeNavigationTarget(
                                 worktree: session.worktree,
                                 assistantMessageID: assistantMessageID,
@@ -273,12 +314,13 @@ struct SessionChatView: View {
             onSelectMode: { viewModel.selectMode($0) },
             onSelectVariant: { viewModel.selectVariant($0) }
         )
-        .openCodeBottomSheet(isPresented: $showAttachmentSources, title: "Add attachment") {
+        .openCodeBottomSheet(isPresented: attachmentSourcesBinding, title: "Add attachment") {
             if viewModel.uiState.composer.canAttachPhotos {
                 OpenCodeBottomSheetEntry(
                     title: "Photos",
                     startDecorator: .icon(.description, accessibilityLabel: "Photos"),
                     action: {
+                        logAttachmentSourceAction(ProductAnalytics.Action.attachPickPhotos)
                         showAttachmentSources = false
                         showPhotosPicker = true
                     }
@@ -289,6 +331,7 @@ struct SessionChatView: View {
                     title: "Files",
                     startDecorator: .icon(.folder, accessibilityLabel: "Files"),
                     action: {
+                        logAttachmentSourceAction(ProductAnalytics.Action.attachPickFiles)
                         showAttachmentSources = false
                         showFilesPicker = true
                     }
@@ -344,6 +387,21 @@ struct SessionChatView: View {
                 activeModelProviderID = nil
                 modelFilterText = ""
             }
+            if let picker {
+                ProductAnalytics.logScreenView(
+                    screenId: pickerScreenId(picker),
+                    presentation: ProductAnalytics.Presentation.sheet,
+                    trigger: ProductAnalytics.Trigger.present
+                )
+            }
+        }
+        .onChange(of: viewModel.uiState.forkResultVisible) { _, visible in
+            guard visible else { return }
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.sessionForkResult,
+                presentation: ProductAnalytics.Presentation.dialog,
+                trigger: ProductAnalytics.Trigger.present
+            )
         }
         .onChange(of: viewModel.uiState.shouldLeaveSession) { _, shouldLeave in
             if shouldLeave {
@@ -378,6 +436,10 @@ struct SessionChatView: View {
                 title: "Delete",
                 enabled: !viewModel.uiState.isLifecycleActionInFlight
             ) {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.sessionDeleteConfirm,
+                    actionId: ProductAnalytics.Action.chatDeleteConfirm
+                )
                 showDeleteConfirmation = false
                 viewModel.deleteSession()
             },
@@ -385,6 +447,10 @@ struct SessionChatView: View {
                 title: "Cancel",
                 enabled: !viewModel.uiState.isLifecycleActionInFlight
             ) {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.sessionDeleteConfirm,
+                    actionId: ProductAnalytics.Action.chatDeleteCancel
+                )
                 showDeleteConfirmation = false
             }
         )
@@ -573,6 +639,7 @@ struct SessionChatView: View {
                 title: "Rename session",
                 icon: .edit,
                 action: {
+                    logOverflowAction(ProductAnalytics.Action.chatOverflowRename)
                     menuExpanded = false
                     viewModel.openRenameSession()
                 }
@@ -581,6 +648,7 @@ struct SessionChatView: View {
                 title: "Review changes",
                 icon: .description,
                 action: {
+                    logOverflowAction(ProductAnalytics.Action.chatOverflowReviewChanges)
                     menuExpanded = false
                     changesTarget = viewModel.uiState.changesNavigationTarget(worktree: session.worktree)
                 }
@@ -589,6 +657,7 @@ struct SessionChatView: View {
                 title: "Session context",
                 icon: .architecture,
                 action: {
+                    logOverflowAction(ProductAnalytics.Action.chatOverflowSessionContext)
                     menuExpanded = false
                     showSessionContext = true
                 }
@@ -597,6 +666,7 @@ struct SessionChatView: View {
                 title: "Copy session ID",
                 icon: .contentCopy,
                 action: {
+                    logOverflowAction(ProductAnalytics.Action.chatOverflowCopySessionId)
                     menuExpanded = false
                     UIPasteboard.general.string = viewModel.uiState.sessionID
                 }
@@ -606,6 +676,7 @@ struct SessionChatView: View {
                 icon: .archive,
                 enabled: lifecycleEnabled,
                 action: {
+                    logOverflowAction(ProductAnalytics.Action.chatOverflowArchive)
                     menuExpanded = false
                     viewModel.archiveSession()
                 }
@@ -616,6 +687,12 @@ struct SessionChatView: View {
                 enabled: lifecycleEnabled,
                 destructive: true,
                 action: {
+                    logOverflowAction(ProductAnalytics.Action.chatOverflowDelete)
+                    ProductAnalytics.logScreenView(
+                        screenId: ProductAnalytics.Screen.sessionDeleteConfirm,
+                        presentation: ProductAnalytics.Presentation.dialog,
+                        trigger: ProductAnalytics.Trigger.present
+                    )
                     menuExpanded = false
                     showDeleteConfirmation = true
                 }
@@ -715,16 +792,25 @@ struct SessionChatView: View {
                         Task { await viewModel.retryModelCatalog() }
                         return
                     }
+                    logChatAction(ProductAnalytics.Action.composerOpenModelPicker)
                     activeModelProviderID = composer.selectedModel?.option.providerID
                     activePicker = .model
                 case .selectMode:
+                    logChatAction(ProductAnalytics.Action.composerOpenModePicker)
                     activePicker = .mode
                 case .selectVariant:
+                    logChatAction(ProductAnalytics.Action.composerOpenVariantPicker)
                     activePicker = .variant
                 case .attach:
+                    logChatAction(ProductAnalytics.Action.composerAttach)
                     let photos = composer.canAttachPhotos
                     let files = composer.canAttachFiles
                     if photos, files {
+                        ProductAnalytics.logScreenView(
+                            screenId: ProductAnalytics.Screen.sessionAttachmentSource,
+                            presentation: ProductAnalytics.Presentation.sheet,
+                            trigger: ProductAnalytics.Trigger.present
+                        )
                         showAttachmentSources = true
                     } else if photos {
                         showPhotosPicker = true
@@ -764,6 +850,48 @@ struct SessionChatView: View {
 
     private func attachmentPresentation(_ attachment: Attachment) -> OpenCodeAttachmentPresentation {
         AttachmentPresentationMapper.presentation(from: attachment)
+    }
+
+    private func logChatAction(_ actionId: String) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionChat,
+            actionId: actionId
+        )
+    }
+
+    private func logOverflowAction(_ actionId: String) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionOverflow,
+            actionId: actionId
+        )
+    }
+
+    private func logAttachmentSourceAction(_ actionId: String) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionAttachmentSource,
+            actionId: actionId
+        )
+    }
+
+    private func pickerScreenId(_ picker: ComposerPickerKind) -> String {
+        switch picker {
+        case .model: ProductAnalytics.Screen.sessionModelPicker
+        case .mode: ProductAnalytics.Screen.sessionModePicker
+        case .variant: ProductAnalytics.Screen.sessionVariantPicker
+        }
+    }
+
+    // Sheet-chrome dismissal only: entry taps clear the flag directly.
+    private var attachmentSourcesBinding: Binding<Bool> {
+        Binding(
+            get: { showAttachmentSources },
+            set: { presented in
+                if !presented {
+                    logAttachmentSourceAction(ProductAnalytics.Action.attachSourceDismiss)
+                }
+                showAttachmentSources = presented
+            }
+        )
     }
 }
 

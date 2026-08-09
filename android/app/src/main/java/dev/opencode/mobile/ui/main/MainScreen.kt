@@ -28,6 +28,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.session.SessionSummary
@@ -213,6 +215,37 @@ internal fun MainScreen(
     val homeTopBarTitle =
         if (HomeDisplayPreferences.showSessionListOnHome) "Sessions" else appName
 
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.HOME_CONNECTION_EMPTY,
+        presentation = ProductAnalytics.Presentation.EMBEDDED,
+        visible = uiState is MainScreenUiState.Disconnected,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.HOME_PROBE_FAILED,
+        presentation = ProductAnalytics.Presentation.EMBEDDED,
+        visible = uiState is MainScreenUiState.ProbeFailed,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.HOME_ADD_PROJECT,
+        presentation = ProductAnalytics.Presentation.SHEET,
+        visible = showAddSheet,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.HOME_SEE_ALL_SESSIONS,
+        presentation = ProductAnalytics.Presentation.SHEET,
+        visible = seeAllSheet != null,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
+        presentation = ProductAnalytics.Presentation.SHEET,
+        visible = showNewSessionProjectPicker,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.HOME_REMOVE_PROJECT_CONFIRM,
+        presentation = ProductAnalytics.Presentation.DIALOG,
+        visible = (uiState as? MainScreenUiState.Loaded)?.pendingProjectRemoval != null,
+    )
+
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBar(
@@ -230,7 +263,13 @@ internal fun MainScreen(
                         OpenCodeTopBarAction.Icon(
                             imageVector = OpenCodeIcons.Settings,
                             contentDescription = "Settings",
-                            onClick = onSettingsClick,
+                            onClick = {
+                                ProductAnalytics.logUserAction(
+                                    screenId = ProductAnalytics.Screen.HOME,
+                                    actionId = ProductAnalytics.Action.HOME_OPEN_SETTINGS,
+                                )
+                                onSettingsClick()
+                            },
                         ),
                     ),
             )
@@ -238,7 +277,15 @@ internal fun MainScreen(
             when (uiState) {
                 is MainScreenUiState.Disconnected -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        ConnectionOnboardingScreen(onConnectClick = onConnectClick)
+                        ConnectionOnboardingScreen(
+                            onConnectClick = {
+                                ProductAnalytics.logUserAction(
+                                    screenId = ProductAnalytics.Screen.HOME_CONNECTION_EMPTY,
+                                    actionId = ProductAnalytics.Action.HOME_CONNECT,
+                                )
+                                onConnectClick()
+                            },
+                        )
                     }
                 }
                 MainScreenUiState.Probing,
@@ -282,10 +329,22 @@ internal fun MainScreen(
                         onRefresh = onRefresh,
                         onBrowseProjectsClick = onAddProjectClick,
                         onFocusProject = onFocusProject,
-                        onSessionClick = onSessionClick,
+                        onSessionClick = { target ->
+                            ProductAnalytics.logUserAction(
+                                screenId = ProductAnalytics.Screen.HOME,
+                                actionId = ProductAnalytics.Action.HOME_OPEN_SESSION,
+                            )
+                            onSessionClick(target)
+                        },
                         onSeeAllSessions = onSeeAllSessions,
                         onNewSession = onNewSession,
-                        onRequestNewSessionProjectPicker = { showNewSessionProjectPicker = true },
+                        onRequestNewSessionProjectPicker = {
+                            ProductAnalytics.logUserAction(
+                                screenId = ProductAnalytics.Screen.HOME,
+                                actionId = ProductAnalytics.Action.HOME_OPEN_NEW_SESSION_PROJECT_PICKER,
+                            )
+                            showNewSessionProjectPicker = true
+                        },
                         onRemoveProject = onRemoveProject,
                         onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
                         modifier = Modifier.weight(1f),
@@ -330,7 +389,13 @@ internal fun MainScreen(
         OpenCodeBottomSheet(
             visible = true,
             title = "Add project",
-            onDismissRequest = onDismissAddProject,
+            onDismissRequest = {
+                ProductAnalytics.logUserAction(
+                    screenId = ProductAnalytics.Screen.HOME_ADD_PROJECT,
+                    actionId = ProductAnalytics.Action.ADD_PROJECT_DISMISS,
+                )
+                onDismissAddProject()
+            },
             alwaysFixedHeight = true,
             pinnedContent = {
                 OpenCodeBottomSheetEntry(
@@ -410,12 +475,26 @@ internal fun MainScreen(
     }
 
     seeAllSheet?.let { sheet ->
-        OpenCodeBottomSheet(visible = true, title = sheet.projectName, onDismissRequest = onDismissSeeAll) {
+        OpenCodeBottomSheet(
+            visible = true,
+            title = sheet.projectName,
+            onDismissRequest = {
+                ProductAnalytics.logUserAction(
+                    screenId = ProductAnalytics.Screen.HOME_SEE_ALL_SESSIONS,
+                    actionId = ProductAnalytics.Action.SEE_ALL_DISMISS,
+                )
+                onDismissSeeAll()
+            },
+        ) {
             sheet.sessions.forEach { session ->
                 OpenCodeBottomSheetEntry(
                     title =
                         session.statusLabel?.let { label -> "${session.title} · $label" } ?: session.title,
                     onClick = {
+                        ProductAnalytics.logUserAction(
+                            screenId = ProductAnalytics.Screen.HOME_SEE_ALL_SESSIONS,
+                            actionId = ProductAnalytics.Action.SEE_ALL_OPEN_SESSION,
+                        )
                         onDismissSeeAll()
                         onSessionClick(SessionOpenTarget(session.id, session.title, sheet.worktree))
                     },
@@ -428,7 +507,13 @@ internal fun MainScreen(
         OpenCodeBottomSheet(
             visible = true,
             title = "New session",
-            onDismissRequest = { showNewSessionProjectPicker = false },
+            onDismissRequest = {
+                ProductAnalytics.logUserAction(
+                    screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
+                    actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_DISMISS,
+                )
+                showNewSessionProjectPicker = false
+            },
         ) {
             if (newSessionPickerProjects.isEmpty()) {
                 OpenCodeBottomSheetEntry(title = "No projects", enabled = false, onClick = {})
@@ -442,6 +527,10 @@ internal fun MainScreen(
                                 contentDescription = null,
                             ),
                         onClick = {
+                            ProductAnalytics.logUserAction(
+                                screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
+                                actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_SELECT_PROJECT,
+                            )
                             showNewSessionProjectPicker = false
                             onNewSession(project.worktree)
                         },
@@ -458,6 +547,32 @@ private fun HomeSessionActions(
     callbacks: HomeSessionActionsCallbacks,
 ) {
     val target = state.target ?: return
+
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
+        presentation = ProductAnalytics.Presentation.SHEET,
+        visible = state.sheetVisible,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.HOME_RENAME_SESSION,
+        presentation = ProductAnalytics.Presentation.DIALOG,
+        visible = state.renameVisible,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.HOME_FORK_SESSION,
+        presentation = ProductAnalytics.Presentation.DIALOG,
+        visible = state.forkVisible,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.HOME_FORK_RESULT,
+        presentation = ProductAnalytics.Presentation.DIALOG,
+        visible = state.forkResultVisible,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.HOME_DELETE_SESSION_CONFIRM,
+        presentation = ProductAnalytics.Presentation.DIALOG,
+        visible = state.deleteConfirmVisible,
+    )
 
     OpenCodeBottomSheet(
         visible = state.sheetVisible,
@@ -652,8 +767,18 @@ private fun HomeProjectsContent(
                 filterTabs = filterTabs,
                 selectedFilterId = resolvedFilterId,
                 createError = projectSessionCreateError,
-                onFilterSelected = { selectedFilterId = it },
+                onFilterSelected = { filterId ->
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.HOME,
+                        actionId = ProductAnalytics.Action.HOME_SELECT_SESSION_FILTER,
+                    )
+                    selectedFilterId = filterId
+                },
                 onSessionSelected = { session ->
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.HOME,
+                        actionId = ProductAnalytics.Action.HOME_OPEN_SESSION,
+                    )
                     onSessionClick(
                         SessionOpenTarget(
                             sessionId = session.id,

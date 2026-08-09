@@ -95,13 +95,27 @@ struct AppRootView: View {
         }
         .background(OpenCodeColors.backgroundBase)
         .task {
+            if rootViewModel.state == .loading {
+                ProductAnalytics.logScreenView(
+                    screenId: ProductAnalytics.Screen.appLoading,
+                    presentation: ProductAnalytics.Presentation.route,
+                    trigger: ProductAnalytics.Trigger.present
+                )
+            }
             await rootViewModel.load()
         }
-        .onChange(of: scenePhase) { _, phase in
+        .onChange(of: scenePhase) { previousPhase, phase in
             guard rootViewModel.state == .home else { return }
             let stream = Container.shared.foregroundEventStream()
             switch phase {
             case .active:
+                if previousPhase == .background {
+                    ProductAnalytics.logScreenView(
+                        screenId: ProductAnalytics.Screen.home,
+                        presentation: ProductAnalytics.Presentation.route,
+                        trigger: ProductAnalytics.Trigger.resume
+                    )
+                }
                 stream.start()
             case .background:
                 stream.stop()

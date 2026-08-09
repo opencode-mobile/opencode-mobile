@@ -13,14 +13,30 @@ struct SessionContextView: View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
                 title: "Session Context",
-                leading: .back(action: { dismiss() }),
+                leading: .back(action: {
+                    logAction(ProductAnalytics.Action.sessionContextBack)
+                    dismiss()
+                }),
                 showDivider: true
             )
             content
         }
         .background(OpenCodeColors.backgroundBase)
         .toolbar(.hidden, for: .navigationBar)
-        .task { await viewModel.load() }
+        .task {
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.sessionContext,
+                presentation: ProductAnalytics.Presentation.route
+            )
+            await viewModel.load()
+        }
+    }
+
+    private func logAction(_ actionId: String) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionContext,
+            actionId: actionId
+        )
     }
 
     @ViewBuilder
@@ -37,6 +53,7 @@ struct SessionContextView: View {
                     .foregroundStyle(OpenCodeColors.textBase)
                     .multilineTextAlignment(.center)
                 OpenCodeButton(variant: .fullWidthText(title: "Retry")) {
+                    logAction(ProductAnalytics.Action.sessionContextRetry)
                     Task { await viewModel.load() }
                 }
             }
@@ -60,7 +77,10 @@ struct SessionContextView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 18)
             }
-            .refreshable { await viewModel.refresh() }
+            .refreshable {
+                logAction(ProductAnalytics.Action.sessionContextRefresh)
+                await viewModel.refresh()
+            }
             .overlay {
                 if viewModel.isRefreshing {
                     ProgressView()

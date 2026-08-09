@@ -28,13 +28,25 @@
 
 | Field | Value |
 | --- | --- |
-| Expected shared intent | Consent gate shipped (OPE-129). On public builds, no taxonomy instrumentation until store-form verification, a second form pass, then a narrow seam-only taxonomy with hard bans (OPE-125). |
-| Current iOS state | Consent UX + seam gate; no product-event taxonomy call sites yet. |
-| Current Android state | Consent UX + seam gate; no product-event taxonomy call sites yet. |
+| Expected shared intent | Consent gate (OPE-129) + full product `product_screen_view` / `product_user_action` coverage via `ProductAnalytics` (OPE-124). Perf/SSE deferred. |
+| Current iOS state | Taxonomy helpers + call sites wired. |
+| Current Android state | Taxonomy helpers + effects + call sites wired. |
 | Affected area | Behavior |
-| Reason | OPE-129 complete; OPE-124 still blocked on OPE-128 + second form pass + taxonomy. |
-| Owner or next action | OPE-128 then OPE-124 |
-| Status | Temporary |
+| Reason | OPE-124 instrumentation complete on both platforms; store disclosure pass still open. |
+| Owner or next action | Second store-form pass for product-event disclosure |
+| Status | Temporary (disclosure only) |
+
+## Product Analytics `composer_dismiss_suggestions`
+
+| Field | Value |
+| --- | --- |
+| Expected shared intent | Log when the user explicitly dismisses composer slash/`@` suggestions. |
+| Current iOS state | Unwired — overlay closes only implicitly; no dismiss control. |
+| Current Android state | Unwired — suggestion visibility is derived from composer text; no user-attributed dismiss. |
+| Affected area | Behavior |
+| Reason | Neither platform exposes an explicit dismiss affordance. |
+| Owner or next action | None unless a dismiss control is added later |
+| Status | Intentional |
 
 ## Product Analytics consent UX
 

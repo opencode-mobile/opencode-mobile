@@ -6,12 +6,19 @@ struct AppOnboardingView: View {
 
     @State private var pageIndex = 0
     @State private var showSetupGuide = false
+    /// Distinguishes a Next-button page change from a user swipe on the pager.
+    @State private var pageChangeFromButton = false
 
     var body: some View {
         Group {
             if showSetupGuide {
                 AppOnboardingSetupGuideView(
                     onBack: {
+                        ProductAnalytics.logUserAction(
+                            screenId: ProductAnalytics.Screen.appOnboardingSetupGuide,
+                            actionId: ProductAnalytics.Action.setupGuideBack
+                        )
+                        pageChangeFromButton = pageIndex != 1
                         pageIndex = 1
                         showSetupGuide = false
                     }
@@ -21,13 +28,37 @@ struct AppOnboardingView: View {
             }
         }
         .background(OpenCodeColors.backgroundBase)
+        .onAppear {
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.appOnboarding,
+                presentation: ProductAnalytics.Presentation.route,
+                trigger: ProductAnalytics.Trigger.present
+            )
+        }
+        .onChange(of: pageIndex) { _, _ in
+            guard !pageChangeFromButton else {
+                pageChangeFromButton = false
+                return
+            }
+            guard !showSetupGuide else { return }
+            ProductAnalytics.logUserAction(
+                screenId: ProductAnalytics.Screen.appOnboarding,
+                actionId: ProductAnalytics.Action.onboardingSwipePage
+            )
+        }
     }
 
     private var pager: some View {
         VStack(spacing: 0) {
             HStack {
                 Spacer()
-                Button("Skip", action: onSkip)
+                Button("Skip") {
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.appOnboarding,
+                        actionId: ProductAnalytics.Action.onboardingSkip
+                    )
+                    onSkip()
+                }
                     .font(OpenCodeTypography.body)
                     .foregroundStyle(OpenCodeColors.textWeak)
                     .padding(.horizontal, 16)
@@ -38,7 +69,13 @@ struct AppOnboardingView: View {
                 ForEach(Array(AppOnboardingCopy.pages.enumerated()), id: \.element.id) { index, page in
                     AppOnboardingPageView(
                         page: page,
-                        onNeedServerFirst: { showSetupGuide = true }
+                        onNeedServerFirst: {
+                            ProductAnalytics.logUserAction(
+                                screenId: ProductAnalytics.Screen.appOnboarding,
+                                actionId: ProductAnalytics.Action.onboardingOpenSetupGuide
+                            )
+                            showSetupGuide = true
+                        }
                     )
                     .tag(index)
                     .padding(.horizontal, 28)
@@ -61,8 +98,17 @@ struct AppOnboardingView: View {
                     ),
                     action: {
                         if pageIndex == AppOnboardingCopy.pages.count - 1 {
+                            ProductAnalytics.logUserAction(
+                                screenId: ProductAnalytics.Screen.appOnboarding,
+                                actionId: ProductAnalytics.Action.onboardingConnect
+                            )
                             onConnect()
                         } else {
+                            ProductAnalytics.logUserAction(
+                                screenId: ProductAnalytics.Screen.appOnboarding,
+                                actionId: ProductAnalytics.Action.onboardingNext
+                            )
+                            pageChangeFromButton = true
                             withAnimation {
                                 pageIndex += 1
                             }
@@ -213,6 +259,10 @@ private struct AppOnboardingSetupGuideView: View {
             OpenCodeButton(
                 variant: .fullWidthText(title: "Open server docs"),
                 action: {
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.appOnboardingSetupGuide,
+                        actionId: ProductAnalytics.Action.setupGuideOpenDocs
+                    )
                     UIApplication.shared.open(AppOnboardingCopy.serverDocsURL)
                 }
             )
@@ -221,6 +271,12 @@ private struct AppOnboardingSetupGuideView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
+        .onAppear {
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.appOnboardingSetupGuide,
+                presentation: ProductAnalytics.Presentation.route
+            )
+        }
     }
 
     @ViewBuilder

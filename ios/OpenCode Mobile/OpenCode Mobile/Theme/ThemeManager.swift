@@ -57,6 +57,12 @@ final class ThemeManager {
         )
     }
 
+    /// Imported preset ids come from user-supplied theme JSON, so callers that
+    /// report a preset outside the app (Analytics) must check this first.
+    func isBundledPreset(id: String) -> Bool {
+        manifestPresetIDs().contains(id)
+    }
+
     func applyPreset(id: String) {
         guard let theme = Self.loadPreset(id: id) else {
             loadError = "Theme preset not found"

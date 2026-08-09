@@ -28,8 +28,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -45,6 +48,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.ProductRouteScreenViewEffect
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeListGroup
@@ -68,17 +73,31 @@ fun AppOnboardingScreen(
 
     if (showSetupGuide) {
         BackHandler { showSetupGuide = false }
+        ProductRouteScreenViewEffect(
+            screenId = ProductAnalytics.Screen.APP_ONBOARDING_SETUP_GUIDE,
+        )
         AppOnboardingSetupGuideScreen(
-            onBack = { showSetupGuide = false },
+            onBack = {
+                ProductAnalytics.logUserAction(
+                    screenId = ProductAnalytics.Screen.APP_ONBOARDING_SETUP_GUIDE,
+                    actionId = ProductAnalytics.Action.SETUP_GUIDE_BACK,
+                )
+                showSetupGuide = false
+            },
             modifier = modifier,
         )
     } else {
+        ProductRouteScreenViewEffect(screenId = ProductAnalytics.Screen.APP_ONBOARDING)
         AppOnboardingPagerScreen(
             pagerState = pagerState,
             pages = pages,
             onSkip = onSkip,
             onConnect = onConnect,
             onNeedServerFirst = {
+                ProductAnalytics.logUserAction(
+                    screenId = ProductAnalytics.Screen.APP_ONBOARDING,
+                    actionId = ProductAnalytics.Action.ONBOARDING_OPEN_SETUP_GUIDE,
+                )
                 scope.launch {
                     pagerState.scrollToPage(1)
                     showSetupGuide = true
@@ -100,6 +119,22 @@ private fun AppOnboardingPagerScreen(
 ) {
     val scope = rememberCoroutineScope()
     val lastPage = pagerState.currentPage == pages.lastIndex
+    var lastReportedPage by remember { mutableIntStateOf(pagerState.currentPage) }
+    var advancedByNextButton by remember { mutableStateOf(false) }
+
+    LaunchedEffect(pagerState.currentPage) {
+        val page = pagerState.currentPage
+        if (page == lastReportedPage) return@LaunchedEffect
+        lastReportedPage = page
+        if (advancedByNextButton) {
+            advancedByNextButton = false
+            return@LaunchedEffect
+        }
+        ProductAnalytics.logUserAction(
+            screenId = ProductAnalytics.Screen.APP_ONBOARDING,
+            actionId = ProductAnalytics.Action.ONBOARDING_SWIPE_PAGE,
+        )
+    }
 
     Column(
         modifier =
@@ -114,7 +149,15 @@ private fun AppOnboardingPagerScreen(
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.End,
         ) {
-            TextButton(onClick = onSkip) {
+            TextButton(
+                onClick = {
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.APP_ONBOARDING,
+                        actionId = ProductAnalytics.Action.ONBOARDING_SKIP,
+                    )
+                    onSkip()
+                },
+            ) {
                 Text(
                     text = "Skip",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -173,8 +216,17 @@ private fun AppOnboardingPagerScreen(
                     ),
                 onClick = {
                     if (lastPage) {
+                        ProductAnalytics.logUserAction(
+                            screenId = ProductAnalytics.Screen.APP_ONBOARDING,
+                            actionId = ProductAnalytics.Action.ONBOARDING_CONNECT,
+                        )
                         onConnect()
                     } else {
+                        ProductAnalytics.logUserAction(
+                            screenId = ProductAnalytics.Screen.APP_ONBOARDING,
+                            actionId = ProductAnalytics.Action.ONBOARDING_NEXT,
+                        )
+                        advancedByNextButton = true
                         scope.launch {
                             pagerState.animateScrollToPage(pagerState.currentPage + 1)
                         }
@@ -391,6 +443,10 @@ private fun AppOnboardingSetupGuideScreen(
             OpenCodeButton(
                 variant = OpenCodeButtonVariant.FullWidthText("Open server docs"),
                 onClick = {
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.APP_ONBOARDING_SETUP_GUIDE,
+                        actionId = ProductAnalytics.Action.SETUP_GUIDE_OPEN_DOCS,
+                    )
                     val intent =
                         Intent(Intent.ACTION_VIEW, Uri.parse(AppOnboardingCopy.SERVER_DOCS_URL))
                     context.startActivity(intent)

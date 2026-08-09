@@ -7,6 +7,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 
@@ -20,10 +22,22 @@ internal fun SessionChatToolDetailSheet(
     target: SessionChatToolDetailTarget?,
     onDismiss: () -> Unit,
 ) {
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SESSION_TOOL_DETAIL,
+        presentation = ProductAnalytics.Presentation.SHEET,
+        visible = target != null,
+    )
+
     OpenCodeBottomSheet(
         visible = target != null,
         title = target?.title.orEmpty(),
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            ProductAnalytics.logUserAction(
+                screenId = ProductAnalytics.Screen.SESSION_TOOL_DETAIL,
+                actionId = ProductAnalytics.Action.TOOL_DETAIL_DISMISS,
+            )
+            onDismiss()
+        },
         contentMode = OpenCodeBottomSheetContentMode.ActionList,
     ) {
         Text(

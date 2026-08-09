@@ -137,6 +137,9 @@ object ThemeManager {
 
     private fun manifestPresetIds(): Set<String> = manifestPresets().map { it.id }.toSet()
 
+    /** Imported preset ids come from user files, so callers must not treat them as safe labels. */
+    fun isBundledPreset(id: String): Boolean = id in manifestPresetIds()
+
     private fun importedThemePresets(): List<ThemePreset> {
         val preferences = prefs() ?: return emptyList()
         val importedThemesJson = preferences.getString(KEY_IMPORTED_THEMES, null) ?: return emptyList()

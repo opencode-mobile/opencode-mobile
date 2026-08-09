@@ -53,12 +53,34 @@ struct SessionChatPickerSheetModifier: ViewModifier {
             get: { activePicker != nil },
             set: { presented in
                 if !presented {
+                    if let picker = activePicker {
+                        ProductAnalytics.logUserAction(
+                            screenId: Self.screenId(for: picker),
+                            actionId: Self.dismissActionId(for: picker)
+                        )
+                    }
                     activePicker = nil
                     activeModelProviderID = nil
                     modelFilterText = ""
                 }
             },
         )
+    }
+
+    private static func screenId(for picker: ComposerPickerKind) -> String {
+        switch picker {
+        case .model: ProductAnalytics.Screen.sessionModelPicker
+        case .mode: ProductAnalytics.Screen.sessionModePicker
+        case .variant: ProductAnalytics.Screen.sessionVariantPicker
+        }
+    }
+
+    private static func dismissActionId(for picker: ComposerPickerKind) -> String {
+        switch picker {
+        case .model: ProductAnalytics.Action.modelPickerDismiss
+        case .mode: ProductAnalytics.Action.modePickerDismiss
+        case .variant: ProductAnalytics.Action.variantPickerDismiss
+        }
     }
 
     private var modelSelectionCatalog: ModelSelectionCatalog {
@@ -81,6 +103,10 @@ struct SessionChatPickerSheetModifier: ViewModifier {
             icon: .arrowBack,
             accessibilityLabel: "Back to providers",
             action: {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.sessionModelPicker,
+                    actionId: ProductAnalytics.Action.modelPickerBackToProviders
+                )
                 activeModelProviderID = nil
                 modelFilterText = ""
             }
@@ -103,7 +129,16 @@ struct SessionChatPickerSheetModifier: ViewModifier {
     @ViewBuilder
     private var modelPickerPinnedContent: some View {
         if showsModelFilter {
-            ModelPickerFilterField(text: $modelFilterText)
+            // Filter text is never sent; only the fact that filtering happened.
+            ModelPickerFilterField(
+                text: $modelFilterText,
+                onFirstEdit: {
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.sessionModelPicker,
+                        actionId: ProductAnalytics.Action.modelPickerFilter
+                    )
+                }
+            )
         }
     }
 
@@ -142,6 +177,10 @@ struct SessionChatPickerSheetModifier: ViewModifier {
                         ? .icon(.check, accessibilityLabel: "Selected")
                         : .none,
                     action: {
+                        ProductAnalytics.logUserAction(
+                            screenId: ProductAnalytics.Screen.sessionModelPicker,
+                            actionId: ProductAnalytics.Action.modelPickerSelectProvider
+                        )
                         activeModelProviderID = provider.id
                         modelFilterText = ""
                     },
@@ -189,9 +228,16 @@ struct SessionChatPickerSheetModifier: ViewModifier {
 
 private struct ModelPickerFilterField: View {
     @Binding var text: String
+    let onFirstEdit: () -> Void
+    @State private var loggedEdit = false
 
     var body: some View {
         TextField("Filter models...", text: $text)
+            .onChange(of: text) { _, _ in
+                guard !loggedEdit else { return }
+                loggedEdit = true
+                onFirstEdit()
+            }
             .font(OpenCodeTypography.body)
             .foregroundStyle(OpenCodeColors.textStrong)
             .padding(.horizontal, 12)

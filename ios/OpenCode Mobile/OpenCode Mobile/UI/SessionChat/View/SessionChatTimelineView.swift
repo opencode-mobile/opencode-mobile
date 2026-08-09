@@ -239,6 +239,10 @@ private struct SessionChatTimelineReadyView: View {
             if showScrollToEnd {
                 OpenCodeActionPill(variant: .scrollToEnd) {
                     logScroll("pill-click count=\(props.messages.count)")
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.sessionChat,
+                        actionId: ProductAnalytics.Action.chatScrollToEnd
+                    )
                     scrollController.scrollToEndAnimated()
                 }
             }

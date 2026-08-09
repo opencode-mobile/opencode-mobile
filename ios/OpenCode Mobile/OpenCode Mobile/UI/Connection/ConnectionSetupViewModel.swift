@@ -80,19 +80,51 @@ final class ConnectionSetupViewModel {
         do {
             try await connectionProbeService.probe(connection: draftConnection())
             state = .testSucceeded
+            logConnectionAction(
+                ProductAnalytics.Action.connectionTest,
+                outcome: ProductAnalytics.Outcome.success
+            )
         } catch let error as ServerProbeError {
             state = .testFailed(error.probeUserMessage)
+            logConnectionAction(
+                ProductAnalytics.Action.connectionTest,
+                outcome: ProductAnalytics.Outcome.failure
+            )
         } catch {
             state = .testFailed(error.localizedDescription)
+            logConnectionAction(
+                ProductAnalytics.Action.connectionTest,
+                outcome: ProductAnalytics.Outcome.failure
+            )
         }
     }
 
     func saveConnection() async -> Bool {
-        guard canSave else { return false }
+        guard canSave else {
+            logConnectionAction(
+                ProductAnalytics.Action.connectionSave,
+                outcome: ProductAnalytics.Outcome.blocked
+            )
+            return false
+        }
         state = .saving
         await connectionSessionCoordinator.saveProfile(draftProfile())
         state = .testSucceeded
+        logConnectionAction(
+            ProductAnalytics.Action.connectionSave,
+            outcome: ProductAnalytics.Outcome.success
+        )
         return true
+    }
+
+    /// Only an enum outcome is reported: never the base URL, username, password,
+    /// or a server error message.
+    private func logConnectionAction(_ actionId: String, outcome: String) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.connectionSetup,
+            actionId: actionId,
+            parameters: [ProductAnalytics.Param.outcome: outcome]
+        )
     }
 
     private func draftProfile() -> ConnectionProfile {

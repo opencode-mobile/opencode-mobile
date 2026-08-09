@@ -7,6 +7,8 @@ struct ChangesView: View {
     @State private var sourceMenuPresented = false
     @State private var selectedPath: String?
     @State private var didAttemptDeepLink = false
+    /// Filter Analytics fires once per screen; the query text is never sent.
+    @State private var loggedFilterEdit = false
     private let initialFilePath: String?
 
     init(
@@ -36,6 +38,7 @@ struct ChangesView: View {
                     leading: .back(action: exitChanges),
                     actions: [
                         .icon(.moreVert, accessibilityLabel: "Choose change source") {
+                            logAction(ProductAnalytics.Action.changesOpenSourceMenu)
                             sourceMenuPresented = true
                         },
                     ],
@@ -47,6 +50,10 @@ struct ChangesView: View {
         .background(OpenCodeColors.backgroundBase)
         .toolbar(.hidden, for: .navigationBar)
         .task {
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.changes,
+                presentation: ProductAnalytics.Presentation.route
+            )
             await viewModel.load()
             attemptDeepLinkIfNeeded()
         }
@@ -75,8 +82,18 @@ struct ChangesView: View {
     }
 
     private func exitChanges() {
+        logAction(ProductAnalytics.Action.changesBack)
         viewModel.clearFilter()
         dismiss()
+    }
+
+    /// File paths and filter text stay out of Analytics.
+    private func logAction(_ actionId: String, parameters: [String: String] = [:]) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.changes,
+            actionId: actionId,
+            parameters: parameters
+        )
     }
 
     @ViewBuilder private var content: some View {
@@ -93,6 +110,7 @@ struct ChangesView: View {
             VStack(spacing: 12) {
                 message("Unable to load changes", detail: error)
                 OpenCodeButton(variant: .compactText(title: "Retry"), contrast: .low) {
+                    logAction(ProductAnalytics.Action.changesRetry)
                     Task { await viewModel.retry() }
                 }
             }
@@ -127,7 +145,10 @@ struct ChangesView: View {
                 OpenCodeTextInput(
                     text: Binding(
                         get: { viewModel.content?.filter ?? "" },
-                        set: viewModel.updateFilter
+                        set: { value in
+                            logFilterEditOnce()
+                            viewModel.updateFilter(value)
+                        }
                     ),
                     hint: "Filter",
                     accessibilityLabel: "Filter changed files"
@@ -139,7 +160,10 @@ struct ChangesView: View {
                         OpenCodeButton(
                             variant: .compactText(title: "Clear filter"),
                             contrast: .low,
-                            action: viewModel.clearFilter
+                            action: {
+                                logAction(ProductAnalytics.Action.changesClearFilter)
+                                viewModel.clearFilter()
+                            }
                         )
                     }
                 } else {
@@ -151,7 +175,16 @@ struct ChangesView: View {
             .padding(16)
         }
         .id(viewModel.state.selectedSource)
-        .refreshable { await viewModel.refresh() }
+        .refreshable {
+            logAction(ProductAnalytics.Action.changesRefresh)
+            await viewModel.refresh()
+        }
+    }
+
+    private func logFilterEditOnce() {
+        guard !loggedFilterEdit else { return }
+        loggedFilterEdit = true
+        logAction(ProductAnalytics.Action.changesUpdateFilter)
     }
 
     private func aggregateSummary(_ changeSet: ChangesContentState) -> some View {
@@ -175,6 +208,7 @@ struct ChangesView: View {
                 .foregroundStyle(OpenCodeColors.textBase)
                 .frame(maxWidth: .infinity, alignment: .leading)
             OpenCodeButton(variant: .compactText(title: "Retry"), contrast: .low) {
+                logAction(ProductAnalytics.Action.changesRetry)
                 Task { await viewModel.refresh() }
             }
         }
@@ -182,7 +216,10 @@ struct ChangesView: View {
     }
 
     private func fileRow(_ file: FileDiff, changeSet: ChangesContentState) -> some View {
-        OpenCodeListItem(title: file.path, action: { selectedPath = file.path }, trailing: {
+        OpenCodeListItem(title: file.path, action: {
+            logAction(ProductAnalytics.Action.changesOpenFile)
+            selectedPath = file.path
+        }, trailing: {
             HStack(spacing: 12) {
                 Text("+\(file.additions)")
                     .font(OpenCodeTypography.caption)
@@ -215,7 +252,10 @@ struct ChangesView: View {
             message(title, detail: detail)
                 .frame(minHeight: 360)
         }
-        .refreshable { await viewModel.refresh() }
+        .refreshable {
+            logAction(ProductAnalytics.Action.changesRefresh)
+            await viewModel.refresh()
+        }
     }
 }
 
@@ -231,7 +271,10 @@ private struct FileViewerView: View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
                 title: state.file.path,
-                leading: .back(action: { dismiss() }),
+                leading: .back(action: {
+                    Self.logAction(ProductAnalytics.Action.fileViewerBack)
+                    dismiss()
+                }),
                 showDivider: true
             )
 
@@ -251,6 +294,20 @@ private struct FileViewerView: View {
         }
         .background(OpenCodeColors.backgroundBase)
         .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.changesFileViewer,
+                presentation: ProductAnalytics.Presentation.route
+            )
+        }
+    }
+
+    /// The viewed file path is never reported.
+    private static func logAction(_ actionId: String) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.changesFileViewer,
+            actionId: actionId
+        )
     }
 
     private var viewerContent: some View {
@@ -279,9 +336,18 @@ private struct FileViewerView: View {
                         nextEnabled: state.canSelectNextHunk,
                         contextEnabled: state.canExpandContext,
                         contextExpanded: state.contextMode == .expanded,
-                        onPrevious: { state.selectPreviousHunk() },
-                        onToggleContext: { state.toggleContextMode() },
-                        onNext: { state.selectNextHunk() }
+                        onPrevious: {
+                            Self.logAction(ProductAnalytics.Action.fileViewerHunkPrevious)
+                            state.selectPreviousHunk()
+                        },
+                        onToggleContext: {
+                            Self.logAction(ProductAnalytics.Action.fileViewerToggleContext)
+                            state.toggleContextMode()
+                        },
+                        onNext: {
+                            Self.logAction(ProductAnalytics.Action.fileViewerHunkNext)
+                            state.selectNextHunk()
+                        }
                     )
                     .padding(.bottom, 12)
                 }

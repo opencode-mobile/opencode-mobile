@@ -42,7 +42,13 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
                 title: "Settings",
-                leading: .back(action: { dismiss() }),
+                leading: .back(action: {
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.settings,
+                        actionId: ProductAnalytics.Action.settingsBack
+                    )
+                    dismiss()
+                }),
                 showDivider: true
             )
 
@@ -55,7 +61,13 @@ struct SettingsView: View {
                         subtitle: "Configure server URL and credentials",
                         style: .card,
                         startDecorator: .icon(.cloud, accessibilityLabel: "Server Connection"),
-                        action: onConnectionSetup
+                        action: {
+                            ProductAnalytics.logUserAction(
+                                screenId: ProductAnalytics.Screen.settings,
+                                actionId: ProductAnalytics.Action.settingsOpenConnection
+                            )
+                            onConnectionSetup()
+                        }
                     )
                     .padding(.horizontal, 16)
 
@@ -66,7 +78,15 @@ struct SettingsView: View {
                         subtitle: themeManager.currentTheme.name,
                         style: .card,
                         startDecorator: .icon(.widgets, accessibilityLabel: "Theme"),
-                        action: { showThemePicker = true }
+                        action: {
+                            logSettingsAction(ProductAnalytics.Action.settingsOpenThemePicker)
+                            ProductAnalytics.logScreenView(
+                                screenId: ProductAnalytics.Screen.settingsThemePicker,
+                                presentation: ProductAnalytics.Presentation.sheet,
+                                trigger: ProductAnalytics.Trigger.present
+                            )
+                            showThemePicker = true
+                        }
                     )
                     .padding(.horizontal, 16)
 
@@ -80,7 +100,10 @@ struct SettingsView: View {
                                 "Session List",
                                 isOn: Binding(
                                     get: { homeDisplayPreferences.showSessionListOnHome },
-                                    set: { homeDisplayPreferences.setShowSessionListOnHome($0) }
+                                    set: { newValue in
+                                        logSettingsAction(ProductAnalytics.Action.settingsToggleSessionList)
+                                        homeDisplayPreferences.setShowSessionListOnHome(newValue)
+                                    }
                                 )
                             )
                             .labelsHidden()
@@ -99,7 +122,12 @@ struct SettingsView: View {
                                 "Hide User Directory",
                                 isOn: Binding(
                                     get: { homeDisplayPreferences.hideUserDirectoryPrefix },
-                                    set: { homeDisplayPreferences.setHideUserDirectoryPrefix($0) }
+                                    set: { newValue in
+                                        logSettingsAction(
+                                            ProductAnalytics.Action.settingsToggleHideUserDirectory
+                                        )
+                                        homeDisplayPreferences.setHideUserDirectoryPrefix(newValue)
+                                    }
                                 )
                             )
                             .labelsHidden()
@@ -115,7 +143,15 @@ struct SettingsView: View {
                         ),
                         style: .card,
                         startDecorator: .icon(.list, accessibilityLabel: "Recent Window"),
-                        action: { showRecentWindowPicker = true }
+                        action: {
+                            logSettingsAction(ProductAnalytics.Action.settingsOpenRecentWindowPicker)
+                            ProductAnalytics.logScreenView(
+                                screenId: ProductAnalytics.Screen.settingsRecentWindowPicker,
+                                presentation: ProductAnalytics.Presentation.sheet,
+                                trigger: ProductAnalytics.Trigger.present
+                            )
+                            showRecentWindowPicker = true
+                        }
                     )
                     .padding(.horizontal, 16)
 
@@ -125,6 +161,7 @@ struct SettingsView: View {
                         style: .card,
                         startDecorator: .icon(.folder, accessibilityLabel: "Import Theme"),
                         action: {
+                            logSettingsAction(ProductAnalytics.Action.settingsImportTheme)
                             importError = nil
                             showThemeImporter = true
                         }
@@ -162,7 +199,15 @@ struct SettingsView: View {
                         subtitle: "Remove cached sessions and messages",
                         style: .card,
                         startDecorator: .icon(.close, accessibilityLabel: "Clear Session Cache"),
-                        action: { showClearSessionCacheConfirmation = true }
+                        action: {
+                            logSettingsAction(ProductAnalytics.Action.settingsClearSessionCache)
+                            ProductAnalytics.logScreenView(
+                                screenId: ProductAnalytics.Screen.settingsClearCacheConfirm,
+                                presentation: ProductAnalytics.Presentation.dialog,
+                                trigger: ProductAnalytics.Trigger.present
+                            )
+                            showClearSessionCacheConfirmation = true
+                        }
                     )
                     .padding(.horizontal, 16)
 
@@ -178,7 +223,15 @@ struct SettingsView: View {
                                 "Product Analytics",
                                 isOn: Binding(
                                     get: { analyticsConsentPreferences.productAnalyticsConsented },
-                                    set: { analyticsConsentPreferences.setProductAnalyticsConsented($0) }
+                                    set: { newValue in
+                                        // Log after applying consent: opting out is
+                                        // dropped by the gate rather than reported.
+                                        analyticsConsentPreferences
+                                            .setProductAnalyticsConsented(newValue)
+                                        logSettingsAction(
+                                            ProductAnalytics.Action.settingsToggleProductAnalytics
+                                        )
+                                    }
                                 )
                             )
                             .labelsHidden()
@@ -253,7 +306,15 @@ struct SettingsView: View {
                         subtitle: "Remove connection, cache, and imported themes",
                         style: .card,
                         startDecorator: .icon(.close, accessibilityLabel: "Clear All Data"),
-                        action: { showClearConfirmation = true }
+                        action: {
+                            logSettingsAction(ProductAnalytics.Action.settingsClearAllData)
+                            ProductAnalytics.logScreenView(
+                                screenId: ProductAnalytics.Screen.settingsClearAllDataConfirm,
+                                presentation: ProductAnalytics.Presentation.dialog,
+                                trigger: ProductAnalytics.Trigger.present
+                            )
+                            showClearConfirmation = true
+                        }
                     )
                     .padding(.horizontal, 16)
                 }
@@ -275,7 +336,7 @@ struct SettingsView: View {
             DiagnosticLogsView()
         }
         .openCodeBottomSheet(
-            isPresented: $showThemePicker,
+            isPresented: themePickerBinding,
             title: "Theme",
             scrollTargetID: themeManager.currentTheme.id
         ) {
@@ -286,6 +347,15 @@ struct SettingsView: View {
                         ? .icon(.check, accessibilityLabel: "Selected")
                         : .none,
                     action: {
+                        // Imported theme ids are user text; report them as a bucket.
+                        let presetValue = themeManager.isBundledPreset(id: preset.id)
+                            ? preset.id
+                            : "imported"
+                        ProductAnalytics.logUserAction(
+                            screenId: ProductAnalytics.Screen.settingsThemePicker,
+                            actionId: ProductAnalytics.Action.themePickerSelectPreset,
+                            parameters: [ProductAnalytics.Param.themePreset: presetValue]
+                        )
                         themeManager.applyPreset(id: preset.id)
                         showThemePicker = false
                     }
@@ -294,7 +364,7 @@ struct SettingsView: View {
             }
         }
         .openCodeBottomSheet(
-            isPresented: $showRecentWindowPicker,
+            isPresented: recentWindowPickerBinding,
             title: "Recent Window",
             scrollTargetID: "hours-\(homeDisplayPreferences.recentWindowHours)"
         ) {
@@ -312,6 +382,11 @@ struct SettingsView: View {
                         ? .icon(.check, accessibilityLabel: "Selected")
                         : .none,
                     action: {
+                        ProductAnalytics.logUserAction(
+                            screenId: ProductAnalytics.Screen.settingsRecentWindowPicker,
+                            actionId: ProductAnalytics.Action.recentWindowSelectHours,
+                            parameters: [ProductAnalytics.Param.hours: String(hours)]
+                        )
                         homeDisplayPreferences.setRecentWindowHours(hours)
                         showRecentWindowPicker = false
                     }
@@ -327,6 +402,10 @@ struct SettingsView: View {
             handleThemeImport(result)
         }
         .task {
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.settings,
+                presentation: ProductAnalytics.Presentation.route
+            )
             sessionCacheSizeLabel = await Container.refreshSessionCacheSizeLabel()
         }
         .openCodeDialog(
@@ -334,6 +413,10 @@ struct SettingsView: View {
             title: "Clear session cache?",
             subtitle: "Removes cached sessions and messages. Your connection and credentials stay.",
             primaryOption: OpenCodeDialogOption(title: "Clear") {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.settingsClearCacheConfirm,
+                    actionId: ProductAnalytics.Action.clearCacheConfirm
+                )
                 Task {
                     await Container.clearSessionCache()
                     sessionCacheSizeLabel = await Container.refreshSessionCacheSizeLabel()
@@ -341,6 +424,10 @@ struct SettingsView: View {
                 showClearSessionCacheConfirmation = false
             },
             secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.settingsClearCacheConfirm,
+                    actionId: ProductAnalytics.Action.clearCacheCancel
+                )
                 showClearSessionCacheConfirmation = false
             }
         )
@@ -349,6 +436,10 @@ struct SettingsView: View {
             title: "Clear all data?",
             subtitle: "This cannot be undone.",
             primaryOption: OpenCodeDialogOption(title: "Clear") {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.settingsClearAllDataConfirm,
+                    actionId: ProductAnalytics.Action.clearAllDataConfirm
+                )
                 Container.clearAllData()
                 Task {
                     sessionCacheSizeLabel = await Container.refreshSessionCacheSizeLabel()
@@ -356,7 +447,49 @@ struct SettingsView: View {
                 showClearConfirmation = false
             },
             secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.settingsClearAllDataConfirm,
+                    actionId: ProductAnalytics.Action.clearAllDataCancel
+                )
                 showClearConfirmation = false
+            }
+        )
+    }
+
+    private func logSettingsAction(_ actionId: String) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.settings,
+            actionId: actionId
+        )
+    }
+
+    // Sheet-chrome dismissal only: entry taps clear the flag directly.
+    private var themePickerBinding: Binding<Bool> {
+        Binding(
+            get: { showThemePicker },
+            set: { presented in
+                if !presented {
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.settingsThemePicker,
+                        actionId: ProductAnalytics.Action.themePickerDismiss
+                    )
+                }
+                showThemePicker = presented
+            }
+        )
+    }
+
+    private var recentWindowPickerBinding: Binding<Bool> {
+        Binding(
+            get: { showRecentWindowPicker },
+            set: { presented in
+                if !presented {
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.settingsRecentWindowPicker,
+                        actionId: ProductAnalytics.Action.recentWindowDismiss
+                    )
+                }
+                showRecentWindowPicker = presented
             }
         )
     }

@@ -150,6 +150,11 @@ final class ChangesViewModel {
 
     func selectSource(_ source: ChangeSource) async {
         guard source != state.selectedSource, availableSources.contains(source) else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.changes,
+            actionId: ProductAnalytics.Action.changesSelectSource,
+            parameters: [ProductAnalytics.Param.changeSource: source.rawValue]
+        )
         state = ChangesState(phase: .loading, selectedSource: source, availableSources: availableSources)
         await load(refreshAvailability: false)
     }

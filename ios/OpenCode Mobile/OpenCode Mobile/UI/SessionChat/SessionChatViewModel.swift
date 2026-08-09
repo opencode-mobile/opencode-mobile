@@ -43,6 +43,11 @@ final class SessionChatViewModel {
     private var lastSnackbarKey: String?
     private var suppressedSnackbarKey: String?
     private var snackbarSequence: UInt64 = 0
+    /// Free-text edits log once per dialog / question so keystrokes are not
+    /// events and no typed content can reach Analytics.
+    private var loggedRenameTitleEdit = false
+    private var loggedForkTitleEdit = false
+    private var loggedQuestionCustomTextEdit: String?
 
     init(
         sessionID: String,
@@ -162,10 +167,12 @@ final class SessionChatViewModel {
     }
 
     func selectSlashSuggestion(commandName: String) {
+        logChatAction(ProductAnalytics.Action.composerSelectSlashSuggestion)
         composer.selectSlashSuggestion(commandName: commandName)
     }
 
     func selectAtSuggestion(agentName: String) {
+        logChatAction(ProductAnalytics.Action.composerSelectAtSuggestion)
         composer.selectAtSuggestion(agentName: agentName)
     }
 
@@ -178,6 +185,7 @@ final class SessionChatViewModel {
     }
 
     func removeAttachment(id: String) {
+        logChatAction(ProductAnalytics.Action.composerRemoveAttachment)
         composer.removeAttachment(id: id)
     }
 
@@ -194,18 +202,32 @@ final class SessionChatViewModel {
     }
 
     func retryModelCatalog() async {
+        logChatAction(ProductAnalytics.Action.composerRetryModelCatalog)
         await composer.loadCatalog()
     }
 
     func selectModel(_ option: ModelSelectionOption) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionModelPicker,
+            actionId: ProductAnalytics.Action.modelPickerSelectModel
+        )
         composer.selectModel(option)
     }
 
     func selectMode(_ mode: String) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionModePicker,
+            actionId: ProductAnalytics.Action.modePickerSelect,
+            parameters: [ProductAnalytics.Param.mode: mode]
+        )
         composer.selectMode(mode)
     }
 
     func selectVariant(_ variant: String) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionVariantPicker,
+            actionId: ProductAnalytics.Action.variantPickerSelect
+        )
         composer.selectVariant(variant)
     }
 
@@ -214,21 +236,40 @@ final class SessionChatViewModel {
     }
 
     func openCommands() {
+        logChatAction(ProductAnalytics.Action.composerOpenCommands)
+        ProductAnalytics.logScreenView(
+            screenId: ProductAnalytics.Screen.sessionCommands,
+            presentation: ProductAnalytics.Presentation.sheet,
+            trigger: ProductAnalytics.Trigger.present
+        )
         commands.openCommands()
         composer.dismissSuggestions()
     }
 
     func dismissCommands() {
+        if uiState.commandsSheetVisible {
+            ProductAnalytics.logUserAction(
+                screenId: ProductAnalytics.Screen.sessionCommands,
+                actionId: ProductAnalytics.Action.commandsDismiss
+            )
+        }
         commands.dismissCommands()
     }
 
     func runClientSlashAction(_ action: ClientSlashAction) {
+        logCommandsAction(action)
         switch action {
         case .new:
             guard isConnectionLive else { return }
             commands.runNew()
         case .fork:
             guard isConnectionLive else { return }
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.sessionFork,
+                presentation: ProductAnalytics.Presentation.dialog,
+                trigger: ProductAnalytics.Trigger.present
+            )
+            loggedForkTitleEdit = false
             commands.openForkDialog(currentTitle: uiState.sessionTitle)
         case .undo:
             commands.runUndo(
@@ -264,24 +305,79 @@ final class SessionChatViewModel {
         }
     }
 
+    /// Screen-level Analytics helper: only taxonomy ids, never message text.
+    private func logChatAction(_ actionId: String, parameters: [String: String] = [:]) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionChat,
+            actionId: actionId,
+            parameters: parameters
+        )
+    }
+
+    private func logCommandsAction(_ action: ClientSlashAction) {
+        let actionId: String =
+            switch action {
+            case .new: ProductAnalytics.Action.commandsNew
+            case .fork: ProductAnalytics.Action.commandsFork
+            case .undo: ProductAnalytics.Action.commandsUndo
+            case .redo: ProductAnalytics.Action.commandsRedo
+            case .compact: ProductAnalytics.Action.commandsCompact
+            }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionCommands,
+            actionId: actionId,
+            parameters: [ProductAnalytics.Param.clientSlash: action.rawValue]
+        )
+    }
+
     func updateForkDraft(_ text: String) {
+        if !loggedForkTitleEdit {
+            loggedForkTitleEdit = true
+            ProductAnalytics.logUserAction(
+                screenId: ProductAnalytics.Screen.sessionFork,
+                actionId: ProductAnalytics.Action.chatForkEditTitle
+            )
+        }
         commands.updateForkDraft(text)
     }
 
     func cancelForkDialog() {
+        if uiState.forkDialogVisible {
+            ProductAnalytics.logUserAction(
+                screenId: ProductAnalytics.Screen.sessionFork,
+                actionId: ProductAnalytics.Action.chatForkCancel
+            )
+        }
         commands.cancelForkDialog()
     }
 
     func confirmFork() {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionFork,
+            actionId: ProductAnalytics.Action.chatForkConfirm,
+            parameters: isConnectionLive
+                ? [:]
+                : [ProductAnalytics.Param.outcome: ProductAnalytics.Outcome.blocked]
+        )
         guard isConnectionLive else { return }
         commands.confirmFork()
     }
 
     func chooseForkOpen() {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionForkResult,
+            actionId: ProductAnalytics.Action.chatForkOpen
+        )
         commands.chooseForkOpen()
     }
 
     func chooseForkStay() {
+        if uiState.forkResultVisible {
+            ProductAnalytics.logUserAction(
+                screenId: ProductAnalytics.Screen.sessionForkResult,
+                actionId: ProductAnalytics.Action.chatForkStay
+            )
+        }
         commands.chooseForkStay()
     }
 
@@ -290,6 +386,9 @@ final class SessionChatViewModel {
     }
 
     func consumeSnackbar() {
+        if uiState.snackbar != nil {
+            logChatAction(ProductAnalytics.Action.chatDismissSnackbar)
+        }
         suppressedSnackbarKey = lastSnackbarKey
         commands.clearActionFeedback()
         composer.clearTransientErrors()
@@ -301,25 +400,75 @@ final class SessionChatViewModel {
     }
 
     func openRenameSession() {
+        ProductAnalytics.logScreenView(
+            screenId: ProductAnalytics.Screen.sessionRename,
+            presentation: ProductAnalytics.Presentation.dialog,
+            trigger: ProductAnalytics.Trigger.present
+        )
+        loggedRenameTitleEdit = false
         sessionInfo.openRenameSession()
     }
 
     func cancelRenameSession() {
+        if uiState.rename.isDialogVisible {
+            ProductAnalytics.logUserAction(
+                screenId: ProductAnalytics.Screen.sessionRename,
+                actionId: ProductAnalytics.Action.chatRenameCancel
+            )
+        }
         sessionInfo.cancelRenameSession()
     }
 
     func updateRenameDraft(_ text: String) {
+        if !loggedRenameTitleEdit {
+            loggedRenameTitleEdit = true
+            ProductAnalytics.logUserAction(
+                screenId: ProductAnalytics.Screen.sessionRename,
+                actionId: ProductAnalytics.Action.chatRenameEditTitle
+            )
+        }
         sessionInfo.updateRenameDraft(text)
     }
 
     func confirmRenameSession() async {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionRename,
+            actionId: ProductAnalytics.Action.chatRenameSave,
+            parameters: isConnectionLive
+                ? [:]
+                : [ProductAnalytics.Param.outcome: ProductAnalytics.Outcome.blocked]
+        )
         guard isConnectionLive else { return }
         await sessionInfo.confirmRenameSession()
     }
 
     func sendPrompt() async {
-        guard isConnectionLive else { return }
-        guard permissionRequests.isEmpty, questionRequests.isEmpty else { return }
+        let hasAttachments = !composer.state.composer.attachments.isEmpty
+        guard isConnectionLive else {
+            logChatAction(
+                ProductAnalytics.Action.composerSend,
+                parameters: [
+                    ProductAnalytics.Param.hasAttachments: String(hasAttachments),
+                    ProductAnalytics.Param.outcome: ProductAnalytics.Outcome.blocked,
+                ]
+            )
+            return
+        }
+        guard permissionRequests.isEmpty, questionRequests.isEmpty else {
+            logChatAction(
+                ProductAnalytics.Action.composerSend,
+                parameters: [
+                    ProductAnalytics.Param.hasAttachments: String(hasAttachments),
+                    ProductAnalytics.Param.outcome: ProductAnalytics.Outcome.blocked,
+                ]
+            )
+            return
+        }
+        // Prompt text and attachment contents are never reported.
+        logChatAction(
+            ProductAnalytics.Action.composerSend,
+            parameters: [ProductAnalytics.Param.hasAttachments: String(hasAttachments)]
+        )
         DiagnosticLog.info(.chat, "sendPrompt start session=\(sessionID)")
         await composer.sendPrompt(
             sessionID: sessionID,
@@ -357,15 +506,29 @@ final class SessionChatViewModel {
     }
 
     func abortSession() async {
+        logChatAction(
+            ProductAnalytics.Action.composerAbort,
+            parameters: isConnectionLive
+                ? [:]
+                : [ProductAnalytics.Param.outcome: ProductAnalytics.Outcome.blocked]
+        )
         guard isConnectionLive else { return }
         await composer.abortSession(timelineIsReady: timeline.state.timeline == .ready)
     }
 
     func allowPermissionOnce(requestID: String, sessionID: String) async {
+        logChatAction(
+            ProductAnalytics.Action.permissionAllowOnce,
+            parameters: [ProductAnalytics.Param.permissionDecision: "allow_once"]
+        )
         await respondToPermission(requestID: requestID, sessionID: sessionID, decision: .allowOnce)
     }
 
     func denyPermission(requestID: String, sessionID: String) async {
+        logChatAction(
+            ProductAnalytics.Action.permissionDeny,
+            parameters: [ProductAnalytics.Param.permissionDecision: "deny"]
+        )
         await respondToPermission(requestID: requestID, sessionID: sessionID, decision: .deny)
     }
 
@@ -374,6 +537,7 @@ final class SessionChatViewModel {
               request.id == requestID, request.sessionID == sessionID, questionSubmittingID == nil,
               request.questions.indices.contains(questionWizardIndex)
         else { return }
+        logChatAction(ProductAnalytics.Action.questionToggleOption)
         let question = request.questions[questionWizardIndex]
         let draft = questionDrafts[questionWizardIndex] ?? QuestionAnswerDraft()
         let selected = question.multiple
@@ -391,6 +555,7 @@ final class SessionChatViewModel {
               request.questions.indices.contains(questionWizardIndex),
               request.questions[questionWizardIndex].custom
         else { return }
+        logChatAction(ProductAnalytics.Action.questionToggleCustom)
         var draft = questionDrafts[questionWizardIndex] ?? QuestionAnswerDraft()
         draft.customSelected.toggle()
         if draft.customSelected { draft.selectedLabels = [] }
@@ -402,6 +567,12 @@ final class SessionChatViewModel {
         guard let request = visibleQuestionRequest(),
               request.id == requestID, request.sessionID == sessionID, questionSubmittingID == nil
         else { return }
+        // Once per question step; the typed answer never becomes a parameter.
+        let editKey = "\(requestID)#\(questionWizardIndex)"
+        if loggedQuestionCustomTextEdit != editKey {
+            loggedQuestionCustomTextEdit = editKey
+            logChatAction(ProductAnalytics.Action.questionEditCustomText)
+        }
         questionDrafts[questionWizardIndex] = QuestionAnswerDraft(selectedLabels: [], customText: text, customSelected: true)
         publishUiState()
     }
@@ -409,6 +580,7 @@ final class SessionChatViewModel {
     func questionBack(requestID: String, sessionID: String) {
         guard visibleQuestionRequest()?.id == requestID, visibleQuestionRequest()?.sessionID == sessionID,
               questionSubmittingID == nil, questionWizardIndex > 0 else { return }
+        logChatAction(ProductAnalytics.Action.questionBack)
         questionWizardIndex -= 1
         publishUiState()
     }
@@ -418,6 +590,7 @@ final class SessionChatViewModel {
               questionSubmittingID == nil, request.questions.indices.contains(questionWizardIndex),
               isQuestionAnswerValid(question: request.questions[questionWizardIndex], draft: questionDrafts[questionWizardIndex] ?? QuestionAnswerDraft()),
               questionWizardIndex < request.questions.count - 1 else { return }
+        logChatAction(ProductAnalytics.Action.questionNext)
         questionWizardIndex += 1
         publishUiState()
     }
@@ -426,6 +599,14 @@ final class SessionChatViewModel {
         guard let request = questionRequests.first(where: { $0.id == requestID && $0.sessionID == sessionID }),
               questionSubmittingID == nil, let answers = buildQuestionAnswers(questions: request.questions, drafts: questionDrafts)
         else { return }
+        // Shape only: whether custom text was used, never the answers themselves.
+        let usedCustomAnswer = questionDrafts.values.contains { $0.customSelected }
+        logChatAction(
+            ProductAnalytics.Action.questionSubmit,
+            parameters: [
+                ProductAnalytics.Param.questionResponse: usedCustomAnswer ? "custom" : "option",
+            ]
+        )
         questionSubmittingID = request.id
         questionError = nil
         OpenCodeLog.sessionChat.info("question reply request=\(request.id, privacy: .public) session=\(request.sessionID, privacy: .public)")
@@ -440,6 +621,7 @@ final class SessionChatViewModel {
     func dismissQuestion(requestID: String, sessionID: String) async {
         guard let request = questionRequests.first(where: { $0.id == requestID && $0.sessionID == sessionID }),
               questionSubmittingID == nil else { return }
+        logChatAction(ProductAnalytics.Action.questionDismiss)
         questionSubmittingID = request.id
         questionError = nil
         OpenCodeLog.sessionChat.info("question dismiss request=\(request.id, privacy: .public) session=\(request.sessionID, privacy: .public)")

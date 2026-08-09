@@ -6,12 +6,23 @@ struct ConnectionSetupView: View {
     @State private var urlFocused = false
     @State private var usernameFocused = false
     @State private var passwordFocused = false
+    /// Field-edit Analytics fires once per field so keystrokes are not events and
+    /// no field value can leak into a parameter.
+    @State private var loggedBaseURLEdit = false
+    @State private var loggedUsernameEdit = false
+    @State private var loggedPasswordEdit = false
 
     var body: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
                 title: "Connect to server",
-                leading: .back(action: onDismiss),
+                leading: .back(action: {
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.connectionSetup,
+                        actionId: ProductAnalytics.Action.connectionBackCancel
+                    )
+                    onDismiss()
+                }),
                 showDivider: true
             )
 
@@ -71,9 +82,34 @@ struct ConnectionSetupView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
-        .onChange(of: viewModel.baseURL) { _, _ in viewModel.onFieldChanged() }
-        .onChange(of: viewModel.username) { _, _ in viewModel.onFieldChanged() }
-        .onChange(of: viewModel.password) { _, _ in viewModel.onFieldChanged() }
+        .onAppear {
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.connectionSetup,
+                presentation: ProductAnalytics.Presentation.fullscreen,
+                trigger: ProductAnalytics.Trigger.present
+            )
+        }
+        .onChange(of: viewModel.baseURL) { _, _ in
+            logFieldEditOnce(&loggedBaseURLEdit, ProductAnalytics.Action.connectionEditBaseUrl)
+            viewModel.onFieldChanged()
+        }
+        .onChange(of: viewModel.username) { _, _ in
+            logFieldEditOnce(&loggedUsernameEdit, ProductAnalytics.Action.connectionEditUsername)
+            viewModel.onFieldChanged()
+        }
+        .onChange(of: viewModel.password) { _, _ in
+            logFieldEditOnce(&loggedPasswordEdit, ProductAnalytics.Action.connectionEditPassword)
+            viewModel.onFieldChanged()
+        }
+    }
+
+    private func logFieldEditOnce(_ alreadyLogged: inout Bool, _ actionId: String) {
+        guard !alreadyLogged else { return }
+        alreadyLogged = true
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.connectionSetup,
+            actionId: actionId
+        )
     }
 
     private var statusMessage: some View {

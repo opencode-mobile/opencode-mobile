@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.SessionError
@@ -138,6 +139,7 @@ class ChangesViewModel
         private var target: Target? = null
         private var availableSources = listOf(ChangeSource.LastTurn)
         private var filter = ""
+        private var filterEditReported = false
         private var loadJob: Job? = null
 
         fun bind(
@@ -151,16 +153,23 @@ class ChangesViewModel
             target = next
             availableSources = listOf(ChangeSource.LastTurn)
             filter = ""
+            filterEditReported = false
             _uiState.value = ChangesUiState(selectedSource = initialSource)
             load(refreshAvailability = true)
         }
 
         fun retry() = load(refreshAvailability = true)
 
-        fun refresh() = load(refreshAvailability = true, preserveContent = true)
+        fun refresh() {
+            load(refreshAvailability = true, preserveContent = true)
+        }
 
         fun selectSource(source: ChangeSource) {
             if (source == _uiState.value.selectedSource || source !in availableSources) return
+            logAction(
+                actionId = ProductAnalytics.Action.CHANGES_SELECT_SOURCE,
+                parameters = mapOf(ProductAnalytics.Param.CHANGE_SOURCE to source.logValue()),
+            )
             _uiState.value =
                 ChangesUiState(
                     phase = ChangesPhase.Loading,
@@ -171,6 +180,14 @@ class ChangesViewModel
         }
 
         fun updateFilter(value: String) {
+            // Report that filtering happened once per filter session, never the query.
+            // Clearing resets the flag instead of logging, so leaving Changes stays silent.
+            if (value.isEmpty()) {
+                filterEditReported = false
+            } else if (!filterEditReported) {
+                filterEditReported = true
+                logAction(ProductAnalytics.Action.CHANGES_UPDATE_FILTER)
+            }
             filter = value
             updateContent { it.copy(filter = value) }
         }
@@ -296,6 +313,17 @@ class ChangesViewModel
                     "load source=${source.logValue()} session=${target.sessionId} directory=${target.worktree} files=$fileCount result=$result durationMs=${System.currentTimeMillis() - startedAt}",
                 )
             }
+        }
+
+        private fun logAction(
+            actionId: String,
+            parameters: Map<String, String> = emptyMap(),
+        ) {
+            ProductAnalytics.logUserAction(
+                screenId = ProductAnalytics.Screen.CHANGES,
+                actionId = actionId,
+                parameters = parameters,
+            )
         }
 
         private inline fun updateContent(transform: (ChangesContentState) -> ChangesContentState) {

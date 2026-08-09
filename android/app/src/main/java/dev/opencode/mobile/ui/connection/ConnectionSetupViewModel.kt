@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.connection
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.data.local.ServerConnectionDefaults
 import dev.opencode.mobile.domain.connection.ConnectionProbeService
 import dev.opencode.mobile.domain.connection.ConnectionProfile
@@ -51,7 +52,14 @@ class ConnectionSetupViewModel
         private val _uiState = MutableStateFlow(ConnectionSetupUiState())
         val uiState: StateFlow<ConnectionSetupUiState> = _uiState.asStateFlow()
 
+        // Field edits fire on every keystroke; report only the first edit per field
+        // per screen appearance so analytics stays a signal of engagement, not volume.
+        private val reportedFieldEdits = mutableSetOf<String>()
+        private var isEditingExistingProfile = false
+
         fun configure(initialProfile: ConnectionProfile?) {
+            reportedFieldEdits.clear()
+            isEditingExistingProfile = initialProfile != null
             _uiState.value =
                 if (initialProfile == null) {
                     ConnectionSetupUiState()
@@ -69,15 +77,34 @@ class ConnectionSetupViewModel
         }
 
         fun onBaseUrlChanged(value: String) {
+            reportFieldEdit(ProductAnalytics.Action.CONNECTION_EDIT_BASE_URL)
             updateFields(baseUrl = value)
         }
 
         fun onUsernameChanged(value: String) {
+            reportFieldEdit(ProductAnalytics.Action.CONNECTION_EDIT_USERNAME)
             updateFields(username = value)
         }
 
         fun onPasswordChanged(value: String) {
+            reportFieldEdit(ProductAnalytics.Action.CONNECTION_EDIT_PASSWORD)
             updateFields(password = value)
+        }
+
+        private fun reportFieldEdit(actionId: String) {
+            if (!reportedFieldEdits.add(actionId)) return
+            logAction(actionId)
+        }
+
+        private fun logAction(
+            actionId: String,
+            parameters: Map<String, String> = emptyMap(),
+        ) {
+            ProductAnalytics.logUserAction(
+                screenId = ProductAnalytics.Screen.CONNECTION_SETUP,
+                actionId = actionId,
+                parameters = parameters,
+            )
         }
 
         private fun updateFields(
@@ -102,6 +129,7 @@ class ConnectionSetupViewModel
         }
 
         fun testConnection() {
+            logAction(ProductAnalytics.Action.CONNECTION_TEST)
             viewModelScope.launch {
                 _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Testing, testResultMessage = null)
                 try {
@@ -129,6 +157,10 @@ class ConnectionSetupViewModel
 
         fun saveConnection(onSaved: () -> Unit) {
             if (!_uiState.value.canSave) return
+            logAction(
+                actionId = ProductAnalytics.Action.CONNECTION_SAVE,
+                parameters = mapOf(ProductAnalytics.Param.IS_EDIT to isEditingExistingProfile.toString()),
+            )
             viewModelScope.launch {
                 _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Saving)
                 connectionSessionCoordinator.saveProfile(draftProfile())

@@ -10,10 +10,15 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.ModelSelectionProvider
@@ -30,6 +35,23 @@ internal enum class ComposerPickerKind(
     Model("Model"),
     Mode("Agent mode"),
     Variant("Variant"),
+    ;
+
+    val productScreenId: String
+        get() =
+            when (this) {
+                Model -> ProductAnalytics.Screen.SESSION_MODEL_PICKER
+                Mode -> ProductAnalytics.Screen.SESSION_MODE_PICKER
+                Variant -> ProductAnalytics.Screen.SESSION_VARIANT_PICKER
+            }
+
+    val productDismissActionId: String
+        get() =
+            when (this) {
+                Model -> ProductAnalytics.Action.MODEL_PICKER_DISMISS
+                Mode -> ProductAnalytics.Action.MODE_PICKER_DISMISS
+                Variant -> ProductAnalytics.Action.VARIANT_PICKER_DISMISS
+            }
 }
 
 @Composable
@@ -70,6 +92,10 @@ internal fun SessionChatPickerSheet(
                 imageVector = OpenCodeIcons.ArrowBack,
                 contentDescription = "Back to providers",
                 onClick = {
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.SESSION_MODEL_PICKER,
+                        actionId = ProductAnalytics.Action.MODEL_PICKER_BACK_TO_PROVIDERS,
+                    )
                     onActiveModelProviderIdChange(null)
                     onModelFilterTextChange("")
                 },
@@ -77,18 +103,54 @@ internal fun SessionChatPickerSheet(
         } else {
             null
         }
+    // Filtering fires per keystroke and the query is user text: report engagement
+    // once per provider list, never the query itself.
+    var filterEditReported by remember(activePicker, activeModelProviderId) { mutableStateOf(false) }
+
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SESSION_MODEL_PICKER,
+        presentation = ProductAnalytics.Presentation.SHEET,
+        visible = activePicker == ComposerPickerKind.Model,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SESSION_MODE_PICKER,
+        presentation = ProductAnalytics.Presentation.SHEET,
+        visible = activePicker == ComposerPickerKind.Mode,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SESSION_VARIANT_PICKER,
+        presentation = ProductAnalytics.Presentation.SHEET,
+        visible = activePicker == ComposerPickerKind.Variant,
+    )
 
     OpenCodeBottomSheet(
         visible = activePicker != null,
         title = modelSheetTitle,
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            activePicker?.let { picker ->
+                ProductAnalytics.logUserAction(
+                    screenId = picker.productScreenId,
+                    actionId = picker.productDismissActionId,
+                )
+            }
+            onDismiss()
+        },
         headerLeadingAction = modelHeaderLeadingAction,
         contentMode = if (showsModelFilter) OpenCodeBottomSheetContentMode.Form else OpenCodeBottomSheetContentMode.ActionList,
         pinnedContent = {
             if (showsModelFilter) {
                 ModelPickerFilterField(
                     value = modelFilterText,
-                    onValueChange = onModelFilterTextChange,
+                    onValueChange = { text ->
+                        if (!filterEditReported) {
+                            filterEditReported = true
+                            ProductAnalytics.logUserAction(
+                                screenId = ProductAnalytics.Screen.SESSION_MODEL_PICKER,
+                                actionId = ProductAnalytics.Action.MODEL_PICKER_FILTER,
+                            )
+                        }
+                        onModelFilterTextChange(text)
+                    },
                 )
             }
         },
@@ -101,6 +163,10 @@ internal fun SessionChatPickerSheet(
                     selectedModel = selectedModel,
                     filterText = modelFilterText,
                     onSelectProvider = { provider ->
+                        ProductAnalytics.logUserAction(
+                            screenId = ProductAnalytics.Screen.SESSION_MODEL_PICKER,
+                            actionId = ProductAnalytics.Action.MODEL_PICKER_SELECT_PROVIDER,
+                        )
                         onActiveModelProviderIdChange(provider.id)
                         onModelFilterTextChange("")
                     },

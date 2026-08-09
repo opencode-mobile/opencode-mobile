@@ -15,6 +15,8 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.SessionTodoStatus
 import dev.opencode.mobile.theme.openCodeColor
@@ -31,10 +33,22 @@ internal fun SessionChatTodosSheet(
     totalCount: Int,
     onDismiss: () -> Unit,
 ) {
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SESSION_TODOS,
+        presentation = ProductAnalytics.Presentation.SHEET,
+        visible = visible,
+    )
+
     OpenCodeBottomSheet(
         visible = visible,
         title = "Session todos",
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            ProductAnalytics.logUserAction(
+                screenId = ProductAnalytics.Screen.SESSION_TODOS,
+                actionId = ProductAnalytics.Action.TODOS_DISMISS,
+            )
+            onDismiss()
+        },
         contentMode = OpenCodeBottomSheetContentMode.ActionList,
     ) {
         Column(
