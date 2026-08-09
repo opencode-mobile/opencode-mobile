@@ -775,6 +775,10 @@ private fun HomeProjectsContent(
                     selectedFilterId = filterId
                 },
                 onSessionSelected = { session ->
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.HOME,
+                        actionId = ProductAnalytics.Action.HOME_OPEN_SESSION,
+                    )
                     onSessionClick(
                         SessionOpenTarget(
                             sessionId = session.id,

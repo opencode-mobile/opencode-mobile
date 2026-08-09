@@ -161,16 +161,15 @@ class ChangesViewModel
         fun retry() = load(refreshAvailability = true)
 
         fun refresh() {
-            logAction(ProductAnalytics.Action.CHANGES_REFRESH)
             load(refreshAvailability = true, preserveContent = true)
         }
 
         fun selectSource(source: ChangeSource) {
+            if (source == _uiState.value.selectedSource || source !in availableSources) return
             logAction(
                 actionId = ProductAnalytics.Action.CHANGES_SELECT_SOURCE,
                 parameters = mapOf(ProductAnalytics.Param.CHANGE_SOURCE to source.logValue()),
             )
-            if (source == _uiState.value.selectedSource || source !in availableSources) return
             _uiState.value =
                 ChangesUiState(
                     phase = ChangesPhase.Loading,

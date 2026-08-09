@@ -126,10 +126,6 @@ struct ChangesView: View {
                 icon: selected ? .check : nil,
                 accessibilityLabel: selected ? "\(source.displayName), selected" : source.displayName,
                 action: {
-                    logAction(
-                        ProductAnalytics.Action.changesSelectSource,
-                        parameters: [ProductAnalytics.Param.changeSource: source.rawValue]
-                    )
                     selectedPath = nil
                     Task { await viewModel.selectSource(source) }
                 }

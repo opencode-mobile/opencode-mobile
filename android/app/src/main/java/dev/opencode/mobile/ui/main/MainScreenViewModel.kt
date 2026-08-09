@@ -469,16 +469,22 @@ class MainScreenViewModel
             val state = _sessionActions.value
             val target = state.target ?: return
             if (state.renameSubmitting) return
-            logAction(
-                ProductAnalytics.Screen.HOME_RENAME_SESSION,
-                ProductAnalytics.Action.HOME_RENAME_SAVE,
-            )
             val trimmed = state.renameDraft.trim()
             if (trimmed.isEmpty()) {
+                logAction(
+                    ProductAnalytics.Screen.HOME_RENAME_SESSION,
+                    ProductAnalytics.Action.HOME_RENAME_SAVE,
+                    mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.BLOCKED),
+                )
                 _sessionActions.update { it.copy(renameError = EMPTY_TITLE_ERROR) }
                 return
             }
             if (trimmed == target.title) {
+                logAction(
+                    ProductAnalytics.Screen.HOME_RENAME_SESSION,
+                    ProductAnalytics.Action.HOME_RENAME_SAVE,
+                    mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.BLOCKED),
+                )
                 clearSessionActions()
                 return
             }
@@ -493,9 +499,19 @@ class MainScreenViewModel
                     )
                 }.onSuccess {
                     logI("rename success session=${target.sessionId}")
+                    logAction(
+                        ProductAnalytics.Screen.HOME_RENAME_SESSION,
+                        ProductAnalytics.Action.HOME_RENAME_SAVE,
+                        mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.SUCCESS),
+                    )
                     clearSessionActions(target.sessionId)
                 }.onFailure { error ->
                     logW("rename failed session=${target.sessionId} message=${error.message}")
+                    logAction(
+                        ProductAnalytics.Screen.HOME_RENAME_SESSION,
+                        ProductAnalytics.Action.HOME_RENAME_SAVE,
+                        mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.FAILURE),
+                    )
                     _sessionActions.update { current ->
                         if (current.target?.sessionId != target.sessionId) {
                             current
@@ -551,12 +567,13 @@ class MainScreenViewModel
             val state = _sessionActions.value
             val target = state.target ?: return
             if (state.forkSubmitting) return
-            logAction(
-                ProductAnalytics.Screen.HOME_FORK_SESSION,
-                ProductAnalytics.Action.HOME_FORK_CONFIRM,
-            )
             val title = state.forkDraft.trim()
             if (title.isEmpty()) {
+                logAction(
+                    ProductAnalytics.Screen.HOME_FORK_SESSION,
+                    ProductAnalytics.Action.HOME_FORK_CONFIRM,
+                    mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.BLOCKED),
+                )
                 _sessionActions.update { it.copy(forkError = EMPTY_TITLE_ERROR) }
                 return
             }
@@ -577,6 +594,11 @@ class MainScreenViewModel
                     )
                 }.onSuccess { forked ->
                     logI("fork success session=${target.sessionId} forkedSession=${forked.id}")
+                    logAction(
+                        ProductAnalytics.Screen.HOME_FORK_SESSION,
+                        ProductAnalytics.Action.HOME_FORK_CONFIRM,
+                        mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.SUCCESS),
+                    )
                     forkedOpenTarget =
                         SessionOpenTarget(
                             sessionId = forked.id,
@@ -597,6 +619,11 @@ class MainScreenViewModel
                     }
                 }.onFailure { error ->
                     logW("fork failed session=${target.sessionId} message=${error.message}")
+                    logAction(
+                        ProductAnalytics.Screen.HOME_FORK_SESSION,
+                        ProductAnalytics.Action.HOME_FORK_CONFIRM,
+                        mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.FAILURE),
+                    )
                     _sessionActions.update { current ->
                         if (current.target?.sessionId != target.sessionId) {
                             current
@@ -773,8 +800,13 @@ class MainScreenViewModel
         private fun logAction(
             screenId: String,
             actionId: String,
+            parameters: Map<String, String> = emptyMap(),
         ) {
-            ProductAnalytics.logUserAction(screenId = screenId, actionId = actionId)
+            ProductAnalytics.logUserAction(
+                screenId = screenId,
+                actionId = actionId,
+                parameters = parameters,
+            )
         }
 
         private fun logI(message: String) {

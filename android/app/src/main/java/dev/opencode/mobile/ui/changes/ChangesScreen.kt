@@ -206,14 +206,20 @@ private fun ChangedFilesScreen(
             ChangesPhase.NoTurn ->
                 RefreshableMessage(
                     state.isRefreshing,
-                    viewModel::refresh,
+                    {
+                        logChangesAction(ProductAnalytics.Action.CHANGES_REFRESH)
+                        viewModel.refresh()
+                    },
                     "No completed turn",
                     "Send a prompt and wait for it to complete, then try again.",
                 )
             ChangesPhase.NoChanges ->
                 RefreshableMessage(
                     state.isRefreshing,
-                    viewModel::refresh,
+                    {
+                        logChangesAction(ProductAnalytics.Action.CHANGES_REFRESH)
+                        viewModel.refresh()
+                    },
                     state.selectedSource.emptyTitle,
                     state.selectedSource.emptyDetail,
                 )
@@ -252,7 +258,10 @@ private fun ChangedFilesContent(
         }
     PullToRefreshBox(
         isRefreshing = state.isRefreshing,
-        onRefresh = viewModel::refresh,
+        onRefresh = {
+            logChangesAction(ProductAnalytics.Action.CHANGES_REFRESH)
+            viewModel.refresh()
+        },
         modifier = Modifier.fillMaxSize(),
     ) {
         LazyColumn(
