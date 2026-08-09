@@ -43,7 +43,11 @@ UI (follow-up) will need design-system / feature UI before product events.
 
 ## Remaining work
 
-1. [OPE-128](https://linear.app/opencode-mobile/issue/OPE-128/verify-store-privacy-forms-for-crashlytics-and-analytics) — Store privacy / data-safety verification for **current** Crashlytics + minimal Analytics (human / store consoles). Task plan: [`ope-128-plan.md`](ope-128-plan.md). **In progress** — evidence map ready; console clicks pending.
+1. [OPE-128](https://linear.app/opencode-mobile/issue/OPE-128/verify-store-privacy-forms-for-crashlytics-and-analytics) — Store privacy / data-safety verification for **current** Crashlytics + minimal Analytics (human / store consoles). Task plan: [`ope-128-plan.md`](ope-128-plan.md). **In progress (2026-08-09 Play Console pass):**
+   - Play **Data safety** questionnaire filled and **saved as draft** for `dev.opencode.mobile`: collect/share Yes; encrypted in transit Yes; no in-app accounts; data types **Crash logs** + **Diagnostics** only; purposes **App functionality** + **Analytics** only (no Advertising / marketing purposes; no Device or other IDs; no App interactions after a flaky usage-dialog over-declare was rolled back).
+   - Play **Advertising ID** declaration saved: **No** (matches AD_ID removal).
+   - **Blocked for final Data safety Save:** empty **Privacy policy URL** (none on the listing; do not invent a hosted policy in-repo) and incomplete **Target audience and content** (and related App content prerequisites such as ads / sign-in details).
+   - App Store Connect **App Privacy** not started in-session (ASC login required).
 2. [OPE-129](https://linear.app/opencode-mobile/issue/OPE-129/in-app-analytics-consent-for-product-events) — In-app Analytics consent UI (gates product / custom events; Crashlytics + minimal automatic breadcrumbs continue under OPE-125 policy).
 3. Store form pass **before** product events ship (after OPE-129; may be tracked on OPE-128 follow-up or OPE-124 acceptance).
 4. [OPE-124](https://linear.app/opencode-mobile/issue/OPE-124/product-analytics-taxonomy-and-instrumentation) — Product Analytics taxonomy and instrumentation (after the above).
