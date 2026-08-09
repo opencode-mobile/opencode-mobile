@@ -1,5 +1,10 @@
 import Foundation
 
+/// Shared release-observability seam (OPE-123).
+/// Public surface is `initialize` only until product Analytics (OPE-124) after
+/// OPE-125. Debug is a no-op; Release configures Firebase in-seam (unlike
+/// Android, which relies on google-services auto-init) and may record the
+/// protected one-shot Crashlytics verification non-fatal.
 enum OpenCodeReleaseObservability {
     static func initialize() {
         #if DEBUG

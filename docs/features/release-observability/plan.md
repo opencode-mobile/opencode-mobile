@@ -125,6 +125,12 @@ See [`ope-122-plan.md`](ope-122-plan.md).
 After both platforms have a seam, align responsibilities and naming so future
 product events have one place to land. No collection expansion.
 
+Contract: both expose `OpenCodeReleaseObservability.initialize(...)` only;
+Debug is a no-op; Release owns SDK readiness + the verification non-fatal;
+feature code never imports Firebase. Full responsibilities and intentional
+platform differences are recorded in [`decisions.md`](decisions.md)
+(Shared release-observability seam contract).
+
 ### OPE-125 — Privacy and consent review
 
 Human gate before Analytics leaves the private-tester audience or gains custom
