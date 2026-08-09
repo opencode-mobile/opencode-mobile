@@ -346,6 +346,19 @@ struct ProjectListHomeViewModelTests {
         #expect(createError == "nope")
     }
 
+    @Test func coordinator_prunesHandlersForDeallocatedOwners() {
+        let coordinator = OptimisticSessionCreateCoordinator()
+        var received: [String] = []
+        var owner: AnyObject? = NSObject()
+        coordinator.onCreateFailed(owner: owner!) { received.append($0) }
+        coordinator.reportCreateFailed("first")
+        #expect(received == ["first"])
+
+        owner = nil
+        coordinator.reportCreateFailed("second")
+        #expect(received == ["first"])
+    }
+
     @Test func onSessionLongPress_opensSheetAndKeepsForkHiddenWithoutUserMessages() async {
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),

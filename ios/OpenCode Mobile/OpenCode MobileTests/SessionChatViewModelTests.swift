@@ -1713,6 +1713,33 @@ struct SessionChatViewModelTests {
         #expect(sessionRepository.createSessionCallCount == 1)
     }
 
+    @Test func startObservingAgainWhileCreatingOrAfterPromotion_issuesSingleCreate() async {
+        let sessionRepository = FakeChatSessionRepository(
+            createSessionResult: Session(
+                id: "ses-new", title: "Created", slug: nil, projectID: nil,
+                directory: "/repo", parentID: nil, updatedAtEpochMs: nil
+            )
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            sessionRepository: sessionRepository,
+            sessionID: OptimisticSessionCreate.placeholderSessionID,
+            sessionTitle: "New Session"
+        )
+        defer { viewModel.stopObserving() }
+
+        viewModel.startObserving()
+        viewModel.startObserving()
+        await viewModel.loadMessages()
+        #expect(viewModel.uiState.sessionID == "ses-new")
+        #expect(sessionRepository.createSessionCallCount == 1)
+
+        viewModel.startObserving()
+        await viewModel.loadMessages()
+        #expect(viewModel.uiState.sessionID == "ses-new")
+        #expect(sessionRepository.createSessionCallCount == 1)
+    }
+
     @Test func runClientSlashAction_fork_confirmAndOpen_navigatesToForkedSession() async {
         let sessionRepository = FakeChatSessionRepository(
             forkSessionResult: Session(

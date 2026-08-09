@@ -2483,6 +2483,39 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun bindPlaceholderAfterPromotion_doesNotRecreateSession() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    createSessionResult = Session(id = "ses-new", title = "Created", directory = "/repo"),
+                )
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind(
+                OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                "New Session",
+                "/repo",
+            )
+            advanceUntilIdle()
+            assertEquals("ses-new", viewModel.uiState.value.sessionId)
+            assertEquals(1, sessionRepository.createSessionCallCount)
+
+            viewModel.bind(
+                OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                "New Session",
+                "/repo",
+            )
+            advanceUntilIdle()
+
+            assertEquals("ses-new", viewModel.uiState.value.sessionId)
+            assertEquals(1, sessionRepository.createSessionCallCount)
+            assertTrue(viewModel.uiState.value.timeline != SessionChatTimelineState.Creating)
+        }
+
+    @Test
     fun runClientSlashAction_fork_confirmAndOpen_navigatesToForkedSession() =
         runTest(testDispatcher) {
             val sessionRepository =
@@ -3307,6 +3340,8 @@ private class FakeSessionRepository(
         private set
     var createSessionRequest: LifecycleRequest? = null
         private set
+    var createSessionCallCount: Int = 0
+        private set
     var forkSessionRequest: ForkRequest? = null
         private set
     var revertRequest: RevertRequest? = null
@@ -3339,6 +3374,7 @@ private class FakeSessionRepository(
         directory: String?,
     ): Session {
         createSessionRequest = LifecycleRequest(id = parentId.orEmpty(), directory = directory)
+        createSessionCallCount += 1
         createSessionError?.let { throw it }
         return createSessionResult ?: Session(id = "new-ses", title = title.orEmpty(), directory = directory)
     }

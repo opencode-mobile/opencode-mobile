@@ -4,13 +4,29 @@ import Foundation
 final class OptimisticSessionCreateCoordinator {
     static let shared = OptimisticSessionCreateCoordinator()
 
-    private var failureHandlers: [(String) -> Void] = []
+    private final class WeakHandler {
+        weak var owner: AnyObject?
+        let handler: (String) -> Void
 
-    func onCreateFailed(_ handler: @escaping (String) -> Void) {
-        failureHandlers.append(handler)
+        init(owner: AnyObject, handler: @escaping (String) -> Void) {
+            self.owner = owner
+            self.handler = handler
+        }
+    }
+
+    private var failureHandlers: [WeakHandler] = []
+
+    func onCreateFailed(owner: AnyObject, _ handler: @escaping (String) -> Void) {
+        prune()
+        failureHandlers.append(WeakHandler(owner: owner, handler: handler))
     }
 
     func reportCreateFailed(_ message: String) {
-        failureHandlers.forEach { $0(message) }
+        prune()
+        failureHandlers.forEach { $0.handler(message) }
+    }
+
+    private func prune() {
+        failureHandlers.removeAll { $0.owner == nil }
     }
 }

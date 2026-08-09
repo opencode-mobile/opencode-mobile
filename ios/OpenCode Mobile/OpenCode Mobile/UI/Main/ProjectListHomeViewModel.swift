@@ -185,7 +185,7 @@ final class ProjectListHomeViewModel {
                 self?.state = .disconnected
             }
         }
-        OptimisticSessionCreateCoordinator.shared.onCreateFailed { [weak self] message in
+        OptimisticSessionCreateCoordinator.shared.onCreateFailed(owner: self) { [weak self] message in
             self?.setProjectSessionCreateError(message)
         }
         startObservingConnectionState()

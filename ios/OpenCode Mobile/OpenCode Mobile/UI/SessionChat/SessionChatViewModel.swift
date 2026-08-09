@@ -883,6 +883,9 @@ final class SessionChatViewModel {
     }
 
     private func beginOptimisticCreate() {
+        if optimisticCreateTask != nil || !OptimisticSessionCreate.isPlaceholder(sessionID) {
+            return
+        }
         OpenCodeLog.sessionChat.info("optimistic create start worktree=\(self.worktree, privacy: .private)")
         timeline.prepareForOptimisticCreate()
         composer.startCatalogLoads()
@@ -912,12 +915,14 @@ final class SessionChatViewModel {
                 }
                 guard !Task.isCancelled else { return }
                 OpenCodeLog.sessionChat.info("optimistic create success id=\(session.id, privacy: .public)")
+                optimisticCreateTask = nil
                 promoteOptimisticSession(id: session.id, title: session.title)
             } catch {
                 guard !Task.isCancelled else { return }
                 OpenCodeLog.sessionChat.warning(
                     "optimistic create failed error=\(error.localizedDescription, privacy: .public)"
                 )
+                optimisticCreateTask = nil
                 OptimisticSessionCreateCoordinator.shared.reportCreateFailed(
                     error.localizedDescription
                 )

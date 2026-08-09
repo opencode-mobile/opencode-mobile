@@ -236,7 +236,7 @@ class SessionChatViewModel
             sessionTitle: String,
             worktree: String,
         ) {
-            if (boundWorktree == worktree && boundSessionId == OptimisticSessionCreate.PLACEHOLDER_SESSION_ID) {
+            if (boundWorktree == worktree && boundSessionId != null) {
                 return
             }
             optimisticCreateJob?.cancel()
