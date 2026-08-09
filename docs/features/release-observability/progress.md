@@ -5,49 +5,43 @@
 - Parent plan and ticket tree created under OPE-121.
 - Shared minimal Analytics contract recorded in `plan.md` (mirrors OPE-72).
 - Task plan for iOS parity: `ope-122-plan.md`.
-- OPE-123 shared seam contract recorded in `decisions.md` (initialize-only
-  public surface; intentional platform differences listed).
-- OPE-125 privacy gate redone under a **public / production release**
-  assumption: prior private-internal unlock superseded; product events blocked
-  until store-form verification + in-app Analytics consent + a second form
-  pass. See `decisions.md`.
+- OPE-123 shared seam contract recorded in `decisions.md` (extended for
+  OPE-129 consent + `logProductEvent`).
+- OPE-125 privacy gate under a **public / production release** assumption.
+- OPE-129 task plan: `ope-129-plan.md`. Consent UX + seam gate implemented
+  (default off; Settings Privacy toggle; Clear All Data resets).
 
 ## Design-system dependencies
 
-Not applicable for Crashlytics / minimal Analytics. In-app Analytics consent
-UI (follow-up) will need design-system / feature UI before product events.
+OPE-129 uses existing `OpenCodeListItem` + platform Switch/Toggle. No new
+design-system component.
 
 ## Android
 
 - OPE-72 complete: release-only Crashlytics + minimal Analytics; Debug
   Firebase-free; verification non-fatal accepted on Play internal.
-- OPE-123: `OpenCodeReleaseObservability` aligned to the shared contract
-  (comments only; no collection change).
-- No product-event instrumentation until OPE-124 reopen criteria are met.
+- OPE-123: `OpenCodeReleaseObservability` aligned to the shared contract.
+- OPE-129: `AnalyticsConsentPreferences`, Settings Privacy toggle, release
+  `logProductEvent` gated by consent; debug send no-op.
+- No product-event taxonomy instrumentation until OPE-124 reopen criteria.
 
 ## iOS
 
 - OPE-122 complete: Firebase iOS app confirmed; SPM Analytics + Crashlytics;
   Debug no-op / Release Firebase seam; Info.plist collection flags; protected
   `verify_crashlytics` on **iOS Release**; policy unit tests; operator runbook.
-- OPE-123: iOS seam comments aligned to the shared contract; public surface
-  remains `initialize` only until a consented product-event API is accepted.
+- OPE-123 / OPE-129: seam exposes consent + gated `logProductEvent`; Settings
+  Privacy toggle; Debug never sends.
 
 ## Blockers
 
 - OPE-124 blocked until: (1) store privacy / data-safety verified for current
-  Crashlytics + minimal Analytics (**OPE-128 in progress**); (2) in-app
-  Analytics consent UI shipped and enforced for product events (OPE-129);
-  (3) store forms updated again for product events; (4) narrow taxonomy +
-  hard bans only.
+  Crashlytics + minimal Analytics (OPE-128); (2) in-app Analytics consent UI
+  (**OPE-129 done**); (3) store forms updated again for product events;
+  (4) narrow taxonomy + hard bans only.
 
 ## Remaining work
 
-1. [OPE-128](https://linear.app/opencode-mobile/issue/OPE-128/verify-store-privacy-forms-for-crashlytics-and-analytics) — Store privacy / data-safety verification for **current** Crashlytics + minimal Analytics (human / store consoles). Task plan: [`ope-128-plan.md`](ope-128-plan.md). **In progress (2026-08-09 Play Console pass):**
-   - Play **Data safety** questionnaire filled and **saved as draft** for `dev.opencode.mobile`: collect/share Yes; encrypted in transit Yes; no in-app accounts; data types **Crash logs** + **Diagnostics** only; purposes **App functionality** + **Analytics** only (no Advertising / marketing purposes; no Device or other IDs; no App interactions after a flaky usage-dialog over-declare was rolled back).
-   - Play **Advertising ID** declaration saved: **No** (matches AD_ID removal).
-   - **Blocked for final Data safety Save:** empty **Privacy policy URL** (none on the listing; do not invent a hosted policy in-repo) and incomplete **Target audience and content** (and related App content prerequisites such as ads / sign-in details).
-   - App Store Connect **App Privacy** not started in-session (ASC login required).
-2. [OPE-129](https://linear.app/opencode-mobile/issue/OPE-129/in-app-analytics-consent-for-product-events) — In-app Analytics consent UI (gates product / custom events; Crashlytics + minimal automatic breadcrumbs continue under OPE-125 policy).
-3. Store form pass **before** product events ship (after OPE-129; may be tracked on OPE-128 follow-up or OPE-124 acceptance).
-4. [OPE-124](https://linear.app/opencode-mobile/issue/OPE-124/product-analytics-taxonomy-and-instrumentation) — Product Analytics taxonomy and instrumentation (after the above).
+1. [OPE-128](https://linear.app/opencode-mobile/issue/OPE-128/verify-store-privacy-forms-for-crashlytics-and-analytics) — Store privacy / data-safety verification for **current** Crashlytics + minimal Analytics (human / store consoles).
+2. Store form pass **before** product events ship (after taxonomy is ready).
+3. [OPE-124](https://linear.app/opencode-mobile/issue/OPE-124/product-analytics-taxonomy-and-instrumentation) — Product Analytics taxonomy and instrumentation (after the above).

@@ -4,17 +4,22 @@ import android.app.Application
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Bundle
+import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
+import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 
 /**
- * Release half of the shared release-observability seam (OPE-123).
+ * Release half of the shared release-observability seam (OPE-123 / OPE-129).
  * Firebase is already initialized by the google-services plugin; this entry
- * only records the protected one-shot Crashlytics verification non-fatal.
- * Future product Analytics (OPE-124) lands here after OPE-125 — no public
- * event APIs until then.
+ * records the protected Crashlytics verification non-fatal and owns the
+ * consented product-event API. Feature code must never import Firebase.
  */
 internal object OpenCodeReleaseObservability {
+    private var application: Application? = null
+
     fun initialize(application: Application) {
+        this.application = application
         val enabled =
             application.packageManager
                 .getApplicationInfo(application.packageName, PackageManager.GET_META_DATA)
@@ -41,6 +46,28 @@ internal object OpenCodeReleaseObservability {
             .getInstance()
             .recordException(OpenCodeMobileCrashlyticsVerification())
         preferences.edit().putBoolean(markerKey, true).commit()
+    }
+
+    fun isProductAnalyticsConsented(): Boolean =
+        AnalyticsConsentPreferences.productAnalyticsConsented
+
+    fun setProductAnalyticsConsented(value: Boolean) {
+        AnalyticsConsentPreferences.updateProductAnalyticsConsented(value)
+    }
+
+    fun logProductEvent(
+        name: String,
+        parameters: Map<String, String> = emptyMap(),
+    ) {
+        if (!ProductAnalyticsConsentPolicy.shouldLog(isProductAnalyticsConsented())) {
+            return
+        }
+        val app = application ?: return
+        val bundle = Bundle()
+        parameters.forEach { (key, value) ->
+            bundle.putString(key, value)
+        }
+        FirebaseAnalytics.getInstance(app).logEvent(name, bundle)
     }
 
     @Suppress("DEPRECATION")

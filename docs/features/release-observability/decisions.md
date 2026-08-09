@@ -50,8 +50,15 @@ Analytics a single future call site per platform.
 
 **Status:** Accepted  
 **Decision:** Both apps expose one release-observability seam named
-`OpenCodeReleaseObservability` with a single public entry point:
-`initialize(...)`. That seam owns:
+`OpenCodeReleaseObservability`. Public entry points:
+
+- `initialize(...)` — release bootstrap + Crashlytics verification
+- `isProductAnalyticsConsented()` / `setProductAnalyticsConsented(_:)` —
+  product-event consent (OPE-129)
+- `logProductEvent(name:parameters:)` — consented product events only
+  (no-op without consent; Debug always no-op)
+
+That seam owns:
 
 1. **Release bootstrap boundary** — Debug / day-to-day builds are no-ops and
    never import or call Firebase. Release paths may use Firebase only inside
@@ -64,13 +71,15 @@ Analytics a single future call site per platform.
    verification non-fatal via Crashlytics, then set the marker. Policy
    decisions live in Firebase-free `CrashlyticsVerificationPolicy`.
 4. **Feature isolation** — Screen Models, views, and domain feature code never
-   import Firebase. Future product Analytics call sites (OPE-124) land only on
-   this seam after OPE-125; until then the public surface stays `initialize`
-   only (no `logEvent` / user-ID / property APIs).
+   import Firebase. Product Analytics call sites (OPE-124) use only this seam’s
+   consented `logProductEvent` API (OPE-129). Consent **storage and enforcement**
+   live on the seam / `AnalyticsConsentPreferences`; consent **UI** lives in
+   Settings (not owned as presentation by the seam).
 
 **Not owned by the seam:** Play / TestFlight / App Distribution pipelines;
-privacy consent UI; custom event taxonomy; FCM / Remote Config / Performance;
-any collection beyond the shared minimal Analytics contract.
+Settings consent presentation; custom event taxonomy; FCM / Remote Config /
+Performance; any collection beyond the shared minimal Analytics contract plus
+consented product events.
 
 **Intentional platform differences:**
 
@@ -230,3 +239,24 @@ Crashlytics/Analytics SDKs is a stronger privacy posture than private
 testers. Keep crash diagnostics usable under the current minimal contract,
 require accurate store declarations for what already ships, and do not expand
 into product Analytics without an explicit consent and form story.
+
+## Product Analytics consent UX (OPE-129)
+
+**Status:** Accepted  
+**Decision:**
+
+1. **Default:** Product Analytics consent is **off**. No product / custom
+   events fire until the user opts in.
+2. **UX:** Settings → **Privacy** → **Product Analytics** toggle using
+   existing `OpenCodeListItem` + platform Switch/Toggle (no new design-system
+   component; no first-launch modal; no ATT prompt).
+3. **Enforcement:** `OpenCodeReleaseObservability.logProductEvent` refuses to
+   send without consent. Debug builds never send. Crashlytics and minimal
+   automatic Analytics breadcrumbs are **not** gated by this toggle.
+4. **Change of consent:** Off immediately blocks further product events; on
+   allows them on Release. **Clear All Data** resets consent to off.
+5. **Storage:** `AnalyticsConsentPreferences` (UserDefaults /
+   SharedPreferences), not Keychain.
+
+**Why:** Matches the OPE-125 public-release product policy with a discoverable
+Settings control and a seam-owned gate before OPE-124 instrumentation.
