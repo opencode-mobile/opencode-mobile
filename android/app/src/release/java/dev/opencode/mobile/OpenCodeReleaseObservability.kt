@@ -6,6 +6,13 @@ import android.content.pm.PackageManager
 import android.os.Build
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 
+/**
+ * Release half of the shared release-observability seam (OPE-123).
+ * Firebase is already initialized by the google-services plugin; this entry
+ * only records the protected one-shot Crashlytics verification non-fatal.
+ * Future product Analytics (OPE-124) lands here after OPE-125 — no public
+ * event APIs until then.
+ */
 internal object OpenCodeReleaseObservability {
     fun initialize(application: Application) {
         val enabled =
