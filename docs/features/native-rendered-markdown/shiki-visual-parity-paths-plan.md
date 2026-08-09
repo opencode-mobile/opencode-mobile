@@ -9,10 +9,6 @@ See also:
 
 - [shiki-visual-parity-path-a-plan.md](./shiki-visual-parity-path-a-plan.md) —
   Path A implementation plan (PA0–PA5)
-- [shiki-visual-parity-path-a-plan.html](./shiki-visual-parity-path-a-plan.html) —
-  visual companion
-- [shiki-visual-parity-paths-plan.html](./shiki-visual-parity-paths-plan.html) —
-  visual companion
 - [web-vs-mobile-highlighter.md](./web-vs-mobile-highlighter.md) — layer-by-layer
   comparison (layers 5–8)
 - [parity-gaps.md](./parity-gaps.md) — current highlighter parity status

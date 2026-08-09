@@ -11,8 +11,6 @@ Public repository observation stays **list-shaped**.
 
 Companion decisions lock:
 [decisions.md](./decisions.md#message-display-rendering-hardening--phase-7b-follow-ups).
-Visual companion:
-[message-display-rendering-7b-plan.html](./message-display-rendering-7b-plan.html).
 
 Linear: [OPE-86](https://linear.app/opencode-mobile/issue/OPE-86/message-display-rendering-phase-7b)
 (umbrella) · [OPE-87](https://linear.app/opencode-mobile/issue/OPE-87/fill-phase-7a-soak-coverage-gaps)

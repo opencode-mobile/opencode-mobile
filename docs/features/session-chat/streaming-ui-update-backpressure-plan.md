@@ -15,9 +15,6 @@ Domain coalescing (`DisplayMessagePipeline` 16 ms / 48 ms, plain-first,
 decoration backlog) already works. This plan targets **host geometry and scroll
 coupling** to every content growth, not TextMate on the UI thread.
 
-Companion review artifact:
-[streaming-ui-update-backpressure-plan.html](./streaming-ui-update-backpressure-plan.html).
-
 Prior diagnosis canvas (workspace-local, not committed):
 `session-chat-message-update-architecture.canvas.tsx` and
 `session-chat-ui-update-architecture-proposal.canvas.tsx`.

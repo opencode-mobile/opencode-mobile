@@ -2,7 +2,6 @@
 
 Linear: [OPE-72](https://linear.app/opencode-mobile/issue/OPE-72/ship-crashlytics-and-minimal-analytics-on-release-builds)
 Parent: [OPE-69](https://linear.app/opencode-mobile/issue/OPE-69/android-release-distribution)
-Companion visual review: [`ope-72-plan.html`](ope-72-plan.html).
 
 ## Outcome
 

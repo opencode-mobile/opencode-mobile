@@ -15,9 +15,7 @@ The implemented starting point is documented in:
 - [assistant-message-pipeline.md](./assistant-message-pipeline.md); and
 - [message-display-rendering-pipeline.md](./message-display-rendering-pipeline.md).
 
-The adjacent
-[HTML plan](./message-display-rendering-hardening-plan.html) is a visual review
-companion. This Markdown file remains the source of truth.
+This Markdown file is the source of truth.
 
 ## Objective
 
@@ -759,7 +757,6 @@ through the new interfaces to superseded shallow implementations.
 
 - `message-display-rendering-hardening-plan.md` — canonical phased plan,
   invariants, gates, and acceptance criteria.
-- `message-display-rendering-hardening-plan.html` — visual phase/status board.
 - `assistant-message-pipeline.md` — implemented store/preparation starting
   architecture; update during implementation.
 - `message-display-rendering-pipeline.md` — implemented presentation/rendering
@@ -771,6 +768,5 @@ through the new interfaces to superseded shallow implementations.
 - `parity-gaps.md` — unchanged for planning; update only for an observable
   temporary or intentional divergence.
 
-When a phase starts or finishes, update this plan, the status badges in the
-[HTML companion](./message-display-rendering-hardening-plan.html), and
+When a phase starts or finishes, update this plan and
 `progress.md` in the same change. Markdown remains the source of truth.

@@ -7,7 +7,6 @@ testers through Google Play's internal testing track, without waiting on an
 Apple Developer account for iOS.
 
 Linear: [OPE-69](https://linear.app/opencode-mobile/issue/OPE-69/android-release-distribution).
-Companion visual review: [`plan.html`](plan.html).
 
 ## In Scope
 

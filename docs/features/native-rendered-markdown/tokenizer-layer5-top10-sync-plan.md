@@ -12,8 +12,6 @@ See also:
 
 - [web-vs-mobile-highlighter.md](./web-vs-mobile-highlighter.md) — layer-by-layer
   web vs mobile comparison
-- [tokenizer-layer5-top10-sync-plan.html](./tokenizer-layer5-top10-sync-plan.html)
-  — visual companion
 
 ## Strategy
 

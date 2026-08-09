@@ -1,8 +1,7 @@
 # OPE-107 — Home Activity Grouping (high-level plan)
 
 Ticket: [OPE-107](https://linear.app/opencode-mobile/issue/OPE-107/home-activity-grouping)  
-Feature contract: [`plan.md`](plan.md) · Decisions: [`decisions.md`](decisions.md)  
-Companion: [`ope-107-plan.html`](ope-107-plan.html)
+Feature contract: [`plan.md`](plan.md) · Decisions: [`decisions.md`](decisions.md)
 
 ## Goal
 

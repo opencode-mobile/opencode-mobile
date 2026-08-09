@@ -9,8 +9,6 @@
 - Why: Compact over chat, matches existing float-stack patterns, keeps
   `todowrite` out of the timeline.
 - Ticket: OPE-60 / OPE-97.
-- Evidence: `docs/features/session-todos/prototype/VERDICT.md` (throwaway UI on
-  `prototype/ope-60-session-todos-ui`).
 
 ## Sync lifecycle
 

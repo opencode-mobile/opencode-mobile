@@ -12,8 +12,6 @@ Parent context:
 
 See also:
 
-- [shiki-visual-parity-path-a-plan.html](./shiki-visual-parity-path-a-plan.html) —
-  visual companion
 - [shiki-visual-parity-paths-plan.md](./shiki-visual-parity-paths-plan.md) —
   Path A vs Path B strategy
 - [docs/design-system/tokens.md](../../design-system/tokens.md) — syntax role mapping

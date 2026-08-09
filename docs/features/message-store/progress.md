@@ -26,14 +26,10 @@
 - [x] The implemented message display and rendering architecture is documented
   from `DisplayMessage` through timeline projection, Screen Model state, native
   row rendering, markdown paint, and auto-follow on both platforms in
-  [message-display-rendering-pipeline.md](./message-display-rendering-pipeline.md),
-  with a self-contained visual companion in
-  [message-display-rendering-pipeline.html](./message-display-rendering-pipeline.html).
+  [message-display-rendering-pipeline.md](./message-display-rendering-pipeline.md).
 - [x] The follow-up reliability and responsiveness architecture is documented
   as a seven-phase cross-platform plan in
-  [message-display-rendering-hardening-plan.md](./message-display-rendering-hardening-plan.md),
-  with a self-contained status board in
-  [message-display-rendering-hardening-plan.html](./message-display-rendering-hardening-plan.html).
+  [message-display-rendering-hardening-plan.md](./message-display-rendering-hardening-plan.md).
 - [x] Hardening Phase 4: independent streaming text lane (format-always 16/48)
   plus disposable decoration lane with bounded backlog on both platforms.
 - [x] Hardening Phase 5: stable `blockID`s, internal DisplayFrame→TimelineFrame

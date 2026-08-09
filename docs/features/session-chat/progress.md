@@ -30,9 +30,7 @@
 - Shared scope: row tap opens Session Chat with local message/composer behavior.
 - **2026-07-28:** Streaming UI update backpressure plan drafted (architecture
   review). See
-  [streaming-ui-update-backpressure-plan.md](./streaming-ui-update-backpressure-plan.md)
-  and companion
-  [streaming-ui-update-backpressure-plan.html](./streaming-ui-update-backpressure-plan.html).
+  [streaming-ui-update-backpressure-plan.md](./streaming-ui-update-backpressure-plan.md).
   **Phases 0–5 complete (uncommitted):** baseline layoutAffecting counters;
   Android Session Chat newest-row size animation disabled; projector text-length
   no longer layout-affecting; `grewBottomRowIDs` / armed GrowBottom follow; thin

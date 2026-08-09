@@ -105,6 +105,4 @@ Parent: [OPE-60](https://linear.app/opencode-mobile/issue/OPE-60/session-todos).
 
 - Domain terms: `CONTEXT.md` (Session Todo List / Session Todo)
 - Research: `docs/research/opencode-session-todos.md`
-- Prototype C verdict: `docs/features/session-todos/prototype/VERDICT.md`
-  (throwaway UI on `prototype/ope-60-session-todos-ui`; do not merge that branch)
 - Sync task plan: `docs/features/session-todos/ope-95-plan.md`

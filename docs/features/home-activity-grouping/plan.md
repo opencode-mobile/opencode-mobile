@@ -76,6 +76,5 @@ without scanning a flat last-changed list.
 
 ## Prototype
 
-- UI exploration and verdict:
-  [`prototype/VERDICT.md`](prototype/VERDICT.md)
-- Run: `npm run prototype:home-activity`
+UI exploration verdict (time ladder, no pin) is recorded in
+[`decisions.md`](decisions.md).

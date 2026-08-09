@@ -1,6 +1,6 @@
 ---
 name: documentation-planning
-description: Route durable opencode-mobile documentation when creating or maintaining feature plans, task plans, progress, decisions, parity gaps, or companion HTML artifacts.
+description: Route durable opencode-mobile documentation when creating or maintaining feature plans, task plans, progress, decisions, or parity gaps.
 ---
 
 # Documentation Planning
@@ -21,7 +21,6 @@ Identify the feature slug and classify every applicable branch:
 | Implementation status or remaining work | `docs/features/<feature-slug>/progress.md` |
 | Durable feature-level choice | `docs/features/<feature-slug>/decisions.md` |
 | Temporary or intentional platform difference | `docs/features/<feature-slug>/parity-gaps.md` |
-| Visual companion to a plan | Adjacent `.html` with the same basename |
 
 Use an ADR only for a hard-to-reverse project decision that is surprising
 without context and resulted from a real trade-off.
@@ -42,8 +41,6 @@ Handle missing paths explicitly:
 - For an existing feature, create a missing routed artifact only when the
   request or another affected artifact requires it. Do not create unrelated
   empty files merely to complete the standard set.
-- Create a missing HTML companion when the HTML branch applies; otherwise its
-  absence is expected.
 - If the feature slug or canonical owner remains ambiguous after inspecting the
   repository, stop and report the competing candidates instead of guessing.
 
@@ -63,20 +60,14 @@ absent with an applicable rule above, or recorded as blocked.
 This step is complete when every applicable branch is updated, explicitly
 unchanged with a reason, or blocked with the missing dependency named.
 
-### 4. Handle HTML only when routed
+### 4. Do not create HTML companions
 
-Create or update an HTML companion when the user requests one or when a new or
-substantially revised plan contains multiple phases, mappings, or risks that are
-materially easier to review visually. Do not create one when the user asks for
-text only. When this branch applies, read [`HTML-PLANS.md`](HTML-PLANS.md) before
-editing the companion.
+HTML plan companions are retired. Keep plans as Markdown only; render a
+temporary visual review on demand if one is needed instead of committing an
+HTML file. Markdown is the source of truth.
 
-Markdown remains the source of truth. HTML is a committed visual review
-artifact, not a runtime asset.
-
-This step is complete when the companion is either synchronized with its
-Markdown source, intentionally omitted by request, not applicable with a
-reason, or blocked with the cause recorded.
+This step is complete when no HTML companion exists or is created for the
+routed artifacts.
 
 ### 5. Apply the durability boundary
 
@@ -91,12 +82,11 @@ transient evidence has entered the canonical artifacts.
 
 ## Completion Gate
 
-Do not finish until every routed artifact and required companion is accounted
+Do not finish until every routed artifact is accounted
 for as **updated**, **unchanged with a reason**, **not applicable with a reason**,
 or **blocked with a named dependency**. Confirm that:
 
 - all affected Markdown artifacts agree on scope, status, decisions, and parity;
-- every applicable HTML companion agrees with its Markdown source;
 - new or changed relative links resolve;
 - no transient evidence or unrelated empty artifact was added; and
 - the final diff contains only the intended durable documentation changes.

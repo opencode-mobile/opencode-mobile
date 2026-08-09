@@ -5,7 +5,7 @@
 - [x] Plan written (`plan.md`).
 - [x] Decisions recorded (`decisions.md`).
 - [x] UI prototype verdict: **A — Classic pager**
-  ([`prototype/VERDICT.md`](./prototype/VERDICT.md)).
+  (recorded in `decisions.md`).
 - [x] Native implementation (iOS + Android).
 
 ## Design-System

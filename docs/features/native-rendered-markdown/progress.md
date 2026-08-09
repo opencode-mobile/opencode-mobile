@@ -159,12 +159,10 @@
   [TextMate Pipeline Architecture Proposal](./textmate-pipeline-architecture-proposal.md)
   from its six-phase
   [implementation plan](./textmate-pipeline-improvement-plan.md). The proposal
-  report and its
-  [HTML companion](./textmate-pipeline-architecture-proposal.html) now focus on
-  one asynchronous, single-owner engine, including its boundary, request
-  lifecycle, incremental fast path, native lifetime, bounded memory, failure
-  behavior, and measurement contract. Phase 1 implementation status is recorded
-  above.
+  report now focuses on one asynchronous, single-owner engine, including its
+  boundary, request lifecycle, incremental fast path, native lifetime, bounded
+  memory, failure behavior, and measurement contract. Phase 1 implementation
+  status is recorded above.
 - 2026-07-28: Reverted `` ```markdown `` nest-depth special case. Fences close on
   the first bare closing marker (CommonMark / opencode web). Parser test
   `markdownFenceClosesOnFirstBareFenceLikeCommonMark` replaces the old nested-
@@ -253,7 +251,7 @@
 ## Completed
 
 - Superseded ADR 0003 with ADR 0004.
-- Added `docs/features/native-rendered-markdown/plan.md` and `plan.html`.
+- Added `docs/features/native-rendered-markdown/plan.md`.
 - Added KMP `shared/markdown-core` module with render-tree models, detector,
   parser, JSON boundary, diagnostics, and common tests.
 - Added a JSON-boundary schema test covering the versioned render tree shape

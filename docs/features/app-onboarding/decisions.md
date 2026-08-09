@@ -8,7 +8,6 @@
   over home Connection onboarding.
 - Why: Chosen in UI prototype; familiar mobile pattern; separates education from
   Connection setup.
-- Evidence: [`prototype/VERDICT.md`](./prototype/VERDICT.md).
 
 ## Three content beats + nested setup
 
@@ -18,8 +17,6 @@
   keeps short steps; only CTA opens https://opencode.ai/docs/server/.
 - Why: Sets expectations (unofficial, server-required, capabilities) without
   duplicating Connection setup; official docs own full server detail.
-- Evidence: content locked in OPE-98 and
-  [`prototype/index.html`](./prototype/index.html) (`?variant=A`).
 
 ## Distinct from Connection onboarding
 
