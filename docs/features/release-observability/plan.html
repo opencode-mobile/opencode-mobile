@@ -149,17 +149,27 @@
         <tr>
           <td><a href="https://linear.app/opencode-mobile/issue/OPE-123/align-shared-release-observability-seam">OPE-123</a></td>
           <td>Shared observability seam alignment</td>
-          <td class="status-ok">In Progress</td>
+          <td class="status-ok">Done</td>
         </tr>
         <tr>
           <td><a href="https://linear.app/opencode-mobile/issue/OPE-125/privacy-and-consent-review-for-analytics-expansion">OPE-125</a></td>
-          <td>Privacy / consent gate</td>
+          <td>Privacy / consent gate (public release)</td>
+          <td class="status-ok">Done (policy)</td>
+        </tr>
+        <tr>
+          <td><a href="https://linear.app/opencode-mobile/issue/OPE-128/verify-store-privacy-forms-for-crashlytics-and-analytics">OPE-128</a></td>
+          <td>Store privacy forms (current Crashlytics + Analytics)</td>
+          <td class="status-later">In Progress (human)</td>
+        </tr>
+        <tr>
+          <td><a href="https://linear.app/opencode-mobile/issue/OPE-129/in-app-analytics-consent-for-product-events">OPE-129</a></td>
+          <td>In-app Analytics consent for product events</td>
           <td class="status-later">Backlog</td>
         </tr>
         <tr>
           <td><a href="https://linear.app/opencode-mobile/issue/OPE-124/product-analytics-taxonomy-and-instrumentation">OPE-124</a></td>
           <td>Product Analytics taxonomy + instrumentation</td>
-          <td class="status-later">Backlog (blocked by 125)</td>
+          <td class="status-later">Blocked (128 + 129)</td>
         </tr>
       </tbody>
     </table>
@@ -168,8 +178,10 @@
     <ol class="phases">
       <li><strong>OPE-122</strong> — Human plist handoff → iOS SPM + release seam → protected verification → device acceptance.</li>
       <li><strong>OPE-123</strong> — Align Android/iOS seam responsibilities without expanding collection.</li>
-      <li><strong>OPE-125</strong> — Privacy/consent before leaving private testers or adding custom events.</li>
-      <li><strong>OPE-124</strong> — Shared event taxonomy through the seam on both platforms.</li>
+      <li><strong>OPE-125</strong> — Public-release privacy gate: keep minimal Crashlytics + Analytics; verify store forms; consent before product events.</li>
+      <li><strong>OPE-128</strong> — Store privacy / data-safety verification for current Crashlytics + Analytics.</li>
+      <li><strong>OPE-129</strong> — In-app Analytics consent UI for product events.</li>
+      <li><strong>OPE-124</strong> — Shared event taxonomy through the seam (blocked until 128 + 129 + second form pass).</li>
     </ol>
 
     <h2>Baseline</h2>

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OPE-128 — Store privacy forms</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #f7f7f5; --fg: #1a1a1a; --muted: #5c5c5c; --card: #fff; --line: #d9d9d4; --ok: #1b7f4a; --later: #8a6d1d; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #121212; --fg: #f0f0f0; --muted: #a3a3a3; --card: #1c1c1c; --line: #333; --ok: #5dce8c; --later: #e0c35a; }
+    }
+    body { margin: 0; font: 16px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+    main { max-width: 52rem; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+    h1 { font-size: 1.5rem; margin: 0 0 0.5rem; }
+    p, li { color: var(--fg); }
+    .muted { color: var(--muted); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.1rem; margin: 1rem 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    th, td { border: 1px solid var(--line); padding: 0.45rem 0.55rem; text-align: left; vertical-align: top; }
+    th { background: color-mix(in srgb, var(--card) 80%, var(--line)); }
+    .status-ok { color: var(--ok); font-weight: 600; }
+    .status-later { color: var(--later); font-weight: 600; }
+    ol.steps { padding-left: 1.2rem; }
+    a { color: inherit; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>OPE-128 — Store privacy forms</h1>
+    <p class="muted">Human-owned verification that Play Data safety and App Store App Privacy match current Crashlytics + minimal Analytics. Source: <a href="./ope-128-plan.md">ope-128-plan.md</a>.</p>
+
+    <div class="card">
+      <strong>Status:</strong> <span class="status-later">In Progress (console work)</span><br />
+      <strong>Blocks:</strong> <a href="https://linear.app/opencode-mobile/issue/OPE-124/product-analytics-taxonomy-and-instrumentation">OPE-124</a><br />
+      <strong>Policy:</strong> <a href="https://linear.app/opencode-mobile/issue/OPE-125/privacy-and-consent-review-for-analytics-expansion">OPE-125</a> public-release gate
+    </div>
+
+    <h2>Declare</h2>
+    <ul>
+      <li>Crash diagnostics / crash logs (Crashlytics)</li>
+      <li>Automatic Analytics lifecycle / technical breadcrumbs (not advertising)</li>
+    </ul>
+    <h2>Do not declare</h2>
+    <ul>
+      <li>Advertising ID / IDFA / ad personalization</li>
+      <li>App-assigned analytics user IDs / user properties</li>
+      <li>Custom product Analytics events</li>
+      <li>Automatic screen / page-view product analytics</li>
+    </ul>
+
+    <h2>Evidence</h2>
+    <table>
+      <thead>
+        <tr><th>Signal</th><th>Android</th><th>iOS</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Crashlytics release</td><td class="status-ok">Yes</td><td class="status-ok">Yes</td></tr>
+        <tr><td>Analytics SDK release</td><td class="status-ok">Yes</td><td class="status-ok">Yes</td></tr>
+        <tr><td>Debug Firebase-free</td><td class="status-ok">Yes</td><td class="status-ok">Yes</td></tr>
+        <tr><td>Custom events / user IDs</td><td>None</td><td>None</td></tr>
+        <tr><td>Screen reporting</td><td>Off</td><td>Off</td></tr>
+        <tr><td>ADID / IDFA / ads</td><td>Off / removed</td><td>Off</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Operator steps</h2>
+    <ol class="steps">
+      <li>Play Console → Data safety → align to evidence; save/submit.</li>
+      <li>App Store Connect → App Privacy → align to evidence; save (do not accidental App Review submit).</li>
+      <li>If a privacy-policy URL is linked, skim for crash/analytics consistency.</li>
+      <li>Record completion in <code>progress.md</code> (no screenshots / exports / PII).</li>
+      <li>Mark OPE-128 Done in Linear.</li>
+    </ol>
+  </main>
+</body>
+</html>
