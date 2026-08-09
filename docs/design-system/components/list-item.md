@@ -10,11 +10,11 @@ trailing meta (caption above a status pill).
 
 - **Container style** (`OpenCodeListItemStyle`, default **`plain`**):
   - **`plain`**: unselected rows are transparent, borderless, and cornerless so
-    they blend with scrollable lists. Selected rows use `color.surface.secondary`
+    they blend with scrollable lists. Selected rows use `surface-raised-base`
     with the shared row corner radius.
-  - **`card`**: unselected rows use `color.surface.primary` plus a **1px** stroke
-    from `color.border.subtle`; selected rows use `color.surface.secondary` and the
-    same stroke and corner radius.
+  - **`card`**: unselected rows use `surface-base` plus a **1px** stroke from
+    `border-weaker-base`; selected rows use `surface-raised-base` and the same
+    stroke and corner radius.
 - Variants: default, selected.
 - States: enabled, disabled.
 - Required content: `title`.
@@ -39,7 +39,8 @@ trailing meta (caption above a status pill).
 
 ## Token Usage
 
-- Semantic tokens: surface, text strong/base/weaker, border subtle, icon,
+- Semantic tokens: `surface-base`, `surface-raised-base`, `text-strong`,
+  `text-base`, `text-weaker`, `border-weaker-base`, `icon-base`,
   `diff-add` / `diff-delete`, status tones (`interactive`, `success`, `warning`,
   `error`, `info`).
 - Component tokens: row corner radius; letter badge size/shape (circle 32);

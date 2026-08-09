@@ -26,10 +26,14 @@ above the home indicator / navigation bar.
 
 ## Behavior
 
-The dock is a presentational surface. Callers own padding of outer insets
-(horizontal float and bottom safe-area / nav-bar padding). Content is clipped to
-the continuous rounded rect. Materials come from `OpenCodeFloatingChrome` /
+The dock is a presentational surface. Content is clipped to the continuous
+rounded rect. Materials come from `OpenCodeFloatingChrome` /
 `openCodeFloatingChrome`.
+
+Outer float insets are platform-specific: iOS `OpenCodeFloatingDock` applies
+horizontal **16** and bottom **4** padding around the chrome; Android callers
+(for example `SessionList`) apply outer float insets around `OpenCodeFloatingDock`.
+Both platforms apply inner content padding **12**.
 
 ## Platform Notes
 

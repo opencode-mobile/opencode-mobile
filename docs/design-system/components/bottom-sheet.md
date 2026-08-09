@@ -23,6 +23,8 @@ clear title, an explicit close affordance, and one or more tappable entries.
   - entry `destructive` (default false): title (and matching icon tint) use the
     semantic error color, same product meaning as overflow menu destructive
     rows.
+  - iOS-only `scrollTargetID` to scroll a specific entry into view inside a
+    scrollable sheet body.
 
 Entries are title-only in this version. Use `OpenCodeListItem` when a row needs
 subtitle content, selected state, or a larger list treatment.

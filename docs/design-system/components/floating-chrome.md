@@ -16,8 +16,9 @@ without adopting dock-specific outer gutters or always-on inner padding.
 - States: default. Pressed, focused, disabled, loading, error, empty, and
   selected are not applicable to the surface itself; content owns those.
 - Required content: slotted body content (or modified view content on iOS).
-- Optional content: corner radius (default 26); Android may pass an optional
-  border stroke and elevation overrides.
+- Optional content: required corner radius (callers typically pass **26** for
+  dock/composer shells or **12** for suggestion overlays); Android may pass an
+  optional border stroke and elevation overrides.
 
 Do not expose raw colors, opacities, or elevation values as public
 customization beyond the documented recipe.
@@ -26,8 +27,8 @@ customization beyond the documented recipe.
 
 - Semantic tokens: `surface.raised` underlay (iOS underlay opacity `0.92` under
   glass; Android fill alpha `0.95`).
-- Component tokens: continuous corner radius default 26pt/dp; callers may pass
-  a smaller radius (for example suggestion overlay `12`).
+- Component tokens: continuous corner radius supplied by the caller; common
+  values are **26** for dock/composer shells and **12** for suggestion overlays.
 - Typography roles: not owned by the surface.
 
 ## Behavior

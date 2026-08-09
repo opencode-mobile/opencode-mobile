@@ -22,18 +22,22 @@ outgoing message.
 - Required content:
   - metadata label using dot-separated sent-message context.
 - Optional content:
-  - message text.
-  - one or more `OpenCodeMessageAttachment` presentation values.
-  - rendered markdown document and initial height cache for prepared content.
+  - legacy convenience inputs: plain `text`, optional top-level
+    `renderedMarkdown`, and/or `attachments`.
+  - ordered `content` parts (`Text` and `Attachment`) for multi-part outgoing
+    messages; when provided, this replaces the legacy text/attachment inputs.
+  - per-text-part optional `renderedMarkdown` document.
   - tap or long-press interaction handled by the owning feature.
 
 ## Token Usage
 
-- Semantic tokens: `color.surface.inset`, `color.text.primary`,
-  `color.text.tertiary`.
+- Semantic tokens: `surface-raised-base`, `text-strong`, `text-weaker`.
 - Component tokens: `outgoingMessage.cornerRadius`,
   `outgoingMessage.maxWidthFraction`, `outgoingMessage.paddingHorizontal`,
   `outgoingMessage.paddingVertical`, `outgoingMessage.footerSpacing`.
+- Related tokens: plain-text slash/command tokens use `syntax-type` highlight
+  on the matched range; markdown height seeding uses
+  `OpenCodeRenderedMarkdown.initialHeight`, not this component.
 - Typography roles:
   - `type.body` for message text.
   - `type.caption` for footer metadata.
@@ -45,9 +49,13 @@ present, the rounded bubble may grow with message content up to the shared
 `outgoingMessage.maxWidthFraction` cap so long prompts wrap naturally. Short
 prompts shrink to their content width; there is no minimum bubble width. The
 message text is shown without a role prefix; alignment communicates that the
-message is outgoing. The bubble uses `color.surface.inset` so it
-remains distinct from the page background in light mode without introducing a
+message is outgoing. The bubble uses `surface-raised-base` so it remains
+distinct from the page background in light mode without introducing a
 component-only raw color. Bubble corners match `listItem.cornerRadius`.
+
+Plain-text parts may highlight a leading slash command token with
+`syntax-type` when the prompt matches the shared command-token heuristic.
+Markdown parts delegate to `OpenCodeRenderedMarkdown`.
 
 Attachments render as a separate row of `OpenCodeMessageAttachment` items
 inside the same outgoing-message grouping. Attachment-only messages omit the

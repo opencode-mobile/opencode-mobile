@@ -12,7 +12,8 @@ of styling native text fields locally.
 - States: empty, populated, focused, disabled, and error.
 - Required content: value binding/callback.
 - Optional content: hint (in-field empty-state copy), accessibility label, error
-  message, enabled state, and semantic submit action (`next` or `done`).
+  message, enabled state, semantic submit action (`next` or `done`), iOS-only
+  external focus binding (`isFocused`), and iOS-only `onSubmit` callback.
 
 There is no external label above the field. The hint appears inside the field
 only while the value is empty. Callers must provide a non-blank hint or a
@@ -47,7 +48,8 @@ content-type behavior. Visual styling is not exposed for feature-level override.
 ## Platform Notes
 
 - iOS: SwiftUI `TextField`/`SecureField` provide native content types and submit
-  behavior. Hint maps to the field's placeholder string.
+  behavior. Hint maps to the field's placeholder string. Optional `isFocused`
+  binding and `onSubmit` callback integrate with feature focus chains.
 - Android: Material `OutlinedTextField` provides native focus, keyboard, and
   password transformation behavior. Hint maps to the field's placeholder; no
   Material floating label is used. The control keeps a local `TextFieldValue` so

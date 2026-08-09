@@ -11,11 +11,13 @@ icon-only button needs.
 - Variants:
   - `fullWidthText(title)` - stretches to available width.
   - `compactText(title)` - sizes to content width.
-  - `iconSquare(icon)` - fixed **40x40** square action.
-  - `iconCircle(icon)` - fixed **40x40** circular action.
-  - `iconCircleText(text)` - fixed **40x40** circular action with a short text
-    glyph (e.g. `/`) instead of a catalog icon, for actions with no suitable
-    icon.
+  - `iconSquare(icon)` - fixed square action.
+  - `iconCircle(icon)` - fixed circular action.
+  - `iconCircleText(text)` - fixed circular action with a short text glyph
+    (e.g. `/`) instead of a catalog icon, for actions with no suitable icon.
+- Size: `medium` (default) or `large`.
+  - Text variants: `medium` min-height **40**; `large` min-height **48**.
+  - Icon variants: `medium` frame **40×40**; `large` frame **48×48**.
 - Contrast: `high` (default), `low`, or `destructive`.
 - States: `enabled`, `disabled`.
 - Required content:
@@ -63,11 +65,11 @@ Disabled state stays muted, blocks interaction, and overrides contrast.
 `fullWidthText` always fills its container width and keeps a minimum touch
 height. `compactText` keeps the same visual language but sizes to content.
 `iconSquare` and `iconCircle` enforce a 1:1 fixed frame with centered icon
-content. `iconCircle` differs from `iconSquare` by geometry only; contrast
-behavior is shared across all variants. `iconCircleText` shares `iconCircle`
-geometry and contrast behavior, swapping the centered catalog icon for a
-short text glyph (button-role typography) for actions the icon catalog does
-not cover.
+content; `size` scales that frame between **40×40** and **48×48**. `iconCircle`
+differs from `iconSquare` by geometry only; contrast behavior is shared across
+all variants. `iconCircleText` shares `iconCircle` geometry and contrast
+behavior, swapping the centered catalog icon for a short text glyph
+(button-role typography) for actions the icon catalog does not cover.
 
 Pressed feedback is provided through native button interaction behavior with
 shared token mapping (secondary surface emphasis on iOS; equivalent mapping on

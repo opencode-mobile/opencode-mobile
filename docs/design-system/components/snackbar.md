@@ -25,7 +25,9 @@ timeline full-screen error empty state when messages cannot load at all.
 ## Token Usage
 
 - Semantic tokens:
-  - `default`: `surface-raised-base`, `text-strong`, `border-weaker-base`
+  - `default`: iOS uses `surface-raised-base`, `text-strong`, and
+    `border-weaker-base`; Android maps to Material `surfaceVariant` /
+    `onSurface` for the default variant container.
   - `error`: `error` fill (or surface with `error` emphasis), on-error /
     inverse strong text for readable contrast
 - Component tokens: see `snackbar.*` in `docs/design-system/tokens.md`.

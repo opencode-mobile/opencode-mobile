@@ -14,9 +14,9 @@ dock.
 ## Public API
 
 - Variants: default capsule chip.
-- States: default (unselected), selected. Pressed uses a subtle scale/opacity
-  treatment (not interactive Liquid Glass lens). Disabled, loading, error, and
-  empty are not applicable.
+- States: default (unselected), selected. Pressed feedback: iOS uses subtle
+  scale/opacity; Android uses ripple on the chip hit target (no scale/opacity
+  animation). Disabled, loading, error, and empty are not applicable.
 - Required content: `title`, `selected`, `action`.
 - Optional content: `count` (omit badge when null); `removeAction` / `onRemove`
   (omit the remove circle when null). Session List Dock only supplies remove

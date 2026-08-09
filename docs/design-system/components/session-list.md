@@ -26,11 +26,15 @@ live status, settings) is owned by the home shell, not this component.
   - `emptyContent` composable / view shown centered above the dock when the
     filtered session list is empty and the caller opts in (for example, connected
     home with no curated projects).
+  - iOS-only `showsEmptyContent` gate for rendering `emptyContent`.
+  - iOS-only `onRefresh` async callback for pull-to-refresh on the session list.
 - Required callbacks:
   - `onSessionSelected(session)`.
   - `onAddProject()`.
   - `onNewSession()`.
   - `onFilterSelected(id)`.
+- Optional callbacks:
+  - `onSessionLongPress(session)` on both platforms.
 - States: default and empty filtered list (dock and filters remain; optional
   caller-supplied empty content may fill the list region). Loading and
   load-error remain owned by the home screen shell. Page chrome is not part of
@@ -77,9 +81,10 @@ sessions whose `worktree` equals the selected filter id are shown.
 ## Platform Notes
 
 - iOS: dense list + Liquid Glass dock/chips/key controls on iOS 26+ with material
-  fallbacks below iOS 26.
+  fallbacks below iOS 26. Pull-to-refresh is available when `onRefresh` is
+  provided.
 - Android: same hierarchy with Material raised glass-like dock; no system Liquid
-  Glass.
+  Glass. Android `SessionList` does not expose pull-to-refresh in this version.
 
 ## Review Surfaces
 
