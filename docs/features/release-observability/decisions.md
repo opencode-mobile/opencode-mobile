@@ -243,11 +243,13 @@ into product Analytics without an explicit consent and form story.
 
 ## Product Analytics consent UX (OPE-129)
 
-**Status:** Accepted  
+**Status:** Accepted (tester-phase default supersedes original opt-in default)  
 **Decision:**
 
-1. **Default:** Product Analytics consent is **off**. No product / custom
-   events fire until the user opts in.
+1. **Default (tester phase):** Product Analytics consent is **on**. Product /
+   custom events may fire on Release until the user opts out in Settings.
+   Explicit stored opt-out is still honored. Revisit and likely restore
+   default-off before public production.
 2. **UX:** Settings → **Privacy** → **Product Analytics** toggle using
    existing `OpenCodeListItem` + platform Switch/Toggle (no new design-system
    component; no first-launch modal; no ATT prompt).
@@ -255,12 +257,14 @@ into product Analytics without an explicit consent and form story.
    send without consent. Debug builds never send. Crashlytics and minimal
    automatic Analytics breadcrumbs are **not** gated by this toggle.
 4. **Change of consent:** Off immediately blocks further product events; on
-   allows them on Release. **Clear All Data** resets consent to off.
+   allows them on Release. **Clear All Data** resets consent to the current
+   default (**on** during tester phase).
 5. **Storage:** `AnalyticsConsentPreferences` (UserDefaults /
    SharedPreferences), not Keychain.
 
-**Why:** Matches the OPE-125 public-release product policy with a discoverable
-Settings control and a seam-owned gate before OPE-124 instrumentation.
+**Why:** Closed testers should emit product events without a Settings hunt.
+The Settings toggle remains so individuals can opt out; public-release
+default-off stays the intended end state after the tester phase.
 
 ## Product Analytics taxonomy (OPE-124)
 

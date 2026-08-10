@@ -7,13 +7,15 @@ import androidx.compose.runtime.setValue
 
 /**
  * Persists in-app consent for **product / custom** Analytics events (OPE-129).
- * Default is off. Does not gate Crashlytics or minimal automatic breadcrumbs.
+ * Default is on for the tester phase. Does not gate Crashlytics or minimal
+ * automatic breadcrumbs.
  */
 object AnalyticsConsentPreferences {
     private const val PREFS_NAME = "opencode_analytics_consent"
     private const val KEY_PRODUCT_ANALYTICS_CONSENTED = "product_analytics_consented"
+    private const val DEFAULT_PRODUCT_ANALYTICS_CONSENTED = true
 
-    var productAnalyticsConsented: Boolean by mutableStateOf(false)
+    var productAnalyticsConsented: Boolean by mutableStateOf(DEFAULT_PRODUCT_ANALYTICS_CONSENTED)
         private set
 
     private var appContext: Context? = null
@@ -23,9 +25,12 @@ object AnalyticsConsentPreferences {
         val prefs = prefs() ?: return
         productAnalyticsConsented =
             if (prefs.contains(KEY_PRODUCT_ANALYTICS_CONSENTED)) {
-                prefs.getBoolean(KEY_PRODUCT_ANALYTICS_CONSENTED, false)
+                prefs.getBoolean(
+                    KEY_PRODUCT_ANALYTICS_CONSENTED,
+                    DEFAULT_PRODUCT_ANALYTICS_CONSENTED,
+                )
             } else {
-                false
+                DEFAULT_PRODUCT_ANALYTICS_CONSENTED
             }
     }
 
@@ -36,7 +41,7 @@ object AnalyticsConsentPreferences {
 
     fun clear() {
         prefs()?.edit()?.remove(KEY_PRODUCT_ANALYTICS_CONSENTED)?.apply()
-        productAnalyticsConsented = false
+        productAnalyticsConsented = DEFAULT_PRODUCT_ANALYTICS_CONSENTED
     }
 
     private fun prefs() = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

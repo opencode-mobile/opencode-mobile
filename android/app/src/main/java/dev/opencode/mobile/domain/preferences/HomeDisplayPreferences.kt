@@ -28,12 +28,13 @@ object HomeDisplayPreferences {
     fun initialize(context: Context) {
         appContext = context.applicationContext
         val prefs = prefs() ?: return
-        showSessionListOnHome =
-            if (prefs.contains(KEY_SHOW_SESSION_LIST_ON_HOME)) {
-                prefs.getBoolean(KEY_SHOW_SESSION_LIST_ON_HOME, true)
-            } else {
-                true
-            }
+        // Settings toggle is hidden; keep session-list home for everyone.
+        showSessionListOnHome = true
+        if (prefs.contains(KEY_SHOW_SESSION_LIST_ON_HOME) &&
+            !prefs.getBoolean(KEY_SHOW_SESSION_LIST_ON_HOME, true)
+        ) {
+            prefs.edit().putBoolean(KEY_SHOW_SESSION_LIST_ON_HOME, true).apply()
+        }
         hideUserDirectoryPrefix =
             if (prefs.contains(KEY_HIDE_USER_DIRECTORY_PREFIX)) {
                 prefs.getBoolean(KEY_HIDE_USER_DIRECTORY_PREFIX, true)

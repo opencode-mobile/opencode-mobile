@@ -11,7 +11,8 @@
 - OPE-128 **done**: store forms verified for current Crashlytics + minimal
   Analytics (`ope-128-plan.md`).
 - OPE-129 task plan: `ope-129-plan.md`. Consent UX + seam gate implemented
-  (default off; Settings Privacy toggle; Clear All Data resets).
+  (tester-phase default on; Settings Privacy toggle; Clear All Data resets to
+  default).
 - OPE-124 task plan: `ope-124-plan.md`. Taxonomy:
   `product_screen_view` + `product_user_action` via `ProductAnalytics` helpers;
   product screens/actions instrumented on both apps (developer tools excluded).
@@ -51,4 +52,11 @@ design-system component. OPE-124 needs none.
 ## Remaining work
 
 1. Store form pass for product-event disclosure (operator).
-2. Publish OPE-124 (commit / PR) when ready.
+2. Revisit Product Analytics default before public production (likely restore
+   default-off).
+
+## Recent changes
+
+- 2026-08-10: Tester-phase default for Product Analytics consent flipped to
+  **on** on iOS and Android (`AnalyticsConsentPreferences`). Explicit opt-out
+  still wins; Clear All Data returns to the default.

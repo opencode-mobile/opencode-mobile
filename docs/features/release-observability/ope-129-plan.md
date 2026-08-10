@@ -12,13 +12,13 @@ Linear: [OPE-129](https://linear.app/opencode-mobile/issue/OPE-129/in-app-analyt
 
 | Behavior | Expected result |
 | --- | --- |
-| Default consent | **Off** (no product events) until the user enables the Settings toggle |
+| Default consent | **On** for the current tester phase (product events allowed until the user opts out). Revisit before public production. |
 | Product-event API without consent | Seam `logProductEvent` is a no-op |
 | Product-event API with consent (Release) | Seam may forward to Firebase Analytics |
 | Debug builds | Always Firebase-free: `logProductEvent` never sends, even if consent is on |
 | Crashlytics / minimal automatic Analytics | Unaffected by this toggle |
 | Change of consent | Turning off immediately blocks further product events; turning on allows them |
-| Clear All Data | Resets consent to **off** |
+| Clear All Data | Resets consent to the default (**on** during tester phase) |
 
 ## Consent UX
 

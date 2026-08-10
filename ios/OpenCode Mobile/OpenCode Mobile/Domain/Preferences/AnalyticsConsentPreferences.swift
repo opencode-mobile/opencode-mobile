@@ -2,7 +2,8 @@ import Foundation
 import Observation
 
 /// Persists in-app consent for **product / custom** Analytics events (OPE-129).
-/// Default is off. Does not gate Crashlytics or minimal automatic breadcrumbs.
+/// Default is on for the tester phase. Does not gate Crashlytics or minimal
+/// automatic breadcrumbs.
 @Observable
 final class AnalyticsConsentPreferences {
     static let shared = AnalyticsConsentPreferences()
@@ -11,6 +12,9 @@ final class AnalyticsConsentPreferences {
         static let productAnalyticsConsented = "productAnalyticsConsented"
     }
 
+    /// Tester-phase default: product events are on until the user opts out.
+    static let defaultProductAnalyticsConsented = true
+
     private let defaults: UserDefaults
 
     private(set) var productAnalyticsConsented: Bool
@@ -18,7 +22,7 @@ final class AnalyticsConsentPreferences {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         if defaults.object(forKey: StorageKeys.productAnalyticsConsented) == nil {
-            productAnalyticsConsented = false
+            productAnalyticsConsented = Self.defaultProductAnalyticsConsented
         } else {
             productAnalyticsConsented = defaults.bool(forKey: StorageKeys.productAnalyticsConsented)
         }
@@ -31,6 +35,6 @@ final class AnalyticsConsentPreferences {
 
     func clear() {
         defaults.removeObject(forKey: StorageKeys.productAnalyticsConsented)
-        productAnalyticsConsented = false
+        productAnalyticsConsented = Self.defaultProductAnalyticsConsented
     }
 }
