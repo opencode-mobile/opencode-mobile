@@ -52,7 +52,7 @@
 
 | Field | Value |
 | --- | --- |
-| Expected shared intent | Settings → Privacy → Product Analytics toggle; default off; Clear All Data resets. |
+| Expected shared intent | Settings → Privacy → Product Analytics toggle; default on (tester phase); Clear All Data resets to default. |
 | Current iOS state | Implemented. |
 | Current Android state | Implemented. |
 | Affected area | Behavior |

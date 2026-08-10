@@ -209,9 +209,6 @@ fun MainNavigation() {
                                                 onRefreshSessionCacheSize = settingsViewModel::refreshSessionCacheSize,
                                                 onImportTheme = settingsViewModel::importThemeFromUri,
                                                 onApplyPreset = settingsViewModel::applyPreset,
-                                                showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
-                                                onShowSessionListOnHomeChange =
-                                                    settingsViewModel::setShowSessionListOnHome,
                                                 hideUserDirectoryPrefix =
                                                     HomeDisplayPreferences.hideUserDirectoryPrefix,
                                                 onHideUserDirectoryPrefixChange =

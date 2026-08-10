@@ -57,8 +57,6 @@ fun SettingsScreen(
     onRefreshSessionCacheSize: () -> Unit,
     onImportTheme: (android.net.Uri) -> Unit,
     onApplyPreset: (String) -> Unit,
-    showSessionListOnHome: Boolean,
-    onShowSessionListOnHomeChange: (Boolean) -> Unit,
     hideUserDirectoryPrefix: Boolean,
     onHideUserDirectoryPrefixChange: (Boolean) -> Unit,
     recentWindowHours: Int,
@@ -164,22 +162,7 @@ fun SettingsScreen(
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
 
-            OpenCodeListItem(
-                title = "Session List",
-                subtitle = "Switch home between session list and project selector",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.List, "Session List"),
-                trailing = {
-                    Switch(
-                        checked = showSessionListOnHome,
-                        onCheckedChange = { enabled ->
-                            logSettingsToggle(ProductAnalytics.Action.SETTINGS_TOGGLE_SESSION_LIST, enabled)
-                            onShowSessionListOnHomeChange(enabled)
-                        },
-                    )
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
+            // Session List home toggle hidden: session list is the only home for now.
 
             OpenCodeListItem(
                 title = "Hide User Directory",
@@ -536,8 +519,6 @@ private fun SettingsScreenLightPreview() {
             onRefreshSessionCacheSize = {},
             onImportTheme = {},
             onApplyPreset = {},
-            showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
-            onShowSessionListOnHomeChange = {},
             hideUserDirectoryPrefix = HomeDisplayPreferences.hideUserDirectoryPrefix,
             onHideUserDirectoryPrefixChange = {},
             recentWindowHours = HomeDisplayPreferences.recentWindowHours,
@@ -567,8 +548,6 @@ private fun SettingsScreenDarkPreview() {
             onRefreshSessionCacheSize = {},
             onImportTheme = {},
             onApplyPreset = {},
-            showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
-            onShowSessionListOnHomeChange = {},
             hideUserDirectoryPrefix = HomeDisplayPreferences.hideUserDirectoryPrefix,
             onHideUserDirectoryPrefixChange = {},
             recentWindowHours = HomeDisplayPreferences.recentWindowHours,

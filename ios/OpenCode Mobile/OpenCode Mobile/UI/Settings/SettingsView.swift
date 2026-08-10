@@ -90,27 +90,7 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    OpenCodeListItem(
-                        title: "Session List",
-                        subtitle: "Switch home between session list and project selector",
-                        style: .card,
-                        startDecorator: .icon(.list, accessibilityLabel: "Session List"),
-                        trailing: {
-                            Toggle(
-                                "Session List",
-                                isOn: Binding(
-                                    get: { homeDisplayPreferences.showSessionListOnHome },
-                                    set: { newValue in
-                                        logSettingsAction(ProductAnalytics.Action.settingsToggleSessionList)
-                                        homeDisplayPreferences.setShowSessionListOnHome(newValue)
-                                    }
-                                )
-                            )
-                            .labelsHidden()
-                            .tint(OpenCodeColors.interactive)
-                        }
-                    )
-                    .padding(.horizontal, 16)
+                    // Session List home toggle hidden: session list is the only home for now.
 
                     OpenCodeListItem(
                         title: "Hide User Directory",

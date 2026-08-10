@@ -20,10 +20,12 @@ final class HomeDisplayPreferences {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        if defaults.object(forKey: StorageKeys.showSessionListOnHome) == nil {
-            showSessionListOnHome = true
-        } else {
-            showSessionListOnHome = defaults.bool(forKey: StorageKeys.showSessionListOnHome)
+        // Settings toggle is hidden; keep session-list home for everyone.
+        showSessionListOnHome = true
+        if defaults.object(forKey: StorageKeys.showSessionListOnHome) != nil,
+           defaults.bool(forKey: StorageKeys.showSessionListOnHome) == false
+        {
+            defaults.set(true, forKey: StorageKeys.showSessionListOnHome)
         }
         if defaults.object(forKey: StorageKeys.hideUserDirectoryPrefix) == nil {
             hideUserDirectoryPrefix = true

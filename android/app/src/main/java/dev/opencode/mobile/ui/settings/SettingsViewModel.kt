@@ -100,10 +100,6 @@ class SettingsViewModel
             ThemeManager.applyPreset(id)
         }
 
-        fun setShowSessionListOnHome(enabled: Boolean) {
-            HomeDisplayPreferences.updateShowSessionListOnHome(enabled)
-        }
-
         fun setHideUserDirectoryPrefix(enabled: Boolean) {
             HomeDisplayPreferences.updateHideUserDirectoryPrefix(enabled)
         }
