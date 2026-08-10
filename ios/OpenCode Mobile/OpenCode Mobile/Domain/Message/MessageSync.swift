@@ -234,7 +234,6 @@ nonisolated final class MessageSync: @unchecked Sendable {
             closeMessageCacheHandle(for: key)
         }
 
-        var emittedSeed = false
         let publishMessages: @Sendable ([Message], Bool) -> Void = { [weak self] messages, isFromCache in
             guard let self else { return }
             guard self.connectionEpoch.current() == observationEpoch.current else { return }
@@ -260,7 +259,6 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 expectedRevision: seedRevision
             )
             let seededMerged = store.messages(sessionID: key.storeSlot)
-            emittedSeed = true
             publishMessages(seededMerged, true)
         }
 
@@ -296,8 +294,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 setHealth(.healthy, for: key)
                 if fingerprintBeforeReload != fingerprint {
                     publishMessages(merged, false)
-                } else if emittedSeed {
-                    // Confirm disk without a second UI paint.
+                } else {
+                    // Confirm disk without a second UI paint. Also clears the
+                    // Syncing indicator on warm in-memory reopens where no disk
+                    // seed ran this loop but REST agrees with the store.
                     cacheHandle.note(messages: merged)
                     yield(.cacheSyncConfirmed)
                 }
