@@ -58,8 +58,10 @@ struct OpenCodeSessionListDock: View {
                             OpenCodeIconImage(icon: .createNewFolder, size: 18)
                                 .foregroundStyle(OpenCodeColors.textStrong)
                                 .frame(width: 36, height: 36)
+                                .contentShape(Circle())
                         }
                         .buttonStyle(.glass)
+                        .clipShape(Circle())
                         .accessibilityLabel("Add project")
 
                         Button(action: onNewSession) {

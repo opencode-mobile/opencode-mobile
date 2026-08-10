@@ -41,8 +41,10 @@ selects/filters; × is a deliberate second step after selection.
 ## Platform Notes
 
 - iOS: `OpenCodeFloatingDock` + `OpenCodeFilterChip` + glass / button CTAs;
-  `GlassEffectContainer` groups chips on iOS 26+. Selection uses
-  `ScrollViewReader` to bring the selected chip fully on-screen.
+  `GlassEffectContainer` groups chips on iOS 26+. Add project clips glass to a
+  **circle**; New session clips glass to a **capsule** (same `.buttonStyle(.glass)`
+  family). Selection uses `ScrollViewReader` to bring the selected chip fully
+  on-screen.
 - Android: same structure with Material raised dock and fill-only CTAs.
   Selection uses `BringIntoViewRequester` inside the horizontal scroll row.
 
