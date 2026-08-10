@@ -263,10 +263,26 @@ struct OpenCodeSessionComposer: View {
                         variant: .iconCircle(.arrowUpward, accessibilityLabel: "Send prompt"),
                         enabled: prompt.sendEnabled,
                         contrast: .low,
-                        action: { onAction(.send) }
+                        action: {
+                            // OPE-138: send leaves editing intent. Mention UITextView is
+                            // outside SwiftUI @FocusState, so resign first responder.
+                            dismissComposerKeyboard()
+                            onAction(.send)
+                        }
                     )
                 }
             }
+    }
+
+    /// Mention prompt uses `UITextView`; resign is the reliable dismiss path
+    /// (same escape hatch as timeline drag dismiss in Session Chat).
+    private func dismissComposerKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
     }
 
     /// Horizontal model / mode / variant chips. Scrolls only when the row is

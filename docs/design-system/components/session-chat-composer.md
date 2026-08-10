@@ -67,6 +67,9 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   chips above the prompt input at 6–8 logical-pixel spacing. Attach is disabled
   when the selected model cannot accept image or PDF input; the feature owns
   that gate and passes `attachEnabled` into the composer.
+- Send clears composer focus and dismisses the software keyboard (OPE-138;
+  restores the OPE-62 chat send policy). Focus stays view-local in the
+  composer; Screen Models do not track keyboard visibility.
 - Model, mode, and thinking-effort (variant) pickers use `OpenCodeChoiceBadge`
   **glass** variant in the **unselected** (clear / clickable) chrome — they open
   pickers rather than toggling a selected peer in-row.

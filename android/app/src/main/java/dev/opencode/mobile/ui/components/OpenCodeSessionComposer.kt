@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -281,6 +282,7 @@ private fun PromptEntryContent(
     state: OpenCodeSessionComposerState.Prompt,
     onAction: (OpenCodeSessionComposerAction) -> Unit,
 ) {
+    val focusManager = LocalFocusManager.current
     if (state.attachments.isNotEmpty()) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -395,7 +397,11 @@ private fun PromptEntryContent(
                 variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send prompt"),
                 enabled = state.sendEnabled,
                 contrast = OpenCodeButtonContrast.Low,
-                onClick = { onAction(OpenCodeSessionComposerAction.Send) },
+                onClick = {
+                    // OPE-138: send leaves editing intent; clear focus so the IME dismisses.
+                    focusManager.clearFocus()
+                    onAction(OpenCodeSessionComposerAction.Send)
+                },
             )
         }
     }

@@ -1,5 +1,14 @@
 # Session Chat Progress
 
+## OPE-138 Dismiss keyboard on send (2026-08-10)
+
+- Status: implemented on both platforms in `OpenCodeSessionComposer`.
+- Send clears composer focus / resigns first responder before the send action
+  so the IME dismisses (OPE-62 chat policy restored after mention-composer
+  refactors dropped it).
+- Remaining: device smoke (focus composer → send → keyboard hides; timeline
+  drag dismiss still works).
+
 ## OPE-113 Session working indicator (2026-08-07)
 
 - Status: implemented on both platforms (unit-tested Android + iOS).
