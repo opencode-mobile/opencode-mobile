@@ -33,6 +33,25 @@ struct SessionChatTimelineOffMainTests {
         timeline.reset()
     }
 
+    @Test func applyLoadedDisplayMessages_dropsStaleDetachedResult() async {
+        let repository = OffMainTimelineMessageRepository(
+            messages: [
+                Message(id: "m1", role: .user, text: "one", model: nil, mode: nil, sentAtEpochMs: 1),
+            ]
+        )
+        let timeline = SessionChatTimeline(
+            sessionID: "ses-stale",
+            worktree: "/repo",
+            messageRepository: repository
+        )
+        // Start two overlapping applies; the second bumps displayFrameRevision.
+        async let first: Void = timeline.loadMessages()
+        async let second: Void = timeline.refreshMessages()
+        _ = await (first, second)
+        #expect(timeline.state.messages.map(\.id) == ["m1"])
+        timeline.reset()
+    }
+
     private func waitUntil(
         timeoutNanoseconds: UInt64 = 2_000_000_000,
         _ condition: @escaping @MainActor () -> Bool

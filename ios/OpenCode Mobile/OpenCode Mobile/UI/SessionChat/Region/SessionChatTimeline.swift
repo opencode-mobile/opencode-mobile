@@ -368,6 +368,8 @@ final class SessionChatTimeline {
             )
         }.value
         guard !Task.isCancelled else { return }
+        // A newer apply may have started while we were off-main; drop stale results.
+        guard frameRevision == displayFrameRevision else { return }
 
         let isRequired = !(fromQuietRefresh && onPublished == nil)
         let stamped = projected.withRequired(isRequired)
@@ -378,6 +380,7 @@ final class SessionChatTimeline {
         rows.reserveCapacity(stamped.rows.count)
         var rebuiltCount = 0
         for (index, timelineRow) in stamped.rows.enumerated() {
+            guard frameRevision == displayFrameRevision, !Task.isCancelled else { return }
             let previous = previousByID[timelineRow.id]
             let reusePrevious =
                 previous != nil
@@ -396,7 +399,7 @@ final class SessionChatTimeline {
                 || (index > 0 && index % 4 == 0)
             if shouldYield {
                 await Task.yield()
-                guard !Task.isCancelled else { return }
+                guard frameRevision == displayFrameRevision, !Task.isCancelled else { return }
             }
         }
 
