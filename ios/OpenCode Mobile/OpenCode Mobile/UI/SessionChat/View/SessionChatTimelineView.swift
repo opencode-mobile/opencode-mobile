@@ -8,6 +8,7 @@ struct SessionChatTimelineViewProps {
     let isRefreshing: Bool
     let errorMessage: String?
     let reviewChangesSummary: ReviewChangesSummary?
+    let syncingIndicatorLabel: String?
     let workingIndicatorLabel: String?
     let sessionTodosVisible: Bool
     let sessionTodoCompletedCount: Int
@@ -32,6 +33,7 @@ struct SessionChatTimelineViewProps {
         isRefreshing: Bool,
         errorMessage: String?,
         reviewChangesSummary: ReviewChangesSummary?,
+        syncingIndicatorLabel: String? = nil,
         workingIndicatorLabel: String? = nil,
         sessionTodosVisible: Bool = false,
         sessionTodoCompletedCount: Int = 0,
@@ -54,6 +56,7 @@ struct SessionChatTimelineViewProps {
         self.isRefreshing = isRefreshing
         self.errorMessage = errorMessage
         self.reviewChangesSummary = reviewChangesSummary
+        self.syncingIndicatorLabel = syncingIndicatorLabel
         self.workingIndicatorLabel = workingIndicatorLabel
         self.sessionTodosVisible = sessionTodosVisible
         self.sessionTodoCompletedCount = sessionTodoCompletedCount
@@ -136,22 +139,39 @@ private struct SessionChatTimelineReadyView: View {
     }
 
     private var displayMessages: [SessionChatRow] {
-        guard let label = props.workingIndicatorLabel else { return props.messages }
-        return props.messages + [
-            SessionChatRow(
-                id: SessionChatWorkingIndicator.id,
-                role: .assistant,
-                text: label,
-                metadataLabel: ""
-            ),
-        ]
+        var rows = props.messages
+        if let label = props.syncingIndicatorLabel {
+            rows.append(
+                SessionChatRow(
+                    id: SessionChatSyncingIndicator.id,
+                    role: .assistant,
+                    text: label,
+                    metadataLabel: ""
+                )
+            )
+        }
+        if let label = props.workingIndicatorLabel {
+            rows.append(
+                SessionChatRow(
+                    id: SessionChatWorkingIndicator.id,
+                    role: .assistant,
+                    text: label,
+                    metadataLabel: ""
+                )
+            )
+        }
+        return rows
+    }
+
+    private var hasStatusIndicatorRows: Bool {
+        props.syncingIndicatorLabel != nil || props.workingIndicatorLabel != nil
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             MessageListTimelineHost(
                 items: displayMessages,
-                applyPacket: props.workingIndicatorLabel == nil ? .from(props.timelineFrame) : nil,
+                applyPacket: hasStatusIndicatorRows ? nil : .from(props.timelineFrame),
                 scrollController: scrollController,
                 onRefresh: props.onRefresh,
                 onUserScrollDismissKeyboard: props.onUserScrollDismissKeyboard,
@@ -281,6 +301,10 @@ private struct SessionChatTimelineReadyView: View {
     }
 }
 
+private enum SessionChatSyncingIndicator {
+    static let id = "session-chat-syncing-indicator"
+}
+
 private enum SessionChatWorkingIndicator {
     static let id = "session-chat-working-indicator"
 }
@@ -293,7 +317,7 @@ private struct SessionChatTimelineHostRow: View {
     let onChangesReviewTap: (String, String?) -> Void
 
     var body: some View {
-        if message.id == SessionChatWorkingIndicator.id {
+        if message.id == SessionChatSyncingIndicator.id || message.id == SessionChatWorkingIndicator.id {
             SessionChatWorkingIndicatorRow(label: message.text)
         } else {
             HStack {

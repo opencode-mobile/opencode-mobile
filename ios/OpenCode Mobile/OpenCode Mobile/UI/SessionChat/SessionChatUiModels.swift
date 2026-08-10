@@ -165,6 +165,8 @@ struct SessionChatUiState: Equatable {
     var sessionStatusLabel: String?
     /// In-chat Working/Retrying label when busy with no assistant content yet.
     var workingIndicatorLabel: String? = nil
+    /// In-chat Syncing label while cached messages wait for network confirmation.
+    var syncingIndicatorLabel: String? = nil
     var sessionTodos: [SessionTodo] = []
     var sessionTodosVisible: Bool = false
     var sessionTodosFinished: Bool = false
@@ -349,6 +351,7 @@ struct SessionChatTimelineRegionState: Equatable {
     var messages: [SessionChatRow] = []
     var isRefreshing: Bool = false
     var messagesFromCache: Bool = false
+    var isSyncingMessages: Bool = false
     var errorMessage: String?
 }
 

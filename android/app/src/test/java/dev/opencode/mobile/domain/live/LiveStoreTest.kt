@@ -1473,6 +1473,7 @@ class MessageSyncTest {
         return when (update) {
             is MessageListUpdate.Messages -> update.messages
             is MessageListUpdate.LoadFailed -> throw update.error
+            is MessageListUpdate.CacheSyncConfirmed -> emptyList()
         }
     }
 

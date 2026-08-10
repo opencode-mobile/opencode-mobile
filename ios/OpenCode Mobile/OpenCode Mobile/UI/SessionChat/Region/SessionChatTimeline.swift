@@ -95,7 +95,8 @@ final class SessionChatTimeline {
                 await applyLoadedDisplayMessagesTransform(
                     warm,
                     isRefreshing: false,
-                    fromQuietRefresh: true
+                    fromQuietRefresh: true,
+                    messagesFromCache: true
                 )
                 await Task.yield()
                 guard !Task.isCancelled, self.observationGeneration == generation else { return }
@@ -125,6 +126,8 @@ final class SessionChatTimeline {
                     switch current {
                     case .loadFailed(let error):
                         applyError(error)
+                    case .cacheSyncConfirmed:
+                        confirmCacheSync()
                     case .messages(let displayMessages, let isFromCache):
                         await applyLoadedDisplayMessagesTransform(
                             displayMessages,
@@ -441,6 +444,7 @@ final class SessionChatTimeline {
         state.messages = rows
         state.isRefreshing = isRefreshing
         state.messagesFromCache = messagesFromCache
+        state.isSyncingMessages = messagesFromCache
         state.errorMessage = resolvedErrorMessage
         if !fromQuietRefresh {
             mergePendingWhileSending = false
@@ -451,6 +455,12 @@ final class SessionChatTimeline {
         SessionPerformanceProbe.emit("styled_timeline_published")
         MessagePipelineProbe.emit(.styledPaintCompleted)
         onPublished?()
+    }
+
+    private func confirmCacheSync() {
+        state.messagesFromCache = false
+        state.isSyncingMessages = false
+        notifyChange()
     }
 
     private func applyError(_ error: Error) {

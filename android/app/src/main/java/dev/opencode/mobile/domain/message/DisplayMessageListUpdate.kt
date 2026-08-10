@@ -9,4 +9,7 @@ sealed interface DisplayMessageListUpdate {
     data class LoadFailed(
         val error: Throwable,
     ) : DisplayMessageListUpdate
+
+    /** Network confirmed cache without a second UI snapshot (fingerprint unchanged). */
+    data object CacheSyncConfirmed : DisplayMessageListUpdate
 }

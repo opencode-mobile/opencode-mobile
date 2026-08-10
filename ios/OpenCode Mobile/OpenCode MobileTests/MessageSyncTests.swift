@@ -7,6 +7,52 @@ import Testing
 struct MessageSyncTests {
     private let decoder = JSONDecoder()
 
+    @Test func warmReopen_unchangedFingerprint_confirmsCacheSyncWithoutSeed() async {
+        // Warm reopen: the in-memory store still holds the previous session's
+        // rows, but no disk seed runs this loop (NoOpSessionCache) and REST
+        // returns an identical fingerprint. The Syncing indicator must clear
+        // via cacheSyncConfirmed even though the second loop did not seed.
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let store = InMemoryMessageStore()
+        store.replaceAll(sessionID: "ses-1", messages: [
+            Message(
+                id: "msg-1",
+                role: .user,
+                text: "Hello",
+                parts: [.text(TextPart(text: "Hello", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ])
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: store),
+            eventStream: eventStream,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) }
+        )
+
+        // First observation publishes and records the fingerprint.
+        let first = MessageCollector()
+        let firstTask = Task { await first.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        _ = await waitUntil { first.latest()?.first?.text == "Hello" }
+        firstTask.cancel()
+        try? await Task.sleep(for: .milliseconds(20))
+
+        // Warm reopen: same store rows, REST unchanged, no disk seed. The
+        // unchanged fingerprint must still yield cacheSyncConfirmed.
+        let second = CacheConfirmAwareCollector()
+        let secondTask = Task { await second.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let confirmed = await waitUntil { second.sawCacheSyncConfirmed }
+        secondTask.cancel()
+        #expect(confirmed)
+        #expect(second.latest()?.first?.text == "Hello")
+    }
+
     @Test func initialLoad_emitsMessagesFromRepository() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
@@ -1443,6 +1489,28 @@ private final class MainThreadFlag: @unchecked Sendable {
         defer { lock.unlock() }
         calls += 1
         if isMain { sawMain = true }
+    }
+}
+
+private final class CacheConfirmAwareCollector: @unchecked Sendable {
+    private(set) var emissions: [[Message]] = []
+    private(set) var sawCacheSyncConfirmed = false
+
+    func collect(_ stream: AsyncStream<MessageListUpdate>) async {
+        for await update in stream {
+            switch update {
+            case .messages(let messages, _):
+                emissions.append(messages)
+            case .cacheSyncConfirmed:
+                sawCacheSyncConfirmed = true
+            case .loadFailed:
+                break
+            }
+        }
+    }
+
+    func latest() -> [Message]? {
+        emissions.last
     }
 }
 

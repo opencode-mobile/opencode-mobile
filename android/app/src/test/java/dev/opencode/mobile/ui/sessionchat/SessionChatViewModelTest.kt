@@ -3137,10 +3137,11 @@ private class FakeMessageRepository(
             observeMessages(sessionId, directory).collect { update ->
                 when (update) {
                     is MessageListUpdate.LoadFailed -> emit(DisplayMessageListUpdate.LoadFailed(update.error))
+                    is MessageListUpdate.CacheSyncConfirmed -> emit(DisplayMessageListUpdate.CacheSyncConfirmed)
                     is MessageListUpdate.Messages -> {
                         val prepared = contentPreparer.prepareMessages(update.messages, previousById)
                         previousById = prepared.associateBy { it.id }
-                        emit(DisplayMessageListUpdate.Messages(prepared))
+                        emit(DisplayMessageListUpdate.Messages(prepared, isFromCache = update.isFromCache))
                     }
                 }
             }

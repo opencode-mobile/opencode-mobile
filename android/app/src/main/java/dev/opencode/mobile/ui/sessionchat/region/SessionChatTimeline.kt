@@ -391,6 +391,10 @@ class SessionChatTimeline(
                                 logE("live display messages failed session=$sessionId", update.error)
                                 applyLoadError(update.error)
                             }
+                            is DisplayMessageListUpdate.CacheSyncConfirmed -> {
+                                logD("live display cache sync confirmed session=$sessionId")
+                                confirmCacheSync()
+                            }
                             is DisplayMessageListUpdate.Messages -> {
                                 logD("live display messages session=$sessionId count=${update.messages.size}")
                                 applyLoadedDisplayMessages(
@@ -563,6 +567,7 @@ class SessionChatTimeline(
                 timelineFrame = stamped,
                 isRefreshing = isRefreshing,
                 messagesFromCache = pending.messagesFromCache,
+                isSyncingMessages = pending.messagesFromCache,
                 errorMessage =
                     if (fromQuietRefresh) {
                         if (merged.isNotEmpty() && state.timeline == SessionChatTimelineState.Error) {
@@ -581,6 +586,15 @@ class SessionChatTimeline(
             pendingBaselineSignatures = emptyMap()
         }
         onPublished?.invoke()
+    }
+
+    private fun confirmCacheSync() {
+        _state.update {
+            it.copy(
+                messagesFromCache = false,
+                isSyncingMessages = false,
+            )
+        }
     }
 
     private fun applyLoadError(throwable: Throwable) {

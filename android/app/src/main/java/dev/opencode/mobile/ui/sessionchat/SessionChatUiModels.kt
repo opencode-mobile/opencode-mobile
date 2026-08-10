@@ -90,6 +90,8 @@ data class SessionChatUiState(
     val sessionStatusLabel: String? = null,
     /** In-chat Working/Retrying label when busy with no assistant content yet. */
     val workingIndicatorLabel: String? = null,
+    /** In-chat Syncing label while cached messages wait for network confirmation. */
+    val syncingIndicatorLabel: String? = null,
     val sessionTodos: List<SessionTodo> = emptyList(),
     val sessionTodosVisible: Boolean = false,
     val sessionTodosFinished: Boolean = false,
@@ -251,6 +253,7 @@ data class SessionChatTimelineRegionState(
     val timelineFrame: TimelineFrame? = null,
     val isRefreshing: Boolean = false,
     val messagesFromCache: Boolean = false,
+    val isSyncingMessages: Boolean = false,
     val errorMessage: String? = null,
 )
 
