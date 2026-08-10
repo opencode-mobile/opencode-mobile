@@ -926,3 +926,13 @@ only when zero production readers remain.
 - `syncHealth` UI: product asks for visible recovering/stale/healthy.
 - Sole-text bridge deletion: no remaining message-root markdown readers.
 - p95 CI: release process requires automated responsiveness gates.
+
+## OPE-136 — Diffable apply packet must stay declared under status chrome
+
+**Decision:** Session Chat always passes `MessageListTimelineApplyPacket.from(timelineFrame)` into `MessageListTimelineHost`, including while syncing/working indicator rows are appended. Status chrome is structural via item IDs; clearing the packet is not allowed.
+
+**Nil-packet fallback:** Identity-stable nil-packet applies update `itemsByID` only and must not synthesize `reconfigureAllSurviving` with an auto-bumped `frameRevision`. Gallery mutations pass an explicit `listRevision` packet instead.
+
+**Status chrome:** Fold syncing/working labels into apply `frameRevision` + `changedRowIDs` so label-only republishes reconfigure those stable rows without clearing the declared packet.
+
+**Why:** Live freeze samples showed MainActor stuck in Diffable `apply` inside SwiftUI `updateUIViewController`. With a nil packet, every update bumped revision and reconfigured all surviving rows in a layout→update loop (≈99% CPU / multi-GB RSS).

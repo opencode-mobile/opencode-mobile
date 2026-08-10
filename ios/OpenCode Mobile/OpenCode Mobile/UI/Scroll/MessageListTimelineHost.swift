@@ -112,6 +112,8 @@ where Item.ID == String {
     private(set) var lastReconfiguredIDs: Set<String> = []
     /// Test seam: whether the last apply used declared IDs (vs gallery fallback).
     private(set) var lastApplyUsedDeclaredIDs = false
+    /// Test seam: how many times a Diffable snapshot was submitted.
+    private(set) var diffableSnapshotApplyCount = 0
 
     init(
         itemContent: @escaping (Item) -> ItemContent,
@@ -241,14 +243,28 @@ where Item.ID == String {
         let previousCount = previousOrderedIDs.count
         let previousIDSet = Set(previousOrderedIDs)
 
-        let resolvedPacket =
-            packet
-            ?? MessageListTimelineApplyPacket.reconfigureAllSurviving(
+        // Declared packet wins. Nil packet is gallery / legacy fallback only.
+        // Never synthesize reconfigure-all with an auto-bumped revision while
+        // IDs are stable — that used to run on every SwiftUI
+        // `updateUIViewController` (status chrome cleared the packet) and
+        // froze Diffable apply in a layout→update loop.
+        let resolvedPacket: MessageListTimelineApplyPacket
+        if let packet {
+            resolvedPacket = packet
+            lastApplyUsedDeclaredIDs = true
+        } else if newOrderedIDs == previousOrderedIDs {
+            itemsByID = Dictionary(uniqueKeysWithValues: uniqueItems.map { ($0.id, $0) })
+            lastApplyUsedDeclaredIDs = false
+            lastReconfiguredIDs = []
+            return
+        } else {
+            resolvedPacket = MessageListTimelineApplyPacket.reconfigureAllSurviving(
                 frameRevision: (lastAppliedFrameRevision ?? 0) &+ 1,
                 previousIDs: previousIDSet,
                 nextIDs: newOrderedIDs
             )
-        lastApplyUsedDeclaredIDs = packet != nil
+            lastApplyUsedDeclaredIDs = false
+        }
 
         // Skip without list-wide Item Equatable:
         // 1) Same frameRevision already applied (composer/session-info reuse keeps
@@ -363,6 +379,7 @@ where Item.ID == String {
                 }
             }
         }
+        diffableSnapshotApplyCount += 1
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         UIView.performWithoutAnimation(applySnapshot)

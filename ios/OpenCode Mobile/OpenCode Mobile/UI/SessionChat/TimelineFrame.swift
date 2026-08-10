@@ -168,6 +168,43 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
         )
     }
 
+    /// Session Chat path: keep declared timeline sets, and fold status-chrome
+    /// labels into revision + `changedRowIDs` so Working/Syncing text updates
+    /// reconfigure those stable rows without clearing the packet (OPE-136).
+    static func from(
+        _ frame: TimelineFrame,
+        syncingIndicatorLabel: String?,
+        workingIndicatorLabel: String?
+    ) -> MessageListTimelineApplyPacket {
+        let base = from(frame)
+        var statusIDs = Set<String>()
+        if syncingIndicatorLabel != nil {
+            statusIDs.insert(SessionChatStatusChrome.syncingRowID)
+        }
+        if workingIndicatorLabel != nil {
+            statusIDs.insert(SessionChatStatusChrome.workingRowID)
+        }
+        let chrome = SessionChatStatusChrome.fingerprint(
+            syncingIndicatorLabel: syncingIndicatorLabel,
+            workingIndicatorLabel: workingIndicatorLabel
+        )
+        var kinds = base.kinds
+        if !statusIDs.isEmpty {
+            kinds.insert(.content)
+        }
+        return MessageListTimelineApplyPacket(
+            frameRevision: base.frameRevision &+ (chrome &* 1_000_003),
+            insertedRowIDs: base.insertedRowIDs,
+            changedRowIDs: base.changedRowIDs.union(statusIDs),
+            removedRowIDs: base.removedRowIDs,
+            layoutChangedRowIDs: base.layoutChangedRowIDs,
+            grewBottomRowIDs: base.grewBottomRowIDs,
+            decorateRowIDs: base.decorateRowIDs,
+            isRequired: base.isRequired,
+            kinds: kinds
+        )
+    }
+
     /// Gallery / non-projector path: treat every surviving ID as needing reconfigure.
     static func reconfigureAllSurviving(
         frameRevision: UInt64,
@@ -190,6 +227,29 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
                 ? []
                 : [.structure, .content]
         )
+    }
+}
+
+/// Stable IDs for Session Chat syncing/working rows appended outside the projector.
+enum SessionChatStatusChrome {
+    static let syncingRowID = "session-chat-syncing-indicator"
+    static let workingRowID = "session-chat-working-indicator"
+
+    static func fingerprint(
+        syncingIndicatorLabel: String?,
+        workingIndicatorLabel: String?
+    ) -> UInt64 {
+        var value: UInt64 = 0
+        func fold(_ string: String?, presentMark: UInt64) {
+            guard let string else { return }
+            value = value &* 1_000_003 &+ presentMark
+            for scalar in string.unicodeScalars {
+                value = value &* 31 &+ UInt64(scalar.value)
+            }
+        }
+        fold(syncingIndicatorLabel, presentMark: 1)
+        fold(workingIndicatorLabel, presentMark: 2)
+        return value
     }
 }
 

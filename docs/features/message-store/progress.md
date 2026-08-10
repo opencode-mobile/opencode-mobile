@@ -117,3 +117,15 @@ None. The message-display-rendering-hardening plan is closed via Phase 7a.
   off main.
 - [ ] Per-SSE MainActor LiveStore fan-out reduction (follow-up).
 - [ ] Manual QA on Release freeze reproduction.
+
+## OPE-136 Diffable timeline apply storm
+
+- [x] Always pass declared `TimelineFrame` apply packet from Session Chat
+  (status chrome must not clear the packet).
+- [x] Harden nil-packet identity-stable path so gallery fallback cannot
+  auto-bump `reconfigureAllSurviving` on every SwiftUI update.
+- [x] Gallery passes a `listRevision` apply packet for resize/content
+  updates.
+- [x] Regression: `nilPacket_identityStable_doesNotReconfigureAllOnRepeatApply`.
+- [ ] Manual QA: open large warm-cache session with syncing/working
+  indicator; confirm no freeze / Diffable apply loop.

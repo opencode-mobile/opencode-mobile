@@ -141,9 +141,9 @@ private struct SessionChatTimelineReadyView: View {
     private var displayMessages: [SessionChatRow] {
         var rows = props.messages
         if let label = props.syncingIndicatorLabel {
-            rows.append(
+                rows.append(
                 SessionChatRow(
-                    id: SessionChatSyncingIndicator.id,
+                    id: SessionChatStatusChrome.syncingRowID,
                     role: .assistant,
                     text: label,
                     metadataLabel: ""
@@ -153,7 +153,7 @@ private struct SessionChatTimelineReadyView: View {
         if let label = props.workingIndicatorLabel {
             rows.append(
                 SessionChatRow(
-                    id: SessionChatWorkingIndicator.id,
+                    id: SessionChatStatusChrome.workingRowID,
                     role: .assistant,
                     text: label,
                     metadataLabel: ""
@@ -163,15 +163,18 @@ private struct SessionChatTimelineReadyView: View {
         return rows
     }
 
-    private var hasStatusIndicatorRows: Bool {
-        props.syncingIndicatorLabel != nil || props.workingIndicatorLabel != nil
-    }
-
     var body: some View {
         ZStack(alignment: .bottom) {
             MessageListTimelineHost(
                 items: displayMessages,
-                applyPacket: hasStatusIndicatorRows ? nil : .from(props.timelineFrame),
+                // Declared timeline sets stay; status-chrome labels fold into
+                // revision + changed IDs so Working/Syncing text can refresh
+                // without clearing the packet (that caused the OPE-136 storm).
+                applyPacket: .from(
+                    props.timelineFrame,
+                    syncingIndicatorLabel: props.syncingIndicatorLabel,
+                    workingIndicatorLabel: props.workingIndicatorLabel
+                ),
                 scrollController: scrollController,
                 onRefresh: props.onRefresh,
                 onUserScrollDismissKeyboard: props.onUserScrollDismissKeyboard,
@@ -301,14 +304,6 @@ private struct SessionChatTimelineReadyView: View {
     }
 }
 
-private enum SessionChatSyncingIndicator {
-    static let id = "session-chat-syncing-indicator"
-}
-
-private enum SessionChatWorkingIndicator {
-    static let id = "session-chat-working-indicator"
-}
-
 private struct SessionChatTimelineHostRow: View {
     let message: SessionChatRow
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
@@ -317,7 +312,9 @@ private struct SessionChatTimelineHostRow: View {
     let onChangesReviewTap: (String, String?) -> Void
 
     var body: some View {
-        if message.id == SessionChatSyncingIndicator.id || message.id == SessionChatWorkingIndicator.id {
+        if message.id == SessionChatStatusChrome.syncingRowID
+            || message.id == SessionChatStatusChrome.workingRowID
+        {
             SessionChatWorkingIndicatorRow(label: message.text)
         } else {
             HStack {
