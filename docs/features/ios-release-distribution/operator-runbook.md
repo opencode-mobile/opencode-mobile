@@ -116,10 +116,10 @@ ASC API key.
 ## Export compliance
 
 The app target sets `ITSAppUsesNonExemptEncryption=NO` because it uses only
-standard system HTTPS/TLS (and ATS-allowed cleartext to user-managed LAN
-servers), not custom encryption. If that assumption changes, update the plist
-key and/or answer the ASC export-compliance questionnaire before the next
-upload.
+standard system HTTPS/TLS (and ATS `NSAllowsArbitraryLoads` cleartext to
+user-managed servers such as LAN or Tailscale HTTP), not custom encryption.
+If that assumption changes, update the plist key and/or answer the ASC
+export-compliance questionnaire before the next upload.
 
 ## Automatic Firebase App Distribution
 
