@@ -101,8 +101,8 @@ struct OpenCodeChoiceBadge: View {
 private struct OpenCodeChoiceBadgeGlassPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .opacity(configuration.isPressed ? 0.78 : 1)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .opacity(configuration.isPressed ? 0.92 : 1)
             .animation(.smooth(duration: 0.16), value: configuration.isPressed)
     }
 }

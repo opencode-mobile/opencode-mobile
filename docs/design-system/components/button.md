@@ -71,9 +71,11 @@ all variants. `iconCircleText` shares `iconCircle` geometry and contrast
 behavior, swapping the centered catalog icon for a short text glyph
 (button-role typography) for actions the icon catalog does not cover.
 
-Pressed feedback is provided through native button interaction behavior with
-shared token mapping (secondary surface emphasis on iOS; equivalent mapping on
-Android).
+Pressed feedback stays subtle: iOS low-contrast uses `surface-raised-base-hover`
+plus a light opacity/scale nudge (`0.92` / `0.98`); high and destructive keep
+their fill tokens and use the same opacity/scale nudge. Do not flash pressed
+fills to `text-base` — that reads as an invert and is too high-contrast.
+Android relies on Material ripple on the shaped `Surface`.
 
 ## Platform Notes
 
