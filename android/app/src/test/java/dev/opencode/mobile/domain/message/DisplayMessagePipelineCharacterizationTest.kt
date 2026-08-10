@@ -638,6 +638,34 @@ class DisplayMessagePipelineCharacterizationTest {
             }
         }
 
+    @Test
+    fun cacheSyncConfirmed_clearsFromCacheFlagBeforeInFlightPublish() =
+        runTest(testDispatcher) {
+            // Regression: CacheSyncConfirmed must clear sourceIsFromCache so an
+            // in-flight cache-seed prepare cannot publish Syncing again.
+            val harness = startHarness()
+            harness.preparer.holdNextPrepareMessages()
+            harness.source.emit(
+                MessageListUpdate.Messages(listOf(plainAssistant("cached")), isFromCache = true),
+            )
+            advanceUntilIdle()
+            assertTrue(harness.preparer.hasPendingPrepareMessagesHold())
+            assertTrue(harness.emissions.isEmpty())
+
+            harness.source.emit(MessageListUpdate.CacheSyncConfirmed)
+            advanceUntilIdle()
+            assertTrue(harness.emissions.single() is DisplayMessageListUpdate.CacheSyncConfirmed)
+
+            harness.preparer.releaseNextPrepareMessages()
+            advanceUntilIdle()
+
+            val messages =
+                harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>()
+            assertEquals(1, messages.size)
+            assertFalse(messages.single().isFromCache)
+            assertEquals("cached", messages.single().messages.single().text)
+        }
+
     private fun TestScope.startHarness(holdDelays: Boolean = false): Harness {
         val harness = Harness(holdDelays = holdDelays)
         harness.collectJob =

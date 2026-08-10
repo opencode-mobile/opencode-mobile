@@ -541,6 +541,9 @@ class DisplayMessagePipeline(
                             send(DisplayMessageListUpdate.LoadFailed(update.error))
                         }
                         is MessageListUpdate.CacheSyncConfirmed -> {
+                            // Network agreed with the cache. Clear the flag so in-flight
+                            // plain-first / enrichment publishes cannot re-raise Syncing.
+                            sourceIsFromCache = false
                             send(DisplayMessageListUpdate.CacheSyncConfirmed)
                         }
                         is MessageListUpdate.Messages -> {

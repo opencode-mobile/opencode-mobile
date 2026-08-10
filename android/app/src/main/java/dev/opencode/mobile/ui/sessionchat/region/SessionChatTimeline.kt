@@ -29,7 +29,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -78,6 +77,9 @@ class SessionChatTimeline(
     private var lastTimelineFrame: TimelineFrame? = null
     private var nextFrameRevision: Long = 1L
 
+    /** After network confirms the cache, ignore late isFromCache publishes for Syncing. */
+    private var networkCacheSyncConfirmed = false
+
     fun bindCreating(worktree: String) {
         observeJob?.cancel()
         transformJob?.cancel()
@@ -92,6 +94,7 @@ class SessionChatTimeline(
         lastLoadedDisplayMessages = emptyList()
         lastTimelineFrame = null
         nextFrameRevision = 1L
+        networkCacheSyncConfirmed = false
         BlockDecorationCache.clear()
         _state.value = SessionChatTimelineRegionState()
         _state.update {
@@ -118,6 +121,7 @@ class SessionChatTimeline(
         lastLoadedDisplayMessages = emptyList()
         lastTimelineFrame = null
         nextFrameRevision = 1L
+        networkCacheSyncConfirmed = false
         BlockDecorationCache.clear()
         _state.value = SessionChatTimelineRegionState()
         _state.update {
@@ -381,9 +385,9 @@ class SessionChatTimeline(
             scope.launch {
                 messageRepository
                     .observeDisplayMessages(sessionId, worktree)
-                    // Drop intermediate snapshots while apply/composition is busy so long
-                    // streams do not replay buffered frames after the server finishes.
-                    .conflate()
+                    // Do not conflate: CacheSyncConfirmed must not be dropped when a late
+                    // cache-generation Messages publish arrives while apply is busy.
+                    // Live Messages still coalesce via pendingLiveDisplayApply.
                     .collect { update ->
                         if (!isCurrentBinding(sessionId, worktree)) return@collect
                         when (update) {
@@ -566,8 +570,8 @@ class SessionChatTimeline(
                 messages = merged,
                 timelineFrame = stamped,
                 isRefreshing = isRefreshing,
-                messagesFromCache = pending.messagesFromCache,
-                isSyncingMessages = pending.messagesFromCache,
+                messagesFromCache = pending.messagesFromCache && !networkCacheSyncConfirmed,
+                isSyncingMessages = pending.messagesFromCache && !networkCacheSyncConfirmed,
                 errorMessage =
                     if (fromQuietRefresh) {
                         if (merged.isNotEmpty() && state.timeline == SessionChatTimelineState.Error) {
@@ -589,6 +593,7 @@ class SessionChatTimeline(
     }
 
     private fun confirmCacheSync() {
+        networkCacheSyncConfirmed = true
         _state.update {
             it.copy(
                 messagesFromCache = false,

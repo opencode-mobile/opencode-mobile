@@ -24,6 +24,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private var lastPublishedRevision: [String: UInt64] = [:]
     private var healthByKey: [MessageSessionKey: MessageSyncHealth] = [:]
     private var messageCacheHandles: [MessageSessionKey: any SessionMessageCacheHandle] = [:]
+    /// Store slots that painted from cache and still need network confirmation.
+    private var awaitingCacheSyncConfirm: Set<String> = []
 
     init(
         listMessages: @escaping MessageListFetcher,
@@ -110,6 +112,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         lastPublishedFrame.removeAll()
         lastPublishedRevision.removeAll()
         healthByKey.removeAll()
+        awaitingCacheSyncConfirm.removeAll()
         lock.unlock()
         store.clear()
     }
@@ -142,6 +145,22 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private func setFingerprint(_ value: String, for storeSlot: String) {
         lock.lock()
         lastFingerprint[storeSlot] = value
+        lock.unlock()
+    }
+
+    private func isAwaitingCacheSyncConfirm(for storeSlot: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return awaitingCacheSyncConfirm.contains(storeSlot)
+    }
+
+    private func setAwaitingCacheSyncConfirm(_ awaiting: Bool, for storeSlot: String) {
+        lock.lock()
+        if awaiting {
+            awaitingCacheSyncConfirm.insert(storeSlot)
+        } else {
+            awaitingCacheSyncConfirm.remove(storeSlot)
+        }
         lock.unlock()
     }
 
@@ -242,7 +261,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 revision: self.store.revision(sessionID: key.storeSlot),
                 for: key.storeSlot
             )
-            if !isFromCache {
+            if isFromCache {
+                self.setAwaitingCacheSyncConfirm(true, for: key.storeSlot)
+            } else {
+                self.setAwaitingCacheSyncConfirm(false, for: key.storeSlot)
                 cacheHandle.note(messages: messages)
             }
             yield(.messages(messages, isFromCache: isFromCache))
@@ -261,6 +283,19 @@ nonisolated final class MessageSync: @unchecked Sendable {
             let seededMerged = store.messages(sessionID: key.storeSlot)
             publishMessages(seededMerged, true)
         }
+
+        // Poll in parallel with the initial REST so a hung first request cannot
+        // leave Syncing stuck after the network returns (Android merge parity).
+        async let pollLoop: Void = runTimelinePollLoop(
+            key: key,
+            staging: staging,
+            observationEpoch: observationEpoch,
+            publishMessages: { publishMessages($0, false) },
+            confirmCacheSync: {
+                self.setAwaitingCacheSyncConfirm(false, for: key.storeSlot)
+                yield(.cacheSyncConfirmed)
+            }
+        )
 
         // Skip an identical REST republish after cache seed or warm replay so
         // DisplayMessagePipeline does not cancel in-flight enrich / plain-first.
@@ -299,6 +334,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     // Syncing indicator on warm in-memory reopens where no disk
                     // seed ran this loop but REST agrees with the store.
                     cacheHandle.note(messages: merged)
+                    setAwaitingCacheSyncConfirm(false, for: key.storeSlot)
                     yield(.cacheSyncConfirmed)
                 }
             }
@@ -327,12 +363,6 @@ nonisolated final class MessageSync: @unchecked Sendable {
         }
 
         async let eventLoop: Void = runEventRefreshLoop(
-            key: key,
-            staging: staging,
-            observationEpoch: observationEpoch,
-            publishMessages: { publishMessages($0, false) }
-        )
-        async let pollLoop: Void = runTimelinePollLoop(
             key: key,
             staging: staging,
             observationEpoch: observationEpoch,
@@ -768,7 +798,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
         key: MessageSessionKey,
         staging: MessageEventStaging,
         observationEpoch: ObservationEpoch,
-        publishMessages: @escaping @Sendable ([Message]) -> Void
+        publishMessages: @escaping @Sendable ([Message]) -> Void,
+        confirmCacheSync: @escaping @Sendable () -> Void
     ) async {
         while !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(pollIntervalMs))
@@ -782,14 +813,21 @@ nonisolated final class MessageSync: @unchecked Sendable {
             let directory = key.directory.isEmpty ? nil : key.directory
             guard let messages = try? await listMessages(key.sessionID, directory) else { continue }
             let fp = messageFingerprint(messages)
-            guard fp != fingerprint(for: key.storeSlot) else { continue }
-            guard store.replaceAllIfRevision(
-                sessionID: key.storeSlot,
-                messages: messages,
-                expectedRevision: expectedRevision
-            ) else { continue }
-            let merged = store.messages(sessionID: key.storeSlot)
-            publishMessages(merged)
+            if fp != fingerprint(for: key.storeSlot) {
+                guard store.replaceAllIfRevision(
+                    sessionID: key.storeSlot,
+                    messages: messages,
+                    expectedRevision: expectedRevision
+                ) else { continue }
+                let merged = store.messages(sessionID: key.storeSlot)
+                publishMessages(merged)
+                continue
+            }
+            guard isAwaitingCacheSyncConfirm(for: key.storeSlot) else { continue }
+            // Initial REST may still be hung after reconnect; poll already
+            // agrees with the cache — clear Syncing without a second paint.
+            openMessageCacheHandle(for: key).note(messages: messages)
+            confirmCacheSync()
         }
     }
 

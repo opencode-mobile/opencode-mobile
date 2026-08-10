@@ -831,6 +831,9 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                             )
                         }
                     case .cacheSyncConfirmed:
+                        // Network agreed with the cache. Clear the flag so in-flight
+                        // plain-first / enrichment publishes cannot re-raise Syncing.
+                        synced { sourceIsFromCache = false }
                         continuation.yield(.cacheSyncConfirmed)
                     }
                 }
