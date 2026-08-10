@@ -51,6 +51,11 @@ final class SessionChatViewModel {
     private var optimisticCreateTask: Task<Void, Never>?
     private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver
     private let activeConnectionManager: ActiveConnectionManager
+    private let connectionProfileStore: any ConnectionProfileStore
+    private var projectLabel: String?
+    private var projectLetter: Character?
+    private var projectLetterAccent: LetterAccent?
+    private var projectIdentityTask: Task<Void, Never>?
 
     init(
         sessionID: String,
@@ -69,6 +74,7 @@ final class SessionChatViewModel {
         foregroundEventStream: any ForegroundEventStream,
         sessionModelSelectionStore: any SessionModelSelectionStore,
         activeConnectionManager: ActiveConnectionManager,
+        connectionProfileStore: any ConnectionProfileStore,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver
     ) {
         self.sessionID = sessionID
@@ -76,6 +82,7 @@ final class SessionChatViewModel {
         self.worktree = worktree
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.activeConnectionManager = activeConnectionManager
+        self.connectionProfileStore = connectionProfileStore
         self.uiState = .initial(
             sessionID: sessionID,
             sessionTitle: sessionTitle,
@@ -135,6 +142,7 @@ final class SessionChatViewModel {
         sessionInfo.onChange = { [weak self] in self?.publishUiState() }
         reviewChanges.onChange = { [weak self] in self?.publishUiState() }
         commands.onChange = { [weak self] in self?.publishUiState() }
+        refreshProjectIdentity()
         publishUiState()
     }
 
@@ -145,6 +153,8 @@ final class SessionChatViewModel {
         }
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID, privacy: .public)")
         sessionReadyStore.setFocusedSession(sessionID: sessionID, directory: worktree)
+        // Peers may have changed while the screen was away; re-resolve smart label.
+        refreshProjectIdentity()
         composer.startCatalogLoads()
         commands.start()
         sessionInfo.startObserving()
@@ -861,6 +871,8 @@ final class SessionChatViewModel {
         OpenCodeLog.sessionChat.info("stop observing session=\(self.sessionID, privacy: .public)")
         optimisticCreateTask?.cancel()
         optimisticCreateTask = nil
+        projectIdentityTask?.cancel()
+        projectIdentityTask = nil
         timeline.stopObserving()
         sessionInfo.stopObserving()
         permissionTask?.cancel()
@@ -869,6 +881,43 @@ final class SessionChatViewModel {
         sessionTodoLiveStore.setLive(false, sessionID: sessionID, directory: worktree)
         sessionReadyStore.setFocusedSession(sessionID: nil, directory: nil)
         reviewChanges.stop()
+    }
+
+    private func refreshProjectIdentity() {
+        projectIdentityTask?.cancel()
+        guard !worktree.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            projectLabel = nil
+            projectLetter = nil
+            projectLetterAccent = nil
+            return
+        }
+        let displayName = ProjectDomainAdapter.displayName(from: worktree)
+        projectLabel = displayName
+        projectLetter = letterCharacter(for: displayName)
+        projectLetterAccent = letterAccent(for: worktree)
+        projectIdentityTask = Task { [worktree, connectionProfileStore, activeConnectionManager] in
+            let baseURL: String?
+            if let current = activeConnectionManager.currentProfile()?.baseURL, !current.isEmpty {
+                baseURL = current
+            } else if let stored = await connectionProfileStore.activeProfile()?.baseURL, !stored.isEmpty {
+                baseURL = stored
+            } else {
+                baseURL = nil
+            }
+            let peers: [String]
+            if let baseURL {
+                peers = await connectionProfileStore.addedWorktrees(serverBaseURL: baseURL)
+            } else {
+                peers = []
+            }
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self.projectLabel = smartProjectLabel(focusWorktree: worktree, peerWorktrees: peers)
+                self.projectLetter = letterCharacter(for: displayName)
+                self.projectLetterAccent = letterAccent(for: worktree)
+                self.publishUiState()
+            }
+        }
     }
 
     func row(from message: Message, previous: SessionChatRow? = nil) -> SessionChatRow? {
@@ -1012,6 +1061,9 @@ final class SessionChatViewModel {
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
+            projectLabel: projectLabel,
+            projectLetter: projectLetter,
+            projectLetterAccent: projectLetterAccent,
             timeline: timelineState.timeline,
             messages: timelineState.messages,
             timelineFrame: timelineFrame,

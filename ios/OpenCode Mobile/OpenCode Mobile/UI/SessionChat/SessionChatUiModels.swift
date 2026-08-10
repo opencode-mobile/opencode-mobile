@@ -153,6 +153,10 @@ struct SessionChatSnackbar: Equatable, Identifiable {
 struct SessionChatUiState: Equatable {
     var sessionID: String
     var sessionTitle: String
+    /// Smart project label for top-bar chrome; nil when worktree missing.
+    var projectLabel: String? = nil
+    var projectLetter: Character? = nil
+    var projectLetterAccent: LetterAccent? = nil
     var timeline: SessionChatTimelineState
     var messages: [SessionChatRow]
     /// Projected timeline frame with declared ID sets. Reused when only

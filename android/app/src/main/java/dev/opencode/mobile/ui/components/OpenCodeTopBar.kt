@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,18 +11,28 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.badgeColors
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
@@ -34,11 +46,22 @@ private val TopBarTitleSpacing = 12.dp
 private val TopBarTitleEdgeInsetWhenNoLeading = 18.dp
 private val TopBarSubtitleSpacing = 0.dp
 private val TopBarTitleBlockHeight = 48.dp
+private val TopBarSubtitleMetaSpacing = 6.dp
+private val TopBarLetterBadgeSize = 16.dp
+private val TopBarLetterBadgeRadius = 4.dp
+private val TopBarLetterGlyphSize = 9.sp
 
 sealed interface OpenCodeTopBarSubtitleAccessory {
     data class StatusDot(
         val status: OpenCodeSessionConnectionStatus,
     ) : OpenCodeTopBarSubtitleAccessory
+}
+
+sealed interface OpenCodeTopBarSubtitleLeading {
+    data class Letter(
+        val character: Char,
+        val accent: LetterAccent,
+    ) : OpenCodeTopBarSubtitleLeading
 }
 
 sealed interface OpenCodeTopBarLeading {
@@ -81,6 +104,7 @@ fun OpenCodeTopBar(
     modifier: Modifier = Modifier,
     title: String? = null,
     subtitle: String? = null,
+    subtitleLeading: OpenCodeTopBarSubtitleLeading? = null,
     subtitleAccessory: OpenCodeTopBarSubtitleAccessory? = null,
     leading: OpenCodeTopBarLeading = OpenCodeTopBarLeading.None,
     actions: List<OpenCodeTopBarAction> = emptyList(),
@@ -93,6 +117,8 @@ fun OpenCodeTopBar(
 
     val resolvedTitle = title?.takeIf { it.isNotBlank() }
     val resolvedSubtitle = subtitle?.takeIf { it.isNotBlank() }
+    val resolvedLeading =
+        if (resolvedSubtitle != null || subtitleAccessory != null) subtitleLeading else null
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -116,6 +142,7 @@ fun OpenCodeTopBar(
                 TopBarTitleBlock(
                     title = resolvedTitle,
                     subtitle = resolvedSubtitle,
+                    subtitleLeading = resolvedLeading,
                     subtitleAccessory = subtitleAccessory,
                     modifier =
                         Modifier
@@ -139,6 +166,7 @@ fun OpenCodeTopBar(
 private fun TopBarTitleBlock(
     title: String,
     subtitle: String?,
+    subtitleLeading: OpenCodeTopBarSubtitleLeading?,
     subtitleAccessory: OpenCodeTopBarSubtitleAccessory?,
     modifier: Modifier = Modifier,
 ) {
@@ -147,7 +175,8 @@ private fun TopBarTitleBlock(
             modifier
                 .height(TopBarTitleBlockHeight)
                 .semantics {
-                    contentDescription = titleBlockAccessibilityLabel(title, subtitle, subtitleAccessory)
+                    contentDescription =
+                        titleBlockAccessibilityLabel(title, subtitle, subtitleLeading, subtitleAccessory)
                 },
         contentAlignment = Alignment.CenterStart,
     ) {
@@ -165,6 +194,7 @@ private fun TopBarTitleBlock(
                 )
                 TopBarSubtitleLine(
                     subtitle = subtitle,
+                    subtitleLeading = subtitleLeading,
                     subtitleAccessory = subtitleAccessory,
                 )
             }
@@ -184,35 +214,101 @@ private fun TopBarTitleBlock(
 @Composable
 private fun TopBarSubtitleLine(
     subtitle: String?,
+    subtitleLeading: OpenCodeTopBarSubtitleLeading?,
     subtitleAccessory: OpenCodeTopBarSubtitleAccessory?,
 ) {
-    when (subtitleAccessory) {
-        is OpenCodeTopBarSubtitleAccessory.StatusDot ->
-            OpenCodeConnectionStatusLabel(status = subtitleAccessory.status)
-        null ->
-            if (subtitle != null) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = openCodeColor("text-base"),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+    val hasSubtitle = subtitle != null
+    val status =
+        when (subtitleAccessory) {
+            is OpenCodeTopBarSubtitleAccessory.StatusDot -> subtitleAccessory.status
+            null -> null
+        }
+    val letter = subtitleLeading as? OpenCodeTopBarSubtitleLeading.Letter
+
+    if (!hasSubtitle && status != null) {
+        OpenCodeConnectionStatusLabel(status = status)
+        return
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TopBarSubtitleMetaSpacing),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        if (letter != null && hasSubtitle) {
+            TopBarLetterBadge(character = letter.character, accent = letter.accent)
+        }
+        if (subtitle != null) {
+            Text(
+                text = subtitle,
+                modifier = Modifier.weight(1f, fill = false).widthIn(max = 220.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = openCodeColor("text-base"),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (hasSubtitle && status != null) {
+            Text(
+                text = "·",
+                style = MaterialTheme.typography.bodySmall,
+                color = openCodeColor("text-weaker"),
+            )
+        }
+        if (status != null) {
+            OpenCodeConnectionStatusLabel(status = status)
+        }
+    }
+}
+
+@Composable
+private fun TopBarLetterBadge(
+    character: Char,
+    accent: LetterAccent,
+) {
+    val dark = isSystemInDarkTheme()
+    val (fill, tint) = accent.badgeColors(dark)
+    Box(
+        modifier =
+            Modifier
+                .size(TopBarLetterBadgeSize)
+                .clip(RoundedCornerShape(TopBarLetterBadgeRadius))
+                .background(fill)
+                .semantics { hideFromAccessibility() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = character.uppercaseChar().toString(),
+            fontSize = TopBarLetterGlyphSize,
+            fontWeight = FontWeight.Bold,
+            color = tint,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+        )
     }
 }
 
 private fun titleBlockAccessibilityLabel(
     title: String,
     subtitle: String?,
+    subtitleLeading: OpenCodeTopBarSubtitleLeading?,
     subtitleAccessory: OpenCodeTopBarSubtitleAccessory?,
 ): String {
-    val secondLine =
-        when (subtitleAccessory) {
-            is OpenCodeTopBarSubtitleAccessory.StatusDot -> "Live updates ${subtitleAccessory.status.label}"
-            null -> subtitle
-        }
-    return if (secondLine != null) "$title, $secondLine" else title
+    val parts = mutableListOf<String>()
+    if (subtitle != null) {
+        val letter =
+            (subtitleLeading as? OpenCodeTopBarSubtitleLeading.Letter)
+                ?.character
+                ?.uppercaseChar()
+                ?.toString()
+        parts += if (letter != null) "Project $letter $subtitle" else subtitle
+    }
+    when (subtitleAccessory) {
+        is OpenCodeTopBarSubtitleAccessory.StatusDot ->
+            parts += "Live updates ${subtitleAccessory.status.label}"
+        null -> Unit
+    }
+    return if (parts.isEmpty()) title else parts.joinToString(prefix = "$title, ", separator = ", ")
 }
 
 @Composable
@@ -322,6 +418,17 @@ private fun OpenCodeTopBarPreviewContent() {
         Text(text = "Status subtitle", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
         OpenCodeTopBar(
             title = "Importing icons explanation",
+            subtitleAccessory = OpenCodeTopBarSubtitleAccessory.StatusDot(OpenCodeSessionConnectionStatus.Live),
+            leading = OpenCodeTopBarLeading.Back(onClick = {}),
+            actions = listOf(OpenCodeTopBarAction.Icon(OpenCodeIcons.MoreVert, "More actions", onClick = {})),
+            showDivider = true,
+        )
+
+        Text(text = "Project + status", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+        OpenCodeTopBar(
+            title = "Wire session project chrome",
+            subtitle = "opencode-mobile",
+            subtitleLeading = OpenCodeTopBarSubtitleLeading.Letter('O', LetterAccent.Blue),
             subtitleAccessory = OpenCodeTopBarSubtitleAccessory.StatusDot(OpenCodeSessionConnectionStatus.Live),
             leading = OpenCodeTopBarLeading.Back(onClick = {}),
             actions = listOf(OpenCodeTopBarAction.Icon(OpenCodeIcons.MoreVert, "More actions", onClick = {})),

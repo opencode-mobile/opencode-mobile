@@ -2029,6 +2029,7 @@ struct SessionChatViewModelTests {
             foregroundEventStream: eventStream,
             sessionModelSelectionStore: selectionStore,
             activeConnectionManager: activeConnectionManager,
+            connectionProfileStore: EmptyConnectionProfileStore(),
             newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
                 store: selectionStore,
                 modelRepository: modelRepository
@@ -2895,4 +2896,14 @@ private func questionRequest(
         toolMessageID: nil,
         toolCallID: nil
     )
+}
+
+private struct EmptyConnectionProfileStore: ConnectionProfileStore {
+    func activeProfile() async -> ConnectionProfile? { nil }
+    func saveProfile(_ profile: ConnectionProfile) async {}
+    func addedWorktrees(serverBaseURL: String) async -> [String] { [] }
+    func addWorktree(serverBaseURL: String, worktree: String) async {}
+    func removeWorktree(serverBaseURL: String, worktree: String) async {}
+    func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async {}
+    func clearAll() async {}
 }

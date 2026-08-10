@@ -398,6 +398,7 @@ extension Container {
                 foregroundEventStream: self.foregroundEventStream(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),
                 activeConnectionManager: self.activeConnectionManager(),
+                connectionProfileStore: self.connectionProfileStore(),
                 newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
                     store: self.sessionModelSelectionStore(),
                     modelRepository: self.modelRepository()

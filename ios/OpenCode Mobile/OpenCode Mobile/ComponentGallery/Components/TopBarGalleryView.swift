@@ -38,6 +38,7 @@ struct TopBarGalleryView: View {
     @State private var showDivider = false
     @State private var showTwoLine = false
     @State private var showStatusDot = false
+    @State private var showProjectMeta = false
     @State private var connectionStatus: OpenCodeSessionConnectionStatus = .live
     @State private var actionsEnabled = true
 
@@ -53,12 +54,17 @@ struct TopBarGalleryView: View {
     }
 
     private var subtitle: String? {
-        guard showTwoLine, !showStatusDot else { return nil }
+        if showProjectMeta { return "opencode-mobile" }
+        guard showTwoLine else { return nil }
         return "Importing icons explanation"
     }
 
     private var subtitleAccessory: OpenCodeTopBarSubtitleAccessory? {
-        showStatusDot ? .statusDot(connectionStatus) : nil
+        (showStatusDot || showProjectMeta) ? .statusDot(connectionStatus) : nil
+    }
+
+    private var subtitleLeading: OpenCodeTopBarSubtitleLeading? {
+        showProjectMeta ? .letter("O", .blue) : nil
     }
 
     private var leadingVariant: OpenCodeTopBarLeading {
@@ -132,6 +138,11 @@ struct TopBarGalleryView: View {
                             action: { showStatusDot.toggle() }
                         )
                         OpenCodeChoiceBadge(
+                            label: "Project meta",
+                            selected: showProjectMeta,
+                            action: { showProjectMeta.toggle() }
+                        )
+                        OpenCodeChoiceBadge(
                             label: "Divider",
                             selected: showDivider,
                             action: { showDivider.toggle() }
@@ -144,7 +155,7 @@ struct TopBarGalleryView: View {
                     }
                 }
 
-                if showStatusDot {
+                if showStatusDot || showProjectMeta {
                     ControlGroup(title: "Connection") {
                         HStack(spacing: 8) {
                             ForEach(OpenCodeSessionConnectionStatus.allCases, id: \.self) { status in
@@ -158,7 +169,7 @@ struct TopBarGalleryView: View {
                     }
                 }
 
-                Text("Switch controls to review title-only, two-line, status-dot subtitle, back, close, icon-action, labeled-action, divider, and disabled-action states.")
+                Text("Switch controls to review title-only, two-line, status-dot subtitle, project meta + status, back, close, icon-action, labeled-action, divider, and disabled-action states.")
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textBase)
             }
@@ -167,6 +178,7 @@ struct TopBarGalleryView: View {
             OpenCodeTopBar(
                 title: title,
                 subtitle: subtitle,
+                subtitleLeading: subtitleLeading,
                 subtitleAccessory: subtitleAccessory,
                 leading: leadingVariant,
                 actions: actionVariants,

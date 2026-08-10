@@ -132,6 +132,10 @@ data class SessionChatUiState(
     val forkResultVisible: Boolean = false,
     val forkedSessionTitle: String = "",
     val pendingSessionReplace: ChildSessionNavigationTarget? = null,
+    /** Smart project label for top-bar chrome; null when worktree missing. */
+    val projectLabel: String? = null,
+    val projectLetter: Char? = null,
+    val projectLetterAccent: dev.opencode.mobile.theme.LetterAccent? = null,
 ) {
     val latestCompletedUserMessageId: String?
         get() {
