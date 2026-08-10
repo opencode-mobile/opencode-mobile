@@ -78,6 +78,12 @@ struct SessionChatTimelineView: View {
     var body: some View {
         Group {
             switch props.timeline {
+            case .creating:
+                OpenCodeStatusStack(
+                    title: "Starting session…",
+                    subtitle: "Creating on server…",
+                    accessibilityIdentifier: "sessionChatCreating"
+                )
             case .loading:
                 OpenCodeStatusStack(
                     title: "Loading messages",

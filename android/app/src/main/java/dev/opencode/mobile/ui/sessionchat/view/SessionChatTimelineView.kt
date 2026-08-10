@@ -114,6 +114,13 @@ internal fun SessionChatTimelineView(
     modifier: Modifier = Modifier,
 ) {
     when (props.timeline) {
+        SessionChatTimelineState.Creating -> OpenCodeStatusStack(
+            title = "Starting session…",
+            subtitle = "Creating on server…",
+            testTag = "sessionChatCreating",
+            modifier = modifier.fillMaxSize(),
+        )
+
         SessionChatTimelineState.Loading -> OpenCodeStatusStack(
             title = "Loading messages",
             subtitle = "Fetching timeline…",

@@ -38,6 +38,11 @@ final class SessionInfo {
         notifyChange()
     }
 
+    func requestLeaveSession() {
+        state.shouldLeaveSession = true
+        notifyChange()
+    }
+
     func startObserving() {
         observationTask?.cancel()
         OpenCodeLog.sessionChat.info("session info observing session=\(self.state.sessionID, privacy: .public)")

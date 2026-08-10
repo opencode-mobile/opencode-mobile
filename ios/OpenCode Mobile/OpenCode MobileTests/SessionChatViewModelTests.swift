@@ -1657,7 +1657,7 @@ struct SessionChatViewModelTests {
         #expect(visible.contains(.redo) == false)
     }
 
-    @Test func runClientSlashAction_new_createsSessionKeepsDraftNeverRunsCommand() async {
+    @Test func runClientSlashAction_new_requestsOptimisticReplaceKeepsDraftNeverRunsCommand() async {
         let sessionRepository = FakeChatSessionRepository(
             createSessionResult: Session(
                 id: "ses-2", title: "New session", slug: nil, projectID: nil,
@@ -1678,9 +1678,13 @@ struct SessionChatViewModelTests {
         viewModel.runClientSlashAction(.new)
         await waitUntil { viewModel.uiState.pendingSessionReplace != nil }
 
-        #expect(sessionRepository.createSessionDirectory == "/repo")
+        #expect(sessionRepository.createSessionCallCount == 0)
         #expect(viewModel.uiState.commandsSheetVisible == false)
-        #expect(viewModel.uiState.pendingSessionReplace == ChildSessionNavigationTarget(sessionID: "ses-2", sessionTitle: "New session", worktree: "/repo"))
+        #expect(viewModel.uiState.pendingSessionReplace == ChildSessionNavigationTarget(
+            sessionID: OptimisticSessionCreate.placeholderSessionID,
+            sessionTitle: "New Session",
+            worktree: "/repo"
+        ))
         #expect(viewModel.uiState.composer.text == "draft that should survive")
         #expect(commandRepository.runCommandCalled == false)
 
@@ -1688,19 +1692,52 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.pendingSessionReplace == nil)
     }
 
-    @Test func runClientSlashAction_new_failure_setsActionErrorMessage() async {
-        let sessionRepository = FakeChatSessionRepository(createSessionError: .http(statusCode: 500, message: "boom"))
-        let viewModel = makeViewModel(messageRepository: FakeMessageRepository(), sessionRepository: sessionRepository)
+    @Test func startObservingOptimisticCreate_promotesSessionAndLoadsMessages() async {
+        let sessionRepository = FakeChatSessionRepository(
+            createSessionResult: Session(
+                id: "ses-new", title: "Created", slug: nil, projectID: nil,
+                directory: "/repo", parentID: nil, updatedAtEpochMs: nil
+            )
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            sessionRepository: sessionRepository,
+            sessionID: OptimisticSessionCreate.placeholderSessionID,
+            sessionTitle: "New Session"
+        )
         defer { viewModel.stopObserving() }
         await viewModel.loadMessages()
 
-        viewModel.runClientSlashAction(.new)
-        await waitUntil { viewModel.uiState.snackbar?.message != nil }
+        #expect(viewModel.uiState.sessionID == "ses-new")
+        #expect(viewModel.uiState.timeline == .empty || viewModel.uiState.timeline == .ready)
+        #expect(sessionRepository.createSessionCallCount == 1)
+    }
 
-        #expect(viewModel.uiState.pendingSessionReplace == nil)
-        #expect(viewModel.uiState.snackbar?.message == "Couldn't start a new session.")
-        #expect(viewModel.uiState.snackbar?.tone == .error)
-        #expect(viewModel.uiState.errorMessage == nil)
+    @Test func startObservingAgainWhileCreatingOrAfterPromotion_issuesSingleCreate() async {
+        let sessionRepository = FakeChatSessionRepository(
+            createSessionResult: Session(
+                id: "ses-new", title: "Created", slug: nil, projectID: nil,
+                directory: "/repo", parentID: nil, updatedAtEpochMs: nil
+            )
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            sessionRepository: sessionRepository,
+            sessionID: OptimisticSessionCreate.placeholderSessionID,
+            sessionTitle: "New Session"
+        )
+        defer { viewModel.stopObserving() }
+
+        viewModel.startObserving()
+        viewModel.startObserving()
+        await viewModel.loadMessages()
+        #expect(viewModel.uiState.sessionID == "ses-new")
+        #expect(sessionRepository.createSessionCallCount == 1)
+
+        viewModel.startObserving()
+        await viewModel.loadMessages()
+        #expect(viewModel.uiState.sessionID == "ses-new")
+        #expect(sessionRepository.createSessionCallCount == 1)
     }
 
     @Test func runClientSlashAction_fork_confirmAndOpen_navigatesToForkedSession() async {
@@ -1944,7 +1981,9 @@ struct SessionChatViewModelTests {
         agentRepository: FakeAgentRepository = FakeAgentRepository(),
         sessionRepository: FakeChatSessionRepository? = nil,
         permissionLiveStore: (any PermissionLiveStore)? = nil,
-        questionLiveStore: (any QuestionLiveStore)? = nil
+        questionLiveStore: (any QuestionLiveStore)? = nil,
+        sessionID: String = "ses-1",
+        sessionTitle: String = "Title"
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         // Mutations (send/rename/fork/new/permissions) require Connected; default fakes start Idle.
@@ -1971,8 +2010,8 @@ struct SessionChatViewModelTests {
             ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: "")
         )
         let viewModel = SessionChatViewModel(
-            sessionID: "ses-1",
-            sessionTitle: "Title",
+            sessionID: sessionID,
+            sessionTitle: sessionTitle,
             worktree: "/repo",
             messageRepository: repo,
             modelRepository: modelRepository,

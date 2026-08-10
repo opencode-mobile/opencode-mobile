@@ -7,8 +7,8 @@ import OSLog
 final class SessionChatViewModel {
     private(set) var uiState: SessionChatUiState
 
-    private let sessionID: String
-    private let sessionTitle: String
+    private var sessionID: String
+    private var sessionTitle: String
     private let worktree: String
 
     private let timeline: SessionChatTimeline
@@ -48,6 +48,9 @@ final class SessionChatViewModel {
     private var loggedRenameTitleEdit = false
     private var loggedForkTitleEdit = false
     private var loggedQuestionCustomTextEdit: String?
+    private var optimisticCreateTask: Task<Void, Never>?
+    private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver
+    private let activeConnectionManager: ActiveConnectionManager
 
     init(
         sessionID: String,
@@ -71,7 +74,13 @@ final class SessionChatViewModel {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
         self.worktree = worktree
-        self.uiState = .initial(sessionID: sessionID, sessionTitle: sessionTitle)
+        self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
+        self.activeConnectionManager = activeConnectionManager
+        self.uiState = .initial(
+            sessionID: sessionID,
+            sessionTitle: sessionTitle,
+            timeline: OptimisticSessionCreate.isPlaceholder(sessionID) ? .creating : .loading
+        )
         self.sessionRepository = sessionRepository
         self.permissionLiveStore = permissionLiveStore ?? EmptyPermissionLiveStore()
         self.questionLiveStore = questionLiveStore ?? EmptyQuestionLiveStore()
@@ -130,6 +139,10 @@ final class SessionChatViewModel {
     }
 
     func startObserving() {
+        if OptimisticSessionCreate.isPlaceholder(sessionID) {
+            beginOptimisticCreate()
+            return
+        }
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID, privacy: .public)")
         sessionReadyStore.setFocusedSession(sessionID: sessionID, directory: worktree)
         composer.startCatalogLoads()
@@ -142,6 +155,10 @@ final class SessionChatViewModel {
     }
 
     func loadMessages() async {
+        if OptimisticSessionCreate.isPlaceholder(sessionID) {
+            await optimisticCreateTask?.value
+            guard !OptimisticSessionCreate.isPlaceholder(sessionID) else { return }
+        }
         async let catalogLoad: Void = composer.loadCatalog()
         _ = await catalogLoad
         await waitForTimelineResolution()
@@ -842,6 +859,8 @@ final class SessionChatViewModel {
 
     func stopObserving() {
         OpenCodeLog.sessionChat.info("stop observing session=\(self.sessionID, privacy: .public)")
+        optimisticCreateTask?.cancel()
+        optimisticCreateTask = nil
         timeline.stopObserving()
         sessionInfo.stopObserving()
         permissionTask?.cancel()
@@ -858,11 +877,78 @@ final class SessionChatViewModel {
 
     private func waitForTimelineResolution() async {
         let deadline = Date().addingTimeInterval(15)
-        while Date() < deadline, timeline.state.timeline == .loading {
+        while Date() < deadline, timeline.state.timeline == .loading || timeline.state.timeline == .creating {
             try? await Task.sleep(for: .milliseconds(10))
         }
     }
 
+    private func beginOptimisticCreate() {
+        if optimisticCreateTask != nil || !OptimisticSessionCreate.isPlaceholder(sessionID) {
+            return
+        }
+        OpenCodeLog.sessionChat.info("optimistic create start worktree=\(self.worktree, privacy: .private)")
+        timeline.prepareForOptimisticCreate()
+        composer.startCatalogLoads()
+        publishUiState()
+        optimisticCreateTask?.cancel()
+        optimisticCreateTask = Task {
+            do {
+                let profile = activeConnectionManager.currentProfile()
+                let session = try await sessionRepository.createSession(
+                    parentID: nil,
+                    title: nil,
+                    directory: worktree
+                )
+                if let profile {
+                    let selection = await newSessionModelSelectionResolver.resolve(
+                        profile: profile,
+                        worktree: worktree
+                    )
+                    if let selection {
+                        await newSessionModelSelectionResolver.seedSession(
+                            profile: profile,
+                            worktree: worktree,
+                            sessionID: session.id,
+                            selection: selection
+                        )
+                    }
+                }
+                guard !Task.isCancelled else { return }
+                OpenCodeLog.sessionChat.info("optimistic create success id=\(session.id, privacy: .public)")
+                optimisticCreateTask = nil
+                promoteOptimisticSession(id: session.id, title: session.title)
+            } catch {
+                guard !Task.isCancelled else { return }
+                OpenCodeLog.sessionChat.warning(
+                    "optimistic create failed error=\(error.localizedDescription, privacy: .public)"
+                )
+                optimisticCreateTask = nil
+                OptimisticSessionCreateCoordinator.shared.reportCreateFailed(
+                    error.localizedDescription
+                )
+                sessionInfo.requestLeaveSession()
+                publishUiState()
+            }
+        }
+    }
+
+    private func promoteOptimisticSession(id: String, title: String) {
+        sessionID = id
+        sessionTitle = title
+        sessionReadyStore.setFocusedSession(sessionID: id, directory: worktree)
+        timeline.rebind(sessionID: id)
+        composer.rebind(sessionID: id)
+        reviewChanges.rebind(sessionID: id)
+        commands.rebind(sessionID: id)
+        sessionInfo.bind(sessionID: id, sessionTitle: title)
+        commands.start()
+        sessionInfo.startObserving()
+        timeline.startObserving()
+        startPermissionObservation()
+        startQuestionObservation()
+        startTodoObservation()
+        publishUiState()
+    }
     private func publishUiState() {
         refilterQuestionOrphans()
         let timelineState = timeline.state

@@ -6,6 +6,7 @@ import dev.opencode.mobile.domain.command.ClientSlashMessageRef
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
+import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.ChildSessionNavigationTarget
 import dev.opencode.mobile.ui.sessionchat.SessionChatCommandsRegionState
@@ -97,31 +98,15 @@ class SessionChatCommands(
         dismissCommands()
         val worktree = boundWorktree ?: return
         _state.update { it.copy(actionErrorMessage = null, actionSuccessMessage = null) }
-        scope.launch(ioDispatcher) {
-            runCatching {
-                val profile = connectionSessionCoordinator.currentProfile()
-                val selection = profile?.let { newSessionModelSelectionResolver.resolve(it, worktree) }
-                val session = sessionRepository.createSession(directory = worktree)
-                if (profile != null && selection != null) {
-                    newSessionModelSelectionResolver.seedSession(profile, worktree, session.id, selection)
-                }
-                session
-            }.onSuccess { session ->
-                logI("new session created id=${session.id}")
-                _state.update {
-                    it.copy(
-                        pendingSessionReplace =
-                            ChildSessionNavigationTarget(
-                                sessionId = session.id,
-                                sessionTitle = session.title,
-                                worktree = worktree,
-                            ),
-                    )
-                }
-            }.onFailure { error ->
-                logW("new session failed error=${error.message}")
-                _state.update { it.copy(actionErrorMessage = "Couldn't start a new session.") }
-            }
+        _state.update {
+            it.copy(
+                pendingSessionReplace =
+                    ChildSessionNavigationTarget(
+                        sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                        sessionTitle = "New Session",
+                        worktree = worktree,
+                    ),
+            )
         }
     }
 

@@ -321,7 +321,8 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         await viewModel.createSession(in: "/repo")
-        #expect(sessionRepository.createdDirectories == ["/repo"])
+        #expect(sessionRepository.createdDirectories.isEmpty)
+        #expect(viewModel.pendingSessionOpen?.id == OptimisticSessionCreate.placeholderSessionID)
         #expect(viewModel.pendingSessionOpen?.worktree == "/repo")
         guard case let .loaded(_, _, _, _, _, createError) = viewModel.state else {
             Issue.record("Expected loaded")
@@ -330,15 +331,14 @@ struct ProjectListHomeViewModelTests {
         #expect(createError == nil)
     }
 
-    @Test func createSession_failureStoresInlineError() async {
-        let sessionRepository = FakeSessionRepository(createError: TestError.message("nope"))
+    @Test func optimisticCreateFailureStoresInlineError() async {
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
-            sessionRepository: sessionRepository,
+            sessionRepository: FakeSessionRepository(),
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
-        await viewModel.createSession(in: "/repo")
+        OptimisticSessionCreateCoordinator.shared.reportCreateFailed("nope")
         guard case let .loaded(_, _, _, _, _, createError) = viewModel.state else {
             Issue.record("Expected loaded")
             return
@@ -346,48 +346,17 @@ struct ProjectListHomeViewModelTests {
         #expect(createError == "nope")
     }
 
-    @Test func createSession_copiesResolvedPreferenceBeforeOpeningChat() async {
-        let store = HomeSelectionStore()
-        let identity = ModelSelectionConnectionIdentity(
-            serverBaseURL: "http://127.0.0.1:4096/",
-            username: "opencode"
-        )
-        await store.saveNewSessionPreference(
-            connectionIdentity: identity,
-            worktree: "/repo",
-            selection: SessionModelSelection(
-                providerID: "openai",
-                modelID: "gpt-4",
-                variant: "high",
-                savedAtEpochMs: 1_000
-            )
-        )
-        let option = ModelSelectionOption(
-            providerID: "openai",
-            providerName: "OpenAI",
-            modelID: "gpt-4",
-            modelName: "GPT-4",
-            variants: ["high"],
-            contextLimitTokens: 128_000
-        )
-        let viewModel = makeViewModel(
-            projectRepository: FakeProjectRepository(),
-            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
-            newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
-                store: store,
-                modelRepository: HomeModelRepository(catalog: ModelSelectionCatalog(options: [option], serverDefault: option))
-            )
-        )
-        await viewModel.refresh()
+    @Test func coordinator_prunesHandlersForDeallocatedOwners() {
+        let coordinator = OptimisticSessionCreateCoordinator()
+        var received: [String] = []
+        var owner: AnyObject? = NSObject()
+        coordinator.onCreateFailed(owner: owner!) { received.append($0) }
+        coordinator.reportCreateFailed("first")
+        #expect(received == ["first"])
 
-        await viewModel.createSession(in: "/repo")
-
-        #expect(viewModel.pendingSessionOpen?.id == "created")
-        #expect(await store.loadSession(
-            connectionIdentity: identity,
-            worktree: "/repo",
-            sessionID: "created"
-        )?.modelID == "gpt-4")
+        owner = nil
+        coordinator.reportCreateFailed("second")
+        #expect(received == ["first"])
     }
 
     @Test func onSessionLongPress_opensSheetAndKeepsForkHiddenWithoutUserMessages() async {

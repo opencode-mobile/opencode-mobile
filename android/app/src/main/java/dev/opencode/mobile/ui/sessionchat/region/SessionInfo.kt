@@ -11,6 +11,7 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.SessionError
+import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionInfoRegionState
@@ -45,6 +46,24 @@ class SessionInfo(
     private var observationJob: Job? = null
     private var renameJob: Job? = null
 
+    fun bindCreating(
+        sessionTitle: String,
+        worktree: String,
+    ) {
+        stopObserving()
+        renameJob?.cancel()
+        renameJob = null
+        boundSessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID
+        boundSessionTitle = sessionTitle
+        boundWorktree = worktree
+        _state.value =
+            SessionInfoRegionState(
+                sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                sessionTitle = sessionTitle,
+            )
+        logI("bind creating worktree=$worktree title=$sessionTitle")
+    }
+
     fun bind(
         sessionId: String,
         sessionTitle: String,
@@ -69,6 +88,10 @@ class SessionInfo(
         logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
         startObserving(sessionId, worktree)
         refreshStatus()
+    }
+
+    fun requestLeaveSession() {
+        _state.update { it.copy(shouldLeaveSession = true) }
     }
 
     fun stopObserving() {
