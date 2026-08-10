@@ -13,7 +13,11 @@ struct OpenCodeFloatingChrome: ViewModifier {
                 .background(OpenCodeColors.surfaceRaisedBase.opacity(0.92), in: shape)
                 .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius, style: .continuous))
         } else {
-            content.background(.regularMaterial, in: shape)
+            // Raised fill + shadow stand-in: `.regularMaterial` alone reads too
+            // low-contrast against background-base on pre–Liquid Glass OS versions.
+            content
+                .background(OpenCodeColors.surfaceRaisedBase.opacity(0.95), in: shape)
+                .shadow(color: Color.black.opacity(0.12), radius: 8, y: 4)
         }
     }
 }

@@ -52,46 +52,49 @@ struct OpenCodeSessionListDock: View {
                     }
                 }
 
-                HStack(spacing: 8) {
-                    if #available(iOS 26, *) {
-                        Button(action: onAddProject) {
-                            OpenCodeIconImage(icon: .createNewFolder, size: 18)
-                                .foregroundStyle(OpenCodeColors.textStrong)
-                                .frame(width: 36, height: 36)
-                        }
-                        .buttonStyle(.glass)
-                        .accessibilityLabel("Add project")
-
-                        Button(action: onNewSession) {
-                            Text("New session")
-                                .font(OpenCodeTypography.caption.weight(.medium))
-                                .foregroundStyle(OpenCodeColors.textStrong)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 36)
-                                .contentShape(Capsule())
-                        }
-                        .buttonStyle(.glass)
-                        .clipShape(Capsule())
-                    } else {
-                        OpenCodeButton(
-                            variant: .iconCircle(.createNewFolder, accessibilityLabel: "Add project"),
-                            size: .medium,
-                            action: onAddProject
-                        )
-                        Button(action: onNewSession) {
-                            Text("New session")
-                                .font(OpenCodeTypography.caption.weight(.medium))
-                                .foregroundStyle(OpenCodeColors.textStrong)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 36)
-                                .background(OpenCodeColors.surfaceRaisedBase, in: Capsule())
-                                .overlay(Capsule().strokeBorder(OpenCodeColors.borderWeakBase, lineWidth: 1.5))
-                        }
-                        .buttonStyle(.plain)
-                    }
+                // Same fill-only recipe as Android DockCta (no per-button glass).
+                HStack(alignment: .center, spacing: 8) {
+                    addProjectButton
+                    newSessionButton
                 }
             }
         }
+    }
+
+    /// Matches Android `DockCta` size (52dp).
+    private static let ctaHeight: CGFloat = 52
+    private static let ctaIconSize: CGFloat = 22
+    private static let ctaFillOpacity: Double = 0.14
+
+    private var addProjectButton: some View {
+        Button(action: onAddProject) {
+            OpenCodeIconImage(icon: .createNewFolder, size: Self.ctaIconSize)
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .frame(width: Self.ctaHeight, height: Self.ctaHeight)
+                .background(
+                    OpenCodeColors.textStrong.opacity(Self.ctaFillOpacity),
+                    in: Circle()
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
+        .accessibilityLabel("Add project")
+    }
+
+    private var newSessionButton: some View {
+        Button(action: onNewSession) {
+            Text("New session")
+                .font(OpenCodeTypography.button)
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .frame(maxWidth: .infinity)
+                .frame(height: Self.ctaHeight)
+                .background(
+                    OpenCodeColors.textStrong.opacity(Self.ctaFillOpacity),
+                    in: Capsule()
+                )
+                .contentShape(Capsule())
+        }
+        .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
     }
 
     @ViewBuilder
@@ -118,6 +121,15 @@ struct OpenCodeSessionListDock: View {
         } else {
             chips
         }
+    }
+}
+
+private struct OpenCodeSessionListDockCtaPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .opacity(configuration.isPressed ? 0.92 : 1)
+            .animation(.smooth(duration: 0.16), value: configuration.isPressed)
     }
 }
 

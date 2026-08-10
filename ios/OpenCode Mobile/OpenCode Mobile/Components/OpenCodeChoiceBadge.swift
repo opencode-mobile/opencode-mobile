@@ -101,8 +101,8 @@ struct OpenCodeChoiceBadge: View {
 private struct OpenCodeChoiceBadgeGlassPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .opacity(configuration.isPressed ? 0.78 : 1)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .opacity(configuration.isPressed ? 0.92 : 1)
             .animation(.smooth(duration: 0.16), value: configuration.isPressed)
     }
 }
@@ -122,19 +122,12 @@ private struct OpenCodeChoiceBadgeGlassChrome: ViewModifier {
                 content
                     .glassEffect(.clear, in: .capsule)
             }
-        } else if selected {
-            content
-                .background(OpenCodeColors.surfaceRaisedBase, in: Capsule())
-                .overlay(
-                    Capsule()
-                        .strokeBorder(OpenCodeColors.borderWeakBase, lineWidth: 1.5)
-                )
         } else {
+            // Fill-only stand-in: outline-only pills read as low-contrast without glass.
             content
-                .background(OpenCodeColors.surfaceRaisedBase.opacity(0.001), in: Capsule())
-                .overlay(
-                    Capsule()
-                        .strokeBorder(OpenCodeColors.borderWeakerBase, lineWidth: 1)
+                .background(
+                    OpenCodeColors.textStrong.opacity(selected ? 0.14 : 0.08),
+                    in: Capsule()
                 )
         }
     }

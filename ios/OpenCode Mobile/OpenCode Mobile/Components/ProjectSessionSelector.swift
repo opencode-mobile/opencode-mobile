@@ -81,7 +81,8 @@ struct ProjectSessionSelector: View {
                 footer(selectedProject)
             }
         }
-        .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 12))
+        // Raised fill: surface-base matches background-base in the theme.
+        .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)

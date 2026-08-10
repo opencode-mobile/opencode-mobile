@@ -26,9 +26,10 @@ dock.
 
 - Semantic tokens: `text.strong` for title and count label in both selected and
   unselected; count badge fill uses primary/text at fixed low opacity (`0.10`).
-  Selected chip background uses primary at low opacity or raised surface /
-  regular glass; unselected uses clear / transparent fill. Remove circle uses
-  the same low-opacity fill as the count badge.
+  Selected chip background uses primary at low opacity or regular glass;
+  unselected uses clear glass on iOS 26+. Material / pre–iOS 26 stand-in uses
+  `text.strong` fill at **0.14** selected / **0.08** unselected with no outline
+  stroke. Remove circle uses the same low-opacity fill as the count badge.
 - Component tokens: `filterChip.metaSize`, `filterChip.remove.iconInset` in
   `../tokens.md`.
 - Typography roles: `type.button` title; caption-scale count. Weight does not
@@ -51,12 +52,12 @@ catalog icon with frame/padding — not `.font` — per [`../icons.md`](../icons
 - iOS: iOS 26+ selected uses regular (non-interactive) glass capsule with fill;
   unselected uses clear glass. Press uses subtle scale/opacity — not
   `.glassEffect(...interactive())`, which is too loud on dense chip rows.
-  Label and count colors stay the same. Below iOS 26 selected uses raised
-  surface + weak border; unselected uses a light stroke so press feedback still
-  reads. Remove control is a separate plain button beside the select hit target.
-- Android: selected fill vs transparent unselected fill; label, count, and
-  border treatment stay constant (Material stand-in for glass chips). Remove
-  uses a nested clickable on the circle so it does not also fire chip `onClick`.
+  Label and count colors stay the same. Below iOS 26: fill-only capsule
+  stand-in (`text.strong` 0.14 / 0.08) with no stroke. Remove control is a
+  separate plain button beside the select hit target.
+- Android: same fill-only Material stand-in as iOS pre–26; label and count
+  colors stay constant. Remove uses a nested clickable on the circle so it does
+  not also fire chip `onClick`.
 
 ## Review Surfaces
 

@@ -101,6 +101,8 @@ private struct OpenCodeButtonStyle: ButtonStyle {
                 Circle()
                     .strokeBorder(borderColor(isPressed: isPressed), lineWidth: 1)
             )
+            .opacity(isPressed ? 0.92 : 1)
+            .scaleEffect(isPressed ? 0.98 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
         } else {
             baseLabel(
@@ -115,6 +117,8 @@ private struct OpenCodeButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 8)
                     .strokeBorder(borderColor(isPressed: isPressed), lineWidth: 1)
             )
+            .opacity(isPressed ? 0.92 : 1)
+            .scaleEffect(isPressed ? 0.98 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
         }
     }
@@ -179,21 +183,26 @@ private struct OpenCodeButtonStyle: ButtonStyle {
 
     private func backgroundColor(isPressed: Bool) -> Color {
         if !enabled { return OpenCodeColors.surfaceRaisedBase }
-        if isPressed { return OpenCodeColors.textBase }
         switch contrast {
-        case .low: return OpenCodeColors.surfaceRaisedBase
-        case .destructive: return OpenCodeColors.error
-        case .high: return OpenCodeColors.textStrong
+        case .low:
+            // Hover emphasis only — a solid textBase flash is too high-contrast.
+            return isPressed ? OpenCodeColors.surfaceRaisedBaseHover : OpenCodeColors.surfaceRaisedBase
+        case .destructive:
+            return OpenCodeColors.error
+        case .high:
+            return OpenCodeColors.textStrong
         }
     }
 
     private func borderColor(isPressed: Bool) -> Color {
         if !enabled { return OpenCodeColors.borderWeakerBase }
-        if isPressed { return OpenCodeColors.textBase }
         switch contrast {
-        case .low: return OpenCodeColors.borderWeakerBase
-        case .destructive: return OpenCodeColors.error
-        case .high: return OpenCodeColors.textStrong
+        case .low:
+            return isPressed ? OpenCodeColors.borderWeakBase : OpenCodeColors.borderWeakerBase
+        case .destructive:
+            return OpenCodeColors.error
+        case .high:
+            return OpenCodeColors.textStrong
         }
     }
 }

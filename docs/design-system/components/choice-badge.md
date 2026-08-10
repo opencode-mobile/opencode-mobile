@@ -25,7 +25,9 @@ is a dock filter with an optional count badge.
 
 - Semantic tokens: `color.surface.primary`, `color.surface.secondary`,
   `color.text.primary` / strong / weaker, `color.border.subtle`,
-  `color.border.default`.
+  `color.border.default`. Glass stand-in (Android always; iOS below 26) uses
+  `text.strong` fill at **0.14** selected / **0.08** unselected — no outline
+  stroke (fills carry separation inside floating chrome).
 - Component tokens: geometry for the standard pill — see `choiceBadge.*` in
   `docs/design-system/tokens.md`. Glass variant uses capsule geometry aligned
   with Filter Chip (min height 36, horizontal 12 / vertical 8 padding).
@@ -49,11 +51,12 @@ pattern).
 - iOS glass (iOS 26+): selected uses regular (non-interactive) glass capsule with
   low-opacity strong fill; unselected uses clear glass. Press uses subtle
   scale/opacity — not `.glassEffect(...interactive())`. Label color does not
-  change with selection. Below iOS 26 selected uses raised surface + weak
-  border; unselected uses a light stroke (Filter Chip fallback).
+  change with selection. Below iOS 26: fill-only capsule stand-in
+  (`text.strong` 0.14 / 0.08) with no stroke — hollow outline-only pills read
+  poorly without Liquid Glass.
 - Android standard: `Surface` with `Modifier.clickable` and outline stroke.
-- Android glass: selected fill vs transparent unselected fill; label and border
-  stay constant (Material stand-in, same recipe as Filter Chip).
+- Android glass: same fill-only stand-in as iOS pre–26 (selected / unselected
+  fills; no border). Label color stays constant.
 
 ## Review Surfaces
 
