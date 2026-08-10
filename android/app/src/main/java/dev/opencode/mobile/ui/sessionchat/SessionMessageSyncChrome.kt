@@ -1,6 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
-/** In-chat status chrome while a cached timeline waits for network confirmation. */
+/** Top-of-timeline Syncing pill copy while a cached timeline waits for network confirmation. */
 object SessionMessageSyncChrome {
     const val STATUS_LABEL = "Syncing…"
 }

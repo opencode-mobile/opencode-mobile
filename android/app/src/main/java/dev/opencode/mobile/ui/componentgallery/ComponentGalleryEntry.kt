@@ -32,6 +32,7 @@ enum class ComponentGalleryEntryId {
     ChoiceBadge,
     FilterTabs,
     ActionPill,
+    SyncingPill,
     ComposerSuggestionOverlay,
     ReviewChangesPill,
     SessionTodosPill,
@@ -83,6 +84,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.ActionPill,
             title = "Action Pill",
             description = "Floating pill for contextual overlay actions such as scroll to end.",
+            category = ComponentGalleryCategory.Controls,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.SyncingPill,
+            title = "Syncing Pill",
+            description = "Non-interactive floating status pill for quiet cache→network sync.",
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(
