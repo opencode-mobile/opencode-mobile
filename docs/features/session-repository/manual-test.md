@@ -14,7 +14,7 @@
 
 ## iOS
 
-1. Build and run on Simulator (localhost works with `NSAllowsLocalNetworking`).
+1. Build and run on Simulator (localhost / Tailscale HTTP work with `NSAllowsArbitraryLoads`).
 2. Confirm the home list loads real sessions.
 3. Tap a row to open Session Chat.
 
