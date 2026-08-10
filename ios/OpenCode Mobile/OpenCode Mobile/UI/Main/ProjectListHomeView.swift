@@ -70,7 +70,7 @@ struct ProjectListHomeView: View {
                 }
                 await viewModel.refresh()
             }
-            .onChange(of: viewModel.pendingSessionOpen?.id) { _, _ in
+            .onChange(of: viewModel.pendingSessionOpen) { _, _ in
                 if let session = viewModel.pendingSessionOpen {
                     openSession(session)
                     viewModel.consumePendingSessionOpen()
@@ -650,6 +650,8 @@ struct SessionListItem: Identifiable, Hashable {
     let updatedAtLabel: String?
     let updatedAtEpochMs: Int64?
     let isReady: Bool
+    /// Unique per optimistic new-session navigation so back-stack entries do not reuse a promoted chat.
+    let optimisticNavigationInstanceID: UUID?
 
     init(
         id: String,
@@ -658,7 +660,8 @@ struct SessionListItem: Identifiable, Hashable {
         statusLabel: String? = nil,
         updatedAtLabel: String? = nil,
         updatedAtEpochMs: Int64? = nil,
-        isReady: Bool = false
+        isReady: Bool = false,
+        optimisticNavigationInstanceID: UUID? = nil
     ) {
         self.id = id
         self.title = title
@@ -667,6 +670,7 @@ struct SessionListItem: Identifiable, Hashable {
         self.updatedAtLabel = updatedAtLabel
         self.updatedAtEpochMs = updatedAtEpochMs
         self.isReady = isReady
+        self.optimisticNavigationInstanceID = optimisticNavigationInstanceID
     }
 }
 

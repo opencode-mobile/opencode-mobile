@@ -408,7 +408,8 @@ final class ProjectListHomeViewModel {
         pendingSessionOpen = SessionListItem(
             id: OptimisticSessionCreate.placeholderSessionID,
             title: "New Session",
-            worktree: worktree
+            worktree: worktree,
+            optimisticNavigationInstanceID: UUID()
         )
     }
 

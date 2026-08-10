@@ -2410,13 +2410,12 @@ class SessionChatViewModelTest {
             assertNull(sessionRepository.createSessionRequest)
             assertFalse(viewModel.uiState.value.commandsSheetVisible)
             assertEquals(
-                ChildSessionNavigationTarget(
-                    sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
-                    sessionTitle = "New Session",
-                    worktree = "/repo",
-                ),
-                viewModel.uiState.value.pendingSessionReplace,
+                OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                viewModel.uiState.value.pendingSessionReplace?.sessionId,
             )
+            assertEquals("New Session", viewModel.uiState.value.pendingSessionReplace?.sessionTitle)
+            assertEquals("/repo", viewModel.uiState.value.pendingSessionReplace?.worktree)
+            assertNotNull(viewModel.uiState.value.pendingSessionReplace?.optimisticNavigationInstanceId)
             assertEquals("draft that should survive", viewModel.uiState.value.composer.text)
             assertFalse(commandRepository.runCommandCalled)
 
@@ -2513,6 +2512,43 @@ class SessionChatViewModelTest {
             assertEquals("ses-new", viewModel.uiState.value.sessionId)
             assertEquals(1, sessionRepository.createSessionCallCount)
             assertTrue(viewModel.uiState.value.timeline != SessionChatTimelineState.Creating)
+        }
+
+    @Test
+    fun bindOptimisticCreate_freshViewModelAfterPromotion_createsSecondSession() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    createSessionResult = Session(id = "ses-new", title = "Created", directory = "/repo"),
+                )
+            val firstViewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+            firstViewModel.bind(
+                OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                "New Session",
+                "/repo",
+            )
+            advanceUntilIdle()
+            assertEquals("ses-new", firstViewModel.uiState.value.sessionId)
+            assertEquals(1, sessionRepository.createSessionCallCount)
+
+            val secondViewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+            secondViewModel.bind(
+                OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                "New Session",
+                "/repo",
+            )
+            advanceUntilIdle()
+
+            assertEquals("ses-new", secondViewModel.uiState.value.sessionId)
+            assertEquals(2, sessionRepository.createSessionCallCount)
         }
 
     @Test

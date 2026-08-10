@@ -304,6 +304,7 @@ class MainScreenViewModel
                                 sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
                                 title = "New Session",
                                 worktree = worktree,
+                                optimisticNavigationInstanceId = java.util.UUID.randomUUID().toString(),
                             ),
                     )
                 } else {
@@ -1331,4 +1332,5 @@ data class SessionOpenTarget(
     val sessionId: String,
     val title: String,
     val worktree: String,
+    val optimisticNavigationInstanceId: String? = null,
 )

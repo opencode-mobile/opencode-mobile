@@ -27,6 +27,7 @@ import kotlinx.serialization.Serializable
     val sessionId: String,
     val sessionTitle: String,
     val worktree: String,
+    val optimisticNavigationInstanceId: String? = null,
 ) : NavKey
 
 @Serializable data class SessionContext(

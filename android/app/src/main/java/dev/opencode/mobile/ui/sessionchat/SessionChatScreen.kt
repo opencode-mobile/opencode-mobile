@@ -82,12 +82,15 @@ fun SessionChatScreen(
     sessionTitle: String,
     worktree: String,
     modifier: Modifier = Modifier,
+    optimisticNavigationInstanceId: String? = null,
     onNavigateBack: () -> Unit = {},
     onSessionContextClick: () -> Unit = {},
     onReviewChangesClick: (ChangesNavigationTarget) -> Unit = {},
     onChildSessionClick: (ChildSessionNavigationTarget) -> Unit = {},
     onSessionReplaceRequested: (ChildSessionNavigationTarget) -> Unit = {},
-    viewModel: SessionChatViewModel = hiltViewModel(key = "$sessionId-$worktree"),
+    viewModel: SessionChatViewModel = hiltViewModel(
+        key = sessionChatViewModelKey(sessionId, worktree, optimisticNavigationInstanceId),
+    ),
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -872,6 +875,13 @@ private fun SessionChatSnackbar.toOpenCodeSnackbarMessage(): OpenCodeSnackbarMes
             },
         id = id,
     )
+
+internal fun sessionChatViewModelKey(
+    sessionId: String,
+    worktree: String,
+    optimisticNavigationInstanceId: String?,
+): String =
+    optimisticNavigationInstanceId?.let { "$sessionId-$worktree-$it" } ?: "$sessionId-$worktree"
 
 @Preview(showBackground = true)
 @Composable

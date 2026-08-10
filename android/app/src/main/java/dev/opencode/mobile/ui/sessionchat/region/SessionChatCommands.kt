@@ -105,6 +105,7 @@ class SessionChatCommands(
                         sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
                         sessionTitle = "New Session",
                         worktree = worktree,
+                        optimisticNavigationInstanceId = java.util.UUID.randomUUID().toString(),
                     ),
             )
         }

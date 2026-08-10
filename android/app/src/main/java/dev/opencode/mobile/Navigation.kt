@@ -170,7 +170,14 @@ fun MainNavigation() {
                                             MainScreen(
                                                 onSettingsClick = { backStack.add(SettingsHome) },
                                                 onSessionClick = { target ->
-                                                    backStack.add(SessionChat(target.sessionId, target.title, target.worktree))
+                                                    backStack.add(
+                                                        SessionChat(
+                                                            sessionId = target.sessionId,
+                                                            sessionTitle = target.title,
+                                                            worktree = target.worktree,
+                                                            optimisticNavigationInstanceId = target.optimisticNavigationInstanceId,
+                                                        ),
+                                                    )
                                                 },
                                                 onEditConnectionClick = { profile ->
                                                     presentConnectionSetup(initialProfile = profile)
@@ -360,6 +367,7 @@ fun MainNavigation() {
                                                 sessionId = key.sessionId,
                                                 sessionTitle = key.sessionTitle,
                                                 worktree = key.worktree,
+                                                optimisticNavigationInstanceId = key.optimisticNavigationInstanceId,
                                                 onNavigateBack = { backStack.removeLastOrNull() },
                                                 onSessionContextClick = {
                                                     backStack.add(SessionContext(key.sessionId, key.worktree))
@@ -381,6 +389,7 @@ fun MainNavigation() {
                                                             sessionId = target.sessionId,
                                                             sessionTitle = target.sessionTitle,
                                                             worktree = target.worktree,
+                                                            optimisticNavigationInstanceId = target.optimisticNavigationInstanceId,
                                                         ),
                                                     )
                                                 },
@@ -391,6 +400,7 @@ fun MainNavigation() {
                                                             sessionId = target.sessionId,
                                                             sessionTitle = target.sessionTitle,
                                                             worktree = target.worktree,
+                                                            optimisticNavigationInstanceId = target.optimisticNavigationInstanceId,
                                                         ),
                                                     )
                                                 },
