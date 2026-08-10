@@ -52,19 +52,10 @@ struct OpenCodeSessionListDock: View {
                     }
                 }
 
-                // Shared geometry with Android: 52pt CTAs, 8pt gap, center-aligned.
+                // Same fill-only recipe as Android DockCta (no per-button glass).
                 HStack(alignment: .center, spacing: 8) {
-                    if #available(iOS 26, *) {
-                        GlassEffectContainer(spacing: 8) {
-                            HStack(alignment: .center, spacing: 8) {
-                                addProjectButton(glass: true)
-                                newSessionButton(glass: true)
-                            }
-                        }
-                    } else {
-                        addProjectButton(glass: false)
-                        newSessionButton(glass: false)
-                    }
+                    addProjectButton
+                    newSessionButton
                 }
             }
         }
@@ -75,54 +66,35 @@ struct OpenCodeSessionListDock: View {
     private static let ctaIconSize: CGFloat = 22
     private static let ctaFillOpacity: Double = 0.14
 
-    @ViewBuilder
-    private func addProjectButton(glass: Bool) -> some View {
-        let label = OpenCodeIconImage(icon: .createNewFolder, size: Self.ctaIconSize)
-            .foregroundStyle(OpenCodeColors.textStrong)
-            .frame(width: Self.ctaHeight, height: Self.ctaHeight)
-            .background(
-                OpenCodeColors.textStrong.opacity(Self.ctaFillOpacity),
-                in: Circle()
-            )
-            .contentShape(Circle())
-
-        if glass {
-            if #available(iOS 26, *) {
-                Button(action: onAddProject) { label }
-                    .buttonStyle(.glass)
-                    .clipShape(Circle())
-                    .accessibilityLabel("Add project")
-            }
-        } else {
-            Button(action: onAddProject) { label }
-                .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
-                .accessibilityLabel("Add project")
+    private var addProjectButton: some View {
+        Button(action: onAddProject) {
+            OpenCodeIconImage(icon: .createNewFolder, size: Self.ctaIconSize)
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .frame(width: Self.ctaHeight, height: Self.ctaHeight)
+                .background(
+                    OpenCodeColors.textStrong.opacity(Self.ctaFillOpacity),
+                    in: Circle()
+                )
+                .contentShape(Circle())
         }
+        .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
+        .accessibilityLabel("Add project")
     }
 
-    @ViewBuilder
-    private func newSessionButton(glass: Bool) -> some View {
-        let label = Text("New session")
-            .font(OpenCodeTypography.button)
-            .foregroundStyle(OpenCodeColors.textStrong)
-            .frame(maxWidth: .infinity)
-            .frame(height: Self.ctaHeight)
-            .background(
-                OpenCodeColors.textStrong.opacity(Self.ctaFillOpacity),
-                in: Capsule()
-            )
-            .contentShape(Capsule())
-
-        if glass {
-            if #available(iOS 26, *) {
-                Button(action: onNewSession) { label }
-                    .buttonStyle(.glass)
-                    .clipShape(Capsule())
-            }
-        } else {
-            Button(action: onNewSession) { label }
-                .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
+    private var newSessionButton: some View {
+        Button(action: onNewSession) {
+            Text("New session")
+                .font(OpenCodeTypography.button)
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .frame(maxWidth: .infinity)
+                .frame(height: Self.ctaHeight)
+                .background(
+                    OpenCodeColors.textStrong.opacity(Self.ctaFillOpacity),
+                    in: Capsule()
+                )
+                .contentShape(Capsule())
         }
+        .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
     }
 
     @ViewBuilder
