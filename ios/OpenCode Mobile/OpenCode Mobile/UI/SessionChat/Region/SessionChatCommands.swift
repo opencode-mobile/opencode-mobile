@@ -107,7 +107,8 @@ final class SessionChatCommands {
         state.pendingSessionReplace = ChildSessionNavigationTarget(
             sessionID: OptimisticSessionCreate.placeholderSessionID,
             sessionTitle: "New Session",
-            worktree: worktree
+            worktree: worktree,
+            optimisticNavigationInstanceID: UUID()
         )
         notifyChange()
     }
@@ -154,7 +155,12 @@ final class SessionChatCommands {
                 let updated = try await sessionRepository.updateSession(id: forked.id, title: title, directory: worktree)
                 guard !Task.isCancelled else { return }
                 OpenCodeLog.sessionChat.info("fork success sourceSession=\(sessionID, privacy: .public) forkedSession=\(updated.id, privacy: .public)")
-                forkedTarget = ChildSessionNavigationTarget(sessionID: updated.id, sessionTitle: updated.title, worktree: worktree)
+                forkedTarget = ChildSessionNavigationTarget(
+                    sessionID: updated.id,
+                    sessionTitle: updated.title,
+                    worktree: worktree,
+                    optimisticNavigationInstanceID: nil
+                )
                 state.forkDialogVisible = false
                 state.forkSubmitting = false
                 state.forkResultVisible = true

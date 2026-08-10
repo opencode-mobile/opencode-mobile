@@ -344,6 +344,7 @@ struct ChildSessionNavigationTarget: Hashable {
     let sessionID: String
     let sessionTitle: String
     let worktree: String
+    let optimisticNavigationInstanceID: UUID?
 }
 
 struct SessionChatTimelineRegionState: Equatable {

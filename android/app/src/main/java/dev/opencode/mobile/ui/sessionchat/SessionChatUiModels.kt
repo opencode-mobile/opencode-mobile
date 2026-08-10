@@ -245,6 +245,7 @@ data class ChildSessionNavigationTarget(
     val sessionId: String,
     val sessionTitle: String,
     val worktree: String,
+    val optimisticNavigationInstanceId: String? = null,
 )
 
 data class SessionChatTimelineRegionState(

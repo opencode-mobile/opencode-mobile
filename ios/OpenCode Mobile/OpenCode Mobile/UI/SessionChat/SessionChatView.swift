@@ -63,21 +63,27 @@ struct SessionChatView: View {
         // back button before OpenCodeTopBar mounts.
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
-        .task(id: session.id) {
+        .task(id: sessionNavigationTaskID) {
             ProductAnalytics.logScreenView(
                 screenId: ProductAnalytics.Screen.sessionChat,
                 presentation: ProductAnalytics.Presentation.route
             )
-            if viewModelStorage == nil {
-                viewModelStorage = injectedViewModel ?? Container.makeSessionChatViewModel(
-                    sessionID: session.id,
-                    sessionTitle: session.title,
-                    worktree: session.worktree
-                )
-            }
+            viewModelStorage?.stopObserving()
+            viewModelStorage = injectedViewModel ?? Container.makeSessionChatViewModel(
+                sessionID: session.id,
+                sessionTitle: session.title,
+                worktree: session.worktree
+            )
             viewModel.startObserving()
             await viewModel.loadMessages()
         }
+    }
+
+    private var sessionNavigationTaskID: String {
+        if let instanceID = session.optimisticNavigationInstanceID {
+            return "\(session.id)-\(instanceID.uuidString)"
+        }
+        return session.id
     }
 
     @ViewBuilder
@@ -191,7 +197,8 @@ struct SessionChatView: View {
                             childSessionTarget = ChildSessionNavigationTarget(
                                 sessionID: sessionID,
                                 sessionTitle: title,
-                                worktree: session.worktree
+                                worktree: session.worktree,
+                                optimisticNavigationInstanceID: nil
                             )
                         },
                         onChangesReviewTap: { assistantMessageID, initialFilePath in
@@ -379,7 +386,8 @@ struct SessionChatView: View {
                 session: SessionListItem(
                     id: target.sessionID,
                     title: target.sessionTitle,
-                    worktree: target.worktree
+                    worktree: target.worktree,
+                    optimisticNavigationInstanceID: target.optimisticNavigationInstanceID
                 )
             )
         }
@@ -519,7 +527,7 @@ struct SessionChatView: View {
                 viewModel.chooseForkStay()
             }
         )
-        .onChange(of: viewModel.uiState.pendingSessionReplace?.sessionID) { _, _ in
+        .onChange(of: viewModel.uiState.pendingSessionReplace) { _, _ in
             if let target = viewModel.uiState.pendingSessionReplace {
                 childSessionTarget = target
                 viewModel.consumePendingSessionReplace()

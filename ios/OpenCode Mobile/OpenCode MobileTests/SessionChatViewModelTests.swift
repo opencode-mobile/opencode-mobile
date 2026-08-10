@@ -1680,11 +1680,10 @@ struct SessionChatViewModelTests {
 
         #expect(sessionRepository.createSessionCallCount == 0)
         #expect(viewModel.uiState.commandsSheetVisible == false)
-        #expect(viewModel.uiState.pendingSessionReplace == ChildSessionNavigationTarget(
-            sessionID: OptimisticSessionCreate.placeholderSessionID,
-            sessionTitle: "New Session",
-            worktree: "/repo"
-        ))
+        #expect(viewModel.uiState.pendingSessionReplace?.sessionID == OptimisticSessionCreate.placeholderSessionID)
+        #expect(viewModel.uiState.pendingSessionReplace?.sessionTitle == "New Session")
+        #expect(viewModel.uiState.pendingSessionReplace?.worktree == "/repo")
+        #expect(viewModel.uiState.pendingSessionReplace?.optimisticNavigationInstanceID != nil)
         #expect(viewModel.uiState.composer.text == "draft that should survive")
         #expect(commandRepository.runCommandCalled == false)
 
@@ -1773,7 +1772,12 @@ struct SessionChatViewModelTests {
 
         viewModel.chooseForkOpen()
         #expect(viewModel.uiState.forkResultVisible == false)
-        #expect(viewModel.uiState.pendingSessionReplace == ChildSessionNavigationTarget(sessionID: "ses-3", sessionTitle: "Forked copy", worktree: "/repo"))
+        #expect(viewModel.uiState.pendingSessionReplace == ChildSessionNavigationTarget(
+            sessionID: "ses-3",
+            sessionTitle: "Forked copy",
+            worktree: "/repo",
+            optimisticNavigationInstanceID: nil
+        ))
     }
 
     @Test func runClientSlashAction_fork_stay_dismissesWithoutNavigating() async {

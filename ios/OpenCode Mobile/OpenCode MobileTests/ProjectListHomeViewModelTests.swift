@@ -324,11 +324,29 @@ struct ProjectListHomeViewModelTests {
         #expect(sessionRepository.createdDirectories.isEmpty)
         #expect(viewModel.pendingSessionOpen?.id == OptimisticSessionCreate.placeholderSessionID)
         #expect(viewModel.pendingSessionOpen?.worktree == "/repo")
+        #expect(viewModel.pendingSessionOpen?.optimisticNavigationInstanceID != nil)
         guard case let .loaded(_, _, _, _, _, createError) = viewModel.state else {
             Issue.record("Expected loaded")
             return
         }
         #expect(createError == nil)
+    }
+
+    @Test func createSession_assignsUniqueOptimisticNavigationInstanceIDs() async {
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: FakeSessionRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        await viewModel.createSession(in: "/repo")
+        let first = viewModel.pendingSessionOpen?.optimisticNavigationInstanceID
+        viewModel.consumePendingSessionOpen()
+        await viewModel.createSession(in: "/repo")
+        let second = viewModel.pendingSessionOpen?.optimisticNavigationInstanceID
+        #expect(first != nil)
+        #expect(second != nil)
+        #expect(first != second)
     }
 
     @Test func optimisticCreateFailureStoresInlineError() async {
