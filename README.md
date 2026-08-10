@@ -18,7 +18,7 @@ This repository holds both app shells, shared product docs, design-system planni
 ## Prerequisites
 
 - **Android:** JDK 17, Android SDK (compile SDK 36)
-- **iOS:** Xcode with iOS 17.6+ simulator support
+- **iOS:** Xcode with iOS 17.5+ simulator support
 - **Dev tooling:** Node.js for repo scripts (`npm install` at repo root)
 
 ## Local development
