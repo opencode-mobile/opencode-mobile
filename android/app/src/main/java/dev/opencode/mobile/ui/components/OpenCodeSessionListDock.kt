@@ -1,6 +1,6 @@
 package dev.opencode.mobile.ui.components
 
-import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -51,9 +51,9 @@ fun OpenCodeSessionListDock(
     onRemoveProject: ((String) -> Unit)? = null,
 ) {
     val textStrong = openCodeColor("text-strong")
-    val borderWeak = openCodeColor("border-weak-base")
     val error = openCodeColor("error")
     val iconStrong = openCodeColor("icon-strong-base")
+    val ctaFill = textStrong.copy(alpha = 0.14f)
 
     OpenCodeFloatingDock(modifier = modifier) {
         Column(
@@ -113,7 +113,7 @@ fun OpenCodeSessionListDock(
             ) {
                 DockCta(
                     onClick = onAddProject,
-                    borderWeak = borderWeak,
+                    fill = ctaFill,
                     shape = CircleShape,
                     modifier = Modifier.size(52.dp),
                 ) {
@@ -126,7 +126,7 @@ fun OpenCodeSessionListDock(
                 }
                 DockCta(
                     onClick = onNewSession,
-                    borderWeak = borderWeak,
+                    fill = ctaFill,
                     shape = NewSessionButtonShape,
                     modifier =
                         Modifier
@@ -147,7 +147,7 @@ fun OpenCodeSessionListDock(
 @Composable
 private fun DockCta(
     onClick: () -> Unit,
-    borderWeak: Color,
+    fill: Color,
     shape: Shape,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
@@ -156,7 +156,7 @@ private fun DockCta(
         modifier =
             modifier
                 .clip(shape)
-                .border(width = 1.5.dp, color = borderWeak, shape = shape)
+                .background(fill)
                 .clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

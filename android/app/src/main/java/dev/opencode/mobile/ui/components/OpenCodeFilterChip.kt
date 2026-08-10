@@ -1,7 +1,6 @@
 package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,7 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -46,15 +44,8 @@ fun OpenCodeFilterChip(
     onRemove: (() -> Unit)? = null,
 ) {
     val textStrong = openCodeColor("text-strong")
-    val borderWeak = openCodeColor("border-weak-base")
-    // Selected vs unselected differs by chip background only — label and count
-    // badge colors stay constant.
-    val fill =
-        if (selected) {
-            textStrong.copy(alpha = 0.14f)
-        } else {
-            Color.Transparent
-        }
+    // Fill-only stand-in (same recipe as iOS pre–26 glass fallback).
+    val fill = textStrong.copy(alpha = if (selected) 0.14f else 0.08f)
 
     Row(
         modifier =
@@ -62,11 +53,6 @@ fun OpenCodeFilterChip(
                 .semantics { this.selected = selected }
                 .clip(ChipShape)
                 .background(fill)
-                .border(
-                    width = 1.dp,
-                    color = borderWeak.copy(alpha = 0.55f),
-                    shape = ChipShape,
-                )
                 .clickable(role = Role.Button, onClick = onClick)
                 .heightIn(min = 36.dp)
                 .padding(

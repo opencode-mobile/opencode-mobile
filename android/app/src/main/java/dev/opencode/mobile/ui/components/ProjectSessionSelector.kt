@@ -41,6 +41,7 @@ import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.badgeColors
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Suppress("ktlint:standard:property-naming")
@@ -87,7 +88,8 @@ fun ProjectSessionSelector(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surface,
+            // Raised fill: surface-base matches background-base in the theme.
+            color = openCodeColor("surface-raised-base"),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         ) {
             Column {

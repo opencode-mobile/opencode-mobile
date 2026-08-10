@@ -29,8 +29,10 @@ owning the visual treatment for project tiles or session preview rows.
 
 ## Token Usage
 
-- Semantic tokens: surface primary, surface secondary, text primary, text
-  secondary, text interactive, border subtle, border default, status error.
+- Semantic tokens: card fill uses `surface.raised` (not `surface.base` —
+  `surface.base` matches `background.base` in the theme and collapses contrast);
+  border subtle (`border.weaker` / outline variant); text primary / secondary;
+  status error for load and create failures.
 - Component dependencies: `OpenCodeButton`, `OpenCodeListItem`, catalog icons,
   and deterministic `LetterAccent` badge colors.
 - Typography roles: heading for project names, code/body-secondary for paths and

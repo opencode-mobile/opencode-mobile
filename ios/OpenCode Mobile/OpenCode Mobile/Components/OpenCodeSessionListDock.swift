@@ -84,8 +84,7 @@ struct OpenCodeSessionListDock: View {
                                 .foregroundStyle(OpenCodeColors.textStrong)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 36)
-                                .background(OpenCodeColors.surfaceRaisedBase, in: Capsule())
-                                .overlay(Capsule().strokeBorder(OpenCodeColors.borderWeakBase, lineWidth: 1.5))
+                                .background(OpenCodeColors.textStrong.opacity(0.14), in: Capsule())
                         }
                         .buttonStyle(.plain)
                     }

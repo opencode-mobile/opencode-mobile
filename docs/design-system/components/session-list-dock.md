@@ -22,8 +22,8 @@ content.
 
 - Surface: Floating Dock chrome (`surface.raised` underlay / glass materials).
 - Filters: Filter Chip selected/unselected.
-- Actions: iOS 26+ glass buttons; fallback `OpenCodeButton` / Android bordered
-  glass-like CTAs.
+- Actions: iOS 26+ glass buttons; below iOS 26 and on Android, fill-only CTAs
+  using `text.strong` at **0.14** (same stand-in family as Filter Chip).
 - Error: `color.error` + body-secondary text.
 
 ## Behavior
@@ -43,7 +43,7 @@ selects/filters; × is a deliberate second step after selection.
 - iOS: `OpenCodeFloatingDock` + `OpenCodeFilterChip` + glass / button CTAs;
   `GlassEffectContainer` groups chips on iOS 26+. Selection uses
   `ScrollViewReader` to bring the selected chip fully on-screen.
-- Android: same structure with Material raised dock and bordered CTAs.
+- Android: same structure with Material raised dock and fill-only CTAs.
   Selection uses `BringIntoViewRequester` inside the horizontal scroll row.
 
 ## Review Surfaces

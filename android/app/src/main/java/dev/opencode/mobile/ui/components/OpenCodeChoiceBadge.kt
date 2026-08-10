@@ -2,7 +2,6 @@ package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.heightIn
@@ -15,7 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -125,20 +123,14 @@ private fun GlassChoiceBadge(
     modifier: Modifier = Modifier,
 ) {
     val textStrong = openCodeColor("text-strong")
-    val borderWeak = openCodeColor("border-weak-base")
     val labelColor =
         if (enabled) {
             textStrong
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         }
-    // Selected vs unselected differs by background fill only.
-    val fill =
-        if (selected) {
-            textStrong.copy(alpha = 0.14f)
-        } else {
-            Color.Transparent
-        }
+    // Fill-only stand-in (same recipe as iOS pre–26 glass fallback).
+    val fill = textStrong.copy(alpha = if (selected) 0.14f else 0.08f)
 
     Box(
         modifier =
@@ -146,11 +138,6 @@ private fun GlassChoiceBadge(
                 .semantics { this.selected = selected }
                 .clip(GlassShape)
                 .background(fill)
-                .border(
-                    width = 1.dp,
-                    color = borderWeak.copy(alpha = 0.55f),
-                    shape = GlassShape,
-                )
                 .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
                 .heightIn(min = 36.dp)
                 .padding(horizontal = BadgePaddingHorizontal, vertical = BadgePaddingVertical),

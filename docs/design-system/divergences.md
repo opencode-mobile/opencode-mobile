@@ -220,14 +220,17 @@ implementation belong in the feature's `parity-gaps.md`.
   related capsule glass Choice Badge variant.
 - iOS behavior: iOS 26+ `glassEffect` with `surface-raised-base` underlay at
   0.92 opacity on floating chrome and floating pills; glass button styles on
-  dock CTAs / chips / key home controls; material fallbacks below iOS 26.
-  Capsule chips, Choice Badge glass, and floating pills use **non-interactive**
-  `glassEffect` plus subtle scale/opacity press — not `.interactive()` lens
-  feedback. Multi-pill float stacks use `GlassEffectContainer`. Composer
-  IconCircles stay non-glass in the OPE-99 shell-only slice.
+  dock CTAs / chips / key home controls. Below iOS 26, floating chrome uses
+  raised fill (0.95) plus light shadow; capsule glass Choice Badges / Filter
+  Chips use fill-only `text.strong` stands-ins (0.14 selected / 0.08
+  unselected) instead of outline-only pills. Capsule chips, Choice Badge glass,
+  and floating pills use **non-interactive** `glassEffect` plus subtle
+  scale/opacity press — not `.interactive()` lens feedback. Multi-pill float
+  stacks use `GlassEffectContainer`. Composer IconCircles stay non-glass in the
+  OPE-99 shell-only slice.
 - Android behavior: Material 3 raised `Surface` (fill alpha 0.95, light
-  elevation) and bordered CTAs as a glass-like stand-in; no system Liquid Glass
-  API.
+  elevation) for floating chrome; glass Choice Badge / Filter Chip stand-ins
+  share the same fill-only recipe as iOS pre–26; no system Liquid Glass API.
 - Reason: Android has no Liquid Glass equivalent; layout and product actions stay
   aligned while materials remain platform-native.
 - Review trigger: if Android gains a system glass material API or product asks

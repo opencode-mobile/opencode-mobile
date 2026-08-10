@@ -120,19 +120,12 @@ private struct OpenCodeFilterChipChrome: ViewModifier {
                 content
                     .glassEffect(.clear, in: .capsule)
             }
-        } else if selected {
-            content
-                .background(OpenCodeColors.surfaceRaisedBase, in: Capsule())
-                .overlay(
-                    Capsule()
-                        .strokeBorder(OpenCodeColors.borderWeakBase, lineWidth: 1.5)
-                )
         } else {
+            // Fill-only stand-in: outline-only chips read as low-contrast without glass.
             content
-                .background(OpenCodeColors.surfaceRaisedBase.opacity(0.001), in: Capsule())
-                .overlay(
-                    Capsule()
-                        .strokeBorder(OpenCodeColors.borderWeakerBase, lineWidth: 1)
+                .background(
+                    OpenCodeColors.textStrong.opacity(selected ? 0.14 : 0.08),
+                    in: Capsule()
                 )
         }
     }
