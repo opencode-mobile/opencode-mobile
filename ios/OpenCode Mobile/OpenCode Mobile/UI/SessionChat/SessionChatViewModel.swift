@@ -153,6 +153,8 @@ final class SessionChatViewModel {
         }
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID, privacy: .public)")
         sessionReadyStore.setFocusedSession(sessionID: sessionID, directory: worktree)
+        // Peers may have changed while the screen was away; re-resolve smart label.
+        refreshProjectIdentity()
         composer.startCatalogLoads()
         commands.start()
         sessionInfo.startObserving()

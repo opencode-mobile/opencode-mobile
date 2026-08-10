@@ -842,6 +842,36 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun bind_sameSessionReuse_refinesProjectLabelWhenPeersChange() =
+        runTest(testDispatcher) {
+            val connectionProfileStore =
+                FakeConnectionProfileStore(
+                    active =
+                        ConnectionProfile(
+                            baseUrl = "http://127.0.0.1:4096/",
+                            username = "opencode",
+                            password = "",
+                        ),
+                    worktrees = mutableListOf("/Users/ivan/Projects/opencode"),
+                )
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    connectionProfileStore = connectionProfileStore,
+                )
+
+            viewModel.bind("ses-1", "Title", "/Users/ivan/Projects/opencode")
+            advanceUntilIdle()
+            assertEquals("opencode", viewModel.uiState.value.projectLabel)
+
+            connectionProfileStore.worktrees += "/Users/ivan/Documents/opencode"
+            viewModel.bind("ses-1", "Title", "/Users/ivan/Projects/opencode")
+            advanceUntilIdle()
+
+            assertEquals("..Projects/opencode", viewModel.uiState.value.projectLabel)
+        }
+
+    @Test
     fun openRenameSession_prefillsCurrentTitle() =
         runTest(testDispatcher) {
             val viewModel = createViewModel(FakeMessageRepository())
@@ -2852,17 +2882,18 @@ class SessionChatViewModelTest {
         questionLiveStore: QuestionLiveStore = FakeQuestionLiveStore(emptyList()),
         sessionReadyStore: SessionReadyStore = EmptySessionReadyStore,
         optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator = OptimisticSessionCreateCoordinator(),
+        connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
         val json = Json { ignoreUnknownKeys = true }
         val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope, EventDomainAdapter(json))
-        val connectionProfileStore = FakeConnectionProfileStore()
         val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
         runBlocking {
-            activeConnectionManager.applyProfile(
-                ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", password = ""),
-            )
+            val profile =
+                connectionProfileStore.activeProfile()
+                    ?: ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", password = "")
+            activeConnectionManager.applyProfile(profile)
         }
         val connectionSessionCoordinator =
             ConnectionSessionCoordinator(
@@ -3045,29 +3076,43 @@ private class FakeSessionModelSelectionStore(
     ): String = "$serverBaseUrl|$worktree|$sessionId"
 }
 
-private class FakeConnectionProfileStore : dev.opencode.mobile.domain.connection.ConnectionProfileStore {
-    override suspend fun activeProfile(): dev.opencode.mobile.domain.connection.ConnectionProfile? = null
+private class FakeConnectionProfileStore(
+    private var active: dev.opencode.mobile.domain.connection.ConnectionProfile? = null,
+    var worktrees: MutableList<String> = mutableListOf(),
+) : dev.opencode.mobile.domain.connection.ConnectionProfileStore {
+    override suspend fun activeProfile(): dev.opencode.mobile.domain.connection.ConnectionProfile? = active
 
-    override suspend fun saveProfile(profile: dev.opencode.mobile.domain.connection.ConnectionProfile) = Unit
+    override suspend fun saveProfile(profile: dev.opencode.mobile.domain.connection.ConnectionProfile) {
+        active = profile
+    }
 
-    override suspend fun addedWorktrees(serverBaseUrl: String): List<String> = emptyList()
+    override suspend fun addedWorktrees(serverBaseUrl: String): List<String> = worktrees.toList()
 
     override suspend fun addWorktree(
         serverBaseUrl: String,
         worktree: String,
-    ) = Unit
+    ) {
+        if (!worktrees.contains(worktree)) worktrees += worktree
+    }
 
     override suspend fun removeWorktree(
         serverBaseUrl: String,
         worktree: String,
-    ) = Unit
+    ) {
+        worktrees.remove(worktree)
+    }
 
     override suspend fun setAddedWorktrees(
         serverBaseUrl: String,
         worktrees: List<String>,
-    ) = Unit
+    ) {
+        this.worktrees = worktrees.toMutableList()
+    }
 
-    override suspend fun clearAll() = Unit
+    override suspend fun clearAll() {
+        active = null
+        worktrees.clear()
+    }
 }
 
 private class FakeSecureCredentialStore : dev.opencode.mobile.domain.connection.SecureCredentialStore {

@@ -218,6 +218,8 @@ class SessionChatViewModel
             sessionReadyStore.setFocusedSession(sessionId, worktree)
             if (boundSessionId == sessionId && boundWorktree == worktree) {
                 bindTitleIfChanged(sessionId, sessionTitle, worktree)
+                // Peers may have changed while the screen was away; re-resolve smart label.
+                scheduleProjectIdentityRefine(worktree)
                 return
             }
             boundSessionId = sessionId
