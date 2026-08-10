@@ -3,11 +3,11 @@ import Observation
 import OpenCodeMarkdownCore
 
 /// Controls whether Session Chat code fences use TextMate (expensive) or the
-/// semantic-fallback highlighter. Enabled by default for allowlisted languages
+/// semantic-fallback highlighter. Enabled by default for all packaged languages
 /// when the preference key is unset; an explicit user off stays off.
 ///
-/// Developer Tools language overrides: opt out of promoted languages, or
-/// force-enable packaged unpromoted languages.
+/// Developer Tools language overrides: opt out of any packaged language
+/// (disabled set). Force-enable remains for legacy unpromoted overrides.
 @Observable
 nonisolated final class MarkdownHighlightPreferences {
     static let shared = MarkdownHighlightPreferences()
@@ -17,11 +17,6 @@ nonisolated final class MarkdownHighlightPreferences {
         static let disabledLanguages = "markdownTextMateDisabledLanguages"
         static let forceEnabledLanguages = "markdownTextMateForceEnabledLanguages"
     }
-
-    private static let promoted: Set<String> = [
-        "javascript", "typescript", "python", "kotlin", "swift",
-        "json", "yaml", "shellscript", "rust", "go",
-    ]
 
     private static let epochLock = NSLock()
     private static var storedEpoch = 0
@@ -69,43 +64,36 @@ nonisolated final class MarkdownHighlightPreferences {
     func isLanguageEnabled(_ canonicalLanguage: String) -> Bool {
         let canonical = canonicalLanguage.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !canonical.isEmpty else { return false }
-        if Self.promoted.contains(canonical) {
-            return !disabledLanguages.contains(canonical)
+        // Allowlist v2: every packaged/named language defaults on unless opted out.
+        if forceEnabledLanguages.contains(canonical) {
+            return true
         }
-        return forceEnabledLanguages.contains(canonical)
+        return !disabledLanguages.contains(canonical)
     }
 
     func setLanguageEnabled(_ canonicalLanguage: String, enabled: Bool) {
         let canonical = canonicalLanguage.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !canonical.isEmpty else { return }
-        if Self.promoted.contains(canonical) {
-            var nextDisabled = disabledLanguages
-            if enabled {
-                nextDisabled.remove(canonical)
-            } else {
-                nextDisabled.insert(canonical)
-            }
-            guard nextDisabled != disabledLanguages else { return }
-            disabledLanguages = nextDisabled
-            forceEnabledLanguages.remove(canonical)
+        var nextDisabled = disabledLanguages
+        var nextForced = forceEnabledLanguages
+        if enabled {
+            nextDisabled.remove(canonical)
+            // Drop legacy force-enable once the language is back on the default path.
+            nextForced.remove(canonical)
         } else {
-            var nextForced = forceEnabledLanguages
-            if enabled {
-                nextForced.insert(canonical)
-            } else {
-                nextForced.remove(canonical)
-            }
-            guard nextForced != forceEnabledLanguages else { return }
-            forceEnabledLanguages = nextForced
-            disabledLanguages.remove(canonical)
+            nextDisabled.insert(canonical)
+            nextForced.remove(canonical)
         }
+        guard nextDisabled != disabledLanguages || nextForced != forceEnabledLanguages else { return }
+        disabledLanguages = nextDisabled
+        forceEnabledLanguages = nextForced
         defaults.set(Array(disabledLanguages).sorted(), forKey: StorageKeys.disabledLanguages)
         defaults.set(Array(forceEnabledLanguages).sorted(), forKey: StorageKeys.forceEnabledLanguages)
         publishGate()
         bumpEpoch()
     }
 
-    /// Restores promoted-on / experimental-off defaults without changing TextMate on/off.
+    /// Restores all-packaged-on defaults without changing TextMate on/off.
     func resetLanguageOverrides() {
         let changed = !disabledLanguages.isEmpty || !forceEnabledLanguages.isEmpty
         guard changed else { return }

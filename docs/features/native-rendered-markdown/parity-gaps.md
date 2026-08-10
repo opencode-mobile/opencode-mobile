@@ -27,9 +27,9 @@
   contract and share priority, cancellation, cache budgets, quality outcomes,
   metric names, work limits, and release gates while retaining native regex and
   executor adapters.
-- Current iOS state: default-on TextMate with allowlist v1; serial KMP/libonig
+- Current iOS state: default-on TextMate with allowlist v2 (all packaged); serial KMP/libonig
   owner; memory/thermal/low-power hooks drive trim and background disablement.
-- Current Android state: default-on TextMate with allowlist v1; single-lane
+- Current Android state: default-on TextMate with allowlist v2 (all packaged); single-lane
   KMP/Joni owner; ComponentCallbacks2 / power-save hooks drive trim and
   background disablement.
 - Intentional platform difference: regex backend only (Joni vs libonig) and

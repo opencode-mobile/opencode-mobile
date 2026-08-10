@@ -5,17 +5,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import dev.opencode.mobile.markdown.TextMateLanguageAllowlist
 import dev.opencode.mobile.markdown.TextMateLanguageGateRegistry
 import dev.opencode.mobile.markdown.TextMateLanguageOverrideGate
 
 /**
  * Controls whether Session Chat code fences use TextMate (expensive) or the
- * semantic-fallback highlighter. Enabled by default for allowlisted languages
+ * semantic-fallback highlighter. Enabled by default for all packaged languages
  * when the preference key is unset; an explicit user off stays off.
  *
- * Developer Tools language overrides: opt out of promoted languages, or
- * force-enable packaged unpromoted languages.
+ * Developer Tools language overrides: opt out of any packaged language (disabled
+ * set). Force-enable remains for legacy unpromoted overrides.
  *
  * Callers that change [textMateEnabled] or language overrides should also clear
  * prepared-markdown caches so settle-reuse cannot keep the old highlighter's
@@ -67,11 +66,9 @@ object MarkdownHighlightPreferences {
     fun isLanguageEnabled(canonicalLanguage: String): Boolean {
         val canonical = canonicalLanguage.trim().lowercase()
         if (canonical.isEmpty()) return false
-        return if (TextMateLanguageAllowlist.isPromoted(canonical)) {
-            canonical !in disabledLanguages
-        } else {
-            canonical in forceEnabledLanguages
-        }
+        // Allowlist v2: every packaged/named language defaults on unless opted out.
+        if (canonical in forceEnabledLanguages) return true
+        return canonical !in disabledLanguages
     }
 
     fun setLanguageEnabled(
@@ -80,34 +77,23 @@ object MarkdownHighlightPreferences {
     ) {
         val canonical = canonicalLanguage.trim().lowercase()
         if (canonical.isEmpty()) return
-        val promoted = TextMateLanguageAllowlist.isPromoted(canonical)
-        if (promoted) {
-            val nextDisabled =
-                if (enabled) {
-                    disabledLanguages - canonical
-                } else {
-                    disabledLanguages + canonical
-                }
-            if (nextDisabled == disabledLanguages) return
-            disabledLanguages = nextDisabled
-            forceEnabledLanguages = forceEnabledLanguages - canonical
-        } else {
-            val nextForced =
-                if (enabled) {
-                    forceEnabledLanguages + canonical
-                } else {
-                    forceEnabledLanguages - canonical
-                }
-            if (nextForced == forceEnabledLanguages) return
-            forceEnabledLanguages = nextForced
-            disabledLanguages = disabledLanguages - canonical
-        }
+        val nextDisabled =
+            if (enabled) {
+                disabledLanguages - canonical
+            } else {
+                disabledLanguages + canonical
+            }
+        // Drop legacy force-enable once the language is back on the default path.
+        val nextForced = forceEnabledLanguages - canonical
+        if (nextDisabled == disabledLanguages && nextForced == forceEnabledLanguages) return
+        disabledLanguages = nextDisabled
+        forceEnabledLanguages = nextForced
         persistLanguageOverrides()
         publishGate()
         epoch += 1
     }
 
-    /** Restores promoted-on / experimental-off defaults without changing TextMate on/off. */
+    /** Restores all-packaged-on defaults without changing TextMate on/off. */
     fun resetLanguageOverrides() {
         val changed = disabledLanguages.isNotEmpty() || forceEnabledLanguages.isNotEmpty()
         if (!changed) return

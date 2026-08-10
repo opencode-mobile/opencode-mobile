@@ -27,12 +27,24 @@
   very large streaming fences, or progressive TextMate-while-streaming is
   reopened.
 
+## Allowlist v2 — All Packaged Languages Default On
+
+- Decision: bump `TextMateLanguageAllowlist.ALLOWLIST_VERSION` to **2**. When a
+  grammar manifest is present, every language in that manifest is promoted
+  (default on). Without a manifest, any non-empty language name is treated as
+  promoted for preference UI. Opt-out remains via the disabled-language set;
+  force-enable is retained only for legacy overrides / non-packaged names.
+- Reason: ship full packaged-grammar coverage by default; users can still disable
+  individual languages or the global TextMate kill switch.
+- Date: 2026-08-10.
+- Supersedes: allowlist v1 top-ten default in Phase 6 enablement below.
+
 ## Developer Tools Language Toggles And Logbook Speed Bands
 
 - Decision: keep the global TextMate preference as the kill switch. Add Developer
-  Tools **TextMate Languages** with A+B overrides: opt out of allowlist-promoted
-  languages; force-enable packaged unpromoted languages. Unset override keys
-  preserve allowlist-only Phase 6 defaults.
+  Tools **TextMate Languages** with opt-out overrides for packaged languages
+  (allowlist v2 defaults all packaged on). Force-enable remains for legacy
+  unpromoted overrides. Unset override keys preserve allowlist defaults.
 - Decision: inject policy through process-local `TextMateLanguageGateRegistry`
   into `OpenCodeSyntaxHighlighter` without expanding `HighlightRequest`.
 - Decision: logbook list status for measured `Highlighted`/`NoSpans` rows shows
