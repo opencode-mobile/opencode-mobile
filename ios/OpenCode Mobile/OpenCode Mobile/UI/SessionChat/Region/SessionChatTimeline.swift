@@ -21,6 +21,8 @@ final class SessionChatTimeline {
     private var lastLoadedMessages: [Message] = []
     private var lastLoadedDisplayMessages: [DisplayMessage] = []
     private var displayFrameRevision: UInt64 = 0
+    /// After network confirms the cache, ignore late isFromCache publishes for Syncing.
+    private var networkCacheSyncConfirmed = false
     /// Catalog used to collapse expanded slash-command templates in user bubbles.
     private(set) var serverCommands: [ServerCommand] = []
 
@@ -60,6 +62,7 @@ final class SessionChatTimeline {
         lastLoadedDisplayMessages = []
         timelineFrame = .empty
         displayFrameRevision = 0
+        networkCacheSyncConfirmed = false
         state = SessionChatTimelineRegionState()
         notifyChange()
     }
@@ -80,6 +83,7 @@ final class SessionChatTimeline {
 
     func startObserving() {
         cancelObservationTasks()
+        networkCacheSyncConfirmed = false
         let generation = observationGeneration
         if let warm = messageRepository.peekWarmDisplayMessages(sessionID: sessionID, directory: worktree), !warm.isEmpty {
             // Warm reopen: show store rows immediately (styled when cache is complete).
@@ -145,7 +149,12 @@ final class SessionChatTimeline {
 
         for await update in messageRepository.observeDisplayMessages(sessionID: sessionID, directory: worktree) {
             guard observationGeneration == generation, !Task.isCancelled else { return }
-            // Coalesce-latest while transform/SwiftUI apply is in flight.
+            // Confirm must not sit behind coalesce-latest: a later cache-generation
+            // Messages publish would otherwise drop it and leave Syncing stuck.
+            if case .cacheSyncConfirmed = update {
+                confirmCacheSync()
+                continue
+            }
             pendingUpdate = update
             kickApply()
         }
@@ -434,8 +443,9 @@ final class SessionChatTimeline {
         state.timeline = resolvedTimeline
         state.messages = rows
         state.isRefreshing = isRefreshing
-        state.messagesFromCache = messagesFromCache
-        state.isSyncingMessages = messagesFromCache
+        let fromCache = messagesFromCache && !networkCacheSyncConfirmed
+        state.messagesFromCache = fromCache
+        state.isSyncingMessages = fromCache
         state.errorMessage = resolvedErrorMessage
         if !fromQuietRefresh {
             mergePendingWhileSending = false
@@ -449,6 +459,7 @@ final class SessionChatTimeline {
     }
 
     private func confirmCacheSync() {
+        networkCacheSyncConfirmed = true
         state.messagesFromCache = false
         state.isSyncingMessages = false
         notifyChange()

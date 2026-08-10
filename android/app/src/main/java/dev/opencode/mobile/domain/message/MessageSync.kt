@@ -56,6 +56,8 @@ class MessageSync(
     private val lastPublishedRevisions = ConcurrentHashMap<String, Long>()
     private val healthByKey = ConcurrentHashMap<MessageSessionKey, MessageSyncHealth>()
     private val messageCacheHandles = ConcurrentHashMap<MessageSessionKey, SessionMessageCacheHandle>()
+    /** Store slots that painted from cache and still need network confirmation. */
+    private val awaitingCacheSyncConfirm = ConcurrentHashMap.newKeySet<String>()
 
     fun observeMessages(
         sessionId: String,
@@ -83,6 +85,7 @@ class MessageSync(
         lastPublishedFrames.clear()
         lastPublishedRevisions.clear()
         healthByKey.clear()
+        awaitingCacheSyncConfirm.clear()
         engine.clear()
     }
 
@@ -141,7 +144,10 @@ class MessageSync(
                 messages: List<Message>,
                 isFromCache: Boolean = false,
             ) {
-                if (!isFromCache) {
+                if (isFromCache) {
+                    awaitingCacheSyncConfirm.add(storeSlot)
+                } else {
+                    awaitingCacheSyncConfirm.remove(storeSlot)
                     cacheHandle.note(messages)
                 }
                 send(MessageListUpdate.Messages(messages = messages, isFromCache = isFromCache))
@@ -600,6 +606,7 @@ class MessageSync(
                             MessagePipelineProbe.emit(MessagePipelineProbe.Marker.DisplayFramePublished)
                         } else {
                             cacheHandle.note(merged)
+                            awaitingCacheSyncConfirm.remove(storeSlot)
                             logI(
                                 "observeMessages skip session=${key.sessionId} count=${merged.size} " +
                                     "source=initial-subscribe fingerprint-unchanged",
@@ -685,7 +692,17 @@ class MessageSync(
                             "source=poll fingerprint-changed",
                     )
                     messageCacheHandle(key).note(merged)
+                    awaitingCacheSyncConfirm.remove(storeSlot)
                     send(MessageListUpdate.Messages(messages = merged, isFromCache = false))
+                } else if (awaitingCacheSyncConfirm.remove(storeSlot)) {
+                    // Initial REST may still be hung after reconnect; poll already
+                    // agrees with the cache — clear Syncing without a second paint.
+                    messageCacheHandle(key).note(messages)
+                    logI(
+                        "observeMessages skip session=${key.sessionId} count=${messages.size} " +
+                            "source=poll fingerprint-unchanged",
+                    )
+                    send(MessageListUpdate.CacheSyncConfirmed)
                 }
             }
         }

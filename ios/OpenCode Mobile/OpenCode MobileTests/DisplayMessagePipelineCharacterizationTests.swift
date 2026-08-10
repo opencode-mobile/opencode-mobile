@@ -642,6 +642,37 @@ struct DisplayMessagePipelineCharacterizationTests {
         task.cancel()
         _ = await waitUntil { collector.isFinished }
     }
+
+    @Test func cacheSyncConfirmed_clearsFromCacheFlagBeforeInFlightPublish() async {
+        // Regression: CacheSyncConfirmed must clear sourceIsFromCache so an
+        // in-flight cache-seed prepare cannot publish Syncing again.
+        let harness = Harness()
+        let collector = CharacterizationDisplayCollector()
+        let task = Task {
+            await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
+        }
+
+        harness.preparer.holdNextPrepareMessages()
+        await harness.source.emit(.messages([plainAssistant("cached")], isFromCache: true))
+        let held = await waitUntil { harness.preparer.hasPendingPrepareMessagesHold }
+        #expect(held)
+        #expect(collector.emissions.isEmpty)
+
+        await harness.source.emit(.cacheSyncConfirmed)
+        let confirmed = await waitUntil { collector.sawCacheSyncConfirmed }
+        #expect(confirmed)
+
+        harness.preparer.releaseNextPrepareMessages()
+        let published = await waitUntil {
+            collector.emissions.count == 1 && collector.fromCacheFlags.last == false
+        }
+        #expect(published)
+        #expect(collector.emissions[0].first?.text == "cached")
+        #expect(collector.fromCacheFlags == [false])
+
+        task.cancel()
+        _ = await waitUntil { collector.isFinished }
+    }
 }
 
 @MainActor
@@ -994,8 +1025,10 @@ private final class ControllablePipelineClock: DisplayMessagePipelineClock, @unc
 private final class CharacterizationDisplayCollector: @unchecked Sendable {
     private let lock = NSLock()
     private var _emissions: [[DisplayMessage]] = []
+    private var _fromCacheFlags: [Bool] = []
     private var _failures: [Error] = []
     private var _isFinished = false
+    private var _sawCacheSyncConfirmed = false
 
     var emissions: [[DisplayMessage]] {
         get {
@@ -1008,6 +1041,18 @@ private final class CharacterizationDisplayCollector: @unchecked Sendable {
             defer { lock.unlock() }
             _emissions = newValue
         }
+    }
+
+    var fromCacheFlags: [Bool] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _fromCacheFlags
+    }
+
+    var sawCacheSyncConfirmed: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _sawCacheSyncConfirmed
     }
 
     var failures: [Error] {
@@ -1028,13 +1073,16 @@ private final class CharacterizationDisplayCollector: @unchecked Sendable {
             case .messages(let messages, let isFromCache):
                 lock.lock()
                 _emissions.append(messages)
+                _fromCacheFlags.append(isFromCache)
                 lock.unlock()
             case .loadFailed(let error):
                 lock.lock()
                 _failures.append(error)
                 lock.unlock()
             case .cacheSyncConfirmed:
-                break
+                lock.lock()
+                _sawCacheSyncConfirmed = true
+                lock.unlock()
             }
         }
         lock.lock()
