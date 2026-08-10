@@ -1,7 +1,7 @@
 import OpenCodeMarkdownCore
 import SwiftUI
 
-private let promotedTextMateLanguages: Set<String> = [
+private let fallbackTextMateLanguages: [String] = [
     "javascript", "typescript", "python", "kotlin", "swift",
     "json", "yaml", "shellscript", "rust", "go",
 ]
@@ -12,14 +12,6 @@ struct TextMateLanguagesView: View {
     @State private var languages: [String] = []
     @State private var refreshToken = 0
     @State private var menuExpanded = false
-
-    private var promoted: [String] {
-        languages.filter { promotedTextMateLanguages.contains($0) }
-    }
-
-    private var experimental: [String] {
-        languages.filter { !promotedTextMateLanguages.contains($0) }
-    }
 
     private var overflowMenuEntries: [OpenCodeOverflowMenuEntry] {
         [
@@ -52,14 +44,9 @@ struct TextMateLanguagesView: View {
 
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    sectionHeader("Promoted")
-                    ForEach(promoted, id: \.self) { language in
-                        languageRow(language, promoted: true)
-                    }
-
-                    sectionHeader("Packaged (experimental)")
-                    ForEach(experimental, id: \.self) { language in
-                        languageRow(language, promoted: false)
+                    sectionHeader("Packaged")
+                    ForEach(languages, id: \.self) { language in
+                        languageRow(language)
                     }
                 }
                 .padding(.bottom, 24)
@@ -74,7 +61,7 @@ struct TextMateLanguagesView: View {
 
     private func loadLanguages() {
         let loaded = TextMatePackagedLanguageCatalog.shared.primaryCanonicalNames()
-        languages = loaded.isEmpty ? promotedTextMateLanguages.sorted() : Array(loaded)
+        languages = loaded.isEmpty ? fallbackTextMateLanguages : Array(loaded)
     }
 
     private func resetLanguages() {
@@ -107,10 +94,11 @@ struct TextMateLanguagesView: View {
     }
 
     @ViewBuilder
-    private func languageRow(_ language: String, promoted: Bool) -> some View {
+    private func languageRow(_ language: String) -> some View {
+        let enabled = preferences.isLanguageEnabled(language)
         OpenCodeListItem(
             title: language,
-            subtitle: promoted ? "Allowlist default on" : "Force-enable to use TextMate",
+            subtitle: enabled ? "Default on" : "Opted out",
             style: .card,
             startDecorator: .icon(.architecture, accessibilityLabel: language),
             trailing: {

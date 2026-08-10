@@ -284,7 +284,7 @@ fun SettingsScreen(
 
             OpenCodeListItem(
                 title = "TextMate Highlighting",
-                subtitle = "On by default for promoted languages; semantic fallback otherwise (can disable)",
+                subtitle = "On by default for all packaged languages; semantic fallback otherwise (can disable)",
                 style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Highlighting"),
                 trailing = {
@@ -298,7 +298,7 @@ fun SettingsScreen(
 
             OpenCodeListItem(
                 title = "TextMate Languages",
-                subtitle = "Opt out of promoted languages or force-enable packaged ones",
+                subtitle = "Opt out of any packaged language (all default on)",
                 style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Languages"),
                 onClick = onTextMateLanguagesClick,

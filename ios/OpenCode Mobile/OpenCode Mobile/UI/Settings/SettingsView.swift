@@ -253,7 +253,7 @@ struct SettingsView: View {
 
                     OpenCodeListItem(
                         title: "TextMate Highlighting",
-                        subtitle: "On by default for promoted languages; semantic fallback otherwise (can disable)",
+                        subtitle: "On by default for all packaged languages; semantic fallback otherwise (can disable)",
                         style: .card,
                         startDecorator: .icon(.description, accessibilityLabel: "TextMate Highlighting"),
                         trailing: {
@@ -276,7 +276,7 @@ struct SettingsView: View {
 
                     OpenCodeListItem(
                         title: "TextMate Languages",
-                        subtitle: "Opt out of promoted languages or force-enable packaged ones",
+                        subtitle: "Opt out of any packaged language (all default on)",
                         style: .card,
                         startDecorator: .icon(.architecture, accessibilityLabel: "TextMate Languages"),
                         action: { showTextMateLanguages = true }

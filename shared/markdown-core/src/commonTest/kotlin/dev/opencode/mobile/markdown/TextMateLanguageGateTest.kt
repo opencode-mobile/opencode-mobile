@@ -7,12 +7,15 @@ import kotlin.test.assertTrue
 
 class TextMateLanguageGateTest {
     @Test
-    fun allowlistOnlyAdmitsPromotedAndRejectsOthers() {
+    fun allowlistOnlyAdmitsEveryPackagedLanguage() {
         val gate = TextMateLanguageOverrideGate.AllowlistOnly
         assertTrue(gate.admits("javascript", testManifest()))
         assertTrue(gate.admits("js", testManifest()))
-        assertFalse(gate.admits("cpp", testManifest()))
-        assertFalse(gate.admits("php", testManifest()))
+        assertTrue(gate.admits("cpp", testManifest()))
+        assertTrue(gate.admits("php", testManifest()))
+        assertTrue(gate.admits("java", testManifest()))
+        assertFalse(gate.admits("unknown-not-packaged", testManifest()))
+        assertFalse(gate.admits(null, testManifest()))
     }
 
     @Test
@@ -23,27 +26,27 @@ class TextMateLanguageGateTest {
             )
         assertFalse(gate.admits("python", testManifest()))
         assertTrue(gate.admits("javascript", testManifest()))
+        assertTrue(gate.admits("cpp", testManifest()))
     }
 
     @Test
-    fun forceEnableAdmitsUnpromotedPackagedLanguage() {
+    fun forceEnableAdmitsUnpromotedLanguageOutsideManifest() {
         val gate =
             TextMateLanguageOverrideGate(
-                forceEnabledCanonicalLanguages = setOf("cpp", "php"),
+                forceEnabledCanonicalLanguages = setOf("cobol"),
             )
-        assertTrue(gate.admits("cpp", testManifest()))
-        assertTrue(gate.admits("php", testManifest()))
-        assertFalse(gate.admits("java", testManifest()))
+        assertTrue(gate.admits("cobol", testManifest()))
+        assertFalse(gate.admits("fortran", testManifest()))
     }
 
     @Test
     fun registryUpdateIsVisibleToReaders() {
         TextMateLanguageGateRegistry.resetForTests()
-        assertFalse(TextMateLanguageGateRegistry.current().admits("cpp", testManifest()))
-        TextMateLanguageGateRegistry.update(
-            TextMateLanguageOverrideGate(forceEnabledCanonicalLanguages = setOf("cpp")),
-        )
         assertTrue(TextMateLanguageGateRegistry.current().admits("cpp", testManifest()))
+        TextMateLanguageGateRegistry.update(
+            TextMateLanguageOverrideGate(disabledCanonicalLanguages = setOf("cpp")),
+        )
+        assertFalse(TextMateLanguageGateRegistry.current().admits("cpp", testManifest()))
         TextMateLanguageGateRegistry.resetForTests()
     }
 

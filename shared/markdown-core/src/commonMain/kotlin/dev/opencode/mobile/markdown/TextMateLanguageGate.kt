@@ -12,8 +12,9 @@ fun interface TextMateLanguageGate {
 }
 
 /**
- * Immutable A+B gate: allowlist defaults on (unless opted out); unpromoted
- * packaged languages default off (unless force-enabled).
+ * Immutable A+B gate: promoted languages default on (unless opted out);
+ * unpromoted languages default off (unless force-enabled). Allowlist v2 promotes
+ * every packaged language, so force-enable is mainly for legacy overrides.
  */
 data class TextMateLanguageOverrideGate(
     val disabledCanonicalLanguages: Set<String> = emptySet(),

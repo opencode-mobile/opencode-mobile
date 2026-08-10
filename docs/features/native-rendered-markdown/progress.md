@@ -6,6 +6,9 @@
 - Ticket: [OPE-109](https://linear.app/opencode-mobile/issue/OPE-109/rendered-markdown-desktop-visual-polish)
   (parent [OPE-16](https://linear.app/opencode-mobile/issue/OPE-16/native-rendered-markdown)).
   Branch: `feature/ope-109-rendered-markdown-desktop-visual-polish`.
+- 2026-08-10: **Allowlist v2** — all packaged TextMate languages default on;
+  Developer Tools language list is a single opt-out catalog (no experimental
+  force-enable section). Shared gate + Android/iOS prefs/settings updated.
 - 2026-08-05: **OPE-109** desktop visual polish — inline code bg/weight, bare
   URL autolink, link/quote token chrome, list marker column sizing, shared
   table column widths + expand-to-container, Android streaming layout

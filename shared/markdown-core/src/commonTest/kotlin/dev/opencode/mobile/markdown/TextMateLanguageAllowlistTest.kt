@@ -6,15 +6,19 @@ import kotlin.test.assertTrue
 
 class TextMateLanguageAllowlistTest {
     @Test
-    fun promotesTopTenCanonicalNames() {
+    fun promotesEveryNamedLanguageWithoutManifest() {
         TextMateLanguageAllowlist.promotedCanonicalLanguages.forEach { language ->
             assertTrue(TextMateLanguageAllowlist.isPromoted(language), language)
         }
-        assertTrue(TextMateLanguageAllowlist.ALLOWLIST_VERSION >= 1)
+        assertTrue(TextMateLanguageAllowlist.isPromoted("java"))
+        assertTrue(TextMateLanguageAllowlist.isPromoted("cpp"))
+        assertTrue(TextMateLanguageAllowlist.ALLOWLIST_VERSION >= 2)
+        assertFalse(TextMateLanguageAllowlist.isPromoted(null))
+        assertFalse(TextMateLanguageAllowlist.isPromoted(""))
     }
 
     @Test
-    fun resolvesAliasesThroughManifest() {
+    fun promotesOnlyManifestMembersWhenManifestProvided() {
         val descriptor =
             TextMateGrammarDescriptor(
                 name = "javascript",
@@ -42,6 +46,7 @@ class TextMateLanguageAllowlistTest {
             )
         assertTrue(TextMateLanguageAllowlist.isPromoted("js", manifest))
         assertTrue(TextMateLanguageAllowlist.isPromoted("JavaScript", manifest))
+        assertTrue(TextMateLanguageAllowlist.isPromoted("javascript", manifest))
         assertFalse(TextMateLanguageAllowlist.isPromoted("java", manifest))
         assertFalse(TextMateLanguageAllowlist.isPromoted(null, manifest))
         assertFalse(TextMateLanguageAllowlist.isPromoted("", manifest))

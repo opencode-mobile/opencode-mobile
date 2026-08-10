@@ -42,7 +42,6 @@ import javax.inject.Inject
 
 data class TextMateLanguageRow(
     val canonical: String,
-    val promoted: Boolean,
     val enabled: Boolean,
 )
 
@@ -63,7 +62,6 @@ class TextMateLanguagesViewModel
             packagedLanguages.map { language ->
                 TextMateLanguageRow(
                     canonical = language,
-                    promoted = TextMateLanguageAllowlist.isPromoted(language),
                     enabled = MarkdownHighlightPreferences.isLanguageEnabled(language),
                 )
             }
@@ -131,8 +129,6 @@ fun TextMateLanguagesScreen(
     onSelectAll: () -> Unit = {},
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
-    val promoted = rows.filter { it.promoted }
-    val experimental = rows.filterNot { it.promoted }
     Column(modifier = Modifier.fillMaxSize()) {
         OpenCodeTopBarOverflowHost(
             expanded = menuExpanded,
@@ -173,12 +169,8 @@ fun TextMateLanguagesScreen(
                     .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            SectionHeader(title = "Promoted")
-            promoted.forEach { row ->
-                LanguageToggleRow(row = row, onLanguageEnabledChange = onLanguageEnabledChange)
-            }
-            SectionHeader(title = "Packaged (experimental)")
-            experimental.forEach { row ->
+            SectionHeader(title = "Packaged")
+            rows.forEach { row ->
                 LanguageToggleRow(row = row, onLanguageEnabledChange = onLanguageEnabledChange)
             }
         }
@@ -192,7 +184,7 @@ private fun LanguageToggleRow(
 ) {
     OpenCodeListItem(
         title = row.canonical,
-        subtitle = if (row.promoted) "Allowlist default on" else "Force-enable to use TextMate",
+        subtitle = if (row.enabled) "Default on" else "Opted out",
         style = OpenCodeListItemStyle.Card,
         startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, row.canonical),
         trailing = {
@@ -222,10 +214,10 @@ private fun TextMateLanguagesScreenPreview() {
         TextMateLanguagesScreen(
             rows =
                 listOf(
-                    TextMateLanguageRow("javascript", promoted = true, enabled = true),
-                    TextMateLanguageRow("python", promoted = true, enabled = false),
-                    TextMateLanguageRow("cpp", promoted = false, enabled = false),
-                    TextMateLanguageRow("php", promoted = false, enabled = true),
+                    TextMateLanguageRow("javascript", enabled = true),
+                    TextMateLanguageRow("python", enabled = false),
+                    TextMateLanguageRow("cpp", enabled = true),
+                    TextMateLanguageRow("php", enabled = true),
                 ),
             onNavigateBack = {},
             onLanguageEnabledChange = { _, _ -> },
