@@ -3,8 +3,8 @@
 ## Intent
 
 Provide the shared capsule-shaped glass / raised-surface material recipe used
-by floating session-chat pills: Action Pill, Review Changes Pill, and Session
-Todos Pill.
+by floating session-chat pills: Action Pill, Syncing Pill, Review Changes Pill,
+and Session Todos Pill.
 
 Callers own label content, tap targets, press feedback, and layout positioning.
 This helper owns only the capsule fill/material and enabled/disabled opacity.
@@ -60,9 +60,9 @@ When multiple glass pills stack on iOS 26+, callers should wrap them in
 
 ## Review Surfaces
 
-Reviewed through **Action Pill**, **Review Changes Pill**, and **Session Todos
-Pill** gallery entries on both platforms. No standalone gallery entry — the
-helper is not a product surface by itself.
+Reviewed through **Action Pill**, **Syncing Pill**, **Review Changes Pill**, and
+**Session Todos Pill** gallery entries on both platforms. No standalone gallery
+entry — the helper is not a product surface by itself.
 
 ## Parity And Divergence
 

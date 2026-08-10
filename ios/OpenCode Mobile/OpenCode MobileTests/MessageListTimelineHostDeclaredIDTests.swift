@@ -134,7 +134,6 @@ struct MessageListTimelineHostDeclaredIDTests {
         ]
         let initialPacket = MessageListTimelineApplyPacket.from(
             frame,
-            syncingIndicatorLabel: nil,
             workingIndicatorLabel: "Working"
         )
         controller.apply(items: initialItems, packet: initialPacket, animatingDifferences: false)
@@ -146,7 +145,6 @@ struct MessageListTimelineHostDeclaredIDTests {
         ]
         let updatedPacket = MessageListTimelineApplyPacket.from(
             frame,
-            syncingIndicatorLabel: nil,
             workingIndicatorLabel: "Compacting"
         )
         #expect(updatedPacket.frameRevision != initialPacket.frameRevision)

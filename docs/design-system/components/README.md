@@ -122,6 +122,7 @@ applicable item is complete.
 - `empty-state.md`
 - `status-stack.md`
 - `action-pill.md`
+- `syncing-pill.md`
 - `composer-suggestion-overlay.md`
 - `review-changes-pill.md`
 - `session-todos-pill.md`

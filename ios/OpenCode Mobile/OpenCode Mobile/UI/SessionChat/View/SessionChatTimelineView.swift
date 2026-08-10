@@ -140,16 +140,6 @@ private struct SessionChatTimelineReadyView: View {
 
     private var displayMessages: [SessionChatRow] {
         var rows = props.messages
-        if let label = props.syncingIndicatorLabel {
-                rows.append(
-                SessionChatRow(
-                    id: SessionChatStatusChrome.syncingRowID,
-                    role: .assistant,
-                    text: label,
-                    metadataLabel: ""
-                )
-            )
-        }
         if let label = props.workingIndicatorLabel {
             rows.append(
                 SessionChatRow(
@@ -167,12 +157,11 @@ private struct SessionChatTimelineReadyView: View {
         ZStack(alignment: .bottom) {
             MessageListTimelineHost(
                 items: displayMessages,
-                // Declared timeline sets stay; status-chrome labels fold into
-                // revision + changed IDs so Working/Syncing text can refresh
-                // without clearing the packet (that caused the OPE-136 storm).
+                // Declared timeline sets stay; Working label folds into
+                // revision + changed IDs so text can refresh without clearing
+                // the packet (that caused the OPE-136 storm).
                 applyPacket: .from(
                     props.timelineFrame,
-                    syncingIndicatorLabel: props.syncingIndicatorLabel,
                     workingIndicatorLabel: props.workingIndicatorLabel
                 ),
                 scrollController: scrollController,
@@ -204,6 +193,16 @@ private struct SessionChatTimelineReadyView: View {
                         "layoutAffecting count=\(layoutIDs.count) rev=\(rev)"
                     )
                 }
+            }
+
+            if let label = props.syncingIndicatorLabel {
+                VStack {
+                    OpenCodeSyncingPill(label: label)
+                        .padding(.top, 10)
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
             }
 
             if !props.hideFloatStack {
@@ -312,9 +311,7 @@ private struct SessionChatTimelineHostRow: View {
     let onChangesReviewTap: (String, String?) -> Void
 
     var body: some View {
-        if message.id == SessionChatStatusChrome.syncingRowID
-            || message.id == SessionChatStatusChrome.workingRowID
-        {
+        if message.id == SessionChatStatusChrome.workingRowID {
             SessionChatWorkingIndicatorRow(label: message.text)
         } else {
             HStack {

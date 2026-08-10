@@ -319,6 +319,21 @@ as documented in `docs/design-system/components/action-pill.md`.
 | `actionPill.iconSpacing` | 6 (logical px) |
 | `actionPill.shadowElevation` | 4 (logical px; Android / pre–iOS 26 fallback only) |
 
+### Syncing pill
+
+Non-interactive floating status pill for quiet cache→network sync over the
+timeline. Reuses Action pill geometry; materials follow the same floating glass
+capsule family as documented in `docs/design-system/components/syncing-pill.md`.
+
+| Token | Value |
+| --- | --- |
+| `syncingPill.minHeight` | 36 (logical px; same as `actionPill.minHeight`) |
+| `syncingPill.paddingHorizontal` | 14 (logical px) |
+| `syncingPill.paddingVertical` | 8 (logical px) |
+| `syncingPill.spinnerSize` | 14 (logical px) |
+| `syncingPill.iconSpacing` | 6 (logical px) |
+| `syncingPill.shadowElevation` | 4 (logical px; Android / pre–iOS 26 fallback only) |
+
 ### Review changes pill
 
 Contextual floating entry point for reviewing the latest completed turn's

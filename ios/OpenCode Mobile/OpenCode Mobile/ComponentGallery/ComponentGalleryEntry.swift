@@ -27,6 +27,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case choiceBadge
     case filterTabs
     case actionPill
+    case syncingPill
     case reviewChangesPill
     case sessionTodosPill
     case sessionTodoItem
@@ -77,6 +78,12 @@ let componentGalleryEntries = [
         id: .actionPill,
         title: "Action Pill",
         description: "Floating pill for contextual overlay actions such as scroll to end.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .syncingPill,
+        title: "Syncing Pill",
+        description: "Non-interactive floating status pill for quiet cache→network sync.",
         category: .controls
     ),
     ComponentGalleryEntry(

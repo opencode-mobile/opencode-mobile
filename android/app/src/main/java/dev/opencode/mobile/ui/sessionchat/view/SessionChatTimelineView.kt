@@ -63,6 +63,7 @@ import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPill
 import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeSessionTodosPill
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
+import dev.opencode.mobile.ui.components.OpenCodeSyncingPill
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
 import dev.opencode.mobile.ui.scroll.MessageListReversedTimelineColumn
@@ -301,18 +302,15 @@ private fun SessionChatTimelineReadyView(
                     ),
                 key = { message -> message.id },
                 statusIndicatorKey =
-                    if (syncingIndicatorLabel != null || workingIndicatorLabel != null) {
+                    if (workingIndicatorLabel != null) {
                         SESSION_CHAT_STATUS_INDICATOR_KEY
                     } else {
                         null
                     },
                 statusIndicatorContent =
-                    if (syncingIndicatorLabel != null || workingIndicatorLabel != null) {
+                    if (workingIndicatorLabel != null) {
                         {
-                            SessionChatStatusIndicatorRows(
-                                syncingLabel = syncingIndicatorLabel,
-                                workingLabel = workingIndicatorLabel,
-                            )
+                            SessionChatWorkingIndicatorRow(label = workingIndicatorLabel)
                         }
                     } else {
                         null
@@ -331,6 +329,16 @@ private fun SessionChatTimelineReadyView(
                     modifier = Modifier.messageListTimelineItemSpacing(isNewestMessage),
                 )
             }
+        }
+
+        if (syncingIndicatorLabel != null) {
+            OpenCodeSyncingPill(
+                label = syncingIndicatorLabel,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 10.dp),
+            )
         }
 
         if (!hideFloatStack) {
@@ -689,22 +697,6 @@ private fun ToolStatus.toToolCallCardStatus(): OpenCodeToolCallCardStatus =
 
 private const val SESSION_CHAT_BOTTOM_ANCHOR_KEY = "session-chat-timeline-bottom"
 private const val SESSION_CHAT_STATUS_INDICATOR_KEY = "session-chat-status-indicators"
-
-/** Feature-local Syncing / Working / Retrying / Compacting status chrome (not prose). */
-@Composable
-private fun SessionChatStatusIndicatorRows(
-    syncingLabel: String?,
-    workingLabel: String?,
-) {
-    Column {
-        syncingLabel?.let { label ->
-            SessionChatWorkingIndicatorRow(label = label)
-        }
-        workingLabel?.let { label ->
-            SessionChatWorkingIndicatorRow(label = label)
-        }
-    }
-}
 
 /** Feature-local Working/Retrying/Compacting status chrome (not prose). */
 @Composable
