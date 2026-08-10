@@ -54,7 +54,6 @@ import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScr
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
-import dev.opencode.mobile.ui.componentgallery.components.ProjectSessionSelectorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionListDockGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
@@ -339,8 +338,6 @@ fun MainNavigation() {
                                                             EmptyStateGalleryScreen()
                                                         ComponentGalleryEntryId.StatusStack ->
                                                             StatusStackGalleryScreen()
-                                                        ComponentGalleryEntryId.ProjectSessionSelector ->
-                                                            ProjectSessionSelectorGalleryScreen()
                                                         ComponentGalleryEntryId.SessionList ->
                                                             SessionListGalleryScreen()
                                                         ComponentGalleryEntryId.SessionListDock ->

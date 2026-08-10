@@ -13,9 +13,6 @@ object HomeDisplayPreferences {
     private const val KEY_HIDE_USER_DIRECTORY_PREFIX = "hide_user_directory_prefix"
     private const val KEY_RECENT_WINDOW_HOURS = "recent_window_hours"
 
-    var showSessionListOnHome: Boolean by mutableStateOf(true)
-        private set
-
     /** When true, replace remote `/Users/…` or `/home/…` with `~` in path labels. */
     var hideUserDirectoryPrefix: Boolean by mutableStateOf(true)
         private set
@@ -28,13 +25,6 @@ object HomeDisplayPreferences {
     fun initialize(context: Context) {
         appContext = context.applicationContext
         val prefs = prefs() ?: return
-        // Settings toggle is hidden; keep session-list home for everyone.
-        showSessionListOnHome = true
-        if (prefs.contains(KEY_SHOW_SESSION_LIST_ON_HOME) &&
-            !prefs.getBoolean(KEY_SHOW_SESSION_LIST_ON_HOME, true)
-        ) {
-            prefs.edit().putBoolean(KEY_SHOW_SESSION_LIST_ON_HOME, true).apply()
-        }
         hideUserDirectoryPrefix =
             if (prefs.contains(KEY_HIDE_USER_DIRECTORY_PREFIX)) {
                 prefs.getBoolean(KEY_HIDE_USER_DIRECTORY_PREFIX, true)
@@ -45,11 +35,6 @@ object HomeDisplayPreferences {
             HomeSessionLadder.sanitizeWindowHours(
                 prefs.getInt(KEY_RECENT_WINDOW_HOURS, HomeSessionLadder.DEFAULT_WINDOW_HOURS),
             )
-    }
-
-    fun updateShowSessionListOnHome(value: Boolean) {
-        showSessionListOnHome = value
-        prefs()?.edit()?.putBoolean(KEY_SHOW_SESSION_LIST_ON_HOME, value)?.apply()
     }
 
     fun updateHideUserDirectoryPrefix(value: Boolean) {
@@ -70,7 +55,6 @@ object HomeDisplayPreferences {
             ?.remove(KEY_HIDE_USER_DIRECTORY_PREFIX)
             ?.remove(KEY_RECENT_WINDOW_HOURS)
             ?.apply()
-        showSessionListOnHome = true
         hideUserDirectoryPrefix = true
         recentWindowHours = HomeSessionLadder.DEFAULT_WINDOW_HOURS
     }

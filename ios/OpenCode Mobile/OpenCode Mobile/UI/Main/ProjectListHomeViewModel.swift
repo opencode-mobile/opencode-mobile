@@ -9,9 +9,7 @@ struct ProjectSectionItem: Identifiable, Equatable {
     let pathSubtitle: String
     let letter: Character
     let letterAccent: LetterAccent
-    let previewSessions: [SessionListItem]
     let allSessions: [SessionListItem]
-    let totalSessionCount: Int
     let loadError: String?
     var sessionsFromCache: Bool = false
 }
@@ -38,13 +36,6 @@ struct AddProjectNavigatorState: Equatable {
         isValidating: false,
         errorMessage: nil
     )
-}
-
-struct SeeAllSessionsSheetState: Equatable, Identifiable {
-    var id: String { worktree }
-    let worktree: String
-    let projectName: String
-    let sessions: [SessionListItem]
 }
 
 struct ProjectRemovalItem: Equatable {
@@ -85,8 +76,6 @@ enum ProjectListHomeState: Equatable {
         sections: [ProjectSectionItem],
         showAddProjectSheet: Bool,
         navigator: AddProjectNavigatorState?,
-        seeAllSessions: SeeAllSessionsSheetState?,
-        focusedWorktree: String?,
         projectSessionCreateError: String?
     )
 }
@@ -100,7 +89,6 @@ final class ProjectListHomeViewModel {
     /// Sheet presentation is tracked here so SwiftUI `.sheet` can observe it directly.
     private(set) var isAddProjectPresented = false
     private(set) var addProjectNavigator = AddProjectNavigatorState.empty
-    private(set) var seeAllSessionsSheet: SeeAllSessionsSheetState?
     private(set) var pendingProjectRemoval: ProjectRemovalItem?
     /// Shared home snackbar: project removal plus archive / delete failures.
     private(set) var removalSnackbar: OpenCodeSnackbarMessage?
@@ -137,8 +125,6 @@ final class ProjectListHomeViewModel {
     private var liveSessionsByWorktree: [String: SessionListSnapshot] = [:]
     private var liveStatusesByWorktree: [String: [String: SessionStatus]] = [:]
     private var liveReadyIdsByWorktree: [String: Set<String>] = [:]
-    private var requestedFocusWorktree: String?
-    private var homeFocusedWorktree: String?
     private var forkGateTask: Task<Void, Never>?
     private var forkedSessionOpenTarget: SessionListItem?
     /// Title-edit Analytics fires once per dialog so keystrokes are not events.
@@ -249,13 +235,11 @@ final class ProjectListHomeViewModel {
         switch state {
         case let .empty(_, _, createError):
             state = .empty(showAddProjectSheet: false, navigator: nil, projectSessionCreateError: createError)
-        case let .loaded(sections, _, _, seeAll, focused, createError):
+        case let .loaded(sections, _, _, createError):
             state = .loaded(
                 sections: sections,
                 showAddProjectSheet: false,
                 navigator: nil,
-                seeAllSessions: seeAll,
-                focusedWorktree: focused,
                 projectSessionCreateError: createError
             )
         default:
@@ -303,7 +287,6 @@ final class ProjectListHomeViewModel {
     func addProject(worktree: String) async {
         let added = await connectionProfileStore.addedWorktrees(serverBaseURL: serverBaseURL)
         if added.contains(worktree) {
-            requestedFocusWorktree = worktree
             dismissAddProjectSheet()
             await runHomeLoad(skipProbe: true)
             return
@@ -319,7 +302,6 @@ final class ProjectListHomeViewModel {
             // open-project behavior). Non-git dirs resolve /project/current to "/".
             _ = try await projectRepository.getCurrentProject(directory: worktree)
             await connectionProfileStore.addWorktree(serverBaseURL: serverBaseURL, worktree: worktree)
-            requestedFocusWorktree = worktree
             dismissAddProjectSheet()
             await runHomeLoad(skipProbe: true)
         } catch {
@@ -330,71 +312,6 @@ final class ProjectListHomeViewModel {
                 return next
             }
         }
-    }
-
-    func focusProject(worktree: String) {
-        guard case let .loaded(sections, showAdd, navigator, seeAll, _, _) = state,
-              sections.contains(where: { $0.worktree == worktree })
-        else { return }
-        ProductAnalytics.logUserAction(
-            screenId: ProductAnalytics.Screen.home,
-            actionId: ProductAnalytics.Action.homeFocusProject
-        )
-        homeFocusedWorktree = worktree
-        state = .loaded(
-            sections: sections,
-            showAddProjectSheet: showAdd,
-            navigator: navigator,
-            seeAllSessions: seeAll,
-            focusedWorktree: worktree,
-            projectSessionCreateError: nil
-        )
-    }
-
-    func showSeeAllSessions(worktree: String) {
-        guard case let .loaded(sections, showAdd, navigator, _, focused, createError) = state else { return }
-        guard let section = sections.first(where: { $0.worktree == worktree }) else { return }
-        ProductAnalytics.logUserAction(
-            screenId: ProductAnalytics.Screen.home,
-            actionId: ProductAnalytics.Action.homeSeeAllSessions
-        )
-        ProductAnalytics.logScreenView(
-            screenId: ProductAnalytics.Screen.homeSeeAllSessions,
-            presentation: ProductAnalytics.Presentation.sheet,
-            trigger: ProductAnalytics.Trigger.present
-        )
-        let sheet = SeeAllSessionsSheetState(
-            worktree: worktree,
-            projectName: section.displayName,
-            sessions: section.allSessions
-        )
-        // Keep enum state and presentation flag in the same turn, state first, so a
-        // concurrent live update cannot clear the sheet using a stale nil seeAll.
-        state = .loaded(
-            sections: sections,
-            showAddProjectSheet: showAdd,
-            navigator: navigator,
-            seeAllSessions: sheet,
-            focusedWorktree: focused,
-            projectSessionCreateError: createError
-        )
-        seeAllSessionsSheet = sheet
-    }
-
-    func dismissSeeAllSessions() {
-        guard case let .loaded(sections, showAdd, navigator, _, focused, createError) = state else {
-            seeAllSessionsSheet = nil
-            return
-        }
-        state = .loaded(
-            sections: sections,
-            showAddProjectSheet: showAdd,
-            navigator: navigator,
-            seeAllSessions: nil,
-            focusedWorktree: focused,
-            projectSessionCreateError: createError
-        )
-        seeAllSessionsSheet = nil
     }
 
     func createSession(in worktree: String) async {
@@ -428,7 +345,7 @@ final class ProjectListHomeViewModel {
     }
 
     func requestRemoveProject(worktree: String) {
-        guard case let .loaded(sections, _, _, _, _, _) = state,
+        guard case let .loaded(sections, _, _, _) = state,
               let section = sections.first(where: { $0.worktree == worktree })
         else { return }
         ProductAnalytics.logUserAction(
@@ -867,15 +784,10 @@ final class ProjectListHomeViewModel {
         // without .probing/.loading. Live store then SWR-refreshes.
         if !preserveContent, !worktrees.isEmpty {
             let sections = await loadSectionsFromCache(worktrees: worktrees)
-            let focusedWorktree = resolvedFocusedWorktree(in: sections)
-            homeFocusedWorktree = focusedWorktree
-            requestedFocusWorktree = nil
             state = .loaded(
                 sections: sections,
                 showAddProjectSheet: false,
                 navigator: nil,
-                seeAllSessions: nil,
-                focusedWorktree: focusedWorktree,
                 projectSessionCreateError: nil
             )
             startLiveObservations(worktrees: worktrees)
@@ -891,7 +803,6 @@ final class ProjectListHomeViewModel {
 
         if worktrees.isEmpty, !preserveContent {
             stopLiveObservations()
-            homeFocusedWorktree = nil
             state = .empty(showAddProjectSheet: false, navigator: nil, projectSessionCreateError: nil)
             if !skipProbe {
                 do {
@@ -929,7 +840,6 @@ final class ProjectListHomeViewModel {
         do {
             if worktrees.isEmpty {
                 stopLiveObservations()
-                homeFocusedWorktree = nil
                 if case let .empty(showAdd, navigator, createError) = previous, preserveContent {
                     state = .empty(
                         showAddProjectSheet: showAdd,
@@ -943,9 +853,6 @@ final class ProjectListHomeViewModel {
             }
 
             let sections = await loadSections(worktrees: worktrees)
-            let focusedWorktree = resolvedFocusedWorktree(in: sections)
-            homeFocusedWorktree = focusedWorktree
-            requestedFocusWorktree = nil
             if sections.isEmpty {
                 stopLiveObservations()
                 if case let .empty(showAdd, navigator, createError) = previous, preserveContent {
@@ -959,13 +866,11 @@ final class ProjectListHomeViewModel {
                 }
                 return
             }
-            if case let .loaded(_, showAdd, navigator, seeAll, _, createError) = previous, preserveContent {
+            if case let .loaded(_, showAdd, navigator, createError) = previous, preserveContent {
                 state = .loaded(
                     sections: sections,
                     showAddProjectSheet: showAdd,
                     navigator: navigator,
-                    seeAllSessions: seeAll,
-                    focusedWorktree: focusedWorktree,
                     projectSessionCreateError: createError
                 )
             } else {
@@ -973,8 +878,6 @@ final class ProjectListHomeViewModel {
                     sections: sections,
                     showAddProjectSheet: false,
                     navigator: nil,
-                    seeAllSessions: nil,
-                    focusedWorktree: focusedWorktree,
                     projectSessionCreateError: nil
                 )
             }
@@ -1014,9 +917,7 @@ final class ProjectListHomeViewModel {
             pathSubtitle: worktree,
             letter: letterCharacter(for: name),
             letterAccent: letterAccent(for: worktree),
-            previewSessions: Array(items.prefix(Self.previewSessionLimit)),
             allSessions: items,
-            totalSessionCount: items.count,
             loadError: nil,
             sessionsFromCache: seeded != nil
         )
@@ -1066,9 +967,7 @@ final class ProjectListHomeViewModel {
                 pathSubtitle: worktree,
                 letter: letterCharacter(for: name),
                 letterAccent: letterAccent(for: worktree),
-                previewSessions: Array(items.prefix(Self.previewSessionLimit)),
                 allSessions: items,
-                totalSessionCount: items.count,
                 loadError: nil
             )
         } catch {
@@ -1080,9 +979,7 @@ final class ProjectListHomeViewModel {
                 pathSubtitle: worktree,
                 letter: letterCharacter(for: name),
                 letterAccent: letterAccent(for: worktree),
-                previewSessions: [],
                 allSessions: [],
-                totalSessionCount: 0,
                 loadError: error.localizedDescription
             )
         }
@@ -1164,13 +1061,11 @@ final class ProjectListHomeViewModel {
         switch state {
         case let .empty(_, _, createError):
             state = .empty(showAddProjectSheet: true, navigator: navigator, projectSessionCreateError: createError)
-        case let .loaded(sections, _, _, seeAll, focused, createError):
+        case let .loaded(sections, _, _, createError):
             state = .loaded(
                 sections: sections,
                 showAddProjectSheet: true,
                 navigator: navigator,
-                seeAllSessions: seeAll,
-                focusedWorktree: focused,
                 projectSessionCreateError: createError
             )
         default:
@@ -1181,8 +1076,6 @@ final class ProjectListHomeViewModel {
     private func updateNavigator(_ transform: (AddProjectNavigatorState) -> AddProjectNavigatorState) {
         setNavigator(transform(addProjectNavigator))
     }
-
-    private static let previewSessionLimit = 3
 
     private func startLiveObservations(worktrees: [String]) {
         stopLiveObservations()
@@ -1245,7 +1138,7 @@ final class ProjectListHomeViewModel {
         readyIds: Set<String>,
         sessionsFromCache: Bool
     ) {
-        guard case let .loaded(sections, showAdd, navigator, seeAll, focused, createError) = state else { return }
+        guard case let .loaded(sections, showAdd, navigator, createError) = state else { return }
         guard let section = sections.first(where: { $0.worktree == worktree }) else { return }
         let items =
             sessions
@@ -1267,9 +1160,7 @@ final class ProjectListHomeViewModel {
             pathSubtitle: section.pathSubtitle,
             letter: section.letter,
             letterAccent: section.letterAccent,
-            previewSessions: Array(items.prefix(Self.previewSessionLimit)),
             allSessions: items,
-            totalSessionCount: items.count,
             loadError: section.loadError,
             sessionsFromCache: sessionsFromCache
         )
@@ -1277,53 +1168,23 @@ final class ProjectListHomeViewModel {
             sections.map { current in
                 current.worktree == worktree ? updatedSection : current
             }
-        let updatedSeeAll =
-            if let seeAll, seeAll.worktree == worktree {
-                SeeAllSessionsSheetState(
-                    worktree: seeAll.worktree,
-                    projectName: seeAll.projectName,
-                    sessions: items
-                )
-            } else {
-                seeAll
-            }
         state = .loaded(
             sections: updatedSections,
             showAddProjectSheet: showAdd,
             navigator: navigator,
-            seeAllSessions: updatedSeeAll,
-            focusedWorktree: focused,
             projectSessionCreateError: createError
         )
-        // Keep presentation flag aligned with state for the focused sheet only.
-        if seeAllSessionsSheet?.worktree == worktree {
-            seeAllSessionsSheet = updatedSeeAll
-        }
-    }
-
-    private func resolvedFocusedWorktree(in sections: [ProjectSectionItem]) -> String? {
-        if let requestedFocusWorktree,
-           sections.contains(where: { $0.worktree == requestedFocusWorktree }) {
-            return requestedFocusWorktree
-        }
-        if let existing = homeFocusedWorktree,
-           sections.contains(where: { $0.worktree == existing }) {
-            return existing
-        }
-        return sections.first?.worktree
     }
 
     private func setProjectSessionCreateError(_ message: String?) {
         switch state {
         case let .empty(showAdd, navigator, _):
             state = .empty(showAddProjectSheet: showAdd, navigator: navigator, projectSessionCreateError: message)
-        case let .loaded(sections, showAdd, navigator, seeAll, focused, _):
+        case let .loaded(sections, showAdd, navigator, _):
             state = .loaded(
                 sections: sections,
                 showAddProjectSheet: showAdd,
                 navigator: navigator,
-                seeAllSessions: seeAll,
-                focusedWorktree: focused,
                 projectSessionCreateError: message
             )
         default:

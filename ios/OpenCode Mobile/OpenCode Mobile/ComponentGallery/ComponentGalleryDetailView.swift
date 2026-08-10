@@ -126,8 +126,6 @@ struct ComponentGalleryDetailView: View {
             EmptyStateGalleryView()
         case .statusStack:
             StatusStackGalleryView()
-        case .projectSessionSelector:
-            ProjectSessionSelectorGalleryView()
         case .sessionList:
             SessionListGalleryView()
         case .sessionListDock:

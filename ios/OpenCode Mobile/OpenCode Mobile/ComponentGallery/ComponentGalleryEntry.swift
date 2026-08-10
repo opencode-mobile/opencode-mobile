@@ -38,7 +38,6 @@ enum ComponentGalleryEntryID: String, Hashable {
     case serverAddressInput
     case emptyState
     case statusStack
-    case projectSessionSelector
     case sessionList
     case sessionListDock
     case sessionStatusBar
@@ -199,12 +198,6 @@ let componentGalleryEntries = [
         title: "Tool Call Card",
         description: "Collapsed tool-agnostic assistant tool row with status variants.",
         category: .chat
-    ),
-    ComponentGalleryEntry(
-        id: .projectSessionSelector,
-        title: "Project Session Selector",
-        description: "Project-scoped session picker with project tiles and session actions.",
-        category: .session
     ),
     ComponentGalleryEntry(
         id: .sessionList,

@@ -32,11 +32,10 @@ with correct worktree scoping on a single opencode server.
 
 ## Design-System
 
-- Reuse `OpenCodeListItem` with letter start decorator for projects; title-only
-  for Project Session Selector session previews.
-- **Session List** as an alternate home mode (settings toggle) instead of the
-  project session selector (`docs/design-system/components/session-list.md`):
-  letter, title, project path subtitle, Idle/Running status, relative-time
-  caption; **Filter Tabs** for All + per-project scoping; sticky footer
-  **Add project** + **New session** (project picker sheet, then create in
-  chosen worktree).
+- Reuse `OpenCodeListItem` with letter start decorator for projects and session
+  rows as needed by Session List.
+- **Session List** is the sole home mode (floating dock with filters + Add
+  project / New session). The earlier Project Session Selector alternate mode
+  was retired — see
+  [`retire-project-session-selector`](../retire-project-session-selector/).
+  Contract: `docs/design-system/components/session-list.md`.

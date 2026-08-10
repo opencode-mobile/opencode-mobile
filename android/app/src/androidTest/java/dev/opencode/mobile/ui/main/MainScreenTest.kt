@@ -18,6 +18,7 @@ class MainScreenTest {
             MainScreen(
                 uiState = MainScreenUiState.Disconnected,
                 liveUpdatesConnectionState = EventStreamConnectionState.Idle,
+                removalSnackbar = null,
                 onSettingsClick = {},
                 onSessionClick = {},
                 onEditConnection = {},
@@ -25,16 +26,17 @@ class MainScreenTest {
                 onRetryProbe = {},
                 onRefresh = {},
                 onAddProjectClick = {},
-                onFocusProject = {},
                 onDismissAddProject = {},
                 onNavigateAddProjectUp = {},
                 onNavigateAddProjectInto = {},
                 onRetryAddProjectNavigator = {},
                 onSelectCurrentDirectory = {},
-                onSeeAllSessions = {},
-                onDismissSeeAll = {},
                 onNewSession = {},
                 onConsumePendingOpenSession = {},
+                onRemoveProject = {},
+                onConfirmRemoveProject = {},
+                onDismissProjectRemoval = {},
+                onConsumeProjectRemovalSnackbar = {},
             )
         }
     }

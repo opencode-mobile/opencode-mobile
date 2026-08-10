@@ -162,8 +162,6 @@ fun SettingsScreen(
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
 
-            // Session List home toggle hidden: session list is the only home for now.
-
             OpenCodeListItem(
                 title = "Hide User Directory",
                 subtitle = "Show ~/Projects/… instead of /Users/you/Projects/…",

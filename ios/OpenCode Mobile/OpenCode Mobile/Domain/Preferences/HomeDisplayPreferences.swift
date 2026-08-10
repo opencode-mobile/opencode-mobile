@@ -13,20 +13,12 @@ final class HomeDisplayPreferences {
 
     private let defaults: UserDefaults
 
-    private(set) var showSessionListOnHome: Bool
     /// When true, replace remote `/Users/…` or `/home/…` with `~` in path labels.
     private(set) var hideUserDirectoryPrefix: Bool
     private(set) var recentWindowHours: Int
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        // Settings toggle is hidden; keep session-list home for everyone.
-        showSessionListOnHome = true
-        if defaults.object(forKey: StorageKeys.showSessionListOnHome) != nil,
-           defaults.bool(forKey: StorageKeys.showSessionListOnHome) == false
-        {
-            defaults.set(true, forKey: StorageKeys.showSessionListOnHome)
-        }
         if defaults.object(forKey: StorageKeys.hideUserDirectoryPrefix) == nil {
             hideUserDirectoryPrefix = true
         } else {
@@ -39,11 +31,6 @@ final class HomeDisplayPreferences {
                 defaults.integer(forKey: StorageKeys.recentWindowHours)
             )
         }
-    }
-
-    func setShowSessionListOnHome(_ value: Bool) {
-        showSessionListOnHome = value
-        defaults.set(value, forKey: StorageKeys.showSessionListOnHome)
     }
 
     func setHideUserDirectoryPrefix(_ value: Bool) {
@@ -61,7 +48,6 @@ final class HomeDisplayPreferences {
         defaults.removeObject(forKey: StorageKeys.showSessionListOnHome)
         defaults.removeObject(forKey: StorageKeys.hideUserDirectoryPrefix)
         defaults.removeObject(forKey: StorageKeys.recentWindowHours)
-        showSessionListOnHome = true
         hideUserDirectoryPrefix = true
         recentWindowHours = HomeSessionLadder.defaultWindowHours
     }

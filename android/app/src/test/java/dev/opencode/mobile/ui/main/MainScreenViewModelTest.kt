@@ -118,11 +118,11 @@ class MainScreenViewModelTest {
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
             val section = loaded.sections.single()
             assertEquals(listOf("active"), section.allSessions.map { it.id })
-            assertEquals(1, section.totalSessionCount)
+            assertEquals(1, section.allSessions.size)
         }
 
     @Test
-    fun uiState_limitsPreviewSessionsToThree() =
+    fun uiState_includesAllSessionsInAllSessions() =
         runTest(testDispatcher) {
             val sessions =
                 (1..7).map { index ->
@@ -135,62 +135,7 @@ class MainScreenViewModelTest {
                 )
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals(
-                3,
-                loaded.sections
-                    .single()
-                    .previewSessions.size,
-            )
-            assertEquals(7, loaded.sections.single().totalSessionCount)
-            assertEquals("/repo", loaded.focusedWorktree)
-        }
-
-    @Test
-    fun focusProject_updatesHomeFocusOnly() =
-        runTest(testDispatcher) {
-            val viewModel =
-                createViewModel(
-                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one", "/two")),
-                    sessionsByWorktree = mapOf("/one" to emptyList(), "/two" to emptyList()),
-                )
-            advanceUntilIdle()
-            viewModel.focusProject("/two")
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals(listOf("/one", "/two"), loaded.sections.map { it.worktree })
-            assertEquals("/two", loaded.focusedWorktree)
-            assertNull(loaded.projectSessionCreateError)
-        }
-
-    @Test
-    fun refresh_preservesFocusedWorktree() =
-        runTest(testDispatcher) {
-            val viewModel =
-                createViewModel(
-                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one", "/two")),
-                    sessionsByWorktree = mapOf("/one" to emptyList(), "/two" to emptyList()),
-                )
-            advanceUntilIdle()
-            viewModel.focusProject("/two")
-            viewModel.refresh()
-            advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals("/two", loaded.focusedWorktree)
-        }
-
-    @Test
-    fun addProject_focusesNewProject() =
-        runTest(testDispatcher) {
-            val store = FakeConnectionProfileStore(initial = listOf("/one"))
-            val viewModel =
-                createViewModel(
-                    connectionProfileStore = store,
-                    sessionsByWorktree = mapOf("/one" to emptyList(), "/two" to emptyList()),
-                )
-            advanceUntilIdle()
-            viewModel.addProject("/two")
-            advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals("/two", loaded.focusedWorktree)
+            assertEquals(7, loaded.sections.single().allSessions.size)
         }
 
     @Test
@@ -326,7 +271,7 @@ class MainScreenViewModelTest {
         }
 
     @Test
-    fun selectCurrentDirectory_validatesAndFocuses() =
+    fun selectCurrentDirectory_validatesAndAddsProject() =
         runTest(testDispatcher) {
             val store = FakeConnectionProfileStore(initial = listOf("/one"))
             val projectRepository = FakeProjectRepository(bootWorktree = "/one")
@@ -349,13 +294,12 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
             assertEquals(listOf("/one", "/home"), store.added(serverUrl))
-            assertEquals("/home", loaded.focusedWorktree)
             assertTrue(projectRepository.validatedDirectories.contains("/home"))
             assertTrue(!loaded.showAddProjectSheet)
         }
 
     @Test
-    fun addProject_alreadyAdded_refocusesWithoutRevalidate() =
+    fun addProject_alreadyAdded_reloadsWithoutRevalidate() =
         runTest(testDispatcher) {
             val store = FakeConnectionProfileStore(initial = listOf("/one", "/two"))
             val projectRepository = FakeProjectRepository(bootWorktree = "/one")
@@ -370,7 +314,6 @@ class MainScreenViewModelTest {
             viewModel.addProject("/two")
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals("/two", loaded.focusedWorktree)
             assertEquals(listOf("/one", "/two"), store.added(serverUrl))
             // Already-added path skips GET /project/current validation before reload.
             // Disk-first home paints from Session Cache and does not revalidate directories.
@@ -408,7 +351,6 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
             assertEquals(listOf("/one", "/home"), store.added(serverUrl))
-            assertEquals("/home", loaded.focusedWorktree)
             assertTrue(!loaded.showAddProjectSheet)
         }
 
@@ -444,7 +386,6 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
             assertEquals(listOf("/one", "/repo/android"), store.added(serverUrl))
-            assertEquals("/repo/android", loaded.focusedWorktree)
             assertTrue(!loaded.showAddProjectSheet)
         }
 
@@ -535,7 +476,6 @@ class MainScreenViewModelTest {
 
             assertFalse(viewModel.isRefreshing.value)
             val after = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals(before.focusedWorktree, after.focusedWorktree)
             assertEquals(before.sections.single().worktree, after.sections.single().worktree)
             assertTrue(sessionRepository.listSessionsCallCount > listCallsBefore)
             assertTrue(viewModel.uiState.value is MainScreenUiState.Loaded)
@@ -558,7 +498,7 @@ class MainScreenViewModelTest {
                     sessionRepository = sessionRepository,
                 )
             advanceUntilIdle()
-            val before = (viewModel.uiState.value as MainScreenUiState.Loaded).sections.single().totalSessionCount
+            val before = (viewModel.uiState.value as MainScreenUiState.Loaded).sections.single().allSessions.size
 
             sessionsByWorktree["/repo"] =
                 listOf(
@@ -569,7 +509,7 @@ class MainScreenViewModelTest {
             advanceTimeBy(550)
             advanceUntilIdle()
 
-            val after = (viewModel.uiState.value as MainScreenUiState.Loaded).sections.single().totalSessionCount
+            val after = (viewModel.uiState.value as MainScreenUiState.Loaded).sections.single().allSessions.size
             assertEquals(before + 1, after)
             assertTrue(sessionRepository.listSessionsCallCount >= 2)
         }
