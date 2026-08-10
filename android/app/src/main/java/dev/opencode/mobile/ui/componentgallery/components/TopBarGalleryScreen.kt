@@ -20,6 +20,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
+import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private enum class GalleryTopBarLeading {
@@ -41,6 +42,7 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
     var showDivider by rememberSaveable { mutableStateOf(false) }
     var showTwoLine by rememberSaveable { mutableStateOf(false) }
     var showStatusDot by rememberSaveable { mutableStateOf(false) }
+    var showProjectMeta by rememberSaveable { mutableStateOf(false) }
     var statusName by rememberSaveable { mutableStateOf(OpenCodeSessionConnectionStatus.Live.name) }
     var actionsEnabled by rememberSaveable { mutableStateOf(true) }
 
@@ -62,13 +64,24 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
             GalleryTopBarActions.Icons -> "Session actions"
             GalleryTopBarActions.Label -> "Project settings"
         }
-    val subtitle = if (showTwoLine && !showStatusDot) "Importing icons explanation" else null
+    val subtitle =
+        when {
+            showProjectMeta -> "opencode-mobile"
+            showTwoLine -> "Importing icons explanation"
+            else -> null
+        }
     val connectionStatus =
         runCatching { OpenCodeSessionConnectionStatus.valueOf(statusName) }
             .getOrDefault(OpenCodeSessionConnectionStatus.Live)
     val subtitleAccessory =
-        if (showStatusDot) {
+        if (showStatusDot || showProjectMeta) {
             OpenCodeTopBarSubtitleAccessory.StatusDot(connectionStatus)
+        } else {
+            null
+        }
+    val subtitleLeading =
+        if (showProjectMeta) {
+            OpenCodeTopBarSubtitleLeading.Letter('O', dev.opencode.mobile.theme.LetterAccent.Blue)
         } else {
             null
         }
@@ -133,6 +146,11 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
             ControlGroup(title = "State") {
                 OpenCodeChoiceBadge(label = "Two-line", selected = showTwoLine, onClick = { showTwoLine = !showTwoLine })
                 OpenCodeChoiceBadge(label = "Status dot", selected = showStatusDot, onClick = { showStatusDot = !showStatusDot })
+                OpenCodeChoiceBadge(
+                    label = "Project meta",
+                    selected = showProjectMeta,
+                    onClick = { showProjectMeta = !showProjectMeta },
+                )
                 OpenCodeChoiceBadge(label = "Divider", selected = showDivider, onClick = { showDivider = !showDivider })
                 OpenCodeChoiceBadge(
                     label = "Actions enabled",
@@ -141,7 +159,7 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
                 )
             }
 
-            if (showStatusDot) {
+            if (showStatusDot || showProjectMeta) {
                 ControlGroup(title = "Connection") {
                     OpenCodeSessionConnectionStatus.entries.forEach { option ->
                         OpenCodeChoiceBadge(
@@ -155,8 +173,8 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
 
             Text(
                 text =
-                    "Switch controls to review title-only, two-line, status-dot subtitle, back, close, icon-action, " +
-                        "labeled-action, divider, and disabled-action states.",
+                    "Switch controls to review title-only, two-line, status-dot subtitle, project meta + status, " +
+                        "back, close, icon-action, labeled-action, divider, and disabled-action states.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -166,6 +184,7 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxWidth(),
             title = title,
             subtitle = subtitle,
+            subtitleLeading = subtitleLeading,
             subtitleAccessory = subtitleAccessory,
             leading = leading,
             actions = actions,

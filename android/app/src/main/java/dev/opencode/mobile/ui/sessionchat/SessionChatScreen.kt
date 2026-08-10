@@ -59,6 +59,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
+import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleLeading
 import dev.opencode.mobile.ui.components.copySessionIdToClipboard
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
@@ -326,6 +327,13 @@ fun SessionChatScreen(
             ) {
                 OpenCodeTopBar(
                     title = uiState.sessionTitle.ifBlank { sessionTitle },
+                    subtitle = uiState.projectLabel,
+                    subtitleLeading =
+                        uiState.projectLetter?.let { letter ->
+                            uiState.projectLetterAccent?.let { accent ->
+                                OpenCodeTopBarSubtitleLeading.Letter(letter, accent)
+                            }
+                        },
                     subtitleAccessory =
                         OpenCodeTopBarSubtitleAccessory.StatusDot(
                             uiState.connectionStatus.toOpenCodeSessionConnectionStatus(),

@@ -15,6 +15,10 @@ enum OpenCodeTopBarSubtitleAccessory {
     case statusDot(OpenCodeSessionConnectionStatus)
 }
 
+enum OpenCodeTopBarSubtitleLeading {
+    case letter(Character, LetterAccent)
+}
+
 enum OpenCodeTopBarLeading {
     case none
     case back(accessibilityLabel: String = "Back", action: () -> Void)
@@ -30,6 +34,7 @@ enum OpenCodeTopBarAction {
 struct OpenCodeTopBar: View {
     let title: String?
     let subtitle: String?
+    let subtitleLeading: OpenCodeTopBarSubtitleLeading?
     let subtitleAccessory: OpenCodeTopBarSubtitleAccessory?
     let leading: OpenCodeTopBarLeading
     let actions: [OpenCodeTopBarAction]
@@ -38,6 +43,7 @@ struct OpenCodeTopBar: View {
     init(
         title: String? = nil,
         subtitle: String? = nil,
+        subtitleLeading: OpenCodeTopBarSubtitleLeading? = nil,
         subtitleAccessory: OpenCodeTopBarSubtitleAccessory? = nil,
         leading: OpenCodeTopBarLeading = .none,
         actions: [OpenCodeTopBarAction] = [],
@@ -51,9 +57,13 @@ struct OpenCodeTopBar: View {
 
         let normalizedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedSubtitle = subtitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedTitle = normalizedTitle?.isEmpty == true ? nil : normalizedTitle
+        let resolvedSubtitle = normalizedSubtitle?.isEmpty == true ? nil : normalizedSubtitle
 
-        self.title = normalizedTitle?.isEmpty == true ? nil : normalizedTitle
-        self.subtitle = normalizedSubtitle?.isEmpty == true ? nil : normalizedSubtitle
+        self.title = resolvedTitle
+        self.subtitle = resolvedSubtitle
+        self.subtitleLeading =
+            (resolvedSubtitle != nil || subtitleAccessory != nil) ? subtitleLeading : nil
         self.subtitleAccessory = subtitleAccessory
         self.leading = leading
         self.actions = actions
@@ -157,28 +167,68 @@ struct OpenCodeTopBar: View {
 
     @ViewBuilder
     private var subtitleLine: some View {
-        switch subtitleAccessory {
-        case let .statusDot(status):
-            OpenCodeConnectionStatusLabel(status: status)
-        case nil:
-            if let subtitle {
-                subtitleLabel(subtitle)
+        let status: OpenCodeSessionConnectionStatus? =
+            switch subtitleAccessory {
+            case let .statusDot(value): value
+            case nil: nil
             }
+        let hasSubtitle = subtitle != nil
+
+        if !hasSubtitle, let status {
+            OpenCodeConnectionStatusLabel(status: status)
+        } else {
+            HStack(spacing: 6) {
+                if hasSubtitle, case let .letter(character, accent)? = subtitleLeading {
+                    topBarLetterBadge(character: character, accent: accent)
+                }
+                if let subtitle {
+                    Text(subtitle)
+                        .font(OpenCodeTypography.caption)
+                        .foregroundStyle(OpenCodeColors.textBase)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .layoutPriority(1)
+                }
+                if hasSubtitle, status != nil {
+                    Text("·")
+                        .font(OpenCodeTypography.caption)
+                        .foregroundStyle(OpenCodeColors.textWeaker)
+                }
+                if let status {
+                    OpenCodeConnectionStatusLabel(status: status)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
+    private func topBarLetterBadge(character: Character, accent: LetterAccent) -> some View {
+        let letter = String(character).uppercased()
+        return Text(letter)
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(accent.badgeTint)
+            .frame(width: 16, height: 16)
+            .background(accent.badgeFill, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .accessibilityHidden(true)
+    }
+
     private func titleBlockAccessibilityLabel(title: String) -> String {
-        let secondLine: String? =
-            switch subtitleAccessory {
-            case let .statusDot(status):
-                "Live updates \(status.rawValue)"
-            case nil:
-                subtitle
+        var parts: [String] = []
+        if let subtitle {
+            if case let .letter(character, _)? = subtitleLeading {
+                parts.append("Project \(String(character).uppercased()) \(subtitle)")
+            } else {
+                parts.append(subtitle)
             }
-        if let secondLine {
-            return "\(title), \(secondLine)"
         }
-        return title
+        switch subtitleAccessory {
+        case let .statusDot(status):
+            parts.append("Live updates \(status.rawValue)")
+        case nil:
+            break
+        }
+        if parts.isEmpty { return title }
+        return "\(title), " + parts.joined(separator: ", ")
     }
 
     private func titleLabel(_ title: String) -> some View {
@@ -319,6 +369,18 @@ private struct OpenCodeTopBarPreviewContent: View {
             previewSection("Status subtitle") {
                 OpenCodeTopBar(
                     title: "Importing icons explanation",
+                    subtitleAccessory: .statusDot(.live),
+                    leading: .back(action: {}),
+                    actions: [.icon(.moreVert, accessibilityLabel: "More actions", action: {})],
+                    showDivider: true
+                )
+            }
+
+            previewSection("Project + status") {
+                OpenCodeTopBar(
+                    title: "Wire session project chrome",
+                    subtitle: "opencode-mobile",
+                    subtitleLeading: .letter("O", .blue),
                     subtitleAccessory: .statusDot(.live),
                     leading: .back(action: {}),
                     actions: [.icon(.moreVert, accessibilityLabel: "More actions", action: {})],

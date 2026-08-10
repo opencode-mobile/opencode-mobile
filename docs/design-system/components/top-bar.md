@@ -31,6 +31,8 @@ search fields, or arbitrary custom content.
 - Optional content:
   - single-line `title`
   - single-line `subtitle`
+  - `subtitleLeading.letter` compact project letter badge (character +
+    `LetterAccent`) shown before subtitle text on the second line
   - `subtitleAccessory.statusDot` for foreground SSE connection state
   - trailing actions list, up to 3 total
 
@@ -66,10 +68,19 @@ line uses plain `subtitle` text, a `subtitleAccessory`, or both. A one-line titl
 is vertically centered inside that fixed block so switching between one-line and
 two-line content does not change overall bar height.
 
-When `subtitleAccessory.statusDot` is set, the second line renders through
-`OpenCodeConnectionStatusLabel` (see `connection-status-label.md`) with
-lowercase status copy and a semantic dot.
-Plain `subtitle` text is ignored while a status-dot accessory is present.
+The second line composes, left to right, any combination of:
+
+1. optional `subtitleLeading.letter` (compact 16pt rounded badge);
+2. optional plain `subtitle` text (`type.caption`, truncates);
+3. when both subtitle content and `subtitleAccessory.statusDot` are present, a
+   middle-dot separator (`·`);
+4. optional `subtitleAccessory.statusDot` via `OpenCodeConnectionStatusLabel`
+   (see `connection-status-label.md`) with lowercase status copy and a semantic
+   dot.
+
+Status-only (no subtitle / letter) keeps the previous single-status layout used
+on home. Letter without subtitle is allowed but unusual; letter is ignored when
+there is no second-line content at all.
 
 Leading actions use semantic meaning rather than arbitrary placement:
 

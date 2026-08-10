@@ -2893,6 +2893,7 @@ class SessionChatViewModelTest {
                     modelRepository = modelRepository,
                 ),
             optimisticSessionCreateCoordinator = optimisticSessionCreateCoordinator,
+            connectionProfileStore = connectionProfileStore,
         ).apply {
             ioDispatcher = testDispatcher
             // Mutations (send/rename/fork/new) require Live; default fakes start Connected.

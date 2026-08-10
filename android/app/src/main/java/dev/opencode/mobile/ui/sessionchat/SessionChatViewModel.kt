@@ -5,8 +5,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
+import dev.opencode.mobile.domain.project.ProjectDomainAdapter
+import dev.opencode.mobile.domain.project.smartProjectLabel
+import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.theme.letterAccentForWorktree
+import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.EmptySessionTodoLiveStore
@@ -71,6 +77,7 @@ class SessionChatViewModel
         sessionModelSelectionStore: SessionModelSelectionStore,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         private val optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator,
+        private val connectionProfileStore: ConnectionProfileStore,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -125,6 +132,10 @@ class SessionChatViewModel
         private var boundSessionId: String? = null
         private var boundSessionTitle: String? = null
         private var boundWorktree: String? = null
+        private var projectLabel: String? = null
+        private var projectLetter: Char? = null
+        private var projectLetterAccent: LetterAccent? = null
+        private var projectIdentityJob: kotlinx.coroutines.Job? = null
         private var permissionSessions: List<Session> = emptyList()
         private var permissionRequests: List<PermissionRequest> = emptyList()
         private var permissionSubmittingId: String? = null
@@ -218,7 +229,14 @@ class SessionChatViewModel
             suppressedSnackbarKey = null
             snackbarSequence = 0L
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
-            _uiState.value = SessionChatUiState.initial(sessionId = sessionId, sessionTitle = sessionTitle)
+            seedProjectIdentity(worktree)
+            _uiState.value =
+                SessionChatUiState.initial(sessionId = sessionId, sessionTitle = sessionTitle).copy(
+                    projectLabel = projectLabel,
+                    projectLetter = projectLetter,
+                    projectLetterAccent = projectLetterAccent,
+                )
+            scheduleProjectIdentityRefine(worktree)
             timeline.bind(sessionId, worktree)
             composer.bind(sessionId, worktree)
             bindTitleIfChanged(sessionId, sessionTitle, worktree)
@@ -247,12 +265,18 @@ class SessionChatViewModel
             suppressedSnackbarKey = null
             snackbarSequence = 0L
             logI("bind optimistic create worktree=$worktree title=$sessionTitle")
+            seedProjectIdentity(worktree)
             _uiState.value =
                 SessionChatUiState.initial(
                     sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
                     sessionTitle = sessionTitle,
                     timeline = SessionChatTimelineState.Creating,
+                ).copy(
+                    projectLabel = projectLabel,
+                    projectLetter = projectLetter,
+                    projectLetterAccent = projectLetterAccent,
                 )
+            scheduleProjectIdentityRefine(worktree)
             timeline.bindCreating(worktree)
             composer.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
             sessionInfo.bindCreating(sessionTitle, worktree)
@@ -1017,6 +1041,44 @@ class SessionChatViewModel
             )
         }
 
+        private fun seedProjectIdentity(worktree: String) {
+            projectIdentityJob?.cancel()
+            if (worktree.isBlank()) {
+                projectLabel = null
+                projectLetter = null
+                projectLetterAccent = null
+                return
+            }
+            val displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree)
+            projectLabel = displayName
+            projectLetter = letterCharacterForProject(displayName)
+            projectLetterAccent = letterAccentForWorktree(worktree)
+        }
+
+        private fun scheduleProjectIdentityRefine(worktree: String) {
+            if (worktree.isBlank()) return
+            val displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree)
+            projectIdentityJob =
+                viewModelScope.launch {
+                    val peers =
+                        withContext(ioDispatcher) {
+                            val baseUrl =
+                                connectionSessionCoordinator.currentProfile()?.baseUrl
+                                    ?: connectionProfileStore.activeProfile()?.baseUrl
+                            if (baseUrl.isNullOrBlank()) {
+                                emptyList()
+                            } else {
+                                connectionProfileStore.addedWorktrees(baseUrl)
+                            }
+                        }
+                    if (boundWorktree != worktree) return@launch
+                    projectLabel = smartProjectLabel(worktree, peers)
+                    projectLetter = letterCharacterForProject(displayName)
+                    projectLetterAccent = letterAccentForWorktree(worktree)
+                    publishUiState()
+                }
+        }
+
         private fun publishUiState(
             timelineState: SessionChatTimelineRegionState,
             composerState: SessionChatComposerRegionState,
@@ -1175,6 +1237,9 @@ class SessionChatViewModel
                 forkResultVisible = commandsState.forkResultVisible,
                 forkedSessionTitle = commandsState.forkedSessionTitle,
                 pendingSessionReplace = commandsState.pendingSessionReplace,
+                projectLabel = projectLabel,
+                projectLetter = projectLetter,
+                projectLetterAccent = projectLetterAccent,
             )
         }
 

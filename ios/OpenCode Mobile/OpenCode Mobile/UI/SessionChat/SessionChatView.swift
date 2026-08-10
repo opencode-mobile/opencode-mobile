@@ -95,6 +95,14 @@ struct SessionChatView: View {
             ) {
                 OpenCodeTopBar(
                     title: viewModel.uiState.sessionTitle.isEmpty ? session.title : viewModel.uiState.sessionTitle,
+                    subtitle: viewModel.uiState.projectLabel,
+                    subtitleLeading: {
+                        if let letter = viewModel.uiState.projectLetter,
+                           let accent = viewModel.uiState.projectLetterAccent {
+                            return .letter(letter, accent)
+                        }
+                        return nil
+                    }(),
                     subtitleAccessory: .statusDot(viewModel.uiState.connectionStatus.openCodeStatus),
                     leading: .back(action: {
                         logChatAction(ProductAnalytics.Action.chatBack)
