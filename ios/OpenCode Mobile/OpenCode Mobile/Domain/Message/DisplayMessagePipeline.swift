@@ -8,13 +8,12 @@ let streamingPrepareDebounceNs: UInt64 = 16_000_000
 /// long replies do not intentionally slow down as they grow.
 let streamingPrepareMaxBatchDuration: Duration = .milliseconds(48)
 
-@MainActor
-final class DisplayMessagePipeline {
+nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
     private let snapshotSource: any DisplayMessageSnapshotSource
     private let contentPreparer: any DisplayMessagePreparing
     private let clock: any DisplayMessagePipelineClock
     private let messageSync: MessageSync?
-    private let connectionProfileIDProvider: () -> String
+    private let connectionProfileIDProvider: @Sendable () -> String
     private let preparedHistoryCache: PreparedHistoryCache
     private let decorationCache: BlockDecorationCache
     private var memoryPressureObserver: NSObjectProtocol?
@@ -23,7 +22,7 @@ final class DisplayMessagePipeline {
         messageSync: MessageSync,
         contentPreparer: MessageContentPreparer,
         clock: (any DisplayMessagePipelineClock)? = nil,
-        connectionProfileIDProvider: @escaping () -> String = { "local" },
+        connectionProfileIDProvider: @escaping @Sendable () -> String = { "local" },
         preparedHistoryCache: PreparedHistoryCache? = nil,
         decorationCache: BlockDecorationCache = .shared
     ) {
@@ -42,7 +41,7 @@ final class DisplayMessagePipeline {
         contentPreparer: any DisplayMessagePreparing,
         clock: (any DisplayMessagePipelineClock)? = nil,
         messageSync: MessageSync? = nil,
-        connectionProfileIDProvider: @escaping () -> String = { "local" },
+        connectionProfileIDProvider: @escaping @Sendable () -> String = { "local" },
         preparedHistoryCache: PreparedHistoryCache? = nil,
         decorationCache: BlockDecorationCache = .shared
     ) {
@@ -99,11 +98,9 @@ final class DisplayMessagePipeline {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                self?.preparedHistoryCache.handleMemoryPressure()
-                Task {
-                    await KMPTextMateHighlightingEngine.shared.trim(.critical)
-                }
+            self?.preparedHistoryCache.handleMemoryPressure()
+            Task {
+                await KMPTextMateHighlightingEngine.shared.trim(.critical)
             }
         }
         observeThermalAndLowPower()
@@ -135,7 +132,7 @@ final class DisplayMessagePipeline {
 
     func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate> {
         AsyncStream { continuation in
-            let task = Task { @MainActor in
+            let task = Task {
                 let cacheKey = self.cacheKey(sessionID: sessionID, directory: directory)
                 var previousByID: [String: DisplayMessage] = preparedHistoryCache.messages(for: cacheKey) ?? [:]
                 var pendingMessages: [Message]?
@@ -181,8 +178,7 @@ final class DisplayMessagePipeline {
                     generation == currentGeneration
                 }
 
-                @MainActor
-                func commitPrepared(
+                                func commitPrepared(
                     generation: UInt64,
                     prepared: [DisplayMessage],
                     mode: MessagePreparationMode
@@ -203,8 +199,7 @@ final class DisplayMessagePipeline {
                     return true
                 }
 
-                @MainActor
-                func buildStructureFirstStreamingFrame(messages: [Message]) async -> [DisplayMessage] {
+                                func buildStructureFirstStreamingFrame(messages: [Message]) async -> [DisplayMessage] {
                     var out: [DisplayMessage] = []
                     out.reserveCapacity(messages.count)
                     for message in messages {
@@ -270,10 +265,9 @@ final class DisplayMessagePipeline {
                         && messageHasStreamingText(current) == job.isStreaming
                 }
 
-                @MainActor
-                func drainDecorationBacklog() {
+                                func drainDecorationBacklog() {
                     if decorationTask != nil { return }
-                    decorationTask = Task { @MainActor in
+                    decorationTask = Task {
                         defer { decorationTask = nil }
                         while !Task.isCancelled {
                             guard let job = decorationBacklog.poll() else { break }
@@ -331,8 +325,7 @@ final class DisplayMessagePipeline {
                     }
                 }
 
-                @MainActor
-                func scheduleStreamingDecoration(generation: UInt64, messages: [Message]) {
+                                func scheduleStreamingDecoration(generation: UInt64, messages: [Message]) {
                     // TextMate on: keep structure-only until Final colors. Skip
                     // streaming semantic decoration so colors do not flash early.
                     guard !MarkdownHighlightPreferences.currentTextMateEnabled() else { return }
@@ -355,8 +348,7 @@ final class DisplayMessagePipeline {
                     drainDecorationBacklog()
                 }
 
-                @MainActor
-                func publishPlainStreamingFrame(generation: UInt64, messages: [Message]) async {
+                                func publishPlainStreamingFrame(generation: UInt64, messages: [Message]) async {
                     guard isCurrent(generation) else { return }
                     let frame = await buildStructureFirstStreamingFrame(messages: messages)
                     previousByID = Dictionary(uniqueKeysWithValues: frame.map { ($0.id, $0) })
@@ -370,10 +362,9 @@ final class DisplayMessagePipeline {
                     scheduleStreamingDecoration(generation: generation, messages: messages)
                 }
 
-                @MainActor
-                func scheduleStreamingPublish(generation: UInt64) {
+                                func scheduleStreamingPublish(generation: UInt64) {
                     debounceTask?.cancel()
-                    debounceTask = Task { @MainActor in
+                    debounceTask = Task {
                         await clock.sleep(for: .nanoseconds(Int64(streamingPrepareDebounceNs)))
                         guard !Task.isCancelled, isCurrent(generation) else { return }
                         guard let latest = pendingMessages else { return }
@@ -394,8 +385,7 @@ final class DisplayMessagePipeline {
                     }
                 }
 
-                @MainActor
-                func schedulePrepare(
+                                func schedulePrepare(
                     generation: UInt64,
                     messages: [Message],
                     reason: String,
@@ -403,7 +393,7 @@ final class DisplayMessagePipeline {
                     onCommitted: (() -> Void)? = nil
                 ) {
                     prepareTask?.cancel()
-                    prepareTask = Task { @MainActor in
+                    prepareTask = Task {
                         let streaming = messagesContainStreamingText(messages)
                         let streamingChars = streamingMessageCharCount(messages)
                         let sinceLastPublishMs: Int = {
@@ -433,15 +423,14 @@ final class DisplayMessagePipeline {
                     }
                 }
 
-                @MainActor
-                func schedulePlainFirstNewestFirst(
+                                func schedulePlainFirstNewestFirst(
                     generation: UInt64,
                     messages: [Message],
                     reason: String,
                     onCommitted: (() -> Void)? = nil
                 ) {
                     prepareTask?.cancel()
-                    prepareTask = Task { @MainActor in
+                    prepareTask = Task {
                         var byID = Dictionary(
                             uniqueKeysWithValues: messages.map { message in
                                 (
@@ -453,8 +442,7 @@ final class DisplayMessagePipeline {
                             }
                         )
 
-                        @MainActor
-                        func publish(label: String) {
+                                                func publish(label: String) {
                             guard isCurrent(generation) else { return }
                             let frame = messages.map { byID[$0.id]! }
                             guard commitPrepared(
@@ -502,10 +490,9 @@ final class DisplayMessagePipeline {
                     }
                 }
 
-                @MainActor
-                func scheduleFinalization(generation: UInt64, messages: [Message]) {
+                                func scheduleFinalization(generation: UInt64, messages: [Message]) {
                     prepareTask?.cancel()
-                    prepareTask = Task { @MainActor in
+                    prepareTask = Task {
                         let snapshot = previousByID
                         let placeholder = await contentPreparer.prepareMessages(
                             messages,
@@ -546,10 +533,9 @@ final class DisplayMessagePipeline {
                     }
                 }
 
-                @MainActor
-                func enrichHistoryInBackground(generation: UInt64, messages: [Message]) {
+                                func enrichHistoryInBackground(generation: UInt64, messages: [Message]) {
                     enrichmentTask?.cancel()
-                    enrichmentTask = Task { @MainActor in
+                    enrichmentTask = Task {
                         let holdReady = MessageContentPreparer.holdReadyUntilNewestMarkdown
                         await Task.yield()
                         // Spinner is already up when holding Ready — start TextMate ASAP.
@@ -574,8 +560,7 @@ final class DisplayMessagePipeline {
                             MessageContentPreparer.historyEnrichViewportCharacterBudget
                         var publishedViewport = false
 
-                        @MainActor
-                        func publishSnapshot(reason: String, count: Int) {
+                                                func publishSnapshot(reason: String, count: Int) {
                             guard isCurrent(generation) else { return }
                             let snapshot = messages.map { byID[$0.id]! }
                             previousByID = Dictionary(uniqueKeysWithValues: snapshot.map { ($0.id, $0) })

@@ -102,3 +102,18 @@ None. The message-display-rendering-hardening plan is closed via Phase 7a.
 - **Parked** (reopen triggers only; not scheduled): public `DisplayFrame`,
   Sync/Pipeline absorption, fingerprint→revision, change-set hint, `syncHealth`
   UI, device p95 CI, sole-text bridge deletion.
+- OPE-135: reduce per-SSE MainActor LiveStore fan-out (still hops for
+  permission/status/question subscribers); Manual QA on Release/TestFlight
+  freeze paths with hang watchdog.
+
+## OPE-135 Off-main timeline and display pipeline
+
+- [x] iOS `DisplayFrameBuilder` / `SessionChatTimelineProjector` /
+  `SessionChatTimelineBlocks` marked `nonisolated`; timeline apply runs
+  structural conversion in `Task.detached` (Android parity).
+- [x] iOS `DisplayMessagePipeline` + `PreparedHistoryCache` moved off
+  MainActor (lock-guarded cache; observe/prepare tasks nonisolated).
+- [x] Regression: `SessionChatTimelineOffMainTests` asserts frame build is
+  off main.
+- [ ] Per-SSE MainActor LiveStore fan-out reduction (follow-up).
+- [ ] Manual QA on Release freeze reproduction.

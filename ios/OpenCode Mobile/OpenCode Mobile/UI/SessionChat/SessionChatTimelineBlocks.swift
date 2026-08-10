@@ -3,7 +3,7 @@ import Foundation
 /// Session Chat presentation units inside one message timeline item.
 /// Built from structured parts with hide rules and lightweight tool chrome.
 /// Every block carries a stable `blockID` derived from server part IDs.
-enum SessionChatTimelineBlock: Equatable, Sendable {
+nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     case text(blockID: String, text: String, renderedMarkdown: NativeMarkdownDocument?)
     case attachment(blockID: String, file: FilePart)
     case toolCard(blockID: String, card: SessionChatToolCardBlock)
@@ -41,7 +41,7 @@ enum SessionChatTimelineBlock: Equatable, Sendable {
     }
 }
 
-struct SessionChatToolCardBlock: Equatable, Sendable {
+nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
     let toolName: String
     let status: ToolStatus
     let title: String
@@ -84,7 +84,7 @@ struct SessionChatToolCardBlock: Equatable, Sendable {
     }
 }
 
-struct SessionChatToolGroupBlock: Equatable, Sendable {
+nonisolated struct SessionChatToolGroupBlock: Equatable, Sendable {
     let count: Int
     let status: ToolStatus
     let title: String
@@ -92,7 +92,7 @@ struct SessionChatToolGroupBlock: Equatable, Sendable {
     let errorText: String?
 }
 
-enum SessionChatTimelineBlocks {
+nonisolated enum SessionChatTimelineBlocks {
     private static let contextToolNames: Set<String> = ["read", "glob", "grep"]
 
     static func build(role: MessageRole, parts: [MessagePart]) -> SessionChatTimelineBlocksResult {

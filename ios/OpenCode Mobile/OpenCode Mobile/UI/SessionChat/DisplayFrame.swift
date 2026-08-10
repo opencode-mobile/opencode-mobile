@@ -15,7 +15,7 @@ nonisolated struct ContentRevision: Hashable, Sendable, Equatable {
 }
 
 /// One message inside an internal display frame, with presentation blocks.
-struct DisplayMessageBody: Sendable {
+nonisolated struct DisplayMessageBody: Sendable {
     let message: Message
     let isStreaming: Bool
     let blocks: [SessionChatTimelineBlock]
@@ -27,14 +27,17 @@ struct DisplayMessageBody: Sendable {
 
 /// Internal display handoff for the pure timeline projector.
 /// Public observation remains `DisplayMessageListUpdate` / `DisplayMessage`.
-struct DisplayFrame: Sendable {
+nonisolated struct DisplayFrame: Sendable {
     let sessionKey: String
     let frameRevision: UInt64
     let sourceRevision: UInt64
     let messages: [DisplayMessageBody]
 }
 
-enum DisplayFrameBuilder {
+nonisolated enum DisplayFrameBuilder {
+    /// Test/diagnostic: last `build` call's thread. Cleared only by tests.
+    nonisolated(unsafe) static var lastBuildWasOnMainThread: Bool?
+
     /// Builds an internal frame from the public list-shaped display snapshot.
     /// Attaches message-root markdown onto the sole text block as a migration bridge.
     static func build(
@@ -44,6 +47,8 @@ enum DisplayFrameBuilder {
         displayMessages: [DisplayMessage],
         serverCommands: [ServerCommand] = []
     ) -> DisplayFrame {
+        // pthread_main_np avoids the async-context warning on Thread.isMainThread.
+        lastBuildWasOnMainThread = pthread_main_np() != 0
         let sorted =
             displayMessages
                 .enumerated()

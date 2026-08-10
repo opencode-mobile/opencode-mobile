@@ -3,7 +3,6 @@ import Testing
 @testable import OpenCode_Mobile
 
 @Suite(.serialized)
-@MainActor
 struct PreparedHistoryCacheTests {
     @Test func evictsLeastRecentlyUsedWhenSessionCapExceeded() {
         let cache = PreparedHistoryCache(characterBudget: 1_000_000, sessionEntryCap: 2)

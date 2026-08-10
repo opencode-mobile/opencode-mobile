@@ -2,7 +2,7 @@ import Foundation
 
 /// Projected timeline row with per-row revision metadata.
 /// Adapted to `SessionChatRow` for Screen Model / hosts in Phase 5.
-struct TimelineRow: Equatable, Identifiable, Sendable {
+nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
     let id: String
     let role: MessageRole
     let text: String
@@ -71,7 +71,7 @@ struct TimelineRow: Equatable, Identifiable, Sendable {
 }
 
 /// Internal projected timeline frame with declared change/layout ID sets.
-struct TimelineFrame: Equatable, Sendable {
+nonisolated struct TimelineFrame: Equatable, Sendable {
     let frameRevision: UInt64
     let rows: [TimelineRow]
     let insertedRowIDs: Set<String>
@@ -194,7 +194,7 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
 }
 
 /// Explicit optimistic merge inputs supplied by `SessionChatTimeline`.
-struct OptimisticInputs: Sendable {
+nonisolated struct OptimisticInputs: Sendable {
     let pendingRows: [TimelineRow]
     let baselineSignatureCounts: [String: Int]
     let mergePending: Bool

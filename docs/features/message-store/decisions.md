@@ -116,6 +116,18 @@ and remain ordered so their completion cannot be lost.
 See
 [message-display-rendering-pipeline.md](./message-display-rendering-pipeline.md).
 
+## Off-main structural projection and pipeline orchestration (OPE-135)
+
+iOS structural conversion (`DisplayFrameBuilder`, `SessionChatTimelineBlocks`,
+`SessionChatTimelineProjector`) is `nonisolated` and runs inside
+`Task.detached` from `SessionChatTimeline`, then publishes the immutable
+`TimelineFrame` on MainActor — matching Android’s worker-dispatcher projection.
+
+`DisplayMessagePipeline` orchestration and `PreparedHistoryCache` are also off
+MainActor (lock-guarded cache). MainActor remains for Screen Model publish and
+native host apply only. Per-SSE LiveStore fan-out on MainActor is an intentional
+follow-up, not part of this decision.
+
 ## Views own native rendering and scroll state
 
 Session Chat views select role and structured-block components from immutable
