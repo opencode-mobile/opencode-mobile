@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -21,14 +22,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineHeightStyle
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -271,31 +275,37 @@ private fun TopBarLetterBadge(
 ) {
     val dark = isSystemInDarkTheme()
     val (fill, tint) = accent.badgeColors(dark)
-    Box(
+    val letter = character.uppercaseChar().toString()
+    val textMeasurer = rememberTextMeasurer()
+    val textStyle =
+        TextStyle(
+            color = tint,
+            fontSize = TopBarLetterGlyphSize,
+            fontWeight = FontWeight.Bold,
+            platformStyle = PlatformTextStyle(includeFontPadding = false),
+            lineHeightStyle =
+                LineHeightStyle(
+                    alignment = LineHeightStyle.Alignment.Center,
+                    trim = LineHeightStyle.Trim.Both,
+                ),
+        )
+    Canvas(
         modifier =
             Modifier
                 .size(TopBarLetterBadgeSize)
                 .clip(RoundedCornerShape(TopBarLetterBadgeRadius))
                 .background(fill)
                 .semantics { hideFromAccessibility() },
-        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = character.uppercaseChar().toString(),
-            color = tint,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            style =
-                TextStyle(
-                    fontSize = TopBarLetterGlyphSize,
-                    lineHeight = TopBarLetterGlyphSize,
-                    fontWeight = FontWeight.Bold,
-                    platformStyle = PlatformTextStyle(includeFontPadding = false),
-                    lineHeightStyle =
-                        LineHeightStyle(
-                            alignment = LineHeightStyle.Alignment.Center,
-                            trim = LineHeightStyle.Trim.Both,
-                        ),
+        val layout = textMeasurer.measure(text = AnnotatedString(letter), style = textStyle)
+        // Center on glyph ink bounds; layout width/side bearings leave O/etc. visually left-biased.
+        val ink = layout.getBoundingBox(0)
+        drawText(
+            textLayoutResult = layout,
+            topLeft =
+                Offset(
+                    x = (size.width - ink.width) / 2f - ink.left,
+                    y = (size.height - ink.height) / 2f - ink.top,
                 ),
         )
     }
