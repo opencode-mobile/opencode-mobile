@@ -75,25 +75,41 @@ struct OpenCodeSessionListDock: View {
                         .buttonStyle(.glass)
                         .clipShape(Capsule())
                     } else {
-                        OpenCodeButton(
-                            variant: .iconCircle(.createNewFolder, accessibilityLabel: "Add project"),
-                            size: .medium,
-                            action: onAddProject
-                        )
+                        // Match Android dock CTAs: shared height + fill-only stand-in.
+                        Button(action: onAddProject) {
+                            OpenCodeIconImage(icon: .createNewFolder, size: 22)
+                                .foregroundStyle(OpenCodeColors.textStrong)
+                                .frame(width: Self.fallbackCtaHeight, height: Self.fallbackCtaHeight)
+                                .background(
+                                    OpenCodeColors.textStrong.opacity(Self.fallbackCtaFillOpacity),
+                                    in: Circle()
+                                )
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
+                        .accessibilityLabel("Add project")
+
                         Button(action: onNewSession) {
                             Text("New session")
                                 .font(OpenCodeTypography.caption.weight(.medium))
                                 .foregroundStyle(OpenCodeColors.textStrong)
                                 .frame(maxWidth: .infinity)
-                                .frame(height: 36)
-                                .background(OpenCodeColors.textStrong.opacity(0.14), in: Capsule())
+                                .frame(height: Self.fallbackCtaHeight)
+                                .background(
+                                    OpenCodeColors.textStrong.opacity(Self.fallbackCtaFillOpacity),
+                                    in: Capsule()
+                                )
+                                .contentShape(Capsule())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
                     }
                 }
             }
         }
     }
+
+    private static let fallbackCtaHeight: CGFloat = 52
+    private static let fallbackCtaFillOpacity: Double = 0.14
 
     @ViewBuilder
     private var filterChipsRow: some View {
@@ -119,6 +135,15 @@ struct OpenCodeSessionListDock: View {
         } else {
             chips
         }
+    }
+}
+
+private struct OpenCodeSessionListDockCtaPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .opacity(configuration.isPressed ? 0.92 : 1)
+            .animation(.smooth(duration: 0.16), value: configuration.isPressed)
     }
 }
 
