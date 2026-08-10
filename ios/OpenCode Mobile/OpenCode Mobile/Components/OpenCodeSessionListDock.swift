@@ -52,64 +52,78 @@ struct OpenCodeSessionListDock: View {
                     }
                 }
 
-                HStack(spacing: 8) {
+                // Shared geometry with Android: 52pt CTAs, 8pt gap, center-aligned.
+                HStack(alignment: .center, spacing: 8) {
                     if #available(iOS 26, *) {
-                        Button(action: onAddProject) {
-                            OpenCodeIconImage(icon: .createNewFolder, size: 18)
-                                .foregroundStyle(OpenCodeColors.textStrong)
-                                .frame(width: 36, height: 36)
-                                .contentShape(Circle())
+                        GlassEffectContainer(spacing: 8) {
+                            HStack(alignment: .center, spacing: 8) {
+                                addProjectButton(glass: true)
+                                newSessionButton(glass: true)
+                            }
                         }
-                        .buttonStyle(.glass)
-                        .clipShape(Circle())
-                        .accessibilityLabel("Add project")
-
-                        Button(action: onNewSession) {
-                            Text("New session")
-                                .font(OpenCodeTypography.caption.weight(.medium))
-                                .foregroundStyle(OpenCodeColors.textStrong)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 36)
-                                .contentShape(Capsule())
-                        }
-                        .buttonStyle(.glass)
-                        .clipShape(Capsule())
                     } else {
-                        // Match Android dock CTAs: shared height + fill-only stand-in.
-                        Button(action: onAddProject) {
-                            OpenCodeIconImage(icon: .createNewFolder, size: 22)
-                                .foregroundStyle(OpenCodeColors.textStrong)
-                                .frame(width: Self.fallbackCtaHeight, height: Self.fallbackCtaHeight)
-                                .background(
-                                    OpenCodeColors.textStrong.opacity(Self.fallbackCtaFillOpacity),
-                                    in: Circle()
-                                )
-                                .contentShape(Circle())
-                        }
-                        .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
-                        .accessibilityLabel("Add project")
-
-                        Button(action: onNewSession) {
-                            Text("New session")
-                                .font(OpenCodeTypography.caption.weight(.medium))
-                                .foregroundStyle(OpenCodeColors.textStrong)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: Self.fallbackCtaHeight)
-                                .background(
-                                    OpenCodeColors.textStrong.opacity(Self.fallbackCtaFillOpacity),
-                                    in: Capsule()
-                                )
-                                .contentShape(Capsule())
-                        }
-                        .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
+                        addProjectButton(glass: false)
+                        newSessionButton(glass: false)
                     }
                 }
             }
         }
     }
 
-    private static let fallbackCtaHeight: CGFloat = 52
-    private static let fallbackCtaFillOpacity: Double = 0.14
+    /// Matches Android `DockCta` size (52dp).
+    private static let ctaHeight: CGFloat = 52
+    private static let ctaIconSize: CGFloat = 22
+    private static let ctaFillOpacity: Double = 0.14
+
+    @ViewBuilder
+    private func addProjectButton(glass: Bool) -> some View {
+        let label = OpenCodeIconImage(icon: .createNewFolder, size: Self.ctaIconSize)
+            .foregroundStyle(OpenCodeColors.textStrong)
+            .frame(width: Self.ctaHeight, height: Self.ctaHeight)
+            .background(
+                OpenCodeColors.textStrong.opacity(Self.ctaFillOpacity),
+                in: Circle()
+            )
+            .contentShape(Circle())
+
+        if glass {
+            if #available(iOS 26, *) {
+                Button(action: onAddProject) { label }
+                    .buttonStyle(.glass)
+                    .clipShape(Circle())
+                    .accessibilityLabel("Add project")
+            }
+        } else {
+            Button(action: onAddProject) { label }
+                .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
+                .accessibilityLabel("Add project")
+        }
+    }
+
+    @ViewBuilder
+    private func newSessionButton(glass: Bool) -> some View {
+        let label = Text("New session")
+            .font(OpenCodeTypography.button)
+            .foregroundStyle(OpenCodeColors.textStrong)
+            .frame(maxWidth: .infinity)
+            .frame(height: Self.ctaHeight)
+            .background(
+                OpenCodeColors.textStrong.opacity(Self.ctaFillOpacity),
+                in: Capsule()
+            )
+            .contentShape(Capsule())
+
+        if glass {
+            if #available(iOS 26, *) {
+                Button(action: onNewSession) { label }
+                    .buttonStyle(.glass)
+                    .clipShape(Capsule())
+            }
+        } else {
+            Button(action: onNewSession) { label }
+                .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
+        }
+    }
 
     @ViewBuilder
     private var filterChipsRow: some View {
