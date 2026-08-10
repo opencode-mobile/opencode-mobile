@@ -12,7 +12,6 @@ final class SessionChatTimeline {
     private var sessionID: String
     private let worktree: String
     private let messageRepository: any MessageRepository
-    private let sentTimeFormatter: DateFormatter
     private var observationTask: Task<Void, Never>?
     private var displayApplyTask: Task<Void, Never>?
     private var observationGeneration = 0
@@ -33,10 +32,6 @@ final class SessionChatTimeline {
         self.sessionID = sessionID
         self.worktree = worktree
         self.messageRepository = messageRepository
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "h:mm a"
-        self.sentTimeFormatter = formatter
     }
 
     func updateServerCommands(_ commands: [ServerCommand]) {
@@ -275,6 +270,8 @@ final class SessionChatTimeline {
     }
 
     func row(from display: DisplayMessage, previous: SessionChatRow? = nil) -> SessionChatRow? {
+        // Single-row path stays synchronous for optimistic send; builders are
+        // nonisolated so this does not pull unrelated MainActor work.
         let frame = DisplayFrameBuilder.build(
             sessionKey: sessionID,
             frameRevision: 0,
@@ -302,15 +299,7 @@ final class SessionChatTimeline {
         let projected = SessionChatTimelineProjector.project(
             frame: frame,
             optimistic: .none,
-            previous: previousTimeline,
-            metadataLabel: { [self] message in
-                metadataLabel(
-                    mode: message.mode,
-                    model: message.model,
-                    variant: message.variant,
-                    sentAtEpochMs: message.sentAtEpochMs
-                )
-            }
+            previous: previousTimeline
         )
         guard let timelineRow = projected.rows.first else { return nil }
         if let previous,
@@ -341,15 +330,9 @@ final class SessionChatTimeline {
         let applyStartedAt = ContinuousClock.now
 
         displayFrameRevision &+= 1
-        let frame = DisplayFrameBuilder.build(
-            sessionKey: sessionID,
-            frameRevision: displayFrameRevision,
-            sourceRevision: displayFrameRevision,
-            displayMessages: displayMessages,
-            serverCommands: serverCommands
-        )
-        await Task.yield()
-        guard !Task.isCancelled else { return }
+        let frameRevision = displayFrameRevision
+        let sessionKey = sessionID
+        let commands = serverCommands
 
         let pendingRows: [TimelineRow]
         if fromQuietRefresh, isSending {
@@ -368,19 +351,26 @@ final class SessionChatTimeline {
         let previousFrame = timelineFrame.frameRevision == 0 && timelineFrame.rows.isEmpty
             ? nil
             : timelineFrame
-        let projected = SessionChatTimelineProjector.project(
-            frame: frame,
-            optimistic: optimistic,
-            previous: previousFrame,
-            metadataLabel: { [self] message in
-                metadataLabel(
-                    mode: message.mode,
-                    model: message.model,
-                    variant: message.variant,
-                    sentAtEpochMs: message.sentAtEpochMs
-                )
-            }
-        )
+
+        // Match Android: structural DisplayFrame + TimelineFrame conversion off main.
+        let projected = await Task.detached(priority: .userInitiated) {
+            let frame = DisplayFrameBuilder.build(
+                sessionKey: sessionKey,
+                frameRevision: frameRevision,
+                sourceRevision: frameRevision,
+                displayMessages: displayMessages,
+                serverCommands: commands
+            )
+            return SessionChatTimelineProjector.project(
+                frame: frame,
+                optimistic: optimistic,
+                previous: previousFrame
+            )
+        }.value
+        guard !Task.isCancelled else { return }
+        // A newer apply may have started while we were off-main; drop stale results.
+        guard frameRevision == displayFrameRevision else { return }
+
         let isRequired = !(fromQuietRefresh && onPublished == nil)
         let stamped = projected.withRequired(isRequired)
         let apply = TimelineApply.classify(stamped)
@@ -390,6 +380,7 @@ final class SessionChatTimeline {
         rows.reserveCapacity(stamped.rows.count)
         var rebuiltCount = 0
         for (index, timelineRow) in stamped.rows.enumerated() {
+            guard frameRevision == displayFrameRevision, !Task.isCancelled else { return }
             let previous = previousByID[timelineRow.id]
             let reusePrevious =
                 previous != nil
@@ -408,7 +399,7 @@ final class SessionChatTimeline {
                 || (index > 0 && index % 4 == 0)
             if shouldYield {
                 await Task.yield()
-                guard !Task.isCancelled else { return }
+                guard frameRevision == displayFrameRevision, !Task.isCancelled else { return }
             }
         }
 
@@ -545,11 +536,6 @@ final class SessionChatTimeline {
 
     private func signatureCounts(_ rows: [SessionChatRow]) -> [String: Int] {
         SessionChatTimelineProjector.signatureCounts(fromSessionChatRows: rows)
-    }
-
-    private func metadataLabel(mode: String?, model: String?, variant: String? = nil, sentAtEpochMs: Int64? = nil) -> String {
-        let timeLabel = sentAtEpochMs.map { sentTimeFormatter.string(from: Date(timeIntervalSince1970: TimeInterval($0) / 1000)) }
-        return [mode, model, variant, timeLabel].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func errorMessage(_ error: Error) -> String {

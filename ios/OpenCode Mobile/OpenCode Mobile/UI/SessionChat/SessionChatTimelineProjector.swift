@@ -3,13 +3,50 @@ import Foundation
 /// Pure `DisplayFrame` → `TimelineFrame` projector.
 /// Optimistic reconciliation and return-previous structural sharing live here;
 /// `SessionChatTimeline` owns lifecycle and supplies optimistic inputs.
-enum SessionChatTimelineProjector {
+///
+/// Must stay `nonisolated` so structural conversion can run off MainActor
+/// (Android already projects on a worker dispatcher).
+nonisolated enum SessionChatTimelineProjector {
+    private static let sentTimeLock = NSLock()
+    private static let sentTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "h:mm a"
+        return formatter
+    }()
+
+    /// Thread-safe metadata label used by off-main projection.
+    static func metadataLabel(for message: Message) -> String {
+        metadataLabel(
+            mode: message.mode,
+            model: message.model,
+            variant: message.variant,
+            sentAtEpochMs: message.sentAtEpochMs
+        )
+    }
+
+    static func metadataLabel(
+        mode: String?,
+        model: String?,
+        variant: String? = nil,
+        sentAtEpochMs: Int64? = nil
+    ) -> String {
+        let timeLabel: String? = sentAtEpochMs.map { epochMs in
+            let date = Date(timeIntervalSince1970: TimeInterval(epochMs) / 1_000)
+            sentTimeLock.lock()
+            defer { sentTimeLock.unlock() }
+            return sentTimeFormatter.string(from: date)
+        }
+        return [mode, model, variant, timeLabel].compactMap { $0 }.joined(separator: " · ")
+    }
+
     static func project(
         frame: DisplayFrame,
         optimistic: OptimisticInputs = .none,
         previous: TimelineFrame? = nil,
-        metadataLabel: (Message) -> String
+        metadataLabel: (@Sendable (Message) -> String)? = nil
     ) -> TimelineFrame {
+        let resolveLabel = metadataLabel ?? { message in Self.metadataLabel(for: message) }
         let previousByID = Dictionary(
             uniqueKeysWithValues: (previous?.rows ?? []).map { ($0.id, $0) }
         )
@@ -17,7 +54,7 @@ enum SessionChatTimelineProjector {
         var serverRows: [TimelineRow] = []
         serverRows.reserveCapacity(frame.messages.count)
         for body in frame.messages {
-            let built = makeRow(from: body, previous: previousByID[body.id], metadataLabel: metadataLabel)
+            let built = makeRow(from: body, previous: previousByID[body.id], metadataLabel: resolveLabel)
             serverRows.append(built)
         }
 
@@ -82,7 +119,7 @@ enum SessionChatTimelineProjector {
     private static func makeRow(
         from body: DisplayMessageBody,
         previous: TimelineRow?,
-        metadataLabel: (Message) -> String
+        metadataLabel: @Sendable (Message) -> String
     ) -> TimelineRow {
         let message = body.message
         // Prefer sole text-block copy so slash-command collapse is what chat shows

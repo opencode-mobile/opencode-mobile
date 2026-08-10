@@ -28,7 +28,7 @@ mechanisms remain platform-native:
 | Area | Android | iOS |
 | --- | --- | --- |
 | Timeline host | Reverse-layout `LazyColumn` with a bottom anchor at layout index `0` | Diffable `UICollectionView` with SwiftUI-hosted, self-sizing cells |
-| Structural projection | Worker dispatcher, then `StateFlow` publish | MainActor projection with cooperative yields |
+| Structural projection | Worker dispatcher, then `StateFlow` publish | `Task.detached` DisplayFrame + TimelineFrame build, then MainActor publish (OPE-135) |
 | Declared-ID apply | Hosts consume `inserted` / `changed` / `removed` / `layoutChanged` from `TimelineFrame` (no live-path `layoutSignature`) | Same declared sets; no list-wide Equatable discovery on the live path |
 | Apply while user scrolls / drags | Compose newest-immutable: visible items recompose from the latest frame (no cell-apply coalesce queue) | Host coalesces pending cell applies and flushes the latest after drag/deceleration |
 | Large markdown paint | Large code/diff annotations build off Main; streaming large fences stay plain | Same 2k code/diff behavior, plus a one-frame/32 ms whole-bubble markdown defer at 3k characters |

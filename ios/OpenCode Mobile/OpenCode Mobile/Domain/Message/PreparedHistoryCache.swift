@@ -7,7 +7,7 @@ enum PreparedHistoryCacheLimits {
     nonisolated static let sessionEntryCap = 8
 }
 
-struct PreparedHistoryCacheKey: Hashable, Sendable {
+nonisolated struct PreparedHistoryCacheKey: Hashable, Sendable {
     let connectionProfileID: String
     let directory: String
     let sessionID: String
@@ -28,14 +28,15 @@ struct PreparedHistoryCacheKey: Hashable, Sendable {
 }
 
 /// Bounded LRU prepared-history cache keyed by profile + directory + session.
-@MainActor
-final class PreparedHistoryCache {
+/// Lock-guarded so `DisplayMessagePipeline` can orchestrate off MainActor.
+nonisolated final class PreparedHistoryCache: @unchecked Sendable {
     private struct Entry {
         var messagesByID: [String: DisplayMessage]
         var characterCost: Int
         var lastUsedAt: ContinuousClock.Instant
     }
 
+    private let lock = NSLock()
     private var entries: [PreparedHistoryCacheKey: Entry] = [:]
     private let characterBudget: Int
     private let sessionEntryCap: Int
@@ -52,6 +53,8 @@ final class PreparedHistoryCache {
     }
 
     func messages(for key: PreparedHistoryCacheKey) -> [String: DisplayMessage]? {
+        lock.lock()
+        defer { lock.unlock() }
         guard var entry = entries[key] else { return nil }
         entry.lastUsedAt = clock.now
         entries[key] = entry
@@ -59,16 +62,20 @@ final class PreparedHistoryCache {
     }
 
     func setMessages(_ messagesByID: [String: DisplayMessage], for key: PreparedHistoryCacheKey) {
+        lock.lock()
+        defer { lock.unlock() }
         let cost = messagesByID.values.reduce(0) { $0 + $1.text.count }
         entries[key] = Entry(
             messagesByID: messagesByID,
             characterCost: cost,
             lastUsedAt: clock.now
         )
-        evictIfNeeded(reason: "commit")
+        evictIfNeededLocked(reason: "commit")
     }
 
     func removeSession(sessionID: String) {
+        lock.lock()
+        defer { lock.unlock() }
         let matching = entries.keys.filter { $0.sessionID == sessionID }
         guard !matching.isEmpty else { return }
         for key in matching {
@@ -80,6 +87,8 @@ final class PreparedHistoryCache {
     }
 
     func removeAll(reason: String) {
+        lock.lock()
+        defer { lock.unlock() }
         let count = entries.count
         entries.removeAll()
         if count > 0 {
@@ -93,14 +102,24 @@ final class PreparedHistoryCache {
         removeAll(reason: "memory-pressure")
     }
 
-    var entryCount: Int { entries.count }
+    var entryCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return entries.count
+    }
 
     var totalCharacterCost: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return totalCharacterCostLocked
+    }
+
+    private var totalCharacterCostLocked: Int {
         entries.values.reduce(0) { $0 + $1.characterCost }
     }
 
-    private func evictIfNeeded(reason: String) {
-        while entries.count > sessionEntryCap || totalCharacterCost > characterBudget {
+    private func evictIfNeededLocked(reason: String) {
+        while entries.count > sessionEntryCap || totalCharacterCostLocked > characterBudget {
             guard let victim = entries.min(by: { $0.value.lastUsedAt < $1.value.lastUsedAt }) else {
                 return
             }

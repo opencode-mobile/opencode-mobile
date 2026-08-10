@@ -3,8 +3,7 @@ import Foundation
 /// Raw message snapshots that feed `DisplayMessagePipeline`. Production wires
 /// `MessageSync`; tests use a controllable source so pacing and preparation can
 /// be exercised without transport.
-@MainActor
-protocol DisplayMessageSnapshotSource: AnyObject {
+protocol DisplayMessageSnapshotSource: AnyObject, Sendable {
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate>
 }
 
@@ -41,14 +40,12 @@ protocol DisplayMessagePreparing: AnyObject, Sendable {
 }
 
 /// Monotonic clock and sleep used for streaming quiet-window / max-batch pacing.
-@MainActor
-protocol DisplayMessagePipelineClock: AnyObject {
+protocol DisplayMessagePipelineClock: AnyObject, Sendable {
     var now: Duration { get }
     func sleep(for duration: Duration) async
 }
 
-@MainActor
-final class SystemDisplayMessagePipelineClock: DisplayMessagePipelineClock {
+nonisolated final class SystemDisplayMessagePipelineClock: DisplayMessagePipelineClock, @unchecked Sendable {
     private let startedAt = ContinuousClock.now
 
     var now: Duration {

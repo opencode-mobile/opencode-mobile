@@ -28,40 +28,73 @@ nonisolated struct DecorationJob: Sendable {
 
 /// Lowest-priority pending decoration is dropped first when bounds are exceeded.
 nonisolated final class DecorationBacklog: @unchecked Sendable {
+    private let lock = NSLock()
     private var jobs: [DecorationJob] = []
     private var queuedChars = 0
-    private(set) var highWaterCount = 0
-    private(set) var highWaterChars = 0
+    private var _highWaterCount = 0
+    private var _highWaterChars = 0
 
-    var size: Int { jobs.count }
+    var size: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return jobs.count
+    }
+
+    var highWaterCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _highWaterCount
+    }
+
+    var highWaterChars: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _highWaterChars
+    }
 
     @discardableResult
     func tryEnqueue(_ job: DecorationJob) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
         while jobs.count >= DecorationBacklogPolicy.pendingCountCapacity
             || queuedChars + job.charCost > DecorationBacklogPolicy.pendingCharCostBudget
         {
-            guard let dropped = dropLowestPriority() else { return false }
+            guard let dropped = dropLowestPriorityUnlocked() else { return false }
             queuedChars = max(0, queuedChars - dropped.charCost)
         }
         jobs.append(job)
         queuedChars += job.charCost
-        highWaterCount = max(highWaterCount, jobs.count)
-        highWaterChars = max(highWaterChars, queuedChars)
+        _highWaterCount = max(_highWaterCount, jobs.count)
+        _highWaterChars = max(_highWaterChars, queuedChars)
         return true
     }
 
     /// Keep only the latest streaming decoration candidate per block.
     @discardableResult
     func replaceStreamingJob(_ job: DecorationJob) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
         jobs.removeAll { candidate in
             guard candidate.blockID == job.blockID, candidate.isStreaming else { return false }
             queuedChars = max(0, queuedChars - candidate.charCost)
             return true
         }
-        return tryEnqueue(job)
+        while jobs.count >= DecorationBacklogPolicy.pendingCountCapacity
+            || queuedChars + job.charCost > DecorationBacklogPolicy.pendingCharCostBudget
+        {
+            guard let dropped = dropLowestPriorityUnlocked() else { return false }
+            queuedChars = max(0, queuedChars - dropped.charCost)
+        }
+        jobs.append(job)
+        queuedChars += job.charCost
+        _highWaterCount = max(_highWaterCount, jobs.count)
+        _highWaterChars = max(_highWaterChars, queuedChars)
+        return true
     }
 
     func poll() -> DecorationJob? {
+        lock.lock()
+        defer { lock.unlock() }
         guard !jobs.isEmpty else { return nil }
         let job = jobs.removeFirst()
         queuedChars = max(0, queuedChars - job.charCost)
@@ -69,11 +102,13 @@ nonisolated final class DecorationBacklog: @unchecked Sendable {
     }
 
     func clear() {
+        lock.lock()
+        defer { lock.unlock() }
         jobs.removeAll()
         queuedChars = 0
     }
 
-    private func dropLowestPriority() -> DecorationJob? {
+    private func dropLowestPriorityUnlocked() -> DecorationJob? {
         guard !jobs.isEmpty else { return nil }
         guard let index = jobs.indices.min(by: { jobs[$0].priority < jobs[$1].priority }) else {
             return nil

@@ -29,7 +29,7 @@ nonisolated enum PresentationBlockId {
     }
 }
 
-enum SessionChatTimelineBlocksResult: Equatable, Sendable {
+nonisolated enum SessionChatTimelineBlocksResult: Equatable, Sendable {
     case ok([SessionChatTimelineBlock])
     /// Displayable parts were missing stable server part IDs.
     case missingPartIds

@@ -664,11 +664,13 @@ private final class Harness {
     }
 }
 
-@MainActor
-private final class ControllableSnapshotSource: DisplayMessageSnapshotSource {
+private final class ControllableSnapshotSource: DisplayMessageSnapshotSource, @unchecked Sendable {
+    private let lock = NSLock()
     private var continuation: AsyncStream<MessageListUpdate>.Continuation?
     private lazy var stream: AsyncStream<MessageListUpdate> = AsyncStream { continuation in
+        self.lock.lock()
         self.continuation = continuation
+        self.lock.unlock()
     }
 
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
@@ -678,11 +680,17 @@ private final class ControllableSnapshotSource: DisplayMessageSnapshotSource {
     func emit(_ update: MessageListUpdate) async {
         // Ensure the lazy stream is created before yielding.
         _ = stream
+        lock.lock()
+        let continuation = self.continuation
+        lock.unlock()
         continuation?.yield(update)
         await Task.yield()
     }
 
     func finish() {
+        lock.lock()
+        let continuation = self.continuation
+        lock.unlock()
         continuation?.finish()
     }
 }
@@ -931,34 +939,54 @@ private final class ControllableDisplayMessagePreparing: DisplayMessagePreparing
     }
 }
 
-@MainActor
-private final class ControllablePipelineClock: DisplayMessagePipelineClock {
-    private(set) var now: Duration = .zero
+private final class ControllablePipelineClock: DisplayMessagePipelineClock, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _now: Duration = .zero
     private let holdSleep: Bool
-    private(set) var pendingSleep: Duration?
+    private var _pendingSleep: Duration?
     private var sleepContinuation: CheckedContinuation<Void, Never>?
+
+    var now: Duration {
+        lock.lock()
+        defer { lock.unlock() }
+        return _now
+    }
+
+    var pendingSleep: Duration? {
+        lock.lock()
+        defer { lock.unlock() }
+        return _pendingSleep
+    }
 
     init(holdSleep: Bool) {
         self.holdSleep = holdSleep
     }
 
     func advance(by duration: Duration) {
-        now += duration
+        lock.lock()
+        _now += duration
+        lock.unlock()
     }
 
     func releaseSleep() {
+        lock.lock()
         let continuation = sleepContinuation
         sleepContinuation = nil
-        pendingSleep = nil
+        _pendingSleep = nil
+        lock.unlock()
         continuation?.resume()
     }
 
     func sleep(for duration: Duration) async {
-        now += duration
+        lock.lock()
+        _now += duration
+        lock.unlock()
         guard holdSleep else { return }
-        pendingSleep = duration
         await withCheckedContinuation { continuation in
+            lock.lock()
+            _pendingSleep = duration
             sleepContinuation = continuation
+            lock.unlock()
         }
     }
 }
