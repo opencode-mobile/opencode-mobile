@@ -102,6 +102,42 @@ struct MessageListTimelineHostDeclaredIDTests {
         #expect(controller.lastReconfiguredIDs.isEmpty)
     }
 
+    @Test func nilPacket_identityStable_doesNotReconfigureAllOnRepeatApply() {
+        let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
+            itemContent: { Text($0.label) },
+            horizontalContentPadding: 0,
+            topContentPadding: 0,
+            bottomContentPadding: 0,
+            bottomOverlayInset: 0,
+            interItemSpacing: 0
+        )
+        controller.loadViewIfNeeded()
+        controller.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+
+        let items = [
+            EqualityCountingItem(id: "a", label: "A"),
+            EqualityCountingItem(id: "b", label: "B"),
+        ]
+        controller.apply(items: items, packet: nil, animatingDifferences: false)
+        #expect(!controller.lastApplyUsedDeclaredIDs)
+        #expect(controller.diffableSnapshotApplyCount == 1)
+
+        // Same IDs + nil packet must not synthesize a bumped reconfigure-all
+        // (Session Chat freeze: status chrome cleared the declared packet).
+        controller.apply(items: items, packet: nil, animatingDifferences: false)
+        #expect(controller.diffableSnapshotApplyCount == 1)
+        #expect(controller.lastReconfiguredIDs.isEmpty)
+        #expect(!controller.lastApplyUsedDeclaredIDs)
+
+        controller.apply(
+            items: items + [EqualityCountingItem(id: "c", label: "C")],
+            packet: nil,
+            animatingDifferences: false
+        )
+        #expect(controller.diffableSnapshotApplyCount == 2)
+        #expect(controller.lastReconfiguredIDs == ["a", "b"])
+    }
+
     @Test func requiredPacket_appliesImmediatelyWhileDragging() {
         let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
             itemContent: { Text($0.label) },

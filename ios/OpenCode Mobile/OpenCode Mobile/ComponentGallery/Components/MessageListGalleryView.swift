@@ -6,6 +6,7 @@ struct MessageListGalleryView: View {
     var body: some View {
         MessageListGalleryPreview(
             messages: model.messages,
+            listRevision: model.listRevision,
             autoFollowEnabled: model.autoFollowEnabled,
             onAddMessage: { model.addMessage() },
             onRemoveLastMessage: { model.removeLastMessage() },
@@ -17,6 +18,7 @@ struct MessageListGalleryView: View {
 
 private struct MessageListGalleryPreview: View {
     let messages: [MessageListGalleryMessage]
+    let listRevision: UInt64
     let autoFollowEnabled: Bool
     let onAddMessage: () -> Void
     let onRemoveLastMessage: () -> Void
@@ -28,10 +30,26 @@ private struct MessageListGalleryPreview: View {
         scrollController.shouldShowScrollToEnd
     }
 
+    private var applyPacket: MessageListTimelineApplyPacket {
+        let ids = Set(messages.map(\.id))
+        return MessageListTimelineApplyPacket(
+            frameRevision: listRevision,
+            insertedRowIDs: [],
+            changedRowIDs: ids,
+            removedRowIDs: [],
+            layoutChangedRowIDs: ids,
+            grewBottomRowIDs: [],
+            decorateRowIDs: [],
+            isRequired: false,
+            kinds: ids.isEmpty ? [] : [.structure, .content]
+        )
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             MessageListTimelineHost(
                 items: messages,
+                applyPacket: applyPacket,
                 scrollController: scrollController
             ) { message in
                 HStack {

@@ -13,6 +13,9 @@ final class MessageListGalleryModel {
     var autoFollowEnabled: Bool
 
     var messages = MessageListGalleryMocks.messages
+    /// Bumped on list mutations so the timeline host can apply identity-stable
+    /// content changes (resize) without a nil-packet reconfigure storm.
+    private(set) var listRevision: UInt64 = 1
 
     private var liveSequence = 0
     private var liveTask: Task<Void, Never>?
@@ -27,6 +30,7 @@ final class MessageListGalleryModel {
     func removeLastMessage() {
         guard !messages.isEmpty else { return }
         messages.removeLast()
+        listRevision &+= 1
     }
 
     func resizeLastMessage() {
@@ -37,6 +41,7 @@ final class MessageListGalleryModel {
             text: lastMessage.text.toggledResizeText,
             metadataLabel: lastMessage.metadataLabel
         )
+        listRevision &+= 1
     }
 
     private func syncLiveMessages() {
@@ -70,6 +75,7 @@ final class MessageListGalleryModel {
             lastRole: messages.last?.role
         )
         messages.append(message)
+        listRevision &+= 1
     }
 
     fileprivate static let resizeMarker = "[gallery-resized]"

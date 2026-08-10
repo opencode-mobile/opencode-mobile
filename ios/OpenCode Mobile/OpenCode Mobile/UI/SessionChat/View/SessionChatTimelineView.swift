@@ -163,15 +163,14 @@ private struct SessionChatTimelineReadyView: View {
         return rows
     }
 
-    private var hasStatusIndicatorRows: Bool {
-        props.syncingIndicatorLabel != nil || props.workingIndicatorLabel != nil
-    }
-
     var body: some View {
         ZStack(alignment: .bottom) {
             MessageListTimelineHost(
                 items: displayMessages,
-                applyPacket: hasStatusIndicatorRows ? nil : .from(props.timelineFrame),
+                // Always pass declared sets. Status chrome is structural via
+                // item IDs; clearing the packet forced a reconfigure-all storm
+                // on every SwiftUI update while syncing/working indicators show.
+                applyPacket: .from(props.timelineFrame),
                 scrollController: scrollController,
                 onRefresh: props.onRefresh,
                 onUserScrollDismissKeyboard: props.onUserScrollDismissKeyboard,
