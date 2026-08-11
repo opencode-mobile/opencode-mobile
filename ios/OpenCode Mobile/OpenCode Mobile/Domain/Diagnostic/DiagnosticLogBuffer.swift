@@ -6,6 +6,7 @@ nonisolated enum DiagnosticLogArea: String, Codable, Sendable, CaseIterable {
     case question
     case session
     case chat
+    case hang
 }
 
 nonisolated enum DiagnosticLogLevel: String, Codable, Sendable, CaseIterable {

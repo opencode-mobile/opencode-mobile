@@ -51,3 +51,19 @@ local JSONL file (same pattern as TextMate Logbook):
 
 The shareable product window remains 5 minutes; persistence only covers process
 death within that window.
+
+## Main-thread hang watchdog (OPE-134)
+
+A background watchdog pings the main thread / main looper and writes Diagnostic
+Log lines under area `hang` when acknowledgment is overdue.
+
+- Detect threshold: **2,500 ms** (`detectThresholdMilliseconds` /
+  `DETECT_THRESHOLD_MILLISECONDS`)
+- Ping / check interval: **500 ms**
+- Detect line: `hang detected overdueMs=<n>` (warning)
+- Recover line: `hang recovered durationMs=<n>` (info)
+- Messages are numeric timing only — no secrets, prompts, or file paths — and
+  still pass through the existing redactor
+- Starts at app launch on both platforms; no product-screen UI changes (area
+  counts may show `hang` in Diagnostic Logs when present)
+- Stack capture / symbolicated backtraces stay out of scope for this ticket

@@ -20,9 +20,10 @@ stuck busy state, SSE drops) can be diagnosed without adb or Xcode.
   logcat or `os_log`.
 - Hard redaction at write time: no passwords, tokens, Basic Auth; no prompt or
   message text; no file or diff bodies; no permission command patterns.
-- Always-on areas for v1: `sse`, `permission`, `question`, `session` (plus
-  closely related stuck-session signals such as reconnect and permission /
-  question refresh outcomes).
+- Always-on areas for v1: `sse`, `permission`, `question`, `session`, `hang`
+  (plus closely related stuck-session signals such as reconnect and permission /
+  question refresh outcomes). `hang` is written by the main-thread hang
+  watchdog (OPE-134).
 - Settings → Developer Tools → Diagnostic Logs: share last window as `.jsonl`
   via the system share sheet; Clear buffer with confirmation.
 - iOS and Android parity for buffer policy, areas, redaction, and Settings
@@ -62,7 +63,7 @@ buffer, for example:
 
 ## Domain Objects
 
-- `DiagnosticLogArea` — `sse`, `permission`, `question`, `session`, …
+- `DiagnosticLogArea` — `sse`, `permission`, `question`, `session`, `hang`, …
 - `DiagnosticLogLevel` — at least `debug`, `info`, `warning`, `error`.
 - `DiagnosticLogEntry` — timestamp, area, level, message (redacted).
 - `DiagnosticLogBuffer` — append, snapshot (time window), clear; enforces
