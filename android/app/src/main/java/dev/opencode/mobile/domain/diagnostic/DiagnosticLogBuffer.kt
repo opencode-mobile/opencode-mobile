@@ -16,6 +16,7 @@ enum class DiagnosticLogArea(
     Permission("permission"),
     Question("question"),
     Session("session"),
+    Hang("hang"),
 }
 
 enum class DiagnosticLogLevel(
