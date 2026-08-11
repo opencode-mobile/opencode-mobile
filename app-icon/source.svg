@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Canonical OpenCode Mobile app launcher icon source.
+  Canonical OpenCode Mobile on-device launcher icon source.
 
-  This single SVG feeds scripts/sync-app-icon.mjs, which emits the Android
-  adaptive-icon vector drawables and the iOS app-icon set PNGs from it.
+  This SVG feeds scripts/sync-app-icon.mjs (npm run app-icon:sync), which emits
+  the Android adaptive-icon vector drawables and the iOS app-icon set PNGs.
+  Store listing art is separate: app-icon/interlock.svg via app-icon:sync-store.
   See docs/design-system/app-icon.md for the contract.
 
   Coordinate space mirrors the Android adaptive-icon foreground vector:
