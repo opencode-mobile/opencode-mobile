@@ -149,12 +149,14 @@ fun OpenCodeListItem(
         isPopping = false
     }
     val combinedScale = if (isPopping) popScale.value else pressScale
+    val surfaceBase = openCodeColor("surface-base")
+    val surfaceRaised = openCodeColor("surface-raised-base")
     val containerColor =
         when {
-            style == OpenCodeListItemStyle.Card && selected -> MaterialTheme.colorScheme.surfaceVariant
-            style == OpenCodeListItemStyle.Card -> MaterialTheme.colorScheme.surface
-            selected -> MaterialTheme.colorScheme.surfaceVariant
-            enabled && isPressed -> openCodeColor("surface-raised-base").copy(alpha = 0.92f)
+            style == OpenCodeListItemStyle.Card && selected -> surfaceRaised
+            style == OpenCodeListItemStyle.Card -> surfaceBase
+            selected -> surfaceRaised
+            enabled && isPressed -> surfaceRaised.copy(alpha = 0.92f)
             else -> Color.Transparent
         }
     val containerShape = RoundedCornerShape(ListItemCornerRadius)
@@ -163,7 +165,6 @@ fun OpenCodeListItem(
     val textStrong = openCodeColor("text-strong")
     val textBase = openCodeColor("text-base")
     val textWeaker = openCodeColor("text-weaker")
-    val surfaceRaised = openCodeColor("surface-raised-base")
     val hasMeta = status != null || !caption.isNullOrEmpty()
     val playContextPop: () -> Unit = {
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -215,9 +216,11 @@ fun OpenCodeListItem(
         shape = containerShape,
         color = containerColor,
         contentColor = contentColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
         border =
             if (style == OpenCodeListItemStyle.Card) {
-                BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                BorderStroke(1.dp, openCodeColor("border-weaker-base"))
             } else {
                 null
             },
