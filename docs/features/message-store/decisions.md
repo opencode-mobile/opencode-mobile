@@ -125,8 +125,18 @@ iOS structural conversion (`DisplayFrameBuilder`, `SessionChatTimelineBlocks`,
 
 `DisplayMessagePipeline` orchestration and `PreparedHistoryCache` are also off
 MainActor (lock-guarded cache). MainActor remains for Screen Model publish and
-native host apply only. Per-SSE LiveStore fan-out on MainActor is an intentional
-follow-up, not part of this decision.
+native host apply only.
+
+## Nonisolated SSE broadcaster + filter-before-hop (OPE-140 Stage 2)
+
+Triage chose option B (Android SharedFlow parity): `ForegroundEventStream`
+publish is nonisolated. MessageSync and LiveStore observation loops consume
+off-main, filter by event type, and hop to MainActor only for UI-owned work.
+Product UX (permission prompts, status chrome, todos, home refresh semantics
+and debounce policy) is unchanged.
+
+See
+[ios-concurrency-freeze-remediation-plan.md](./ios-concurrency-freeze-remediation-plan.md).
 
 ## Views own native rendering and scroll state
 

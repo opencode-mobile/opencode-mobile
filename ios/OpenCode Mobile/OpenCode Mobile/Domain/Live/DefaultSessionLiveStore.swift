@@ -19,21 +19,36 @@ final class DefaultSessionLiveStore: SessionLiveStore {
 
     func observeSessions(directory: String) -> AsyncStream<SessionListSnapshot> {
         if cache[directory] == nil {
+            let sessionRepository = sessionRepository
+            let eventStream = eventStream
+            let sessionCache = sessionCache
             cache[directory] = SharedLiveObservation { yield in
-                Task {
-                    await self.runSessionLoop(directory: directory, yield: yield)
+                Task.detached {
+                    await Self.runSessionLoop(
+                        directory: directory,
+                        sessionRepository: sessionRepository,
+                        eventStream: eventStream,
+                        sessionCache: sessionCache,
+                        yield: yield
+                    )
                 }
             }
         }
         return cache[directory]!.stream()
     }
 
-    private func runSessionLoop(directory: String, yield: @escaping (SessionListSnapshot) -> Void) async {
+    private nonisolated static func runSessionLoop(
+        directory: String,
+        sessionRepository: any SessionRepository,
+        eventStream: any ForegroundEventStream,
+        sessionCache: any SessionCache,
+        yield: @escaping @Sendable (SessionListSnapshot) -> Void
+    ) async {
         if let seeded = await sessionCache.seedSessions(worktree: directory) {
             yield(SessionListSnapshot(sessions: seeded, isFromCache: true))
         }
 
-        if let sessions = await loadSessions(directory: directory) {
+        if let sessions = await loadSessions(directory: directory, sessionRepository: sessionRepository) {
             await sessionCache.rememberSessions(worktree: directory, sessions: sessions)
             yield(SessionListSnapshot(sessions: sessions, isFromCache: false))
         }
@@ -49,8 +64,11 @@ final class DefaultSessionLiveStore: SessionLiveStore {
             refreshTask = Task {
                 try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.sessionDebounceMs))
                 guard !Task.isCancelled else { return }
-                if let sessions = await self.loadSessions(directory: directory) {
-                    await self.sessionCache.rememberSessions(worktree: directory, sessions: sessions)
+                if let sessions = await loadSessions(
+                    directory: directory,
+                    sessionRepository: sessionRepository
+                ) {
+                    await sessionCache.rememberSessions(worktree: directory, sessions: sessions)
                     yield(SessionListSnapshot(sessions: sessions, isFromCache: false))
                 }
             }
@@ -61,7 +79,10 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         cache.removeAll()
     }
 
-    private func loadSessions(directory: String) async -> [Session]? {
+    private nonisolated static func loadSessions(
+        directory: String,
+        sessionRepository: any SessionRepository
+    ) async -> [Session]? {
         try? await sessionRepository.listSessions(directory: directory)
     }
 }

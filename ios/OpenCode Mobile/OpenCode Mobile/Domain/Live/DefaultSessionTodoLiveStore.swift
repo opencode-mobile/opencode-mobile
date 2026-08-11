@@ -2,7 +2,7 @@ import Foundation
 
 @MainActor
 final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
-    private struct SessionKey: Hashable {
+    private struct SessionKey: Hashable, Sendable {
         let sessionID: String
         let directory: String
     }
@@ -44,7 +44,28 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
             handle.continuations[id] = continuation
             continuation.yield(handle.todos)
             if handle.eventTask == nil {
-                handle.eventTask = Task { await self.runEventLoop(key: key) }
+                let sessionRepository = self.sessionRepository
+                let eventStream = self.eventStream
+                let adapter = self.adapter
+                handle.eventTask = Task.detached { [weak self] in
+                    let store = self
+                    for await event in eventStream.events() {
+                        if event.type == "todo.updated", event.sessionID == key.sessionID {
+                            let isLive = await MainActor.run { store?.handles[key]?.isLive == true }
+                            guard isLive else { continue }
+                            if let todos = adapter.todos(fromEventProperties: event.rawProperties) {
+                                await MainActor.run {
+                                    store?.replace(todos: todos, key: key, markCache: true)
+                                }
+                            }
+                            continue
+                        }
+                        if event.type == "stream.reconnected" || event.type == "server.connected" {
+                            await store?.fetch(key: key, force: true)
+                        }
+                    }
+                    _ = sessionRepository
+                }
             }
             continuation.onTermination = { @Sendable _ in
                 Task { @MainActor [weak self] in
@@ -86,24 +107,6 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
         if handle.continuations.isEmpty {
             handle.eventTask?.cancel()
             handle.eventTask = nil
-        }
-    }
-
-    private func runEventLoop(key: SessionKey) async {
-        for await event in eventStream.events() {
-            guard let handle = handles[key] else { return }
-            if event.type == "todo.updated", event.sessionID == key.sessionID {
-                guard handle.isLive else { continue }
-                if let todos = adapter.todos(fromEventProperties: event.rawProperties) {
-                    replace(todos: todos, key: key, markCache: true)
-                }
-                continue
-            }
-            if handle.isLive,
-               event.type == "stream.reconnected" || event.type == "server.connected"
-            {
-                await fetch(key: key, force: true)
-            }
         }
     }
 

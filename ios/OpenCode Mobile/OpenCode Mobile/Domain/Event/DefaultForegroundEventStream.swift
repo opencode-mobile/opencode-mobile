@@ -1,8 +1,16 @@
 import Foundation
 
-@MainActor
-final class DefaultForegroundEventStream: ForegroundEventStream {
-    private(set) var connectionState: EventStreamConnectionState = .idle
+/// Nonisolated broadcaster: byte read, parse, and event yield stay off MainActor.
+/// LiveStores filter before hopping back for UI-owned work (OPE-140 Stage 2).
+nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _connectionState: EventStreamConnectionState = .idle
+
+    var connectionState: EventStreamConnectionState {
+        lock.lock()
+        defer { lock.unlock() }
+        return _connectionState
+    }
 
     private let api: EventsAPIClient
     private let adapter: EventDomainAdapter
@@ -21,11 +29,14 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
     func events() -> AsyncStream<OpencodeEvent> {
         let subscriberID = UUID()
         return AsyncStream { continuation in
-            subscriberContinuations[subscriberID] = continuation
+            self.lock.lock()
+            self.subscriberContinuations[subscriberID] = continuation
+            self.lock.unlock()
             continuation.onTermination = { [weak self] _ in
-                Task { @MainActor in
-                    self?.subscriberContinuations.removeValue(forKey: subscriberID)
-                }
+                guard let self else { return }
+                self.lock.lock()
+                self.subscriberContinuations.removeValue(forKey: subscriberID)
+                self.lock.unlock()
             }
         }
     }
@@ -33,12 +44,16 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
     func connectionStateUpdates() -> AsyncStream<EventStreamConnectionState> {
         let subscriberID = UUID()
         return AsyncStream { continuation in
-            continuation.yield(connectionState)
-            connectionStateContinuations[subscriberID] = continuation
+            self.lock.lock()
+            let current = self._connectionState
+            self.connectionStateContinuations[subscriberID] = continuation
+            self.lock.unlock()
+            continuation.yield(current)
             continuation.onTermination = { [weak self] _ in
-                Task { @MainActor in
-                    self?.connectionStateContinuations.removeValue(forKey: subscriberID)
-                }
+                guard let self else { return }
+                self.lock.lock()
+                self.connectionStateContinuations.removeValue(forKey: subscriberID)
+                self.lock.unlock()
             }
         }
     }
@@ -49,55 +64,71 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
         _ = ConnectionEpoch.shared.bump()
         let api = api
         let adapter = adapter
-        // Byte read + line parse must not occupy MainActor. State publish hops
-        // back via MainActor.run. Running the loop on MainActor starved UI on
-        // send (production freezes; diagnostic blackout).
+        // Byte read + line parse + event publish must not occupy MainActor.
         streamTask = Task(priority: .userInitiated) { [weak self] in
             await Self.runStreamLoop(api: api, adapter: adapter, owner: self)
         }
     }
 
     func stop() {
-        if streamTask != nil || connectionState != .idle {
-            DiagnosticLog.info(.sse, "foreground SSE stream stopping")
-        }
+        lock.lock()
+        let hadTask = streamTask != nil
+        let state = _connectionState
         streamTask?.cancel()
         streamTask = nil
         wasConnected = false
         currentStreamWasConnected = false
         emittedReconnectForCurrentStream = false
+        lock.unlock()
+        if hadTask || state != .idle {
+            DiagnosticLog.info(.sse, "foreground SSE stream stopping")
+        }
         applyConnectionState(.idle)
     }
 
     private func publish(_ event: OpencodeEvent) {
-        for continuation in subscriberContinuations.values {
+        lock.lock()
+        let conts = Array(subscriberContinuations.values)
+        lock.unlock()
+        for continuation in conts {
             continuation.yield(event)
         }
     }
 
     private func applyConnectionState(_ state: EventStreamConnectionState) {
-        if connectionState != state {
-            DiagnosticLog.debug(.sse, "foreground SSE state \(connectionState) -> \(state)")
+        lock.lock()
+        let previous = _connectionState
+        _connectionState = state
+        let conts = Array(connectionStateContinuations.values)
+        lock.unlock()
+        if previous != state {
+            DiagnosticLog.debug(.sse, "foreground SSE state \(previous) -> \(state)")
         }
-        connectionState = state
-        for continuation in connectionStateContinuations.values {
+        for continuation in conts {
             continuation.yield(state)
         }
     }
 
     private func markStreamConnected() {
-        let shouldPublishReconnect = wasConnected && !currentStreamWasConnected && !emittedReconnectForCurrentStream
-        if connectionState != .connected {
+        lock.lock()
+        let shouldPublishReconnect =
+            wasConnected && !currentStreamWasConnected && !emittedReconnectForCurrentStream
+        let needsConnectedState = _connectionState != .connected
+        currentStreamWasConnected = true
+        wasConnected = true
+        if shouldPublishReconnect {
+            emittedReconnectForCurrentStream = true
+        }
+        lock.unlock()
+
+        if needsConnectedState {
             applyConnectionState(.connected)
         }
         if shouldPublishReconnect {
             DiagnosticLog.info(.sse, "foreground SSE stream reconnected")
             _ = ConnectionEpoch.shared.bump()
             publish(OpencodeEvent(type: "stream.reconnected", sessionID: nil))
-            emittedReconnectForCurrentStream = true
         }
-        currentStreamWasConnected = true
-        wasConnected = true
     }
 
     @discardableResult
@@ -124,64 +155,59 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
         }
     }
 
-    /// Nonisolated so the Task body does not hop to MainActor for the whole loop.
-    private nonisolated static func runStreamLoop(
+    private static func runStreamLoop(
         api: EventsAPIClient,
         adapter: EventDomainAdapter,
         owner: DefaultForegroundEventStream?
     ) async {
-        var retryAttempt = 0
+        final class RetryBox: @unchecked Sendable {
+            var attempt = 0
+        }
+        let retry = RetryBox()
         while !Task.isCancelled {
-            let wasConnected = await MainActor.run { [weak owner] in
-                guard let owner else { return false }
-                owner.currentStreamWasConnected = false
-                owner.emittedReconnectForCurrentStream = false
-                let wasConnected = owner.wasConnected
-                owner.applyConnectionState(wasConnected ? .reconnecting : .connecting)
-                return wasConnected
-            }
+            guard let owner else { return }
+            let wasConnected = owner.beginConnectAttempt()
 
             do {
                 try await api.streamGlobalEvents(
                     onHTTPResponse: { statusCode in
                         DiagnosticLog.info(.sse, "GET /global/event opened status=\(statusCode)")
-                        await MainActor.run { [weak owner] in
-                            owner?.markStreamConnected()
-                        }
-                        retryAttempt = 0
+                        owner.markStreamConnected()
+                        retry.attempt = 0
                     },
                     onDataLine: { dataLine in
                         guard let event = adapter.parseEvent(dataLine: dataLine) else {
                             DiagnosticLog.warning(.sse, "SSE event parse failed")
                             return
                         }
-                        let shouldResetRetry = await MainActor.run { [weak owner] in
-                            owner?.handleStreamEvent(event) ?? false
-                        }
-                        if shouldResetRetry {
-                            retryAttempt = 0
+                        if owner.handleStreamEvent(event) {
+                            retry.attempt = 0
                         }
                     }
                 )
-                await MainActor.run { [weak owner] in
-                    owner?.applyConnectionState(.disconnected)
-                }
+                owner.applyConnectionState(.disconnected)
             } catch is CancellationError {
-                await MainActor.run { [weak owner] in
-                    owner?.applyConnectionState(.idle)
-                }
+                owner.applyConnectionState(.idle)
                 return
             } catch {
                 DiagnosticLog.warning(.sse, "foreground SSE stream failed error=\(String(describing: error))")
-                await MainActor.run { [weak owner] in
-                    owner?.applyConnectionState(wasConnected ? .reconnecting : .disconnected)
-                }
+                owner.applyConnectionState(wasConnected ? .reconnecting : .disconnected)
             }
 
-            retryAttempt += 1
-            let backoffMs = min(10_000, 1_000 * retryAttempt)
+            retry.attempt += 1
+            let backoffMs = min(10_000, 1_000 * retry.attempt)
             DiagnosticLog.debug(.sse, "foreground SSE retry in \(backoffMs)ms")
             try? await Task.sleep(for: .milliseconds(backoffMs))
         }
+    }
+
+    private func beginConnectAttempt() -> Bool {
+        lock.lock()
+        currentStreamWasConnected = false
+        emittedReconnectForCurrentStream = false
+        let previouslyConnected = wasConnected
+        lock.unlock()
+        applyConnectionState(previouslyConnected ? .reconnecting : .connecting)
+        return previouslyConnected
     }
 }

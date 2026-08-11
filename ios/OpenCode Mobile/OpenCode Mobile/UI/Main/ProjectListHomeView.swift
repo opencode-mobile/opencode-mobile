@@ -756,8 +756,7 @@ private struct PreviewMessageRepository: MessageRepository {
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
 }
 
-@MainActor
-private final class PreviewForegroundEventStream: ForegroundEventStream {
+nonisolated private final class PreviewForegroundEventStream: ForegroundEventStream, @unchecked Sendable {
     var connectionState: EventStreamConnectionState = .connecting
 
     func connectionStateUpdates() -> AsyncStream<EventStreamConnectionState> {

@@ -50,3 +50,6 @@ None.
   Share Diagnostic Logs shows `hang detected` (and `hang recovered` if the
   stall ended before quit).
 - Confirm iOS / Android parity on device (areas, fields, Settings actions).
+- Stage 0 hang watchdog is implemented on
+  `feature/ope-134-main-thread-hang-watchdog` (worktree; see OPE-134). Manual
+  QA: stall → force-quit → Share Diagnostic Logs shows `hang detected`.

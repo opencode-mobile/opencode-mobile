@@ -52,10 +52,19 @@ final class DefaultSessionReadyStore: SessionReadyStore {
             handles[directory] = handle
             ensureStatusObservation(directory: directory, handle: handle)
         }
-        eventTask = Task { [weak self] in
-            guard let self else { return }
-            for await event in self.eventStream.events() {
-                self.onEvent(type: event.type, sessionID: event.sessionID)
+        eventTask = Task.detached { [weak self, eventStream] in
+            let store = self
+            for await event in eventStream.events() {
+                // Filter off-main; only control events hop to the Ready store.
+                switch event.type {
+                case "session.status", "session.idle", "stream.reconnected", "server.connected":
+                    break
+                default:
+                    continue
+                }
+                await MainActor.run {
+                    store?.onEvent(type: event.type, sessionID: event.sessionID)
+                }
             }
         }
     }

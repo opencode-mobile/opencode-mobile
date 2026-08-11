@@ -5,9 +5,9 @@ nonisolated final class SharedLiveObservation<Value: Sendable>: @unchecked Senda
     private var continuations: [UUID: AsyncStream<Value>.Continuation] = [:]
     private var upstreamTask: Task<Void, Never>?
     private var lastValue: Value?
-    private let makeUpstream: (@escaping (Value) -> Void) -> Task<Void, Never>
+    private let makeUpstream: (@escaping @Sendable (Value) -> Void) -> Task<Void, Never>
 
-    init(makeUpstream: @escaping (@escaping (Value) -> Void) -> Task<Void, Never>) {
+    init(makeUpstream: @escaping (@escaping @Sendable (Value) -> Void) -> Task<Void, Never>) {
         self.makeUpstream = makeUpstream
     }
 
