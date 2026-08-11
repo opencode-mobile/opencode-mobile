@@ -6,6 +6,7 @@ import dagger.hilt.android.HiltAndroidApp
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.diagnostic.MainThreadHangWatchdog
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
@@ -30,10 +31,10 @@ class OpenCodeMobileApplication : Application() {
             .fromApplication(this, TextMatePressureEntryPoint::class.java)
             .textMateProcessPressureObserver()
             .start()
-        EntryPointAccessors
-            .fromApplication(this, HangWatchdogEntryPoint::class.java)
-            .mainThreadHangWatchdog()
-            .start()
+        val hangWatchdogEntry =
+            EntryPointAccessors.fromApplication(this, HangWatchdogEntryPoint::class.java)
+        hangWatchdogEntry.diagnosticLogBuffer()
+        hangWatchdogEntry.mainThreadHangWatchdog().start()
     }
 }
 
@@ -46,5 +47,7 @@ interface TextMatePressureEntryPoint {
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 interface HangWatchdogEntryPoint {
+    fun diagnosticLogBuffer(): DiagnosticLogBuffer
+
     fun mainThreadHangWatchdog(): MainThreadHangWatchdog
 }

@@ -7,7 +7,9 @@ import javax.inject.Singleton
 @Singleton
 class DiagnosticLogger
     @Inject
-    constructor() {
+    constructor(
+        @Suppress("unused") private val diagnosticLogBuffer: DiagnosticLogBuffer,
+    ) {
         fun debug(
             area: DiagnosticLogArea,
             message: String,

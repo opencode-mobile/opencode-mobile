@@ -39,7 +39,7 @@ class MainThreadHangWatchdog
                         Thread(runnable, "opencode-hang-watchdog-test").apply { isDaemon = true }
                     },
             ): MainThreadHangWatchdog =
-                MainThreadHangWatchdog(DiagnosticLogger()).apply {
+                MainThreadHangWatchdog(DiagnosticLogger(DiagnosticLogBuffer())).apply {
                     this.clockEpochMilliseconds = clockEpochMilliseconds
                     this.scheduleOnMain = scheduleOnMain
                     this.scheduler = scheduler
