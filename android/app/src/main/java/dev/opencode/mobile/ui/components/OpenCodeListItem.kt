@@ -4,7 +4,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,11 +26,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -165,6 +165,7 @@ fun OpenCodeListItem(
     val textStrong = openCodeColor("text-strong")
     val textBase = openCodeColor("text-base")
     val textWeaker = openCodeColor("text-weaker")
+    val borderWeaker = openCodeColor("border-weaker-base")
     val hasMeta = status != null || !caption.isNullOrEmpty()
     val playContextPop: () -> Unit = {
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -206,92 +207,90 @@ fun OpenCodeListItem(
             else -> Modifier
         }
 
-    Surface(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .scale(combinedScale)
-                .clip(containerShape)
-                .then(interactionModifier),
-        shape = containerShape,
-        color = containerColor,
-        contentColor = contentColor,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        border =
-            if (style == OpenCodeListItemStyle.Card) {
-                BorderStroke(1.dp, openCodeColor("border-weaker-base"))
-            } else {
-                null
-            },
-    ) {
-        Row(
+    CompositionLocalProvider(LocalContentColor provides contentColor) {
+        Box(
             modifier =
-                Modifier
+                modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = ListItemVerticalPadding),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    .scale(combinedScale)
+                    .clip(containerShape)
+                    .background(containerColor, containerShape)
+                    .then(
+                        if (style == OpenCodeListItemStyle.Card) {
+                            Modifier.border(1.dp, borderWeaker, containerShape)
+                        } else {
+                            Modifier
+                        },
+                    ).then(interactionModifier),
         ) {
-            ListItemStartDecoration(decorator = startDecorator, enabled = enabled)
-
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(ListItemTitleSubtitleSpacing),
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = ListItemVerticalPadding),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(
-                    text = title,
-                    color = if (enabled) textStrong else textWeaker,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (subtitleSegments != null) {
-                    val disabledColor = textWeaker
+                ListItemStartDecoration(decorator = startDecorator, enabled = enabled)
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(ListItemTitleSubtitleSpacing),
+                ) {
                     Text(
-                        text =
-                            buildAnnotatedString {
-                                subtitleSegments.forEach { segment ->
-                                    val color =
-                                        if (!enabled) {
-                                            disabledColor
-                                        } else {
-                                            when (segment.tone) {
-                                                OpenCodeListItemSubtitleTone.Secondary -> textBase
-                                                OpenCodeListItemSubtitleTone.Addition -> openCodeColor("diff-add")
-                                                OpenCodeListItemSubtitleTone.Deletion -> openCodeColor("diff-delete")
-                                            }
-                                        }
-                                    withStyle(SpanStyle(color = color)) { append(segment.text) }
-                                }
-                            },
-                        style = MaterialTheme.typography.labelMedium,
+                        text = title,
+                        color = if (enabled) textStrong else textWeaker,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                } else if (subtitle != null) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (enabled) textBase else textWeaker,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    if (subtitleSegments != null) {
+                        val disabledColor = textWeaker
+                        Text(
+                            text =
+                                buildAnnotatedString {
+                                    subtitleSegments.forEach { segment ->
+                                        val color =
+                                            if (!enabled) {
+                                                disabledColor
+                                            } else {
+                                                when (segment.tone) {
+                                                    OpenCodeListItemSubtitleTone.Secondary -> textBase
+                                                    OpenCodeListItemSubtitleTone.Addition -> openCodeColor("diff-add")
+                                                    OpenCodeListItemSubtitleTone.Deletion -> openCodeColor("diff-delete")
+                                                }
+                                            }
+                                        withStyle(SpanStyle(color = color)) { append(segment.text) }
+                                    }
+                                },
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    } else if (subtitle != null) {
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (enabled) textBase else textWeaker,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
+                if (hasMeta) {
+                    ListItemMetaColumn(
+                        status = status,
+                        caption = caption,
+                        enabled = enabled,
+                        textWeaker = textWeaker,
+                        surfaceRaised = surfaceRaised,
                     )
                 }
-            }
 
-            if (hasMeta) {
-                ListItemMetaColumn(
-                    status = status,
-                    caption = caption,
-                    enabled = enabled,
-                    textWeaker = textWeaker,
-                    surfaceRaised = surfaceRaised,
-                )
-            }
-
-            if (trailing != null) {
-                Box(contentAlignment = Alignment.Center) { trailing() }
+                if (trailing != null) {
+                    Box(contentAlignment = Alignment.Center) { trailing() }
+                }
             }
         }
     }
