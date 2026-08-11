@@ -19,18 +19,33 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
 
     func observeStatuses(directory: String) -> AsyncStream<[String: SessionStatus]> {
         if cache[directory] == nil {
+            let sessionRepository = sessionRepository
+            let eventStream = eventStream
+            let eventAdapter = eventAdapter
             cache[directory] = SharedLiveObservation { yield in
-                Task {
-                    await self.runStatusLoop(directory: directory, yield: yield)
+                Task.detached {
+                    await Self.runStatusLoop(
+                        directory: directory,
+                        sessionRepository: sessionRepository,
+                        eventStream: eventStream,
+                        eventAdapter: eventAdapter,
+                        yield: yield
+                    )
                 }
             }
         }
         return cache[directory]!.stream()
     }
 
-    private func runStatusLoop(directory: String, yield: @escaping ([String: SessionStatus]) -> Void) async {
+    private nonisolated static func runStatusLoop(
+        directory: String,
+        sessionRepository: any SessionRepository,
+        eventStream: any ForegroundEventStream,
+        eventAdapter: EventDomainAdapter,
+        yield: @escaping @Sendable ([String: SessionStatus]) -> Void
+    ) async {
         var current: [String: SessionStatus] = [:]
-        if let statuses = await loadStatuses(directory: directory) {
+        if let statuses = await loadStatuses(directory: directory, sessionRepository: sessionRepository) {
             current = statuses
             yield(current)
         }
@@ -43,7 +58,10 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                 reconnectTask = Task {
                     try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs))
                     guard !Task.isCancelled else { return }
-                    if let statuses = await self.loadStatuses(directory: directory) {
+                    if let statuses = await loadStatuses(
+                        directory: directory,
+                        sessionRepository: sessionRepository
+                    ) {
                         current = statuses
                         yield(current)
                     }
@@ -51,7 +69,9 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                 continue
             }
             guard event.triggersStatusRefresh else { continue }
-            guard let next = applyStatusEvent(current: current, event: event), next != current else { continue }
+            guard let next = applyStatusEvent(current: current, event: event, eventAdapter: eventAdapter),
+                  next != current
+            else { continue }
             current = next
             yield(current)
         }
@@ -61,16 +81,20 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         cache.removeAll()
     }
 
-    private func loadStatuses(directory: String) async -> [String: SessionStatus]? {
+    private nonisolated static func loadStatuses(
+        directory: String,
+        sessionRepository: any SessionRepository
+    ) async -> [String: SessionStatus]? {
         guard let statuses = try? await sessionRepository.getAllSessionStatuses(directory: directory) else {
             return nil
         }
         return Dictionary(uniqueKeysWithValues: statuses.map { ($0.sessionID, $0) })
     }
 
-    private func applyStatusEvent(
+    private nonisolated static func applyStatusEvent(
         current: [String: SessionStatus],
-        event: OpencodeEvent
+        event: OpencodeEvent,
+        eventAdapter: EventDomainAdapter
     ) -> [String: SessionStatus]? {
         switch event.type {
         case "session.status":

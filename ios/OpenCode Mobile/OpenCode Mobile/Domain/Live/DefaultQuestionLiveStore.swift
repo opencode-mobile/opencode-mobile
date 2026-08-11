@@ -13,15 +13,29 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
 
     func observeQuestions(directory: String) -> AsyncStream<[QuestionRequest]> {
         if cache[directory] == nil {
+            let sessionRepository = sessionRepository
+            let eventStream = eventStream
             cache[directory] = SharedLiveObservation { yield in
-                Task { await self.runLoop(directory: directory, yield: yield) }
+                Task.detached {
+                    await Self.runLoop(
+                        directory: directory,
+                        sessionRepository: sessionRepository,
+                        eventStream: eventStream,
+                        yield: yield
+                    )
+                }
             }
         }
         return cache[directory]!.stream()
     }
 
-    private func runLoop(directory: String, yield: @escaping ([QuestionRequest]) -> Void) async {
-        await refresh(directory: directory, trigger: "initial", yield: yield)
+    private nonisolated static func runLoop(
+        directory: String,
+        sessionRepository: any SessionRepository,
+        eventStream: any ForegroundEventStream,
+        yield: @escaping @Sendable ([QuestionRequest]) -> Void
+    ) async {
+        await refresh(directory: directory, trigger: "initial", sessionRepository: sessionRepository, yield: yield)
         for await event in eventStream.events() {
             guard event.type == "question.asked" ||
                 event.type == "question.replied" ||
@@ -29,14 +43,20 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
                 event.type == "stream.reconnected" ||
                 event.type == "server.connected"
             else { continue }
-            await refresh(directory: directory, trigger: event.type, yield: yield)
+            await refresh(
+                directory: directory,
+                trigger: event.type,
+                sessionRepository: sessionRepository,
+                yield: yield
+            )
         }
     }
 
-    private func refresh(
+    private nonisolated static func refresh(
         directory: String,
         trigger: String,
-        yield: @escaping ([QuestionRequest]) -> Void
+        sessionRepository: any SessionRepository,
+        yield: @escaping @Sendable ([QuestionRequest]) -> Void
     ) async {
         do {
             let requests = try await sessionRepository.listPendingQuestions(directory: directory)

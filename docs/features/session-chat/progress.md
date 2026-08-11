@@ -34,7 +34,8 @@
   paths `nonisolated`, detach MessageSync observation, run SSE loop off main
   (publish hops back), add `chat` diagnostic logs on send. Regression:
   `MessageSyncTests.initialLoad_messageLoopDoesNotRunOnMainThread`. Manual
-  TestFlight QA still open.
+  TestFlight QA still open. Residual Stages 0–5:
+  [ios-concurrency-freeze-remediation-plan.md](../message-store/ios-concurrency-freeze-remediation-plan.md).
 - Status: complete for scaffold-first Session Chat entry.
 - Shared scope: row tap opens Session Chat with local message/composer behavior.
 - **2026-07-28:** Streaming UI update backpressure plan drafted (architecture

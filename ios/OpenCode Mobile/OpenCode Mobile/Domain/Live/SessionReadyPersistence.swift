@@ -1,22 +1,22 @@
 import Foundation
 
-struct SessionReadyPersistedEntry: Codable, Equatable, Sendable {
+nonisolated struct SessionReadyPersistedEntry: Codable, Equatable, Sendable {
     var sessionID: String
     var directory: String
     var atEpochMs: Double
 }
 
-struct SessionReadyPersistedState: Codable, Equatable, Sendable {
+nonisolated struct SessionReadyPersistedState: Codable, Equatable, Sendable {
     var ready: [SessionReadyPersistedEntry] = []
     var watched: [SessionReadyPersistedEntry] = []
 }
 
-protocol SessionReadyPersistence: AnyObject, Sendable {
+nonisolated protocol SessionReadyPersistence: AnyObject, Sendable {
     func load() -> SessionReadyPersistedState
     func save(_ state: SessionReadyPersistedState)
 }
 
-final class InMemorySessionReadyPersistence: SessionReadyPersistence, @unchecked Sendable {
+nonisolated final class InMemorySessionReadyPersistence: SessionReadyPersistence, @unchecked Sendable {
     private var state = SessionReadyPersistedState()
 
     func load() -> SessionReadyPersistedState { state }
@@ -26,7 +26,7 @@ final class InMemorySessionReadyPersistence: SessionReadyPersistence, @unchecked
     }
 }
 
-final class UserDefaultsSessionReadyPersistence: SessionReadyPersistence, @unchecked Sendable {
+nonisolated final class UserDefaultsSessionReadyPersistence: SessionReadyPersistence, @unchecked Sendable {
     private let defaults: UserDefaults
     private let stateKey = "session_ready.state"
     private let legacyReadyKey = "session_ready.entries"
@@ -71,12 +71,12 @@ final class UserDefaultsSessionReadyPersistence: SessionReadyPersistence, @unche
     }
 }
 
-protocol SessionReadyClock: Sendable {
+nonisolated protocol SessionReadyClock: Sendable {
     func nowEpochMs() -> Double
 }
 
-struct SystemSessionReadyClock: SessionReadyClock {
-    func nowEpochMs() -> Double {
+nonisolated struct SystemSessionReadyClock: SessionReadyClock {
+    nonisolated func nowEpochMs() -> Double {
         Date().timeIntervalSince1970 * 1000
     }
 }

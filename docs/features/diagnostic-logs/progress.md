@@ -41,3 +41,6 @@ None.
 - Manual QA: force-quit within the 5-minute window and confirm export still
   contains pre-restart evidence without secrets.
 - Confirm iOS / Android parity on device (areas, fields, Settings actions).
+- Stage 0 hang watchdog is implemented on
+  `feature/ope-134-main-thread-hang-watchdog` (worktree; see OPE-134). Manual
+  QA: stall → force-quit → Share Diagnostic Logs shows `hang detected`.

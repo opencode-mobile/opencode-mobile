@@ -18,9 +18,10 @@ publishes immutable UI frames. Matches Android worker projection.
 
 ## Out of scope (follow-up)
 
-- Per-event SSE → LiveStore MainActor fan-out redesign.
+- Per-event SSE → LiveStore MainActor fan-out redesign — tracked as Stage 2 of
+  [ios-concurrency-freeze-remediation-plan.md](./ios-concurrency-freeze-remediation-plan.md).
 - Removing `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` project-wide.
-- Stack-capturing hang watchdog (OPE-134).
+- Stack-capturing hang watchdog (OPE-134) — Stage 0 of that remediation plan.
 
 ## Expected result
 

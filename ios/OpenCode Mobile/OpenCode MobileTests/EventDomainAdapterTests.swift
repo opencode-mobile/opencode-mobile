@@ -98,19 +98,29 @@ struct EventDomainAdapterTests {
 }
 
 final class FakeForegroundEventStream: ForegroundEventStream, @unchecked Sendable {
-    var connectionState: EventStreamConnectionState = .idle
+    private let lock = NSLock()
+    private var _connectionState: EventStreamConnectionState = .idle
+    var connectionState: EventStreamConnectionState {
+        lock.lock()
+        defer { lock.unlock() }
+        return _connectionState
+    }
     private var continuations: [UUID: AsyncStream<OpencodeEvent>.Continuation] = [:]
     private var connectionStateContinuations: [UUID: AsyncStream<EventStreamConnectionState>.Continuation] = [:]
 
     func connectionStateUpdates() -> AsyncStream<EventStreamConnectionState> {
         let id = UUID()
         return AsyncStream { continuation in
-            continuation.yield(connectionState)
-            connectionStateContinuations[id] = continuation
+            self.lock.lock()
+            let current = self._connectionState
+            self.connectionStateContinuations[id] = continuation
+            self.lock.unlock()
+            continuation.yield(current)
             continuation.onTermination = { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.connectionStateContinuations.removeValue(forKey: id)
-                }
+                guard let self else { return }
+                self.lock.lock()
+                self.connectionStateContinuations.removeValue(forKey: id)
+                self.lock.unlock()
             }
         }
     }
@@ -118,11 +128,14 @@ final class FakeForegroundEventStream: ForegroundEventStream, @unchecked Sendabl
     func events() -> AsyncStream<OpencodeEvent> {
         let id = UUID()
         return AsyncStream { continuation in
-            continuations[id] = continuation
+            self.lock.lock()
+            self.continuations[id] = continuation
+            self.lock.unlock()
             continuation.onTermination = { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.continuations.removeValue(forKey: id)
-                }
+                guard let self else { return }
+                self.lock.lock()
+                self.continuations.removeValue(forKey: id)
+                self.lock.unlock()
             }
         }
     }
@@ -136,14 +149,20 @@ final class FakeForegroundEventStream: ForegroundEventStream, @unchecked Sendabl
     }
 
     func setConnectionState(_ state: EventStreamConnectionState) {
-        connectionState = state
-        for continuation in connectionStateContinuations.values {
+        lock.lock()
+        _connectionState = state
+        let conts = Array(connectionStateContinuations.values)
+        lock.unlock()
+        for continuation in conts {
             continuation.yield(state)
         }
     }
 
     func emit(_ event: OpencodeEvent) {
-        for continuation in continuations.values {
+        lock.lock()
+        let conts = Array(continuations.values)
+        lock.unlock()
+        for continuation in conts {
             continuation.yield(event)
         }
     }

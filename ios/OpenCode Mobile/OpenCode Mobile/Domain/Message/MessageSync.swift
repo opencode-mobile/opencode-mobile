@@ -198,7 +198,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         )
         let cacheHandle = openMessageCacheHandle(for: key)
         let producer = Task { [eventStream] in
-            for await event in await eventStream.events() {
+            for await event in eventStream.events() {
                 staging.enqueue(event, sessionID: key.sessionID, epoch: observationEpoch.current)
             }
             staging.finish()
@@ -206,7 +206,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         let connectionWatcher = Task { [eventStream, weak self] in
             guard let self else { return }
             var seenConnected = false
-            for await state in await eventStream.connectionStateUpdates() {
+            for await state in eventStream.connectionStateUpdates() {
                 switch state {
                 case .connected:
                     // Cold resume after stop() reaches Connected/Live without

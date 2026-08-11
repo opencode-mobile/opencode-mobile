@@ -46,11 +46,47 @@ final class SessionInfo {
     func startObserving() {
         observationTask?.cancel()
         OpenCodeLog.sessionChat.info("session info observing session=\(self.state.sessionID, privacy: .public)")
+        let boundSessionID = state.sessionID
+        let eventStream = foregroundEventStream
+        let eventAdapter = eventAdapter
+        let info = self
         observationTask = Task {
-            async let statusLoop: Void = observeStatuses()
-            async let connectionLoop: Void = observeConnectionState()
-            async let eventLoop: Void = observeEvents()
-            _ = await (statusLoop, connectionLoop, eventLoop)
+            async let statusLoop: Void = info.observeStatuses()
+            async let connectionLoop: Void = info.observeConnectionState()
+            // Event fan-out must not resume MainActor on every message.part.delta.
+            let eventLoop = Task.detached { [weak info] in
+                for await event in eventStream.events() {
+                    let scope: String =
+                        if event.sessionID == boundSessionID {
+                            "bound"
+                        } else if event.sessionID == nil {
+                            "global"
+                        } else {
+                            "other"
+                        }
+                    // Keep diagnostic visibility off-main; skip MainActor for high-volume noise.
+                    if event.type != "message.part.delta" {
+                        OpenCodeLog.sessionChat.debug(
+                            "SSE event observed session=\(boundSessionID, privacy: .public) type=\(event.type, privacy: .public) eventSession=\(event.sessionID ?? "-", privacy: .public) scope=\(scope, privacy: .public)"
+                        )
+                    }
+                    let boundError =
+                        event.sessionID == boundSessionID ? event.sessionErrorMessage : nil
+                    let hasTitleUpdate = eventAdapter.sessionTitleUpdate(from: event) != nil
+                    guard boundError != nil || hasTitleUpdate else { continue }
+                    await MainActor.run {
+                        guard let sessionInfo = info else { return }
+                        if let boundError {
+                            sessionInfo.state.errorMessage = boundError
+                            sessionInfo.notifyChange()
+                        }
+                        if hasTitleUpdate {
+                            sessionInfo.applySessionUpdatedTitle(event)
+                        }
+                    }
+                }
+            }
+            _ = await (statusLoop, connectionLoop, eventLoop.value)
         }
     }
 
@@ -251,27 +287,6 @@ final class SessionInfo {
             DiagnosticLog.debug(.session, "live connection session=\(state.sessionID) state=\(connectionState)")
             state.connectionStatus = SessionConnectionStatus(connectionState: connectionState)
             notifyChange()
-        }
-    }
-
-    private func observeEvents() async {
-        for await event in foregroundEventStream.events() {
-            if event.sessionID == state.sessionID, let message = event.sessionErrorMessage {
-                state.errorMessage = message
-                notifyChange()
-            }
-            let scope =
-                if event.sessionID == state.sessionID {
-                    "bound"
-                } else if event.sessionID == nil {
-                    "global"
-                } else {
-                    "other"
-                }
-            OpenCodeLog.sessionChat.debug(
-                "SSE event observed session=\(self.state.sessionID, privacy: .public) type=\(event.type, privacy: .public) eventSession=\(event.sessionID ?? "-", privacy: .public) scope=\(scope, privacy: .public)"
-            )
-            applySessionUpdatedTitle(event)
         }
     }
 

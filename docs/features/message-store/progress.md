@@ -102,9 +102,26 @@ None. The message-display-rendering-hardening plan is closed via Phase 7a.
 - **Parked** (reopen triggers only; not scheduled): public `DisplayFrame`,
   Sync/Pipeline absorption, fingerprint→revision, change-set hint, `syncHealth`
   UI, device p95 CI, sole-text bridge deletion.
-- OPE-135: reduce per-SSE MainActor LiveStore fan-out (still hops for
-  permission/status/question subscribers); Manual QA on Release/TestFlight
-  freeze paths with hang watchdog.
+- OPE-135: reduce per-SSE MainActor LiveStore fan-out — **in progress on
+  OPE-140** (nonisolated broadcaster + LiveStore filter-before-hop).
+- Staged remediation umbrella:
+  [ios-concurrency-freeze-remediation-plan.md](./ios-concurrency-freeze-remediation-plan.md)
+  (Stages 0–5). Linear: [OPE-140](https://linear.app/opencode-mobile/issue/OPE-140/ios-concurrency-freeze-remediation);
+  Stage 0 hang watchdog: [OPE-134](https://linear.app/opencode-mobile/issue/OPE-134/main-thread-hang-watchdog-for-diagnostic-logs).
+
+## OPE-140 iOS concurrency freeze remediation
+
+- [x] Stage 1a: `MessageEventStaging` unlock-before-resume (+ regression test).
+- [x] Stage 1b: `nonisolated` footguns for Ready persistence/clock +
+  `SessionDomainAdapter` / `SessionListSnapshot`.
+- [x] Stage 2: Nonisolated `ForegroundEventStream` publish; Permission /
+  Question / Status / Session / Todo / Ready / SessionInfo filter off-main
+  before MainActor hop (UX unchanged).
+- [x] Stage 0: Hang watchdog implemented on
+  `feature/ope-134-main-thread-hang-watchdog` (separate worktree; Manual QA
+  still open — see OPE-134).
+- [ ] Stage 3: Residual timeline hitch / Diffable soak as needed.
+- [ ] Stage 5: Release/TestFlight freeze matrix.
 
 ## OPE-135 Off-main timeline and display pipeline
 
@@ -115,8 +132,10 @@ None. The message-display-rendering-hardening plan is closed via Phase 7a.
   MainActor (lock-guarded cache; observe/prepare tasks nonisolated).
 - [x] Regression: `SessionChatTimelineOffMainTests` asserts frame build is
   off main.
-- [ ] Per-SSE MainActor LiveStore fan-out reduction (follow-up).
-- [ ] Manual QA on Release freeze reproduction.
+- [x] Per-SSE MainActor LiveStore fan-out reduction — landed under OPE-140
+  Stage 2 (see above).
+- [ ] Manual QA on Release freeze reproduction — Stage 5 of
+  [ios-concurrency-freeze-remediation-plan.md](./ios-concurrency-freeze-remediation-plan.md).
 
 ## OPE-136 Diffable timeline apply storm
 

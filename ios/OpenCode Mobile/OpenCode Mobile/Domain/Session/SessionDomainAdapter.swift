@@ -1,6 +1,6 @@
 import Foundation
 
-struct SessionDomainAdapter: Sendable {
+nonisolated struct SessionDomainAdapter: Sendable {
     func session(from dto: SessionDTO) -> Session {
         Session(
             id: dto.id,
