@@ -5,8 +5,8 @@
 Provide the home-scale cross-project session feed: dense rows and a floating
 bottom dock with project filter chips plus Add project / New session.
 
-Use when Session List home mode is on. Page chrome (`OpenCodeTopBar` title,
-live status, settings) is owned by the home shell, not this component.
+Use as the home session feed. Page chrome (`OpenCodeTopBar` title, live status,
+settings) is owned by the home shell, not this component.
 
 ## Public API
 

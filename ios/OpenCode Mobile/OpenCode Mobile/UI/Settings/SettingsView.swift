@@ -90,8 +90,6 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    // Session List home toggle hidden: session list is the only home for now.
-
                     OpenCodeListItem(
                         title: "Hide User Directory",
                         subtitle: "Show ~/Projects/… instead of /Users/you/Projects/…",

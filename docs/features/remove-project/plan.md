@@ -23,8 +23,7 @@ projects the user still wants to see — the inverse of Add Project.
 
 ## Out Of Scope
 
-- Project Session Selector mode affordance (ignored; feature is Session List
-  only for now).
+- Alternate Project Session Selector home mode (retired; Session List only).
 - Removing projects from a manage screen or Settings.
 - Deleting server sessions or the worktree itself.
 - Multiple Connection Profile / server management.

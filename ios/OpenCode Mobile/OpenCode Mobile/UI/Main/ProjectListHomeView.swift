@@ -7,7 +7,6 @@ struct ProjectListHomeView: View {
     @State private var navigationPath = NavigationPath()
     @State private var connectionSetupPresentation: ConnectionSetupPresentation?
     @State private var connectionSetupViewModel: ConnectionSetupViewModel?
-    @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var showNewSessionProjectPicker = false
     @State private var selectedSessionFilterId = SessionListFilterTab.allId
     @Binding private var presentConnectionSetupOnAppear: Bool
@@ -24,7 +23,7 @@ struct ProjectListHomeView: View {
         NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
                 OpenCodeTopBar(
-                    title: homeTopBarTitle,
+                    title: "Sessions",
                     subtitleAccessory: showsLiveUpdatesStatus
                         ? .statusDot(viewModel.liveUpdatesConnectionState.openCodeSessionConnectionStatus)
                         : nil,
@@ -123,24 +122,6 @@ struct ProjectListHomeView: View {
                             action: { Task { await viewModel.navigateAddProjectInto(path: entry.absolutePath) } }
                         )
                     }
-                }
-            }
-            .openCodeBottomSheet(
-                item: seeAllSheetBinding,
-                title: viewModel.seeAllSessionsSheet?.projectName ?? "Sessions"
-            ) { sheet in
-                ForEach(sheet.sessions) { session in
-                    OpenCodeBottomSheetEntry(
-                        title: seeAllSessionEntryTitle(session),
-                        action: {
-                            ProductAnalytics.logUserAction(
-                                screenId: ProductAnalytics.Screen.homeSeeAllSessions,
-                                actionId: ProductAnalytics.Action.seeAllOpenSession
-                            )
-                            viewModel.dismissSeeAllSessions()
-                            openSession(session)
-                        }
-                    )
                 }
             }
             .openCodeBottomSheet(
@@ -364,7 +345,7 @@ struct ProjectListHomeView: View {
 
     private var newSessionPickerProjects: [(worktree: String, displayName: String)] {
         switch viewModel.state {
-        case let .loaded(sections, _, _, _, _, _):
+        case let .loaded(sections, _, _, _):
             sections.map { ($0.worktree, $0.displayName) }
         default:
             []
@@ -385,23 +366,6 @@ struct ProjectListHomeView: View {
                         actionId: ProductAnalytics.Action.addProjectDismiss
                     )
                     viewModel.dismissAddProjectSheet()
-                }
-            }
-        )
-    }
-
-    // Sheet-chrome dismissal only: entry taps clear presentation state on the
-    // Screen Model, which never routes back through these setters.
-    private var seeAllSheetBinding: Binding<SeeAllSessionsSheetState?> {
-        Binding(
-            get: { viewModel.seeAllSessionsSheet },
-            set: { value in
-                if value == nil {
-                    ProductAnalytics.logUserAction(
-                        screenId: ProductAnalytics.Screen.homeSeeAllSessions,
-                        actionId: ProductAnalytics.Action.seeAllDismiss
-                    )
-                    viewModel.dismissSeeAllSessions()
                 }
             }
         )
@@ -444,10 +408,6 @@ struct ProjectListHomeView: View {
         }
     }
 
-    private var homeTopBarTitle: String {
-        homeDisplayPreferences.showSessionListOnHome ? "Sessions" : "OpenCode Mobile"
-    }
-
     @ViewBuilder
     private var content: some View {
         switch viewModel.state {
@@ -474,9 +434,9 @@ struct ProjectListHomeView: View {
         case let .probeFailed(message):
             probeFailed(message)
         case let .empty(_, _, createError):
-            homeProjectsList(sections: [], focusedWorktree: nil, createError: createError)
-        case let .loaded(sections, _, _, _, focusedWorktree, createError):
-            homeProjectsList(sections: sections, focusedWorktree: focusedWorktree, createError: createError)
+            homeProjectsList(sections: [], createError: createError)
+        case let .loaded(sections, _, _, createError):
+            homeProjectsList(sections: sections, createError: createError)
         }
     }
 
@@ -512,133 +472,64 @@ struct ProjectListHomeView: View {
     @ViewBuilder
     private func homeProjectsList(
         sections: [ProjectSectionItem],
-        focusedWorktree: String?,
         createError: String?
     ) -> some View {
-        if homeDisplayPreferences.showSessionListOnHome {
-            let sessions = sections.crossProjectSessionListSessions()
-            let filterTabs = sections.sessionListFilterTabs(sessionCount: sessions.count)
-            let selectedFilterId =
-                filterTabs.contains(where: { $0.id == selectedSessionFilterId })
-                    ? selectedSessionFilterId
-                    : SessionListFilterTab.allId
-            SessionList(
-                sessions: sessions,
-                filterTabs: filterTabs,
-                selectedFilterId: selectedFilterId,
-                createError: createError,
-                onFilterSelected: { filterId in
-                    ProductAnalytics.logUserAction(
-                        screenId: ProductAnalytics.Screen.home,
-                        actionId: ProductAnalytics.Action.homeSelectSessionFilter
-                    )
-                    selectedSessionFilterId = filterId
-                },
-                onSessionSelected: { session in
-                    ProductAnalytics.logUserAction(
-                        screenId: ProductAnalytics.Screen.home,
-                        actionId: ProductAnalytics.Action.homeOpenSession
-                    )
-                    openSession(
-                        SessionListItem(
-                            id: session.id,
-                            title: session.title,
-                            worktree: session.worktree
-                        )
-                    )
-                },
-                onSessionLongPress: { session in
-                    viewModel.onSessionLongPress(
-                        sessionId: session.id,
+        let sessions = sections.crossProjectSessionListSessions()
+        let filterTabs = sections.sessionListFilterTabs(sessionCount: sessions.count)
+        let selectedFilterId =
+            filterTabs.contains(where: { $0.id == selectedSessionFilterId })
+                ? selectedSessionFilterId
+                : SessionListFilterTab.allId
+        SessionList(
+            sessions: sessions,
+            filterTabs: filterTabs,
+            selectedFilterId: selectedFilterId,
+            createError: createError,
+            onFilterSelected: { filterId in
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.home,
+                    actionId: ProductAnalytics.Action.homeSelectSessionFilter
+                )
+                selectedSessionFilterId = filterId
+            },
+            onSessionSelected: { session in
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.home,
+                    actionId: ProductAnalytics.Action.homeOpenSession
+                )
+                openSession(
+                    SessionListItem(
+                        id: session.id,
                         title: session.title,
                         worktree: session.worktree
                     )
-                },
-                onAddProject: { Task { await viewModel.showAddProjectSheet() } },
-                onNewSession: {
-                    ProductAnalytics.logUserAction(
-                        screenId: ProductAnalytics.Screen.home,
-                        actionId: ProductAnalytics.Action.homeOpenNewSessionProjectPicker
-                    )
-                    ProductAnalytics.logScreenView(
-                        screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
-                        presentation: ProductAnalytics.Presentation.sheet,
-                        trigger: ProductAnalytics.Trigger.present
-                    )
-                    showNewSessionProjectPicker = true
-                },
-                onRefresh: { await viewModel.pullToRefresh() },
-                onRemoveProject: { worktree in viewModel.requestRemoveProject(worktree: worktree) },
-                showsEmptyContent: sections.isEmpty,
-                emptyContent: { NoProjectsEmptyState() }
-            )
-        } else {
-            GeometryReader { proxy in
-                if sections.isEmpty {
-                    ScrollView {
-                        NoProjectsEmptyState()
-                            .frame(maxWidth: .infinity, minHeight: proxy.size.height)
-                    }
-                    .background(OpenCodeColors.backgroundBase)
-                    .refreshable { await viewModel.pullToRefresh() }
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        ProjectSessionSelector(
-                            projects: [],
-                            selectedWorktree: nil,
-                            createError: createError,
-                            onProjectSelected: { _ in },
-                            onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
-                            onSessionSelected: { _, _ in },
-                            onShowAllSessions: { _ in },
-                            onNewSession: { _ in }
-                        )
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 16)
-                    }
-                } else {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 16) {
-                            ProjectSessionSelector(
-                                projects: sections.map(\.projectSessionSelectorProject),
-                                selectedWorktree: focusedWorktree,
-                                createError: createError,
-                                onProjectSelected: { viewModel.focusProject(worktree: $0) },
-                                onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
-                                onSessionSelected: { project, session in
-                                    ProductAnalytics.logUserAction(
-                                        screenId: ProductAnalytics.Screen.home,
-                                        actionId: ProductAnalytics.Action.homeOpenSession
-                                    )
-                                    openSession(
-                                        SessionListItem(id: session.id, title: session.title, worktree: project.worktree)
-                                    )
-                                },
-                                onShowAllSessions: { viewModel.showSeeAllSessions(worktree: $0) },
-                                onNewSession: { worktree in Task { await viewModel.createSession(in: worktree) } }
-                            )
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 16)
-                        }
-                        .frame(
-                            maxWidth: .infinity,
-                            minHeight: proxy.size.height,
-                            alignment: .bottom
-                        )
-                    }
-                    .background(OpenCodeColors.backgroundBase)
-                    .refreshable { await viewModel.pullToRefresh() }
-                }
-            }
-            .background(OpenCodeColors.backgroundBase)
-        }
-    }
-}
-
-private func seeAllSessionEntryTitle(_ session: SessionListItem) -> String {
-    if let statusLabel = session.statusLabel {
-        "\(session.title) · \(statusLabel)"
-    } else {
-        session.title
+                )
+            },
+            onSessionLongPress: { session in
+                viewModel.onSessionLongPress(
+                    sessionId: session.id,
+                    title: session.title,
+                    worktree: session.worktree
+                )
+            },
+            onAddProject: { Task { await viewModel.showAddProjectSheet() } },
+            onNewSession: {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.home,
+                    actionId: ProductAnalytics.Action.homeOpenNewSessionProjectPicker
+                )
+                ProductAnalytics.logScreenView(
+                    screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
+                    presentation: ProductAnalytics.Presentation.sheet,
+                    trigger: ProductAnalytics.Trigger.present
+                )
+                showNewSessionProjectPicker = true
+            },
+            onRefresh: { await viewModel.pullToRefresh() },
+            onRemoveProject: { worktree in viewModel.requestRemoveProject(worktree: worktree) },
+            showsEmptyContent: sections.isEmpty,
+            emptyContent: { NoProjectsEmptyState() }
+        )
     }
 }
 
@@ -674,30 +565,7 @@ struct SessionListItem: Identifiable, Hashable {
     }
 }
 
-private extension ProjectSectionItem {
-    var projectSessionSelectorProject: ProjectSessionSelectorProject {
-        ProjectSessionSelectorProject(
-            worktree: worktree,
-            displayName: displayName,
-            pathSubtitle: pathSubtitle,
-            letter: letter,
-            letterAccent: letterAccent,
-            previewSessions: previewSessions.map(\.projectSessionSelectorSession),
-            totalSessionCount: totalSessionCount,
-            loadError: loadError
-        )
-    }
-}
-
 private extension SessionListItem {
-    var projectSessionSelectorSession: ProjectSessionSelectorSession {
-        ProjectSessionSelectorSession(
-            id: id,
-            title: title,
-            subtitle: updatedAtLabel ?? statusLabel
-        )
-    }
-
     func sessionListStatus(hasPendingPermission: Bool = false) -> SessionListStatus {
         _ = hasPendingPermission // Reserved for a future home Needs approval pill.
         switch statusLabel {

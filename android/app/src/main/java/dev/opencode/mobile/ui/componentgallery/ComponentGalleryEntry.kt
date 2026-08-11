@@ -44,7 +44,6 @@ enum class ComponentGalleryEntryId {
     ServerAddressInput,
     EmptyState,
     StatusStack,
-    ProjectSessionSelector,
     SessionList,
     SessionListDock,
     SessionStatusBar,
@@ -211,12 +210,6 @@ val ComponentGalleryEntries =
             title = "Tool Call Card",
             description = "Collapsed tool-agnostic assistant tool row with status variants.",
             category = ComponentGalleryCategory.Chat,
-        ),
-        ComponentGalleryEntry(
-            id = ComponentGalleryEntryId.ProjectSessionSelector,
-            title = "Project Session Selector",
-            description = "Project-scoped session picker with project tiles and session actions.",
-            category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(
             id = ComponentGalleryEntryId.SessionList,

@@ -29,7 +29,7 @@ struct ProjectListHomeViewModelTests {
         }
     }
 
-    @Test func refresh_limitsPreviewSessionsToThree() async {
+    @Test func refresh_loadsAllSessions() async {
         let sessions = (1 ... 7).map {
             Session(id: "\($0)", title: "S\($0)", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: Int64($0))
         }
@@ -41,19 +41,17 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         // Disk-first paints empty cache immediately; wait for live SWR to fill sections.
         let populated = await waitUntil {
-            if case let .loaded(sections, _, _, _, _, _) = viewModel.state {
-                return sections.first?.totalSessionCount == 7
+            if case let .loaded(sections, _, _, _) = viewModel.state {
+                return sections.first?.allSessions.count == 7
             }
             return false
         }
         #expect(populated)
-        guard case let .loaded(sections, _, _, _, focusedWorktree, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _) = viewModel.state else {
             Issue.record("Expected loaded")
             return
         }
-        #expect(sections.first?.previewSessions.count == 3)
-        #expect(sections.first?.totalSessionCount == 7)
-        #expect(focusedWorktree == "/repo")
+        #expect(sections.first?.allSessions.count == 7)
     }
 
     @Test func refresh_excludesArchivedSessionsFromActiveLists() async {
@@ -77,18 +75,18 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         let populated = await waitUntil {
-            if case let .loaded(sections, _, _, _, _, _) = viewModel.state {
+            if case let .loaded(sections, _, _, _) = viewModel.state {
                 return sections.first?.allSessions.map(\.id) == ["active"]
             }
             return false
         }
         #expect(populated)
-        guard case let .loaded(sections, _, _, _, _, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _) = viewModel.state else {
             Issue.record("Expected loaded")
             return
         }
         #expect(sections.first?.allSessions.map(\.id) == ["active"])
-        #expect(sections.first?.totalSessionCount == 1)
+        #expect(sections.first?.allSessions.count == 1)
     }
 
     @Test func refresh_preservesAddedWorktreeOrder() async {
@@ -98,31 +96,14 @@ struct ProjectListHomeViewModelTests {
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/slow", "/fast"])
         )
         await viewModel.refresh()
-        guard case let .loaded(sections, _, _, _, focusedWorktree, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _) = viewModel.state else {
             Issue.record("Expected loaded")
             return
         }
         #expect(sections.map(\.worktree) == ["/slow", "/fast"])
-        #expect(focusedWorktree == "/slow")
     }
 
-    @Test func focusProject_updatesHomeFocusOnly() async {
-        let viewModel = makeViewModel(
-            projectRepository: FakeProjectRepository(),
-            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one", "/two"])
-        )
-        await viewModel.refresh()
-        viewModel.focusProject(worktree: "/two")
-        guard case let .loaded(sections, _, _, _, focusedWorktree, createError) = viewModel.state else {
-            Issue.record("Expected loaded")
-            return
-        }
-        #expect(sections.map(\.worktree) == ["/one", "/two"])
-        #expect(focusedWorktree == "/two")
-        #expect(createError == nil)
-    }
-
-    @Test func addProject_focusesNewProject() async {
+    @Test func addProject_addsNewWorktree() async {
         let store = FakeConnectionProfileStore(initial: ["/one"])
         let projectRepository = FakeProjectRepository(projects: [
             Project(id: "two", worktree: "/two", displayName: "two"),
@@ -133,11 +114,12 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         await viewModel.addProject(worktree: "/two")
-        guard case let .loaded(_, _, _, _, focusedWorktree, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _) = viewModel.state else {
             Issue.record("Expected loaded")
             return
         }
-        #expect(focusedWorktree == "/two")
+        #expect(sections.map(\.worktree).contains("/two"))
+        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").contains("/two"))
     }
 
     @Test func requestRemoveProject_setsPendingRemoval() async {
@@ -174,7 +156,7 @@ struct ProjectListHomeViewModelTests {
 
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/two"])
         #expect(viewModel.pendingProjectRemoval == nil)
-        guard case let .loaded(sections, _, _, _, _, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _) = viewModel.state else {
             Issue.record("Expected loaded")
             return
         }
@@ -221,7 +203,7 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
-        guard case let .loaded(_, show, navigator, _, _, _) = viewModel.state else {
+        guard case let .loaded(_, show, navigator, _) = viewModel.state else {
             Issue.record("Expected loaded")
             return
         }
@@ -246,12 +228,12 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
         await viewModel.selectCurrentDirectory()
-        guard case let .loaded(_, show, _, _, focusedWorktree, _) = viewModel.state else {
+        guard case let .loaded(_, show, _, createError) = viewModel.state else {
             Issue.record("Expected loaded")
             return
         }
         #expect(show == false)
-        #expect(focusedWorktree == "/home")
+        #expect(createError == nil)
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").contains("/home"))
         #expect(projectRepository.validatedDirectories.contains("/home"))
     }
@@ -275,12 +257,11 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
         await viewModel.selectCurrentDirectory()
-        guard case let .loaded(_, show, _, _, focusedWorktree, _) = viewModel.state else {
+        guard case let .loaded(_, show, _, _) = viewModel.state else {
             Issue.record("Expected loaded")
             return
         }
         #expect(show == false)
-        #expect(focusedWorktree == "/home")
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one", "/home"])
     }
 
@@ -303,12 +284,11 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
         await viewModel.selectCurrentDirectory()
-        guard case let .loaded(_, show, _, _, focusedWorktree, _) = viewModel.state else {
+        guard case let .loaded(_, show, _, _) = viewModel.state else {
             Issue.record("Expected loaded")
             return
         }
         #expect(show == false)
-        #expect(focusedWorktree == "/repo/android")
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one", "/repo/android"])
     }
 
@@ -325,7 +305,7 @@ struct ProjectListHomeViewModelTests {
         #expect(viewModel.pendingSessionOpen?.id == OptimisticSessionCreate.placeholderSessionID)
         #expect(viewModel.pendingSessionOpen?.worktree == "/repo")
         #expect(viewModel.pendingSessionOpen?.optimisticNavigationInstanceID != nil)
-        guard case let .loaded(_, _, _, _, _, createError) = viewModel.state else {
+        guard case let .loaded(_, _, _, createError) = viewModel.state else {
             Issue.record("Expected loaded")
             return
         }
@@ -357,7 +337,7 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         OptimisticSessionCreateCoordinator.shared.reportCreateFailed("nope")
-        guard case let .loaded(_, _, _, _, _, createError) = viewModel.state else {
+        guard case let .loaded(_, _, _, createError) = viewModel.state else {
             Issue.record("Expected loaded")
             return
         }

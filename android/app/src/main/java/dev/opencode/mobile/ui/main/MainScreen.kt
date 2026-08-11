@@ -3,12 +3,8 @@ package dev.opencode.mobile.ui.main
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -22,7 +18,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -30,7 +25,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
-import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.theme.LetterAccent
@@ -50,11 +44,7 @@ import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
-import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
-import dev.opencode.mobile.ui.components.ProjectSessionSelector
-import dev.opencode.mobile.ui.components.ProjectSessionSelectorProject
-import dev.opencode.mobile.ui.components.ProjectSessionSelectorSession
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListSession
@@ -134,14 +124,11 @@ fun MainScreen(
         onConnectClick = onConnectClick,
         onRefresh = viewModel::pullToRefresh,
         onAddProjectClick = viewModel::showAddProjectSheet,
-        onFocusProject = viewModel::focusProject,
         onDismissAddProject = viewModel::dismissAddProjectSheet,
         onNavigateAddProjectUp = viewModel::navigateAddProjectUp,
         onNavigateAddProjectInto = viewModel::navigateAddProjectInto,
         onRetryAddProjectNavigator = viewModel::retryAddProjectNavigator,
         onSelectCurrentDirectory = viewModel::selectCurrentDirectory,
-        onSeeAllSessions = viewModel::showSeeAllSessions,
-        onDismissSeeAll = viewModel::dismissSeeAllSessions,
         onNewSession = viewModel::createSession,
         onConsumePendingOpenSession = viewModel::consumePendingOpenSession,
         onRemoveProject = viewModel::requestRemoveProject,
@@ -165,14 +152,11 @@ internal fun MainScreen(
     onRetryProbe: () -> Unit,
     onRefresh: () -> Unit,
     onAddProjectClick: () -> Unit,
-    onFocusProject: (String) -> Unit,
     onDismissAddProject: () -> Unit,
     onNavigateAddProjectUp: () -> Unit,
     onNavigateAddProjectInto: (String) -> Unit,
     onRetryAddProjectNavigator: () -> Unit,
     onSelectCurrentDirectory: () -> Unit,
-    onSeeAllSessions: (String) -> Unit,
-    onDismissSeeAll: () -> Unit,
     onNewSession: (String) -> Unit,
     onConsumePendingOpenSession: () -> Unit,
     onRemoveProject: (String) -> Unit,
@@ -184,7 +168,6 @@ internal fun MainScreen(
     sessionActions: HomeSessionActionsUiState = HomeSessionActionsUiState(),
     sessionActionsCallbacks: HomeSessionActionsCallbacks = HomeSessionActionsCallbacks(),
 ) {
-    val appName = stringResource(R.string.app_name)
     val pendingOpenSession = (uiState as? MainScreenUiState.Loaded)?.pendingOpenSession
     LaunchedEffect(pendingOpenSession) {
         pendingOpenSession?.let { target ->
@@ -204,16 +187,13 @@ internal fun MainScreen(
             is MainScreenUiState.Loaded -> uiState.addProjectNavigator
             else -> null
         }
-    val seeAllSheet = (uiState as? MainScreenUiState.Loaded)?.seeAllSessions
+
     var showNewSessionProjectPicker by rememberSaveable { mutableStateOf(false) }
     val newSessionPickerProjects =
         when (uiState) {
             is MainScreenUiState.Loaded -> uiState.sections
             else -> emptyList()
         }
-
-    val homeTopBarTitle =
-        if (HomeDisplayPreferences.showSessionListOnHome) "Sessions" else appName
 
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.HOME_CONNECTION_EMPTY,
@@ -231,11 +211,6 @@ internal fun MainScreen(
         visible = showAddSheet,
     )
     ProductPresentedScreenViewEffect(
-        screenId = ProductAnalytics.Screen.HOME_SEE_ALL_SESSIONS,
-        presentation = ProductAnalytics.Presentation.SHEET,
-        visible = seeAllSheet != null,
-    )
-    ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
         presentation = ProductAnalytics.Presentation.SHEET,
         visible = showNewSessionProjectPicker,
@@ -249,7 +224,7 @@ internal fun MainScreen(
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBar(
-                title = homeTopBarTitle,
+                title = "Sessions",
                 subtitleAccessory =
                     if (showsLiveUpdatesStatus(uiState)) {
                         OpenCodeTopBarSubtitleAccessory.StatusDot(
@@ -314,7 +289,6 @@ internal fun MainScreen(
                             is MainScreenUiState.Loaded -> uiState.sections
                             else -> emptyList()
                         }
-                    val focusedWorktree = (uiState as? MainScreenUiState.Loaded)?.focusedWorktree
                     val projectSessionCreateError =
                         when (uiState) {
                             is MainScreenUiState.Empty -> uiState.projectSessionCreateError
@@ -323,12 +297,10 @@ internal fun MainScreen(
                         }
                     HomeProjectsContent(
                         sections = sections,
-                        focusedWorktree = focusedWorktree,
                         projectSessionCreateError = projectSessionCreateError,
                         isRefreshing = isRefreshing,
                         onRefresh = onRefresh,
                         onBrowseProjectsClick = onAddProjectClick,
-                        onFocusProject = onFocusProject,
                         onSessionClick = { target ->
                             ProductAnalytics.logUserAction(
                                 screenId = ProductAnalytics.Screen.HOME,
@@ -336,8 +308,6 @@ internal fun MainScreen(
                             )
                             onSessionClick(target)
                         },
-                        onSeeAllSessions = onSeeAllSessions,
-                        onNewSession = onNewSession,
                         onRequestNewSessionProjectPicker = {
                             ProductAnalytics.logUserAction(
                                 screenId = ProductAnalytics.Screen.HOME,
@@ -470,35 +440,6 @@ internal fun MainScreen(
                         )
                     }
                 }
-            }
-        }
-    }
-
-    seeAllSheet?.let { sheet ->
-        OpenCodeBottomSheet(
-            visible = true,
-            title = sheet.projectName,
-            onDismissRequest = {
-                ProductAnalytics.logUserAction(
-                    screenId = ProductAnalytics.Screen.HOME_SEE_ALL_SESSIONS,
-                    actionId = ProductAnalytics.Action.SEE_ALL_DISMISS,
-                )
-                onDismissSeeAll()
-            },
-        ) {
-            sheet.sessions.forEach { session ->
-                OpenCodeBottomSheetEntry(
-                    title =
-                        session.statusLabel?.let { label -> "${session.title} · $label" } ?: session.title,
-                    onClick = {
-                        ProductAnalytics.logUserAction(
-                            screenId = ProductAnalytics.Screen.HOME_SEE_ALL_SESSIONS,
-                            actionId = ProductAnalytics.Action.SEE_ALL_OPEN_SESSION,
-                        )
-                        onDismissSeeAll()
-                        onSessionClick(SessionOpenTarget(session.id, session.title, sheet.worktree))
-                    },
-                )
             }
         }
     }
@@ -730,149 +671,71 @@ private fun ProbeFailedContent(
 @Composable
 private fun HomeProjectsContent(
     sections: List<ProjectSectionUi>,
-    focusedWorktree: String?,
     projectSessionCreateError: String?,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onBrowseProjectsClick: () -> Unit,
-    onFocusProject: (String) -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
-    onSeeAllSessions: (String) -> Unit,
-    onNewSession: (String) -> Unit,
     onRequestNewSessionProjectPicker: () -> Unit,
     onRemoveProject: (String) -> Unit,
     onSessionLongPress: (SessionListSession) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val showSessionList = HomeDisplayPreferences.showSessionListOnHome
     PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
         modifier = modifier.fillMaxSize(),
     ) {
-        if (showSessionList) {
-            val sessions = sections.toCrossProjectSessionListSessions()
-            val filterTabs = sections.toSessionListFilterTabs(sessionCount = sessions.size)
-            var selectedFilterId by rememberSaveable {
-                mutableStateOf(SessionListFilterTab.ALL_ID)
-            }
-            val resolvedFilterId =
-                if (filterTabs.any { it.id == selectedFilterId }) {
-                    selectedFilterId
-                } else {
-                    SessionListFilterTab.ALL_ID
-                }
-            SessionList(
-                sessions = sessions,
-                filterTabs = filterTabs,
-                selectedFilterId = resolvedFilterId,
-                createError = projectSessionCreateError,
-                onFilterSelected = { filterId ->
-                    ProductAnalytics.logUserAction(
-                        screenId = ProductAnalytics.Screen.HOME,
-                        actionId = ProductAnalytics.Action.HOME_SELECT_SESSION_FILTER,
-                    )
-                    selectedFilterId = filterId
-                },
-                onSessionSelected = { session ->
-                    ProductAnalytics.logUserAction(
-                        screenId = ProductAnalytics.Screen.HOME,
-                        actionId = ProductAnalytics.Action.HOME_OPEN_SESSION,
-                    )
-                    onSessionClick(
-                        SessionOpenTarget(
-                            sessionId = session.id,
-                            title = session.title,
-                            worktree = session.worktree,
-                        ),
-                    )
-                },
-                onAddProject = onBrowseProjectsClick,
-                onNewSession = onRequestNewSessionProjectPicker,
-                onRemoveProject = onRemoveProject,
-                onSessionLongPress = onSessionLongPress,
-                modifier = Modifier.fillMaxSize(),
-                emptyContent =
-                    if (sections.isEmpty()) {
-                        { NoProjectsEmptyState() }
-                    } else {
-                        null
-                    },
-            )
-        } else if (sections.isEmpty()) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
-            ) {
-                NoProjectsEmptyState(modifier = Modifier.align(Alignment.Center))
-                ProjectSessionSelector(
-                    projects = emptyList(),
-                    selectedWorktree = null,
-                    createError = projectSessionCreateError,
-                    onProjectSelected = onFocusProject,
-                    onBrowseProjects = onBrowseProjectsClick,
-                    onSessionSelected = { _, _ -> },
-                    onShowAllSessions = onSeeAllSessions,
-                    onNewSession = onNewSession,
-                    modifier =
-                        Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(horizontal = 16.dp)
-                            .padding(bottom = 16.dp),
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 16.dp),
-                verticalArrangement = Arrangement.Bottom,
-            ) {
-                item(key = "project-session-selector") {
-                    ProjectSessionSelector(
-                        projects = sections.map(ProjectSectionUi::toProjectSessionSelectorProject),
-                        selectedWorktree = focusedWorktree,
-                        createError = projectSessionCreateError,
-                        onProjectSelected = onFocusProject,
-                        onBrowseProjects = onBrowseProjectsClick,
-                        onSessionSelected = { project, session ->
-                            onSessionClick(
-                                SessionOpenTarget(
-                                    sessionId = session.id,
-                                    title = session.title,
-                                    worktree = project.worktree,
-                                ),
-                            )
-                        },
-                        onShowAllSessions = onSeeAllSessions,
-                        onNewSession = onNewSession,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
-            }
+        val sessions = sections.toCrossProjectSessionListSessions()
+        val filterTabs = sections.toSessionListFilterTabs(sessionCount = sessions.size)
+        var selectedFilterId by rememberSaveable {
+            mutableStateOf(SessionListFilterTab.ALL_ID)
         }
+        val resolvedFilterId =
+            if (filterTabs.any { it.id == selectedFilterId }) {
+                selectedFilterId
+            } else {
+                SessionListFilterTab.ALL_ID
+            }
+        SessionList(
+            sessions = sessions,
+            filterTabs = filterTabs,
+            selectedFilterId = resolvedFilterId,
+            createError = projectSessionCreateError,
+            onFilterSelected = { filterId ->
+                ProductAnalytics.logUserAction(
+                    screenId = ProductAnalytics.Screen.HOME,
+                    actionId = ProductAnalytics.Action.HOME_SELECT_SESSION_FILTER,
+                )
+                selectedFilterId = filterId
+            },
+            onSessionSelected = { session ->
+                ProductAnalytics.logUserAction(
+                    screenId = ProductAnalytics.Screen.HOME,
+                    actionId = ProductAnalytics.Action.HOME_OPEN_SESSION,
+                )
+                onSessionClick(
+                    SessionOpenTarget(
+                        sessionId = session.id,
+                        title = session.title,
+                        worktree = session.worktree,
+                    ),
+                )
+            },
+            onAddProject = onBrowseProjectsClick,
+            onNewSession = onRequestNewSessionProjectPicker,
+            onRemoveProject = onRemoveProject,
+            onSessionLongPress = onSessionLongPress,
+            modifier = Modifier.fillMaxSize(),
+            emptyContent =
+                if (sections.isEmpty()) {
+                    { NoProjectsEmptyState() }
+                } else {
+                    null
+                },
+        )
     }
 }
-
-private fun ProjectSectionUi.toProjectSessionSelectorProject(): ProjectSessionSelectorProject =
-    ProjectSessionSelectorProject(
-        worktree = worktree,
-        displayName = displayName,
-        pathSubtitle = pathSubtitle,
-        letter = letter,
-        letterAccent = letterAccent,
-        previewSessions = previewSessions.map(SessionSummary::toProjectSessionSelectorSession),
-        totalSessionCount = totalSessionCount,
-        loadError = loadError,
-    )
-
-private fun SessionSummary.toProjectSessionSelectorSession(): ProjectSessionSelectorSession =
-    ProjectSessionSelectorSession(
-        id = id,
-        title = title,
-        subtitle = updatedAtLabel ?: statusLabel,
-    )
 
 private fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<SessionListSession> =
     flatMap { section ->
@@ -941,7 +804,6 @@ fun MainScreenPreview() {
         MainScreen(
             uiState =
                 MainScreenUiState.Loaded(
-                    focusedWorktree = "/Users/demo/opencode-mobile",
                     sections =
                         listOf(
                             ProjectSectionUi(
@@ -950,17 +812,11 @@ fun MainScreenPreview() {
                                 pathSubtitle = "/Users/demo/opencode-mobile",
                                 letter = 'O',
                                 letterAccent = LetterAccent.Violet,
-                                previewSessions =
-                                    listOf(
-                                        SessionSummary(id = "1", title = "Importing icons explanation"),
-                                        SessionSummary(id = "2", title = "Material Design Icons integration plan"),
-                                    ),
                                 allSessions =
                                     listOf(
                                         SessionSummary(id = "1", title = "Importing icons explanation"),
                                         SessionSummary(id = "2", title = "Material Design Icons integration plan"),
                                     ),
-                                totalSessionCount = 2,
                             ),
                         ),
                 ),
@@ -974,14 +830,11 @@ fun MainScreenPreview() {
             onRetryProbe = {},
             onRefresh = {},
             onAddProjectClick = {},
-            onFocusProject = {},
             onDismissAddProject = {},
             onNavigateAddProjectUp = {},
             onNavigateAddProjectInto = {},
             onRetryAddProjectNavigator = {},
             onSelectCurrentDirectory = {},
-            onSeeAllSessions = {},
-            onDismissSeeAll = {},
             onNewSession = {},
             onConsumePendingOpenSession = {},
             onRemoveProject = {},

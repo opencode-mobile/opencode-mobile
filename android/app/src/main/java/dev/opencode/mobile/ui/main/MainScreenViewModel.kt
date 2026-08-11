@@ -96,8 +96,6 @@ class MainScreenViewModel
         private val serverBaseUrl: String
             get() = activeConnectionManager.current()?.baseUrl.orEmpty()
         private var liveObservationJobs: List<Job> = emptyList()
-        private var requestedFocusWorktree: String? = null
-        private var homeFocusedWorktree: String? = null
         private var forkGateJob: Job? = null
         private var forkedOpenTarget: SessionOpenTarget? = null
 
@@ -230,7 +228,6 @@ class MainScreenViewModel
             viewModelScope.launch {
                 val added = connectionProfileStore.addedWorktrees(serverBaseUrl)
                 if (worktree in added) {
-                    requestedFocusWorktree = worktree
                     dismissAddProjectSheet()
                     runHomeLoad(skipProbe = true)
                     return@launch
@@ -242,7 +239,6 @@ class MainScreenViewModel
                         // Persist the selected directory (web open-project behavior), not the
                         // /project/current worktree — non-git dirs resolve to global "/".
                         connectionProfileStore.addWorktree(serverBaseUrl, worktree)
-                        requestedFocusWorktree = worktree
                         dismissAddProjectSheet()
                         runHomeLoad(skipProbe = true)
                     }.onFailure { error ->
@@ -253,39 +249,6 @@ class MainScreenViewModel
                             )
                         }
                     }
-            }
-        }
-
-        fun focusProject(worktree: String) {
-            logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_FOCUS_PROJECT)
-            _uiState.update { state ->
-                if (state is MainScreenUiState.Loaded && state.sections.any { it.worktree == worktree }) {
-                    homeFocusedWorktree = worktree
-                    state.copy(focusedWorktree = worktree, projectSessionCreateError = null)
-                } else {
-                    state
-                }
-            }
-        }
-
-        fun showSeeAllSessions(worktree: String) {
-            val state = _uiState.value as? MainScreenUiState.Loaded ?: return
-            val section = state.sections.firstOrNull { it.worktree == worktree } ?: return
-            logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_SEE_ALL_SESSIONS)
-            _uiState.value =
-                state.copy(
-                    seeAllSessions =
-                        SeeAllSessionsSheet(
-                            worktree = worktree,
-                            projectName = section.displayName,
-                            sessions = section.allSessions,
-                        ),
-                )
-        }
-
-        fun dismissSeeAllSessions() {
-            _uiState.update { state ->
-                if (state is MainScreenUiState.Loaded) state.copy(seeAllSessions = null) else state
             }
         }
 
@@ -827,11 +790,7 @@ class MainScreenViewModel
             // without Probing/Loading. Live store then SWR-refreshes.
             if (!preserveContent && worktrees.isNotEmpty()) {
                 val sections = loadSectionsFromCache(worktrees)
-                val focusedWorktree = resolvedFocusedWorktree(sections)
-                homeFocusedWorktree = focusedWorktree
-                requestedFocusWorktree = null
-                _uiState.value =
-                    MainScreenUiState.Loaded(sections = sections, focusedWorktree = focusedWorktree)
+                _uiState.value = MainScreenUiState.Loaded(sections = sections)
                 startLiveObservations(worktrees)
                 if (!skipProbe) {
                     runCatching { projectRepository.probeServer() }
@@ -844,7 +803,6 @@ class MainScreenViewModel
 
             if (worktrees.isEmpty() && !preserveContent) {
                 stopLiveObservations()
-                homeFocusedWorktree = null
                 _uiState.value = MainScreenUiState.Empty()
                 if (!skipProbe) {
                     runCatching { projectRepository.probeServer() }
@@ -887,7 +845,6 @@ class MainScreenViewModel
             try {
                 if (worktrees.isEmpty()) {
                     stopLiveObservations()
-                    homeFocusedWorktree = null
                     _uiState.value =
                         when {
                             preserveContent && previous is MainScreenUiState.Empty -> previous
@@ -897,9 +854,6 @@ class MainScreenViewModel
                 }
 
                 val sections = loadProjectSections(worktrees)
-                val focusedWorktree = resolvedFocusedWorktree(sections)
-                homeFocusedWorktree = focusedWorktree
-                requestedFocusWorktree = null
                 if (sections.isEmpty()) {
                     stopLiveObservations()
                     _uiState.value =
@@ -912,9 +866,9 @@ class MainScreenViewModel
                 _uiState.value =
                     when {
                         preserveContent && previous is MainScreenUiState.Loaded ->
-                            previous.copy(sections = sections, focusedWorktree = focusedWorktree)
+                            previous.copy(sections = sections)
                         else ->
-                            MainScreenUiState.Loaded(sections = sections, focusedWorktree = focusedWorktree)
+                            MainScreenUiState.Loaded(sections = sections)
                     }
                 startLiveObservations(worktrees)
             } catch (error: Throwable) {
@@ -946,9 +900,7 @@ class MainScreenViewModel
                 pathSubtitle = worktree,
                 letter = letterCharacterForProject(displayName),
                 letterAccent = letterAccentForWorktree(worktree),
-                previewSessions = summaries.take(PREVIEW_SESSION_LIMIT),
                 allSessions = summaries,
-                totalSessionCount = summaries.size,
                 loadError = null,
                 sessionsFromCache = seeded != null,
             )
@@ -967,9 +919,7 @@ class MainScreenViewModel
                                         pathSubtitle = worktree,
                                         letter = letterCharacterForProject(ProjectDomainAdapter.displayNameFromWorktree(worktree)),
                                         letterAccent = letterAccentForWorktree(worktree),
-                                        previewSessions = emptyList(),
                                         allSessions = emptyList(),
-                                        totalSessionCount = 0,
                                         loadError = throwable.message ?: "Unable to load sessions",
                                     )
                                 }
@@ -1002,9 +952,7 @@ class MainScreenViewModel
                 pathSubtitle = worktree,
                 letter = letterCharacterForProject(ProjectDomainAdapter.displayNameFromWorktree(worktree)),
                 letterAccent = letterAccentForWorktree(worktree),
-                previewSessions = summaries.take(PREVIEW_SESSION_LIMIT),
                 allSessions = summaries,
-                totalSessionCount = summaries.size,
                 loadError = null,
             )
         }
@@ -1170,28 +1118,14 @@ class MainScreenViewModel
                     }
             val updatedSection =
                 section.copy(
-                    previewSessions = summaries.take(PREVIEW_SESSION_LIMIT),
                     allSessions = summaries,
-                    totalSessionCount = summaries.size,
                     sessionsFromCache = sessionsFromCache,
                 )
             val updatedSections =
                 state.sections.map { current ->
                     if (current.worktree == worktree) updatedSection else current
                 }
-            val updatedSeeAll =
-                state.seeAllSessions?.takeIf { it.worktree == worktree }?.copy(
-                    sessions = summaries,
-                ) ?: state.seeAllSessions
-            _uiState.value = state.copy(sections = updatedSections, seeAllSessions = updatedSeeAll)
-        }
-
-        private fun resolvedFocusedWorktree(sections: List<ProjectSectionUi>): String? {
-            val requested = requestedFocusWorktree
-            if (requested != null && sections.any { it.worktree == requested }) return requested
-            val current = homeFocusedWorktree
-            if (current != null && sections.any { it.worktree == current }) return current
-            return sections.firstOrNull()?.worktree
+            _uiState.value = state.copy(sections = updatedSections)
         }
 
         private fun clearProjectSessionCreateError() {
@@ -1209,7 +1143,6 @@ class MainScreenViewModel
         }
 
         private companion object {
-            const val PREVIEW_SESSION_LIMIT = 3
             const val TAG = "MainScreenViewModel"
             const val EMPTY_TITLE_ERROR = "Enter a session title"
             const val ARCHIVE_ERROR = "Couldn't archive session."
@@ -1243,9 +1176,7 @@ sealed interface MainScreenUiState {
         val sections: List<ProjectSectionUi>,
         val showAddProjectSheet: Boolean = false,
         val addProjectNavigator: AddProjectNavigatorUi? = null,
-        val seeAllSessions: SeeAllSessionsSheet? = null,
         val pendingOpenSession: SessionOpenTarget? = null,
-        val focusedWorktree: String? = null,
         val projectSessionCreateError: String? = null,
         val pendingProjectRemoval: ProjectRemovalUi? = null,
     ) : MainScreenUiState
@@ -1289,9 +1220,7 @@ data class ProjectSectionUi(
     val pathSubtitle: String,
     val letter: Char,
     val letterAccent: LetterAccent,
-    val previewSessions: List<SessionSummary>,
     val allSessions: List<SessionSummary>,
-    val totalSessionCount: Int,
     val loadError: String? = null,
     val sessionsFromCache: Boolean = false,
 )
@@ -1321,12 +1250,6 @@ data class AddProjectNavigatorUi(
             )
     }
 }
-
-data class SeeAllSessionsSheet(
-    val worktree: String,
-    val projectName: String,
-    val sessions: List<SessionSummary>,
-)
 
 data class SessionOpenTarget(
     val sessionId: String,
