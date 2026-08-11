@@ -28,8 +28,10 @@ ENV ANDROID_HOME=/opt/android-sdk
 ENV ANDROID_SDK_ROOT=/opt/android-sdk
 
 # Android SDK: command-line tools + platform 36 / build-tools 36.0.0 (matches
-# android/app/build.gradle.kts compileSdk = 36).
+# android/app/build.gradle.kts compileSdk = 36). NDK matches app ndkVersion for
+# packaging native debug symbols into release AABs.
 ARG ANDROID_CMDLINE_TOOLS_VERSION=14742923
+ARG ANDROID_NDK_VERSION=27.2.12479018
 RUN mkdir -p "${ANDROID_HOME}/cmdline-tools" \
     && cd /tmp \
     && wget -q "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_CMDLINE_TOOLS_VERSION}_latest.zip" -O cmdtools.zip \
@@ -40,7 +42,8 @@ RUN mkdir -p "${ANDROID_HOME}/cmdline-tools" \
     && "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" \
         "platform-tools" \
         "platforms;android-36" \
-        "build-tools;36.0.0" > /dev/null \
+        "build-tools;36.0.0" \
+        "ndk;${ANDROID_NDK_VERSION}" > /dev/null \
     && chmod -R a+rX "${ANDROID_HOME}"
 
 ENV PATH=${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/cmdline-tools/latest/bin:${JAVA_HOME}/bin:${PATH}

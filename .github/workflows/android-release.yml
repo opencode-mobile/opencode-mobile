@@ -61,6 +61,26 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Ensure Android NDK for native symbols
+        shell: bash
+        run: |
+          set -euo pipefail
+          ndk_version="27.2.12479018"
+          if [[ -d "${ANDROID_HOME:-}/ndk/${ndk_version}" ]]; then
+            echo "NDK ${ndk_version} already installed."
+            exit 0
+          fi
+          sdkmanager_bin=""
+          if [[ -x "${ANDROID_HOME:-}/cmdline-tools/latest/bin/sdkmanager" ]]; then
+            sdkmanager_bin="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          elif command -v sdkmanager >/dev/null 2>&1; then
+            sdkmanager_bin="$(command -v sdkmanager)"
+          else
+            echo "sdkmanager not found; cannot install NDK ${ndk_version}." >&2
+            exit 1
+          fi
+          yes | "$sdkmanager_bin" "ndk;${ndk_version}"
+
       - name: Prepare upload keystore
         shell: bash
         env:
@@ -87,6 +107,13 @@ jobs:
             android/app/build/outputs/apk/release/app-release.apk \
             "$EXPECTED_UPLOAD_CERT_SHA256"
 
+      - name: Verify AAB symbolication metadata
+        working-directory: .
+        run: |
+          .github/scripts/verify-android-aab-symbols.sh \
+            android/app/build/outputs/bundle/release/app-release.aab \
+            android/app/build/outputs/mapping/release/mapping.txt
+
       - name: Upload signed AAB
         uses: actions/upload-artifact@v4
         with:
@@ -102,6 +129,14 @@ jobs:
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
+
+      - name: Upload R8 mapping
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-mapping-${{ inputs.version_name }}-${{ github.run_number }}
+          path: android/app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Publish to Play internal testing
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
