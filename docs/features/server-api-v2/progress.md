@@ -10,8 +10,8 @@
   - [x] [OPE-147](https://linear.app/opencode-mobile/issue/OPE-147/p0-detect-server-api-protocol) P0
   - [x] [OPE-148](https://linear.app/opencode-mobile/issue/OPE-148/p1-read-only-home-on-v2) P1
   - [x] [OPE-149](https://linear.app/opencode-mobile/issue/OPE-149/p2-chat-history-on-v2) P2
-  - [ ] [OPE-150](https://linear.app/opencode-mobile/issue/OPE-150/p3-live-stream-and-prompt-on-v2) P3
-  - [ ] [OPE-151](https://linear.app/opencode-mobile/issue/OPE-151/p4-permissions-questions-and-composer-catalogs-on-v2) P4
+  - [x] [OPE-150](https://linear.app/opencode-mobile/issue/OPE-150/p3-live-stream-and-prompt-on-v2) P3
+  - [x] [OPE-151](https://linear.app/opencode-mobile/issue/OPE-151/p4-permissions-questions-and-composer-catalogs-on-v2) P4
   - [ ] [OPE-152](https://linear.app/opencode-mobile/issue/OPE-152/p5-compact-revert-todos-vcs-and-add-project-on-v2) P5
   - [ ] [OPE-153](https://linear.app/opencode-mobile/issue/OPE-153/p6-capability-gates-cleanup-and-protocol-matrix-tests) P6
 
@@ -44,6 +44,12 @@
 - [x] P3: V2 `{id,type,data}` envelope parse + `session.next.*` projector
 - [x] P3: `prompt_async` → `POST /api/session/{id}/prompt` (+ agent/model switch)
 - [x] P3: Unit tests (event projector, prompt routing, v1 SSE/prompt regression)
+- [x] P4: Permission list/reply dual remotes (`action`/`resources`/`reply`)
+- [x] P4: Question list/reply/reject with session-scoped v2 paths
+- [x] P4: Abort → `POST /api/session/{id}/interrupt`
+- [x] P4: Command/agent list dual remotes; command run on `/api/session/{id}/command`
+- [x] P4: Model catalog from `/api/provider` + `/api/model`
+- [x] P4: Unit tests (session/command/agent/model protocol routing)
 
 ## Android implementation
 
@@ -68,6 +74,12 @@
 - [x] P3: V2 `{id,type,data}` envelope parse + `session.next.*` projector
 - [x] P3: `prompt_async` → `POST /api/session/{id}/prompt` (+ agent/model switch)
 - [x] P3: Unit tests (event projector, prompt routing, v1 SSE/prompt regression)
+- [x] P4: Permission list/reply dual remotes (`action`/`resources`/`reply`)
+- [x] P4: Question list/reply/reject with session-scoped v2 paths
+- [x] P4: Abort → `POST /api/session/{id}/interrupt`
+- [x] P4: Command/agent list dual remotes; command run on `/api/session/{id}/command`
+- [x] P4: Model catalog from `/api/provider` + `/api/model`
+- [x] P4: Unit tests (session/command/agent/model protocol routing)
 
 ## Blockers
 
@@ -82,8 +94,5 @@
 
 ## Remaining work
 
-- P1: validate against a live v2 server (home list + open session shell).
-- P1: confirm archive path or gate the home archive action on v2.
-- P2: validate against a live v2 server (open existing session, static history).
-- P3: validate against a live v2 server (send prompt, stream tokens, reconnect).
-- P4–P6 as in [`plan.md`](plan.md).
+- P5–P6 as in [`plan.md`](plan.md).
+- Live v2 validation for P1–P4 is deferred.

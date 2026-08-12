@@ -1,6 +1,6 @@
 import Foundation
 
-struct CommandDTO: Codable, Sendable {
+nonisolated struct CommandDTO: Codable, Sendable {
     let name: String
     let description: String?
     let agent: String?
@@ -11,7 +11,7 @@ struct CommandDTO: Codable, Sendable {
     let hints: [String]?
 }
 
-struct RunCommandRequestDTO: Codable, Sendable {
+nonisolated struct RunCommandRequestDTO: Codable, Sendable {
     let command: String
     let arguments: String
     let agent: String?
@@ -36,7 +36,7 @@ struct RunCommandRequestDTO: Codable, Sendable {
     }
 }
 
-struct CommandFilePartDTO: Codable, Sendable {
+nonisolated struct CommandFilePartDTO: Codable, Sendable {
     let type: String
     let mime: String
     let url: String

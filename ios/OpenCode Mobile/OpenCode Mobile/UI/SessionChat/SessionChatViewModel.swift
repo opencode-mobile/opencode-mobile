@@ -639,7 +639,12 @@ final class SessionChatViewModel {
         OpenCodeLog.sessionChat.info("question reply request=\(request.id, privacy: .public) session=\(request.sessionID, privacy: .public)")
         publishUiState()
         do {
-            _ = try await sessionRepository.replyToQuestion(questionID: request.id, answers: answers, directory: worktree)
+            _ = try await sessionRepository.replyToQuestion(
+                questionID: request.id,
+                answers: answers,
+                directory: worktree,
+                sessionID: request.sessionID
+            )
         } catch {
             await handleQuestionMutationFailure(requestID: request.id, error: error, dismiss: false)
         }
@@ -654,7 +659,11 @@ final class SessionChatViewModel {
         OpenCodeLog.sessionChat.info("question dismiss request=\(request.id, privacy: .public) session=\(request.sessionID, privacy: .public)")
         publishUiState()
         do {
-            _ = try await sessionRepository.rejectQuestion(questionID: request.id, directory: worktree)
+            _ = try await sessionRepository.rejectQuestion(
+                questionID: request.id,
+                directory: worktree,
+                sessionID: request.sessionID
+            )
         } catch {
             await handleQuestionMutationFailure(requestID: request.id, error: error, dismiss: true)
         }

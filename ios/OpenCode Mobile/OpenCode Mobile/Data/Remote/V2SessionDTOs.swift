@@ -33,3 +33,44 @@ nonisolated struct V2RenameSessionRequestDTO: Encodable, Sendable {
 nonisolated struct V2ForkSessionRequestDTO: Encodable, Sendable {
     let messageID: String?
 }
+
+nonisolated struct V2PermissionRequestDTO: Decodable, Sendable {
+    let id: String
+    let sessionID: String
+    let action: String
+    let resources: [String]
+    let save: [String]
+    let metadata: [String: AnyCodable]
+    let source: V2PermissionSourceDTO?
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case sessionID
+        case action
+        case resources
+        case save
+        case metadata
+        case source
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        sessionID = try container.decode(String.self, forKey: .sessionID)
+        action = try container.decode(String.self, forKey: .action)
+        resources = try container.decodeIfPresent([String].self, forKey: .resources) ?? []
+        save = try container.decodeIfPresent([String].self, forKey: .save) ?? []
+        metadata = try container.decodeIfPresent([String: AnyCodable].self, forKey: .metadata) ?? [:]
+        source = try container.decodeIfPresent(V2PermissionSourceDTO.self, forKey: .source)
+    }
+}
+
+nonisolated struct V2PermissionSourceDTO: Decodable, Sendable {
+    let type: String?
+    let messageID: String?
+    let callID: String?
+}
+
+nonisolated struct V2PermissionReplyRequestDTO: Encodable, Sendable {
+    let reply: String
+}

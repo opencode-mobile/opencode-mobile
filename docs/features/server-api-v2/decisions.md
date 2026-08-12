@@ -96,3 +96,27 @@ optionally `POST .../agent` and `POST .../model`, then
 **Why:** Per-prompt agent/model are not on the v2 prompt body. Mentions and
 attachments map onto `prompt.agents` / `prompt.files` (`uri` ← data URL).
 v1 `prompt_async` + `parts[]` stays unchanged.
+
+## V2 session interactions map onto existing domain types (2026-08-12)
+
+**Choice:** P4 remotes dual-map behind existing repositories. Screen Models
+keep today's permission, question, command, agent, and model types.
+
+- Permission: `action` → `permission`, `resources` → `patterns`, `save` →
+  `always`, `source.messageID` / `callID` → tool ids; reply body uses `reply`
+  (`once` / `always` / `reject`), not v1 `response`.
+- Question: ViewModels pass `sessionId` so v2 can
+  `POST /api/session/{sid}/question/{id}/reply|reject`; v1 ignores it.
+- Abort: v2 `POST /api/session/{id}/interrupt` (204).
+- Commands: v2 list has no `source` (treat as `.command`); run still posts
+  `RunCommandRequest` to `POST /api/session/{id}/command`.
+- Agents: v2 `id` → `MentionableAgent.name`; still drop `primary` / `hidden`.
+- Models: join `/api/provider` + `/api/model`; skip disabled providers,
+  `enabled == false`, and `deprecated`; empty `capabilities.input` keeps the
+  v1 image+pdf default; `serverDefault` is `null` on v2.
+
+**Why:** Permission dock, question dock, stop, slash commands, @ mentions, and
+the model picker already consume those domain types. Live stores already listen
+to remapped `permission.asked` / `question.*` from P3.
+
+**Alternative rejected:** Fork docks or composer catalogs per protocol.

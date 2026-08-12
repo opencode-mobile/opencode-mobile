@@ -146,6 +146,19 @@ nonisolated struct SessionDomainAdapter: Sendable {
         )
     }
 
+    func permissionRequest(from dto: V2PermissionRequestDTO) -> PermissionRequest {
+        PermissionRequest(
+            id: dto.id,
+            sessionID: dto.sessionID,
+            permission: dto.action,
+            patterns: dto.resources,
+            metadata: dto.metadata,
+            always: dto.save,
+            toolMessageID: dto.source?.messageID,
+            toolCallID: dto.source?.callID
+        )
+    }
+
     func questionRequest(from dto: QuestionRequestDTO) -> QuestionRequest {
         QuestionRequest(
             id: dto.id,

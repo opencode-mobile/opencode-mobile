@@ -222,6 +222,164 @@ struct SessionProtocolRepositoryTests {
         #expect(url.path.hasSuffix("/api/session"))
     }
 
+    @Test func v2ListPermissionsUnwrapsEnvelopeAndMapsAction() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            {"data":[{
+              "id":"per_1",
+              "sessionID":"ses_1",
+              "action":"edit",
+              "resources":["src/a.kt"],
+              "save":["src/*"],
+              "source":{"type":"tool","messageID":"msg_1","callID":"call_1"}
+            }]}
+            """#)
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let permissions = try await repository.listPendingPermissions(directory: "/repo")
+
+        let permission = try #require(permissions.first)
+        #expect(permission.id == "per_1")
+        #expect(permission.permission == "edit")
+        #expect(permission.patterns == ["src/a.kt"])
+        #expect(permission.toolMessageID == "msg_1")
+        let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
+        #expect(url.path.hasSuffix("/api/permission/request"))
+        #expect(queryValue(url, "location[directory]") == "/repo")
+    }
+
+    @Test func v2RespondToPermissionPostsReplyBody() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let ok = try await repository.respondToPermission(
+            sessionID: "ses_1",
+            permissionID: "per_1",
+            decision: .allowOnce,
+            directory: "/repo"
+        )
+
+        #expect(ok)
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path.hasSuffix("/api/session/ses_1/permission/per_1/reply") == true)
+        #expect(ProtocolRoutingURLProtocol.bodies.first??.contains(#""reply":"once""#) == true)
+    }
+
+    @Test func v2ReplyToQuestionUsesSessionScopedPath() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let ok = try await repository.replyToQuestion(
+            questionID: "que_1",
+            answers: [["Yes"]],
+            directory: "/repo",
+            sessionID: "ses_1"
+        )
+
+        #expect(ok)
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        #expect(request.url?.path.hasSuffix("/api/session/ses_1/question/que_1/reply") == true)
+    }
+
+    @Test func v2AbortSessionPostsInterrupt() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let ok = try await repository.abortSession(id: "ses_1", directory: "/repo")
+
+        #expect(ok)
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path.hasSuffix("/api/session/ses_1/interrupt") == true)
+    }
+
+    @Test func v2ListCommandsUnwrapsLocationEnvelope() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"{"data":[{"name":"init","template":"do init","description":"Setup"}]}"#)
+        ])
+        let manager = makeManager(serverProtocol: .v2)
+        let repository = DefaultCommandRepository(
+            api: CommandsAPIClient(connectionProvider: { manager.connection }, urlSession: makeURLSession()),
+            adapter: CommandDomainAdapter(),
+            activeConnectionManager: manager
+        )
+
+        let commands = try await repository.listCommands(directory: "/repo")
+
+        #expect(commands.map(\.name) == ["init"])
+        #expect(commands.first?.description == "Setup")
+        let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
+        #expect(url.path.hasSuffix("/api/command"))
+        #expect(queryValue(url, "location[directory]") == "/repo")
+    }
+
+    @Test func v2ListAgentsMapsIdAndFiltersPrimary() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            {"data":[
+              {"id":"build","mode":"primary","hidden":false,"description":"Primary"},
+              {"id":"explore","mode":"subagent","hidden":false,"description":"Explorer"}
+            ]}
+            """#)
+        ])
+        let manager = makeManager(serverProtocol: .v2)
+        let repository = DefaultAgentRepository(
+            api: AgentsAPIClient(connectionProvider: { manager.connection }, urlSession: makeURLSession()),
+            adapter: AgentDomainAdapter(),
+            activeConnectionManager: manager
+        )
+
+        let agents = try await repository.listMentionableAgents(directory: "/repo")
+
+        #expect(agents.map(\.name) == ["explore"])
+        #expect(agents.first?.description == "Explorer")
+        let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
+        #expect(url.path.hasSuffix("/api/agent"))
+        #expect(queryValue(url, "location[directory]") == "/repo")
+    }
+
+    @Test func v2ListModelOptionsJoinsProviderAndModelLists() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"{"data":[{"id":"anthropic","name":"Anthropic","disabled":false}]}"#),
+            .json(#"""
+            {"data":[{
+              "id":"claude-sonnet",
+              "providerID":"anthropic",
+              "name":"Claude Sonnet",
+              "enabled":true,
+              "status":"active",
+              "variants":[{"id":"high"},{"id":"low"}],
+              "capabilities":{"tools":true,"input":["text","image"]},
+              "limit":{"context":200000,"output":8192}
+            }]}
+            """#)
+        ])
+        let manager = makeManager(serverProtocol: .v2)
+        let repository = DefaultModelRepository(
+            api: ModelsAPIClient(connectionProvider: { manager.connection }, urlSession: makeURLSession()),
+            adapter: ModelDomainAdapter(),
+            activeConnectionManager: manager
+        )
+
+        let catalog = try await repository.listModelOptions(directory: "/repo")
+
+        let option = try #require(catalog.options.first)
+        #expect(catalog.options.count == 1)
+        #expect(option.providerID == "anthropic")
+        #expect(option.providerName == "Anthropic")
+        #expect(option.modelID == "claude-sonnet")
+        #expect(option.variants == ["high", "low"])
+        #expect(option.supportsImageInput)
+        #expect(!option.supportsPdfInput)
+        #expect(catalog.serverDefault == nil)
+        #expect(ProtocolRoutingURLProtocol.requests.count == 2)
+        #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.hasSuffix("/api/provider") == true)
+        #expect(ProtocolRoutingURLProtocol.requests[1].url?.path.hasSuffix("/api/model") == true)
+        #expect(queryValue(try #require(ProtocolRoutingURLProtocol.requests[0].url), "location[directory]") == "/repo")
+    }
+
     // MARK: - Helpers
 
     private func makeManager(serverProtocol: ServerProtocol?) -> ActiveConnectionManager {

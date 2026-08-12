@@ -9,6 +9,7 @@ import dev.opencode.mobile.data.remote.dto.QuestionRequestDto
 import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.SessionRevertDto
 import dev.opencode.mobile.data.remote.dto.TodoDto
+import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
 import dev.opencode.mobile.domain.message.MessageTokenUsage
@@ -169,6 +170,18 @@ class SessionDomainAdapter {
             always = dto.always,
             toolMessageId = dto.tool?.messageId,
             toolCallId = dto.tool?.callId,
+        )
+
+    fun toPermissionRequest(dto: V2PermissionRequestDto): PermissionRequest =
+        PermissionRequest(
+            id = dto.id,
+            sessionId = dto.sessionId,
+            permission = dto.action,
+            patterns = dto.resources,
+            metadata = dto.metadata,
+            always = dto.save,
+            toolMessageId = dto.source?.messageId,
+            toolCallId = dto.source?.callId,
         )
 
     fun toQuestionRequest(dto: QuestionRequestDto): QuestionRequest =

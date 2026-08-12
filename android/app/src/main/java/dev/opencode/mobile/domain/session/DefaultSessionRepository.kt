@@ -11,6 +11,7 @@ import dev.opencode.mobile.data.remote.dto.RevertSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.SummarizeSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.UpdateSessionTimeDto
+import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
@@ -41,12 +42,22 @@ class DefaultSessionRepository
         }
 
         override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> =
-            runCatching { api.listPendingPermissions(directory).map(adapter::toPermissionRequest) }
-                .getOrElse { throw adapter.mapError(it) }
+            runCatching {
+                if (isV2()) {
+                    api.listPendingPermissionsV2(directory).map(adapter::toPermissionRequest)
+                } else {
+                    api.listPendingPermissions(directory).map(adapter::toPermissionRequest)
+                }
+            }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun listPendingQuestions(directory: String?): List<QuestionRequest> =
-            runCatching { api.listPendingQuestions(directory).map(adapter::toQuestionRequest) }
-                .getOrElse { throw adapter.mapError(it) }
+            runCatching {
+                if (isV2()) {
+                    api.listPendingQuestionsV2(directory).map(adapter::toQuestionRequest)
+                } else {
+                    api.listPendingQuestions(directory).map(adapter::toQuestionRequest)
+                }
+            }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun listSessions(directory: String?): List<Session> =
             runCatching {
@@ -219,8 +230,13 @@ class DefaultSessionRepository
             id: String,
             directory: String?,
         ): Boolean =
-            runCatching { api.abortSession(id, directory) }
-                .getOrElse { throw adapter.mapError(it) }
+            runCatching {
+                if (isV2()) {
+                    api.interruptSessionV2(id)
+                } else {
+                    api.abortSession(id, directory)
+                }
+            }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun shareSession(
             id: String,
@@ -290,31 +306,57 @@ class DefaultSessionRepository
             directory: String?,
         ): Boolean =
             runCatching {
-                api.respondToPermission(
-                    sessionId,
-                    permissionId,
-                    PermissionResponseRequestDto(response = adapter.toPermissionResponse(decision)),
-                    directory,
-                )
+                if (isV2()) {
+                    api.respondToPermissionV2(
+                        sessionId,
+                        permissionId,
+                        V2PermissionReplyRequestDto(reply = adapter.toPermissionResponse(decision)),
+                    )
+                } else {
+                    api.respondToPermission(
+                        sessionId,
+                        permissionId,
+                        PermissionResponseRequestDto(response = adapter.toPermissionResponse(decision)),
+                        directory,
+                    )
+                }
             }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun replyToQuestion(
             requestId: String,
             answers: List<List<String>>,
             directory: String?,
+        ): Boolean = replyToQuestion(sessionId = "", requestId = requestId, answers = answers, directory = directory)
+
+        override suspend fun replyToQuestion(
+            sessionId: String,
+            requestId: String,
+            answers: List<List<String>>,
+            directory: String?,
         ): Boolean =
             runCatching {
-                api.replyToQuestion(
-                    requestId,
-                    QuestionReplyRequestDto(answers = answers),
-                    directory,
-                )
+                if (isV2()) {
+                    api.replyToQuestionV2(sessionId, requestId, QuestionReplyRequestDto(answers = answers))
+                } else {
+                    api.replyToQuestion(requestId, QuestionReplyRequestDto(answers = answers), directory)
+                }
             }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun rejectQuestion(
             requestId: String,
             directory: String?,
+        ): Boolean = rejectQuestion(sessionId = "", requestId = requestId, directory = directory)
+
+        override suspend fun rejectQuestion(
+            sessionId: String,
+            requestId: String,
+            directory: String?,
         ): Boolean =
-            runCatching { api.rejectQuestion(requestId, directory) }
-                .getOrElse { throw adapter.mapError(it) }
+            runCatching {
+                if (isV2()) {
+                    api.rejectQuestionV2(sessionId, requestId)
+                } else {
+                    api.rejectQuestion(requestId, directory)
+                }
+            }.getOrElse { throw adapter.mapError(it) }
     }
