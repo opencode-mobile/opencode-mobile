@@ -2,20 +2,151 @@ import Foundation
 
 nonisolated struct EventDomainAdapter: Sendable {
     func parseEvent(dataLine: String) -> OpencodeEvent? {
-        guard let data = dataLine.data(using: .utf8) else { return nil }
+        parseEvents(dataLine: dataLine).first
+    }
+
+    func parseEvents(dataLine: String) -> [OpencodeEvent] {
+        guard let data = dataLine.data(using: .utf8) else { return [] }
         guard
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return nil }
+        else { return [] }
 
         let payload = json["payload"] as? [String: Any]
         let type = payload?["type"] as? String ?? json["type"] as? String
-        guard let type else { return nil }
+        guard let type else { return [] }
 
-        let properties = payload?["properties"] as? [String: Any] ?? json["properties"] as? [String: Any]
+        let properties = payload?["properties"] as? [String: Any]
+            ?? json["properties"] as? [String: Any]
+            ?? json["data"] as? [String: Any]
+            ?? [:]
+        return project(type: type, properties: properties)
+    }
+
+    private func project(type: String, properties: [String: Any]) -> [OpencodeEvent] {
+        switch type {
+        case "permission.v2.asked":
+            [event(type: "permission.asked", properties: properties)]
+        case "permission.v2.replied":
+            [event(type: "permission.replied", properties: properties)]
+        case "question.v2.asked":
+            [event(type: "question.asked", properties: properties)]
+        case "question.v2.replied":
+            [event(type: "question.replied", properties: properties)]
+        case "question.v2.rejected":
+            [event(type: "question.rejected", properties: properties)]
+        case "session.next.prompt.admitted", "session.next.prompted":
+            [userMessageUpdated(properties)]
+        case "session.next.step.started":
+            stepStarted(properties)
+        case "session.next.step.ended":
+            [event(type: "session.idle", properties: properties)]
+        case "session.next.step.failed":
+            [
+                event(type: "session.error", properties: properties),
+                event(type: "session.idle", properties: properties),
+            ]
+        case "session.next.retried":
+            [statusEvent(properties, statusType: "retry")]
+        case "session.next.text.started":
+            textStarted(properties)
+        case "session.next.text.delta":
+            [textDelta(properties)]
+        case "session.next.text.ended":
+            [textPartUpdated(properties)]
+        case "session.next.moved", "session.next.agent.switched", "session.next.model.switched":
+            [event(type: "session.updated", properties: properties)]
+        default:
+            [event(type: type, properties: properties)]
+        }
+    }
+
+    private func event(type: String, properties: [String: Any]) -> OpencodeEvent {
+        OpencodeEvent(
+            type: type,
+            sessionID: sessionID(from: properties),
+            rawProperties: properties.mapValues { AnySendable.from($0) ?? .null }
+        )
+    }
+
+    private func userMessageUpdated(_ properties: [String: Any]) -> OpencodeEvent {
         let sessionID = sessionID(from: properties)
-        let rawProperties = properties.map { $0.mapValues { AnySendable.from($0) ?? .null } }
+        var info: [String: Any] = ["role": "user"]
+        if let messageID = string(in: properties, key: "messageID") ?? string(in: properties, key: "id") {
+            info["id"] = messageID
+        }
+        if let sessionID {
+            info["sessionID"] = sessionID
+        }
+        return event(type: "message.updated", properties: ["info": info])
+    }
 
-        return OpencodeEvent(type: type, sessionID: sessionID, rawProperties: rawProperties)
+    private func stepStarted(_ properties: [String: Any]) -> [OpencodeEvent] {
+        let sessionID = sessionID(from: properties)
+        var info: [String: Any] = ["role": "assistant"]
+        if let assistantID = string(in: properties, key: "assistantMessageID") {
+            info["id"] = assistantID
+        }
+        if let sessionID {
+            info["sessionID"] = sessionID
+        }
+        return [
+            event(type: "message.updated", properties: ["info": info]),
+            statusEvent(properties, statusType: "busy"),
+        ]
+    }
+
+    private func textStarted(_ properties: [String: Any]) -> [OpencodeEvent] {
+        let sessionID = sessionID(from: properties)
+        var info: [String: Any] = ["role": "assistant"]
+        if let assistantID = string(in: properties, key: "assistantMessageID") {
+            info["id"] = assistantID
+        }
+        if let sessionID {
+            info["sessionID"] = sessionID
+        }
+        return [
+            event(type: "message.updated", properties: ["info": info]),
+            textPartUpdated(properties, text: ""),
+        ]
+    }
+
+    private func textDelta(_ properties: [String: Any]) -> OpencodeEvent {
+        var projected: [String: Any] = ["field": "text"]
+        if let sessionID = sessionID(from: properties) {
+            projected["sessionID"] = sessionID
+        }
+        if let messageID = string(in: properties, key: "assistantMessageID") {
+            projected["messageID"] = messageID
+        }
+        if let partID = string(in: properties, key: "textID") {
+            projected["partID"] = partID
+        }
+        if let delta = string(in: properties, key: "delta") {
+            projected["delta"] = delta
+        }
+        return event(type: "message.part.delta", properties: projected)
+    }
+
+    private func textPartUpdated(_ properties: [String: Any], text: String? = nil) -> OpencodeEvent {
+        var part: [String: Any] = ["type": "text", "text": text ?? string(in: properties, key: "text") ?? ""]
+        if let partID = string(in: properties, key: "textID") {
+            part["id"] = partID
+        }
+        if let sessionID = sessionID(from: properties) {
+            part["sessionID"] = sessionID
+        }
+        if let messageID = string(in: properties, key: "assistantMessageID") {
+            part["messageID"] = messageID
+        }
+        return event(type: "message.part.updated", properties: ["part": part])
+    }
+
+    private func statusEvent(_ properties: [String: Any], statusType: String) -> OpencodeEvent {
+        var projected: [String: Any] = ["status": ["type": statusType]]
+        if let sessionID = sessionID(from: properties) {
+            projected["sessionID"] = sessionID
+        }
+        return event(type: "session.status", properties: projected)
     }
 
     private func sessionID(from properties: [String: Any]?) -> String? {

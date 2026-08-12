@@ -154,3 +154,38 @@ data class AgentPartSourceDto(
     val start: Int,
     val end: Int,
 )
+
+@Serializable
+data class V2PromptRequestDto(
+    val prompt: V2PromptInputDto,
+    val delivery: String,
+)
+
+@Serializable
+data class V2PromptInputDto(
+    val text: String,
+    val files: List<V2PromptFileDto>? = null,
+    val agents: List<V2PromptAgentDto>? = null,
+)
+
+@Serializable
+data class V2PromptFileDto(
+    val uri: String,
+    val name: String? = null,
+)
+
+@Serializable
+data class V2PromptAgentDto(
+    val name: String,
+    val source: V2PromptSourceDto? = null,
+)
+
+@Serializable
+data class V2SwitchAgentRequestDto(
+    val agent: String,
+)
+
+@Serializable
+data class V2SwitchModelRequestDto(
+    val model: V2ModelRefDto,
+)

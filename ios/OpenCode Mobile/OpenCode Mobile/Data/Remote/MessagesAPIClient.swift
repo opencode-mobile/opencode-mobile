@@ -12,12 +12,21 @@ protocol MessagesAPI: Sendable {
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> MessageDTO
     func sendMessage(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws -> MessageDTO
     func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws
+    func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, directory: String?) async throws
+    func switchSessionAgent(sessionID: String, agent: String, directory: String?) async throws
+    func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String?) async throws
 }
 
 extension MessagesAPI {
     func listMessagesV2(sessionID: String, directory: String?) async throws -> [V2SessionMessageDTO] {
         []
     }
+
+    func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, directory: String?) async throws {}
+
+    func switchSessionAgent(sessionID: String, agent: String, directory: String?) async throws {}
+
+    func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String?) async throws {}
 }
 
 nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
@@ -76,6 +85,29 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
 
     func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, directory: String? = nil) async throws {
         var request = try requireConnection().authorizedRequest(path: "session/\(sessionID)/prompt_async", method: "POST", directory: directory)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(body)
+        _ = try await data(for: request)
+    }
+
+    func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, directory: String? = nil) async throws {
+        try await postNoContent(path: "api/session/\(sessionID)/prompt", body: body, directory: directory)
+    }
+
+    func switchSessionAgent(sessionID: String, agent: String, directory: String? = nil) async throws {
+        try await postNoContent(
+            path: "api/session/\(sessionID)/agent",
+            body: V2SwitchAgentRequestDTO(agent: agent),
+            directory: directory
+        )
+    }
+
+    func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String? = nil) async throws {
+        try await postNoContent(path: "api/session/\(sessionID)/model", body: body, directory: directory)
+    }
+
+    private func postNoContent<B: Encodable>(path: String, body: B, directory: String?) async throws {
+        var request = try requireConnection().authorizedRequest(path: path, method: "POST", directory: directory)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
         _ = try await data(for: request)

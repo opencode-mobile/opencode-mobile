@@ -233,6 +233,55 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun toV2PromptRequest_mapsTextFilesAndAgents() {
+        val body =
+            adapter.toV2PromptRequest(
+                PromptSendOptions(
+                    text = "@explore please",
+                    attachments =
+                        listOf(
+                            Attachment(
+                                id = "attachment-1",
+                                filename = "notes.txt",
+                                mime = "text/plain",
+                                kind = AttachmentKind.Text,
+                                dataUrl = "data:text/plain;base64,SGk=",
+                                byteCount = 2,
+                            ),
+                        ),
+                    agentMentions =
+                        listOf(
+                            AgentMention(id = "m1", name = "explore", start = 0, end = 8),
+                        ),
+                    mode = "build",
+                ),
+            )
+
+        assertEquals("@explore please", body.prompt.text)
+        assertEquals("steer", body.delivery)
+        assertEquals("data:text/plain;base64,SGk=", body.prompt.files?.single()?.uri)
+        assertEquals("notes.txt", body.prompt.files?.single()?.name)
+        assertEquals("explore", body.prompt.agents?.single()?.name)
+        assertEquals("@explore", body.prompt.agents?.single()?.source?.text)
+    }
+
+    @Test
+    fun toV2SwitchModelRequest_mapsProviderModelAndVariant() {
+        val body =
+            adapter.toV2SwitchModelRequest(
+                PromptSendOptions(
+                    text = "Hello",
+                    model = PromptModelSelection(providerId = "anthropic", modelId = "claude-sonnet"),
+                    variant = "high",
+                ),
+            )
+
+        assertEquals("claude-sonnet", body?.model?.id)
+        assertEquals("anthropic", body?.model?.providerId)
+        assertEquals("high", body?.model?.variant)
+    }
+
+    @Test
     fun compactToolLabel_pending_returnsHourglass() {
         assertEquals(
             "\u231B webfetch",

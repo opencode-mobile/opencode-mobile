@@ -3,7 +3,10 @@ package dev.opencode.mobile.data.remote
 import dev.opencode.mobile.data.remote.dto.ApiListEnvelope
 import dev.opencode.mobile.data.remote.dto.MessageDto
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
+import dev.opencode.mobile.data.remote.dto.V2PromptRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionMessageDto
+import dev.opencode.mobile.data.remote.dto.V2SwitchAgentRequestDto
+import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
 import dev.opencode.mobile.network.setJsonBody
@@ -95,6 +98,46 @@ class MessagesApi private constructor(
             throw ResponseException(response, "prompt_async failed with status ${response.status.value}")
         }
         // Release the 204 response body so OkHttp can reuse the connection.
+        response.bodyAsText()
+    }
+
+    suspend fun sendPromptV2(
+        sessionId: String,
+        body: V2PromptRequestDto,
+        directory: String? = null,
+    ) {
+        postSuccess("api/session/$sessionId/prompt", body, directory)
+    }
+
+    suspend fun switchSessionAgent(
+        sessionId: String,
+        agent: String,
+        directory: String? = null,
+    ) {
+        postSuccess("api/session/$sessionId/agent", V2SwitchAgentRequestDto(agent), directory)
+    }
+
+    suspend fun switchSessionModel(
+        sessionId: String,
+        body: V2SwitchModelRequestDto,
+        directory: String? = null,
+    ) {
+        postSuccess("api/session/$sessionId/model", body, directory)
+    }
+
+    private suspend inline fun <reified T> postSuccess(
+        path: String,
+        body: T,
+        directory: String?,
+    ) {
+        val response =
+            httpClient.get().post(path) {
+                applyDirectory(directory)
+                setJsonBody(json, body)
+            }
+        if (!response.status.isSuccess()) {
+            throw ResponseException(response, "$path failed with status ${response.status.value}")
+        }
         response.bodyAsText()
     }
 

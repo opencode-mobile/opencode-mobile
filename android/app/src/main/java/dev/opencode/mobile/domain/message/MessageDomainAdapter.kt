@@ -13,7 +13,13 @@ import dev.opencode.mobile.data.remote.dto.SendPromptModelDto
 import dev.opencode.mobile.data.remote.dto.V2AssistantContentDto
 import dev.opencode.mobile.data.remote.dto.V2FileAttachmentDto
 import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
+import dev.opencode.mobile.data.remote.dto.V2PromptAgentDto
+import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
+import dev.opencode.mobile.data.remote.dto.V2PromptInputDto
+import dev.opencode.mobile.data.remote.dto.V2PromptRequestDto
+import dev.opencode.mobile.data.remote.dto.V2PromptSourceDto
 import dev.opencode.mobile.data.remote.dto.V2SessionMessageDto
+import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
 import dev.opencode.mobile.data.remote.dto.V2ToolStateDto
 import dev.opencode.mobile.domain.agent.ComposerMentionRouting
 import io.ktor.client.plugins.ResponseException
@@ -186,6 +192,49 @@ class MessageDomainAdapter {
             variant = options.variant,
             agent = options.mode,
         )
+
+    fun toV2PromptRequest(options: PromptSendOptions): V2PromptRequestDto {
+        val files =
+            options.attachments
+                .map { attachment ->
+                    V2PromptFileDto(uri = attachment.dataUrl, name = attachment.filename)
+                }.takeIf { it.isNotEmpty() }
+        val agents =
+            ComposerMentionRouting
+                .agentParts(options.text, options.agentMentions)
+                .map { part ->
+                    V2PromptAgentDto(
+                        name = part.name,
+                        source =
+                            V2PromptSourceDto(
+                                start = part.start,
+                                end = part.end,
+                                text = part.sourceValue,
+                            ),
+                    )
+                }.takeIf { it.isNotEmpty() }
+        return V2PromptRequestDto(
+            prompt =
+                V2PromptInputDto(
+                    text = options.text,
+                    files = files,
+                    agents = agents,
+                ),
+            delivery = "steer",
+        )
+    }
+
+    fun toV2SwitchModelRequest(options: PromptSendOptions): V2SwitchModelRequestDto? {
+        val model = options.model ?: return null
+        return V2SwitchModelRequestDto(
+            model =
+                V2ModelRefDto(
+                    id = model.modelId,
+                    providerId = model.providerId,
+                    variant = options.variant,
+                ),
+        )
+    }
 
     fun mapError(throwable: Throwable): MessageError =
         when (throwable) {

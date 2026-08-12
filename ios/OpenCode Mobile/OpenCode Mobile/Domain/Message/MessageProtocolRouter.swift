@@ -25,6 +25,28 @@ struct MessageProtocolRouter: Sendable {
         return try await api.listMessages(sessionID: sessionID, directory: directory).map(adapter.message)
     }
 
+    func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {
+        if await isV2() {
+            if let agent = options.mode, !agent.isEmpty {
+                try await api.switchSessionAgent(sessionID: sessionID, agent: agent, directory: directory)
+            }
+            if let model = adapter.v2SwitchModelRequest(options: options) {
+                try await api.switchSessionModel(sessionID: sessionID, body: model, directory: directory)
+            }
+            try await api.sendPromptV2(
+                sessionID: sessionID,
+                body: adapter.v2PromptRequest(options: options),
+                directory: directory
+            )
+            return
+        }
+        try await api.sendPromptAsync(
+            sessionID: sessionID,
+            body: adapter.sendRequest(options: options),
+            directory: directory
+        )
+    }
+
     private func isV2() async -> Bool {
         if let protocolValue = activeConnectionManager?.serverProtocol {
             return protocolValue == .v2

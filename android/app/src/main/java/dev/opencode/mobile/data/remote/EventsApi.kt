@@ -1,5 +1,6 @@
 package dev.opencode.mobile.data.remote
 
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import io.ktor.client.request.accept
 import io.ktor.client.request.header
@@ -14,12 +15,14 @@ class EventsApi(
     private val httpClient: OpencodeSseHttpClient,
 ) {
     suspend fun streamGlobalEvents(
+        protocol: ServerProtocol = ServerProtocol.V1,
         onHTTPResponse: suspend (Int) -> Unit = {},
         onDataLine: suspend (String) -> Unit,
     ) {
+        val path = if (protocol == ServerProtocol.V2) "api/event" else "global/event"
         httpClient
             .get()
-            .prepareGet("global/event") {
+            .prepareGet(path) {
                 accept(ContentType.Text.EventStream)
                 header(HttpHeaders.CacheControl, "no-cache")
                 // Match iOS: keep SSE uncompressed so framing stays line-oriented under burst.
