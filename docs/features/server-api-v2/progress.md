@@ -4,6 +4,8 @@
 
 - [x] Research: [`../server-connection/research-opencode-api-v2.md`](../server-connection/research-opencode-api-v2.md)
 - [x] Work-split plan: [`plan.md`](plan.md)
+- [x] Integration branch `feature/ope-146-server-api-v2` (phase PRs target this,
+  not `main`; ship when epic is ready)
 - [x] Linear epic [OPE-146](https://linear.app/opencode-mobile/issue/OPE-146/server-api-v2-compatibility)
   - [OPE-147](https://linear.app/opencode-mobile/issue/OPE-147/p0-detect-server-api-protocol) P0
   - [OPE-148](https://linear.app/opencode-mobile/issue/OPE-148/p1-read-only-home-on-v2) P1

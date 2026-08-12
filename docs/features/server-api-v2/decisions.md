@@ -1,5 +1,18 @@
 # Server API v2 — Decisions
 
+## Stack phase PRs on an integration branch (2026-08-12)
+
+**Choice:** Land all Server API v2 phases on
+`feature/ope-146-server-api-v2`. Phase PRs (OPE-147…OPE-153) target that branch,
+not `main`. Merge the integration branch to `main` once when the epic is ready.
+
+**Why:** Keeps incomplete dual-stack work off `main` while still allowing
+reviewable vertical slices. One ship decision for the whole migration.
+
+**Alternative rejected:** Merge each phase to `main` as it finishes — would
+expose half-routed remotes and capability gaps to production tracks before the
+stack is coherent.
+
 ## Dual-stack behind repositories (2026-08-12)
 
 **Choice:** Detect `v1` \| `v2` on connect; route under remotes/adapters;

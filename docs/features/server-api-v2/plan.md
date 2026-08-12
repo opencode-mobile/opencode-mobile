@@ -193,6 +193,28 @@ patches).
 - Android: `ConnectionProbeService` / `HealthApi`; Hilt modules; repositories
   under `domain/*`.
 
+## Integration branch
+
+All phase work stacks on one long-lived branch and reaches `main` only when the
+epic is ready:
+
+```text
+main
+  └─ feature/ope-146-server-api-v2          ← integration (merge to main once)
+       ├─ feature/ope-147-…  → PR → ope-146
+       ├─ feature/ope-148-…  → PR → ope-146
+       └─ … P2–P6 likewise
+```
+
+Rules:
+
+- Cut each phase branch from the current tip of `feature/ope-146-server-api-v2`
+  (after prior phases are merged into it), never from `main`.
+- Open every phase PR with **base** `feature/ope-146-server-api-v2`, not `main`.
+- Do not merge `feature/ope-146-server-api-v2` → `main` until P0–P6 (or the
+  agreed shippable subset) are complete and validated on the integration branch.
+- Final ship is one PR: `feature/ope-146-server-api-v2` → `main`.
+
 ## Linear
 
 Epic: [OPE-146](https://linear.app/opencode-mobile/issue/OPE-146/server-api-v2-compatibility)
@@ -208,7 +230,7 @@ Epic: [OPE-146](https://linear.app/opencode-mobile/issue/OPE-146/server-api-v2-c
 | P6 | [OPE-153](https://linear.app/opencode-mobile/issue/OPE-153/p6-capability-gates-cleanup-and-protocol-matrix-tests) |
 
 Each ticket: both platforms, tests, progress update, no UI rewrite unless
-capability gate.
+capability gate. Phase PRs target `feature/ope-146-server-api-v2`.
 
 ## Dependencies / Order
 
