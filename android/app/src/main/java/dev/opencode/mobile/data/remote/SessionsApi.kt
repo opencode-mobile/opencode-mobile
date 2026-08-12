@@ -304,13 +304,24 @@ class SessionsApi private constructor(
 
     // --- V2 home / session CRUD ---
 
-    suspend fun listSessionsV2(directory: String? = null): List<V2SessionDto> =
-        httpClient
-            .get()
-            .get("api/session") {
-                applyDirectory(directory)
-            }.body<ApiListEnvelope<V2SessionDto>>()
-            .data
+    suspend fun listSessionsV2(directory: String? = null): List<V2SessionDto> {
+        val sessions = mutableListOf<V2SessionDto>()
+        var cursor: String? = null
+        var pages = 0
+        do {
+            val envelope =
+                httpClient
+                    .get()
+                    .get("api/session") {
+                        applyDirectory(directory)
+                        cursor?.let { parameter("cursor", it) }
+                    }.body<ApiListEnvelope<V2SessionDto>>()
+            sessions += envelope.data
+            cursor = envelope.cursor?.next?.takeIf { it.isNotBlank() }
+            pages++
+        } while (cursor != null && pages < MAX_V2_SESSION_LIST_PAGES)
+        return sessions
+    }
 
     suspend fun createSessionV2(directory: String? = null): V2SessionDto =
         httpClient
@@ -381,5 +392,9 @@ class SessionsApi private constructor(
 
     private fun interface ClientProvider {
         fun get(): HttpClient
+    }
+
+    private companion object {
+        const val MAX_V2_SESSION_LIST_PAGES = 20
     }
 }

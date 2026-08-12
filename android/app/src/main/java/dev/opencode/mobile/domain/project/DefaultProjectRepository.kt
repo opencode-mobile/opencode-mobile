@@ -4,6 +4,8 @@ import dev.opencode.mobile.data.remote.HealthApi
 import dev.opencode.mobile.data.remote.ProjectsApi
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.network.ActiveConnectionManager
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 class DefaultProjectRepository
@@ -14,10 +16,21 @@ class DefaultProjectRepository
         private val adapter: ProjectDomainAdapter,
         private val activeConnectionManager: ActiveConnectionManager,
     ) : ProjectRepository {
-        private fun isV2(): Boolean =
-            activeConnectionManager.currentProtocol() == ServerProtocol.V2
+        private val protocolMutex = Mutex()
+
+        private suspend fun isV2(): Boolean {
+            protocolMutex.withLock {
+                activeConnectionManager.currentProtocol()?.let { return it == ServerProtocol.V2 }
+                runCatching { probeServerLocked() }
+                return activeConnectionManager.currentProtocol() == ServerProtocol.V2
+            }
+        }
 
         override suspend fun probeServer() {
+            protocolMutex.withLock { probeServerLocked() }
+        }
+
+        private suspend fun probeServerLocked() {
             runCatching {
                 val protocol = healthApi.detectProtocol()
                 activeConnectionManager.updateProtocol(protocol)

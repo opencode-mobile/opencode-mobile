@@ -72,26 +72,34 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
     private let adapter: SessionDomainAdapter
     private let sessionModelSelectionStore: (any SessionModelSelectionStore)?
     private let activeConnectionManager: ActiveConnectionManager?
+    private let projectRepository: (any ProjectRepository)?
 
     init(
         api: SessionsAPIClient,
         adapter: SessionDomainAdapter,
         sessionModelSelectionStore: (any SessionModelSelectionStore)? = nil,
-        activeConnectionManager: ActiveConnectionManager? = nil
+        activeConnectionManager: ActiveConnectionManager? = nil,
+        projectRepository: (any ProjectRepository)? = nil
     ) {
         self.api = api
         self.adapter = adapter
         self.sessionModelSelectionStore = sessionModelSelectionStore
         self.activeConnectionManager = activeConnectionManager
+        self.projectRepository = projectRepository
     }
 
-    private var isV2: Bool {
-        (activeConnectionManager?.serverProtocol ?? .v1) == .v2
+    private func isV2() async -> Bool {
+        if let protocolValue = activeConnectionManager?.serverProtocol {
+            return protocolValue == .v2
+        }
+        guard let projectRepository else { return false }
+        _ = try? await projectRepository.probeServer()
+        return activeConnectionManager?.serverProtocol == .v2
     }
 
     func listSessions(directory: String?) async throws -> [Session] {
         try await run {
-            if isV2 {
+            if await isV2() {
                 return try await api.listSessionsV2(directory: directory).map { adapter.session(from: $0) }
             }
             return try await api.listSessions(directory: directory).map { adapter.session(from: $0) }
@@ -108,7 +116,7 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {
         try await run {
-            guard isV2 else {
+            guard await isV2() else {
                 return adapter.session(from: try await api.createSession(parentID: parentID, title: title, directory: directory))
             }
             // V2 create is location-scoped; title/parent are applied via follow-up when needed.
@@ -123,7 +131,7 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] {
         try await run {
-            if isV2 {
+            if await isV2() {
                 return adapter.sessionStatuses(fromActive: try await api.getActiveSessionsV2())
             }
             return try await api.getAllSessionStatuses(directory: directory).map { adapter.sessionStatus(sessionID: $0.key, raw: $0.value) }
@@ -132,7 +140,7 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func getSession(id: String, directory: String?) async throws -> Session {
         try await run {
-            if isV2 {
+            if await isV2() {
                 return adapter.session(from: try await api.getSessionV2(id: id))
             }
             return adapter.session(from: try await api.getSession(id: id, directory: directory))
@@ -141,7 +149,7 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func updateSession(id: String, title: String?, directory: String?) async throws -> Session {
         try await run {
-            guard isV2 else {
+            guard await isV2() else {
                 return adapter.session(from: try await api.updateSession(id: id, title: title, directory: directory))
             }
             guard let title, !title.isEmpty else {
@@ -156,7 +164,7 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func archiveSession(id: String, directory: String?) async throws -> Session {
         try await run {
-            guard isV2 else {
+            guard await isV2() else {
                 return adapter.session(from: try await api.archiveSession(id: id, directory: directory))
             }
             try await api.archiveSessionV2(id: id)
@@ -170,7 +178,7 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func deleteSession(id: String, directory: String?) async throws -> Bool {
         let deleted = try await run {
-            if isV2 {
+            if await isV2() {
                 return try await api.deleteSessionV2(id: id)
             }
             return try await api.deleteSession(id: id, directory: directory)
@@ -191,7 +199,7 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func listChildSessions(id: String) async throws -> [Session] {
         try await run {
-            if isV2 {
+            if await isV2() {
                 // No dedicated children route on published v2; filter the location list.
                 return try await api.listSessionsV2()
                     .filter { $0.parentID == id }
@@ -218,7 +226,7 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func forkSession(id: String, atMessageID: String?) async throws -> Session {
         try await run {
-            if isV2 {
+            if await isV2() {
                 return adapter.session(from: try await api.forkSessionV2(id: id, messageID: atMessageID))
             }
             return adapter.session(from: try await api.forkSession(id: id, messageID: atMessageID))

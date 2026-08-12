@@ -86,7 +86,8 @@ extension Container {
                 api: self.sessionsAPIClient(),
                 adapter: self.sessionDomainAdapter(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),
-                activeConnectionManager: self.activeConnectionManager()
+                activeConnectionManager: self.activeConnectionManager(),
+                projectRepository: self.projectRepository()
             )
         }.singleton
     }

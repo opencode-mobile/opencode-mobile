@@ -181,9 +181,50 @@ struct SessionProtocolRepositoryTests {
         #expect(queryValue(url, "location[directory]") == nil)
     }
 
+    @Test func v2ListSessionsFollowsCursorPages() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            {"data":[{"id":"ses_a","title":"A","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"}}],"cursor":{"previous":null,"next":"page-2"}}
+            """#),
+            .json(#"""
+            {"data":[{"id":"ses_b","title":"B","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":3,"updated":4},"location":{"directory":"/repo"}}],"cursor":{"previous":"page-2","next":null}}
+            """#)
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let sessions = try await repository.listSessions(directory: "/repo")
+
+        #expect(sessions.map(\.id) == ["ses_a", "ses_b"])
+        #expect(ProtocolRoutingURLProtocol.requests.count == 2)
+        #expect(queryValue(try #require(ProtocolRoutingURLProtocol.requests[0].url), "cursor") == nil)
+        #expect(queryValue(try #require(ProtocolRoutingURLProtocol.requests[1].url), "cursor") == "page-2")
+    }
+
+    @Test func unknownProtocolProbesBeforeRoutingToV2() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            {"data":[{"id":"ses_2","title":"Two","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"}}],"cursor":{"next":null}}
+            """#)
+        ])
+        let manager = makeManager(serverProtocol: nil)
+        let repository = DefaultSessionRepository(
+            api: SessionsAPIClient(connectionProvider: { manager.connection }, urlSession: makeURLSession()),
+            adapter: SessionDomainAdapter(),
+            activeConnectionManager: manager,
+            projectRepository: ProbeToV2ProjectRepository(manager: manager)
+        )
+
+        let sessions = try await repository.listSessions(directory: "/repo")
+
+        #expect(sessions.map(\.id) == ["ses_2"])
+        #expect(manager.serverProtocol == .v2)
+        let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
+        #expect(url.path.hasSuffix("/api/session"))
+    }
+
     // MARK: - Helpers
 
-    private func makeManager(serverProtocol: ServerProtocol) -> ActiveConnectionManager {
+    private func makeManager(serverProtocol: ServerProtocol?) -> ActiveConnectionManager {
         let manager = ActiveConnectionManager()
         manager.applyConnection(
             ServerConnection(
@@ -305,5 +346,19 @@ private extension URLRequest {
             data.append(buffer, count: read)
         }
         return String(data: data, encoding: .utf8)
+    }
+}
+
+private struct ProbeToV2ProjectRepository: ProjectRepository {
+    let manager: ActiveConnectionManager
+
+    func probeServer() async throws {
+        manager.updateProtocol(.v2)
+    }
+
+    func listProjects() async throws -> [Project] { [] }
+
+    func getCurrentProject(directory: String?) async throws -> Project {
+        Project(id: "unused", worktree: directory ?? "", displayName: "unused")
     }
 }

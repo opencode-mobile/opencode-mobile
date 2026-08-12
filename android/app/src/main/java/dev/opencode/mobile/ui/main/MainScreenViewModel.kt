@@ -791,13 +791,13 @@ class MainScreenViewModel
             if (!preserveContent && worktrees.isNotEmpty()) {
                 val sections = loadSectionsFromCache(worktrees)
                 _uiState.value = MainScreenUiState.Loaded(sections = sections)
-                startLiveObservations(worktrees)
                 if (!skipProbe) {
                     runCatching { projectRepository.probeServer() }
                         .onFailure {
                             // Keep cached home; connection chrome reflects reachability.
                         }
                 }
+                startLiveObservations(worktrees)
                 return
             }
 

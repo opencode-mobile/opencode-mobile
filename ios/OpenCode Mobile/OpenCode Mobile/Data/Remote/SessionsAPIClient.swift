@@ -176,8 +176,24 @@ nonisolated struct SessionsAPIClient: Sendable {
     // MARK: - V2 home / session CRUD
 
     func listSessionsV2(directory: String? = nil) async throws -> [V2SessionDTO] {
-        let envelope: APIListEnvelope<V2SessionDTO> = try await get(path: "api/session", directory: directory)
-        return envelope.data
+        var sessions: [V2SessionDTO] = []
+        var cursor: String?
+        var pages = 0
+        repeat {
+            var query: [String: String] = [:]
+            if let cursor {
+                query["cursor"] = cursor
+            }
+            let envelope: APIListEnvelope<V2SessionDTO> = try await get(
+                path: "api/session",
+                directory: directory,
+                query: query
+            )
+            sessions.append(contentsOf: envelope.data)
+            cursor = envelope.cursor?.next.flatMap { $0.isEmpty ? nil : $0 }
+            pages += 1
+        } while cursor != nil && pages < Self.maxV2SessionListPages
+        return sessions
     }
 
     func createSessionV2(directory: String? = nil) async throws -> V2SessionDTO {
@@ -219,9 +235,24 @@ nonisolated struct SessionsAPIClient: Sendable {
     }
 
     private struct EmptyBody: Codable {}
+    private static let maxV2SessionListPages = 20
 
-    private func get<T: Decodable>(path: String, directory: String? = nil) async throws -> T {
-        let data = try await data(for: try requireConnection().authorizedRequest(path: path, directory: directory))
+    private func get<T: Decodable>(
+        path: String,
+        directory: String? = nil,
+        query: [String: String] = [:]
+    ) async throws -> T {
+        var request = try requireConnection().authorizedRequest(path: path, directory: directory)
+        if !query.isEmpty, let url = request.url,
+           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            var items = components.queryItems ?? []
+            query.forEach { name, value in
+                items.append(URLQueryItem(name: name, value: value))
+            }
+            components.queryItems = items
+            request.url = components.url
+        }
+        let data = try await data(for: request)
         return try decoder.decode(T.self, from: data)
     }
 

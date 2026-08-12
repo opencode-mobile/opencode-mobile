@@ -14,7 +14,10 @@ import dev.opencode.mobile.data.remote.dto.UpdateSessionTimeDto
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 class DefaultSessionRepository
@@ -24,11 +27,18 @@ class DefaultSessionRepository
         private val adapter: SessionDomainAdapter,
         private val sessionModelSelectionStore: SessionModelSelectionStore? = null,
         private val activeConnectionManager: ActiveConnectionManager? = null,
+        private val projectRepository: ProjectRepository? = null,
     ) : SessionRepository {
-        private fun protocol(): ServerProtocol =
-            activeConnectionManager?.currentProtocol() ?: ServerProtocol.V1
+        private val protocolMutex = Mutex()
 
-        private fun isV2(): Boolean = protocol() == ServerProtocol.V2
+        private suspend fun isV2(): Boolean {
+            protocolMutex.withLock {
+                activeConnectionManager?.currentProtocol()?.let { return it == ServerProtocol.V2 }
+                val projectRepository = projectRepository ?: return false
+                runCatching { projectRepository.probeServer() }
+                return activeConnectionManager?.currentProtocol() == ServerProtocol.V2
+            }
+        }
 
         override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> =
             runCatching { api.listPendingPermissions(directory).map(adapter::toPermissionRequest) }

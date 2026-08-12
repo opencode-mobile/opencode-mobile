@@ -7,7 +7,9 @@ import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.project.DefaultProjectRepository
+import dev.opencode.mobile.domain.project.Project
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
+import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import io.ktor.client.HttpClient
@@ -229,7 +231,65 @@ class SessionProtocolRepositoryTest {
             assertTrue(requests[1].url.encodedPath.endsWith("/api/session/ses_new/rename"))
         }
 
-    private suspend fun manager(protocol: ServerProtocol): ActiveConnectionManager {
+    @Test
+    fun v2ListSessions_followsCursorPages() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val pages =
+                ArrayDeque(
+                    listOf(
+                        """{"data":[{"id":"ses_a","title":"A","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"}}],"cursor":{"previous":null,"next":"page-2"}}""",
+                        """{"data":[{"id":"ses_b","title":"B","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":3,"updated":4},"location":{"directory":"/repo"}}],"cursor":{"previous":"page-2","next":null}}""",
+                    ),
+                )
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(pages.removeFirst())
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val sessions = repository.listSessions("/repo")
+
+            assertEquals(listOf("ses_a", "ses_b"), sessions.map { it.id })
+            assertEquals(2, requests.size)
+            assertEquals(null, requests[0].url.parameters["cursor"])
+            assertEquals("page-2", requests[1].url.parameters["cursor"])
+        }
+
+    @Test
+    fun unknownProtocol_probesBeforeRoutingToV2() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """{"data":[{"id":"ses_2","title":"Two","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"}}],"cursor":{"next":null}}""",
+                    )
+                }
+            val manager = manager(protocol = null)
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager,
+                    projectRepository = ProbeToV2ProjectRepository(manager),
+                )
+
+            val sessions = repository.listSessions("/repo")
+
+            assertEquals("ses_2", sessions.single().id)
+            assertEquals(ServerProtocol.V2, manager.currentProtocol())
+            assertTrue(requests.single().url.encodedPath.contains("/api/session"))
+        }
+
+    private suspend fun manager(protocol: ServerProtocol?): ActiveConnectionManager {
         val manager = ActiveConnectionManager(FakeProfileStore())
         manager.applyProfile(
             ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", password = ""),
@@ -287,4 +347,16 @@ private class FakeProfileStore : ConnectionProfileStore {
     override suspend fun clearAll() {
         profile = null
     }
+}
+
+private class ProbeToV2ProjectRepository(
+    private val manager: ActiveConnectionManager,
+) : ProjectRepository {
+    override suspend fun probeServer() {
+        manager.updateProtocol(ServerProtocol.V2)
+    }
+
+    override suspend fun listProjects(): List<Project> = emptyList()
+
+    override suspend fun getCurrentProject(directory: String?): Project = error("unused")
 }
