@@ -106,7 +106,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
 
     func toolStatus(from raw: String?) -> ToolStatus {
         switch raw {
-        case "pending":
+        case "pending", "streaming":
             .pending
         case "running":
             .running
@@ -193,7 +193,294 @@ nonisolated struct MessageDomainAdapter: Sendable {
         dtos.compactMap { messagePart(from: $0) }
     }
 
+    func messages(fromV2 dtos: [V2SessionMessageDTO]) -> [Message] {
+        var messages: [Message] = []
+        var agent = ""
+        var model: V2ModelRefDTO?
+        for dto in dtos {
+            switch dto.type {
+            case "agent-switched":
+                agent = dto.agent ?? ""
+            case "model-switched":
+                model = dto.model
+            case "user":
+                messages.append(projectV2User(dto, agent: agent, model: model))
+                agent = dto.agent ?? agent
+                model = dto.model ?? model
+            case "synthetic":
+                if let synthetic = projectV2Synthetic(dto, agent: agent, model: model) {
+                    messages.append(synthetic)
+                }
+            case "skill":
+                messages.append(projectV2Skill(dto, agent: agent, model: model))
+            case "shell":
+                messages.append(contentsOf: projectV2Shell(dto, agent: agent, model: model))
+            case "assistant":
+                agent = dto.agent ?? agent
+                model = dto.model ?? model
+                messages.append(projectV2Assistant(dto))
+            case "compaction":
+                messages.append(projectV2Compaction(dto))
+            default:
+                break
+            }
+        }
+        return messages
+    }
+
     // MARK: Private
+
+    private func projectV2User(_ dto: V2SessionMessageDTO, agent: String, model: V2ModelRefDTO?) -> Message {
+        var parts: [MessagePart] = []
+        let text = dto.text ?? ""
+        if !text.isEmpty {
+            parts.append(.text(TextPart(id: "\(dto.id):text:0", text: text, isStreaming: false)))
+        }
+        for (index, file) in dto.files.enumerated() {
+            if let part = v2FilePart(file, fallbackID: "\(dto.id):file:\(index)") {
+                parts.append(part)
+            }
+        }
+        return messageFromV2(
+            id: dto.id,
+            role: .user,
+            parts: parts,
+            mode: dto.agent ?? (agent.isEmpty ? nil : agent),
+            model: dto.model ?? model,
+            sentAtEpochMs: dto.time?.created,
+            contextEstimate: MessageContextEstimate(
+                userCharacters: text.count
+                    + dto.files.reduce(0) { $0 + ($1.source?.text?.count ?? 0) }
+                    + dto.agents.reduce(0) { $0 + ($1.source?.text?.count ?? 0) }
+            )
+        )
+    }
+
+    private func projectV2Synthetic(_ dto: V2SessionMessageDTO, agent: String, model: V2ModelRefDTO?) -> Message? {
+        let text = dto.description?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+            ?? dto.text?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        guard let text else { return nil }
+        return messageFromV2(
+            id: dto.id,
+            role: .user,
+            parts: [.text(TextPart(id: "\(dto.id):text:0", text: text, isStreaming: false, isSynthetic: true))],
+            mode: agent.isEmpty ? nil : agent,
+            model: model,
+            sentAtEpochMs: dto.time?.created,
+            contextEstimate: MessageContextEstimate(userCharacters: text.count)
+        )
+    }
+
+    private func projectV2Skill(_ dto: V2SessionMessageDTO, agent: String, model: V2ModelRefDTO?) -> Message {
+        let text = dto.text ?? ""
+        return messageFromV2(
+            id: dto.id,
+            role: .user,
+            parts: text.isEmpty ? [] : [.text(TextPart(id: "\(dto.id):text:0", text: text, isStreaming: false))],
+            mode: dto.name ?? (agent.isEmpty ? nil : agent),
+            model: model,
+            sentAtEpochMs: dto.time?.created,
+            contextEstimate: MessageContextEstimate(userCharacters: text.count)
+        )
+    }
+
+    private func projectV2Shell(_ dto: V2SessionMessageDTO, agent: String, model: V2ModelRefDTO?) -> [Message] {
+        let command = dto.command ?? ""
+        let completed = dto.time?.completed != nil
+        let user = messageFromV2(
+            id: dto.id,
+            role: .user,
+            parts: command.isEmpty ? [] : [.text(TextPart(id: "\(dto.id):text:0", text: command, isStreaming: false))],
+            mode: agent.isEmpty ? nil : agent,
+            model: model,
+            sentAtEpochMs: dto.time?.created,
+            contextEstimate: MessageContextEstimate(userCharacters: command.count)
+        )
+        let assistant = messageFromV2(
+            id: "\(dto.id):assistant",
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "\(dto.id):tool",
+                        toolName: "bash",
+                        status: completed ? .completed : .running,
+                        title: "Shell",
+                        callID: dto.callID,
+                        output: dto.output
+                    )
+                )
+            ],
+            mode: agent.isEmpty ? nil : agent,
+            model: model,
+            sentAtEpochMs: dto.time?.created
+        )
+        return [user, assistant]
+    }
+
+    private func projectV2Assistant(_ dto: V2SessionMessageDTO) -> Message {
+        let parts = dto.content.compactMap(v2AssistantPart)
+        return messageFromV2(
+            id: dto.id,
+            role: .assistant,
+            parts: parts,
+            fallbackText: dto.error?.message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            cost: dto.cost,
+            tokens: tokenUsage(from: dto.tokens),
+            mode: dto.agent,
+            model: dto.model,
+            sentAtEpochMs: dto.time?.created,
+            contextInputTokens: dto.tokens?.input,
+            contextEstimate: v2AssistantContextEstimate(dto.content)
+        )
+    }
+
+    private func projectV2Compaction(_ dto: V2SessionMessageDTO) -> Message {
+        let summary = dto.summary ?? ""
+        var parts: [MessagePart] = [.compaction(CompactionPart(id: dto.id, auto: dto.reason == "auto"))]
+        if !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append(.text(TextPart(id: "\(dto.id):text:0", text: summary, isStreaming: false)))
+        }
+        return messageFromV2(
+            id: dto.id,
+            role: .assistant,
+            parts: parts,
+            mode: "compaction",
+            sentAtEpochMs: dto.time?.created,
+            contextEstimate: MessageContextEstimate(assistantCharacters: summary.count)
+        )
+    }
+
+    private func messageFromV2(
+        id: String,
+        role: MessageRole,
+        parts: [MessagePart],
+        fallbackText: String = "",
+        cost: Double? = nil,
+        tokens: MessageTokenUsage? = nil,
+        mode: String? = nil,
+        model: V2ModelRefDTO? = nil,
+        sentAtEpochMs: Int64? = nil,
+        contextInputTokens: Int64? = nil,
+        contextEstimate: MessageContextEstimate = MessageContextEstimate()
+    ) -> Message {
+        let flatText = displayText(from: parts)
+        return Message(
+            id: id,
+            role: role,
+            text: flatText.isEmpty ? fallbackText : flatText,
+            parts: parts,
+            cost: cost,
+            tokens: tokens,
+            model: model?.id,
+            modelProviderID: model?.providerID,
+            modelID: model?.id,
+            variant: model?.variant,
+            mode: mode,
+            sentAtEpochMs: sentAtEpochMs,
+            contextInputTokens: contextInputTokens,
+            contextEstimate: contextEstimate
+        )
+    }
+
+    private func v2AssistantPart(_ content: V2AssistantContentDTO) -> MessagePart? {
+        switch content.type {
+        case "text":
+            guard let text = content.text else { return nil }
+            return .text(TextPart(id: content.id, text: text, isStreaming: false))
+        case "tool":
+            guard let name = content.name else { return nil }
+            let state = content.state
+            return .tool(
+                ToolPart(
+                    id: content.id,
+                    toolName: name,
+                    status: toolStatus(from: state?.status),
+                    title: name,
+                    error: state?.error?.message.flatMap { $0.isEmpty ? nil : $0 },
+                    callID: content.id,
+                    input: dictionaryFromInput(state?.input),
+                    output: toolOutput(state),
+                    metadata: state?.structured
+                )
+            )
+        default:
+            return nil
+        }
+    }
+
+    private func v2FilePart(_ file: V2FileAttachmentDTO, fallbackID: String) -> MessagePart? {
+        guard let url = file.uri,
+              let mime = file.mime?.lowercased(),
+              url.lowercased().hasPrefix("data:"),
+              AttachmentDataURL.validates(url, mime: mime),
+              let kind = AttachmentDataURL.kind(for: mime)
+        else { return nil }
+        return .file(
+            FilePart(
+                id: fallbackID,
+                filename: file.name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "Attachment",
+                mime: mime,
+                kind: kind,
+                dataURL: url
+            )
+        )
+    }
+
+    private func dictionaryFromInput(_ input: AnyCodable?) -> [String: AnyCodable]? {
+        switch input {
+        case let .dictionary(object):
+            return object
+        case let .string(raw):
+            guard let data = raw.data(using: .utf8),
+                  let decoded = try? JSONDecoder().decode([String: AnyCodable].self, from: data)
+            else { return nil }
+            return decoded
+        default:
+            return nil
+        }
+    }
+
+    private func toolOutput(_ state: V2ToolStateDTO?) -> String? {
+        let texts = state?.content.compactMap { item -> String? in
+            guard item.type == "text" else { return nil }
+            return item.text.flatMap { $0.isEmpty ? nil : $0 }
+        } ?? []
+        let joined = texts.joined(separator: "\n")
+        return joined.isEmpty ? nil : joined
+    }
+
+    private func v2AssistantContextEstimate(_ content: [V2AssistantContentDTO]) -> MessageContextEstimate {
+        let assistantCharacters = content.reduce(0) { total, item in
+            switch item.type {
+            case "text", "reasoning":
+                total + (item.text?.count ?? 0)
+            default:
+                total
+            }
+        }
+        let toolCharacters = content.reduce(0) { total, item in
+            guard item.type == "tool", let state = item.state else { return total }
+            let inputOverhead = (dictionaryFromInput(state.input)?.keys.count ?? 0) * 16
+            let payload: Int
+            switch state.status {
+            case "pending", "streaming":
+                if case let .string(raw)? = state.input {
+                    payload = raw.count
+                } else {
+                    payload = 0
+                }
+            case "completed":
+                payload = toolOutput(state)?.count ?? 0
+            case "error":
+                payload = state.error?.message?.count ?? 0
+            default:
+                payload = 0
+            }
+            return total + inputOverhead + payload
+        }
+        return MessageContextEstimate(assistantCharacters: assistantCharacters, toolCharacters: toolCharacters)
+    }
 
     private func role(from raw: String) -> MessageRole {
         switch raw.lowercased() {

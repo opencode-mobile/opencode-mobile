@@ -8,8 +8,8 @@
   not `main`; ship when epic is ready)
 - [x] Linear epic [OPE-146](https://linear.app/opencode-mobile/issue/OPE-146/server-api-v2-compatibility)
   - [x] [OPE-147](https://linear.app/opencode-mobile/issue/OPE-147/p0-detect-server-api-protocol) P0
-  - [ ] [OPE-148](https://linear.app/opencode-mobile/issue/OPE-148/p1-read-only-home-on-v2) P1
-  - [ ] [OPE-149](https://linear.app/opencode-mobile/issue/OPE-149/p2-chat-history-on-v2) P2
+  - [x] [OPE-148](https://linear.app/opencode-mobile/issue/OPE-148/p1-read-only-home-on-v2) P1
+  - [x] [OPE-149](https://linear.app/opencode-mobile/issue/OPE-149/p2-chat-history-on-v2) P2
   - [ ] [OPE-150](https://linear.app/opencode-mobile/issue/OPE-150/p3-live-stream-and-prompt-on-v2) P3
   - [ ] [OPE-151](https://linear.app/opencode-mobile/issue/OPE-151/p4-permissions-questions-and-composer-catalogs-on-v2) P4
   - [ ] [OPE-152](https://linear.app/opencode-mobile/issue/OPE-152/p5-compact-revert-todos-vcs-and-add-project-on-v2) P5
@@ -36,6 +36,10 @@
 - [x] P1: Repository routing by cached protocol (Screen Models unchanged)
 - [x] P1: Active→busy status mapping
 - [x] P1: Unit tests (`SessionProtocolRepositoryTests`)
+- [x] P2: V2 message DTOs + `GET /api/session/{id}/message` cursor pages
+- [x] P2: Projected Session.Message → domain `Message` (`MessageDomainAdapter`)
+- [x] P2: `MessageProtocolRouter` for repository + MessageSync seed
+- [x] P2: Unit tests (`MessageProtocolRepositoryTests`, projector cases)
 
 ## Android implementation
 
@@ -52,6 +56,10 @@
 - [x] P1: Repository routing by cached protocol (Screen Models unchanged)
 - [x] P1: Active→busy status mapping
 - [x] P1: Unit tests (`SessionProtocolRepositoryTest`)
+- [x] P2: V2 message DTOs + `GET /api/session/{id}/message` cursor pages
+- [x] P2: Projected Session.Message → domain `Message` (`MessageDomainAdapter`)
+- [x] P2: `MessageProtocolRouter` for repository + MessageSync seed
+- [x] P2: Unit tests (`MessageProtocolRepositoryTest`, projector cases)
 
 ## Blockers
 
@@ -68,4 +76,5 @@
 
 - P1: validate against a live v2 server (home list + open session shell).
 - P1: confirm archive path or gate the home archive action on v2.
-- P2–P6 as in [`plan.md`](plan.md).
+- P2: validate against a live v2 server (open existing session, static history).
+- P3–P6 as in [`plan.md`](plan.md).

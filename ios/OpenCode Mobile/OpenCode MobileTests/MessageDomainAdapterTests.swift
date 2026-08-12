@@ -548,6 +548,104 @@ struct MessageDomainAdapterTests {
         #expect(message.contextEstimate.userCharacters == "agent prompt text".count)
     }
 
+    @Test func projectV2MapsUserAssistantAndSkipsSwitches() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {"id":"msg_switch","type":"agent-switched","agent":"build","time":{"created":1}},
+                  {"id":"msg_user","type":"user","text":"Hello","time":{"created":2}},
+                  {
+                    "id":"msg_asst",
+                    "type":"assistant",
+                    "agent":"build",
+                    "model":{"id":"gpt-5","providerID":"openai"},
+                    "content":[
+                      {"type":"text","id":"txt_1","text":"Hi there"},
+                      {
+                        "type":"tool",
+                        "id":"tool_1",
+                        "name":"bash",
+                        "state":{
+                          "status":"completed",
+                          "input":{"command":"ls"},
+                          "content":[{"type":"text","text":"src"}],
+                          "structured":{}
+                        }
+                      }
+                    ],
+                    "cost":0.1,
+                    "tokens":{"input":10,"output":4,"reasoning":0,"cache":{"read":0,"write":0}},
+                    "time":{"created":3}
+                  }
+                ]
+                """.utf8
+            )
+        )
+
+        let messages = adapter.messages(fromV2: dtos)
+
+        #expect(messages.count == 2)
+        #expect(messages[0].role == .user)
+        #expect(messages[0].text == "Hello")
+        #expect(messages[0].mode == "build")
+        #expect(messages[1].role == .assistant)
+        #expect(messages[1].text == "Hi there")
+        #expect(messages[1].modelID == "gpt-5")
+        #expect(messages[1].modelProviderID == "openai")
+        guard case let .tool(tool) = messages[1].parts.first(where: { if case .tool = $0 { true } else { false } }) else {
+            Issue.record("expected tool part")
+            return
+        }
+        #expect(tool.toolName == "bash")
+        #expect(tool.status == .completed)
+        #expect(tool.output == "src")
+    }
+
+    @Test func projectV2ExpandsShellAndCompaction() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_shell",
+                    "type":"shell",
+                    "callID":"call_1",
+                    "command":"pwd",
+                    "output":"/repo",
+                    "time":{"created":1,"completed":2}
+                  },
+                  {
+                    "id":"msg_compact",
+                    "type":"compaction",
+                    "reason":"auto",
+                    "summary":"Earlier work summarized",
+                    "time":{"created":3}
+                  }
+                ]
+                """.utf8
+            )
+        )
+
+        let messages = adapter.messages(fromV2: dtos)
+
+        #expect(messages.count == 3)
+        #expect(messages[0].role == .user)
+        #expect(messages[0].text == "pwd")
+        #expect(messages[1].id == "msg_shell:assistant")
+        guard case let .tool(shellTool) = messages[1].parts.first else {
+            Issue.record("expected shell tool")
+            return
+        }
+        #expect(shellTool.toolName == "bash")
+        #expect(shellTool.output == "/repo")
+        #expect(messages[2].mode == "compaction")
+        #expect(messages[2].text == "Earlier work summarized")
+        #expect(messages[2].parts.contains { if case let .compaction(part) = $0 { part.auto } else { false } })
+    }
+
     private func decodeMessage(_ json: String) throws -> MessageDTO {
         try decoder.decode(MessageDTO.self, from: Data(json.utf8))
     }

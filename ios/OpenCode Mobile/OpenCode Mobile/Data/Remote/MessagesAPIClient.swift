@@ -8,18 +8,30 @@ nonisolated enum MessagesAPIError: Error {
 
 protocol MessagesAPI: Sendable {
     func listMessages(sessionID: String, directory: String?) async throws -> [MessageDTO]
+    func listMessagesV2(sessionID: String, directory: String?) async throws -> [V2SessionMessageDTO]
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> MessageDTO
     func sendMessage(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws -> MessageDTO
     func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws
 }
 
+extension MessagesAPI {
+    func listMessagesV2(sessionID: String, directory: String?) async throws -> [V2SessionMessageDTO] {
+        []
+    }
+}
+
 nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
+    private let urlSession: URLSession
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    init(connectionProvider: @escaping @Sendable () -> ServerConnection?) {
+    init(
+        connectionProvider: @escaping @Sendable () -> ServerConnection?,
+        urlSession: URLSession = .shared
+    ) {
         self.connectionProvider = connectionProvider
+        self.urlSession = urlSession
     }
 
     private func requireConnection() throws -> ServerConnection {
@@ -31,6 +43,27 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
 
     func listMessages(sessionID: String, directory: String? = nil) async throws -> [MessageDTO] {
         try await get(path: "session/\(sessionID)/message", directory: directory)
+    }
+
+    func listMessagesV2(sessionID: String, directory: String? = nil) async throws -> [V2SessionMessageDTO] {
+        var messages: [V2SessionMessageDTO] = []
+        var cursor: String?
+        var pages = 0
+        repeat {
+            var query: [String: String] = ["order": "asc"]
+            if let cursor {
+                query["cursor"] = cursor
+            }
+            let envelope: APIListEnvelope<V2SessionMessageDTO> = try await get(
+                path: "api/session/\(sessionID)/message",
+                directory: directory,
+                query: query
+            )
+            messages.append(contentsOf: envelope.data)
+            cursor = envelope.cursor?.next.flatMap { $0.isEmpty ? nil : $0 }
+            pages += 1
+        } while cursor != nil && pages < Self.maxV2MessageListPages
+        return messages
     }
 
     func getMessage(sessionID: String, messageID: String, directory: String? = nil) async throws -> MessageDTO {
@@ -48,8 +81,22 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         _ = try await data(for: request)
     }
 
-    private func get<T: Decodable>(path: String, directory: String? = nil) async throws -> T {
-        let data = try await data(for: try requireConnection().authorizedRequest(path: path, directory: directory))
+    private func get<T: Decodable>(
+        path: String,
+        directory: String? = nil,
+        query: [String: String] = [:]
+    ) async throws -> T {
+        var request = try requireConnection().authorizedRequest(path: path, directory: directory)
+        if !query.isEmpty, let url = request.url,
+           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            var items = components.queryItems ?? []
+            query.forEach { name, value in
+                items.append(URLQueryItem(name: name, value: value))
+            }
+            components.queryItems = items
+            request.url = components.url
+        }
+        let data = try await data(for: request)
         return try decoder.decode(T.self, from: data)
     }
 
@@ -70,7 +117,7 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            (data, response) = try await urlSession.data(for: request)
         } catch {
             OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
             throw error
@@ -86,4 +133,6 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         }
         return data
     }
+
+    private static let maxV2MessageListPages = 20
 }

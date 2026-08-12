@@ -1,22 +1,30 @@
 package dev.opencode.mobile.data.remote
 
+import dev.opencode.mobile.data.remote.dto.ApiListEnvelope
 import dev.opencode.mobile.data.remote.dto.MessageDto
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
+import dev.opencode.mobile.data.remote.dto.V2SessionMessageDto
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
 import dev.opencode.mobile.network.setJsonBody
+import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ResponseException
 import io.ktor.client.request.get
+import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 
-class MessagesApi(
-    private val httpClient: OpencodeHttpClient,
+class MessagesApi private constructor(
+    private val httpClient: ClientProvider,
     private val json: Json,
 ) {
+    constructor(httpClient: OpencodeHttpClient, json: Json) : this(ClientProvider(httpClient::get), json)
+
+    internal constructor(httpClient: HttpClient, json: Json) : this(ClientProvider { httpClient }, json)
+
     suspend fun listMessages(
         sessionId: String,
         directory: String? = null,
@@ -26,6 +34,29 @@ class MessagesApi(
             .get("session/$sessionId/message") {
                 applyDirectory(directory)
             }.body()
+
+    suspend fun listMessagesV2(
+        sessionId: String,
+        directory: String? = null,
+    ): List<V2SessionMessageDto> {
+        val messages = mutableListOf<V2SessionMessageDto>()
+        var cursor: String? = null
+        var pages = 0
+        do {
+            val envelope =
+                httpClient
+                    .get()
+                    .get("api/session/$sessionId/message") {
+                        applyDirectory(directory)
+                        parameter("order", "asc")
+                        cursor?.let { parameter("cursor", it) }
+                    }.body<ApiListEnvelope<V2SessionMessageDto>>()
+            messages += envelope.data
+            cursor = envelope.cursor?.next?.takeIf { it.isNotBlank() }
+            pages++
+        } while (cursor != null && pages < MAX_V2_MESSAGE_LIST_PAGES)
+        return messages
+    }
 
     suspend fun getMessage(
         sessionId: String,
@@ -65,5 +96,13 @@ class MessagesApi(
         }
         // Release the 204 response body so OkHttp can reuse the connection.
         response.bodyAsText()
+    }
+
+    private fun interface ClientProvider {
+        fun get(): HttpClient
+    }
+
+    private companion object {
+        const val MAX_V2_MESSAGE_LIST_PAGES = 20
     }
 }

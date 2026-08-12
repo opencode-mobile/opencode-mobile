@@ -715,4 +715,94 @@ class MessageDomainAdapterTest {
 
         assertEquals("agent prompt text".length, message.contextEstimate.userCharacters)
     }
+
+    @Test
+    fun projectV2_mapsUserAssistantAndSkipsSwitches() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {"id":"msg_switch","type":"agent-switched","agent":"build","time":{"created":1}},
+                  {"id":"msg_user","type":"user","text":"Hello","time":{"created":2}},
+                  {
+                    "id":"msg_asst",
+                    "type":"assistant",
+                    "agent":"build",
+                    "model":{"id":"gpt-5","providerID":"openai"},
+                    "content":[
+                      {"type":"text","id":"txt_1","text":"Hi there"},
+                      {
+                        "type":"tool",
+                        "id":"tool_1",
+                        "name":"bash",
+                        "state":{
+                          "status":"completed",
+                          "input":{"command":"ls"},
+                          "content":[{"type":"text","text":"src"}],
+                          "structured":{}
+                        }
+                      }
+                    ],
+                    "cost":0.1,
+                    "tokens":{"input":10,"output":4,"reasoning":0,"cache":{"read":0,"write":0}},
+                    "time":{"created":3}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val messages = adapter.projectV2(dtos)
+
+        assertEquals(2, messages.size)
+        assertEquals(MessageRole.User, messages[0].role)
+        assertEquals("Hello", messages[0].text)
+        assertEquals("build", messages[0].mode)
+        assertEquals(MessageRole.Assistant, messages[1].role)
+        assertEquals("Hi there", messages[1].text)
+        assertEquals("gpt-5", messages[1].modelId)
+        assertEquals("openai", messages[1].modelProviderId)
+        val tool = messages[1].parts.filterIsInstance<MessagePart.Tool>().single()
+        assertEquals("bash", tool.toolName)
+        assertEquals(ToolStatus.Completed, tool.status)
+        assertEquals("src", tool.output)
+    }
+
+    @Test
+    fun projectV2_expandsShellAndCompaction() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {
+                    "id":"msg_shell",
+                    "type":"shell",
+                    "callID":"call_1",
+                    "command":"pwd",
+                    "output":"/repo",
+                    "time":{"created":1,"completed":2}
+                  },
+                  {
+                    "id":"msg_compact",
+                    "type":"compaction",
+                    "reason":"auto",
+                    "summary":"Earlier work summarized",
+                    "time":{"created":3}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val messages = adapter.projectV2(dtos)
+
+        assertEquals(3, messages.size)
+        assertEquals(MessageRole.User, messages[0].role)
+        assertEquals("pwd", messages[0].text)
+        assertEquals("msg_shell:assistant", messages[1].id)
+        val shellTool = messages[1].parts.filterIsInstance<MessagePart.Tool>().single()
+        assertEquals("bash", shellTool.toolName)
+        assertEquals("/repo", shellTool.output)
+        assertEquals("compaction", messages[2].mode)
+        assertEquals("Earlier work summarized", messages[2].text)
+        assertTrue(messages[2].parts.any { it is MessagePart.Compaction && it.auto })
+    }
 }
