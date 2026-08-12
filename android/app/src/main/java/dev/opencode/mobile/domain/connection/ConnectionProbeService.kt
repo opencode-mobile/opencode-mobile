@@ -1,8 +1,6 @@
 package dev.opencode.mobile.domain.connection
 
 import dev.opencode.mobile.data.remote.dto.HealthDto
-import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
-import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.network.KtorClientFactory
@@ -21,6 +19,8 @@ class ConnectionProbeService(
         KtorClientFactory.create(connection, json)
     },
 ) {
+    private val detector = ServerProtocolDetector(adapter)
+
     /**
      * Dual-probe health and return the detected [ServerProtocol].
      *
@@ -29,42 +29,10 @@ class ConnectionProbeService(
     suspend fun probe(connection: ServerConnection): ServerProtocol {
         val client = clientFactory(connection)
         try {
-            var lastError: Throwable? = null
-            val globalHealth =
-                runCatching { client.fetchHealth("global/health") }
-                    .onFailure { lastError = it }
-                    .getOrNull()
-
-            val apiHealth =
-                if (globalHealth?.healthy == true) {
-                    null
-                } else {
-                    runCatching { client.fetchHealth("api/health") }
-                        .onFailure { lastError = it }
-                        .getOrNull()
-                }
-
-            val protocol =
-                ServerProtocolClassifier.classify(globalHealth, apiHealth)
-                    ?: throw adapter.mapProbeError(
-                        lastError ?: ServerProbeError.Transport(IllegalStateException("No health endpoint")),
-                    )
-
-            when {
-                globalHealth?.healthy == true -> adapter.requireHealthy(globalHealth)
-                apiHealth?.pid != null -> {
-                    if (apiHealth.healthy == false) {
-                        throw ServerProbeError.Unhealthy(apiHealth.version)
-                    }
-                }
-                apiHealth != null -> adapter.requireHealthy(apiHealth)
-            }
-
-            DiagnosticLog.info(
-                DiagnosticLogArea.Connection,
-                "protocol=${protocol.wireValue}",
+            return detector.detect(
+                fetchGlobalHealth = { client.fetchHealth("global/health") },
+                fetchApiHealth = { client.fetchHealth("api/health") },
             )
-            return protocol
         } catch (error: Throwable) {
             throw if (error is ServerProbeError) error else adapter.mapProbeError(error)
         } finally {

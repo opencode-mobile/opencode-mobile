@@ -2,9 +2,7 @@ package dev.opencode.mobile.data.remote
 
 import dev.opencode.mobile.data.remote.dto.HealthDto
 import dev.opencode.mobile.domain.connection.ServerProtocol
-import dev.opencode.mobile.domain.connection.ServerProtocolClassifier
-import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
-import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import dev.opencode.mobile.domain.connection.ServerProtocolDetector
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.network.OpencodeHttpClient
@@ -17,6 +15,8 @@ class HealthApi(
     private val httpClient: OpencodeHttpClient,
     private val adapter: ProjectDomainAdapter = ProjectDomainAdapter(),
 ) {
+    private val detector = ServerProtocolDetector(adapter)
+
     suspend fun getGlobalHealth(): HealthDto = fetchHealth("global/health")
 
     suspend fun getApiHealth(): HealthDto = fetchHealth("api/health")
@@ -28,44 +28,15 @@ class HealthApi(
      * Dual-probe health endpoints and return the detected protocol.
      * Throws [ServerProbeError] when neither endpoint is usable.
      */
-    suspend fun detectProtocol(): ServerProtocol {
-        var lastError: Throwable? = null
-        val globalHealth =
-            runCatching { getGlobalHealth() }
-                .onFailure { lastError = it }
-                .getOrNull()
-
-        val apiHealth =
-            if (globalHealth?.healthy == true) {
-                null
-            } else {
-                runCatching { getApiHealth() }
-                    .onFailure { lastError = it }
-                    .getOrNull()
-            }
-
-        val protocol =
-            ServerProtocolClassifier.classify(globalHealth, apiHealth)
-                ?: throw adapter.mapProbeError(
-                    lastError ?: ServerProbeError.Transport(IllegalStateException("No health endpoint")),
-                )
-
-        when {
-            globalHealth?.healthy == true -> adapter.requireHealthy(globalHealth)
-            apiHealth?.pid != null -> {
-                if (apiHealth.healthy == false) {
-                    throw ServerProbeError.Unhealthy(apiHealth.version)
-                }
-            }
-            apiHealth != null -> adapter.requireHealthy(apiHealth)
+    suspend fun detectProtocol(): ServerProtocol =
+        try {
+            detector.detect(
+                fetchGlobalHealth = ::getGlobalHealth,
+                fetchApiHealth = ::getApiHealth,
+            )
+        } catch (error: Throwable) {
+            throw if (error is ServerProbeError) error else adapter.mapProbeError(error)
         }
-
-        DiagnosticLog.info(
-            DiagnosticLogArea.Connection,
-            "protocol=${protocol.wireValue}",
-        )
-        return protocol
-    }
 
     private suspend fun fetchHealth(path: String): HealthDto {
         val response: HttpResponse = httpClient.get().get(path)

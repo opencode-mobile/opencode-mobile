@@ -48,8 +48,10 @@ class ActiveConnectionManager
 
         fun requireConnection(): ServerConnection = connection ?: error("No active server connection")
 
-        fun updateProtocol(protocol: ServerProtocol) {
-            connection = connection?.withProtocol(protocol)
+        suspend fun updateProtocol(protocol: ServerProtocol) {
+            mutex.withLock {
+                connection = connection?.withProtocol(protocol)
+            }
         }
 
         suspend fun applyProfile(

@@ -52,7 +52,10 @@ nonisolated struct ProjectsAPIClient: Sendable {
             do {
                 return try await getGlobalHealth()
             } catch {
-                lastError = error
+                lastError = ServerProtocolProbeErrors.prefer(
+                    previous: lastError,
+                    next: adapter.mapProbeError(error)
+                )
                 return nil
             }
         }()
@@ -65,7 +68,10 @@ nonisolated struct ProjectsAPIClient: Sendable {
                 do {
                     return try await getApiHealth()
                 } catch {
-                    lastError = error
+                    lastError = ServerProtocolProbeErrors.prefer(
+                        previous: lastError,
+                        next: adapter.mapProbeError(error)
+                    )
                     return nil
                 }
             }()
@@ -75,7 +81,13 @@ nonisolated struct ProjectsAPIClient: Sendable {
             globalHealth: globalHealth,
             apiHealth: apiHealth
         ) else {
-            throw adapter.mapProbeError(lastError ?? ProjectsAPIError.invalidResponse)
+            throw adapter.mapProbeError(
+                ServerProtocolProbeErrors.unresolved(
+                    globalHealth: globalHealth,
+                    apiHealth: apiHealth,
+                    fetchError: lastError
+                )
+            )
         }
 
         switch detected {

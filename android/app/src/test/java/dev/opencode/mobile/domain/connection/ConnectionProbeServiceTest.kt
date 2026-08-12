@@ -171,6 +171,66 @@ class ConnectionProbeServiceTest {
             }
         }
 
+    @Test
+    fun probe_prefersAuthFailureOverLaterNotFound() =
+        runTest {
+            val service =
+                service { request ->
+                    when (request.url.encodedPath) {
+                        "/global/health" ->
+                            respond(
+                                content = """{"error":"unauthorized"}""",
+                                status = HttpStatusCode.Unauthorized,
+                                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                            )
+                        "/api/health" ->
+                            respond(
+                                content = """{}""",
+                                status = HttpStatusCode.NotFound,
+                                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                            )
+                        else -> error("unexpected ${request.url}")
+                    }
+                }
+
+            try {
+                service.probe(connection)
+                fail("expected ServerProbeError.Http 401")
+            } catch (error: ServerProbeError.Http) {
+                assertEquals(401, error.statusCode)
+            }
+        }
+
+    @Test
+    fun probe_reportsUnhealthyWhenBodiesArePresentButUnusable() =
+        runTest {
+            val service =
+                service { request ->
+                    when (request.url.encodedPath) {
+                        "/global/health" ->
+                            respond(
+                                content = """{"healthy":false,"version":"1.0.0"}""",
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                            )
+                        "/api/health" ->
+                            respond(
+                                content = """{}""",
+                                status = HttpStatusCode.NotFound,
+                                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                            )
+                        else -> error("unexpected ${request.url}")
+                    }
+                }
+
+            try {
+                service.probe(connection)
+                fail("expected ServerProbeError.Unhealthy")
+            } catch (error: ServerProbeError.Unhealthy) {
+                assertEquals("1.0.0", error.version)
+            }
+        }
+
     private fun service(handler: MockRequestHandler) =
         ConnectionProbeService(
             json = json,
