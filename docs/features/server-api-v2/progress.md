@@ -40,6 +40,10 @@
 - [x] P2: Projected Session.Message → domain `Message` (`MessageDomainAdapter`)
 - [x] P2: `MessageProtocolRouter` for repository + MessageSync seed
 - [x] P2: Unit tests (`MessageProtocolRepositoryTests`, projector cases)
+- [x] P3: `GET /api/event` subscribe when cached protocol is v2
+- [x] P3: V2 `{id,type,data}` envelope parse + `session.next.*` projector
+- [x] P3: `prompt_async` → `POST /api/session/{id}/prompt` (+ agent/model switch)
+- [x] P3: Unit tests (event projector, prompt routing, v1 SSE/prompt regression)
 
 ## Android implementation
 
@@ -60,6 +64,10 @@
 - [x] P2: Projected Session.Message → domain `Message` (`MessageDomainAdapter`)
 - [x] P2: `MessageProtocolRouter` for repository + MessageSync seed
 - [x] P2: Unit tests (`MessageProtocolRepositoryTest`, projector cases)
+- [x] P3: `GET /api/event` subscribe when cached protocol is v2
+- [x] P3: V2 `{id,type,data}` envelope parse + `session.next.*` projector
+- [x] P3: `prompt_async` → `POST /api/session/{id}/prompt` (+ agent/model switch)
+- [x] P3: Unit tests (event projector, prompt routing, v1 SSE/prompt regression)
 
 ## Blockers
 
@@ -77,4 +85,5 @@
 - P1: validate against a live v2 server (home list + open session shell).
 - P1: confirm archive path or gate the home archive action on v2.
 - P2: validate against a live v2 server (open existing session, static history).
-- P3–P6 as in [`plan.md`](plan.md).
+- P3: validate against a live v2 server (send prompt, stream tokens, reconnect).
+- P4–P6 as in [`plan.md`](plan.md).

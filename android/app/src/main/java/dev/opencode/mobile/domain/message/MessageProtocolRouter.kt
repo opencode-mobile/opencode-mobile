@@ -30,6 +30,24 @@ class MessageProtocolRouter
                 api.listMessages(sessionId, directory).map(adapter::toMessage)
             }
 
+        suspend fun sendPromptAsync(
+            sessionId: String,
+            options: PromptSendOptions,
+            directory: String?,
+        ) {
+            if (isV2()) {
+                options.mode?.takeIf { it.isNotBlank() }?.let { agent ->
+                    api.switchSessionAgent(sessionId, agent, directory)
+                }
+                adapter.toV2SwitchModelRequest(options)?.let { model ->
+                    api.switchSessionModel(sessionId, model, directory)
+                }
+                api.sendPromptV2(sessionId, adapter.toV2PromptRequest(options), directory)
+            } else {
+                api.sendPromptAsync(sessionId, adapter.toSendRequest(options), directory)
+            }
+        }
+
         private suspend fun isV2(): Boolean {
             protocolMutex.withLock {
                 activeConnectionManager?.currentProtocol()?.let { return it == ServerProtocol.V2 }

@@ -69,3 +69,30 @@ normalization.
 
 **Alternative rejected:** Keep v2 wire types in the store — would fork
 MessageSync and timeline rendering per protocol.
+
+## V2 live events project into OpencodeEvent (2026-08-12)
+
+**Choice:** Parse `/api/event` native `{id,type,data}` envelopes in
+`EventDomainAdapter` and project `session.next.*` (plus `permission.v2.*` /
+`question.v2.*`) into today’s `OpencodeEvent` types before MessageSync and
+LiveStores see them. Text streaming uses synthetic `message.part.delta`;
+`session.next.step.ended` becomes `session.idle` so reconnect-style full
+reload remains the authority catch-up.
+
+**Why:** MessageSync already applies `message.*` / `session.idle`. Desktop’s
+session.next reducer is incomplete and uses unpublished type names; published
+OpenAPI `session.next.*` is the contract.
+
+**Alternative rejected:** Fork MessageSync per protocol, or copy desktop’s
+non-published `session.text.delta` / `session.execution.*` labels.
+
+## V2 prompt send keeps PromptSendOptions (2026-08-12)
+
+**Choice:** Composer still builds `PromptSendOptions`. On v2 the router
+optionally `POST .../agent` and `POST .../model`, then
+`POST /api/session/{id}/prompt` with nested `{text,files,agents}` and
+`delivery: steer`.
+
+**Why:** Per-prompt agent/model are not on the v2 prompt body. Mentions and
+attachments map onto `prompt.agents` / `prompt.files` (`uri` ← data URL).
+v1 `prompt_async` + `parts[]` stays unchanged.

@@ -109,9 +109,9 @@ final class DefaultMessageRepository: MessageRepository {
             "prompt_async session=\(sessionID) fileParts=\(options.attachments.count) textCharacters=\(options.text.count)"
         )
         try await run {
-            try await api.sendPromptAsync(
+            try await protocolRouter.sendPromptAsync(
                 sessionID: sessionID,
-                body: adapter.sendRequest(options: options),
+                options: options,
                 directory: directory
             )
         }

@@ -95,7 +95,7 @@ class DefaultMessageRepository
                 "sendPromptAsync session=$sessionId directory=${directory ?: "-"} " +
                     "text=${options.text.isNotBlank()} files=${options.attachments.size}",
             )
-            runCatching { api.sendPromptAsync(sessionId, adapter.toSendRequest(options), directory) }
+            runCatching { protocolRouter.sendPromptAsync(sessionId, options, directory) }
                 .getOrElse { throw adapter.mapError(it) }
         }
 

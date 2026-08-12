@@ -169,6 +169,30 @@ nonisolated struct MessageDomainAdapter: Sendable {
         )
     }
 
+    func v2PromptRequest(options: PromptSendOptions) -> V2PromptRequestDTO {
+        let files = options.attachments.map { V2PromptFileDTO(uri: $0.dataURL, name: $0.filename) }
+        let agents = ComposerMentionRouting.agentParts(text: options.text, mentions: options.agentMentions).map { part in
+            V2PromptAgentDTO(
+                name: part.name,
+                source: V2PromptSourceDTO(start: part.start, end: part.end, text: part.sourceValue)
+            )
+        }
+        return V2PromptRequestDTO(
+            prompt: V2PromptInputDTO(
+                text: options.text,
+                files: files.isEmpty ? nil : files,
+                agents: agents.isEmpty ? nil : agents
+            )
+        )
+    }
+
+    func v2SwitchModelRequest(options: PromptSendOptions) -> V2SwitchModelRequestDTO? {
+        guard let model = options.model else { return nil }
+        return V2SwitchModelRequestDTO(
+            model: V2PromptModelRefDTO(id: model.modelID, providerID: model.providerID, variant: options.variant)
+        )
+    }
+
     func mapError(_ error: Error) -> MessageError {
         if let messageError = error as? MessageError {
             return messageError

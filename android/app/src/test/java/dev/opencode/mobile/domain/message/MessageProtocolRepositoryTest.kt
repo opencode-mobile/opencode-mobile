@@ -85,6 +85,73 @@ class MessageProtocolRepositoryTest {
         }
 
     @Test
+    fun v1SendPrompt_usesPromptAsyncPartsBody() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val router = router(client, ServerProtocol.V1)
+
+            router.sendPromptAsync(
+                "ses_1",
+                PromptSendOptions(text = "Hello"),
+                "/repo",
+            )
+
+            assertTrue(requests.single().url.encodedPath.endsWith("/session/ses_1/prompt_async"))
+            val body = (requests.single().body as io.ktor.http.content.TextContent).text
+            assertTrue(body.contains("\"parts\""))
+            assertTrue(body.contains("Hello"))
+        }
+
+    @Test
+    fun v2SendPrompt_switchesAgentModelThenPostsPrompt() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.OK)
+                }
+            val router = router(client, ServerProtocol.V2)
+
+            router.sendPromptAsync(
+                "ses_2",
+                PromptSendOptions(
+                    text = "Hello",
+                    attachments =
+                        listOf(
+                            Attachment(
+                                id = "a1",
+                                filename = "note.txt",
+                                mime = "text/plain",
+                                kind = AttachmentKind.Text,
+                                dataUrl = "data:text/plain;base64,SGk=",
+                                byteCount = 2,
+                            ),
+                        ),
+                    model = PromptModelSelection(providerId = "openai", modelId = "gpt-5"),
+                    variant = "high",
+                    mode = "build",
+                ),
+                "/repo",
+            )
+
+            assertEquals(3, requests.size)
+            assertTrue(requests[0].url.encodedPath.endsWith("/api/session/ses_2/agent"))
+            assertTrue(requests[1].url.encodedPath.endsWith("/api/session/ses_2/model"))
+            assertTrue(requests[2].url.encodedPath.endsWith("/api/session/ses_2/prompt"))
+            val promptBody = (requests[2].body as io.ktor.http.content.TextContent).text
+            assertTrue(promptBody.contains("Hello"))
+            assertTrue(promptBody.contains("data:text/plain;base64,SGk="))
+            assertTrue(promptBody.contains("steer"))
+            assertTrue(!promptBody.contains("\"parts\""))
+        }
+
+    @Test
     fun v2ListMessages_followsCursorPages() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()

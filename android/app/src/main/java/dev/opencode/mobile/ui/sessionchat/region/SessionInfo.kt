@@ -412,6 +412,7 @@ class SessionInfo(
             (error?.get("message") as? JsonPrimitive)?.contentOrNull,
             (properties?.get("message") as? JsonPrimitive)?.contentOrNull,
             (error?.get("name") as? JsonPrimitive)?.contentOrNull,
+            (error?.get("type") as? JsonPrimitive)?.contentOrNull,
         ).firstOrNull { !it.isNullOrBlank() } ?: "Session work failed"
     }
 

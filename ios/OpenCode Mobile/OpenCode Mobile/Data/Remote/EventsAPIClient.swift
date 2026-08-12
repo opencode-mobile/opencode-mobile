@@ -32,7 +32,7 @@ nonisolated final class EventsAPIClient: Sendable {
             throw EventsAPIError.noActiveConnection
         }
 
-        let normalizedPath = "global/event"
+        let normalizedPath = Self.subscribePath(for: connection.serverProtocol)
         let url = connection.apiBaseURL.appendingPathComponent(normalizedPath)
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -74,6 +74,14 @@ nonisolated final class EventsAPIClient: Sendable {
         for payload in parser.finish() {
             await onDataLine(payload)
         }
+    }
+
+    var eventSubscribePath: String {
+        Self.subscribePath(for: connectionProvider()?.serverProtocol)
+    }
+
+    private static func subscribePath(for serverProtocol: ServerProtocol?) -> String {
+        serverProtocol == .v2 ? "api/event" : "global/event"
     }
 }
 

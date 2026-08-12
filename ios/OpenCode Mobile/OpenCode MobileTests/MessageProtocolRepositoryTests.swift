@@ -91,6 +91,55 @@ struct MessageProtocolRepositoryTests {
         #expect(url.path.contains("/api/session/ses_2/message"))
     }
 
+    @Test func v1SendPromptUsesPromptAsyncPartsBody() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            MessageStubResponse(statusCode: 204, body: "")
+        ])
+        let router = makeRouter(serverProtocol: .v1)
+
+        try await router.sendPromptAsync(
+            sessionID: "ses_1",
+            options: PromptSendOptions(text: "Hello"),
+            directory: "/repo"
+        )
+
+        let url = try #require(MessageProtocolURLProtocol.requests.first?.url)
+        #expect(url.path.hasSuffix("/session/ses_1/prompt_async"))
+    }
+
+    @Test func v2SendPromptSwitchesAgentModelThenPostsPrompt() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            MessageStubResponse(statusCode: 204, body: ""),
+            MessageStubResponse(statusCode: 204, body: ""),
+            MessageStubResponse(statusCode: 200, body: #"{"data":{"id":"msg_1","sessionID":"ses_2","prompt":{"text":"Hello"},"delivery":"steer","admittedSeq":1,"timeCreated":1}}"#)
+        ])
+        let router = makeRouter(serverProtocol: .v2)
+        let attachment = Attachment(
+            id: "a1",
+            filename: "note.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "data:text/plain;base64,SGk="
+        )
+
+        try await router.sendPromptAsync(
+            sessionID: "ses_2",
+            options: PromptSendOptions(
+                text: "Hello",
+                attachments: [attachment],
+                model: PromptModelSelection(providerID: "openai", modelID: "gpt-5"),
+                variant: "high",
+                mode: "build"
+            ),
+            directory: "/repo"
+        )
+
+        #expect(MessageProtocolURLProtocol.requests.count == 3)
+        #expect(MessageProtocolURLProtocol.requests[0].url?.path.hasSuffix("/api/session/ses_2/agent") == true)
+        #expect(MessageProtocolURLProtocol.requests[1].url?.path.hasSuffix("/api/session/ses_2/model") == true)
+        #expect(MessageProtocolURLProtocol.requests[2].url?.path.hasSuffix("/api/session/ses_2/prompt") == true)
+    }
+
     private func makeManager(serverProtocol: ServerProtocol?) -> ActiveConnectionManager {
         let manager = ActiveConnectionManager()
         manager.applyConnection(

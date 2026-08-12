@@ -8,6 +8,7 @@ data class EventEnvelopeDto(
     val payload: EventPayloadDto? = null,
     val type: String? = null,
     val properties: JsonObject? = null,
+    val data: JsonObject? = null,
 )
 
 @Serializable

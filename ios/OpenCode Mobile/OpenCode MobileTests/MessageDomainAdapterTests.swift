@@ -123,6 +123,43 @@ struct MessageDomainAdapterTests {
         #expect(body.parts[0].type == "file")
     }
 
+    @Test func v2PromptRequest_mapsTextFilesAndAgents() {
+        let attachment = Attachment(
+            id: "attachment-1",
+            filename: "notes.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "data:text/plain;base64,SGk="
+        )
+        let body = adapter.v2PromptRequest(
+            options: PromptSendOptions(
+                text: "@explore please",
+                attachments: [attachment],
+                mode: "build",
+                agentMentions: [AgentMention(id: "m1", name: "explore", start: 0, end: 8)]
+            )
+        )
+        #expect(body.prompt.text == "@explore please")
+        #expect(body.delivery == "steer")
+        #expect(body.prompt.files?.first?.uri == "data:text/plain;base64,SGk=")
+        #expect(body.prompt.files?.first?.name == "notes.txt")
+        #expect(body.prompt.agents?.first?.name == "explore")
+        #expect(body.prompt.agents?.first?.source?.text == "@explore")
+    }
+
+    @Test func v2SwitchModelRequest_mapsProviderModelAndVariant() {
+        let body = adapter.v2SwitchModelRequest(
+            options: PromptSendOptions(
+                text: "Hello",
+                model: PromptModelSelection(providerID: "anthropic", modelID: "claude-sonnet"),
+                variant: "high"
+            )
+        )
+        #expect(body?.model.id == "claude-sonnet")
+        #expect(body?.model.providerID == "anthropic")
+        #expect(body?.model.variant == "high")
+    }
+
     @Test func compactToolLabel_pending_returnsHourglass() {
         #expect(
             adapter.compactToolLabel(for: ToolPart(toolName: "webfetch", status: .pending)) == "\u{231B} webfetch"
