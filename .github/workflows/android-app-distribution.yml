@@ -51,6 +51,26 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Ensure Android NDK for native symbols
+        shell: bash
+        run: |
+          set -euo pipefail
+          ndk_version="27.2.12479018"
+          if [[ -d "${ANDROID_HOME:-}/ndk/${ndk_version}" ]]; then
+            echo "NDK ${ndk_version} already installed."
+            exit 0
+          fi
+          sdkmanager_bin=""
+          if [[ -x "${ANDROID_HOME:-}/cmdline-tools/latest/bin/sdkmanager" ]]; then
+            sdkmanager_bin="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          elif command -v sdkmanager >/dev/null 2>&1; then
+            sdkmanager_bin="$(command -v sdkmanager)"
+          else
+            echo "sdkmanager not found; cannot install NDK ${ndk_version}." >&2
+            exit 1
+          fi
+          yes | "$sdkmanager_bin" "ndk;${ndk_version}"
+
       - name: Prepare protected credentials
         shell: bash
         env:

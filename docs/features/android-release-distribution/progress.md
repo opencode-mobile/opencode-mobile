@@ -10,6 +10,8 @@
       → [OPE-71](https://linear.app/opencode-mobile/issue/OPE-71/publish-to-play-internal-and-run-test-lab-robo)
       → [OPE-72](https://linear.app/opencode-mobile/issue/OPE-72/ship-crashlytics-and-minimal-analytics-on-release-builds)
       → [OPE-73](https://linear.app/opencode-mobile/issue/OPE-73/distribute-every-merged-android-build-through-firebase-app)
+      → [OPE-141](https://linear.app/opencode-mobile/issue/OPE-141/ship-play-crash-symbolication-for-release-builds)
+- [x] OPE-141 refined in `ope-141-plan.md`
 - [x] Grilled decisions accepted in `decisions.md`, including personal
       ownership, package-risk acceptance, signing/authentication, workflow
       boundaries, release observability, and Test Lab cost controls
@@ -20,7 +22,8 @@
 - [x] Complete OPE-70
 - [x] Complete OPE-71
 - [x] Complete OPE-72
-- [ ] Complete OPE-73
+- [x] Complete OPE-73
+- [ ] Complete OPE-141
 - [x] Update README CI table once workflows exist
 
 ## Design-system dependencies
@@ -104,12 +107,22 @@ follow-up avoids an out-of-scope Play review.
 
 ## Remaining work
 
-1. Merge the APK follow-up and complete one real automatic App Distribution run.
-2. Migrate the Pixel 9 once from the Play app-signing certificate to the upload-
-   key certificate, then install and open the Firebase release.
-3. Keep OPE-69 open until OPE-73 is complete.
+1. Complete OPE-141 Play crash symbolication: merge the branch, publish one
+   protected Android Release with `verify_crashlytics=true`, confirm Play
+   Console warnings are gone, and confirm the Crashlytics verification stack is
+   symbolicated.
+2. Optionally enable `isShrinkResources` after minify is proven.
+3. Deferred hardening before broader distribution: add a second trusted
+   administrator and optionally place another encrypted credential copy on an
+   offline device or removable drive.
 
-Deferred hardening before broader distribution: add a second trusted
-administrator and optionally place another encrypted credential copy on an
-offline device or removable drive. The controlled local credentials folder and
-an independently encrypted off-device cloud backup are in place.
+## Android implementation — OPE-141
+
+In progress on `feature/ope-141-play-crash-symbolication`:
+
+- release R8 minify enabled with app keep attributes;
+- native debug symbols packaged via `SYMBOL_TABLE`;
+- CI NDK install, AAB symbolication metadata verification, and mapping artifact
+  retention;
+- Crashlytics NDK still deferred.
+

@@ -55,14 +55,24 @@ gh workflow run "Android Release" --ref main -f version_name=0.1.0
 or `0.1.0-internal.1`. The workflow derives `versionCode` from the monotonically
 increasing GitHub run number.
 
-Each successful run uploads two seven-day artifacts:
+Each successful run uploads three artifacts:
 
-- `android-aab-<version-name>-<run-number>` — signed AAB for Play;
-- `android-apk-<version-name>-<run-number>` — signed APK for Test Lab.
+- `android-aab-<version-name>-<run-number>` — signed AAB for Play (7 days);
+- `android-apk-<version-name>-<run-number>` — signed APK for Test Lab (7 days);
+- `android-mapping-<version-name>-<run-number>` — R8 `mapping.txt` (90 days).
 
-The workflow verifies the AAB with `jarsigner` and the APK with `apksigner`
-before upload. A missing secret, malformed version, signing failure, or signature
-verification failure stops the run.
+The workflow verifies the AAB with `jarsigner`, the APK with `apksigner`, and
+confirms the AAB embeds R8 mapping metadata before Play upload. A missing
+secret, malformed version, signing failure, signature verification failure, or
+missing R8 mapping stops the run. Native debug-symbol metadata is reported when
+present; pre-stripped AndroidX `.so` files may omit it without failing the run.
+
+Release builds enable R8 minify and request native debug symbols
+(`ndk.debugSymbolLevel = SYMBOL_TABLE`). Mapping rides in the AAB for Play and
+is uploaded to Crashlytics by the Firebase Crashlytics Gradle plugin. Resource
+shrinking stays off until minify is proven on a Play-internal build. Current
+release `.so` files come from AndroidX already stripped, so Play may still show
+the native-debug-symbols advisory until unstripped native code is present.
 
 ## Upload certificate
 
@@ -237,6 +247,12 @@ the app, enable Crashlytics debug logging through ADB, and check for a
 successful report upload before changing code. Do not paste raw dashboard
 exports, tester identifiers, app content, or credentials into the repository or
 Linear.
+
+After an OPE-141 release, also confirm in Play Console that the uploaded AAB no
+longer warns about missing deobfuscation/mapping, and that the Crashlytics
+verification stack is symbolicated (class and method names readable). A remaining
+native-debug-symbols advisory is expected while only pre-stripped AndroidX
+`.so` files are present.
 
 OPE-72 protected-main acceptance used Android Release
 [run 30009973764](https://github.com/opencode-mobile/opencode-mobile/actions/runs/30009973764),

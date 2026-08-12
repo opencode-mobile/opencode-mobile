@@ -75,6 +75,8 @@ ktlint {
 android {
     namespace = "dev.opencode.mobile"
     compileSdk = 36
+    // Pin NDK so release builds can package native debug symbols for Play.
+    ndkVersion = "27.2.12479018"
     defaultConfig {
         applicationId = "dev.opencode.mobile"
         minSdk = 24
@@ -96,10 +98,16 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            // Resource shrinking stays off until minify is proven on Play-internal.
+            isShrinkResources = false
             signingConfig = signingConfigs.findByName("release")
             manifestPlaceholders["crashlyticsVerificationEnabled"] = verifyCrashlytics
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            ndk {
+                // Function names for Play / Android Vitals native stacks without FULL size cost.
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
         }
     }
     compileOptions {

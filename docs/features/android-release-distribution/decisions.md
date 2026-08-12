@@ -231,3 +231,29 @@ separate from the canonical Play release workflow's version sequence.
 **Revisit when:** The Play app is intentionally reviewed and published, Firebase
 supports delivery with the normal Play app-signing certificate, or the project
 replaces App Distribution with a Play testing-track release on every merge.
+
+## Release AABs carry Play + Crashlytics symbolication inputs
+
+**Status:** Accepted for OPE-141 implementation
+
+**Decision:** Enable R8 minify on release builds, keep `isShrinkResources`
+false until minify is proven on Play internal, pin NDK `27.2.12479018`, and set
+`ndk.debugSymbolLevel = SYMBOL_TABLE` so release AABs embed the R8 mapping and,
+when available, native debug symbols. Rely on AAB metadata for Play Console
+symbolication and on the Crashlytics Gradle plugin's default mapping upload for
+Firebase. Retain `mapping.txt` as a ninety-day workflow artifact for forensics.
+Do not add Crashlytics NDK in this ticket.
+
+Current release native libraries come only from AndroidX and ship already
+stripped, so AGP may omit the AAB `debugsymbols` metadata even with
+`debugSymbolLevel` set. That Play native-symbol warning can remain until the app
+ships unstripped native code or a dependency provides symbols. The R8/mapping
+path is the actionable fix for Kotlin/Java stacks.
+
+**Why:** Play Console warnings are about missing symbolication assets, not
+unsigned or broken builds. Embedding mapping in the AAB avoids a manual Play
+upload step, while Crashlytics still needs the mapping for its own dashboard.
+Deferring resource shrinking and Crashlytics NDK keeps the first R8 cut focused
+on stack readability without expanding native crash scope beyond what the
+shipped `.so` files can support.
+
