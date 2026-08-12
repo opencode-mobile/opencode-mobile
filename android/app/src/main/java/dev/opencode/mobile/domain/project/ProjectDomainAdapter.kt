@@ -6,12 +6,14 @@ import io.ktor.client.plugins.ResponseException
 import java.io.File
 
 class ProjectDomainAdapter {
-    fun toProject(dto: ProjectDto): Project =
-        Project(
+    fun toProject(dto: ProjectDto): Project {
+        val worktree = dto.resolvedWorktree
+        return Project(
             id = dto.id,
-            worktree = dto.worktree,
-            displayName = displayNameFromWorktree(dto.worktree),
+            worktree = worktree,
+            displayName = displayNameFromWorktree(worktree),
         )
+    }
 
     fun mapProbeError(throwable: Throwable): ServerProbeError =
         when (throwable) {

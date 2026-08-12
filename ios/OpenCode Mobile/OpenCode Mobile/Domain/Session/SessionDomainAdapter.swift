@@ -18,6 +18,32 @@ nonisolated struct SessionDomainAdapter: Sendable {
         )
     }
 
+    func session(from dto: V2SessionDTO) -> Session {
+        Session(
+            id: dto.id,
+            title: dto.title,
+            slug: nil,
+            projectID: dto.projectID,
+            directory: dto.location?.directory,
+            parentID: dto.parentID,
+            cost: dto.cost,
+            tokens: tokenUsage(from: dto.tokens),
+            createdAtEpochMs: dto.time?.created,
+            updatedAtEpochMs: dto.time?.updated,
+            archivedAtEpochMs: dto.time?.archived,
+            revert: dto.revert.map(sessionRevert)
+        )
+    }
+
+    /// V2 reports only active sessions; its `running` wire type is the app's `busy` status.
+    func sessionStatuses(fromActive activeByID: [String: APISessionActiveDTO]) -> [SessionStatus] {
+        activeByID.map { sessionID, active in
+            let wireType = active.type?.lowercased()
+            let uiType = wireType == "running" ? "busy" : (wireType ?? "busy")
+            return SessionStatus(sessionID: sessionID, raw: ["type": uiType])
+        }
+    }
+
     func sessionRevert(from dto: SessionRevertDTO) -> SessionRevert {
         SessionRevert(messageID: dto.messageID, partID: dto.partID, snapshot: dto.snapshot, diff: dto.diff)
     }

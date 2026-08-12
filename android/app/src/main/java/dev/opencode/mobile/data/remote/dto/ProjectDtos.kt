@@ -12,6 +12,14 @@ data class HealthDto(
 @Serializable
 data class ProjectDto(
     val id: String,
-    val worktree: String,
+    val worktree: String? = null,
+    /** V2 `/api/project/current` uses `directory` instead of `worktree`. */
+    val directory: String? = null,
     val vcs: String? = null,
-)
+) {
+    val resolvedWorktree: String
+        get() =
+            worktree?.takeIf { it.isNotBlank() }
+                ?: directory?.takeIf { it.isNotBlank() }
+                ?: error("Project requires worktree or directory")
+}

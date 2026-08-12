@@ -36,7 +36,12 @@ struct DefaultProjectRepository: ProjectRepository, Sendable {
     }
 
     func getCurrentProject(directory: String?) async throws -> Project {
-        try await run { adapter.project(from: try await api.getCurrentProject(directory: directory)) }
+        try await run {
+            if (activeConnectionManager?.serverProtocol ?? .v1) == .v2 {
+                return adapter.project(from: try await api.getCurrentProjectV2(directory: directory))
+            }
+            return adapter.project(from: try await api.getCurrentProject(directory: directory))
+        }
     }
 
     private func run<T>(_ work: () async throws -> T) async throws -> T {

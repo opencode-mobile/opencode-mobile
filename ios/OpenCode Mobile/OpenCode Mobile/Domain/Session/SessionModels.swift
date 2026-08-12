@@ -2,7 +2,7 @@ import Foundation
 
 struct Session: Sendable, Equatable {
     let id: String
-    let title: String
+    var title: String
     let slug: String?
     let projectID: String?
     let directory: String?

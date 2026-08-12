@@ -11,6 +11,7 @@ import dev.opencode.mobile.data.remote.dto.RevertSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.SummarizeSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.UpdateSessionTimeDto
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -24,6 +25,11 @@ class DefaultSessionRepository
         private val sessionModelSelectionStore: SessionModelSelectionStore? = null,
         private val activeConnectionManager: ActiveConnectionManager? = null,
     ) : SessionRepository {
+        private fun protocol(): ServerProtocol =
+            activeConnectionManager?.currentProtocol() ?: ServerProtocol.V1
+
+        private fun isV2(): Boolean = protocol() == ServerProtocol.V2
+
         override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> =
             runCatching { api.listPendingPermissions(directory).map(adapter::toPermissionRequest) }
                 .getOrElse { throw adapter.mapError(it) }
@@ -33,8 +39,13 @@ class DefaultSessionRepository
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun listSessions(directory: String?): List<Session> =
-            runCatching { api.listSessions(directory).map(adapter::toSession) }
-                .getOrElse { throw adapter.mapError(it) }
+            runCatching {
+                if (isV2()) {
+                    api.listSessionsV2(directory).map(adapter::toSession)
+                } else {
+                    api.listSessions(directory).map(adapter::toSession)
+                }
+            }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun createSession(
             parentId: String?,
@@ -42,22 +53,41 @@ class DefaultSessionRepository
             directory: String?,
         ): Session =
             runCatching {
-                adapter.toSession(
-                    api.createSession(CreateSessionRequestDto(parentId = parentId, title = title), directory),
-                )
+                if (isV2()) {
+                    // V2 create is location-scoped; title/parent are applied via follow-up when needed.
+                    var created = adapter.toSession(api.createSessionV2(directory))
+                    if (!title.isNullOrBlank()) {
+                        api.renameSessionV2(created.id, title)
+                        created = created.copy(title = title)
+                    }
+                    created
+                } else {
+                    adapter.toSession(
+                        api.createSession(CreateSessionRequestDto(parentId = parentId, title = title), directory),
+                    )
+                }
             }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun getAllSessionStatuses(directory: String?): List<SessionStatus> =
             runCatching {
-                api.getAllSessionStatuses(directory).map { (id, status) -> adapter.toSessionStatus(id, status) }
+                if (isV2()) {
+                    adapter.toSessionStatusesFromActive(api.getActiveSessionsV2())
+                } else {
+                    api.getAllSessionStatuses(directory).map { (id, status) -> adapter.toSessionStatus(id, status) }
+                }
             }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun getSession(
             id: String,
             directory: String?,
         ): Session =
-            runCatching { adapter.toSession(api.getSession(id, directory)) }
-                .getOrElse { throw adapter.mapError(it) }
+            runCatching {
+                if (isV2()) {
+                    adapter.toSession(api.getSessionV2(id))
+                } else {
+                    adapter.toSession(api.getSession(id, directory))
+                }
+            }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun updateSession(
             id: String,
@@ -65,7 +95,15 @@ class DefaultSessionRepository
             directory: String?,
         ): Session =
             runCatching {
-                adapter.toSession(api.updateSession(id, UpdateSessionRequestDto(title = title), directory))
+                if (isV2()) {
+                    require(!title.isNullOrBlank()) { "V2 rename requires a title" }
+                    api.renameSessionV2(id, title)
+                    adapter.toSession(api.getSessionV2(id)).let { session ->
+                        if (session.title == title) session else session.copy(title = title)
+                    }
+                } else {
+                    adapter.toSession(api.updateSession(id, UpdateSessionRequestDto(title = title), directory))
+                }
             }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun archiveSession(
@@ -73,15 +111,26 @@ class DefaultSessionRepository
             directory: String?,
         ): Session =
             runCatching {
-                adapter.toSession(
-                    api.updateSession(
-                        id,
-                        UpdateSessionRequestDto(
-                            time = UpdateSessionTimeDto(archived = System.currentTimeMillis()),
+                if (isV2()) {
+                    api.archiveSessionV2(id)
+                    adapter.toSession(api.getSessionV2(id)).let { session ->
+                        if (session.archivedAtEpochMs != null) {
+                            session
+                        } else {
+                            session.copy(archivedAtEpochMs = System.currentTimeMillis())
+                        }
+                    }
+                } else {
+                    adapter.toSession(
+                        api.updateSession(
+                            id,
+                            UpdateSessionRequestDto(
+                                time = UpdateSessionTimeDto(archived = System.currentTimeMillis()),
+                            ),
+                            directory,
                         ),
-                        directory,
-                    ),
-                )
+                    )
+                }
             }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun deleteSession(
@@ -89,8 +138,13 @@ class DefaultSessionRepository
             directory: String?,
         ): Boolean {
             val deleted =
-                runCatching { api.deleteSession(id, directory) }
-                    .getOrElse { throw adapter.mapError(it) }
+                runCatching {
+                    if (isV2()) {
+                        api.deleteSessionV2(id)
+                    } else {
+                        api.deleteSession(id, directory)
+                    }
+                }.getOrElse { throw adapter.mapError(it) }
             val profile = activeConnectionManager?.currentProfile()
             if (deleted && profile != null) {
                 runCatching {
@@ -107,8 +161,14 @@ class DefaultSessionRepository
             id: String,
             directory: String?,
         ): List<Session> =
-            runCatching { api.listChildSessions(id, directory).map(adapter::toSession) }
-                .getOrElse { throw adapter.mapError(it) }
+            runCatching {
+                if (isV2()) {
+                    // No dedicated children route on published v2; filter the location list.
+                    api.listSessionsV2(directory).filter { it.parentId == id }.map(adapter::toSession)
+                } else {
+                    api.listChildSessions(id, directory).map(adapter::toSession)
+                }
+            }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun listSessionTodos(
             id: String,
@@ -138,7 +198,11 @@ class DefaultSessionRepository
             directory: String?,
         ): Session =
             runCatching {
-                adapter.toSession(api.forkSession(id, ForkSessionRequestDto(messageId = atMessageId), directory))
+                if (isV2()) {
+                    adapter.toSession(api.forkSessionV2(id, atMessageId))
+                } else {
+                    adapter.toSession(api.forkSession(id, ForkSessionRequestDto(messageId = atMessageId), directory))
+                }
             }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun abortSession(

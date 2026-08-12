@@ -44,9 +44,16 @@ nonisolated struct ServerConnection: Sendable {
         )
     }
 
-    func authorizedRequest(path: String, method: String = "GET", directory: String? = nil) -> URLRequest {
+    func authorizedRequest(
+        path: String,
+        method: String = "GET",
+        directory: String? = nil,
+        locationDirectory: String? = nil
+    ) -> URLRequest {
         let normalizedPath = path.hasPrefix("/") ? String(path.dropFirst()) : path
-        let url = apiBaseURL.appendingPathComponent(normalizedPath).appendingDirectoryQuery(directory)
+        let url = apiBaseURL.appendingPathComponent(normalizedPath)
+            .appendingDirectoryQuery(directory)
+            .appendingLocationDirectoryQuery(locationDirectory)
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
