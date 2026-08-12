@@ -35,8 +35,24 @@ nonisolated struct SessionsAPIClient: Sendable {
         try await get(path: "permission", directory: directory)
     }
 
+    func listPendingPermissionsV2(directory: String? = nil) async throws -> [V2PermissionRequestDTO] {
+        let envelope: APIListEnvelope<V2PermissionRequestDTO> = try await get(
+            path: "api/permission/request",
+            locationDirectory: directory
+        )
+        return envelope.data
+    }
+
     func listPendingQuestions(directory: String? = nil) async throws -> [QuestionRequestDTO] {
         try await get(path: "question", directory: directory)
+    }
+
+    func listPendingQuestionsV2(directory: String? = nil) async throws -> [QuestionRequestDTO] {
+        let envelope: APIListEnvelope<QuestionRequestDTO> = try await get(
+            path: "api/question/request",
+            locationDirectory: directory
+        )
+        return envelope.data
     }
 
     func createSession(parentID: String?, title: String?, directory: String? = nil) async throws -> SessionDTO {
@@ -92,6 +108,10 @@ nonisolated struct SessionsAPIClient: Sendable {
 
     func abortSession(id: String, directory: String? = nil) async throws -> Bool {
         try await postEmpty(path: "session/\(id)/abort", body: EmptyBody(), directory: directory)
+    }
+
+    func interruptSessionV2(id: String) async throws -> Bool {
+        try await postWithoutBody(path: "api/session/\(id)/interrupt")
     }
 
     func shareSession(id: String, directory: String? = nil) async throws -> SessionDTO {
@@ -173,6 +193,32 @@ nonisolated struct SessionsAPIClient: Sendable {
         try await postEmpty(path: "question/\(questionID)/reject", body: EmptyBody(), directory: directory)
     }
 
+    func respondToPermissionV2(
+        sessionID: String,
+        permissionID: String,
+        body: V2PermissionReplyRequestDTO
+    ) async throws -> Bool {
+        try await postEmpty(
+            path: "api/session/\(sessionID)/permission/\(permissionID)/reply",
+            body: body
+        )
+    }
+
+    func replyToQuestionV2(
+        sessionID: String,
+        questionID: String,
+        body: QuestionReplyRequestDTO
+    ) async throws -> Bool {
+        try await postEmpty(
+            path: "api/session/\(sessionID)/question/\(questionID)/reply",
+            body: body
+        )
+    }
+
+    func rejectQuestionV2(sessionID: String, questionID: String) async throws -> Bool {
+        try await postWithoutBody(path: "api/session/\(sessionID)/question/\(questionID)/reject")
+    }
+
     // MARK: - V2 home / session CRUD
 
     func listSessionsV2(directory: String? = nil) async throws -> [V2SessionDTO] {
@@ -240,9 +286,14 @@ nonisolated struct SessionsAPIClient: Sendable {
     private func get<T: Decodable>(
         path: String,
         directory: String? = nil,
+        locationDirectory: String? = nil,
         query: [String: String] = [:]
     ) async throws -> T {
-        var request = try requireConnection().authorizedRequest(path: path, directory: directory)
+        var request = try requireConnection().authorizedRequest(
+            path: path,
+            directory: directory,
+            locationDirectory: locationDirectory
+        )
         if !query.isEmpty, let url = request.url,
            var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
             var items = components.queryItems ?? []

@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.command
 import dev.opencode.mobile.data.remote.dto.CommandDto
 import dev.opencode.mobile.data.remote.dto.CommandFilePartDto
 import dev.opencode.mobile.data.remote.dto.RunCommandRequestDto
+import dev.opencode.mobile.data.remote.dto.V2CommandDto
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
 
@@ -13,6 +14,16 @@ class CommandDomainAdapter {
                 name = dto.name,
                 description = dto.description?.takeIf { it.isNotBlank() },
                 source = toSource(dto.source),
+                template = dto.template?.takeIf { it.isNotBlank() },
+            )
+        }
+
+    fun toServerCommandsFromV2(dtos: List<V2CommandDto>): List<ServerCommand> =
+        dtos.map { dto ->
+            ServerCommand(
+                name = dto.name,
+                description = dto.description?.takeIf { it.isNotBlank() },
+                source = ServerCommandSource.Command,
                 template = dto.template?.takeIf { it.isNotBlank() },
             )
         }

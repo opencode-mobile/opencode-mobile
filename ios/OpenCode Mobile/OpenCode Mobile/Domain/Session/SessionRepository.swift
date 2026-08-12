@@ -25,14 +25,22 @@ protocol SessionRepository: Sendable {
     func unrevertSession(id: String) async throws -> Bool
     func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?) async throws -> Bool
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool
+    func replyToQuestion(questionID: String, answers: [[String]], directory: String?, sessionID: String?) async throws -> Bool
     func rejectQuestion(questionID: String, directory: String?) async throws -> Bool
+    func rejectQuestion(questionID: String, directory: String?, sessionID: String?) async throws -> Bool
 }
 
 extension SessionRepository {
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] { [] }
     func listPendingQuestions(directory: String?) async throws -> [QuestionRequest] { [] }
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool { false }
+    func replyToQuestion(questionID: String, answers: [[String]], directory: String?, sessionID: String?) async throws -> Bool {
+        try await replyToQuestion(questionID: questionID, answers: answers, directory: directory)
+    }
     func rejectQuestion(questionID: String, directory: String?) async throws -> Bool { false }
+    func rejectQuestion(questionID: String, directory: String?, sessionID: String?) async throws -> Bool {
+        try await rejectQuestion(questionID: questionID, directory: directory)
+    }
 
     func getSession(id: String) async throws -> Session {
         try await getSession(id: id, directory: nil)
@@ -107,11 +115,21 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
     }
 
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] {
-        try await run { try await api.listPendingPermissions(directory: directory).map { adapter.permissionRequest(from: $0) } }
+        try await run {
+            if await isV2() {
+                return try await api.listPendingPermissionsV2(directory: directory).map { adapter.permissionRequest(from: $0) }
+            }
+            return try await api.listPendingPermissions(directory: directory).map { adapter.permissionRequest(from: $0) }
+        }
     }
 
     func listPendingQuestions(directory: String?) async throws -> [QuestionRequest] {
-        try await run { try await api.listPendingQuestions(directory: directory).map { adapter.questionRequest(from: $0) } }
+        try await run {
+            if await isV2() {
+                return try await api.listPendingQuestionsV2(directory: directory).map { adapter.questionRequest(from: $0) }
+            }
+            return try await api.listPendingQuestions(directory: directory).map { adapter.questionRequest(from: $0) }
+        }
     }
 
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {
@@ -234,7 +252,12 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
     }
 
     func abortSession(id: String, directory: String?) async throws -> Bool {
-        try await run { try await api.abortSession(id: id, directory: directory) }
+        try await run {
+            if await isV2() {
+                return try await api.interruptSessionV2(id: id)
+            }
+            return try await api.abortSession(id: id, directory: directory)
+        }
     }
 
     func shareSession(id: String) async throws -> Session {
@@ -289,7 +312,14 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         directory: String?
     ) async throws -> Bool {
         try await run {
-            try await api.respondToPermission(
+            if await isV2() {
+                return try await api.respondToPermissionV2(
+                    sessionID: sessionID,
+                    permissionID: permissionID,
+                    body: V2PermissionReplyRequestDTO(reply: adapter.permissionResponse(decision))
+                )
+            }
+            return try await api.respondToPermission(
                 sessionID: sessionID,
                 permissionID: permissionID,
                 body: PermissionResponseRequestDTO(response: adapter.permissionResponse(decision)),
@@ -299,8 +329,24 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
     }
 
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool {
+        try await replyToQuestion(questionID: questionID, answers: answers, directory: directory, sessionID: nil)
+    }
+
+    func replyToQuestion(
+        questionID: String,
+        answers: [[String]],
+        directory: String?,
+        sessionID: String?
+    ) async throws -> Bool {
         try await run {
-            try await api.replyToQuestion(
+            if await isV2() {
+                return try await api.replyToQuestionV2(
+                    sessionID: sessionID ?? "",
+                    questionID: questionID,
+                    body: QuestionReplyRequestDTO(answers: answers)
+                )
+            }
+            return try await api.replyToQuestion(
                 questionID: questionID,
                 body: QuestionReplyRequestDTO(answers: answers),
                 directory: directory
@@ -309,7 +355,16 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
     }
 
     func rejectQuestion(questionID: String, directory: String?) async throws -> Bool {
-        try await run { try await api.rejectQuestion(questionID: questionID, directory: directory) }
+        try await rejectQuestion(questionID: questionID, directory: directory, sessionID: nil)
+    }
+
+    func rejectQuestion(questionID: String, directory: String?, sessionID: String?) async throws -> Bool {
+        try await run {
+            if await isV2() {
+                return try await api.rejectQuestionV2(sessionID: sessionID ?? "", questionID: questionID)
+            }
+            return try await api.rejectQuestion(questionID: questionID, directory: directory)
+        }
     }
 
     private func run<T>(_ work: () async throws -> T) async throws -> T {

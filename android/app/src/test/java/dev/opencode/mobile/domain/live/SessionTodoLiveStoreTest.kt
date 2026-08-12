@@ -344,13 +344,13 @@ private class FakeTodoSessionRepository(
     ): Boolean = error("unused")
 
     override suspend fun replyToQuestion(
-        questionId: String,
+        requestId: String,
         answers: List<List<String>>,
         directory: String?,
     ): Boolean = error("unused")
 
     override suspend fun rejectQuestion(
-        questionId: String,
+        requestId: String,
         directory: String?,
     ): Boolean = error("unused")
 }

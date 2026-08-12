@@ -289,6 +289,112 @@ class SessionProtocolRepositoryTest {
             assertTrue(requests.single().url.encodedPath.contains("/api/session"))
         }
 
+    @Test
+    fun v2ListPermissions_unwrapsEnvelopeAndMapsActionToPermission() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """
+                        {"data":[{
+                          "id":"per_1",
+                          "sessionID":"ses_1",
+                          "action":"edit",
+                          "resources":["src/a.kt"],
+                          "save":["src/*"],
+                          "source":{"type":"tool","messageID":"msg_1","callID":"call_1"}
+                        }]}
+                        """.trimIndent(),
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val permissions = repository.listPendingPermissions("/repo")
+
+            assertEquals("per_1", permissions.single().id)
+            assertEquals("edit", permissions.single().permission)
+            assertEquals(listOf("src/a.kt"), permissions.single().patterns)
+            assertEquals("msg_1", permissions.single().toolMessageId)
+            assertTrue(requests.single().url.encodedPath.contains("/api/permission/request"))
+            assertEquals("/repo", requests.single().url.parameters["location[directory]"])
+        }
+
+    @Test
+    fun v2RespondToPermission_postsReplyBody() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val ok = repository.respondToPermission("ses_1", "per_1", PermissionDecision.AllowOnce, "/repo")
+
+            assertTrue(ok)
+            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/permission/per_1/reply"))
+            assertTrue(requests.single().requestBodyText().contains("\"reply\":\"once\""))
+        }
+
+    @Test
+    fun v2ReplyToQuestion_usesSessionScopedPath() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val ok = repository.replyToQuestion("ses_1", "que_1", listOf(listOf("Yes")), "/repo")
+
+            assertTrue(ok)
+            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/question/que_1/reply"))
+            assertTrue(requests.single().requestBodyText().contains("\"answers\""))
+        }
+
+    @Test
+    fun v2AbortSession_postsInterrupt() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val ok = repository.abortSession("ses_1", "/repo")
+
+            assertTrue(ok)
+            assertEquals(HttpMethod.Post, requests.single().method)
+            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/interrupt"))
+        }
+
     private suspend fun manager(protocol: ServerProtocol?): ActiveConnectionManager {
         val manager = ActiveConnectionManager(FakeProfileStore())
         manager.applyProfile(

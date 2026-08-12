@@ -226,7 +226,9 @@ extension Container {
         self {
             DefaultModelRepository(
                 api: self.modelsAPIClient(),
-                adapter: self.modelDomainAdapter()
+                adapter: self.modelDomainAdapter(),
+                activeConnectionManager: self.activeConnectionManager(),
+                projectRepository: self.projectRepository()
             )
         }.singleton
     }
@@ -243,7 +245,9 @@ extension Container {
         self {
             DefaultCommandRepository(
                 api: self.commandsAPIClient(),
-                adapter: self.commandDomainAdapter()
+                adapter: self.commandDomainAdapter(),
+                activeConnectionManager: self.activeConnectionManager(),
+                projectRepository: self.projectRepository()
             )
         }.singleton
     }
@@ -260,7 +264,9 @@ extension Container {
         self {
             DefaultAgentRepository(
                 api: self.agentsAPIClient(),
-                adapter: self.agentDomainAdapter()
+                adapter: self.agentDomainAdapter(),
+                activeConnectionManager: self.activeConnectionManager(),
+                projectRepository: self.projectRepository()
             )
         }.singleton
     }

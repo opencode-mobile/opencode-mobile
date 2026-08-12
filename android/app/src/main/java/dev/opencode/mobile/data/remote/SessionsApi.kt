@@ -20,11 +20,14 @@ import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CreateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2ForkSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2LocationDto
+import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
+import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2RenameSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
+import dev.opencode.mobile.network.applyLocationDirectory
 import dev.opencode.mobile.network.setJsonBody
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -175,6 +178,12 @@ class SessionsApi private constructor(
                 applyDirectory(directory)
             }.body()
 
+    suspend fun interruptSessionV2(id: String): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$id/interrupt")
+            .ensureSuccess()
+
     suspend fun shareSession(
         id: String,
         directory: String? = null,
@@ -301,6 +310,53 @@ class SessionsApi private constructor(
             .post("question/$requestId/reject") {
                 applyDirectory(directory)
             }.body()
+
+    suspend fun listPendingPermissionsV2(directory: String? = null): List<V2PermissionRequestDto> =
+        httpClient
+            .get()
+            .get("api/permission/request") {
+                applyLocationDirectory(directory)
+            }.body<ApiListEnvelope<V2PermissionRequestDto>>()
+            .data
+
+    suspend fun respondToPermissionV2(
+        sessionId: String,
+        permissionId: String,
+        body: V2PermissionReplyRequestDto,
+    ): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$sessionId/permission/$permissionId/reply") {
+                setJsonBody(json, body)
+            }.ensureSuccess()
+
+    suspend fun listPendingQuestionsV2(directory: String? = null): List<QuestionRequestDto> =
+        httpClient
+            .get()
+            .get("api/question/request") {
+                applyLocationDirectory(directory)
+            }.body<ApiListEnvelope<QuestionRequestDto>>()
+            .data
+
+    suspend fun replyToQuestionV2(
+        sessionId: String,
+        requestId: String,
+        body: QuestionReplyRequestDto,
+    ): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$sessionId/question/$requestId/reply") {
+                setJsonBody(json, body)
+            }.ensureSuccess()
+
+    suspend fun rejectQuestionV2(
+        sessionId: String,
+        requestId: String,
+    ): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$sessionId/question/$requestId/reject")
+            .ensureSuccess()
 
     // --- V2 home / session CRUD ---
 

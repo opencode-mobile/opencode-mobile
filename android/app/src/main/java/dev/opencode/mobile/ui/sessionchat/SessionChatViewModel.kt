@@ -781,7 +781,7 @@ class SessionChatViewModel
             publishUiState()
             viewModelScope.launch(ioDispatcher) {
                 runCatching {
-                    sessionRepository.replyToQuestion(request.id, answers, boundWorktree)
+                    sessionRepository.replyToQuestion(request.sessionId, request.id, answers, boundWorktree)
                 }.onFailure { handleQuestionMutationFailure(request.id, it, dismiss = false) }
             }
         }
@@ -800,7 +800,7 @@ class SessionChatViewModel
             publishUiState()
             viewModelScope.launch(ioDispatcher) {
                 runCatching {
-                    sessionRepository.rejectQuestion(request.id, boundWorktree)
+                    sessionRepository.rejectQuestion(request.sessionId, request.id, boundWorktree)
                 }.onFailure { handleQuestionMutationFailure(request.id, it, dismiss = true) }
             }
         }

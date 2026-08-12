@@ -12,6 +12,17 @@ struct CommandDomainAdapter: Sendable {
         }
     }
 
+    func toServerCommands(_ dtos: [V2CommandDTO]) -> [ServerCommand] {
+        dtos.map { dto in
+            ServerCommand(
+                name: dto.name,
+                description: dto.description?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                source: .command,
+                template: dto.template?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+            )
+        }
+    }
+
     func toRunRequest(_ options: CommandRunOptions) -> RunCommandRequestDTO {
         RunCommandRequestDTO(
             command: options.command,
