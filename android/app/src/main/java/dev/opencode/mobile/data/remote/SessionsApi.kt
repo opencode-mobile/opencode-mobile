@@ -1,5 +1,9 @@
 package dev.opencode.mobile.data.remote
 
+import dev.opencode.mobile.data.remote.dto.ApiActiveSessionsEnvelope
+import dev.opencode.mobile.data.remote.dto.ApiDataEnvelope
+import dev.opencode.mobile.data.remote.dto.ApiListEnvelope
+import dev.opencode.mobile.data.remote.dto.ApiSessionActiveDto
 import dev.opencode.mobile.data.remote.dto.CreateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.FileDiffDto
 import dev.opencode.mobile.data.remote.dto.ForkSessionRequestDto
@@ -13,6 +17,11 @@ import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.SummarizeSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.TodoDto
 import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
+import dev.opencode.mobile.data.remote.dto.V2CreateSessionRequestDto
+import dev.opencode.mobile.data.remote.dto.V2ForkSessionRequestDto
+import dev.opencode.mobile.data.remote.dto.V2LocationDto
+import dev.opencode.mobile.data.remote.dto.V2RenameSessionRequestDto
+import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
@@ -26,6 +35,8 @@ import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.patch
 import io.ktor.client.request.post
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import javax.inject.Inject
@@ -291,7 +302,99 @@ class SessionsApi private constructor(
                 applyDirectory(directory)
             }.body()
 
+    // --- V2 home / session CRUD ---
+
+    suspend fun listSessionsV2(directory: String? = null): List<V2SessionDto> {
+        val sessions = mutableListOf<V2SessionDto>()
+        var cursor: String? = null
+        var pages = 0
+        do {
+            val envelope =
+                httpClient
+                    .get()
+                    .get("api/session") {
+                        applyDirectory(directory)
+                        cursor?.let { parameter("cursor", it) }
+                    }.body<ApiListEnvelope<V2SessionDto>>()
+            sessions += envelope.data
+            cursor = envelope.cursor?.next?.takeIf { it.isNotBlank() }
+            pages++
+        } while (cursor != null && pages < MAX_V2_SESSION_LIST_PAGES)
+        return sessions
+    }
+
+    suspend fun createSessionV2(directory: String? = null): V2SessionDto =
+        httpClient
+            .get()
+            .post("api/session") {
+                setJsonBody(
+                    json,
+                    V2CreateSessionRequestDto(
+                        location = directory?.let { V2LocationDto(directory = it) },
+                    ),
+                )
+            }.body<ApiDataEnvelope<V2SessionDto>>()
+            .data
+
+    suspend fun getActiveSessionsV2(): Map<String, ApiSessionActiveDto> =
+        httpClient
+            .get()
+            .get("api/session/active")
+            .body<ApiActiveSessionsEnvelope>()
+            .data
+
+    suspend fun getSessionV2(id: String): V2SessionDto =
+        httpClient
+            .get()
+            .get("api/session/$id")
+            .body<ApiDataEnvelope<V2SessionDto>>()
+            .data
+
+    suspend fun renameSessionV2(
+        id: String,
+        title: String,
+    ) {
+        httpClient
+            .get()
+            .post("api/session/$id/rename") {
+                setJsonBody(json, V2RenameSessionRequestDto(title = title))
+            }.ensureSuccess()
+    }
+
+    suspend fun archiveSessionV2(id: String) {
+        httpClient
+            .get()
+            .post("api/session/$id/archive")
+            .ensureSuccess()
+    }
+
+    suspend fun deleteSessionV2(id: String): Boolean =
+        httpClient
+            .get()
+            .delete("api/session/$id")
+            .ensureSuccess()
+
+    suspend fun forkSessionV2(
+        id: String,
+        messageId: String?,
+    ): V2SessionDto =
+        httpClient
+            .get()
+            .post("api/session/$id/fork") {
+                setJsonBody(json, V2ForkSessionRequestDto(messageId = messageId))
+            }.body<ApiDataEnvelope<V2SessionDto>>()
+            .data
+
+    private fun HttpResponse.ensureSuccess(): Boolean {
+        check(status.isSuccess()) { "HTTP ${status.value}: ${status.description}" }
+        return true
+    }
+
     private fun interface ClientProvider {
         fun get(): HttpClient
+    }
+
+    private companion object {
+        const val MAX_V2_SESSION_LIST_PAGES = 20
     }
 }

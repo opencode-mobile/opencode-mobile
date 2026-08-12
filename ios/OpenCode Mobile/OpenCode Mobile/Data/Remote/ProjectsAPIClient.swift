@@ -33,6 +33,10 @@ nonisolated struct ProjectsAPIClient: Sendable {
         try await get(path: "project/current", directory: directory)
     }
 
+    func getCurrentProjectV2(directory: String? = nil) async throws -> ProjectDTO {
+        try await get(path: "api/project/current", locationDirectory: directory)
+    }
+
     func getGlobalHealth() async throws -> HealthDTO {
         try await get(path: "global/health")
     }
@@ -106,11 +110,20 @@ nonisolated struct ProjectsAPIClient: Sendable {
         return detected
     }
 
-    private func get<T: Decodable>(path: String, directory: String? = nil) async throws -> T {
+    private func get<T: Decodable>(
+        path: String,
+        directory: String? = nil,
+        locationDirectory: String? = nil
+    ) async throws -> T {
         guard let connection = connectionProvider() else {
             throw ProjectsAPIError.noActiveConnection
         }
-        let data = try await data(for: connection.authorizedRequest(path: path, directory: directory))
+        let request = connection.authorizedRequest(
+            path: path,
+            directory: directory,
+            locationDirectory: locationDirectory
+        )
+        let data = try await data(for: request)
         return try decoder.decode(T.self, from: data)
     }
 

@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.session
 
 import dev.opencode.mobile.data.remote.dto.FileDiffDto
+import dev.opencode.mobile.data.remote.dto.ApiSessionActiveDto
 import dev.opencode.mobile.data.remote.dto.MessageTokensDto
 import dev.opencode.mobile.data.remote.dto.PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.QuestionInfoDto
@@ -8,6 +9,7 @@ import dev.opencode.mobile.data.remote.dto.QuestionRequestDto
 import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.SessionRevertDto
 import dev.opencode.mobile.data.remote.dto.TodoDto
+import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
 import dev.opencode.mobile.domain.message.MessageTokenUsage
 import io.ktor.client.plugins.ResponseException
@@ -40,6 +42,33 @@ class SessionDomainAdapter {
             archivedAtEpochMs = dto.time?.archived,
             revert = dto.revert?.let(::toSessionRevert),
         )
+
+    fun toSession(dto: V2SessionDto): Session =
+        Session(
+            id = dto.id,
+            title = dto.title,
+            slug = null,
+            projectId = dto.projectId,
+            directory = dto.location?.directory,
+            parentId = dto.parentId,
+            cost = dto.cost,
+            tokens = toTokenUsage(dto.tokens),
+            createdAtEpochMs = dto.time?.created,
+            updatedAtEpochMs = dto.time?.updated,
+            archivedAtEpochMs = dto.time?.archived,
+            revert = dto.revert?.let(::toSessionRevert),
+        )
+
+    fun toSessionStatusesFromActive(activeById: Map<String, ApiSessionActiveDto>): List<SessionStatus> =
+        activeById.map { (sessionId, active) ->
+            val wireType = active.type?.lowercase()
+            val uiType =
+                when (wireType) {
+                    "running" -> "busy"
+                    else -> wireType ?: "busy"
+                }
+            SessionStatus(sessionId = sessionId, raw = mapOf("type" to uiType))
+        }
 
     private fun toSessionRevert(dto: SessionRevertDto): SessionRevert =
         SessionRevert(

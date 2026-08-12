@@ -43,3 +43,12 @@ instead of defaulting to `v2`.
 is unsafe for Test Connection / home reachability (would mark dead servers as
 reachable). Classification matrix still matches desktop for v1-only, v2-only
 (`pid`), dual (prefer v1), and transitional `/api/health` without `pid`.
+
+## V2 fork body uses `messageID` (2026-08-12)
+
+**Choice:** P1 fork on v2 posts `{ messageID }` per the published OpenAPI
+fixture and desktop dialog, not a nested `boundary` object.
+
+**Why:** Research noted a possible `boundary: { type, messageID }` shape, but
+the OpenAPI fixture and current desktop fork call use flat `messageID`. Prefer
+the published contract until upstream documents otherwise.
