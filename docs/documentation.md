@@ -29,7 +29,7 @@ I update it?".
 │   │   ├── typography.md          #   semantic type roles + platform mappings
 │   │   ├── icons.md               #   Material icon catalog + sync workflow
 │   │   ├── opencode-web-theme.md  #   web theme evidence
-│   │   ├── app-icon.md            #   app launcher icon planning
+│   │   ├── app-icon.md            #   launcher + store listing icons
 │   │   ├── divergences.md         #   intentional platform differences (persistent)
 │   │   └── components/            #   Component Collection contract + docs
 │   │       ├── README.md          #     component contract, template, gallery, DoD

@@ -115,16 +115,43 @@ track using `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`. This is the only Play-bound
 workflow and therefore remains the sole owner of the monotonically increasing
 `versionCode` sequence.
 
-Before the first rollout, open Play Console and add the owner's Google account
-to the internal-testing tester list. After a successful Android Release run:
+### Tester self-invite (Google Group)
 
-1. Open the internal-test opt-in URL while signed in as that tester.
-2. Join the test and install **OpenCode Mobile — Unofficial** from Google Play
-   on a physical Android device.
-3. Confirm Play Console shows the new version on the internal track.
+Internal testing uses a Google Group so testers can self-join without editing
+Play Console per person (cap remains 100):
+
+| Resource | Value |
+| --- | --- |
+| Google Group | [OpenCode Mobile Testers](https://groups.google.com/g/opencode-mobile-testers) |
+| Group email | `opencode-mobile-testers@googlegroups.com` |
+| Who can see | Anyone on the web |
+| Who can join | Anyone on the web can join |
+| Play email list | `OpenCode Mobile Testers` (contains the group email) |
+| Play opt-in URL | https://play.google.com/apps/internaltest/4701255816217600017 |
+
+Share both links with testers:
+
+1. Join the Google Group while signed into the Google account they will use on
+   the Android device.
+2. Open the Play opt-in URL with that same account, Join the test, then install
+   **OpenCode Mobile — Unofficial** from Google Play.
+3. After a new Android Release, confirm Play Console shows the new version on
+   the internal track.
+
+Group membership sync into Play can take minutes to a few hours. Joining the
+test via the opt-in link is usually immediate once Play recognizes the account.
 
 The app may remain otherwise incomplete in Play Console during internal
 testing. Do not promote the release to closed, open, or production tracks.
+
+### Store listing upload kit
+
+Play Console graphics for the draft listing live in
+[`play-listing/`](../../../play-listing/) (icon + feature graphic) and
+[`test-screenshots/`](../../../test-screenshots/) (`android_1_*.jpg` phone
+shots). The high-res listing icon is the interlocking store mark from
+`app-icon/interlock.svg` — regenerate with `npm run app-icon:sync-store`.
+On-device launcher icons stay on `app-icon/source.svg`.
 
 The first physical acceptance used `ivanfenenko@gmail.com` and confirmed that
 `0.1.0-internal.4` / `versionCode` 4 installed and opened successfully on a

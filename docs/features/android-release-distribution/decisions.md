@@ -165,12 +165,25 @@ breadcrumbs without turning OPE-72 into product analytics.
 
 ## Play distribution starts with one internal tester
 
-**Status:** Accepted
+**Status:** Superseded
 **Decision:** Use the Play internal testing track, initially limited to the
 owner's verified tester account. Internal App Sharing is only a manual escape
 hatch. Public, open, closed, and production tracks are follow-ups.
 **Why:** This proves Play-delivered installation and updates with the smallest
 possible audience.
+
+## Play internal testers self-invite via Google Group
+
+**Status:** Accepted
+**Decision:** Keep Play Internal testing (not Open/Closed). Enroll testers
+through the Google Group `opencode-mobile-testers@googlegroups.com` (**Who can
+see** = Anyone on the web; **Who can join** = Anyone on the web can join) added
+as the Play email list `OpenCode Mobile Testers`. Share the group URL plus the
+Play opt-in URL. Do not promote to open testing solely for self-invite.
+**Why:** Testers can self-join without per-person Play Console edits while
+staying inside the Internal track's 100-tester private boundary. Visibility must
+be public enough for non-members to open the group page and see Join; otherwise
+Google Groups shows “content unavailable.”
 
 ## Test Lab starts with a bounded Robo crawl
 
