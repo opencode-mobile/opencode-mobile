@@ -9,15 +9,23 @@ protocol ProjectRepository: Sendable {
 struct DefaultProjectRepository: ProjectRepository, Sendable {
     private let api: ProjectsAPIClient
     private let adapter: ProjectDomainAdapter
+    private let activeConnectionManager: ActiveConnectionManager?
 
-    init(api: ProjectsAPIClient, adapter: ProjectDomainAdapter) {
+    init(
+        api: ProjectsAPIClient,
+        adapter: ProjectDomainAdapter,
+        activeConnectionManager: ActiveConnectionManager? = nil
+    ) {
         self.api = api
         self.adapter = adapter
+        self.activeConnectionManager = activeConnectionManager
     }
 
     func probeServer() async throws {
         do {
-            try adapter.requireHealthy(try await api.getHealth())
+            let detected = try await api.detectProtocol()
+            DiagnosticLog.info(.connection, "protocol=\(detected.wireValue)")
+            activeConnectionManager?.updateProtocol(detected)
         } catch {
             throw adapter.mapProbeError(error)
         }

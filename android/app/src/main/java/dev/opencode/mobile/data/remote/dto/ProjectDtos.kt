@@ -4,8 +4,9 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class HealthDto(
-    val healthy: Boolean,
+    val healthy: Boolean? = null,
     val version: String? = null,
+    val pid: Int? = null,
 )
 
 @Serializable

@@ -1,8 +1,9 @@
 import Foundation
 
 struct HealthDTO: Codable, Sendable {
-    let healthy: Bool
+    let healthy: Bool?
     let version: String?
+    let pid: Int?
 }
 
 struct ProjectDTO: Codable, Sendable {

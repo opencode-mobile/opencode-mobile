@@ -10,7 +10,7 @@ struct ProjectDomainAdapter: Sendable {
     }
 
     func requireHealthy(_ dto: HealthDTO) throws {
-        if !dto.healthy {
+        if dto.healthy != true {
             throw ServerProbeError.unhealthy(version: dto.version)
         }
     }

@@ -19,6 +19,7 @@ final class ConnectionSetupViewModel {
 
     private let connectionProbeService: ConnectionProbing
     private let connectionSessionCoordinator: ConnectionSessionCoordinator
+    private var detectedProtocol: ServerProtocol?
 
     init(
         connectionProbeService: ConnectionProbing,
@@ -40,6 +41,7 @@ final class ConnectionSetupViewModel {
             username = ConnectionProfile.formDefaults.username
             password = ConnectionProfile.formDefaults.password
         }
+        detectedProtocol = nil
         state = .idle
     }
 
@@ -69,6 +71,7 @@ final class ConnectionSetupViewModel {
     func onFieldChanged() {
         switch state {
         case .testSucceeded, .testFailed:
+            detectedProtocol = nil
             state = .idle
         default:
             break
@@ -78,19 +81,21 @@ final class ConnectionSetupViewModel {
     func testConnection() async {
         state = .testing
         do {
-            try await connectionProbeService.probe(connection: draftConnection())
+            detectedProtocol = try await connectionProbeService.probe(connection: draftConnection())
             state = .testSucceeded
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
                 outcome: ProductAnalytics.Outcome.success
             )
         } catch let error as ServerProbeError {
+            detectedProtocol = nil
             state = .testFailed(error.probeUserMessage)
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
                 outcome: ProductAnalytics.Outcome.failure
             )
         } catch {
+            detectedProtocol = nil
             state = .testFailed(error.localizedDescription)
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
@@ -108,7 +113,7 @@ final class ConnectionSetupViewModel {
             return false
         }
         state = .saving
-        await connectionSessionCoordinator.saveProfile(draftProfile())
+        await connectionSessionCoordinator.saveProfile(draftProfile(), serverProtocol: detectedProtocol)
         state = .testSucceeded
         logConnectionAction(
             ProductAnalytics.Action.connectionSave,

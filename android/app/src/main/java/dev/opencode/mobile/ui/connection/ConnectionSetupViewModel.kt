@@ -8,6 +8,7 @@ import dev.opencode.mobile.data.local.ServerConnectionDefaults
 import dev.opencode.mobile.domain.connection.ConnectionProbeService
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.userMessage
 import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.network.ServerConnection
@@ -56,10 +57,12 @@ class ConnectionSetupViewModel
         // per screen appearance so analytics stays a signal of engagement, not volume.
         private val reportedFieldEdits = mutableSetOf<String>()
         private var isEditingExistingProfile = false
+        private var detectedProtocol: ServerProtocol? = null
 
         fun configure(initialProfile: ConnectionProfile?) {
             reportedFieldEdits.clear()
             isEditingExistingProfile = initialProfile != null
+            detectedProtocol = null
             _uiState.value =
                 if (initialProfile == null) {
                     ConnectionSetupUiState()
@@ -118,6 +121,9 @@ class ConnectionSetupViewModel
                     ConnectionSetupState.TestSucceeded, ConnectionSetupState.TestFailed -> ConnectionSetupState.Idle
                     else -> current.state
                 }
+            if (resetState == ConnectionSetupState.Idle) {
+                detectedProtocol = null
+            }
             _uiState.value =
                 current.copy(
                     baseUrl = baseUrl,
@@ -133,19 +139,21 @@ class ConnectionSetupViewModel
             viewModelScope.launch {
                 _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Testing, testResultMessage = null)
                 try {
-                    connectionProbeService.probe(draftConnection())
+                    detectedProtocol = connectionProbeService.probe(draftConnection())
                     _uiState.value =
                         _uiState.value.copy(
                             state = ConnectionSetupState.TestSucceeded,
                             testResultMessage = "Server reachable",
                         )
                 } catch (error: ServerProbeError) {
+                    detectedProtocol = null
                     _uiState.value =
                         _uiState.value.copy(
                             state = ConnectionSetupState.TestFailed,
                             testResultMessage = error.userMessage(),
                         )
                 } catch (error: Throwable) {
+                    detectedProtocol = null
                     _uiState.value =
                         _uiState.value.copy(
                             state = ConnectionSetupState.TestFailed,
@@ -163,7 +171,7 @@ class ConnectionSetupViewModel
             )
             viewModelScope.launch {
                 _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Saving)
-                connectionSessionCoordinator.saveProfile(draftProfile())
+                connectionSessionCoordinator.saveProfile(draftProfile(), detectedProtocol)
                 _uiState.value = _uiState.value.copy(state = ConnectionSetupState.TestSucceeded)
                 onSaved()
             }

@@ -2,6 +2,8 @@ package dev.opencode.mobile.network
 
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
+import dev.opencode.mobile.domain.connection.ServerCapabilities
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
@@ -26,6 +28,11 @@ class ActiveConnectionManager
 
         fun current(): ServerConnection? = connection
 
+        fun currentProtocol(): ServerProtocol? = connection?.serverProtocol
+
+        fun currentCapabilities(): ServerCapabilities =
+            connection?.capabilities ?: ServerCapabilities.forProtocol(ServerProtocol.V1)
+
         fun currentProfile(): ConnectionProfile? =
             current()?.let { connection ->
                 ConnectionProfile(
@@ -41,10 +48,17 @@ class ActiveConnectionManager
 
         fun requireConnection(): ServerConnection = connection ?: error("No active server connection")
 
-        suspend fun applyProfile(profile: ConnectionProfile) {
+        fun updateProtocol(protocol: ServerProtocol) {
+            connection = connection?.withProtocol(protocol)
+        }
+
+        suspend fun applyProfile(
+            profile: ConnectionProfile,
+            serverProtocol: ServerProtocol? = null,
+        ) {
             mutex.withLock {
                 connectionProfileStore.saveProfile(profile)
-                connection = ServerConnection.fromProfile(profile)
+                connection = ServerConnection.fromProfile(profile, serverProtocol)
             }
         }
     }

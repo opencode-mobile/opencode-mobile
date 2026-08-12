@@ -25,7 +25,7 @@ class ProjectDomainAdapter {
         }
 
     fun requireHealthy(dto: HealthDto) {
-        if (!dto.healthy) {
+        if (dto.healthy != true) {
             throw ServerProbeError.Unhealthy(dto.version)
         }
     }
