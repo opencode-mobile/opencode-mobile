@@ -768,6 +768,31 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun projectV2_assistantInheritsCarriedAgentAndModel() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {"id":"msg_agent","type":"agent-switched","agent":"build","time":{"created":1}},
+                  {"id":"msg_model","type":"model-switched","model":{"id":"gpt-5","providerID":"openai"},"time":{"created":2}},
+                  {
+                    "id":"msg_asst",
+                    "type":"assistant",
+                    "content":[{"type":"text","id":"t1","text":"Hi"}],
+                    "time":{"created":3}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val message = adapter.projectV2(dtos).single()
+
+        assertEquals("build", message.mode)
+        assertEquals("gpt-5", message.modelId)
+        assertEquals("openai", message.modelProviderId)
+    }
+
+    @Test
     fun projectV2_expandsShellAndCompaction() {
         val dtos =
             json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(

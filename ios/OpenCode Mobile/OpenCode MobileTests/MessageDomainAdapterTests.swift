@@ -603,6 +603,33 @@ struct MessageDomainAdapterTests {
         #expect(tool.output == "src")
     }
 
+    @Test func projectV2AssistantInheritsCarriedAgentAndModel() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {"id":"msg_agent","type":"agent-switched","agent":"build","time":{"created":1}},
+                  {"id":"msg_model","type":"model-switched","model":{"id":"gpt-5","providerID":"openai"},"time":{"created":2}},
+                  {
+                    "id":"msg_asst",
+                    "type":"assistant",
+                    "content":[{"type":"text","id":"t1","text":"Hi"}],
+                    "time":{"created":3}
+                  }
+                ]
+                """.utf8
+            )
+        )
+
+        let messages = adapter.messages(fromV2: dtos)
+        let message = try #require(messages.first)
+        #expect(messages.count == 1)
+        #expect(message.mode == "build")
+        #expect(message.modelID == "gpt-5")
+        #expect(message.modelProviderID == "openai")
+    }
+
     @Test func projectV2ExpandsShellAndCompaction() throws {
         let dtos = try decoder.decode(
             [V2SessionMessageDTO].self,

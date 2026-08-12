@@ -218,7 +218,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             case "assistant":
                 agent = dto.agent ?? agent
                 model = dto.model ?? model
-                messages.append(projectV2Assistant(dto))
+                messages.append(projectV2Assistant(dto, agent: agent, model: model))
             case "compaction":
                 messages.append(projectV2Compaction(dto))
             default:
@@ -318,7 +318,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
         return [user, assistant]
     }
 
-    private func projectV2Assistant(_ dto: V2SessionMessageDTO) -> Message {
+    private func projectV2Assistant(_ dto: V2SessionMessageDTO, agent: String, model: V2ModelRefDTO?) -> Message {
         let parts = dto.content.compactMap(v2AssistantPart)
         return messageFromV2(
             id: dto.id,
@@ -327,8 +327,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             fallbackText: dto.error?.message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
             cost: dto.cost,
             tokens: tokenUsage(from: dto.tokens),
-            mode: dto.agent,
-            model: dto.model,
+            mode: dto.agent ?? (agent.isEmpty ? nil : agent),
+            model: dto.model ?? model,
             sentAtEpochMs: dto.time?.created,
             contextInputTokens: dto.tokens?.input,
             contextEstimate: v2AssistantContextEstimate(dto.content)

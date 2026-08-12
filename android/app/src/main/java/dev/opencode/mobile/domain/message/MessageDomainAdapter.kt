@@ -222,7 +222,7 @@ class MessageDomainAdapter {
                 "assistant" -> {
                     agent = dto.agent ?: agent
                     model = dto.model ?: model
-                    messages += projectV2Assistant(dto)
+                    messages += projectV2Assistant(dto, agent, model)
                 }
                 "compaction" -> messages += projectV2Compaction(dto)
                 else -> Unit
@@ -360,7 +360,11 @@ class MessageDomainAdapter {
         return listOf(user, assistant)
     }
 
-    private fun projectV2Assistant(dto: V2SessionMessageDto): Message {
+    private fun projectV2Assistant(
+        dto: V2SessionMessageDto,
+        agent: String,
+        model: V2ModelRefDto?,
+    ): Message {
         val parts = dto.content.mapNotNull(::toV2AssistantPart)
         val errorText = dto.error?.message?.trim().orEmpty()
         return messageFromV2(
@@ -370,8 +374,8 @@ class MessageDomainAdapter {
             fallbackText = errorText,
             cost = dto.cost,
             tokens = toTokenUsage(dto.tokens),
-            mode = dto.agent,
-            model = dto.model,
+            mode = dto.agent ?: agent.ifBlank { null },
+            model = dto.model ?: model,
             sentAtEpochMs = dto.time?.created,
             contextInputTokens = dto.tokens?.input,
             contextEstimate = v2AssistantContextEstimate(dto.content),
