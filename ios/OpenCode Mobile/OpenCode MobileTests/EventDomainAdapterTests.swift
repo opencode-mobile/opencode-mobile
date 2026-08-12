@@ -100,6 +100,16 @@ struct EventDomainAdapterTests {
         #expect(event?.rawProperties?["info"]?.dictionaryValue?["id"]?.stringValue == "msg-1")
     }
 
+    @Test func parseEvents_projectsStepFailedIntoSessionErrorWithV2Message() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.next.step.failed","data":{"sessionID":"ses-1","error":{"type":"ProviderError","message":"model overloaded"}}}"#
+        )
+        #expect(events.map(\.type) == ["session.error", "session.idle"])
+        #expect(events[0].sessionID == "ses-1")
+        #expect(events[0].sessionErrorMessage == "model overloaded")
+    }
+
     @Test func parseEvent_projectsStepEndedIntoSessionIdle() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(

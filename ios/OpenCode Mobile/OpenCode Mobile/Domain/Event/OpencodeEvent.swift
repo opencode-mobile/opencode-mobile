@@ -32,15 +32,19 @@ nonisolated struct OpencodeEvent: Sendable, Equatable {
     }
 
     var sessionErrorMessage: String? {
-        guard type == "session.error",
-              case let .dictionary(error)? = rawProperties?["error"]
-        else { return nil }
-        if case let .dictionary(data)? = error["data"],
-           case let .string(message)? = data["message"],
-           !message.isEmpty {
+        guard type == "session.error" else { return nil }
+        let error = rawProperties?["error"]?.dictionaryValue
+        let data = error?["data"]?.dictionaryValue
+        let candidates = [
+            data?["message"]?.stringValue,
+            error?["message"]?.stringValue,
+            rawProperties?["message"]?.stringValue,
+            error?["name"]?.stringValue,
+            error?["type"]?.stringValue,
+        ]
+        if let message = candidates.compactMap({ $0 }).first(where: { !$0.isEmpty }) {
             return message
         }
-        if case let .string(name)? = error["name"], !name.isEmpty { return name }
         return "Session work failed"
     }
 

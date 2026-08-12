@@ -111,6 +111,21 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvents_projectsStepFailedIntoSessionErrorAndIdle() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.next.step.failed","data":{"sessionID":"ses-1","error":{"type":"ProviderError","message":"model overloaded"}}}""",
+            )
+
+        assertEquals(listOf("session.error", "session.idle"), events.map { it.type })
+        assertEquals("ses-1", events[0].sessionId)
+        assertEquals(
+            "model overloaded",
+            events[0].rawProperties?.get("error")?.jsonObject?.get("message")?.jsonPrimitive?.content,
+        )
+    }
+
+    @Test
     fun parseEvent_projectsStepEndedIntoSessionIdle() {
         val event =
             adapter.parseEvent(
