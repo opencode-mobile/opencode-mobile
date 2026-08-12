@@ -10,6 +10,14 @@ final class ActiveConnectionManager: @unchecked Sendable {
         return _connection
     }
 
+    var serverProtocol: ServerProtocol? {
+        connection?.serverProtocol
+    }
+
+    var capabilities: ServerCapabilities {
+        connection?.capabilities ?? .forProtocol(.v1)
+    }
+
     func ensureLoaded(from store: ConnectionProfileStore) async {
         lock.lock()
         let needsLoad = _connection == nil
@@ -21,8 +29,8 @@ final class ActiveConnectionManager: @unchecked Sendable {
         }
     }
 
-    func apply(_ profile: ConnectionProfile) {
-        let connection = ServerConnection(profile: profile)
+    func apply(_ profile: ConnectionProfile, serverProtocol: ServerProtocol? = nil) {
+        let connection = ServerConnection(profile: profile, serverProtocol: serverProtocol)
         lock.lock()
         _connection = connection
         lock.unlock()
@@ -32,6 +40,13 @@ final class ActiveConnectionManager: @unchecked Sendable {
         lock.lock()
         _connection = connection
         lock.unlock()
+    }
+
+    func updateProtocol(_ serverProtocol: ServerProtocol) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let current = _connection else { return }
+        _connection = current.withProtocol(serverProtocol)
     }
 
     func disconnect() {
@@ -83,9 +98,9 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         lock.unlock()
     }
 
-    func saveProfile(_ profile: ConnectionProfile) async {
+    func saveProfile(_ profile: ConnectionProfile, serverProtocol: ServerProtocol? = nil) async {
         await connectionProfileStore.saveProfile(profile)
-        activeConnectionManager.apply(profile)
+        activeConnectionManager.apply(profile, serverProtocol: serverProtocol)
         lock.lock()
         let handlers = profileSavedHandlers
         lock.unlock()
@@ -100,6 +115,10 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         let handlers = profileClearedHandlers
         handlers.forEach { $0() }
     }
+
+    func currentProfile() -> ConnectionProfile? {
+        activeConnectionManager.currentProfile()
+    }
 }
 
 enum ProbeStatus: Equatable {
@@ -109,16 +128,23 @@ enum ProbeStatus: Equatable {
 }
 
 protocol ConnectionProbing: Sendable {
-    func probe(connection: ServerConnection) async throws
+    func probe(connection: ServerConnection) async throws -> ServerProtocol
 }
 
 struct ConnectionProbeService: ConnectionProbing, Sendable {
     private let adapter = ProjectDomainAdapter()
+    private let urlSession: URLSession
 
-    func probe(connection: ServerConnection) async throws {
-        let client = ProjectsAPIClient(fixedConnection: connection)
+    init(urlSession: URLSession = .shared) {
+        self.urlSession = urlSession
+    }
+
+    func probe(connection: ServerConnection) async throws -> ServerProtocol {
+        let client = ProjectsAPIClient(fixedConnection: connection, urlSession: urlSession)
         do {
-            try adapter.requireHealthy(try await client.getHealth())
+            let detected = try await client.detectProtocol()
+            DiagnosticLog.info(.connection, "protocol=\(detected.wireValue)")
+            return detected
         } catch {
             throw adapter.mapProbeError(error)
         }

@@ -6,21 +6,42 @@ nonisolated struct ServerConnection: Sendable {
     let baseURL: URL
     let username: String
     let password: String?
+    let serverProtocol: ServerProtocol?
 
     var apiBaseURL: URL { baseURL }
 
-    init(profile: ConnectionProfile) {
+    var capabilities: ServerCapabilities {
+        ServerCapabilities.forProtocol(serverProtocol ?? .v1)
+    }
+
+    init(profile: ConnectionProfile, serverProtocol: ServerProtocol? = nil) {
         let normalized = profile.normalizedBaseURL
         self.baseURL = URL(string: normalized) ?? AppConfig.serverBaseURL
         let trimmedUsername = profile.username.trimmingCharacters(in: .whitespacesAndNewlines)
         self.username = trimmedUsername.isEmpty ? Self.defaultUsername : trimmedUsername
         self.password = profile.password.isEmpty ? nil : profile.password
+        self.serverProtocol = serverProtocol
     }
 
-    init(baseURL: URL, username: String = Self.defaultUsername, password: String?) {
+    init(
+        baseURL: URL,
+        username: String = Self.defaultUsername,
+        password: String?,
+        serverProtocol: ServerProtocol? = nil
+    ) {
         self.baseURL = baseURL
         self.username = username
         self.password = password
+        self.serverProtocol = serverProtocol
+    }
+
+    func withProtocol(_ serverProtocol: ServerProtocol) -> ServerConnection {
+        ServerConnection(
+            baseURL: baseURL,
+            username: username,
+            password: password,
+            serverProtocol: serverProtocol
+        )
     }
 
     func authorizedRequest(path: String, method: String = "GET", directory: String? = nil) -> URLRequest {

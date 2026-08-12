@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.project
 
 import dev.opencode.mobile.data.remote.HealthApi
 import dev.opencode.mobile.data.remote.ProjectsApi
+import dev.opencode.mobile.network.ActiveConnectionManager
 import javax.inject.Inject
 
 class DefaultProjectRepository
@@ -10,10 +11,12 @@ class DefaultProjectRepository
         private val healthApi: HealthApi,
         private val projectsApi: ProjectsApi,
         private val adapter: ProjectDomainAdapter,
+        private val activeConnectionManager: ActiveConnectionManager,
     ) : ProjectRepository {
         override suspend fun probeServer() {
             runCatching {
-                adapter.requireHealthy(healthApi.getHealth())
+                val protocol = healthApi.detectProtocol()
+                activeConnectionManager.updateProtocol(protocol)
             }.getOrElse { throw adapter.mapProbeError(it) }
         }
 

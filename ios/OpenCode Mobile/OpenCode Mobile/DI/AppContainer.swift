@@ -68,7 +68,8 @@ extension Container {
         self {
             DefaultProjectRepository(
                 api: self.projectsAPIClient(),
-                adapter: self.projectDomainAdapter()
+                adapter: self.projectDomainAdapter(),
+                activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
     }

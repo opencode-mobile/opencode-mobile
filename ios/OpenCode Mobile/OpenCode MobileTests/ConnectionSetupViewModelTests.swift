@@ -6,7 +6,7 @@ import Testing
 struct ConnectionSetupViewModelTests {
     @Test func save_disabledUntilTestSucceeds() async {
         let viewModel = ConnectionSetupViewModel(
-            connectionProbeService: FakeConnectionProbeService(result: .success(())),
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
             connectionSessionCoordinator: ConnectionSessionCoordinator(
                 activeConnectionManager: ActiveConnectionManager(),
                 connectionProfileStore: FakeSetupConnectionProfileStore()
@@ -19,7 +19,7 @@ struct ConnectionSetupViewModelTests {
 
     @Test func fieldChange_resetsSuccessfulTest() async {
         let viewModel = ConnectionSetupViewModel(
-            connectionProbeService: FakeConnectionProbeService(result: .success(())),
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
             connectionSessionCoordinator: ConnectionSessionCoordinator(
                 activeConnectionManager: ActiveConnectionManager(),
                 connectionProfileStore: FakeSetupConnectionProfileStore()
@@ -34,9 +34,9 @@ struct ConnectionSetupViewModelTests {
 }
 
 private struct FakeConnectionProbeService: ConnectionProbing {
-    let result: Result<Void, Error>
+    let result: Result<ServerProtocol, Error>
 
-    func probe(connection: ServerConnection) async throws {
+    func probe(connection: ServerConnection) async throws -> ServerProtocol {
         try result.get()
     }
 }
