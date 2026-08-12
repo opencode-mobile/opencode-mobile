@@ -126,6 +126,10 @@ nonisolated struct SessionDomainAdapter: Sendable {
         VcsInfo(currentBranch: dto.branch, defaultBranch: dto.defaultBranch)
     }
 
+    func vcsInfo(from dto: V2VcsInfoDTO) -> VcsInfo {
+        VcsInfo(currentBranch: dto.branch?.current, defaultBranch: dto.branch?.default)
+    }
+
     func permissionResponse(_ decision: PermissionDecision) -> String {
         switch decision {
         case .allowOnce: "once"

@@ -120,3 +120,37 @@ the model picker already consume those domain types. Live stores already listen
 to remapped `permission.asked` / `question.*` from P3.
 
 **Alternative rejected:** Fork docks or composer catalogs per protocol.
+
+## V2 revert uses stage/clear, not commit (2026-08-12)
+
+**Choice:** Map Commands undo to `POST /api/session/{id}/revert/stage`
+(`messageID`, optional `partID`, `files: true`) and redo to
+`POST /api/session/{id}/revert/clear`. Do not call `revert/commit`.
+
+**Why:** v1 revert/unrevert is reversible. v2 commit permanently applies the
+staged boundary and would break redo. Staging with `files: true` applies the
+file changes the way v1 revert does.
+
+**Alternative rejected:** Auto-commit after stage — irreversible, no redo.
+
+## V2 todos seed from events only (2026-08-12)
+
+**Choice:** `listSessionTodos` returns an empty list on v2 and does not call a
+REST todo route. `DefaultSessionTodoLiveStore` still applies `todo.updated`
+events.
+
+**Why:** Published v2 session API has no `GET .../todo` twin. Hitting the v1
+path would 404 on v2-only servers. Event-only seed matches the research gap
+until upstream adds a REST snapshot.
+
+## V2 add-project starts at resolved location (2026-08-12)
+
+**Choice:** Map `GET /path` to `GET /api/location` and `GET /file` to
+`GET /api/fs/list`. `ServerPaths.home` is the location `directory` (no dedicated
+home path on v2). Directory entries join relative `path` onto the listing
+directory.
+
+**Why:** Add Project only needs a browse root plus child directories. Users can
+still navigate up from the resolved location. Avoid inventing a home path the
+server does not expose.
+

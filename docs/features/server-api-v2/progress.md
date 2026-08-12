@@ -12,7 +12,7 @@
   - [x] [OPE-149](https://linear.app/opencode-mobile/issue/OPE-149/p2-chat-history-on-v2) P2
   - [x] [OPE-150](https://linear.app/opencode-mobile/issue/OPE-150/p3-live-stream-and-prompt-on-v2) P3
   - [x] [OPE-151](https://linear.app/opencode-mobile/issue/OPE-151/p4-permissions-questions-and-composer-catalogs-on-v2) P4
-  - [ ] [OPE-152](https://linear.app/opencode-mobile/issue/OPE-152/p5-compact-revert-todos-vcs-and-add-project-on-v2) P5
+  - [x] [OPE-152](https://linear.app/opencode-mobile/issue/OPE-152/p5-compact-revert-todos-vcs-and-add-project-on-v2) P5
   - [ ] [OPE-153](https://linear.app/opencode-mobile/issue/OPE-153/p6-capability-gates-cleanup-and-protocol-matrix-tests) P6
 
 ## Design-system dependencies
@@ -50,6 +50,12 @@
 - [x] P4: Command/agent list dual remotes; command run on `/api/session/{id}/command`
 - [x] P4: Model catalog from `/api/provider` + `/api/model`
 - [x] P4: Unit tests (session/command/agent/model protocol routing)
+- [x] P5: Compact → `POST /api/session/{id}/compact` (`delivery: steer`)
+- [x] P5: Revert → `revert/stage` + `revert/clear` (no auto-commit)
+- [x] P5: Todos REST seed skipped on v2 (event-only)
+- [x] P5: VCS info/diff dual remotes (`git` → `working`)
+- [x] P5: Add-project `GET /api/location` + `GET /api/fs/list`
+- [x] P5: Unit tests (session compact/revert/todos/vcs + filesystem protocol routing)
 
 ## Android implementation
 
@@ -80,6 +86,12 @@
 - [x] P4: Command/agent list dual remotes; command run on `/api/session/{id}/command`
 - [x] P4: Model catalog from `/api/provider` + `/api/model`
 - [x] P4: Unit tests (session/command/agent/model protocol routing)
+- [x] P5: Compact → `POST /api/session/{id}/compact` (`delivery: steer`)
+- [x] P5: Revert → `revert/stage` + `revert/clear` (no auto-commit)
+- [x] P5: Todos REST seed skipped on v2 (event-only)
+- [x] P5: VCS info/diff dual remotes (`git` → `working`)
+- [x] P5: Add-project `GET /api/location` + `GET /api/fs/list`
+- [x] P5: Unit tests (session compact/revert/todos/vcs + filesystem protocol routing)
 
 ## Blockers
 
@@ -94,5 +106,5 @@
 
 ## Remaining work
 
-- P5–P6 as in [`plan.md`](plan.md).
-- Live v2 validation for P1–P4 is deferred.
+- P6 as in [`plan.md`](plan.md).
+- Live v2 validation for P1–P5 is deferred.

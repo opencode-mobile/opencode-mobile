@@ -41,3 +41,20 @@ nonisolated struct APIActiveSessionsEnvelope: Decodable, Sendable {
 nonisolated struct APISessionActiveDTO: Decodable, Sendable {
     let type: String?
 }
+
+nonisolated struct APILocatedEnvelope<T: Decodable & Sendable>: Decodable, Sendable {
+    let location: V2LocationInfoDTO?
+    let data: T
+}
+
+nonisolated struct V2LocationInfoDTO: Decodable, Sendable {
+    let directory: String
+    let workspaceID: String?
+    let project: V2LocationProjectDTO?
+}
+
+nonisolated struct V2LocationProjectDTO: Decodable, Sendable {
+    let id: String?
+    let directory: String?
+    let canonical: String?
+}

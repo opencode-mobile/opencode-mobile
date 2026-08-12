@@ -280,6 +280,46 @@ nonisolated struct SessionsAPIClient: Sendable {
         return envelope.data
     }
 
+    func compactSessionV2(id: String) async throws -> Bool {
+        var request = try requireConnection().authorizedRequest(path: "api/session/\(id)/compact", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(V2CompactSessionRequestDTO())
+        request.timeoutInterval = .infinity
+        let data = try await data(for: request)
+        if let value = try? decoder.decode(Bool.self, from: data) {
+            return value
+        }
+        return true
+    }
+
+    func stageRevertV2(id: String, messageID: String, partID: String?) async throws -> Bool {
+        try await postEmpty(
+            path: "api/session/\(id)/revert/stage",
+            body: V2RevertStageRequestDTO(messageID: messageID, partID: partID)
+        )
+    }
+
+    func clearRevertV2(id: String) async throws -> Bool {
+        try await postWithoutBody(path: "api/session/\(id)/revert/clear")
+    }
+
+    func getVcsInfoV2(directory: String? = nil) async throws -> V2VcsInfoDTO {
+        let envelope: APILocatedEnvelope<V2VcsInfoDTO> = try await get(
+            path: "api/vcs",
+            locationDirectory: directory
+        )
+        return envelope.data
+    }
+
+    func getVcsDiffV2(mode: String, directory: String? = nil, context: Int = 12) async throws -> [FileDiffDTO] {
+        let envelope: APILocatedEnvelope<[FileDiffDTO]> = try await get(
+            path: "api/vcs/diff",
+            locationDirectory: directory,
+            query: ["mode": mode, "context": String(context)]
+        )
+        return envelope.data
+    }
+
     private struct EmptyBody: Codable {}
     private static let maxV2SessionListPages = 20
 

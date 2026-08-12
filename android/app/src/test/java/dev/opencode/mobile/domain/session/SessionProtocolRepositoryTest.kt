@@ -395,6 +395,163 @@ class SessionProtocolRepositoryTest {
             assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/interrupt"))
         }
 
+    @Test
+    fun v2SummarizeSession_postsCompactWithSteerDelivery() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val ok = repository.summarizeSession("ses_1", "openai", "gpt-4.1", "/repo")
+
+            assertTrue(ok)
+            assertEquals(HttpMethod.Post, requests.single().method)
+            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/compact"))
+            assertTrue(requests.single().requestBodyText().contains("\"delivery\":\"steer\""))
+        }
+
+    @Test
+    fun v2RevertSession_stagesWithMessageAndFiles() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val ok = repository.revertSession("ses_1", "msg_9", "part_2", "/repo")
+
+            assertTrue(ok)
+            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/revert/stage"))
+            val body = requests.single().requestBodyText()
+            assertTrue(body.contains("\"messageID\":\"msg_9\""))
+            assertTrue(body.contains("\"partID\":\"part_2\""))
+            assertTrue(body.contains("\"files\":true"))
+        }
+
+    @Test
+    fun v2UnrevertSession_clearsStagedRevert() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val ok = repository.unrevertSession("ses_1", "/repo")
+
+            assertTrue(ok)
+            assertEquals(HttpMethod.Post, requests.single().method)
+            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/revert/clear"))
+        }
+
+    @Test
+    fun v2ListSessionTodos_skipsRestAndReturnsEmpty() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson("[]")
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val todos = repository.listSessionTodos("ses_1", "/repo")
+
+            assertTrue(todos.isEmpty())
+            assertTrue(requests.isEmpty())
+        }
+
+    @Test
+    fun v2GetVcsInfo_unwrapsBranchEnvelope() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """
+                        {
+                          "location":{"directory":"/repo","project":{"id":"p","directory":"/repo","canonical":"/repo"}},
+                          "data":{"branch":{"current":"feature/review","default":"main"}}
+                        }
+                        """.trimIndent(),
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val info = repository.getVcsInfo("/repo")
+
+            assertEquals(VcsInfo("feature/review", "main"), info)
+            assertTrue(requests.single().url.encodedPath.contains("/api/vcs"))
+            assertEquals("/repo", requests.single().url.parameters["location[directory]"])
+        }
+
+    @Test
+    fun v2GetVcsDiff_mapsGitModeToWorking() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """
+                        {
+                          "location":{"directory":"/repo","project":{"id":"p","directory":"/repo","canonical":"/repo"}},
+                          "data":[{"file":"App.kt","patch":"@@","additions":1,"deletions":0,"status":"modified"}]
+                        }
+                        """.trimIndent(),
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val files = repository.getVcsDiff(VcsDiffMode.WorkingTree, "/repo", context = 12)
+
+            assertEquals("App.kt", files.single().path)
+            assertTrue(requests.single().url.encodedPath.contains("/api/vcs/diff"))
+            assertEquals("working", requests.single().url.parameters["mode"])
+            assertEquals("12", requests.single().url.parameters["context"])
+            assertEquals("/repo", requests.single().url.parameters["location[directory]"])
+        }
+
     private suspend fun manager(protocol: ServerProtocol?): ActiveConnectionManager {
         val manager = ActiveConnectionManager(FakeProfileStore())
         manager.applyProfile(

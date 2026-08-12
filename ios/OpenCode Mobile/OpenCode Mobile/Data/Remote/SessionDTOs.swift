@@ -133,7 +133,7 @@ struct TodoDTO: Codable, Sendable {
     let priority: String
 }
 
-struct FileDiffDTO: Decodable, Sendable {
+nonisolated struct FileDiffDTO: Decodable, Sendable {
     let file: String
     let patch: String?
     let before: String?

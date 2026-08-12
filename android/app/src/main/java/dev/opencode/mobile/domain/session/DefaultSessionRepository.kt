@@ -195,8 +195,14 @@ class DefaultSessionRepository
             id: String,
             directory: String?,
         ): List<SessionTodo> =
-            runCatching { adapter.toTodos(api.listSessionTodos(id, directory)) }
-                .getOrElse { throw adapter.mapError(it) }
+            runCatching {
+                if (isV2()) {
+                    // Published v2 has no REST todo twin; live store seeds from events.
+                    emptyList()
+                } else {
+                    adapter.toTodos(api.listSessionTodos(id, directory))
+                }
+            }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun initializeSessionAgents(
             id: String,
@@ -261,16 +267,26 @@ class DefaultSessionRepository
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun getVcsInfo(directory: String?): VcsInfo =
-            runCatching { adapter.toVcsInfo(api.getVcsInfo(directory)) }
-                .getOrElse { throw adapter.mapError(it) }
+            runCatching {
+                if (isV2()) {
+                    adapter.toVcsInfo(api.getVcsInfoV2(directory))
+                } else {
+                    adapter.toVcsInfo(api.getVcsInfo(directory))
+                }
+            }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun getVcsDiff(
             mode: VcsDiffMode,
             directory: String?,
             context: Int,
         ): List<FileDiff> =
-            runCatching { api.getVcsDiff(mode.wireValue, directory, context).map(adapter::toFileDiff) }
-                .getOrElse { throw adapter.mapError(it) }
+            runCatching {
+                if (isV2()) {
+                    api.getVcsDiffV2(mode.v2WireValue, directory, context).map(adapter::toFileDiff)
+                } else {
+                    api.getVcsDiff(mode.wireValue, directory, context).map(adapter::toFileDiff)
+                }
+            }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun summarizeSession(
             id: String,
@@ -279,7 +295,15 @@ class DefaultSessionRepository
             directory: String?,
         ): Boolean =
             runCatching {
-                api.summarizeSession(id, SummarizeSessionRequestDto(providerId = providerId, modelId = modelId), directory)
+                if (isV2()) {
+                    api.compactSessionV2(id)
+                } else {
+                    api.summarizeSession(
+                        id,
+                        SummarizeSessionRequestDto(providerId = providerId, modelId = modelId),
+                        directory,
+                    )
+                }
             }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun revertSession(
@@ -289,15 +313,24 @@ class DefaultSessionRepository
             directory: String?,
         ): Boolean =
             runCatching {
-                api.revertSession(id, RevertSessionRequestDto(messageId = messageId, partId = partId), directory)
+                if (isV2()) {
+                    api.stageRevertV2(id, messageId, partId)
+                } else {
+                    api.revertSession(id, RevertSessionRequestDto(messageId = messageId, partId = partId), directory)
+                }
             }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun unrevertSession(
             id: String,
             directory: String?,
         ): Boolean =
-            runCatching { api.unrevertSession(id, directory) }
-                .getOrElse { throw adapter.mapError(it) }
+            runCatching {
+                if (isV2()) {
+                    api.clearRevertV2(id)
+                } else {
+                    api.unrevertSession(id, directory)
+                }
+            }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun respondToPermission(
             sessionId: String,

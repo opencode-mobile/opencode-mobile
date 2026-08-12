@@ -76,7 +76,12 @@ extension Container {
 
     var filesystemRepository: Factory<any FilesystemRepository> {
         self {
-            DefaultFilesystemRepository(api: self.filesystemAPIClient())
+            DefaultFilesystemRepository(
+                api: self.filesystemAPIClient(),
+                adapter: FilesystemDomainAdapter(),
+                activeConnectionManager: self.activeConnectionManager(),
+                projectRepository: self.projectRepository()
+            )
         }.singleton
     }
 

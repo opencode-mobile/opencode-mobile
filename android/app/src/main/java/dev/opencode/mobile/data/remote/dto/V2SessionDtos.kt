@@ -60,3 +60,26 @@ data class V2PermissionSourceDto(
 data class V2PermissionReplyRequestDto(
     val reply: String,
 )
+
+@Serializable
+data class V2CompactSessionRequestDto(
+    val delivery: String,
+)
+
+@Serializable
+data class V2RevertStageRequestDto(
+    @SerialName("messageID") val messageId: String,
+    @SerialName("partID") val partId: String? = null,
+    val files: Boolean,
+)
+
+@Serializable
+data class V2VcsInfoDto(
+    val branch: V2VcsBranchDto? = null,
+)
+
+@Serializable
+data class V2VcsBranchDto(
+    val current: String? = null,
+    val default: String? = null,
+)

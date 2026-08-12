@@ -123,6 +123,14 @@ enum class VcsDiffMode(
 ) {
     WorkingTree("git"),
     MainBranch("branch"),
+    ;
+
+    val v2WireValue: String
+        get() =
+            when (this) {
+                WorkingTree -> "working"
+                MainBranch -> "branch"
+            }
 }
 
 enum class PermissionDecision {
