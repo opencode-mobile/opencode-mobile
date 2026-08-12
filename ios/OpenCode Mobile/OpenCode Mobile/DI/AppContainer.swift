@@ -100,6 +100,17 @@ extension Container {
         self { MessageDomainAdapter() }.singleton
     }
 
+    var messageProtocolRouter: Factory<MessageProtocolRouter> {
+        self {
+            MessageProtocolRouter(
+                api: self.messagesAPIClient(),
+                adapter: self.messageDomainAdapter(),
+                activeConnectionManager: self.activeConnectionManager(),
+                projectRepository: self.projectRepository()
+            )
+        }.singleton
+    }
+
     var messageStore: Factory<InMemoryMessageStore> {
         self { InMemoryMessageStore() }.singleton
     }
@@ -144,13 +155,13 @@ extension Container {
 
     var messageSync: Factory<MessageSync> {
         self {
-            let api = self.messagesAPIClient()
+            let router = self.messageProtocolRouter()
             let adapter = self.messageDomainAdapter()
             let manager = self.activeConnectionManager()
             return MessageSync(
                 listMessages: { sessionID, directory in
                     do {
-                        return try await api.listMessages(sessionID: sessionID, directory: directory).map(adapter.message)
+                        return try await router.listMessages(sessionID: sessionID, directory: directory)
                     } catch {
                         throw adapter.mapError(error)
                     }
@@ -197,7 +208,8 @@ extension Container {
                 adapter: self.messageDomainAdapter(),
                 messageSync: self.messageSync(),
                 displayMessagePipeline: self.displayMessagePipeline(),
-                contentPreparer: self.messageContentPreparer()
+                contentPreparer: self.messageContentPreparer(),
+                protocolRouter: self.messageProtocolRouter()
             )
         }.singleton
     }

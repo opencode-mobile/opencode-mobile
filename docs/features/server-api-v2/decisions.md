@@ -52,3 +52,20 @@ fixture and desktop dialog, not a nested `boundary` object.
 **Why:** Research noted a possible `boundary: { type, messageID }` shape, but
 the OpenAPI fixture and current desktop fork call use flat `messageID`. Prefer
 the published contract until upstream documents otherwise.
+
+## V2 chat history projects into domain Message (2026-08-12)
+
+**Choice:** Map v2 `Session.Message.*` into today’s domain `Message` /
+`MessagePart` in `MessageDomainAdapter` (not a Screen Model fork). Skip
+`agent-switched` / `model-switched` / `system` as timeline rows (apply agent
+and model onto later user/assistant messages). Expand `shell` into a user
+command plus an assistant `bash` tool message. Keep `compaction` as its own
+assistant message with `mode = compaction`.
+
+**Why:** MessageSync, the display pipeline, and Session Chat already consume
+domain `Message`. Desktop uses a similar projection into v1-shaped
+messages/parts. Static history can ship without waiting for P3 event
+normalization.
+
+**Alternative rejected:** Keep v2 wire types in the store — would fork
+MessageSync and timeline rendering per protocol.

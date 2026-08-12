@@ -5,7 +5,6 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import dev.opencode.mobile.data.remote.MessagesApi
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.message.DefaultMessageRepository
@@ -13,6 +12,7 @@ import dev.opencode.mobile.domain.message.DisplayMessagePipeline
 import dev.opencode.mobile.domain.message.InMemoryMessageStore
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageDomainAdapter
+import dev.opencode.mobile.domain.message.MessageProtocolRouter
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageSync
 import dev.opencode.mobile.domain.message.SessionMessageEngine
@@ -45,7 +45,7 @@ abstract class MessageModule {
         @Provides
         @Singleton
         fun provideMessageSync(
-            api: MessagesApi,
+            protocolRouter: MessageProtocolRouter,
             adapter: MessageDomainAdapter,
             engine: SessionMessageEngine,
             eventStream: ForegroundEventStream,
@@ -55,7 +55,7 @@ abstract class MessageModule {
         ): MessageSync =
             MessageSync(
                 listMessages = { sessionId, directory ->
-                    runCatching { api.listMessages(sessionId, directory).map(adapter::toMessage) }
+                    runCatching { protocolRouter.listMessages(sessionId, directory) }
                         .getOrElse { throw adapter.mapError(it) }
                 },
                 engine = engine,

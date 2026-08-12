@@ -31,19 +31,22 @@ final class DefaultMessageRepository: MessageRepository {
     private let messageSync: MessageSync
     private let displayMessagePipeline: DisplayMessagePipeline
     private let contentPreparer: MessageContentPreparer
+    private let protocolRouter: MessageProtocolRouter
 
     init(
         api: any MessagesAPI,
         adapter: MessageDomainAdapter,
         messageSync: MessageSync,
         displayMessagePipeline: DisplayMessagePipeline,
-        contentPreparer: MessageContentPreparer
+        contentPreparer: MessageContentPreparer,
+        protocolRouter: MessageProtocolRouter? = nil
     ) {
         self.api = api
         self.adapter = adapter
         self.messageSync = messageSync
         self.displayMessagePipeline = displayMessagePipeline
         self.contentPreparer = contentPreparer
+        self.protocolRouter = protocolRouter ?? MessageProtocolRouter(api: api, adapter: adapter)
     }
 
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
@@ -76,7 +79,7 @@ final class DefaultMessageRepository: MessageRepository {
     }
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
-        try await run { try await api.listMessages(sessionID: sessionID, directory: directory).map(adapter.message) }
+        try await run { try await protocolRouter.listMessages(sessionID: sessionID, directory: directory) }
     }
 
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {

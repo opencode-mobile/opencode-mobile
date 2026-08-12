@@ -14,6 +14,7 @@ class DefaultMessageRepository
         private val messageSync: MessageSync,
         private val displayMessagePipeline: DisplayMessagePipeline,
         private val contentPreparer: MessageContentPreparer,
+        private val protocolRouter: MessageProtocolRouter,
     ) : MessageRepository {
         override fun observeMessages(
             sessionId: String,
@@ -58,7 +59,7 @@ class DefaultMessageRepository
             val elapsedMs =
                 measureTimeMillis {
                     messages =
-                        runCatching { api.listMessages(sessionId, directory).map(adapter::toMessage) }
+                        runCatching { protocolRouter.listMessages(sessionId, directory) }
                             .getOrElse { throw adapter.mapError(it) }
                 }
             logI(
