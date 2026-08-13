@@ -445,7 +445,7 @@ private extension SessionChatRow {
                 .text(id: blockID, text: text)
             case .attachment(_, let file):
                 .attachment(file.attachmentPresentation)
-            case .toolCard, .toolGroup:
+            case .toolCard, .toolGroup, .childSessionRow:
                 nil
             }
         }
@@ -546,6 +546,18 @@ private struct AssistantMessageContent: View {
                         title: group.title,
                         subtitle: group.subtitle,
                         errorText: group.errorText
+                    )
+                case .childSessionRow(_, let row):
+                    SessionChatChildSessionRow(
+                        agentName: row.agentName,
+                        letter: row.letter,
+                        isBackground: row.isBackground,
+                        secondLine: row.secondLine,
+                        timeStartEpochMs: row.timeStartEpochMs,
+                        showsChevron: row.childSessionId != nil,
+                        action: row.childSessionId.map { id in
+                            { onChildSessionTap(id, row.agentName) }
+                        }
                     )
                 }
             }

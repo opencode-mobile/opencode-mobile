@@ -23,6 +23,8 @@ Recorded in `decisions.md` (Running child session chat row). Follow-up to
   prompt. Do not subscribe to the child session’s tool stream for this row.
 - Elapsed: `m:ss` from existing tool `time.start` when present; omit when
   missing. Lift `time.start` into the domain only as needed for this row.
+  Tick locally in the row view from that start; do not rebuild timeline
+  blocks on a timer.
 - Tap / `childSessionId` navigation unchanged from OPE-52.
 - iOS and Android in the same change, with chrome + nav tests.
 
@@ -33,7 +35,8 @@ Recorded in `decisions.md` (Running child session chat row). Follow-up to
 - Changing completed or error `task` chrome (keep OPE-52 Tool Call Card).
 - Extending the design-system Tool Call Card. This row is feature-local
   Session Chat chrome: Tool Call Card stays collapsed tool-agnostic status.
-- New server APIs or a free-running client clock.
+- New server APIs, invented start times, or a Screen Model / timeline-builder
+  timer. A view-local tick from `time.start` is in scope.
 
 ## Design system
 
@@ -47,6 +50,8 @@ Recorded in `decisions.md` (Running child session chat row). Follow-up to
 - Pending/running `task` parts match Quiet row content and do not animate
   progress.
 - Missing `time.start` omits elapsed rather than showing `0:00`.
+- When `time.start` is present, elapsed advances locally while the row is
+  visible.
 - Missing `sessionId` stays readable and non-tappable.
 - Completed/error `task` parts still use the Tool Call Card.
 - iOS and Android chrome mapping and navigation stay in parity.

@@ -100,7 +100,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             callID: callID,
             input: state?.input,
             output: state?.output,
-            metadata: state?.metadata
+            metadata: state?.metadata,
+            timeStartEpochMs: state?.time?.start
         )
     }
 
