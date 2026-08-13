@@ -66,6 +66,7 @@ object SessionChatTimelineBlocks {
     fun build(
         role: MessageRole,
         parts: List<MessagePart>,
+        collapseConsecutiveToolCalls: Boolean = false,
     ): SessionChatTimelineBlocksResult {
         if (parts.isEmpty()) return SessionChatTimelineBlocksResult.Ok(emptyList())
 
@@ -107,12 +108,13 @@ object SessionChatTimelineBlocks {
                         continue
                     }
                     if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    if (isContextTool(part.toolName)) {
+                    if (collapseConsecutiveToolCalls || isContextTool(part.toolName)) {
                         val groupTools = mutableListOf<MessagePart.Tool>()
                         var lookAhead = index
                         while (lookAhead < parts.size) {
                             val candidate = parts[lookAhead] as? MessagePart.Tool ?: break
-                            if (!isVisibleTool(candidate) || !isContextTool(candidate.toolName)) break
+                            if (!isVisibleTool(candidate)) break
+                            if (!collapseConsecutiveToolCalls && !isContextTool(candidate.toolName)) break
                             groupTools += candidate
                             lookAhead += 1
                         }
@@ -155,6 +157,7 @@ object SessionChatTimelineBlocks {
         parts: List<MessagePart>,
         messageId: String,
         fallbackText: String,
+        collapseConsecutiveToolCalls: Boolean = false,
     ): List<SessionChatTimelineBlock> {
         fun fallbackBlocks(): List<SessionChatTimelineBlock> =
             if (fallbackText.isNotBlank()) {
@@ -168,7 +171,7 @@ object SessionChatTimelineBlocks {
                 emptyList()
             }
 
-        return when (val result = build(role, parts)) {
+        return when (val result = build(role, parts, collapseConsecutiveToolCalls)) {
             is SessionChatTimelineBlocksResult.Ok ->
                 result.blocks.ifEmpty { fallbackBlocks() }
             SessionChatTimelineBlocksResult.MissingPartIds -> fallbackBlocks()
@@ -217,36 +220,38 @@ object SessionChatTimelineBlocks {
             blockID = PresentationBlockId.toolGroup(memberIds),
             count = tools.size,
             status = status,
-            title = contextGroupTitle(tools),
+            title = groupTitle(tools),
             subtitle = null,
             errorText = errorText,
         )
     }
 
-    private fun contextGroupTitle(tools: List<MessagePart.Tool>): String {
-        val counts =
-            linkedMapOf(
-                "read" to 0,
-                "grep" to 0,
-                "glob" to 0,
-            )
+    /**
+     * Counts group members by tool family in encounter order, pluralizing the
+     * context families while other families keep their raw name (e.g.
+     * `2 reads · 1 bash · 1 edit`).
+     */
+    private fun groupTitle(tools: List<MessagePart.Tool>): String {
+        val order = mutableListOf<String>()
+        val counts = mutableMapOf<String, Int>()
         for (tool in tools) {
             val key = tool.toolName.lowercase()
+            if (key !in counts) order += key
             counts[key] = (counts[key] ?: 0) + 1
         }
-        return counts.entries
-            .filter { it.value > 0 }
-            .joinToString(" · ") { (name, count) ->
-                val label =
-                    when (name) {
-                        "read" -> if (count == 1) "read" else "reads"
-                        "grep" -> if (count == 1) "grep" else "greps"
-                        "glob" -> if (count == 1) "glob" else "globs"
-                        else -> name
-                    }
-                "$count $label"
-            }
+        return order.joinToString(" · ") { name ->
+            val count = counts.getValue(name)
+            "$count ${familyLabel(name, count)}"
+        }
     }
+
+    private fun familyLabel(name: String, count: Int): String =
+        when (name) {
+            "read" -> if (count == 1) "read" else "reads"
+            "grep" -> if (count == 1) "grep" else "greps"
+            "glob" -> if (count == 1) "glob" else "globs"
+            else -> name
+        }
 
     private fun worstStatus(statuses: List<ToolStatus>): ToolStatus {
         if (statuses.any { it == ToolStatus.Error }) return ToolStatus.Error

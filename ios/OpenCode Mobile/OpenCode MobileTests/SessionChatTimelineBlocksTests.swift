@@ -868,6 +868,144 @@ struct SessionChatTimelineBlocksTests {
         #expect(two.single?.blockID != three.single?.blockID)
     }
 
+    @Test func build_collapseOff_keepsNonContextToolsSeparate() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "bash-1", toolName: "bash", status: .completed)),
+                .tool(ToolPart(id: "bash-2", toolName: "bash", status: .completed)),
+            ]
+        )
+        #expect(blocks.count == 2)
+        guard case .toolCard = blocks[0], case .toolCard = blocks[1] else {
+            Issue.record("Expected two tool cards when collapse is off")
+            return
+        }
+        #expect(blocks.map(\.blockID) == [
+            PresentationBlockId.direct("bash-1"),
+            PresentationBlockId.direct("bash-2"),
+        ])
+    }
+
+    @Test func build_collapseOn_groupsMixedConsecutiveTools() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "bash-1", toolName: "bash", status: .completed)),
+                .tool(ToolPart(id: "edit-1", toolName: "edit", status: .completed)),
+                .tool(ToolPart(id: "read-1", toolName: "read", status: .completed)),
+            ],
+            collapseConsecutiveToolCalls: true
+        )
+        guard case .toolGroup(let blockID, let group) = blocks.single else {
+            Issue.record("Expected tool group")
+            return
+        }
+        #expect(blockID == PresentationBlockId.toolGroup(["bash-1", "edit-1", "read-1"]))
+        #expect(group.count == 3)
+        #expect(group.title == "1 bash · 1 edit · 1 read")
+    }
+
+    @Test func build_collapseOn_mixedFamilyTitleCounts() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed)),
+                .tool(ToolPart(id: "r2", toolName: "read", status: .completed)),
+                .tool(ToolPart(id: "bash-1", toolName: "bash", status: .completed)),
+                .tool(ToolPart(id: "edit-1", toolName: "edit", status: .completed)),
+            ],
+            collapseConsecutiveToolCalls: true
+        )
+        guard case .toolGroup(_, let group) = blocks.single else {
+            Issue.record("Expected tool group")
+            return
+        }
+        #expect(group.count == 4)
+        #expect(group.title == "2 reads · 1 bash · 1 edit")
+    }
+
+    @Test func build_collapseOn_singleToolStaysCard() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "bash-1", toolName: "bash", status: .completed)),
+            ],
+            collapseConsecutiveToolCalls: true
+        )
+        guard case .toolCard(let blockID, _) = blocks.single else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(blockID == PresentationBlockId.direct("bash-1"))
+    }
+
+    @Test func build_collapseOn_textBreaksGroup() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "bash-1", toolName: "bash", status: .completed)),
+                text("note-1", "note"),
+                .tool(ToolPart(id: "bash-2", toolName: "bash", status: .completed)),
+            ],
+            collapseConsecutiveToolCalls: true
+        )
+        #expect(blocks.count == 3)
+        guard case .toolCard = blocks[0], case .toolCard = blocks[2] else {
+            Issue.record("Expected tool cards around text")
+            return
+        }
+    }
+
+    @Test func build_collapseOn_hiddenToolBreaksGroup() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed)),
+                .tool(ToolPart(id: "todo-1", toolName: "todowrite", status: .completed)),
+                .tool(ToolPart(id: "r2", toolName: "read", status: .completed)),
+            ],
+            collapseConsecutiveToolCalls: true
+        )
+        #expect(blocks.count == 2)
+        guard case .toolCard = blocks[0], case .toolCard = blocks[1] else {
+            Issue.record("Expected two tool cards split by hidden tool")
+            return
+        }
+    }
+
+    @Test func build_collapseOn_groupStatusPrefersError() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "bash-1", toolName: "bash", status: .completed)),
+                .tool(ToolPart(id: "edit-1", toolName: "edit", status: .error, error: "boom")),
+                .tool(ToolPart(id: "read-1", toolName: "read", status: .running)),
+            ],
+            collapseConsecutiveToolCalls: true
+        )
+        guard case .toolGroup(_, let group) = blocks.single else {
+            Issue.record("Expected tool group")
+            return
+        }
+        #expect(group.status == .error)
+        #expect(group.errorText == "boom")
+    }
+
+    @Test func build_collapseOff_mixedToolsContextStillGroups() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed)),
+                .tool(ToolPart(id: "r2", toolName: "read", status: .completed)),
+                .tool(ToolPart(id: "bash-1", toolName: "bash", status: .completed)),
+            ]
+        )
+        #expect(blocks.count == 2)
+        guard case .toolGroup(let blockID, let group) = blocks[0] else {
+            Issue.record("Expected context group")
+            return
+        }
+        #expect(blockID == PresentationBlockId.toolGroup(["r1", "r2"]))
+        #expect(group.title == "2 reads")
+        guard case .toolCard = blocks[1] else {
+            Issue.record("Expected bash card")
+            return
+        }
+    }
+
     @Test func build_toolGroupMembershipChange_changesBlockID() {
         let two = okBlocks(
             parts: [
@@ -894,9 +1032,14 @@ struct SessionChatTimelineBlocksTests {
     private func okBlocks(
         role: MessageRole = .assistant,
         parts: [MessagePart],
+        collapseConsecutiveToolCalls: Bool = false,
         sourceLocation: SourceLocation = #_sourceLocation
     ) -> [SessionChatTimelineBlock] {
-        let result = SessionChatTimelineBlocks.build(role: role, parts: parts)
+        let result = SessionChatTimelineBlocks.build(
+            role: role,
+            parts: parts,
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls
+        )
         guard case .ok(let blocks) = result else {
             Issue.record("Expected Ok", sourceLocation: sourceLocation)
             return []

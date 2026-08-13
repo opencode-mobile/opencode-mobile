@@ -326,9 +326,12 @@ labels or attachment bytes into message `text` for Session Chat display.
 
 ### tool group
 
-A Session Chat timeline block that summarizes consecutive context ToolParts
-(`read` / `glob` / `grep`) inside one message as a single Tool Call Card.
-A text block or a different tool family breaks the group.
+A Session Chat timeline block that summarizes consecutive visible ToolParts
+inside one message as a single Tool Call Card. By default only consecutive
+context ToolParts (`read` / `glob` / `grep`) group; with the
+**Collapse consecutive tool calls** Appearance preference on, any consecutive
+visible tool families group. A text block, an attachment, or a hidden tool
+breaks the group.
 _Avoid_: expanding each grouped tool inline; treating a group as multiple
 timeline messages.
 

@@ -994,11 +994,160 @@ class SessionChatTimelineBlocksTest {
         assertTrue(!tool.opensChangesReview)
     }
 
+    @Test
+    fun build_collapseOff_keepsNonContextToolsSeparate() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "prt-1"),
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "prt-2"),
+                    ),
+            )
+
+        assertEquals(2, blocks.size)
+        assertTrue(blocks[0] is SessionChatTimelineBlock.ToolCard)
+        assertTrue(blocks[1] is SessionChatTimelineBlock.ToolCard)
+        assertEquals(PresentationBlockId.direct("prt-1"), blocks[0].blockID)
+        assertEquals(PresentationBlockId.direct("prt-2"), blocks[1].blockID)
+    }
+
+    @Test
+    fun build_collapseOn_groupsMixedConsecutiveTools() {
+        val group =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                collapseConsecutiveToolCalls = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "prt-1"),
+                        MessagePart.Tool(toolName = "edit", status = ToolStatus.Completed, id = "prt-2"),
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "prt-3"),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolGroup
+
+        assertEquals(PresentationBlockId.toolGroup(listOf("prt-1", "prt-2", "prt-3")), group.blockID)
+        assertEquals(3, group.count)
+        assertEquals("1 bash · 1 edit · 1 read", group.title)
+    }
+
+    @Test
+    fun build_collapseOn_mixedFamilyTitleCounts() {
+        val group =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                collapseConsecutiveToolCalls = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "prt-1"),
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "prt-2"),
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "prt-3"),
+                        MessagePart.Tool(toolName = "edit", status = ToolStatus.Completed, id = "prt-4"),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolGroup
+
+        assertEquals(4, group.count)
+        assertEquals("2 reads · 1 bash · 1 edit", group.title)
+    }
+
+    @Test
+    fun build_collapseOn_singleToolStaysCard() {
+        val card =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                collapseConsecutiveToolCalls = true,
+                parts = listOf(MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "prt-1")),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals(PresentationBlockId.direct("prt-1"), card.blockID)
+    }
+
+    @Test
+    fun build_collapseOn_textBreaksGroup() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                collapseConsecutiveToolCalls = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "prt-1"),
+                        MessagePart.Text("note", id = "prt-2"),
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "prt-3"),
+                    ),
+            )
+
+        assertEquals(3, blocks.size)
+        assertTrue(blocks[0] is SessionChatTimelineBlock.ToolCard)
+        assertTrue(blocks[2] is SessionChatTimelineBlock.ToolCard)
+    }
+
+    @Test
+    fun build_collapseOff_mixedToolsContextStillGroups() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "prt-1"),
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "prt-2"),
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "prt-3"),
+                    ),
+            )
+
+        assertEquals(2, blocks.size)
+        val group = blocks[0] as SessionChatTimelineBlock.ToolGroup
+        assertEquals(PresentationBlockId.toolGroup(listOf("prt-1", "prt-2")), group.blockID)
+        assertEquals("2 reads", group.title)
+        assertTrue(blocks[1] is SessionChatTimelineBlock.ToolCard)
+    }
+
+    @Test
+    fun build_collapseOn_hiddenToolBreaksGroup() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                collapseConsecutiveToolCalls = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "prt-1"),
+                        MessagePart.Tool(toolName = "todowrite", status = ToolStatus.Completed, id = "prt-2"),
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "prt-3"),
+                    ),
+            )
+
+        assertEquals(2, blocks.size)
+        assertTrue(blocks[0] is SessionChatTimelineBlock.ToolCard)
+        assertTrue(blocks[1] is SessionChatTimelineBlock.ToolCard)
+    }
+
+    @Test
+    fun build_collapseOn_groupStatusPrefersError() {
+        val group =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                collapseConsecutiveToolCalls = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "prt-1"),
+                        MessagePart.Tool(toolName = "edit", status = ToolStatus.Error, id = "prt-2", error = "boom"),
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Running, id = "prt-3"),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolGroup
+
+        assertEquals(ToolStatus.Error, group.status)
+        assertEquals("boom", group.errorText)
+    }
+
     private fun buildBlocks(
         role: MessageRole,
         parts: List<MessagePart>,
+        collapseConsecutiveToolCalls: Boolean = false,
     ): List<SessionChatTimelineBlock> =
-        when (val result = SessionChatTimelineBlocks.build(role, parts)) {
+        when (
+            val result =
+                SessionChatTimelineBlocks.build(role, parts, collapseConsecutiveToolCalls)
+        ) {
             is SessionChatTimelineBlocksResult.Ok -> result.blocks
             SessionChatTimelineBlocksResult.MissingPartIds -> error("expected Ok, got MissingPartIds")
         }

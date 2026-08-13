@@ -22,6 +22,7 @@ import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.textmate.TextMateLogbook
 import dev.opencode.mobile.theme.ThemeManager
@@ -84,6 +85,7 @@ class SettingsViewModel
                 MarkdownHighlightPreferences.clear()
                 AnalyticsConsentPreferences.clear()
                 AppOnboardingPreferences.clear()
+                SessionChatDisplayPreferences.clear()
                 messageContentPreparer.clearDocumentCache()
                 BlockDecorationCache.clear()
                 textMateLogbook.clear()
@@ -106,6 +108,10 @@ class SettingsViewModel
 
         fun setRecentWindowHours(hours: Int) {
             HomeDisplayPreferences.updateRecentWindowHours(hours)
+        }
+
+        fun setCollapseConsecutiveToolCalls(enabled: Boolean) {
+            SessionChatDisplayPreferences.updateCollapseConsecutiveToolCalls(enabled)
         }
 
         fun setTextMateEnabled(enabled: Boolean) {

@@ -95,7 +95,11 @@ nonisolated struct SessionChatToolGroupBlock: Equatable, Sendable {
 nonisolated enum SessionChatTimelineBlocks {
     private static let contextToolNames: Set<String> = ["read", "glob", "grep"]
 
-    static func build(role: MessageRole, parts: [MessagePart]) -> SessionChatTimelineBlocksResult {
+    static func build(
+        role: MessageRole,
+        parts: [MessagePart],
+        collapseConsecutiveToolCalls: Bool = false
+    ) -> SessionChatTimelineBlocksResult {
         guard !parts.isEmpty else { return .ok([]) }
 
         let allowToolCards = role == .assistant
@@ -147,14 +151,16 @@ nonisolated enum SessionChatTimelineBlocks {
                     continue
                 }
                 flushText()
-                if isContextTool(tool.toolName) {
+                if collapseConsecutiveToolCalls || isContextTool(tool.toolName) {
                     var groupTools: [ToolPart] = []
                     var lookAhead = index
                     while lookAhead < parts.count {
                         guard case .tool(let candidate) = parts[lookAhead],
-                              isVisibleTool(candidate),
-                              isContextTool(candidate.toolName)
+                              isVisibleTool(candidate)
                         else { break }
+                        if !collapseConsecutiveToolCalls, !isContextTool(candidate.toolName) {
+                            break
+                        }
                         groupTools.append(candidate)
                         lookAhead += 1
                     }
@@ -185,7 +191,8 @@ nonisolated enum SessionChatTimelineBlocks {
         role: MessageRole,
         parts: [MessagePart],
         messageId: String,
-        fallbackText: String
+        fallbackText: String,
+        collapseConsecutiveToolCalls: Bool = false
     ) -> [SessionChatTimelineBlock] {
         func fallbackBlocks() -> [SessionChatTimelineBlock] {
             let trimmed = fallbackText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -199,7 +206,7 @@ nonisolated enum SessionChatTimelineBlocks {
             ]
         }
 
-        switch build(role: role, parts: parts) {
+        switch build(role: role, parts: parts, collapseConsecutiveToolCalls: collapseConsecutiveToolCalls) {
         case .ok(let blocks):
             return blocks.isEmpty ? fallbackBlocks() : blocks
         case .missingPartIds:
@@ -253,38 +260,38 @@ nonisolated enum SessionChatTimelineBlocks {
             group: SessionChatToolGroupBlock(
                 count: tools.count,
                 status: status,
-                title: contextGroupTitle(tools),
+                title: groupTitle(tools),
                 subtitle: nil,
                 errorText: errorText
             )
         )
     }
 
-    private static func contextGroupTitle(_ tools: [ToolPart]) -> String {
-        var counts: [(String, Int)] = [
-            ("read", 0),
-            ("grep", 0),
-            ("glob", 0),
-        ]
+    /// Counts group members by tool family in encounter order, pluralizing the
+    /// context families while other families keep their raw name (e.g.
+    /// `2 reads · 1 bash · 1 edit`).
+    private static func groupTitle(_ tools: [ToolPart]) -> String {
+        var order: [String] = []
+        var counts: [String: Int] = [:]
         for tool in tools {
             let key = tool.toolName.lowercased()
-            if let index = counts.firstIndex(where: { $0.0 == key }) {
-                counts[index].1 += 1
+            if counts[key] == nil {
+                order.append(key)
             }
+            counts[key, default: 0] += 1
         }
-        return counts
-            .filter { $0.1 > 0 }
-            .map { name, count in
-                let label: String =
-                    switch name {
-                    case "read": count == 1 ? "read" : "reads"
-                    case "grep": count == 1 ? "grep" : "greps"
-                    case "glob": count == 1 ? "glob" : "globs"
-                    default: name
-                    }
-                return "\(count) \(label)"
-            }
-            .joined(separator: " · ")
+        return order.map { name in
+            "\(counts[name, default: 0]) \(familyLabel(name, count: counts[name, default: 0]))"
+        }.joined(separator: " · ")
+    }
+
+    private static func familyLabel(_ name: String, count: Int) -> String {
+        switch name {
+        case "read": return count == 1 ? "read" : "reads"
+        case "grep": return count == 1 ? "grep" : "greps"
+        case "glob": return count == 1 ? "glob" : "globs"
+        default: return name
+        }
     }
 
     private static func worstStatus(_ statuses: [ToolStatus]) -> ToolStatus {

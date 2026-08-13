@@ -45,7 +45,8 @@ nonisolated enum DisplayFrameBuilder {
         frameRevision: UInt64,
         sourceRevision: UInt64,
         displayMessages: [DisplayMessage],
-        serverCommands: [ServerCommand] = []
+        serverCommands: [ServerCommand] = [],
+        collapseConsecutiveToolCalls: Bool = false
     ) -> DisplayFrame {
         // pthread_main_np avoids the async-context warning on Thread.isMainThread.
         lastBuildWasOnMainThread = pthread_main_np() != 0
@@ -71,7 +72,8 @@ nonisolated enum DisplayFrameBuilder {
                 role: message.role,
                 parts: message.parts,
                 messageId: message.id,
-                fallbackText: message.text
+                fallbackText: message.text,
+                collapseConsecutiveToolCalls: collapseConsecutiveToolCalls
             )
             blocks = SessionChatTimelineBlocks.collapseCommandInvocations(
                 role: message.role,
