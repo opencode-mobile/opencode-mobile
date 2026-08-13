@@ -234,10 +234,16 @@ jobs:
           distributed_sha="$(git rev-parse HEAD)"
           short_sha="$(git rev-parse --short=12 HEAD)"
           subject="$(git log -1 --pretty=%s)"
+          distributed_ref="${SOURCE_REF:-${GITHUB_REF_NAME:-}}"
+          distributed_ref="${distributed_ref#refs/heads/}"
+          distributed_ref="${distributed_ref#refs/tags/}"
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             release_notes="Dispatch $short_sha: $subject"
           else
             release_notes="Merge $short_sha: $subject"
+          fi
+          if [[ -n "$distributed_ref" && "$distributed_ref" != "main" ]]; then
+            release_notes="Not from main: $distributed_ref"$'\n'"$release_notes"
           fi
           if ! distribution_output="$(
             npx --yes "firebase-tools@$FIREBASE_TOOLS_VERSION" \
@@ -265,6 +271,9 @@ jobs:
           {
             echo "## iOS App Distribution"
             echo
+            if [[ -n "$distributed_ref" && "$distributed_ref" != "main" ]]; then
+              echo "- **Not from main:** \`$distributed_ref\`"
+            fi
             echo "- Commit: \`$distributed_sha\`"
             if [[ -n "${SOURCE_REF:-}" ]]; then
               echo "- Source ref: \`$SOURCE_REF\`"

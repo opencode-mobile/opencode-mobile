@@ -214,9 +214,10 @@ gh workflow run "Android App Distribution" --ref feature/ope-146-server-api-v2
 The workflow uses Firebase CLI `15.24.0` with Application Default Credentials
 from `FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON`. It records the commit
 subject and short SHA as release notes (`Merge` on a `main` push, `Dispatch`
-on a manual run), then places only the stable Firebase console and
-tester-experience links in the workflow summary. The signed APK artifact is
-retained for seven days. Firebase App Distribution releases remain available
+on a manual run). When the distributed ref is not `main`, those notes start
+with `Not from main: <ref>` so testers see a branch build before the commit
+line. The workflow summary then places only the stable Firebase console and
+tester-experience links. The signed APK artifact is retained for seven days. Firebase App Distribution releases remain available
 for 150 days.
 
 App Distribution version codes use `1000000000 + github.run_number`, a
