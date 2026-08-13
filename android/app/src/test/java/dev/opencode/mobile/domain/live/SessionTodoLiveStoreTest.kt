@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.session.PermissionDecision
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
@@ -219,6 +220,54 @@ class SessionTodoLiveStoreTest {
             assertEquals(before, emissions.size)
         }
 
+    @Test
+    fun failedRestSeed_doesNotWipeEventTodos() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeTodoSessionRepository(
+                    listTodosError = SessionError.Http(404, "Todos REST is unavailable on v2"),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store = createStore(repository, eventStream)
+            val emissions = mutableListOf<List<SessionTodo>>()
+            val job =
+                launch {
+                    store.observeTodos("ses-1", "/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+            store.setLive(true, "ses-1", "/repo")
+            advanceUntilIdle()
+
+            eventStream.emit(
+                OpencodeEvent(
+                    type = "todo.updated",
+                    sessionId = "ses-1",
+                    rawProperties =
+                        buildJsonObject {
+                            put(
+                                "todos",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("content", "From event")
+                                            put("status", "pending")
+                                            put("priority", "low")
+                                        },
+                                    )
+                                },
+                            )
+                        },
+                ),
+            )
+            advanceUntilIdle()
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = null, rawProperties = null))
+            advanceUntilIdle()
+            job.cancel()
+
+            assertEquals("From event", emissions.last().single().content)
+            assertTrue(repository.listTodosCallCount >= 2)
+        }
+
     private fun createStore(
         repository: SessionRepository,
         eventStream: FakeForegroundEventStream,
@@ -233,6 +282,7 @@ class SessionTodoLiveStoreTest {
 private class FakeTodoSessionRepository(
     var todos: List<SessionTodo> = emptyList(),
     var listTodosCallCount: Int = 0,
+    var listTodosError: Throwable? = null,
 ) : SessionRepository {
     override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> = emptyList()
 
@@ -279,6 +329,7 @@ private class FakeTodoSessionRepository(
         directory: String?,
     ): List<SessionTodo> {
         listTodosCallCount += 1
+        listTodosError?.let { throw it }
         return todos
     }
 

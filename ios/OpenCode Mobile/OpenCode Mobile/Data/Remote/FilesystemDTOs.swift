@@ -15,3 +15,8 @@ struct FileNodeDTO: Decodable, Sendable {
     let type: String
     let ignored: Bool?
 }
+
+nonisolated struct V2FsEntryDTO: Decodable, Sendable {
+    let path: String
+    let type: String
+}

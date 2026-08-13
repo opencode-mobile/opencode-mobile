@@ -3,6 +3,7 @@ package dev.opencode.mobile.data.remote
 import dev.opencode.mobile.data.remote.dto.ApiActiveSessionsEnvelope
 import dev.opencode.mobile.data.remote.dto.ApiDataEnvelope
 import dev.opencode.mobile.data.remote.dto.ApiListEnvelope
+import dev.opencode.mobile.data.remote.dto.ApiLocatedEnvelope
 import dev.opencode.mobile.data.remote.dto.ApiSessionActiveDto
 import dev.opencode.mobile.data.remote.dto.CreateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.FileDiffDto
@@ -17,13 +18,16 @@ import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.SummarizeSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.TodoDto
 import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
+import dev.opencode.mobile.data.remote.dto.V2CompactSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CreateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2ForkSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2LocationDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2RenameSessionRequestDto
+import dev.opencode.mobile.data.remote.dto.V2RevertStageRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
+import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
@@ -439,6 +443,56 @@ class SessionsApi private constructor(
             .post("api/session/$id/fork") {
                 setJsonBody(json, V2ForkSessionRequestDto(messageId = messageId))
             }.body<ApiDataEnvelope<V2SessionDto>>()
+            .data
+
+    suspend fun compactSessionV2(id: String): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$id/compact") {
+                timeout {
+                    requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+                    socketTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+                }
+                setJsonBody(json, V2CompactSessionRequestDto(delivery = "steer"))
+            }.ensureSuccess()
+
+    suspend fun stageRevertV2(
+        id: String,
+        messageId: String,
+        partId: String?,
+    ): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$id/revert/stage") {
+                setJsonBody(json, V2RevertStageRequestDto(messageId = messageId, partId = partId, files = true))
+            }.ensureSuccess()
+
+    suspend fun clearRevertV2(id: String): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$id/revert/clear")
+            .ensureSuccess()
+
+    suspend fun getVcsInfoV2(directory: String? = null): V2VcsInfoDto =
+        httpClient
+            .get()
+            .get("api/vcs") {
+                applyLocationDirectory(directory)
+            }.body<ApiLocatedEnvelope<V2VcsInfoDto>>()
+            .data
+
+    suspend fun getVcsDiffV2(
+        mode: String,
+        directory: String? = null,
+        context: Int = 12,
+    ): List<FileDiffDto> =
+        httpClient
+            .get()
+            .get("api/vcs/diff") {
+                applyLocationDirectory(directory)
+                parameter("mode", mode)
+                parameter("context", context)
+            }.body<ApiLocatedEnvelope<List<FileDiffDto>>>()
             .data
 
     private fun HttpResponse.ensureSuccess(): Boolean {

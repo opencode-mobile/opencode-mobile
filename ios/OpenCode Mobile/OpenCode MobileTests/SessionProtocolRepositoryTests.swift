@@ -295,6 +295,98 @@ struct SessionProtocolRepositoryTests {
         #expect(request.url?.path.hasSuffix("/api/session/ses_1/interrupt") == true)
     }
 
+    @Test func v2SummarizeSessionPostsCompactWithSteerDelivery() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let ok = try await repository.summarizeSession(id: "ses_1", providerID: "openai", modelID: "gpt-4.1")
+
+        #expect(ok)
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path.hasSuffix("/api/session/ses_1/compact") == true)
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first.flatMap { $0 })
+        #expect(body.contains("\"delivery\":\"steer\""))
+    }
+
+    @Test func v2RevertSessionStagesWithMessageAndFiles() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let ok = try await repository.revertSession(id: "ses_1", messageID: "msg_9", partID: "part_2")
+
+        #expect(ok)
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        #expect(request.url?.path.hasSuffix("/api/session/ses_1/revert/stage") == true)
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first.flatMap { $0 })
+        #expect(body.contains("\"messageID\":\"msg_9\""))
+        #expect(body.contains("\"partID\":\"part_2\""))
+        #expect(body.contains("\"files\":true"))
+    }
+
+    @Test func v2UnrevertSessionClearsStagedRevert() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let ok = try await repository.unrevertSession(id: "ses_1")
+
+        #expect(ok)
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path.hasSuffix("/api/session/ses_1/revert/clear") == true)
+    }
+
+    @Test func v2ListSessionTodosSkipsRestAndSignalsUnavailable() async {
+        ProtocolRoutingURLProtocol.reset(responses: [.json("[]")])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        await #expect(throws: SessionError.http(statusCode: 404, message: "Todos REST is unavailable on v2")) {
+            _ = try await repository.listSessionTodos(id: "ses_1", directory: "/repo")
+        }
+        #expect(ProtocolRoutingURLProtocol.requests.isEmpty)
+    }
+
+    @Test func v2GetVcsInfoUnwrapsBranchEnvelope() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            {
+              "location":{"directory":"/repo","project":{"id":"p","directory":"/repo","canonical":"/repo"}},
+              "data":{"branch":{"current":"feature/review","default":"main"}}
+            }
+            """#)
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let info = try await repository.getVcsInfo(directory: "/repo")
+
+        #expect(info.currentBranch == "feature/review")
+        #expect(info.defaultBranch == "main")
+        let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
+        #expect(url.path.hasSuffix("/api/vcs"))
+        #expect(queryValue(url, "location[directory]") == "/repo")
+    }
+
+    @Test func v2GetVcsDiffMapsGitModeToWorking() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            {
+              "location":{"directory":"/repo","project":{"id":"p","directory":"/repo","canonical":"/repo"}},
+              "data":[{"file":"App.kt","patch":"@@","additions":1,"deletions":0,"status":"modified"}]
+            }
+            """#)
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let files = try await repository.getVcsDiff(mode: .workingTree, directory: "/repo", context: 12)
+
+        #expect(files.map(\.path) == ["App.kt"])
+        let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
+        #expect(url.path.hasSuffix("/api/vcs/diff"))
+        #expect(queryValue(url, "mode") == "working")
+        #expect(queryValue(url, "context") == "12")
+        #expect(queryValue(url, "location[directory]") == "/repo")
+    }
+
     @Test func v2ListCommandsUnwrapsLocationEnvelope() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
             .json(#"{"data":[{"name":"init","template":"do init","description":"Setup"}]}"#)

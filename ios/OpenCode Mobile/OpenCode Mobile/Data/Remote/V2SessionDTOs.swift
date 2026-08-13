@@ -74,3 +74,32 @@ nonisolated struct V2PermissionSourceDTO: Decodable, Sendable {
 nonisolated struct V2PermissionReplyRequestDTO: Encodable, Sendable {
     let reply: String
 }
+
+nonisolated struct V2CompactSessionRequestDTO: Encodable, Sendable {
+    let delivery: String
+
+    init(delivery: String = "steer") {
+        self.delivery = delivery
+    }
+}
+
+nonisolated struct V2RevertStageRequestDTO: Encodable, Sendable {
+    let messageID: String
+    let partID: String?
+    let files: Bool
+
+    init(messageID: String, partID: String? = nil, files: Bool = true) {
+        self.messageID = messageID
+        self.partID = partID
+        self.files = files
+    }
+}
+
+nonisolated struct V2VcsInfoDTO: Decodable, Sendable {
+    let branch: V2VcsBranchDTO?
+}
+
+nonisolated struct V2VcsBranchDTO: Decodable, Sendable {
+    let current: String?
+    let `default`: String?
+}

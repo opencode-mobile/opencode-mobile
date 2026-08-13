@@ -2,14 +2,20 @@ import Foundation
 
 nonisolated struct FilesystemAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
+    private let urlSession: URLSession
     private let decoder = JSONDecoder()
 
-    init(connectionProvider: @escaping @Sendable () -> ServerConnection?) {
+    init(
+        connectionProvider: @escaping @Sendable () -> ServerConnection?,
+        urlSession: URLSession = .shared
+    ) {
         self.connectionProvider = connectionProvider
+        self.urlSession = urlSession
     }
 
-    init(fixedConnection: ServerConnection) {
+    init(fixedConnection: ServerConnection, urlSession: URLSession = .shared) {
         self.connectionProvider = { fixedConnection }
+        self.urlSession = urlSession
     }
 
     func getPaths() async throws -> PathDTO {
@@ -18,25 +24,46 @@ nonisolated struct FilesystemAPIClient: Sendable {
 
     // Lists absoluteDirectory via path=. + directory= so paths outside the boot worktree work.
     func listFiles(absoluteDirectory: String) async throws -> [FileNodeDTO] {
+        try await get(path: "file", directory: absoluteDirectory, query: ["path": "."])
+    }
+
+    func getLocationV2() async throws -> V2LocationInfoDTO {
+        try await get(path: "api/location")
+    }
+
+    func listFilesV2(absoluteDirectory: String) async throws -> [V2FsEntryDTO] {
+        let envelope: APILocatedEnvelope<[V2FsEntryDTO]> = try await get(
+            path: "api/fs/list",
+            locationDirectory: absoluteDirectory,
+            query: ["path": "."]
+        )
+        return envelope.data
+    }
+
+    private func get<T: Decodable>(
+        path: String,
+        directory: String? = nil,
+        locationDirectory: String? = nil,
+        query: [String: String] = [:]
+    ) async throws -> T {
         guard let connection = connectionProvider() else {
             throw ProjectsAPIError.noActiveConnection
         }
-        var request = connection.authorizedRequest(path: "file", directory: absoluteDirectory)
-        if let url = request.url, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+        var request = connection.authorizedRequest(
+            path: path,
+            directory: directory,
+            locationDirectory: locationDirectory
+        )
+        if !query.isEmpty, let url = request.url,
+           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
             var items = components.queryItems ?? []
-            items.append(URLQueryItem(name: "path", value: "."))
+            query.forEach { name, value in
+                items.append(URLQueryItem(name: name, value: value))
+            }
             components.queryItems = items
             request.url = components.url
         }
         let data = try await data(for: request)
-        return try decoder.decode([FileNodeDTO].self, from: data)
-    }
-
-    private func get<T: Decodable>(path: String) async throws -> T {
-        guard let connection = connectionProvider() else {
-            throw ProjectsAPIError.noActiveConnection
-        }
-        let data = try await data(for: connection.authorizedRequest(path: path))
         return try decoder.decode(T.self, from: data)
     }
 
@@ -45,7 +72,7 @@ nonisolated struct FilesystemAPIClient: Sendable {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            (data, response) = try await urlSession.data(for: request)
         } catch {
             OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
             throw error

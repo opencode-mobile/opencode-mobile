@@ -229,7 +229,12 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func listSessionTodos(id: String, directory: String?) async throws -> [SessionTodo] {
         try await run {
-            adapter.todos(from: try await api.listSessionTodos(id: id, directory: directory))
+            if await isV2() {
+                // No REST snapshot on v2. Throw so the live store keeps event-seeded
+                // todos instead of replacing them with an empty list.
+                throw SessionError.http(statusCode: 404, message: "Todos REST is unavailable on v2")
+            }
+            return adapter.todos(from: try await api.listSessionTodos(id: id, directory: directory))
         }
     }
 
@@ -276,19 +281,31 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
     }
 
     func getVcsInfo(directory: String?) async throws -> VcsInfo {
-        try await run { adapter.vcsInfo(from: try await api.getVcsInfo(directory: directory)) }
+        try await run {
+            if await isV2() {
+                return adapter.vcsInfo(from: try await api.getVcsInfoV2(directory: directory))
+            }
+            return adapter.vcsInfo(from: try await api.getVcsInfo(directory: directory))
+        }
     }
 
     func getVcsDiff(mode: VcsDiffMode, directory: String?, context: Int) async throws -> [FileDiff] {
         try await run {
-            try await api.getVcsDiff(mode: mode, directory: directory, context: context)
+            if await isV2() {
+                return try await api.getVcsDiffV2(mode: mode.v2WireValue, directory: directory, context: context)
+                    .map(adapter.fileDiff)
+            }
+            return try await api.getVcsDiff(mode: mode, directory: directory, context: context)
                 .map(adapter.fileDiff)
         }
     }
 
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool {
         try await run {
-            try await api.summarizeSession(
+            if await isV2() {
+                return try await api.compactSessionV2(id: id)
+            }
+            return try await api.summarizeSession(
                 id: id,
                 body: SummarizeSessionRequestDTO(providerID: providerID, modelID: modelID)
             )
@@ -297,12 +314,20 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool {
         try await run {
-            try await api.revertSession(id: id, body: RevertSessionRequestDTO(messageID: messageID, partID: partID))
+            if await isV2() {
+                return try await api.stageRevertV2(id: id, messageID: messageID, partID: partID)
+            }
+            return try await api.revertSession(id: id, body: RevertSessionRequestDTO(messageID: messageID, partID: partID))
         }
     }
 
     func unrevertSession(id: String) async throws -> Bool {
-        try await run { try await api.unrevertSession(id: id) }
+        try await run {
+            if await isV2() {
+                return try await api.clearRevertV2(id: id)
+            }
+            return try await api.unrevertSession(id: id)
+        }
     }
 
     func respondToPermission(
