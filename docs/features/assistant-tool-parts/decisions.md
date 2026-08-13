@@ -182,3 +182,28 @@ Superseded by **OPE-51 file-change tool cards (grilling)** below.
 - Timeline `ToolCard` optional `childSessionId`: non-null → push child Session
   Chat (same worktree); null → display-only. No preflight for stale children.
 - No task grouping. Parallel with OPE-51.
+
+## Running child session chat row (Quiet row)
+
+[OPE-158](https://linear.app/opencode-mobile/issue/OPE-158/running-child-session-chat-row).
+Locked from the running-child-session thread prototype, variant **A — Quiet
+row**. A pending/running `task` in the parent timeline is a person/thread row,
+not a Tool Call Card. Completed and error `task` parts keep the OPE-52 Tool
+Call Card.
+
+- Layout: circular letter avatar, agent name, optional `background` caption,
+  live second line, optional elapsed, trailing chevron when tappable.
+- No spinning progress, status ring, shimmer, or pulsing dots. “Still working”
+  is the updating second line and elapsed time.
+- Avatar is a letter from the agent name on a raised circle. Do not add a
+  per-agent color palette (OPE-52 still forbids agent color as status chrome).
+- Second line: running `ToolPart.title` when present, otherwise the task
+  description / prompt. Do not subscribe to the child session’s tool stream
+  just to populate this row.
+- Elapsed: `m:ss` from existing tool `time.start` when that timestamp is
+  already on the payload; omit when missing. Do not invent a free-running
+  client clock or a new server API.
+- Tap / `childSessionId` navigation stays as OPE-52.
+- Feature-local Session Chat chrome. Do not extend the Tool Call Card for this
+  row; that component stays collapsed tool-agnostic status chrome.
+- Prototype: `docs/prototypes/running-child-session-thread/` (`?variant=A`).

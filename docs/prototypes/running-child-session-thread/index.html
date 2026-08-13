@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Running child session — thread entry, no spinner</title>
+<style>
+  :root {
+    --bg: #1C1C1C;
+    --surface: #1C1C1C;
+    --raised: #232323;
+    --raised-hover: #2A2A2A;
+    --text: #EDEDED;
+    --text-base: #A0A0A0;
+    --text-weak: #707070;
+    --text-weaker: #505050;
+    --border: #282828;
+    --border-weaker: #232323;
+    --icon: #7E7E7E;
+    --icon-strong: #EDEDED;
+    --success: #3DDC84;
+    --warning: #E8B339;
+    --error: #F07178;
+    --interactive: #8CB0FF;
+    --explore: #5B8DEF;
+    --general: #81B29A;
+    --phone-w: 390px;
+    --phone-h: 844px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    background: #0e0e0e;
+    color: var(--text);
+    padding: 28px 20px 120px;
+  }
+
+  .page-meta {
+    max-width: 920px;
+    margin: 0 auto 28px;
+  }
+  .page-meta h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+  }
+  .page-meta p {
+    margin: 0 0 8px;
+    color: var(--text-base);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    max-width: 42rem;
+  }
+  .page-meta .tag {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-weak);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 10px;
+  }
+
+  .stage {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+  .phone {
+    width: var(--phone-w);
+    height: var(--phone-h);
+    background: var(--bg);
+    border-radius: 44px;
+    border: 1px solid #333;
+    box-shadow: 0 0 0 1px #111, 0 24px 80px rgba(0,0,0,0.55);
+    overflow: hidden;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .phone-notch {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 34px;
+    background: #000;
+    border-radius: 20px;
+    z-index: 30;
+    pointer-events: none;
+  }
+  .status-bar {
+    height: 54px;
+    padding: 18px 28px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    position: relative;
+    z-index: 5;
+  }
+  .status-bar .right {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    font-size: 12px;
+    opacity: 0.9;
+  }
+  .app {
+    height: calc(100% - 54px);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px 10px 8px;
+    min-height: 56px;
+    flex-shrink: 0;
+  }
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    border: none;
+    color: var(--icon-strong);
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .icon-btn svg { width: 18px; height: 18px; }
+  .title-block {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    height: 40px;
+  }
+  .title {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+  }
+  .subtitle-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    flex-shrink: 0;
+    box-shadow: 0 0 0 2px rgba(61, 220, 132, 0.18);
+  }
+  .status-label {
+    font-size: 12px;
+    color: var(--text-base);
+    text-transform: lowercase;
+  }
+
+  .timeline {
+    flex: 1;
+    overflow: auto;
+    padding: 8px 16px 148px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .msg-user {
+    align-self: flex-end;
+    max-width: 82%;
+    background: var(--raised);
+    border-radius: 16px 16px 4px 16px;
+    padding: 10px 14px;
+    font-size: 15px;
+    line-height: 1.4;
+    color: var(--text);
+  }
+  .msg-user .foot {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-weaker);
+    text-align: right;
+  }
+
+  .tool-card {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--surface);
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .tool-card .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    margin-top: 6px; flex-shrink: 0;
+    background: var(--success);
+  }
+  .tool-card .t { font-size: 15px; font-weight: 600; line-height: 1.25; }
+  .tool-card .s {
+    font-size: 12px;
+    color: var(--text-base);
+    margin-top: 4px;
+  }
+
+  .avatar {
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .avatar.explore { background: var(--explore); }
+  .avatar.general { background: var(--general); }
+
+  .stack {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--raised);
+    overflow: hidden;
+  }
+
+  /* A — quiet person row. Zero motion. Live line is just copy. */
+  .quiet {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--border-weaker);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .quiet:last-child { border-bottom: none; }
+  .quiet:active { background: var(--raised-hover); }
+  .quiet .avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 14px;
+  }
+  .quiet-body { flex: 1; min-width: 0; }
+  .quiet-name {
+    font-size: 15px;
+    font-weight: 650;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .quiet-name .meta {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-weak);
+  }
+  .quiet-now {
+    margin-top: 3px;
+    font-size: 13px;
+    color: var(--text-base);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .quiet-now code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .quiet-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .quiet-side .time {
+    font-size: 12px;
+    color: var(--text-weak);
+    font-variant-numeric: tabular-nums;
+  }
+  .quiet-side svg { width: 16px; height: 16px; color: var(--text-weaker); }
+
+  /* B — now-playing: the work is the title, the agent is the eyebrow */
+  .now {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    grid-template-rows: auto auto auto;
+    column-gap: 12px;
+    row-gap: 2px;
+    padding: 12px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--border-weaker);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    align-items: center;
+  }
+  .now:last-child { border-bottom: none; }
+  .now:active { background: var(--raised-hover); }
+  .now .avatar {
+    grid-row: 1 / span 3;
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    font-size: 16px;
+  }
+  .now .eyebrow {
+    grid-column: 2;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-weak);
+    letter-spacing: 0.02em;
+  }
+  .now .headline {
+    grid-column: 2;
+    font-size: 17px;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+  .now .path {
+    grid-column: 2;
+    font-size: 12px;
+    color: var(--text-base);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .now .open {
+    grid-column: 3;
+    grid-row: 1 / span 3;
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--interactive);
+    padding: 8px 10px;
+    border-radius: 999px;
+    background: rgba(140,176,255,0.12);
+    align-self: center;
+  }
+
+  /* C — quoted peek: person header + last child actions as a quote */
+  .peek {
+    width: 100%;
+    display: block;
+    padding: 0;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--border-weaker);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .peek:last-child { border-bottom: none; }
+  .peek:active { background: var(--raised-hover); }
+  .peek-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 12px 8px;
+  }
+  .peek .avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+  .peek-who { flex: 1; min-width: 0; }
+  .peek-name {
+    font-size: 15px;
+    font-weight: 650;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .peek-name .meta {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-weak);
+    font-variant-numeric: tabular-nums;
+  }
+  .peek-desc {
+    font-size: 12px;
+    color: var(--text-base);
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .peek-open {
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--interactive);
+    flex-shrink: 0;
+  }
+  .quote {
+    margin: 0 12px 12px 54px;
+    padding: 8px 10px;
+    border-left: 2px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .quote .line {
+    display: flex;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-weak);
+    min-width: 0;
+  }
+  .quote .line.live { color: var(--text); }
+  .quote .verb {
+    font-weight: 650;
+    min-width: 36px;
+  }
+  .quote .line.live .verb { color: var(--text); }
+  .quote .path {
+    flex: 1;
+    min-width: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .composer-wrap {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 18px;
+    z-index: 10;
+  }
+  .composer {
+    background: rgba(35,35,35,0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 10px 12px 10px 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+  }
+  .composer-input {
+    color: var(--text-weak);
+    font-size: 15px;
+    padding: 4px 0 10px;
+  }
+  .composer-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .choice {
+    font-size: 12px;
+    color: var(--text-base);
+    background: rgba(255,255,255,0.06);
+    border-radius: 999px;
+    padding: 5px 10px;
+  }
+  .stop {
+    margin-left: auto;
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: var(--text);
+    color: #111;
+    font-size: 13px;
+    font-weight: 650;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .stop .sq {
+    width: 8px; height: 8px;
+    background: #111;
+    border-radius: 1.5px;
+  }
+
+  .toast {
+    position: absolute;
+    left: 24px;
+    right: 24px;
+    bottom: 96px;
+    z-index: 20;
+    background: #f5f5f5;
+    color: #111;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 550;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  .switcher {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #f5f5f5;
+    color: #111;
+    border-radius: 999px;
+    padding: 6px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.08);
+    font-size: 13px;
+    font-weight: 600;
+    max-width: calc(100vw - 24px);
+  }
+  .switcher button {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: #e8e8e8;
+    color: #111;
+    cursor: pointer;
+    font-size: 16px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+  .switcher button:hover { background: #ddd; }
+  .switcher .label {
+    padding: 0 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: min(360px, 62vw);
+    text-align: center;
+  }
+  .switcher .label small {
+    display: block;
+    font-weight: 500;
+    font-size: 11px;
+    color: #666;
+    margin-top: 1px;
+  }
+
+  .state-dump {
+    max-width: 920px;
+    margin: 24px auto 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    color: var(--text-weak);
+    background: #151515;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+  <!--
+    PROTOTYPE — throwaway.
+    Question: Option C (agent thread) without spinning progress — how should a running child session look as a person/thread row?
+    Three variants via ?variant=A|B|C. No spinners, rings, shimmer, or pulsing dots. Aliveness is copy + elapsed only.
+  -->
+
+  <header class="page-meta">
+    <h1>Running child session — thread, no spinner</h1>
+    <p>
+      Same chat, same two running children, still the person/thread idea from C.
+      No spinning rings, no pulsing dots, no shimmer. “Still working” is the updating line and elapsed time.
+    </p>
+    <span class="tag">Prototype · not production</span>
+  </header>
+
+  <div class="stage">
+    <div class="phone" id="phone" data-variant="A">
+      <div class="phone-notch"></div>
+      <div class="status-bar">
+        <span>9:41</span>
+        <span class="right">●●●● ▮</span>
+      </div>
+      <div class="app" id="app"></div>
+      <div class="toast" id="toast"></div>
+    </div>
+  </div>
+
+  <div class="state-dump" id="state"></div>
+
+  <div class="switcher" id="switcher" role="toolbar" aria-label="Prototype variant switcher">
+    <button type="button" id="prev" aria-label="Previous variant">←</button>
+    <div class="label" id="label">A — Quiet row</div>
+    <button type="button" id="next" aria-label="Next variant">→</button>
+  </div>
+
+<script>
+const CHILDREN = [
+  {
+    id: "explore",
+    letter: "E",
+    title: "explore",
+    desc: "Find how session chat maps task tools",
+    steps: [
+      { verb: "Grep", path: "taskChrome" },
+      { verb: "Read", path: "SessionChatTimelineBlocks.kt" },
+      { verb: "Glob", path: "**/*ToolCall*" },
+      { verb: "Read", path: "OpenCodeToolCallCard.swift" },
+    ],
+  },
+  {
+    id: "general",
+    letter: "G",
+    title: "general",
+    desc: "Compare iOS and Android card chrome",
+    background: true,
+    steps: [
+      { verb: "Read", path: "OpenCodeToolCallCard.kt" },
+      { verb: "Read", path: "OpenCodeToolCallCard.swift" },
+      { verb: "Grep", path: "childSessionId" },
+    ],
+  },
+];
+
+const VARIANTS = [
+  { key: "A", name: "Quiet row", blurb: "C minus spin: avatar, name, live line, elapsed. Zero motion." },
+  { key: "B", name: "Now playing", blurb: "Work is the title; agent is the eyebrow; Open is a button." },
+  { key: "C", name: "Quoted peek", blurb: "Person header plus last child actions as a quote, not a spinner." },
+];
+
+const ui = {
+  variant: "A",
+  stepIndex: { explore: 1, general: 0 },
+  elapsed: { explore: 18, general: 9 },
+  lastAction: null,
+  toastTimer: null,
+};
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  })[c]);
+}
+
+function fmt(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m + ":" + String(s).padStart(2, "0");
+}
+
+function child(id) {
+  return CHILDREN.find(c => c.id === id);
+}
+
+function currentStep(id) {
+  const c = child(id);
+  return c.steps[ui.stepIndex[id] % c.steps.length];
+}
+
+function recentSteps(id) {
+  const c = child(id);
+  const i = ui.stepIndex[id] % c.steps.length;
+  const out = [];
+  for (let k = Math.max(0, i - 2); k <= i; k++) out.push({ ...c.steps[k], live: k === i });
+  return out;
+}
+
+function backBtn() {
+  return `<button class="icon-btn" aria-label="Back">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>`;
+}
+function moreBtn() {
+  return `<button class="icon-btn" aria-label="More">
+    <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="6" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="18" r="1.6"/></svg>
+  </button>`;
+}
+function chev() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>`;
+}
+
+function topBar() {
+  return `
+    <div class="topbar">
+      ${backBtn()}
+      <div class="title-block">
+        <div class="title">Wire task tool card</div>
+        <div class="subtitle-row"><span class="status-dot"></span><span class="status-label">live</span></div>
+      </div>
+      ${moreBtn()}
+    </div>`;
+}
+
+function userMsg() {
+  return `
+    <div class="msg-user">
+      Find how we render the task tool in Session Chat and sketch a better running state. Compare iOS and Android while you're in there.
+      <div class="foot">Build · Opus · 9:38 PM</div>
+    </div>`;
+}
+
+function completedRead() {
+  return `
+    <button class="tool-card" type="button" data-action="toast" data-msg="Completed Read — not a child session">
+      <span class="dot"></span>
+      <div>
+        <div class="t">Read</div>
+        <div class="s">SessionChatTimelineBlocks.kt</div>
+      </div>
+    </button>`;
+}
+
+function composer() {
+  return `
+    <div class="composer-wrap">
+      <div class="composer">
+        <div class="composer-input">Message opencode…</div>
+        <div class="composer-row">
+          <span class="choice">build ▾</span>
+          <span class="choice">opus ▾</span>
+          <button class="stop" type="button" data-action="toast" data-msg="Would abort the parent session">
+            <span class="sq"></span>Stop
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function quietRow(c) {
+  const step = currentStep(c.id);
+  return `
+    <button class="quiet" type="button" data-action="open" data-id="${esc(c.id)}">
+      <div class="avatar ${esc(c.id)}">${esc(c.letter)}</div>
+      <div class="quiet-body">
+        <div class="quiet-name">
+          ${esc(c.title)}
+          ${c.background ? `<span class="meta">background</span>` : ""}
+        </div>
+        <div class="quiet-now">${esc(step.verb)} · <code>${esc(step.path)}</code></div>
+      </div>
+      <div class="quiet-side">
+        <span class="time">${fmt(ui.elapsed[c.id])}</span>
+        ${chev()}
+      </div>
+    </button>`;
+}
+
+function nowRow(c) {
+  const step = currentStep(c.id);
+  const who = c.background ? `${c.title} · background · ${fmt(ui.elapsed[c.id])}` : `${c.title} · ${fmt(ui.elapsed[c.id])}`;
+  return `
+    <button class="now" type="button" data-action="open" data-id="${esc(c.id)}">
+      <div class="avatar ${esc(c.id)}">${esc(c.letter)}</div>
+      <div class="eyebrow">${esc(who)}</div>
+      <div class="headline">${esc(step.verb)}</div>
+      <div class="path">${esc(step.path)}</div>
+      <span class="open">Open</span>
+    </button>`;
+}
+
+function peekRow(c) {
+  const lines = recentSteps(c.id).map(s => `
+    <div class="line ${s.live ? "live" : ""}">
+      <span class="verb">${esc(s.verb)}</span>
+      <span class="path">${esc(s.path)}</span>
+    </div>`).join("");
+  return `
+    <button class="peek" type="button" data-action="open" data-id="${esc(c.id)}">
+      <div class="peek-head">
+        <div class="avatar ${esc(c.id)}">${esc(c.letter)}</div>
+        <div class="peek-who">
+          <div class="peek-name">
+            ${esc(c.title)}
+            <span class="meta">${fmt(ui.elapsed[c.id])}${c.background ? " · bg" : ""}</span>
+          </div>
+          <div class="peek-desc">${esc(c.desc)}</div>
+        </div>
+        <span class="peek-open">Open</span>
+      </div>
+      <div class="quote">${lines}</div>
+    </button>`;
+}
+
+function renderA() {
+  return topBar() +
+    `<div class="timeline">${userMsg()}${completedRead()}<div class="stack">${CHILDREN.map(quietRow).join("")}</div></div>` +
+    composer();
+}
+
+function renderB() {
+  return topBar() +
+    `<div class="timeline">${userMsg()}${completedRead()}<div class="stack">${CHILDREN.map(nowRow).join("")}</div></div>` +
+    composer();
+}
+
+function renderC() {
+  return topBar() +
+    `<div class="timeline">${userMsg()}${completedRead()}<div class="stack">${CHILDREN.map(peekRow).join("")}</div></div>` +
+    composer();
+}
+
+function dumpState() {
+  const v = VARIANTS.find(x => x.key === ui.variant);
+  const lines = [
+    `variant=${v.key} (${v.name})`,
+    `question=option C thread row without spinning progress`,
+    `motion=none (no spinner, ring, shimmer, or pulsing dots)`,
+    `aliveness=updating copy + elapsed`,
+    ...CHILDREN.map(c => {
+      const step = currentStep(c.id);
+      return `  ${c.id}: elapsed=${fmt(ui.elapsed[c.id])} step=${step.verb} ${step.path}`;
+    }),
+    `lastAction=${ui.lastAction || "none"}`,
+    `note=${v.blurb}`,
+  ];
+  document.getElementById("state").textContent = lines.join("\n");
+}
+
+function render() {
+  const v = VARIANTS.find(x => x.key === ui.variant) || VARIANTS[0];
+  let html = "";
+  if (v.key === "A") html = renderA();
+  else if (v.key === "B") html = renderB();
+  else html = renderC();
+  document.getElementById("app").innerHTML = html;
+  document.getElementById("phone").dataset.variant = v.key;
+  dumpState();
+}
+
+function applyVariant(key) {
+  const v = VARIANTS.find(x => x.key === key) || VARIANTS[0];
+  ui.variant = v.key;
+  const url = new URL(location.href);
+  url.searchParams.set("variant", v.key);
+  history.replaceState(null, "", url);
+  document.getElementById("label").innerHTML =
+    `${v.key} — ${esc(v.name)}<small>${esc(v.blurb)}</small>`;
+  render();
+}
+
+function getVariantIndex() {
+  const p = new URLSearchParams(location.search).get("variant");
+  if (p == null) return 0;
+  const byKey = VARIANTS.findIndex(v => v.key.toLowerCase() === String(p).toLowerCase());
+  if (byKey >= 0) return byKey;
+  return 0;
+}
+
+function setVariant(index) {
+  const i = ((index % VARIANTS.length) + VARIANTS.length) % VARIANTS.length;
+  applyVariant(VARIANTS[i].key);
+}
+
+function showToast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(ui.toastTimer);
+  ui.toastTimer = setTimeout(() => el.classList.remove("show"), 1600);
+}
+
+document.getElementById("app").addEventListener("click", (e) => {
+  const hit = e.target.closest("[data-action]");
+  if (!hit) return;
+  const action = hit.dataset.action;
+  if (action === "open") {
+    const c = child(hit.dataset.id);
+    ui.lastAction = `open child session ${c.id}`;
+    showToast(`Would open child session “${c.title}”`);
+    dumpState();
+  } else if (action === "toast") {
+    ui.lastAction = hit.dataset.msg;
+    showToast(hit.dataset.msg);
+    dumpState();
+  }
+});
+
+document.getElementById("prev").addEventListener("click", () => setVariant(getVariantIndex() - 1));
+document.getElementById("next").addEventListener("click", () => setVariant(getVariantIndex() + 1));
+
+document.addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+  if (e.key === "ArrowLeft") { e.preventDefault(); setVariant(getVariantIndex() - 1); }
+  if (e.key === "ArrowRight") { e.preventDefault(); setVariant(getVariantIndex() + 1); }
+});
+
+setInterval(() => {
+  ui.elapsed.explore += 1;
+  ui.elapsed.general += 1;
+  if (ui.elapsed.explore % 3 === 0) {
+    ui.stepIndex.explore = (ui.stepIndex.explore + 1) % child("explore").steps.length;
+  }
+  if (ui.elapsed.general % 4 === 0) {
+    ui.stepIndex.general = (ui.stepIndex.general + 1) % child("general").steps.length;
+  }
+  render();
+}, 1000);
+
+setVariant(getVariantIndex());
+</script>
+</body>
+</html>

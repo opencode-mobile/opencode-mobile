@@ -167,6 +167,8 @@ them.
   or keeping issues in sync with `docs/features/`.
 - Use `.agents/skills/feature/SKILL.md` when linking a Linear ticket, branch,
   feature docs directory, merge checklist, and pull request for a feature task.
+- Use `.agents/skills/publish-prototype/SKILL.md` when building a throwaway
+  browser prototype and publishing it to the artifact server for remote review.
 
 ## Branch naming
 
