@@ -18,6 +18,7 @@
 | [OPE-50](https://linear.app/opencode-mobile/issue/OPE-50/lightweight-tool-chrome) | Lightweight tool chrome | OPE-49 |
 | [OPE-51](https://linear.app/opencode-mobile/issue/OPE-51/file-change-tool-cards) | File change tool cards | OPE-50 |
 | [OPE-52](https://linear.app/opencode-mobile/issue/OPE-52/subagent-task-tool-card) | Subagent task tool card | None (parallel with OPE-51) |
+| [OPE-158](https://linear.app/opencode-mobile/issue/OPE-158/running-child-session-chat-row) | Running child session chat row | OPE-52 |
 
 ## Design System
 
@@ -55,8 +56,13 @@
 
 ## Remaining
 
-- None for the planned assistant-tool-parts child tickets. Follow-up polish
-  (per-block markdown) remains under parity gaps.
+- Running child session chat row (Quiet row)
+  ([OPE-158](https://linear.app/opencode-mobile/issue/OPE-158/running-child-session-chat-row)):
+  pending/running `task` parts use the locked person/thread row instead of a
+  Tool Call Card. Follow-up to OPE-52. Plan:
+  `docs/features/assistant-tool-parts/ope-158-plan.md`. Prototype:
+  `docs/prototypes/running-child-session-thread/?variant=A`.
+- Follow-up polish (per-block markdown) remains under parity gaps.
 
 ## Completed
 

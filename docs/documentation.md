@@ -89,9 +89,10 @@ Optional feature artifacts that appear in practice:
 - `operator-runbook.md` — non-secret release/ops ownership contract (e.g. `android-release-distribution/operator-runbook.md`).
 - `ruleset.md`, `phase-*.md`, `pipeline-*.md` — CI or engineering-phase specifics where the feature needs them.
 
-Design prototypes are retired; a prototype verdict, when produced, is folded
-into the feature's `plan.md` and `decisions.md` instead of a committed
-`prototype/` directory.
+HTML plan companions stay retired. Throwaway UX prototypes that lock a
+decision may live under `docs/prototypes/` as evidence, cited from the
+feature's `plan.md` and `decisions.md`. Fold the verdict into those Markdown
+artifacts; do not treat the HTML as the source of truth.
 
 ### 2.2 Design system
 

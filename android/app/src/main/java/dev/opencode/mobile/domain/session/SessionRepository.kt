@@ -121,8 +121,21 @@ interface SessionRepository {
         directory: String? = null,
     ): Boolean = false
 
+    suspend fun replyToQuestion(
+        sessionId: String,
+        requestId: String,
+        answers: List<List<String>>,
+        directory: String? = null,
+    ): Boolean = replyToQuestion(requestId, answers, directory)
+
     suspend fun rejectQuestion(
         requestId: String,
         directory: String? = null,
     ): Boolean = false
+
+    suspend fun rejectQuestion(
+        sessionId: String,
+        requestId: String,
+        directory: String? = null,
+    ): Boolean = rejectQuestion(requestId, directory)
 }

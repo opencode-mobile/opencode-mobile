@@ -19,7 +19,9 @@ Android.
   only; no card expand API.
 - File change tools (`edit`/`write`/`apply_patch`): filename or `N files` +
   +N/−N; tap opens owning-turn Changes (File Viewer deep-link or list).
-- `task` tool card with navigate to child session when available.
+- `task` tool card with navigate to child session when available. Pending and
+  running `task` parts use the Quiet row (OPE-158) instead of a Tool Call
+  Card; completed and error `task` parts keep the OPE-52 card.
 
 ## Out of scope
 
@@ -59,7 +61,8 @@ Android.
 - Actions: OPE-50 sheet taps where noted; OPE-51 file-change → owning-turn
   File Viewer (single-file path deep-link) or Changed Files list (multi-file
   patch / missing path in snapshot); OPE-52 `task` → child session when
-  `metadata.sessionId` is present. OPE-49 generic cards remain display-only.
+  `metadata.sessionId` is present; OPE-158 pending/running `task` uses the
+  Quiet row (same tap). OPE-49 generic cards remain display-only.
 - Chat display uses blocks; `Message.text` is TextPart-only.
 
 ## Native navigation entry points

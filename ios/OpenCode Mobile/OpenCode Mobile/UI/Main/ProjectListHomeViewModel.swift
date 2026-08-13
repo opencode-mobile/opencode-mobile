@@ -790,7 +790,6 @@ final class ProjectListHomeViewModel {
                 navigator: nil,
                 projectSessionCreateError: nil
             )
-            startLiveObservations(worktrees: worktrees)
             if !skipProbe {
                 do {
                     try await projectRepository.probeServer()
@@ -798,6 +797,7 @@ final class ProjectListHomeViewModel {
                     // Keep cached home; connection chrome reflects reachability.
                 }
             }
+            startLiveObservations(worktrees: worktrees)
             return
         }
 

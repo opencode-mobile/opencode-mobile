@@ -107,6 +107,7 @@ internal data class SessionChatTimelineViewProps(
     val onToolDetailTap: (SessionChatToolDetailTarget) -> Unit = {},
     val onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit = { _, _ -> },
     val onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit = { _, _ -> },
+    val supportsSessionMessageDiff: Boolean = true,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -177,6 +178,7 @@ internal fun SessionChatTimelineView(
                 onToolDetailTap = props.onToolDetailTap,
                 onChildSessionTap = props.onChildSessionTap,
                 onChangesReviewTap = props.onChangesReviewTap,
+                supportsSessionMessageDiff = props.supportsSessionMessageDiff,
                 modifier = modifier,
             )
         }
@@ -205,6 +207,7 @@ private fun SessionChatTimelineReadyView(
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
+    supportsSessionMessageDiff: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -322,6 +325,7 @@ private fun SessionChatTimelineReadyView(
                     onToolDetailTap = onToolDetailTap,
                     onChildSessionTap = onChildSessionTap,
                     onChangesReviewTap = onChangesReviewTap,
+                    supportsSessionMessageDiff = supportsSessionMessageDiff,
                     // Streaming height growth is GrowBottom + unanimated layout; do not
                     // animateContentSize on production Session Chat (gallery may still demo it).
                     animateSizeChanges = false,
@@ -415,6 +419,7 @@ private fun SessionChatMessageRow(
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
+    supportsSessionMessageDiff: Boolean,
     animateSizeChanges: Boolean,
     onContentSizeAnimationFinished: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -469,6 +474,7 @@ private fun SessionChatMessageRow(
                     onToolDetailTap = onToolDetailTap,
                     onChildSessionTap = onChildSessionTap,
                     onChangesReviewTap = onChangesReviewTap,
+                    supportsSessionMessageDiff = supportsSessionMessageDiff,
                 )
 
             MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
@@ -526,6 +532,7 @@ private fun AssistantMessageContent(
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
+    supportsSessionMessageDiff: Boolean,
 ) {
     val blocks =
         message.blocks.ifEmpty {
@@ -578,7 +585,7 @@ private fun AssistantMessageContent(
                                             onChildSessionTap(block.childSessionId, block.title)
                                         }
                                     }
-                                    block.opensChangesReview -> {
+                                    block.opensChangesReview && supportsSessionMessageDiff -> {
                                         {
                                             onChangesReviewTap(message.id, block.changesInitialFilePath)
                                         }

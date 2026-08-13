@@ -25,7 +25,8 @@ struct ChangesView: View {
             worktree: worktree,
             messageID: messageID,
             initialSource: initialSource,
-            repository: Container.shared.sessionRepository()
+            repository: Container.shared.sessionRepository(),
+            capabilitiesProvider: { Container.shared.activeConnectionManager().capabilities }
         ))
     }
 

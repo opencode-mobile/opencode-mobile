@@ -2,6 +2,8 @@ package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -53,6 +55,107 @@ class EventDomainAdapterTest {
         assertEquals("message.part.delta", event?.type)
         assertEquals("ses-1", event?.sessionId)
         assertTrue(event!!.triggersMessageRefresh)
+    }
+
+    @Test
+    fun parseEvent_readsV2NativeEnvelope() {
+        val event =
+            adapter.parseEvent(
+                """{"id":"evt_1","type":"server.connected","data":{}}""",
+            )
+
+        assertEquals("server.connected", event?.type)
+        assertNull(event?.sessionId)
+    }
+
+    @Test
+    fun parseEvent_projectsV2TextDeltaIntoMessagePartDelta() {
+        val event =
+            adapter.parseEvent(
+                """{"id":"evt_2","type":"session.next.text.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","textID":"prt-1","delta":"Hi"}}""",
+            )
+
+        assertEquals("message.part.delta", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        assertEquals("msg-2", event?.rawProperties?.get("messageID")?.jsonPrimitive?.content)
+        assertEquals("prt-1", event?.rawProperties?.get("partID")?.jsonPrimitive?.content)
+        assertEquals("text", event?.rawProperties?.get("field")?.jsonPrimitive?.content)
+        assertEquals("Hi", event?.rawProperties?.get("delta")?.jsonPrimitive?.content)
+        assertTrue(event!!.triggersMessageRefresh)
+    }
+
+    @Test
+    fun parseEvents_projectsStepStartedIntoAssistantMessageAndBusyStatus() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.next.step.started","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
+            )
+
+        assertEquals(listOf("message.updated", "session.status"), events.map { it.type })
+        assertEquals("ses-1", events[0].sessionId)
+        assertEquals("assistant", events[0].rawProperties?.get("info")?.jsonObject?.get("role")?.jsonPrimitive?.content)
+        assertEquals("busy", events[1].rawProperties?.get("status")?.jsonObject?.get("type")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvent_projectsPromptAdmittedIntoUserMessageUpdated() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.next.prompt.admitted","data":{"sessionID":"ses-1","messageID":"msg-1"}}""",
+            )
+
+        assertEquals("message.updated", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        assertEquals("user", event?.rawProperties?.get("info")?.jsonObject?.get("role")?.jsonPrimitive?.content)
+        assertEquals("msg-1", event?.rawProperties?.get("info")?.jsonObject?.get("id")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvents_projectsStepFailedIntoSessionErrorAndIdle() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.next.step.failed","data":{"sessionID":"ses-1","error":{"type":"ProviderError","message":"model overloaded"}}}""",
+            )
+
+        assertEquals(listOf("session.error", "session.idle"), events.map { it.type })
+        assertEquals("ses-1", events[0].sessionId)
+        assertEquals(
+            "model overloaded",
+            events[0].rawProperties?.get("error")?.jsonObject?.get("message")?.jsonPrimitive?.content,
+        )
+    }
+
+    @Test
+    fun parseEvent_projectsStepEndedIntoSessionIdle() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.next.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
+            )
+
+        assertEquals("session.idle", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+    }
+
+    @Test
+    fun parseEvent_remapsPermissionV2Asked() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"permission.v2.asked","data":{"sessionID":"ses-1"}}""",
+            )
+
+        assertEquals("permission.asked", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+    }
+
+    @Test
+    fun parseEvent_readsV2SameNamedLegacyMessageUpdated() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"message.updated","data":{"sessionID":"ses-1","info":{"id":"msg-1","role":"user"}}}""",
+            )
+
+        assertEquals("message.updated", event?.type)
+        assertEquals("ses-1", event?.sessionId)
     }
 
     @Test

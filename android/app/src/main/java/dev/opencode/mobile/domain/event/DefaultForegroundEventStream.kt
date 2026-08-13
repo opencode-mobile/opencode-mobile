@@ -1,9 +1,11 @@
 package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.data.remote.EventsApi
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.message.ConnectionEpoch
+import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -26,6 +28,7 @@ class DefaultForegroundEventStream
         private val eventsApi: EventsApi,
         private val eventDomainAdapter: EventDomainAdapter,
         private val diagnosticLogger: DiagnosticLogger,
+        private val activeConnectionManager: ActiveConnectionManager,
     ) : ForegroundEventStream {
         private val scope = CoroutineScope(SupervisorJob())
         private var streamJob: Job? = null
@@ -53,38 +56,42 @@ class DefaultForegroundEventStream
                             if (wasConnected) EventStreamConnectionState.Reconnecting else EventStreamConnectionState.Connecting,
                         )
                         try {
+                            val protocol = activeConnectionManager.currentProtocolOrProbe()
+                            val path = if (protocol == ServerProtocol.V2) "/api/event" else "/global/event"
                             eventsApi.streamGlobalEvents(
+                                protocol = protocol,
                                 onHTTPResponse = { statusCode ->
                                     diagnosticLogger.info(
                                         DiagnosticLogArea.Sse,
-                                        "GET /global/event opened status=$statusCode",
+                                        "GET $path opened status=$statusCode protocol=${protocol.wireValue}",
                                     )
                                     markStreamConnected()
                                     retryAttempt = 0
                                 },
                             ) { dataLine ->
-                                val event =
-                                    eventDomainAdapter.parseEvent(dataLine)
-                                        ?: run {
-                                            diagnosticLogger.warning(DiagnosticLogArea.Sse, "SSE event parse failed")
-                                            return@streamGlobalEvents
+                                val parsed = eventDomainAdapter.parseEvents(dataLine)
+                                if (parsed.isEmpty()) {
+                                    diagnosticLogger.warning(DiagnosticLogArea.Sse, "SSE event parse failed")
+                                    return@streamGlobalEvents
+                                }
+                                for (event in parsed) {
+                                    diagnosticLogger.debug(
+                                        DiagnosticLogArea.Sse,
+                                        "SSE event type=${event.type} session=${event.sessionId ?: "-"}",
+                                    )
+                                    when (event.type) {
+                                        "server.connected" -> {
+                                            markStreamConnected()
+                                            retryAttempt = 0
+                                            _events.emit(event)
                                         }
-                                diagnosticLogger.debug(
-                                    DiagnosticLogArea.Sse,
-                                    "SSE event type=${event.type} session=${event.sessionId ?: "-"}",
-                                )
-                                when (event.type) {
-                                    "server.connected" -> {
-                                        markStreamConnected()
-                                        retryAttempt = 0
-                                        _events.emit(event)
-                                    }
-                                    "server.heartbeat" -> Unit
-                                    else -> {
-                                        markStreamConnected()
-                                        // Emit on the read coroutine so order is preserved and
-                                        // we do not spawn one job per delta under burst.
-                                        _events.emit(event)
+                                        "server.heartbeat" -> Unit
+                                        else -> {
+                                            markStreamConnected()
+                                            // Emit on the read coroutine so order is preserved and
+                                            // we do not spawn one job per delta under burst.
+                                            _events.emit(event)
+                                        }
                                     }
                                 }
                             }

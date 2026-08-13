@@ -2,6 +2,10 @@ package dev.opencode.mobile.domain.project
 
 import dev.opencode.mobile.data.remote.HealthApi
 import dev.opencode.mobile.data.remote.ProjectsApi
+import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.network.ActiveConnectionManager
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 class DefaultProjectRepository
@@ -10,11 +14,17 @@ class DefaultProjectRepository
         private val healthApi: HealthApi,
         private val projectsApi: ProjectsApi,
         private val adapter: ProjectDomainAdapter,
+        private val activeConnectionManager: ActiveConnectionManager,
     ) : ProjectRepository {
+        private val probeMutex = Mutex()
+
         override suspend fun probeServer() {
-            runCatching {
-                adapter.requireHealthy(healthApi.getHealth())
-            }.getOrElse { throw adapter.mapProbeError(it) }
+            probeMutex.withLock {
+                runCatching {
+                    val protocol = healthApi.detectProtocol()
+                    activeConnectionManager.updateProtocol(protocol)
+                }.getOrElse { throw adapter.mapProbeError(it) }
+            }
         }
 
         override suspend fun listProjects(): List<Project> =
@@ -22,6 +32,13 @@ class DefaultProjectRepository
                 .getOrElse { throw adapter.mapProbeError(it) }
 
         override suspend fun getCurrentProject(directory: String?): Project =
-            runCatching { adapter.toProject(projectsApi.getCurrentProject(directory)) }
-                .getOrElse { throw adapter.mapProbeError(it) }
+            runCatching {
+                val dto =
+                    if (activeConnectionManager.currentProtocolOrProbe() == ServerProtocol.V2) {
+                        projectsApi.getCurrentProjectV2(directory)
+                    } else {
+                        projectsApi.getCurrentProject(directory)
+                    }
+                adapter.toProject(dto)
+            }.getOrElse { throw adapter.mapProbeError(it) }
     }

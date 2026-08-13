@@ -24,6 +24,32 @@ struct ModelDomainAdapter: Sendable {
         return ModelSelectionCatalog(options: options, serverDefault: serverDefault)
     }
 
+    func catalog(providers: [V2ProviderInfoDTO], models: [V2ModelInfoDTO]) -> ModelSelectionCatalog {
+        let providerNames = Dictionary(uniqueKeysWithValues: providers.map { ($0.id, $0.name ?? $0.id) })
+        let disabledProviders = Set(providers.filter { $0.disabled == true }.map(\.id))
+        let options: [ModelSelectionOption] = models.compactMap { model in
+            guard isUsable(model), !disabledProviders.contains(model.providerID) else { return nil }
+            let inputs = (model.capabilities?.input ?? []).map { $0.lowercased() }
+            let variants = model.variants.compactMap { variant -> String? in
+                guard let id = variant.id, !id.isEmpty else { return nil }
+                return id
+            }
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+            return ModelSelectionOption(
+                providerID: model.providerID,
+                providerName: providerNames[model.providerID] ?? model.providerID,
+                modelID: model.id,
+                modelName: model.name ?? model.id,
+                variants: variants,
+                contextLimitTokens: model.limit?.context,
+                supportsImageInput: inputs.isEmpty || inputs.contains("image"),
+                supportsPdfInput: inputs.isEmpty || inputs.contains("pdf")
+            )
+        }
+        .sorted { $0.modelLabel.localizedCaseInsensitiveCompare($1.modelLabel) == .orderedAscending }
+        return ModelSelectionCatalog(options: options, serverDefault: nil)
+    }
+
     func mapError(_ error: Error) -> ModelSelectionError {
         if let modelError = error as? ModelSelectionError {
             return modelError
@@ -44,6 +70,16 @@ struct ModelDomainAdapter: Sendable {
 
     private func isUsable(_ model: ProviderModelDTO) -> Bool {
         if model.disabled == true {
+            return false
+        }
+        if model.status?.lowercased() == "deprecated" {
+            return false
+        }
+        return true
+    }
+
+    private func isUsable(_ model: V2ModelInfoDTO) -> Bool {
+        if model.enabled == false {
             return false
         }
         if model.status?.lowercased() == "deprecated" {

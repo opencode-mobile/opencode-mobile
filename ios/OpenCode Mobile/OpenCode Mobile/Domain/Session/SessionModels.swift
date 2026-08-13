@@ -2,7 +2,7 @@ import Foundation
 
 struct Session: Sendable, Equatable {
     let id: String
-    let title: String
+    var title: String
     let slug: String?
     let projectID: String?
     let directory: String?
@@ -126,6 +126,13 @@ struct VcsInfo: Sendable, Equatable {
 enum VcsDiffMode: String, Sendable {
     case workingTree = "git"
     case mainBranch = "branch"
+
+    var v2WireValue: String {
+        switch self {
+        case .workingTree: "working"
+        case .mainBranch: "branch"
+        }
+    }
 }
 
 enum PermissionDecision: Sendable {

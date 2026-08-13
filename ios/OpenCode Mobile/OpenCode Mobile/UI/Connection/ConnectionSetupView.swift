@@ -172,7 +172,7 @@ private struct ConnectionSetupPreview: View {
 }
 
 private struct PreviewConnectionProbeService: ConnectionProbing {
-    func probe(connection: ServerConnection) async throws {}
+    func probe(connection: ServerConnection) async throws -> ServerProtocol { .v1 }
 }
 
 private struct PreviewConnectionProfileStore: ConnectionProfileStore {

@@ -53,3 +53,13 @@
   home"*.
 - Reason: the project may not be visible after the filter falls back to All, so
   a short confirmation closes the loop without a heavier affordance.
+
+## Dock × superseded by picker hold-to-remove
+
+- Date: 2026-08-13
+- Decision: home no longer reveals remove via **×** on a selected filter chip.
+  Removal moves to **hold** on a project row in the Session List project
+  picker, then the same confirm dialog and snackbar.
+- Reason: chips do not scale past a handful of projects. Locked in
+  [`session-list-project-picker`](../session-list-project-picker/decisions.md).
+  Local curation semantics from this slice stay.

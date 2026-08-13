@@ -2,6 +2,8 @@ package dev.opencode.mobile.domain.model
 
 import dev.opencode.mobile.data.remote.dto.ConfigProvidersResponseDto
 import dev.opencode.mobile.data.remote.dto.ProviderModelDto
+import dev.opencode.mobile.data.remote.dto.V2ModelInfoDto
+import dev.opencode.mobile.data.remote.dto.V2ProviderInfoDto
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
 
@@ -34,6 +36,34 @@ class ModelDomainAdapter {
         )
     }
 
+    fun toCatalog(
+        providers: List<V2ProviderInfoDto>,
+        models: List<V2ModelInfoDto>,
+    ): ModelSelectionCatalog {
+        val providerNames = providers.associate { it.id to (it.name ?: it.id) }
+        val disabledProviders = providers.filter { it.disabled == true }.map { it.id }.toSet()
+        val options =
+            models
+                .filter { model -> isUsable(model) && model.providerId !in disabledProviders }
+                .map { model ->
+                    val inputs = model.capabilities?.input.orEmpty().map { it.lowercase() }
+                    ModelSelectionOption(
+                        providerId = model.providerId,
+                        providerName = providerNames[model.providerId] ?: model.providerId,
+                        modelId = model.id,
+                        modelName = model.name ?: model.id,
+                        variants =
+                            model.variants
+                                .mapNotNull { it.id?.takeIf(String::isNotBlank) }
+                                .sortedWith(String.CASE_INSENSITIVE_ORDER),
+                        contextLimitTokens = model.limit?.context,
+                        supportsImageInput = inputs.isEmpty() || "image" in inputs,
+                        supportsPdfInput = inputs.isEmpty() || "pdf" in inputs,
+                    )
+                }.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.modelLabel })
+        return ModelSelectionCatalog(options = options, serverDefault = null)
+    }
+
     fun mapError(throwable: Throwable): ModelSelectionError =
         when (throwable) {
             is ModelSelectionError -> throwable
@@ -43,6 +73,9 @@ class ModelDomainAdapter {
         }
 
     private fun isUsable(model: ProviderModelDto): Boolean = model.disabled != true && model.status?.lowercase() != "deprecated"
+
+    private fun isUsable(model: V2ModelInfoDto): Boolean =
+        model.enabled != false && model.status?.lowercase() != "deprecated"
 
     private fun defaultOption(
         defaults: Map<String, String>,

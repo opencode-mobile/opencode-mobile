@@ -2,12 +2,28 @@ import Foundation
 
 final class ActiveConnectionManager: @unchecked Sendable {
     private let lock = NSLock()
+    private let probeLock = NSLock()
+    private let connectionProbing: (any ConnectionProbing)?
     private var _connection: ServerConnection?
+    private var inFlightProbe: Task<ServerProtocol, Never>?
+    private var probeGeneration = 0
+
+    init(connectionProbing: (any ConnectionProbing)? = nil) {
+        self.connectionProbing = connectionProbing
+    }
 
     var connection: ServerConnection? {
         lock.lock()
         defer { lock.unlock() }
         return _connection
+    }
+
+    var serverProtocol: ServerProtocol? {
+        connection?.serverProtocol
+    }
+
+    var capabilities: ServerCapabilities {
+        connection?.capabilities ?? .forProtocol(.v1)
     }
 
     func ensureLoaded(from store: ConnectionProfileStore) async {
@@ -21,23 +37,110 @@ final class ActiveConnectionManager: @unchecked Sendable {
         }
     }
 
-    func apply(_ profile: ConnectionProfile) {
-        let connection = ServerConnection(profile: profile)
+    func apply(_ profile: ConnectionProfile, serverProtocol: ServerProtocol? = nil) {
+        let connection = ServerConnection(profile: profile, serverProtocol: serverProtocol)
         lock.lock()
         _connection = connection
         lock.unlock()
+        invalidateInFlightProbe()
     }
 
     func applyConnection(_ connection: ServerConnection) {
         lock.lock()
         _connection = connection
         lock.unlock()
+        invalidateInFlightProbe()
+    }
+
+    func updateProtocol(_ serverProtocol: ServerProtocol) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let current = _connection else { return }
+        _connection = current.withProtocol(serverProtocol)
+    }
+
+    /// Implicit protocol resolution for repository remotes.
+    /// Cache hit returns immediately. Cache miss probes the active connection,
+    /// caches the result, and returns it. Missing connection, missing probe, or
+    /// a thrown probe returns `.v1` without throwing.
+    func currentProtocolOrProbe() async -> ServerProtocol {
+        if let cached = serverProtocol {
+            return cached
+        }
+        guard connection != nil, connectionProbing != nil else {
+            return .v1
+        }
+
+        let task: Task<ServerProtocol, Never>
+        probeLock.lock()
+        if let cached = serverProtocol {
+            probeLock.unlock()
+            return cached
+        }
+        if let existing = inFlightProbe {
+            task = existing
+        } else {
+            let generation = probeGeneration
+            let created = Task { [self] in
+                await self.performProtocolProbe(generation: generation)
+            }
+            inFlightProbe = created
+            task = created
+        }
+        probeLock.unlock()
+        return await task.value
+    }
+
+    private func performProtocolProbe(generation: Int) async -> ServerProtocol {
+        defer {
+            probeLock.lock()
+            if probeGeneration == generation {
+                inFlightProbe = nil
+            }
+            probeLock.unlock()
+        }
+        if let cached = serverProtocol {
+            return cached
+        }
+        guard let current = connection, let probing = connectionProbing else {
+            return .v1
+        }
+        do {
+            let detected = try await probing.probe(connection: current)
+            return cacheDetectedProtocol(detected, for: current)
+        } catch {
+            return .v1
+        }
+    }
+
+    /// Caches `detected` only when the active connection is still the probed one.
+    /// A disconnect or profile switch during the await must not stamp the old
+    /// server's protocol onto a different connection.
+    private func cacheDetectedProtocol(
+        _ detected: ServerProtocol,
+        for probed: ServerConnection
+    ) -> ServerProtocol {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let active = _connection, active.hasSameIdentity(as: probed) else {
+            return _connection?.serverProtocol ?? .v1
+        }
+        _connection = active.withProtocol(detected)
+        return detected
+    }
+
+    private func invalidateInFlightProbe() {
+        probeLock.lock()
+        probeGeneration += 1
+        inFlightProbe = nil
+        probeLock.unlock()
     }
 
     func disconnect() {
         lock.lock()
         _connection = nil
         lock.unlock()
+        invalidateInFlightProbe()
     }
 
     func currentProfile() -> ConnectionProfile? {
@@ -83,9 +186,9 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         lock.unlock()
     }
 
-    func saveProfile(_ profile: ConnectionProfile) async {
+    func saveProfile(_ profile: ConnectionProfile, serverProtocol: ServerProtocol? = nil) async {
         await connectionProfileStore.saveProfile(profile)
-        activeConnectionManager.apply(profile)
+        activeConnectionManager.apply(profile, serverProtocol: serverProtocol)
         lock.lock()
         let handlers = profileSavedHandlers
         lock.unlock()
@@ -100,6 +203,10 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         let handlers = profileClearedHandlers
         handlers.forEach { $0() }
     }
+
+    func currentProfile() -> ConnectionProfile? {
+        activeConnectionManager.currentProfile()
+    }
 }
 
 enum ProbeStatus: Equatable {
@@ -109,16 +216,23 @@ enum ProbeStatus: Equatable {
 }
 
 protocol ConnectionProbing: Sendable {
-    func probe(connection: ServerConnection) async throws
+    func probe(connection: ServerConnection) async throws -> ServerProtocol
 }
 
 struct ConnectionProbeService: ConnectionProbing, Sendable {
     private let adapter = ProjectDomainAdapter()
+    private let urlSession: URLSession
 
-    func probe(connection: ServerConnection) async throws {
-        let client = ProjectsAPIClient(fixedConnection: connection)
+    init(urlSession: URLSession = .shared) {
+        self.urlSession = urlSession
+    }
+
+    func probe(connection: ServerConnection) async throws -> ServerProtocol {
+        let client = ProjectsAPIClient(fixedConnection: connection, urlSession: urlSession)
         do {
-            try adapter.requireHealthy(try await client.getHealth())
+            let detected = try await client.detectProtocol()
+            DiagnosticLog.info(.connection, "protocol=\(detected.wireValue)")
+            return detected
         } catch {
             throw adapter.mapProbeError(error)
         }

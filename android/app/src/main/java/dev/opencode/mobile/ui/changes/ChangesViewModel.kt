@@ -5,11 +5,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.domain.connection.ServerCapabilities
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.VcsDiffMode
+import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
 import dev.opencode.mobile.ui.components.UnifiedDiffDocument
 import dev.opencode.mobile.ui.components.UnifiedDiffParser
@@ -128,220 +131,286 @@ data class FileViewerState(
 }
 
 @HiltViewModel
-class ChangesViewModel
+class ChangesViewModel(
+    private val repository: SessionRepository,
+    private val capabilitiesProvider: () -> ServerCapabilities,
+) : ViewModel() {
     @Inject
     constructor(
-        private val repository: SessionRepository,
-    ) : ViewModel() {
-        private val _uiState = MutableStateFlow(ChangesUiState())
-        val uiState: StateFlow<ChangesUiState> = _uiState.asStateFlow()
+        repository: SessionRepository,
+        activeConnectionManager: ActiveConnectionManager,
+    ) : this(repository, { activeConnectionManager.currentCapabilities() })
 
-        private var target: Target? = null
-        private var availableSources = listOf(ChangeSource.LastTurn)
-        private var filter = ""
-        private var filterEditReported = false
-        private var loadJob: Job? = null
+    constructor(
+        repository: SessionRepository,
+        capabilities: ServerCapabilities = ServerCapabilities.forProtocol(ServerProtocol.V1),
+    ) : this(repository, { capabilities })
 
-        fun bind(
-            sessionId: String,
-            worktree: String,
-            messageId: String?,
-            initialSource: ChangeSource = ChangeSource.LastTurn,
-        ) {
-            val next = Target(sessionId, worktree, messageId, initialSource)
-            if (target == next) return
-            target = next
-            availableSources = listOf(ChangeSource.LastTurn)
-            filter = ""
-            filterEditReported = false
-            _uiState.value = ChangesUiState(selectedSource = initialSource)
-            load(refreshAvailability = true)
-        }
+    private val capabilities: ServerCapabilities
+        get() = capabilitiesProvider()
 
-        fun retry() = load(refreshAvailability = true)
+    private val _uiState =
+        MutableStateFlow(
+            ChangesUiState(
+                selectedSource = capabilitySelectedSource(ChangeSource.LastTurn),
+                availableSources = capabilitySources(),
+            ),
+        )
+    val uiState: StateFlow<ChangesUiState> = _uiState.asStateFlow()
 
-        fun refresh() {
-            load(refreshAvailability = true, preserveContent = true)
-        }
+    private var target: Target? = null
+    private var availableSources = capabilitySources()
+    private var filter = ""
+    private var filterEditReported = false
+    private var loadJob: Job? = null
 
-        fun selectSource(source: ChangeSource) {
-            if (source == _uiState.value.selectedSource || source !in availableSources) return
-            logAction(
-                actionId = ProductAnalytics.Action.CHANGES_SELECT_SOURCE,
-                parameters = mapOf(ProductAnalytics.Param.CHANGE_SOURCE to source.logValue()),
+    fun bind(
+        sessionId: String,
+        worktree: String,
+        messageId: String?,
+        initialSource: ChangeSource = ChangeSource.LastTurn,
+    ) {
+        val next = Target(sessionId, worktree, messageId, initialSource)
+        if (target == next) return
+        target = next
+        availableSources = capabilitySources()
+        filter = ""
+        filterEditReported = false
+        _uiState.value =
+            ChangesUiState(
+                selectedSource = capabilitySelectedSource(initialSource),
+                availableSources = availableSources,
             )
-            _uiState.value =
-                ChangesUiState(
-                    phase = ChangesPhase.Loading,
-                    selectedSource = source,
-                    availableSources = availableSources,
-                )
-            load(refreshAvailability = false)
+        load(refreshAvailability = true)
+    }
+
+    fun retry() = load(refreshAvailability = true)
+
+    fun refresh() {
+        load(refreshAvailability = true, preserveContent = true)
+    }
+
+    fun selectSource(source: ChangeSource) {
+        if (source == _uiState.value.selectedSource || source !in availableSources) return
+        logAction(
+            actionId = ProductAnalytics.Action.CHANGES_SELECT_SOURCE,
+            parameters = mapOf(ProductAnalytics.Param.CHANGE_SOURCE to source.logValue()),
+        )
+        _uiState.value =
+            ChangesUiState(
+                phase = ChangesPhase.Loading,
+                selectedSource = source,
+                availableSources = availableSources,
+            )
+        load(refreshAvailability = false)
+    }
+
+    fun updateFilter(value: String) {
+        // Report that filtering happened once per filter session, never the query.
+        // Clearing resets the flag instead of logging, so leaving Changes stays silent.
+        if (value.isEmpty()) {
+            filterEditReported = false
+        } else if (!filterEditReported) {
+            filterEditReported = true
+            logAction(ProductAnalytics.Action.CHANGES_UPDATE_FILTER)
         }
+        filter = value
+        updateContent { it.copy(filter = value) }
+    }
 
-        fun updateFilter(value: String) {
-            // Report that filtering happened once per filter session, never the query.
-            // Clearing resets the flag instead of logging, so leaving Changes stays silent.
-            if (value.isEmpty()) {
-                filterEditReported = false
-            } else if (!filterEditReported) {
-                filterEditReported = true
-                logAction(ProductAnalytics.Action.CHANGES_UPDATE_FILTER)
-            }
-            filter = value
-            updateContent { it.copy(filter = value) }
-        }
+    fun clearFilter() = updateFilter("")
 
-        fun clearFilter() = updateFilter("")
-
-        private fun load(
-            refreshAvailability: Boolean,
-            preserveContent: Boolean = false,
-        ) {
-            val target = target ?: return
-            val requestedSource = _uiState.value.selectedSource
-            loadJob?.cancel()
-            val preservedPhase = _uiState.value.phase.takeIf { preserveContent && it is ChangesPhase.Content }
-            _uiState.value =
-                ChangesUiState(
-                    phase = preservedPhase ?: ChangesPhase.Loading,
-                    selectedSource = requestedSource,
-                    availableSources = availableSources,
-                    isRefreshing = preservedPhase != null,
-                )
-            loadJob =
-                viewModelScope.launch {
-                    val startedAt = System.currentTimeMillis()
-                    var activeSource = requestedSource
-                    try {
-                        if (refreshAvailability) availableSources = resolveAvailableSources(target.worktree)
-                        var selectedSource = requestedSource.takeIf { it in availableSources } ?: ChangeSource.LastTurn
-                        if (selectedSource != requestedSource) {
-                            logLoad(requestedSource, target, 0, "unsupported-fallback", startedAt)
-                        }
-                        activeSource = selectedSource
-                        if (preservedPhase == null) {
-                            _uiState.value = ChangesUiState(ChangesPhase.Loading, selectedSource, availableSources)
-                        }
-                        val files =
-                            try {
-                                loadFiles(target, selectedSource)
-                            } catch (error: Throwable) {
-                                if (selectedSource == ChangeSource.LastTurn || !error.isUnsupportedVcs()) throw error
-                                logLoad(selectedSource, target, 0, "unsupported-fallback", startedAt)
-                                availableSources = listOf(ChangeSource.LastTurn)
-                                selectedSource = ChangeSource.LastTurn
-                                activeSource = selectedSource
-                                if (preservedPhase == null) {
-                                    _uiState.value = ChangesUiState(ChangesPhase.Loading, selectedSource, availableSources)
-                                }
-                                loadFiles(target, selectedSource)
-                            }
-                        val sortedFiles = files.sortedBy(FileDiff::path)
-                        logLoad(selectedSource, target, sortedFiles.size, if (sortedFiles.isEmpty()) "empty" else "success", startedAt)
+    private fun load(
+        refreshAvailability: Boolean,
+        preserveContent: Boolean = false,
+    ) {
+        val target = target ?: return
+        val requestedSource = _uiState.value.selectedSource
+        loadJob?.cancel()
+        val preservedPhase = _uiState.value.phase.takeIf { preserveContent && it is ChangesPhase.Content }
+        _uiState.value =
+            ChangesUiState(
+                phase = preservedPhase ?: ChangesPhase.Loading,
+                selectedSource = requestedSource,
+                availableSources = availableSources,
+                isRefreshing = preservedPhase != null,
+            )
+        loadJob =
+            viewModelScope.launch {
+                val startedAt = System.currentTimeMillis()
+                var activeSource = requestedSource
+                try {
+                    if (refreshAvailability) availableSources = resolveAvailableSources(target.worktree)
+                    if (availableSources.isEmpty()) {
+                        logLoad(requestedSource, target, 0, "empty", startedAt)
                         _uiState.value =
                             ChangesUiState(
-                                phase =
-                                    when {
-                                        selectedSource == ChangeSource.LastTurn && target.messageId == null -> ChangesPhase.NoTurn
-                                        sortedFiles.isEmpty() -> ChangesPhase.NoChanges
-                                        else -> ChangesPhase.Content(ChangesContentState(sortedFiles, filter))
-                                    },
-                                selectedSource = selectedSource,
+                                phase = ChangesPhase.NoChanges,
+                                selectedSource = requestedSource,
                                 availableSources = availableSources,
                             )
-                    } catch (error: CancellationException) {
-                        throw error
-                    } catch (error: Throwable) {
-                        runCatching {
-                            Log.w(
-                                TAG,
-                                "load source=${activeSource.logValue()} session=${target.sessionId} directory=${target.worktree} files=0 result=failure durationMs=${System.currentTimeMillis() - startedAt}",
-                                error,
-                            )
-                        }
-                        _uiState.value =
-                            if (preservedPhase != null) {
-                                val restoredPhase =
-                                    (preservedPhase as ChangesPhase.Content).copy(
-                                        changeSet = preservedPhase.changeSet.copy(filter = filter),
-                                    )
-                                ChangesUiState(
-                                    phase = restoredPhase,
-                                    selectedSource = requestedSource,
-                                    availableSources = availableSources,
-                                    refreshError = error.userMessage(),
-                                )
-                            } else {
-                                ChangesUiState(ChangesPhase.Error(error.userMessage()), activeSource, availableSources)
-                            }
+                        return@launch
                     }
+                    var selectedSource = preferredSource(requestedSource)
+                    if (selectedSource != requestedSource) {
+                        logLoad(requestedSource, target, 0, "unsupported-fallback", startedAt)
+                    }
+                    activeSource = selectedSource
+                    if (preservedPhase == null) {
+                        _uiState.value = ChangesUiState(ChangesPhase.Loading, selectedSource, availableSources)
+                    }
+                    val files =
+                        try {
+                            loadFiles(target, selectedSource)
+                        } catch (error: Throwable) {
+                            if (
+                                selectedSource != ChangeSource.WorkingTree ||
+                                !error.isUnsupportedVcs() ||
+                                !capabilities.supportsSessionMessageDiff
+                            ) {
+                                throw error
+                            }
+                            logLoad(selectedSource, target, 0, "unsupported-fallback", startedAt)
+                            availableSources = listOf(ChangeSource.LastTurn)
+                            selectedSource = ChangeSource.LastTurn
+                            activeSource = selectedSource
+                            if (preservedPhase == null) {
+                                _uiState.value = ChangesUiState(ChangesPhase.Loading, selectedSource, availableSources)
+                            }
+                            loadFiles(target, selectedSource)
+                        }
+                    val sortedFiles = files.sortedBy(FileDiff::path)
+                    logLoad(selectedSource, target, sortedFiles.size, if (sortedFiles.isEmpty()) "empty" else "success", startedAt)
+                    _uiState.value =
+                        ChangesUiState(
+                            phase =
+                                when {
+                                    selectedSource == ChangeSource.LastTurn && target.messageId == null -> ChangesPhase.NoTurn
+                                    sortedFiles.isEmpty() -> ChangesPhase.NoChanges
+                                    else -> ChangesPhase.Content(ChangesContentState(sortedFiles, filter))
+                                },
+                            selectedSource = selectedSource,
+                            availableSources = availableSources,
+                        )
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Throwable) {
+                    runCatching {
+                        Log.w(
+                            TAG,
+                            "load source=${activeSource.logValue()} session=${target.sessionId} directory=${target.worktree} files=0 result=failure durationMs=${System.currentTimeMillis() - startedAt}",
+                            error,
+                        )
+                    }
+                    _uiState.value =
+                        if (preservedPhase != null) {
+                            val restoredPhase =
+                                (preservedPhase as ChangesPhase.Content).copy(
+                                    changeSet = preservedPhase.changeSet.copy(filter = filter),
+                                )
+                            ChangesUiState(
+                                phase = restoredPhase,
+                                selectedSource = requestedSource,
+                                availableSources = availableSources,
+                                refreshError = error.userMessage(),
+                            )
+                        } else {
+                            ChangesUiState(ChangesPhase.Error(error.userMessage()), activeSource, availableSources)
+                        }
                 }
+            }
+    }
+
+    private fun capabilitySources(): List<ChangeSource> =
+        if (capabilities.supportsSessionMessageDiff) {
+            listOf(ChangeSource.LastTurn)
+        } else {
+            listOf(ChangeSource.WorkingTree)
         }
 
-        private suspend fun resolveAvailableSources(worktree: String): List<ChangeSource> =
-            try {
-                if (repository.getVcsInfo(worktree).supportsGit) {
-                    listOf(ChangeSource.WorkingTree, ChangeSource.LastTurn)
+    private fun capabilitySelectedSource(requested: ChangeSource): ChangeSource =
+        if (requested == ChangeSource.LastTurn && !capabilities.supportsSessionMessageDiff) {
+            ChangeSource.WorkingTree
+        } else {
+            requested
+        }
+
+    private suspend fun resolveAvailableSources(worktree: String): List<ChangeSource> {
+        val sources = mutableListOf<ChangeSource>()
+        try {
+            if (repository.getVcsInfo(worktree).supportsGit) {
+                sources += ChangeSource.WorkingTree
+            }
+        } catch (error: Throwable) {
+            if (!error.isUnsupportedVcs()) throw error
+        }
+        if (capabilities.supportsSessionMessageDiff) {
+            sources += ChangeSource.LastTurn
+        }
+        return sources
+    }
+
+    private fun preferredSource(requested: ChangeSource): ChangeSource =
+        requested.takeIf { it in availableSources }
+            ?: ChangeSource.LastTurn.takeIf { it in availableSources }
+            ?: availableSources.first()
+
+    private suspend fun loadFiles(
+        target: Target,
+        source: ChangeSource,
+    ): List<FileDiff> =
+        when (source) {
+            ChangeSource.LastTurn ->
+                if (!capabilities.supportsSessionMessageDiff) {
+                    emptyList()
                 } else {
-                    listOf(ChangeSource.LastTurn)
-                }
-            } catch (error: Throwable) {
-                if (error.isUnsupportedVcs()) listOf(ChangeSource.LastTurn) else throw error
-            }
-
-        private suspend fun loadFiles(
-            target: Target,
-            source: ChangeSource,
-        ): List<FileDiff> =
-            when (source) {
-                ChangeSource.LastTurn ->
                     target.messageId?.let { repository.getSessionDiff(target.sessionId, it, target.worktree) }.orEmpty()
-                ChangeSource.WorkingTree -> repository.getVcsDiff(VcsDiffMode.WorkingTree, target.worktree, context = 12)
-            }
-
-        private fun logLoad(
-            source: ChangeSource,
-            target: Target,
-            fileCount: Int,
-            result: String,
-            startedAt: Long,
-        ) {
-            runCatching {
-                Log.i(
-                    TAG,
-                    "load source=${source.logValue()} session=${target.sessionId} directory=${target.worktree} files=$fileCount result=$result durationMs=${System.currentTimeMillis() - startedAt}",
-                )
-            }
+                }
+            ChangeSource.WorkingTree -> repository.getVcsDiff(VcsDiffMode.WorkingTree, target.worktree, context = 12)
         }
 
-        private fun logAction(
-            actionId: String,
-            parameters: Map<String, String> = emptyMap(),
-        ) {
-            ProductAnalytics.logUserAction(
-                screenId = ProductAnalytics.Screen.CHANGES,
-                actionId = actionId,
-                parameters = parameters,
+    private fun logLoad(
+        source: ChangeSource,
+        target: Target,
+        fileCount: Int,
+        result: String,
+        startedAt: Long,
+    ) {
+        runCatching {
+            Log.i(
+                TAG,
+                "load source=${source.logValue()} session=${target.sessionId} directory=${target.worktree} files=$fileCount result=$result durationMs=${System.currentTimeMillis() - startedAt}",
             )
         }
+    }
 
-        private inline fun updateContent(transform: (ChangesContentState) -> ChangesContentState) {
-            val state = _uiState.value
-            val current = state.phase as? ChangesPhase.Content ?: return
-            _uiState.value = state.copy(phase = current.copy(changeSet = transform(current.changeSet)))
-        }
-
-        private data class Target(
-            val sessionId: String,
-            val worktree: String,
-            val messageId: String?,
-            val initialSource: ChangeSource,
+    private fun logAction(
+        actionId: String,
+        parameters: Map<String, String> = emptyMap(),
+    ) {
+        ProductAnalytics.logUserAction(
+            screenId = ProductAnalytics.Screen.CHANGES,
+            actionId = actionId,
+            parameters = parameters,
         )
+    }
 
-        private companion object {
-            const val TAG = "Changes"
-        }
+    private inline fun updateContent(transform: (ChangesContentState) -> ChangesContentState) {
+        val state = _uiState.value
+        val current = state.phase as? ChangesPhase.Content ?: return
+        _uiState.value = state.copy(phase = current.copy(changeSet = transform(current.changeSet)))
+    }
+
+    private data class Target(
+        val sessionId: String,
+        val worktree: String,
+        val messageId: String?,
+        val initialSource: ChangeSource,
+    )
+
+    private companion object {
+        const val TAG = "Changes"
+    }
     }
 
 private fun ChangeSource.logValue() = name.replace(Regex("([a-z])([A-Z])"), "$1-$2").lowercase()

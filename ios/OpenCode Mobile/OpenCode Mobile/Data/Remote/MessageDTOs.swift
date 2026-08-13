@@ -164,6 +164,52 @@ nonisolated struct AgentPartSourceDTO: Codable, Sendable {
     let end: Int
 }
 
+nonisolated struct V2PromptRequestDTO: Codable, Sendable {
+    let prompt: V2PromptInputDTO
+    let delivery: String
+
+    init(prompt: V2PromptInputDTO, delivery: String = "steer") {
+        self.prompt = prompt
+        self.delivery = delivery
+    }
+}
+
+nonisolated struct V2PromptInputDTO: Codable, Sendable {
+    let text: String
+    let files: [V2PromptFileDTO]?
+    let agents: [V2PromptAgentDTO]?
+
+    init(text: String, files: [V2PromptFileDTO]? = nil, agents: [V2PromptAgentDTO]? = nil) {
+        self.text = text
+        self.files = files
+        self.agents = agents
+    }
+}
+
+nonisolated struct V2PromptFileDTO: Codable, Sendable {
+    let uri: String
+    let name: String?
+}
+
+nonisolated struct V2PromptAgentDTO: Codable, Sendable {
+    let name: String
+    let source: V2PromptSourceDTO?
+}
+
+nonisolated struct V2SwitchAgentRequestDTO: Codable, Sendable {
+    let agent: String
+}
+
+nonisolated struct V2SwitchModelRequestDTO: Codable, Sendable {
+    let model: V2PromptModelRefDTO
+}
+
+nonisolated struct V2PromptModelRefDTO: Codable, Sendable {
+    let id: String
+    let providerID: String
+    let variant: String?
+}
+
 /// A type-erased Codable value for flexible JSON content.
 nonisolated enum AnyCodable: Codable, Sendable, Equatable {
     case string(String)

@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multi-server switcher d2 — title + picker</title>
+<style>
+  :root {
+    --bg: #1C1C1C;
+    --surface: #1C1C1C;
+    --raised: #232323;
+    --raised-hover: #2A2A2A;
+    --text: #EDEDED;
+    --text-base: #A0A0A0;
+    --text-weak: #707070;
+    --text-weaker: #505050;
+    --border: #282828;
+    --icon: #7E7E7E;
+    --icon-strong: #EDEDED;
+    --success: #3DDC84;
+    --warning: #E8B339;
+    --error: #F07178;
+    --interactive: #8CB0FF;
+    --letter-o: #5B8DEF;
+    --letter-w: #E07A5F;
+    --letter-b: #81B29A;
+    --letter-i: #C9A227;
+    --letter-m: #8B7CF6;
+    --phone-w: 390px;
+    --phone-h: 844px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    background: #0e0e0e;
+    color: var(--text);
+    padding: 28px 20px 120px;
+  }
+
+  .page-meta { max-width: 920px; margin: 0 auto 28px; }
+  .page-meta h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.02em; }
+  .page-meta p { margin: 0 0 8px; color: var(--text-base); font-size: 0.95rem; line-height: 1.5; max-width: 42rem; }
+  .page-meta .tag {
+    display: inline-block; margin-top: 8px; font-size: 11px; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--text-weak); border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px 10px;
+  }
+
+  .stage { display: flex; justify-content: center; }
+  .phone {
+    width: var(--phone-w); height: var(--phone-h); background: var(--bg);
+    border-radius: 44px; border: 1px solid #333;
+    box-shadow: 0 0 0 1px #111, 0 24px 80px rgba(0,0,0,0.55);
+    overflow: hidden; position: relative; flex-shrink: 0;
+  }
+  .phone-notch {
+    position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 34px; background: #000; border-radius: 20px; z-index: 30; pointer-events: none;
+  }
+  .status-bar {
+    height: 54px; padding: 18px 28px 0; display: flex; justify-content: space-between;
+    align-items: center; font-size: 14px; font-weight: 600; color: var(--text); position: relative; z-index: 5;
+  }
+  .app { height: calc(100% - 54px); display: flex; flex-direction: column; position: relative; overflow: hidden; }
+
+  .topbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px 10px 8px; min-height: 56px; flex-shrink: 0;
+  }
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.08);
+    border: none; color: var(--icon-strong); display: grid; place-items: center;
+    flex-shrink: 0; cursor: pointer;
+  }
+  .icon-btn svg { width: 18px; height: 18px; }
+  .icon-btn:active { transform: scale(0.96); }
+  .title-block {
+    flex: 1; min-width: 0; display: flex; flex-direction: column;
+    justify-content: center; gap: 2px; height: 40px;
+  }
+  .title {
+    font-size: 17px; font-weight: 600; letter-spacing: -0.02em; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;
+  }
+  .title-hit {
+    display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+    background: none; border: none; padding: 0; cursor: pointer; color: inherit; font: inherit; text-align: left;
+  }
+  .title-hit .chev { width: 12px; height: 12px; color: var(--text-base); flex-shrink: 0; transition: transform 0.15s ease; }
+  .title-hit.open .chev { transform: rotate(180deg); }
+  .subtitle-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .caption {
+    font-size: 12px; color: var(--text-base); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; line-height: 1.2;
+  }
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--success); flex-shrink: 0;
+    box-shadow: 0 0 0 2px rgba(61, 220, 132, 0.18);
+  }
+  .status-dot.off { background: var(--error); box-shadow: 0 0 0 2px rgba(240,113,120,0.18); }
+  .status-label { font-size: 12px; color: var(--text-base); text-transform: lowercase; }
+
+  .letter {
+    width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0; position: relative;
+  }
+  .letter.lg { width: 44px; height: 44px; font-size: 18px; }
+  .letter.xl { width: 52px; height: 52px; font-size: 20px; }
+  .letter .corner-dot {
+    position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px;
+    border-radius: 50%; border: 2px solid var(--bg); background: var(--success);
+  }
+  .letter .corner-dot.off { background: var(--error); }
+  .letter.raised-ring .corner-dot { border-color: var(--raised); }
+
+  .scroll { flex: 1; overflow: auto; padding: 0 0 148px; -webkit-overflow-scrolling: touch; }
+  .scroll.picker { padding-bottom: 100px; }
+  .section-h { padding: 16px 16px 8px; font-size: 13px; font-weight: 600; color: var(--text-weak); }
+  .row {
+    display: flex; align-items: center; gap: 12px; padding: 10px 16px; cursor: pointer;
+    background: none; border: none; width: 100%; text-align: left; color: inherit; font: inherit;
+  }
+  .row:active { background: var(--raised); }
+  .row-body { flex: 1; min-width: 0; }
+  .row-title {
+    font-size: 16px; font-weight: 600; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .row-sub {
+    font-size: 13px; color: var(--text-base); margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .row-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+  .row-time { font-size: 12px; color: var(--text-weak); }
+  .pill { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 8px; line-height: 1.4; }
+  .pill.idle { background: rgba(237,237,237,0.10); color: var(--text-base); }
+  .pill.running { background: rgba(140,176,255,0.16); color: var(--interactive); }
+  .pill.ready { background: rgba(61,220,132,0.16); color: var(--success); }
+  .check { width: 20px; color: var(--interactive); flex-shrink: 0; display: grid; place-items: center; }
+  .check svg { width: 18px; height: 18px; }
+
+  .dock {
+    position: absolute; left: 12px; right: 12px; bottom: 18px; z-index: 8;
+    background: rgba(35,35,35,0.92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border); border-radius: 22px; padding: 10px 12px 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+  }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex-shrink: 0; border: none; cursor: pointer; font: inherit; font-size: 13px; font-weight: 500;
+    color: var(--text); background: rgba(237,237,237,0.08); border-radius: 999px; padding: 7px 12px;
+  }
+  .chip.sel { background: rgba(237,237,237,0.14); }
+  .chip .n { margin-left: 6px; font-size: 11px; background: rgba(237,237,237,0.10); border-radius: 999px; padding: 1px 6px; }
+  .dock-actions { display: flex; gap: 8px; align-items: center; }
+  .add-circle {
+    width: 52px; height: 52px; border-radius: 50%; border: none; background: rgba(237,237,237,0.14);
+    color: var(--text); display: grid; place-items: center; cursor: pointer; flex-shrink: 0;
+  }
+  .add-circle svg { width: 22px; height: 22px; }
+  .new-session {
+    flex: 1; height: 52px; border: none; border-radius: 999px; background: rgba(237,237,237,0.14);
+    color: var(--text); font: inherit; font-size: 16px; font-weight: 600; cursor: pointer;
+  }
+
+  .overlay { position: absolute; inset: 0; z-index: 20; background: rgba(0,0,0,0.45); }
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; top: 48px; background: var(--bg);
+    border-radius: 20px 20px 0 0; display: flex; flex-direction: column;
+    box-shadow: 0 -12px 40px rgba(0,0,0,0.45);
+  }
+  .sheet-handle { width: 36px; height: 5px; border-radius: 999px; background: #3a3a3a; margin: 10px auto 4px; }
+  .sheet-head { padding: 8px 16px 12px; }
+  .sheet-head h2 { margin: 0; font-size: 22px; letter-spacing: -0.03em; }
+  .sheet-scroll { flex: 1; overflow: auto; padding-bottom: 24px; }
+  .current-card {
+    margin: 4px 16px 16px; background: var(--raised); border-radius: 16px; padding: 16px;
+    display: flex; gap: 12px; align-items: center; border: 1px solid #333;
+  }
+  .current-card .name { font-size: 17px; font-weight: 600; }
+  .current-card .url { font-size: 13px; color: var(--text-base); margin-top: 2px; }
+  .using { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--interactive); }
+
+  .id-card {
+    display: flex; align-items: center; gap: 14px; width: calc(100% - 32px);
+    margin: 0 16px 10px; padding: 16px; border: none; border-radius: 18px;
+    background: var(--raised); color: inherit; font: inherit; text-align: left; cursor: pointer;
+  }
+  .id-card.active { outline: 2px solid var(--interactive); outline-offset: 0; }
+  .id-card:active { filter: brightness(1.08); }
+  .id-card .meta { font-size: 12px; color: var(--text-weak); margin-top: 4px; }
+  .id-card-add {
+    background: transparent; border: 1px dashed #3a3a3a;
+    color: var(--interactive); font-weight: 600;
+  }
+  .id-card-add .letter { background: rgba(237,237,237,0.10); color: var(--text); }
+
+  .empty { padding: 48px 32px; text-align: center; color: var(--text-weak); font-size: 14px; line-height: 1.45; }
+
+  .state-dump {
+    max-width: 920px; margin: 24px auto 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px; color: var(--text-weak); background: #151515; border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 16px; white-space: pre-wrap;
+  }
+
+  .switcher {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 100;
+    display: flex; align-items: center; gap: 4px; background: #f5f5f5; color: #111;
+    border-radius: 999px; padding: 6px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.08);
+    font-size: 13px; font-weight: 600; max-width: calc(100vw - 24px);
+  }
+  .switcher button {
+    width: 36px; height: 36px; border-radius: 50%; border: none; background: #e8e8e8;
+    color: #111; cursor: pointer; font-size: 16px; display: grid; place-items: center; flex-shrink: 0;
+  }
+  .switcher button:hover { background: #ddd; }
+  .switcher .label {
+    padding: 0 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: min(320px, 60vw); text-align: center;
+  }
+  .switcher .label small { display: block; font-weight: 500; font-size: 11px; color: #666; margin-top: 1px; }
+</style>
+</head>
+<body>
+  <!--
+    PROTOTYPE — throwaway. Round 2.
+    Question: Server stays in the top bar (liked from A). What should the
+    selection UI be, using the fuller pickers from B (server list) and C (sheet)?
+    Three variants via ?variant=A|B|C. Sessions always scoped to the active server.
+  -->
+
+  <header class="page-meta">
+    <h1>Multi-server d2 — title stays, picker changes</h1>
+    <p>
+      Locked from round 1: the top-bar title <strong>is the server</strong>, and
+      home never mixes sessions across servers. These three only change what
+      opens when you tap that title — C’s sheet, B’s full server list, or large
+      identity cards.
+    </p>
+    <span class="tag">Prototype · not production · d2</span>
+  </header>
+
+  <div class="stage">
+    <div class="phone" id="phone">
+      <div class="phone-notch"></div>
+      <div class="status-bar"><span>9:41</span><span>●●●● ▮</span></div>
+      <div class="app" id="app"></div>
+    </div>
+  </div>
+
+  <div class="state-dump" id="state"></div>
+
+  <div class="switcher" role="toolbar" aria-label="Prototype variant switcher">
+    <button type="button" id="prev" aria-label="Previous variant">←</button>
+    <div class="label" id="label">A — Title + sheet</div>
+    <button type="button" id="next" aria-label="Next variant">→</button>
+  </div>
+
+<script>
+const SERVERS = [
+  {
+    id: "mac-mini", name: "Mac Mini", letter: "M", color: "var(--letter-m)",
+    url: "http://192.168.1.42:4096", status: "live", lastUsed: "now",
+    projects: [
+      { id: "opencode-mobile", title: "opencode-mobile" },
+      { id: "website", title: "website" },
+    ],
+    sessions: [
+      { id: "s1", title: "Permission sheet copy", project: "opencode-mobile", path: "~/Projects/opencode-mobile", letter: "O", color: "var(--letter-o)", status: "running", time: "now", section: "Recent" },
+      { id: "s2", title: "Wire session project chrome", project: "opencode-mobile", path: "~/Projects/opencode-mobile", letter: "O", color: "var(--letter-o)", status: "ready", time: "2m", section: "Recent" },
+      { id: "s3", title: "Landing hero rewrite", project: "website", path: "~/Projects/website", letter: "W", color: "var(--letter-w)", status: "idle", time: "1h", section: "Today" },
+    ],
+  },
+  {
+    id: "work-laptop", name: "Work laptop", letter: "W", color: "var(--letter-w)",
+    url: "http://10.0.4.12:4096", status: "offline", lastUsed: "yesterday",
+    projects: [{ id: "billing-api", title: "billing-api" }],
+    sessions: [
+      { id: "s4", title: "Invoice CSV export", project: "billing-api", path: "~/work/billing-api", letter: "B", color: "var(--letter-b)", status: "idle", time: "Yesterday", section: "Yesterday" },
+      { id: "s5", title: "Refund edge cases", project: "billing-api", path: "~/work/billing-api", letter: "B", color: "var(--letter-b)", status: "idle", time: "Mon", section: "This week" },
+    ],
+  },
+  {
+    id: "tailscale-vps", name: "Tailscale VPS", letter: "T", color: "var(--letter-i)",
+    url: "http://100.64.2.8:4096", status: "live", lastUsed: "4h ago",
+    projects: [{ id: "infra", title: "infra" }],
+    sessions: [
+      { id: "s6", title: "Rotate deploy keys", project: "infra", path: "~/src/infra", letter: "I", color: "var(--letter-i)", status: "running", time: "now", section: "Recent" },
+      { id: "s7", title: "nginx cache headers", project: "infra", path: "~/src/infra", letter: "I", color: "var(--letter-i)", status: "idle", time: "4h", section: "Today" },
+    ],
+  },
+];
+
+const VARIANTS = [
+  { key: "A", name: "Title + sheet", blurb: "Tap the server title → C’s workspace sheet (Using now + switch-to)." },
+  { key: "B", name: "Title + server list", blurb: "Tap the server title → B’s full-screen Connection Profile list." },
+  { key: "C", name: "Title + identity cards", blurb: "Tap the server title → large tappable server cards, current outlined." },
+];
+
+const ui = {
+  variant: "A",
+  activeServerId: "mac-mini",
+  filterId: "all",
+  picker: false,
+  toast: null,
+};
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  })[c]);
+}
+function serverById(id) { return SERVERS.find(s => s.id === id) || SERVERS[0]; }
+function active() { return serverById(ui.activeServerId); }
+function statusCopy(s) { return s.status === "live" ? "live" : "offline"; }
+function dotClass(status) { return status === "live" ? "" : "off"; }
+
+function settingsSvg() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.7.9 1.2 1.5 1.2H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>`;
+}
+function backSvg() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>`;
+}
+function plusSvg() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
+}
+function chevSvg() {
+  return `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>`;
+}
+function checkSvg() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12l5 5 9-9"/></svg>`;
+}
+
+function filteredSessions(server) {
+  if (ui.filterId === "all") return server.sessions;
+  return server.sessions.filter(s => s.project === ui.filterId);
+}
+
+function sessionList(server) {
+  const sessions = filteredSessions(server);
+  if (!sessions.length) return `<div class="empty">No sessions for this filter on ${esc(server.name)}.</div>`;
+  const sections = [];
+  for (const s of sessions) if (!sections.includes(s.section)) sections.push(s.section);
+  return sections.map(section => {
+    const rows = sessions.filter(s => s.section === section).map(s => `
+      <div class="row">
+        <div class="letter" style="background:${s.color}">
+          ${esc(s.letter)}
+          ${s.status === "running" || s.status === "ready" ? `<span class="corner-dot"></span>` : ""}
+        </div>
+        <div class="row-body">
+          <div class="row-title">${esc(s.title)}</div>
+          <div class="row-sub">${esc(s.path)}</div>
+        </div>
+        <div class="row-meta">
+          <div class="row-time">${esc(s.time)}</div>
+          <span class="pill ${esc(s.status)}">${esc(s.status === "idle" ? "Idle" : s.status === "ready" ? "Ready" : "Running")}</span>
+        </div>
+      </div>`).join("");
+    return `<div class="section-h">${esc(section)}</div>${rows}`;
+  }).join("");
+}
+
+function dock(server) {
+  const chips = [
+    `<button class="chip ${ui.filterId === "all" ? "sel" : ""}" data-action="filter" data-id="all">All<span class="n">${server.sessions.length}</span></button>`,
+    ...server.projects.map(p => {
+      const n = server.sessions.filter(s => s.project === p.id).length;
+      return `<button class="chip ${ui.filterId === p.id ? "sel" : ""}" data-action="filter" data-id="${esc(p.id)}">${esc(p.title)}<span class="n">${n}</span></button>`;
+    }),
+  ].join("");
+  return `
+    <div class="dock">
+      <div class="chips">${chips}</div>
+      <div class="dock-actions">
+        <button class="add-circle" data-action="toast" data-msg="Add project stays scoped to the active server" aria-label="Add project">${plusSvg()}</button>
+        <button class="new-session" data-action="toast" data-msg="New session on ${esc(server.name)}">New session</button>
+      </div>
+    </div>`;
+}
+
+function connectionSubtitle(server) {
+  return `
+    <div class="subtitle-row">
+      <span class="status-dot ${dotClass(server.status)}"></span>
+      <span class="status-label">${esc(statusCopy(server))}</span>
+    </div>`;
+}
+
+function sessionsChrome(open) {
+  const s = active();
+  return `
+    <div class="topbar">
+      <div class="title-block">
+        <button class="title-hit ${open ? "open" : ""}" data-action="toggle-picker">
+          <span class="title">${esc(s.name)}</span>
+          ${chevSvg()}
+        </button>
+        ${connectionSubtitle(s)}
+      </div>
+      <button class="icon-btn" aria-label="Settings">${settingsSvg()}</button>
+    </div>
+    <div class="scroll">${sessionList(s)}</div>
+    ${dock(s)}`;
+}
+
+function sheetPicker(current) {
+  const others = SERVERS.filter(s => s.id !== current.id).map(s => `
+    <button class="row" data-action="switch" data-id="${esc(s.id)}">
+      <div class="letter" style="background:${s.color}">
+        ${esc(s.letter)}
+        <span class="corner-dot ${dotClass(s.status)}"></span>
+      </div>
+      <div class="row-body">
+        <div class="row-title">${esc(s.name)}</div>
+        <div class="row-sub">${esc(s.url.replace("http://", ""))} · ${esc(s.lastUsed)}</div>
+      </div>
+      <span class="pill ${s.status === "live" ? "ready" : "idle"}">${esc(s.status === "live" ? "Live" : "Offline")}</span>
+    </button>`).join("");
+  return `
+    <div class="overlay" data-action="close-picker">
+      <div class="sheet" onclick="event.stopPropagation()">
+        <div class="sheet-handle"></div>
+        <div class="sheet-head"><h2>Servers</h2></div>
+        <div class="sheet-scroll">
+          <div class="section-h">Using now</div>
+          <div class="current-card">
+            <div class="letter lg raised-ring" style="background:${current.color}">
+              ${esc(current.letter)}
+              <span class="corner-dot ${dotClass(current.status)}"></span>
+            </div>
+            <div>
+              <div class="name">${esc(current.name)}</div>
+              <div class="url">${esc(current.url)}</div>
+            </div>
+            <span class="using">Active</span>
+          </div>
+          <div class="section-h">Switch to</div>
+          ${others}
+          <button class="row" data-action="toast" data-msg="Would open connection setup for a new profile">
+            <div class="letter" style="background:rgba(237,237,237,0.12);color:var(--text)">${plusSvg()}</div>
+            <div class="row-body">
+              <div class="row-title">Add server</div>
+              <div class="row-sub">New Connection Profile</div>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function listPicker(current) {
+  const rows = SERVERS.map(s => `
+    <button class="row" data-action="switch" data-id="${esc(s.id)}">
+      <div class="letter" style="background:${s.color}">
+        ${esc(s.letter)}
+        <span class="corner-dot ${dotClass(s.status)}"></span>
+      </div>
+      <div class="row-body">
+        <div class="row-title">${esc(s.name)}</div>
+        <div class="row-sub">${esc(s.url.replace("http://", ""))} · ${s.sessions.length} sessions</div>
+      </div>
+      <div class="row-meta">
+        <div class="row-time">${esc(s.lastUsed)}</div>
+        <span class="pill ${s.status === "live" ? "ready" : "idle"}">${esc(s.status === "live" ? "Live" : "Offline")}</span>
+      </div>
+      <span class="check">${s.id === current.id ? checkSvg() : ""}</span>
+    </button>`).join("");
+  return `
+    <div class="topbar">
+      <button class="icon-btn" data-action="close-picker" aria-label="Back">${backSvg()}</button>
+      <div class="title-block">
+        <div class="title">Servers</div>
+        <div class="caption">${SERVERS.length} saved</div>
+      </div>
+      <button class="icon-btn" aria-label="Settings">${settingsSvg()}</button>
+    </div>
+    <div class="scroll picker">
+      <div class="section-h">Connection Profiles</div>
+      ${rows}
+    </div>
+    <div class="dock">
+      <div class="dock-actions">
+        <button class="new-session" data-action="toast" data-msg="Would open connection setup for a new profile">Add server</button>
+      </div>
+    </div>`;
+}
+
+function cardsPicker(current) {
+  const cards = SERVERS.map(s => `
+    <button class="id-card ${s.id === current.id ? "active" : ""}" data-action="switch" data-id="${esc(s.id)}">
+      <div class="letter xl raised-ring" style="background:${s.color}">
+        ${esc(s.letter)}
+        <span class="corner-dot ${dotClass(s.status)}"></span>
+      </div>
+      <div class="row-body">
+        <div class="row-title">${esc(s.name)}</div>
+        <div class="row-sub">${esc(s.url.replace("http://", ""))}</div>
+        <div class="meta">${s.sessions.length} sessions · ${esc(s.lastUsed)}</div>
+      </div>
+      <span class="check">${s.id === current.id ? checkSvg() : ""}</span>
+    </button>`).join("");
+  return `
+    <div class="topbar">
+      <button class="icon-btn" data-action="close-picker" aria-label="Back">${backSvg()}</button>
+      <div class="title-block">
+        <div class="title">Switch server</div>
+        <div class="caption">One active Connection Profile</div>
+      </div>
+    </div>
+    <div class="scroll picker" style="padding-top:8px">
+      ${cards}
+      <button class="id-card id-card-add" data-action="toast" data-msg="Would open connection setup for a new profile">
+        <div class="letter xl">${plusSvg()}</div>
+        <div class="row-body">
+          <div class="row-title" style="color:var(--interactive)">Add server</div>
+          <div class="row-sub">New Connection Profile</div>
+        </div>
+      </button>
+    </div>`;
+}
+
+function renderA() {
+  return sessionsChrome(ui.picker) + (ui.picker ? sheetPicker(active()) : "");
+}
+function renderB() {
+  return ui.picker ? listPicker(active()) : sessionsChrome(false);
+}
+function renderC() {
+  return ui.picker ? cardsPicker(active()) : sessionsChrome(false);
+}
+
+function dumpState() {
+  const v = VARIANTS.find(x => x.key === ui.variant);
+  const s = active();
+  const visible = filteredSessions(s);
+  document.getElementById("state").textContent =
+    `variant=${v.key} (${v.name})\n` +
+    `locked=top-bar title is the active server; sessions scoped to that server\n` +
+    `picker=${ui.picker ? "open" : "closed"}  pickerKind=${v.key === "A" ? "sheet" : v.key === "B" ? "full-screen list" : "identity cards"}\n` +
+    `activeServer=${s.id}  name=${s.name}  status=${s.status}\n` +
+    `url=${s.url}\n` +
+    `filter=${ui.filterId}\n` +
+    `sessionsVisible=${visible.length} of ${s.sessions.length} on this server\n` +
+    `sessionIds=[${visible.map(x => x.id).join(", ")}]\n` +
+    (ui.toast ? `lastAction=${ui.toast}\n` : "") +
+    `note=${v.blurb}`;
+}
+
+function render() {
+  const v = VARIANTS.find(x => x.key === ui.variant) || VARIANTS[0];
+  let html = "";
+  if (v.key === "A") html = renderA();
+  else if (v.key === "B") html = renderB();
+  else html = renderC();
+  document.getElementById("app").innerHTML = html;
+  document.getElementById("phone").dataset.variant = v.key;
+  dumpState();
+}
+
+function applyVariant(key) {
+  const v = VARIANTS.find(x => x.key === key) || VARIANTS[0];
+  ui.variant = v.key;
+  ui.picker = false;
+  ui.filterId = "all";
+  ui.toast = null;
+  const url = new URL(location.href);
+  url.searchParams.set("variant", v.key);
+  history.replaceState(null, "", url);
+  document.getElementById("label").innerHTML =
+    `${v.key} — ${esc(v.name)}<small>${esc(v.blurb)}</small>`;
+  render();
+}
+
+function getVariantIndex() {
+  const p = new URLSearchParams(location.search).get("variant");
+  if (p == null) return 0;
+  const byKey = VARIANTS.findIndex(v => v.key.toLowerCase() === String(p).toLowerCase());
+  if (byKey >= 0) return byKey;
+  const n = parseInt(p, 10);
+  if (!Number.isNaN(n) && n >= 0 && n < VARIANTS.length) return n;
+  return 0;
+}
+
+function setVariant(index) {
+  const i = ((index % VARIANTS.length) + VARIANTS.length) % VARIANTS.length;
+  applyVariant(VARIANTS[i].key);
+}
+
+document.getElementById("app").addEventListener("click", (e) => {
+  const hit = e.target.closest("[data-action]");
+  if (!hit) return;
+  const action = hit.dataset.action;
+  if (action === "toggle-picker") ui.picker = !ui.picker;
+  else if (action === "close-picker") ui.picker = false;
+  else if (action === "switch") {
+    ui.activeServerId = hit.dataset.id;
+    ui.filterId = "all";
+    ui.picker = false;
+    ui.toast = `switched to ${serverById(ui.activeServerId).name}`;
+  } else if (action === "filter") {
+    ui.filterId = hit.dataset.id;
+    ui.toast = `filter=${ui.filterId}`;
+  } else if (action === "toast") {
+    ui.toast = hit.dataset.msg;
+  }
+  render();
+});
+
+document.getElementById("prev").addEventListener("click", () => setVariant(getVariantIndex() - 1));
+document.getElementById("next").addEventListener("click", () => setVariant(getVariantIndex() + 1));
+document.addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+  if (e.key === "ArrowLeft") { e.preventDefault(); setVariant(getVariantIndex() - 1); }
+  if (e.key === "ArrowRight") { e.preventDefault(); setVariant(getVariantIndex() + 1); }
+});
+
+setVariant(getVariantIndex());
+</script>
+</body>
+</html>

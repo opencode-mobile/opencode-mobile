@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.connection
 
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -29,8 +30,11 @@ class ConnectionSessionCoordinator
 
         fun currentProfile(): ConnectionProfile? = activeConnectionManager.currentProfile()
 
-        suspend fun saveProfile(profile: ConnectionProfile) {
-            activeConnectionManager.applyProfile(profile)
+        suspend fun saveProfile(
+            profile: ConnectionProfile,
+            serverProtocol: ServerProtocol? = null,
+        ) {
+            activeConnectionManager.applyProfile(profile, serverProtocol)
             httpClient.rebuild()
             sseHttpClient.rebuild()
             profileSavedEvents.emit(Unit)
