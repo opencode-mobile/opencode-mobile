@@ -231,6 +231,26 @@ class ChangesViewModelTest {
             assertEquals(emptyList<Request>(), repository.requests)
         }
 
+    @Test fun bindUsesLiveCapabilitiesAfterProtocolDetection() =
+        runTest(dispatcher) {
+            var detected = ServerProtocol.V1
+            val repository =
+                FakeRepository(
+                    vcsInfoResults = ArrayDeque(listOf(Result.success(VcsInfo("feature", "main")))),
+                    vcsDiffResults = ArrayDeque(listOf(Result.success(listOf(file("git.kt"))))),
+                )
+            val viewModel =
+                ChangesViewModel(repository) { ServerCapabilities.forProtocol(detected) }
+            detected = ServerProtocol.V2
+            viewModel.bind("s", "/w", "m", ChangeSource.LastTurn)
+            advanceUntilIdle()
+
+            assertEquals(listOf(ChangeSource.WorkingTree), viewModel.uiState.value.availableSources)
+            assertEquals(ChangeSource.WorkingTree, viewModel.uiState.value.selectedSource)
+            assertEquals(emptyList<Request>(), repository.requests)
+            assertEquals(listOf(VcsRequest(VcsDiffMode.WorkingTree, "/w", 12)), repository.vcsRequests)
+        }
+
     @Test fun v2WithoutGitShowsEmptyChanges() =
         runTest(dispatcher) {
             val repository =

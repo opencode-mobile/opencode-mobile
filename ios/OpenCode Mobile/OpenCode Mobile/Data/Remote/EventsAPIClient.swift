@@ -12,15 +12,25 @@ nonisolated final class EventsAPIClient: Sendable {
     }()
 
     private let connectionProvider: @Sendable () -> ServerConnection?
+    private let protocolResolver: (@Sendable () async -> ServerProtocol)?
     private let urlSession: URLSession
 
-    init(connectionProvider: @escaping @Sendable () -> ServerConnection?) {
+    init(
+        connectionProvider: @escaping @Sendable () -> ServerConnection?,
+        protocolResolver: (@Sendable () async -> ServerProtocol)? = nil
+    ) {
         self.connectionProvider = connectionProvider
+        self.protocolResolver = protocolResolver
         self.urlSession = Self.defaultStreamingSession
     }
 
-    init(connectionProvider: @escaping @Sendable () -> ServerConnection?, urlSession: URLSession) {
+    init(
+        connectionProvider: @escaping @Sendable () -> ServerConnection?,
+        urlSession: URLSession,
+        protocolResolver: (@Sendable () async -> ServerProtocol)? = nil
+    ) {
         self.connectionProvider = connectionProvider
+        self.protocolResolver = protocolResolver
         self.urlSession = urlSession
     }
 
@@ -32,7 +42,12 @@ nonisolated final class EventsAPIClient: Sendable {
             throw EventsAPIError.noActiveConnection
         }
 
-        let normalizedPath = Self.subscribePath(for: connection.serverProtocol)
+        let resolvedProtocol = if let protocolResolver {
+            await protocolResolver()
+        } else {
+            connection.serverProtocol ?? .v1
+        }
+        let normalizedPath = Self.subscribePath(for: resolvedProtocol)
         let url = connection.apiBaseURL.appendingPathComponent(normalizedPath)
         var request = URLRequest(url: url)
         request.httpMethod = "GET"

@@ -576,6 +576,26 @@ class SessionProtocolRepositoryTest {
             assertTrue(requests.isEmpty())
         }
 
+    @Test
+    fun v2Abort_mapsHttpFailureToSessionErrorHttp() =
+        runTest {
+            val client =
+                testClient {
+                    respond("", HttpStatusCode.Unauthorized)
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val error = runCatching { repository.abortSession("ses_1", "/repo") }.exceptionOrNull()
+
+            val http = error as SessionError.Http
+            assertEquals(401, http.statusCode)
+        }
+
     private suspend fun manager(
         protocol: ServerProtocol?,
         probing: ConnectionProbing? = null,

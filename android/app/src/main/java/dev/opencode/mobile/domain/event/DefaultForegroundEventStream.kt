@@ -56,7 +56,7 @@ class DefaultForegroundEventStream
                             if (wasConnected) EventStreamConnectionState.Reconnecting else EventStreamConnectionState.Connecting,
                         )
                         try {
-                            val protocol = activeConnectionManager.currentProtocol() ?: ServerProtocol.V1
+                            val protocol = activeConnectionManager.currentProtocolOrProbe()
                             val path = if (protocol == ServerProtocol.V2) "/api/event" else "/global/event"
                             eventsApi.streamGlobalEvents(
                                 protocol = protocol,

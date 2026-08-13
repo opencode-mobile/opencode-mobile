@@ -271,7 +271,13 @@ extension Container {
     }
 
     var eventsAPIClient: Factory<EventsAPIClient> {
-        self { EventsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+        self {
+            let manager = self.activeConnectionManager()
+            return EventsAPIClient(
+                connectionProvider: self.connectionProvider(),
+                protocolResolver: { await manager.currentProtocolOrProbe() }
+            )
+        }.singleton
     }
 
     var eventDomainAdapter: Factory<EventDomainAdapter> {

@@ -220,6 +220,29 @@ struct ChangesViewModelTests {
         #expect(repository.requests.isEmpty)
     }
 
+    @Test func loadUsesLiveCapabilitiesAfterProtocolDetection() async {
+        var serverProtocol = ServerProtocol.v1
+        let repository = ChangesSessionRepository(
+            results: [],
+            vcsInfoResults: [.success(VcsInfo(currentBranch: "feature", defaultBranch: "main"))],
+            vcsDiffResults: [.success([Self.file("git.swift")])]
+        )
+        let viewModel = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/w",
+            messageID: "m",
+            initialSource: .lastTurn,
+            repository: repository,
+            capabilitiesProvider: { .forProtocol(serverProtocol) }
+        )
+        serverProtocol = .v2
+        await viewModel.load()
+        #expect(viewModel.state.availableSources == [.workingTree])
+        #expect(viewModel.state.selectedSource == .workingTree)
+        #expect(repository.requests.isEmpty)
+        #expect(repository.vcsRequests == [.init(mode: .workingTree, directory: "/w", context: 12)])
+    }
+
     @Test func v2WithoutGitShowsEmptyChanges() async {
         let repository = ChangesSessionRepository(
             results: [],

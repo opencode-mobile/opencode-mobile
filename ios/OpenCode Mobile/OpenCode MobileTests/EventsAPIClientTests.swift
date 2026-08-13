@@ -49,7 +49,22 @@ struct EventsAPIClientTests {
         #expect(MockSSEURLProtocol.lastPath?.hasSuffix("/api/event") == true)
     }
 
-    private func makeClient(responseBody: String, serverProtocol: ServerProtocol? = nil) -> EventsAPIClient {
+    @Test func streamGlobalEvents_probesProtocolOnCacheMiss() async throws {
+        let body = "data: {\"type\":\"server.connected\",\"data\":{}}\n\n"
+        let client = makeClient(responseBody: body, serverProtocol: nil, resolvedProtocol: .v2)
+        var lines: [String] = []
+        try await client.streamGlobalEvents { line in
+            lines.append(line)
+        }
+        #expect(lines.count == 1)
+        #expect(MockSSEURLProtocol.lastPath?.hasSuffix("/api/event") == true)
+    }
+
+    private func makeClient(
+        responseBody: String,
+        serverProtocol: ServerProtocol? = nil,
+        resolvedProtocol: ServerProtocol? = nil
+    ) -> EventsAPIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockSSEURLProtocol.self]
         MockSSEURLProtocol.register(responseBody: Data(responseBody.utf8))
@@ -59,9 +74,13 @@ struct EventsAPIClientTests {
             password: "secret",
             serverProtocol: serverProtocol
         )
+        let resolver: (@Sendable () async -> ServerProtocol)? = resolvedProtocol.map { value in
+            { value }
+        }
         return EventsAPIClient(
             connectionProvider: { connection },
-            urlSession: session
+            urlSession: session,
+            protocolResolver: resolver
         )
     }
 }

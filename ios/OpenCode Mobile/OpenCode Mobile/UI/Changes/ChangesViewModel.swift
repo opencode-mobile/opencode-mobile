@@ -109,8 +109,9 @@ final class ChangesViewModel {
     private let worktree: String
     private let messageID: String?
     private let repository: SessionRepository
-    private let capabilities: ServerCapabilities
+    private let capabilitiesProvider: () -> ServerCapabilities
     private var availableSources: [ChangeSource]
+    private var capabilities: ServerCapabilities { capabilitiesProvider() }
     private var filter = ""
     private var loadRevision = 0
 
@@ -127,17 +128,19 @@ final class ChangesViewModel {
         messageID: String?,
         initialSource: ChangeSource = .lastTurn,
         repository: SessionRepository,
-        capabilities: ServerCapabilities = .forProtocol(.v1)
+        capabilities: ServerCapabilities = .forProtocol(.v1),
+        capabilitiesProvider: (() -> ServerCapabilities)? = nil
     ) {
         self.sessionID = sessionID
         self.worktree = worktree
         self.messageID = messageID
         self.repository = repository
-        self.capabilities = capabilities
-        let sources = Self.capabilitySources(capabilities)
+        let provider = capabilitiesProvider ?? { capabilities }
+        self.capabilitiesProvider = provider
+        let sources = Self.capabilitySources(provider())
         self.availableSources = sources
         state = ChangesState(
-            selectedSource: Self.capabilitySelectedSource(initialSource, capabilities: capabilities),
+            selectedSource: Self.capabilitySelectedSource(initialSource, capabilities: provider()),
             availableSources: sources
         )
     }
@@ -148,8 +151,8 @@ final class ChangesViewModel {
         self.worktree = worktree
         self.messageID = messageID
         repository = PreviewChangesRepository(files: files)
-        capabilities = .forProtocol(.v1)
-        let sources = Self.capabilitySources(capabilities)
+        capabilitiesProvider = { .forProtocol(.v1) }
+        let sources = Self.capabilitySources(.forProtocol(.v1))
         availableSources = sources
         state = ChangesState(selectedSource: initialSource, availableSources: sources)
     }

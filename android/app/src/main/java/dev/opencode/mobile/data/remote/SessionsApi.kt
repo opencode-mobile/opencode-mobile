@@ -36,6 +36,7 @@ import dev.opencode.mobile.network.setJsonBody
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeoutConfig
+import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
@@ -43,6 +44,7 @@ import io.ktor.client.request.parameter
 import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -495,8 +497,11 @@ class SessionsApi private constructor(
             }.body<ApiLocatedEnvelope<List<FileDiffDto>>>()
             .data
 
-    private fun HttpResponse.ensureSuccess(): Boolean {
-        check(status.isSuccess()) { "HTTP ${status.value}: ${status.description}" }
+    private suspend fun HttpResponse.ensureSuccess(): Boolean {
+        if (!status.isSuccess()) {
+            throw ResponseException(this, "HTTP ${status.value}: ${status.description}")
+        }
+        bodyAsText()
         return true
     }
 

@@ -133,17 +133,21 @@ data class FileViewerState(
 @HiltViewModel
 class ChangesViewModel(
     private val repository: SessionRepository,
-    private val capabilities: ServerCapabilities,
+    private val capabilitiesProvider: () -> ServerCapabilities,
 ) : ViewModel() {
     @Inject
     constructor(
         repository: SessionRepository,
         activeConnectionManager: ActiveConnectionManager,
-    ) : this(repository, activeConnectionManager.currentCapabilities())
+    ) : this(repository, { activeConnectionManager.currentCapabilities() })
 
     constructor(
         repository: SessionRepository,
-    ) : this(repository, ServerCapabilities.forProtocol(ServerProtocol.V1))
+        capabilities: ServerCapabilities = ServerCapabilities.forProtocol(ServerProtocol.V1),
+    ) : this(repository, { capabilities })
+
+    private val capabilities: ServerCapabilities
+        get() = capabilitiesProvider()
 
     private val _uiState =
         MutableStateFlow(
