@@ -245,6 +245,27 @@ separate from the canonical Play release workflow's version sequence.
 supports delivery with the normal Play app-signing certificate, or the project
 replaces App Distribution with a Play testing-track release on every merge.
 
+## Manual App Distribution from a non-main ref
+
+**Status:** Accepted
+
+**Decision:** Keep automatic Firebase App Distribution on every push to
+protected `main`. Add `workflow_dispatch` with an optional `source_ref` input
+so an operator can distribute a branch, tag, or SHA without merging it. Manual
+runs must still use the workflow file on `main` (`--ref main`); `source_ref`
+only changes which commit is checked out. The `android-release` environment
+stays restricted to `main`. Play publishing (`Android Release`) stays
+main-only and is unchanged.
+
+**Why:** Feature-branch tester builds should not require merging to `main` or
+opening release-environment branch policy to every `feature/*` ref. Running the
+workflow from `main` keeps signing and Firebase secrets behind the existing
+environment gate, while `source_ref` selects the code under test.
+
+**Revisit when:** App Distribution should run from a selected branch's own
+workflow file, or release-environment branch policy is intentionally opened
+beyond `main`.
+
 ## Release AABs carry Play + Crashlytics symbolication inputs
 
 **Status:** Accepted for OPE-141 implementation
