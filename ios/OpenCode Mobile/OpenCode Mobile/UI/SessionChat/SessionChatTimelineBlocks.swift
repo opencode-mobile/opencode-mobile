@@ -151,16 +151,14 @@ nonisolated enum SessionChatTimelineBlocks {
                     continue
                 }
                 flushText()
-                if collapseConsecutiveToolCalls || isContextTool(tool.toolName) {
+                if isGroupableTool(tool, collapse: collapseConsecutiveToolCalls) {
                     var groupTools: [ToolPart] = []
                     var lookAhead = index
                     while lookAhead < parts.count {
                         guard case .tool(let candidate) = parts[lookAhead],
-                              isVisibleTool(candidate)
+                              isVisibleTool(candidate),
+                              isGroupableTool(candidate, collapse: collapseConsecutiveToolCalls)
                         else { break }
-                        if !collapseConsecutiveToolCalls, !isContextTool(candidate.toolName) {
-                            break
-                        }
                         groupTools.append(candidate)
                         lookAhead += 1
                     }
@@ -245,6 +243,15 @@ nonisolated enum SessionChatTimelineBlocks {
 
     private static func isContextTool(_ toolName: String) -> Bool {
         contextToolNames.contains(toolName.lowercased())
+    }
+
+    /// A visible tool can join a group. Subagent (`task`) spawns never group so
+    /// their child-session tap stays available; when collapse is on every other
+    /// visible tool groups, otherwise only context tools do.
+    private static func isGroupableTool(_ tool: ToolPart, collapse: Bool) -> Bool {
+        if tool.toolName.lowercased() == "task" { return false }
+        if collapse { return true }
+        return isContextTool(tool.toolName)
     }
 
     private static func toToolGroup(_ tools: [ToolPart]) -> SessionChatTimelineBlock? {

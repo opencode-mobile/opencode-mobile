@@ -108,13 +108,13 @@ object SessionChatTimelineBlocks {
                         continue
                     }
                     if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    if (collapseConsecutiveToolCalls || isContextTool(part.toolName)) {
+                    if (isGroupableTool(part, collapseConsecutiveToolCalls)) {
                         val groupTools = mutableListOf<MessagePart.Tool>()
                         var lookAhead = index
                         while (lookAhead < parts.size) {
                             val candidate = parts[lookAhead] as? MessagePart.Tool ?: break
                             if (!isVisibleTool(candidate)) break
-                            if (!collapseConsecutiveToolCalls && !isContextTool(candidate.toolName)) break
+                            if (!isGroupableTool(candidate, collapseConsecutiveToolCalls)) break
                             groupTools += candidate
                             lookAhead += 1
                         }
@@ -207,6 +207,17 @@ object SessionChatTimelineBlocks {
     }
 
     private fun isContextTool(toolName: String): Boolean = toolName.lowercase() in contextToolNames
+
+    /**
+     * A visible tool can join a group. Subagent (`task`) spawns never group so
+     * their child-session tap stays available; when collapse is on every other
+     * visible tool groups, otherwise only context tools do.
+     */
+    private fun isGroupableTool(tool: MessagePart.Tool, collapse: Boolean): Boolean {
+        if (tool.toolName.lowercase() == "task") return false
+        if (collapse) return true
+        return isContextTool(tool.toolName)
+    }
 
     private fun toToolGroup(tools: List<MessagePart.Tool>): SessionChatTimelineBlock.ToolGroup? {
         val memberIds = tools.map { it.id ?: return null }

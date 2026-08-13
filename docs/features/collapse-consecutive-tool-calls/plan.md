@@ -14,7 +14,8 @@ Settings → Appearance. Default remains expanded (today’s per-tool cards).
   default).
 - When the toggle is **on**, any run of two or more consecutive **visible**
   ToolParts in one assistant message becomes one **tool group** timeline block
-  (aggregated summary card), regardless of tool family.
+  (aggregated summary card), except **subagent (`task`) tools**, which never
+  group so their child-session tap stays available.
 - When the toggle is **off**, keep current OPE-50 behavior: only consecutive
   context tools (`read` / `glob` / `grep`) auto-group; all other tools stay
   individual Tool Call Cards with specialized chrome and taps.

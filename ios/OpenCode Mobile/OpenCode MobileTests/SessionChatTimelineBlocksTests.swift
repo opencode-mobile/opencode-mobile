@@ -985,6 +985,41 @@ struct SessionChatTimelineBlocksTests {
         #expect(group.errorText == "boom")
     }
 
+    @Test func build_collapseOn_taskNeverGroups() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "task-1", toolName: "task", status: .completed, metadata: ["sessionId": .string("ses-1")])),
+                .tool(ToolPart(id: "task-2", toolName: "task", status: .completed, metadata: ["sessionId": .string("ses-2")])),
+            ],
+            collapseConsecutiveToolCalls: true
+        )
+        #expect(blocks.count == 2)
+        guard case .toolCard(let firstID, let first) = blocks[0],
+              case .toolCard(let secondID, _) = blocks[1] else {
+            Issue.record("Expected two task cards, not a group")
+            return
+        }
+        #expect(firstID == PresentationBlockId.direct("task-1"))
+        #expect(secondID == PresentationBlockId.direct("task-2"))
+        #expect(first.childSessionId == "ses-1")
+    }
+
+    @Test func build_collapseOn_taskBreaksGroup() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed)),
+                .tool(ToolPart(id: "task-1", toolName: "task", status: .completed)),
+                .tool(ToolPart(id: "r2", toolName: "read", status: .completed)),
+            ],
+            collapseConsecutiveToolCalls: true
+        )
+        #expect(blocks.count == 3)
+        guard case .toolCard = blocks[0], case .toolCard = blocks[1], case .toolCard = blocks[2] else {
+            Issue.record("Expected task to break grouping into three cards")
+            return
+        }
+    }
+
     @Test func build_collapseOff_mixedToolsContextStillGroups() {
         let blocks = okBlocks(
             parts: [

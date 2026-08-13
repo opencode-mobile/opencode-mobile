@@ -330,8 +330,9 @@ A Session Chat timeline block that summarizes consecutive visible ToolParts
 inside one message as a single Tool Call Card. By default only consecutive
 context ToolParts (`read` / `glob` / `grep`) group; with the
 **Collapse consecutive tool calls** Appearance preference on, any consecutive
-visible tool families group. A text block, an attachment, or a hidden tool
-breaks the group.
+visible tool families group except subagent (`task`) spawns, which never group
+so their child-session tap stays available. A text block, an attachment, a
+hidden tool, or a `task` tool breaks the group.
 _Avoid_: expanding each grouped tool inline; treating a group as multiple
 timeline messages.
 

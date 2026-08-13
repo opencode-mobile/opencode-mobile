@@ -31,6 +31,16 @@
   intentional; users who need taps leave the preference off.
 - No in-group expand in this slice (same as OPE-50 context groups).
 
+## Subagent (task) tools never group
+
+- `task` (subagent spawn) tools are excluded from all-family collapse even when
+  the toggle is on. They stay individual Tool Call Cards so the child-session
+  tap remains available, and they break a group on either side.
+- This narrows the ticket's "regardless of tool family" wording: subagent
+  spawns are the one visible family that never collapses, because a
+  display-only summary would strand the user from opening a running child
+  session.
+
 ## Implementation seam
 
 - Gate/widen grouping in the pure `SessionChatTimelineBlocks` builders on both

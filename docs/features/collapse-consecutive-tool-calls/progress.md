@@ -49,6 +49,7 @@
 - [x] Clear All Data resets the preference
 - [x] Unit tests for on/off grouping rules on both platforms
 - [x] Live re-project when preference flips while Session Chat is open
+- [x] Subagent (`task`) tools excluded from collapse and break groups
 
 ## Checks
 

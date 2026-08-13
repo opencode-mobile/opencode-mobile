@@ -1139,6 +1139,57 @@ class SessionChatTimelineBlocksTest {
         assertEquals("boom", group.errorText)
     }
 
+    @Test
+    fun build_collapseOn_taskNeverGroups() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                collapseConsecutiveToolCalls = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "task",
+                            status = ToolStatus.Completed,
+                            id = "prt-1",
+                            metadata = json("sessionId" to "ses-1"),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "task",
+                            status = ToolStatus.Completed,
+                            id = "prt-2",
+                            metadata = json("sessionId" to "ses-2"),
+                        ),
+                    ),
+            )
+
+        assertEquals(2, blocks.size)
+        val first = blocks[0] as SessionChatTimelineBlock.ToolCard
+        val second = blocks[1] as SessionChatTimelineBlock.ToolCard
+        assertEquals(PresentationBlockId.direct("prt-1"), first.blockID)
+        assertEquals(PresentationBlockId.direct("prt-2"), second.blockID)
+        assertEquals("ses-1", first.childSessionId)
+    }
+
+    @Test
+    fun build_collapseOn_taskBreaksGroup() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                collapseConsecutiveToolCalls = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "prt-1"),
+                        MessagePart.Tool(toolName = "task", status = ToolStatus.Completed, id = "prt-2"),
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "prt-3"),
+                    ),
+            )
+
+        assertEquals(3, blocks.size)
+        assertTrue(blocks[0] is SessionChatTimelineBlock.ToolCard)
+        assertTrue(blocks[1] is SessionChatTimelineBlock.ToolCard)
+        assertTrue(blocks[2] is SessionChatTimelineBlock.ToolCard)
+    }
+
     private fun buildBlocks(
         role: MessageRole,
         parts: List<MessagePart>,
