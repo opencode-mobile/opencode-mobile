@@ -104,3 +104,15 @@ environment secrets (ASC API trio + App Distribution SA JSON) and the same
 persistent signing keychain / WMO workaround as iOS Release. Ad Hoc requires
 registered device UDIDs; new tester devices need a UDID registration and a new
 build.
+
+## Manual App Distribution from a non-main ref
+
+Keep automatic Firebase App Distribution on every push to protected `main`.
+Add `workflow_dispatch` with an optional `source_ref` input so an operator can
+distribute a branch, tag, or SHA without merging it. Manual runs must still use
+the workflow file on `main` (`--ref main`); `source_ref` only changes which
+commit is checked out. The `ios-release` environment stays restricted to
+`main`. TestFlight (`iOS Release`) stays main-only and is unchanged.
+
+Running the workflow from `main` keeps signing and Firebase secrets behind the
+existing environment gate, while `source_ref` selects the code under test.

@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Optional branch, tag, or SHA to build and distribute. Leave empty to use main. Always run this workflow from main."
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -27,8 +33,18 @@ jobs:
       EXPECTED_UPLOAD_CERT_SHA256: 9E:FB:99:19:6B:2D:F6:56:FD:FA:1D:88:3D:33:00:7E:0F:E0:DA:28:AB:FF:A6:F8:BC:C3:3D:42:0F:CA:E1:37
 
     steps:
-      - name: Checkout merged commit
+      - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.source_ref || github.sha }}
+
+      - name: Record distributed commit
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "DISTRIBUTED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "SOURCE_REF=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.source_ref || '' }}" >> "$GITHUB_ENV"
 
       - name: Set distribution version
         shell: bash
@@ -103,7 +119,7 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: android-app-distribution-${{ github.sha }}-${{ github.run_number }}
+          name: android-app-distribution-${{ env.DISTRIBUTED_SHA }}-${{ github.run_number }}
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
@@ -112,9 +128,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          distributed_sha="$(git rev-parse HEAD)"
           short_sha="$(git rev-parse --short=12 HEAD)"
           subject="$(git log -1 --pretty=%s)"
-          release_notes="Merge $short_sha: $subject"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            release_notes="Dispatch $short_sha: $subject"
+          else
+            release_notes="Merge $short_sha: $subject"
+          fi
           if ! distribution_output="$(
             npx --yes "firebase-tools@$FIREBASE_TOOLS_VERSION" \
               appdistribution:distribute \
@@ -140,7 +161,10 @@ jobs:
           {
             echo "## Android App Distribution"
             echo
-            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Commit: \`$distributed_sha\`"
+            if [[ -n "${SOURCE_REF:-}" ]]; then
+              echo "- Source ref: \`$SOURCE_REF\`"
+            fi
             echo "- Version: \`$ANDROID_VERSION_NAME\` (\`$ANDROID_VERSION_CODE\`)"
             echo "- Tester group: \`$FIREBASE_TESTER_GROUP\`"
             echo "- [Firebase release]($firebase_console_uri)"

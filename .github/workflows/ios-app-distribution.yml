@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Optional branch, tag, or SHA to build and distribute. Leave empty to use main. Always run this workflow from main."
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -31,8 +37,18 @@ jobs:
       FIREBASE_TOOLS_VERSION: 15.24.0
 
     steps:
-      - name: Checkout merged commit
+      - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.source_ref || github.sha }}
+
+      - name: Record distributed commit
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "DISTRIBUTED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "SOURCE_REF=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.source_ref || '' }}" >> "$GITHUB_ENV"
 
       - name: Set distribution build number
         shell: bash
@@ -193,7 +209,7 @@ jobs:
       - name: Upload signed Ad Hoc IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ios-app-distribution-${{ github.sha }}-${{ github.run_number }}
+          name: ios-app-distribution-${{ env.DISTRIBUTED_SHA }}-${{ github.run_number }}
           path: ${{ env.IOS_IPA_PATH }}
           if-no-files-found: error
           retention-days: 7
@@ -202,9 +218,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          distributed_sha="$(git rev-parse HEAD)"
           short_sha="$(git rev-parse --short=12 HEAD)"
           subject="$(git log -1 --pretty=%s)"
-          release_notes="Merge $short_sha: $subject"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            release_notes="Dispatch $short_sha: $subject"
+          else
+            release_notes="Merge $short_sha: $subject"
+          fi
           if ! distribution_output="$(
             npx --yes "firebase-tools@$FIREBASE_TOOLS_VERSION" \
               appdistribution:distribute \
@@ -231,7 +252,10 @@ jobs:
           {
             echo "## iOS App Distribution"
             echo
-            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Commit: \`$distributed_sha\`"
+            if [[ -n "${SOURCE_REF:-}" ]]; then
+              echo "- Source ref: \`$SOURCE_REF\`"
+            fi
             echo "- Marketing version: \`$IOS_MARKETING_VERSION\`"
             echo "- Build number: \`$IOS_BUILD_NUMBER\`"
             echo "- Tester group: \`$FIREBASE_TESTER_GROUP\`"
