@@ -295,12 +295,25 @@ struct MessageDomainAdapterTests {
         }
         #expect(t.status == .running)
         #expect(t.title == "Searching...")
+        #expect(t.timeStartEpochMs == nil)
         if case let .string(query)? = t.input?["query"] {
             #expect(query == "opencode")
         } else {
             Issue.record("Expected query input")
         }
         #expect(adapter.compactToolLabel(for: t) == "\u{23F3} Searching...")
+    }
+
+    @Test func messagePart_runningMapsTimeStart() throws {
+        let dto = try decoder.decode(
+            MessagePartDTO.self,
+            from: #"{"id":"prt-1","type":"tool","tool":"task","state":{"status":"running","time":{"start":1710000000000}}}"#.data(using: .utf8)!
+        )
+        guard case .tool(let t) = adapter.messagePart(from: dto) else {
+            Issue.record("Expected tool part")
+            return
+        }
+        #expect(t.timeStartEpochMs == 1_710_000_000_000)
     }
 
     @Test func messagePart_errorPreservesErrorText() throws {

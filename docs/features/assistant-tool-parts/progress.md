@@ -29,39 +29,38 @@
 ## Android
 
 - Structured `MessagePart.Tool` with `ToolStatus`, optional title/error/call id,
-  opaque input/output/metadata; Android tool-state DTO has `metadata`.
+  opaque input/output/metadata, and optional `timeStartEpochMs`; Android
+  tool-state DTO has `metadata`.
 - `Message.text` is TextPart-only; compact tool labels remain available via
   `compactToolLabel` for non-card surfaces.
 - Session Chat timeline: context groups, shell/network detail sheet, interact
-  chrome, specialized `task` cards with child-session navigation, and
-  file-change cards (`edit` / `write` / `apply_patch`) with +/− and owning-turn
-  Changes navigation
+  chrome, specialized `task` cards with child-session navigation, Quiet row
+  for pending/running `task` parts, and file-change cards (`edit` / `write` /
+  `apply_patch`) with +/− and owning-turn Changes navigation
   ([OPE-50](https://linear.app/opencode-mobile/issue/OPE-50/lightweight-tool-chrome),
   [OPE-51](https://linear.app/opencode-mobile/issue/OPE-51/file-change-tool-cards),
-  [OPE-52](https://linear.app/opencode-mobile/issue/OPE-52/subagent-task-tool-card)).
+  [OPE-52](https://linear.app/opencode-mobile/issue/OPE-52/subagent-task-tool-card),
+  [OPE-158](https://linear.app/opencode-mobile/issue/OPE-158/running-child-session-chat-row)).
 
 ## iOS
 
 - Structured `ToolPart` with `ToolStatus`, optional title/error/call id, opaque
-  input/output/metadata (`AnyCodable` maps).
+  input/output/metadata (`AnyCodable` maps), and optional `timeStartEpochMs`.
 - `Message.text` is TextPart-only; compact tool labels remain available via
   `compactToolLabel` for non-card surfaces.
 - Session Chat timeline: context groups, shell/network detail sheet, interact
-  chrome, specialized `task` cards with child-session navigation, and
-  file-change cards (`edit` / `write` / `apply_patch`) with +/− and owning-turn
-  Changes navigation
+  chrome, specialized `task` cards with child-session navigation, Quiet row
+  for pending/running `task` parts, and file-change cards (`edit` / `write` /
+  `apply_patch`) with +/− and owning-turn Changes navigation
   ([OPE-50](https://linear.app/opencode-mobile/issue/OPE-50/lightweight-tool-chrome),
   [OPE-51](https://linear.app/opencode-mobile/issue/OPE-51/file-change-tool-cards),
-  [OPE-52](https://linear.app/opencode-mobile/issue/OPE-52/subagent-task-tool-card)).
+  [OPE-52](https://linear.app/opencode-mobile/issue/OPE-52/subagent-task-tool-card),
+  [OPE-158](https://linear.app/opencode-mobile/issue/OPE-158/running-child-session-chat-row)).
 
 ## Remaining
 
-- Running child session chat row (Quiet row)
-  ([OPE-158](https://linear.app/opencode-mobile/issue/OPE-158/running-child-session-chat-row)):
-  pending/running `task` parts use the locked person/thread row instead of a
-  Tool Call Card. Follow-up to OPE-52. Plan:
-  `docs/features/assistant-tool-parts/ope-158-plan.md`. Prototype:
-  `docs/prototypes/running-child-session-thread/?variant=A`.
+- Open pull request and merge Running child session chat row
+  ([OPE-158](https://linear.app/opencode-mobile/issue/OPE-158/running-child-session-chat-row)).
 - Follow-up polish (per-block markdown) remains under parity gaps.
 
 ## Completed
@@ -72,3 +71,5 @@
 - Lightweight tool chrome (context, shell, network, interact) ([OPE-50](https://linear.app/opencode-mobile/issue/OPE-50/lightweight-tool-chrome)).
 - Task / child-session tool card ([OPE-52](https://linear.app/opencode-mobile/issue/OPE-52/subagent-task-tool-card)).
 - File-change tool cards ([OPE-51](https://linear.app/opencode-mobile/issue/OPE-51/file-change-tool-cards)).
+- Running child session chat row Quiet row implemented on iOS and Android
+  ([OPE-158](https://linear.app/opencode-mobile/issue/OPE-158/running-child-session-chat-row)).

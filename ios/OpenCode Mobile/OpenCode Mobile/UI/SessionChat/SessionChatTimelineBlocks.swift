@@ -8,6 +8,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     case attachment(blockID: String, file: FilePart)
     case toolCard(blockID: String, card: SessionChatToolCardBlock)
     case toolGroup(blockID: String, group: SessionChatToolGroupBlock)
+    case childSessionRow(blockID: String, row: SessionChatChildSessionRowBlock)
 
     var blockID: String {
         switch self {
@@ -18,6 +19,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case .toolCard(let blockID, _):
             blockID
         case .toolGroup(let blockID, _):
+            blockID
+        case .childSessionRow(let blockID, _):
             blockID
         }
     }
@@ -35,6 +38,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             lID == rID && lCard == rCard
         case let (.toolGroup(lID, lGroup), .toolGroup(rID, rGroup)):
             lID == rID && lGroup == rGroup
+        case let (.childSessionRow(lID, lRow), .childSessionRow(rID, rRow)):
+            lID == rID && lRow == rRow
         default:
             false
         }
@@ -90,6 +95,15 @@ nonisolated struct SessionChatToolGroupBlock: Equatable, Sendable {
     let title: String
     let subtitle: String?
     let errorText: String?
+}
+
+nonisolated struct SessionChatChildSessionRowBlock: Equatable, Sendable {
+    let agentName: String
+    let letter: String
+    let isBackground: Bool
+    let secondLine: String?
+    let timeStartEpochMs: Int64?
+    let childSessionId: String?
 }
 
 nonisolated enum SessionChatTimelineBlocks {
@@ -163,13 +177,13 @@ nonisolated enum SessionChatTimelineBlocks {
                         blocks.append(group)
                         index = lookAhead
                     } else {
-                        guard let card = toToolCard(tool) else { return .missingPartIds }
-                        blocks.append(card)
+                        guard let block = toToolBlock(tool) else { return .missingPartIds }
+                        blocks.append(block)
                         index += 1
                     }
                 } else {
-                    guard let card = toToolCard(tool) else { return .missingPartIds }
-                    blocks.append(card)
+                    guard let block = toToolBlock(tool) else { return .missingPartIds }
+                    blocks.append(block)
                     index += 1
                 }
             }
@@ -293,6 +307,32 @@ nonisolated enum SessionChatTimelineBlocks {
             return .running
         }
         return .completed
+    }
+
+    private static func toToolBlock(_ tool: ToolPart) -> SessionChatTimelineBlock? {
+        if tool.toolName.lowercased() == "task", tool.status == .pending || tool.status == .running {
+            return toChildSessionRow(tool)
+        }
+        return toToolCard(tool)
+    }
+
+    private static func toChildSessionRow(_ tool: ToolPart) -> SessionChatTimelineBlock? {
+        guard let partId = tool.id else { return nil }
+        let agentName = taskAgentName(tool)
+        let secondLine =
+            nonEmpty(tool.title)
+            ?? inputString(tool.input, keys: "description", "prompt")
+        return .childSessionRow(
+            blockID: PresentationBlockId.direct(partId),
+            row: SessionChatChildSessionRowBlock(
+                agentName: agentName,
+                letter: SessionChatChildSessionElapsed.letter(from: agentName),
+                isBackground: isTruthyMetadata(tool.metadata, key: "background"),
+                secondLine: secondLine,
+                timeStartEpochMs: tool.timeStartEpochMs,
+                childSessionId: metadataString(tool.metadata, keys: "sessionId")
+            )
+        )
     }
 
     private static func toToolCard(_ tool: ToolPart) -> SessionChatTimelineBlock? {
@@ -510,10 +550,7 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func taskChrome(_ tool: ToolPart) -> Chrome {
-        let title =
-            inputString(tool.input, keys: "agent", "name")
-            ?? metadataString(tool.metadata, keys: "agent")
-            ?? "Task"
+        let title = taskAgentName(tool)
         let description =
             inputString(tool.input, keys: "description", "prompt")
             ?? runningTitleOverride(tool)
@@ -528,6 +565,12 @@ nonisolated enum SessionChatTimelineBlocks {
             subtitle: subtitle,
             childSessionId: metadataString(tool.metadata, keys: "sessionId")
         )
+    }
+
+    private static func taskAgentName(_ tool: ToolPart) -> String {
+        inputString(tool.input, keys: "agent", "name")
+            ?? metadataString(tool.metadata, keys: "agent")
+            ?? "Task"
     }
 
     private static func contextChrome(tool: ToolPart, displayTitle: String, subtitle: String?) -> Chrome {

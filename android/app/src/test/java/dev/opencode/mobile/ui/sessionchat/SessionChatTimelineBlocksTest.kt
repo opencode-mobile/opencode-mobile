@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.message.ToolStatus
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -654,7 +655,7 @@ class SessionChatTimelineBlocksTest {
 
     @Test
     fun build_taskFallsBackTitleAndOmitsNavWithoutSessionId() {
-        val tool =
+        val row =
             buildBlocks(
                 role = MessageRole.Assistant,
                 parts =
@@ -667,12 +668,46 @@ class SessionChatTimelineBlocksTest {
                             input = json("prompt" to "Investigate flaky tests"),
                         ),
                     ),
-            ).single() as SessionChatTimelineBlock.ToolCard
+            ).single() as SessionChatTimelineBlock.ChildSessionRow
 
-        assertEquals("Task", tool.title)
-        assertEquals("Investigate flaky tests", tool.subtitle)
-        assertNull(tool.childSessionId)
-        assertNull(tool.detailText)
+        assertEquals("Task", row.agentName)
+        assertEquals("T", row.letter)
+        assertEquals("Working…", row.secondLine)
+        assertNull(row.childSessionId)
+        assertFalse(row.isBackground)
+        assertNull(row.timeStartEpochMs)
+    }
+
+    @Test
+    fun build_pendingTaskQuietRowUsesPromptWhenTitleMissing() {
+        val row =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "task",
+                            status = ToolStatus.Pending,
+                            id = "prt-1",
+                            input = json("agent" to "explore", "description" to "Find auth bugs"),
+                            metadata =
+                                JsonObject(
+                                    mapOf(
+                                        "background" to JsonPrimitive(true),
+                                        "sessionId" to JsonPrimitive("ses-child-1"),
+                                    ),
+                                ),
+                            timeStartEpochMs = 1_710_000_000_000,
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ChildSessionRow
+
+        assertEquals("explore", row.agentName)
+        assertEquals("E", row.letter)
+        assertEquals("Find auth bugs", row.secondLine)
+        assertTrue(row.isBackground)
+        assertEquals("ses-child-1", row.childSessionId)
+        assertEquals(1_710_000_000_000, row.timeStartEpochMs)
     }
 
     @Test
