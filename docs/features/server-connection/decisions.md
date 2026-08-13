@@ -8,6 +8,8 @@
 - Reason: matches v1 bounded context (one opencode server, one project context
   at a time).
 - Revisit when: multi-server or multi-project switching is in scope.
+  Tracked as [OPE-159](https://linear.app/opencode-mobile/issue/OPE-159/multiple-connection-profiles)
+  (`docs/features/multi-server/`).
 
 ## Test connection before save
 

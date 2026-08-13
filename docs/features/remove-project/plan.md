@@ -2,6 +2,12 @@
 
 Linear: [OPE-108](https://linear.app/opencode-mobile/issue/OPE-108/remove-project-from-home)
 
+The dock **×** entry point below is superseded by
+[Session List Project Picker](../session-list-project-picker/plan.md)
+hold-to-remove ([OPE-160](https://linear.app/opencode-mobile/issue/OPE-160/session-list-project-picker)).
+Confirm dialog, snackbar, and local-curation semantics in this slice still
+apply.
+
 ## User Goal
 
 Remove an added project from the home Session List so home shows only the

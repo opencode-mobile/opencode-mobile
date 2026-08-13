@@ -70,5 +70,8 @@ caption from `session.updatedAt`. Idle/Running/Ready copy is Session List–loca
 and does not replace Working/Retrying labels used in Session Chat.
 
 Add project and New session live on the Session List dock (project picker for
-new session). Project filter chips scope the list; remove-project uses chip ×.
+new session). Project filter uses the Session List project picker (scope
+control + sheet), not dock chips; see
+[`session-list-project-picker`](../session-list-project-picker/decisions.md).
+Remove-project uses hold-to-remove in that sheet.
 

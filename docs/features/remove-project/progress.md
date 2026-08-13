@@ -33,4 +33,7 @@
 
 ## Remaining Work
 
-- None for the planned slice.
+- None for the planned slice. Dock × entry point superseded by
+  [`session-list-project-picker`](../session-list-project-picker/)
+  ([OPE-160](https://linear.app/opencode-mobile/issue/OPE-160/session-list-project-picker));
+  see `decisions.md`.
