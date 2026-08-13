@@ -195,10 +195,11 @@ passed `MediumPhone.arm-36-en-portrait` and
 ## Firebase App Distribution
 
 `Android App Distribution` distributes on every push to protected `main`. It
-also accepts a manual `workflow_dispatch` from `main`. Leave `source_ref` empty
-to distribute `main`; set it to a branch, tag, or SHA to distribute that commit
-instead. Always run the workflow from `main` — `source_ref` only changes the
-checked-out code. The `android-release` environment stays restricted to `main`.
+also accepts a manual `workflow_dispatch` from `main`, `feature/*`, or
+`fix/*`. Leave `source_ref` empty to distribute the selected workflow branch;
+set it to a branch, tag, or SHA to check out that commit instead. The
+`android-release` environment allows those same branch patterns. Play
+publishing stays main-only.
 
 It builds one upload-key-signed APK from the selected commit, verifies the
 upload certificate, and distributes the APK to the private Firebase group alias
@@ -207,7 +208,7 @@ Lab, or expose credentials to pull requests.
 
 ```bash
 gh workflow run "Android App Distribution" --ref main
-gh workflow run "Android App Distribution" --ref main -f source_ref=feature/ope-146-server-api-v2
+gh workflow run "Android App Distribution" --ref feature/ope-146-server-api-v2
 ```
 
 The workflow uses Firebase CLI `15.24.0` with Application Default Credentials

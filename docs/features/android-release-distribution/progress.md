@@ -85,8 +85,8 @@ and OPE-74 are complete.
 
 OPE-73 planning, repository implementation, and owner setup are active. The
 `Android App Distribution` workflow still distributes on every push to
-protected `main`, and also accepts `workflow_dispatch` from `main` with an
-optional `source_ref` for a branch, tag, or SHA. It signs and verifies one APK,
+protected `main`, and also accepts `workflow_dispatch` from `main`,
+`feature/*`, or `fix/*`, with an optional `source_ref` override. It signs and verifies one APK,
 authenticates with a dedicated protected secret, targets the private
 `android-internal` group, and summarizes only stable Firebase links. Runs
 serialize without cancellation. App Distribution uses a separate high

@@ -251,20 +251,20 @@ replaces App Distribution with a Play testing-track release on every merge.
 
 **Decision:** Keep automatic Firebase App Distribution on every push to
 protected `main`. Add `workflow_dispatch` with an optional `source_ref` input
-so an operator can distribute a branch, tag, or SHA without merging it. Manual
-runs must still use the workflow file on `main` (`--ref main`); `source_ref`
-only changes which commit is checked out. The `android-release` environment
-stays restricted to `main`. Play publishing (`Android Release`) stays
-main-only and is unchanged.
+so an operator can distribute a selected workflow branch, or override the
+checkout to a branch, tag, or SHA. The job runs on `workflow_dispatch` or on
+`main`. The `android-release` environment allows `main`, `feature/*`, and
+`fix/*`. Play publishing (`Android Release`) stays main-only via its own job
+filter.
 
-**Why:** Feature-branch tester builds should not require merging to `main` or
-opening release-environment branch policy to every `feature/*` ref. Running the
-workflow from `main` keeps signing and Firebase secrets behind the existing
-environment gate, while `source_ref` selects the code under test.
+**Why:** Tester builds of an integration branch should not wait on a merge to
+`main`. Dispatching from that branch uses its workflow file; environment
+patterns keep signing secrets off arbitrary refs while covering this repo's
+ticket branches. `source_ref` remains available when the workflow file on
+`main` should check out other code.
 
-**Revisit when:** App Distribution should run from a selected branch's own
-workflow file, or release-environment branch policy is intentionally opened
-beyond `main`.
+**Revisit when:** App Distribution should accept any ref, or Play publishing
+should share this branch policy.
 
 ## Release AABs carry Play + Crashlytics symbolication inputs
 

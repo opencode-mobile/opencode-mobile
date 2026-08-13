@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       source_ref:
-        description: "Optional branch, tag, or SHA to build and distribute. Leave empty to use main. Always run this workflow from main."
+        description: "Optional branch, tag, or SHA to check out. Leave empty to distribute the selected workflow branch."
         required: false
         type: string
 
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   distribute:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: [self-hosted, macOS, mac-mini]
     environment: ios-release
     defaults:

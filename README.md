@@ -69,10 +69,10 @@ self-hosted runner. Android Build and iOS Build stay manual.
 | iOS Checks | PR (non-draft) + dispatch | Mac mini (`self-hosted, macOS, mac-mini`) | Build, analyzer, unit tests |
 | Android Build | `workflow_dispatch` | Blacksmith Linux | Assemble debug APK |
 | Android Release | `workflow_dispatch` on `main` | Blacksmith Linux | Build and verify signed AAB + APK, then publish to Play internal |
-| Android App Distribution | `push` to `main`, or `workflow_dispatch` on `main` | Blacksmith Linux | Build and verify a signed APK, then distribute it to the private Firebase tester group |
+| Android App Distribution | `push` to `main`, or `workflow_dispatch` | Blacksmith Linux | Build and verify a signed APK, then distribute it to the private Firebase tester group |
 | Android Test Lab | `workflow_dispatch` on `main` | Blacksmith Linux | Run bounded Robo tests against a signed release APK |
 | iOS Build | `workflow_dispatch` | Mac mini (`self-hosted, macOS, mac-mini`) | Simulator build |
-| iOS App Distribution | `push` to `main`, or `workflow_dispatch` on `main` | Mac mini (`self-hosted, macOS, mac-mini`) | Build and verify a signed Ad Hoc IPA, then distribute it to the private Firebase tester group |
+| iOS App Distribution | `push` to `main`, or `workflow_dispatch` | Mac mini (`self-hosted, macOS, mac-mini`) | Build and verify a signed Ad Hoc IPA, then distribute it to the private Firebase tester group |
 
 To block merges, require status checks `android-checks` and `ios-checks` on
 `main` (repository ruleset or branch protection, strict up-to-date). See
@@ -85,9 +85,9 @@ gh workflow run "Android Checks" --ref main
 gh workflow run "Android Release" --ref main -f version_name=0.1.0
 gh workflow run "Android Test Lab" --ref main -f release_run_id=<android-release-run-id>
 gh workflow run "Android App Distribution" --ref main
-gh workflow run "Android App Distribution" --ref main -f source_ref=<branch-or-sha>
+gh workflow run "Android App Distribution" --ref feature/ope-146-server-api-v2
 gh workflow run "iOS App Distribution" --ref main
-gh workflow run "iOS App Distribution" --ref main -f source_ref=<branch-or-sha>
+gh workflow run "iOS App Distribution" --ref feature/ope-146-server-api-v2
 ```
 
 Android Release, Android App Distribution, and Android Test Lab use the
