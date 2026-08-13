@@ -1,8 +1,8 @@
 name: Smoke Mac mini
 
 # OPE-114 — proves the private Mac mini self-hosted runner can pick up
-# a job via outbound polling (no inbound ports, no Blacksmith).
-# Android / Blacksmith runners are untouched. Delete after OPE-115 if desired.
+# a job via outbound polling (no inbound ports). Android stays on fedora-box.
+# Delete after OPE-115 if desired.
 
 on:
   workflow_dispatch:

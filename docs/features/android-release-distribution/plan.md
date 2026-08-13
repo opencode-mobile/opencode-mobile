@@ -13,7 +13,7 @@ Linear: [OPE-69](https://linear.app/opencode-mobile/issue/OPE-69/android-release
 - Create and configure Google Cloud / Firebase and Google Play Console projects
   for OpenCode Mobile Android.
 - Sign release (or upload-key) Android App Bundles and APKs in CI.
-- Run device tests in Firebase Test Lab from GitHub Actions (Blacksmith).
+- Run device tests in Firebase Test Lab from GitHub Actions (fedora-box).
 - Publish to the Play Console **internal testing** track.
 - Distribute every merged `main` build to a private Firebase App Distribution
   tester group through a directly uploaded signed APK.

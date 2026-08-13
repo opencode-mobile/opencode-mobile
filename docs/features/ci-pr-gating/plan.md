@@ -2,8 +2,9 @@
 
 ## User Goal
 
-Ready-for-review pull requests run Android and iOS Checks on Blacksmith and
-cannot merge into `main` while those checks are pending or failing.
+Ready-for-review pull requests run Android Checks on the Fedora box and iOS
+Checks on the Mac mini, and cannot merge into `main` while those checks are
+pending or failing.
 
 ## In Scope
 
