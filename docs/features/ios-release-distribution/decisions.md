@@ -116,4 +116,6 @@ tag, or SHA. The job runs on `workflow_dispatch` or on `main`. The
 
 Dispatching from an integration branch uses that branch's workflow file.
 Environment patterns keep signing secrets off arbitrary refs while covering
-this repo's ticket branches.
+this repo's ticket branches. Non-main distributions put
+`Not from main: <ref>` on the first line of Firebase release notes so testers
+do not mistake a branch build for a merged `main` build.

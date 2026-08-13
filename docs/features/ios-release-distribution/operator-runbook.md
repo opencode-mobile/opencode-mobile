@@ -154,9 +154,11 @@ from **iOS Release**, including the Release WMO workaround
 (`SWIFT_OPTIMIZATION_LEVEL=-Onone`). Firebase CLI `15.24.0` uses Application
 Default Credentials from `FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON`.
 Release notes are the commit subject plus short SHA (`Merge` on a `main`
-push, `Dispatch` on a manual run). The workflow summary gets only the stable
-Firebase console and tester-experience links. The IPA artifact is retained
-for seven days.
+push, `Dispatch` on a manual run). When the distributed ref is not `main`,
+those notes start with `Not from main: <ref>` so testers see a branch build
+before the commit line. The workflow summary gets only the stable Firebase
+console and tester-experience links. The IPA artifact is retained for seven
+days.
 
 ### Install from Firebase (Ad Hoc)
 

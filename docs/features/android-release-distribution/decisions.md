@@ -261,7 +261,9 @@ filter.
 `main`. Dispatching from that branch uses its workflow file; environment
 patterns keep signing secrets off arbitrary refs while covering this repo's
 ticket branches. `source_ref` remains available when the workflow file on
-`main` should check out other code.
+`main` should check out other code. Non-main distributions put
+`Not from main: <ref>` on the first line of Firebase release notes so testers
+do not mistake a branch build for a merged `main` build.
 
 **Revisit when:** App Distribution should accept any ref, or Play publishing
 should share this branch policy.
