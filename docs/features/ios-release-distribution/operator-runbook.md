@@ -124,10 +124,10 @@ export-compliance questionnaire before the next upload.
 ## Firebase App Distribution
 
 `iOS App Distribution` distributes on every push to protected `main`. It also
-accepts a manual `workflow_dispatch` from `main`. Leave `source_ref` empty to
-distribute `main`; set it to a branch, tag, or SHA to distribute that commit
-instead. Always run the workflow from `main` — `source_ref` only changes the
-checked-out code. The `ios-release` environment stays restricted to `main`.
+accepts a manual `workflow_dispatch` from `main`, `feature/*`, or `fix/*`.
+Leave `source_ref` empty to distribute the selected workflow branch; set it to
+a branch, tag, or SHA to check out that commit instead. The `ios-release`
+environment allows those same branch patterns. TestFlight stays main-only.
 
 It archives a Release build, exports a signed **Ad Hoc** IPA, verifies Team ID
 `677MTXPXZZ` / bundle `dev.opencode.mobile`, and distributes the IPA to the
@@ -136,7 +136,7 @@ TestFlight, submit for App Review, or change the App Store listing.
 
 ```bash
 gh workflow run "iOS App Distribution" --ref main
-gh workflow run "iOS App Distribution" --ref main -f source_ref=feature/ope-146-server-api-v2
+gh workflow run "iOS App Distribution" --ref feature/ope-146-server-api-v2
 ```
 
 | Field | Value |

@@ -60,7 +60,7 @@ persistent-keychain success path.
 | Firebase | [Release `10n7be4jvnrb0`](https://console.firebase.google.com/project/opencode-mobile-release/appdistribution/app/ios:dev.opencode.mobile/releases/10n7be4jvnrb0?utm_source=firebase-tools) → `ios-internal` |
 | Device | Owner installed via Firebase tester flow (2026-08-08) |
 
-Manual `workflow_dispatch` from `main` with optional `source_ref` can also
+Manual `workflow_dispatch` from `main`, `feature/*`, or `fix/*` can also
 distribute a non-`main` commit without merging it. See the
 [operator runbook](operator-runbook.md#firebase-app-distribution).
 

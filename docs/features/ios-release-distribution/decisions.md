@@ -109,10 +109,11 @@ build.
 
 Keep automatic Firebase App Distribution on every push to protected `main`.
 Add `workflow_dispatch` with an optional `source_ref` input so an operator can
-distribute a branch, tag, or SHA without merging it. Manual runs must still use
-the workflow file on `main` (`--ref main`); `source_ref` only changes which
-commit is checked out. The `ios-release` environment stays restricted to
-`main`. TestFlight (`iOS Release`) stays main-only and is unchanged.
+distribute a selected workflow branch, or override the checkout to a branch,
+tag, or SHA. The job runs on `workflow_dispatch` or on `main`. The
+`ios-release` environment allows `main`, `feature/*`, and `fix/*`. TestFlight
+(`iOS Release`) stays main-only via its own job filter.
 
-Running the workflow from `main` keeps signing and Firebase secrets behind the
-existing environment gate, while `source_ref` selects the code under test.
+Dispatching from an integration branch uses that branch's workflow file.
+Environment patterns keep signing secrets off arbitrary refs while covering
+this repo's ticket branches.
