@@ -171,7 +171,7 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
             do {
                 try await api.streamGlobalEvents(
                     onHTTPResponse: { statusCode in
-                        DiagnosticLog.info(.sse, "GET \(Self.eventPath(for: api)) opened status=\(statusCode)")
+                        DiagnosticLog.info(.sse, "GET \(Self.eventPath(for: api)) opened status=\(statusCode) protocol=\(api.eventProtocolWireValue)")
                         owner.markStreamConnected()
                         retry.attempt = 0
                     },

@@ -133,6 +133,23 @@ file changes the way v1 revert does.
 
 **Alternative rejected:** Auto-commit after stage — irreversible, no redo.
 
+## V2 last-turn review is capability-gated (2026-08-13)
+
+**Choice:** Screen Models read `ServerCapabilities.supportsSessionMessageDiff`
+and omit last-turn Changes, the review pill, and tool-card last-turn
+navigation on v2. Working-tree VCS diffs stay available. Repositories return
+HTTP 404 for `getSessionDiff` on v2 without calling `GET /session/{id}/diff`.
+Dead unused repository methods (`share`, `init`, children, sync send, get
+message, list projects) stay; removing them is a large fake-update with no
+v2 product effect.
+
+**Why:** Upstream has no session message-diff twin. Degrade in product UI via
+the existing capability flag rather than blocking v2 or forking Changes
+ViewModels.
+
+**Alternative rejected:** Leave last-turn visible and let the v1 path 404 —
+would show a failed Changes load instead of a working-tree-only review.
+
 ## V2 todos seed from events only (2026-08-12)
 
 **Choice:** `listSessionTodos` does not call a REST todo route on v2 and

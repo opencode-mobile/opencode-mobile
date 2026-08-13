@@ -5,11 +5,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.domain.connection.ServerCapabilities
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.VcsDiffMode
+import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
 import dev.opencode.mobile.ui.components.UnifiedDiffDocument
 import dev.opencode.mobile.ui.components.UnifiedDiffParser
@@ -128,12 +131,21 @@ data class FileViewerState(
 }
 
 @HiltViewModel
-class ChangesViewModel
+class ChangesViewModel(
+    private val repository: SessionRepository,
+    private val capabilities: ServerCapabilities,
+) : ViewModel() {
     @Inject
     constructor(
-        private val repository: SessionRepository,
-    ) : ViewModel() {
-        private val _uiState = MutableStateFlow(ChangesUiState())
+        repository: SessionRepository,
+        activeConnectionManager: ActiveConnectionManager,
+    ) : this(repository, activeConnectionManager.currentCapabilities())
+
+    constructor(
+        repository: SessionRepository,
+    ) : this(repository, ServerCapabilities.forProtocol(ServerProtocol.V1))
+
+    private val _uiState = MutableStateFlow(ChangesUiState())
         val uiState: StateFlow<ChangesUiState> = _uiState.asStateFlow()
 
         private var target: Target? = null
@@ -215,7 +227,17 @@ class ChangesViewModel
                     var activeSource = requestedSource
                     try {
                         if (refreshAvailability) availableSources = resolveAvailableSources(target.worktree)
-                        var selectedSource = requestedSource.takeIf { it in availableSources } ?: ChangeSource.LastTurn
+                        if (availableSources.isEmpty()) {
+                            logLoad(requestedSource, target, 0, "empty", startedAt)
+                            _uiState.value =
+                                ChangesUiState(
+                                    phase = ChangesPhase.NoChanges,
+                                    selectedSource = requestedSource,
+                                    availableSources = availableSources,
+                                )
+                            return@launch
+                        }
+                        var selectedSource = preferredSource(requestedSource)
                         if (selectedSource != requestedSource) {
                             logLoad(requestedSource, target, 0, "unsupported-fallback", startedAt)
                         }
@@ -227,7 +249,13 @@ class ChangesViewModel
                             try {
                                 loadFiles(target, selectedSource)
                             } catch (error: Throwable) {
-                                if (selectedSource == ChangeSource.LastTurn || !error.isUnsupportedVcs()) throw error
+                                if (
+                                    selectedSource != ChangeSource.WorkingTree ||
+                                    !error.isUnsupportedVcs() ||
+                                    !capabilities.supportsSessionMessageDiff
+                                ) {
+                                    throw error
+                                }
                                 logLoad(selectedSource, target, 0, "unsupported-fallback", startedAt)
                                 availableSources = listOf(ChangeSource.LastTurn)
                                 selectedSource = ChangeSource.LastTurn
@@ -279,16 +307,25 @@ class ChangesViewModel
                 }
         }
 
-        private suspend fun resolveAvailableSources(worktree: String): List<ChangeSource> =
+        private suspend fun resolveAvailableSources(worktree: String): List<ChangeSource> {
+            val sources = mutableListOf<ChangeSource>()
             try {
                 if (repository.getVcsInfo(worktree).supportsGit) {
-                    listOf(ChangeSource.WorkingTree, ChangeSource.LastTurn)
-                } else {
-                    listOf(ChangeSource.LastTurn)
+                    sources += ChangeSource.WorkingTree
                 }
             } catch (error: Throwable) {
-                if (error.isUnsupportedVcs()) listOf(ChangeSource.LastTurn) else throw error
+                if (!error.isUnsupportedVcs()) throw error
             }
+            if (capabilities.supportsSessionMessageDiff) {
+                sources += ChangeSource.LastTurn
+            }
+            return sources
+        }
+
+        private fun preferredSource(requested: ChangeSource): ChangeSource =
+            requested.takeIf { it in availableSources }
+                ?: ChangeSource.LastTurn.takeIf { it in availableSources }
+                ?: availableSources.first()
 
         private suspend fun loadFiles(
             target: Target,

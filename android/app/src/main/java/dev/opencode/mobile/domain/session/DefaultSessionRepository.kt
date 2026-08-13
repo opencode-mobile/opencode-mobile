@@ -264,8 +264,12 @@ class DefaultSessionRepository
             messageId: String?,
             directory: String?,
         ): List<FileDiff> =
-            runCatching { api.getSessionDiff(id, messageId, directory).map(adapter::toFileDiff) }
-                .getOrElse { throw adapter.mapError(it) }
+            runCatching {
+                if (isV2()) {
+                    throw SessionError.Http(404, "session message diff is not available")
+                }
+                api.getSessionDiff(id, messageId, directory).map(adapter::toFileDiff)
+            }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun getVcsInfo(directory: String?): VcsInfo =
             runCatching {

@@ -10,13 +10,15 @@ final class SessionChatReviewChanges {
     private var sessionID: String
     private let worktree: String
     private let sessionRepository: any SessionRepository
+    private let supportsSessionMessageDiff: () -> Bool
     private var requestTask: Task<Void, Never>?
     private var candidateMessageID: String?
 
-    init(sessionID: String, worktree: String, sessionRepository: any SessionRepository) {
+    init(sessionID: String, worktree: String, sessionRepository: any SessionRepository, supportsSessionMessageDiff: @escaping () -> Bool = { true }) {
         self.sessionID = sessionID
         self.worktree = worktree
         self.sessionRepository = sessionRepository
+        self.supportsSessionMessageDiff = supportsSessionMessageDiff
     }
 
     func rebind(sessionID: String) {
@@ -38,7 +40,7 @@ final class SessionChatReviewChanges {
         let messageID = messages.last(where: {
             $0.role == .user && !$0.isPending && !$0.isStreaming
         })?.id
-        let eligibleMessageID = hasResolvedSessionStatus && !isTurnActive && !isSending ? messageID : nil
+        let eligibleMessageID = supportsSessionMessageDiff() && hasResolvedSessionStatus && !isTurnActive && !isSending ? messageID : nil
         guard eligibleMessageID != candidateMessageID else { return }
 
         requestTask?.cancel()

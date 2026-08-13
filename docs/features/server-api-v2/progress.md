@@ -13,7 +13,7 @@
   - [x] [OPE-150](https://linear.app/opencode-mobile/issue/OPE-150/p3-live-stream-and-prompt-on-v2) P3
   - [x] [OPE-151](https://linear.app/opencode-mobile/issue/OPE-151/p4-permissions-questions-and-composer-catalogs-on-v2) P4
   - [x] [OPE-152](https://linear.app/opencode-mobile/issue/OPE-152/p5-compact-revert-todos-vcs-and-add-project-on-v2) P5
-  - [ ] [OPE-153](https://linear.app/opencode-mobile/issue/OPE-153/p6-capability-gates-cleanup-and-protocol-matrix-tests) P6
+  - [x] [OPE-153](https://linear.app/opencode-mobile/issue/OPE-153/p6-capability-gates-cleanup-and-protocol-matrix-tests) P6
 
 ## Design-system dependencies
 
@@ -56,6 +56,13 @@
 - [x] P5: VCS info/diff dual remotes (`git` → `working`)
 - [x] P5: Add-project `GET /api/location` + `GET /api/fs/list`
 - [x] P5: Unit tests (session compact/revert/todos/vcs + filesystem protocol routing)
+- [x] P6: Hide last-turn review on v2 via `ServerCapabilities`
+- [x] P6: Keep working-tree VCS diffs; last-turn navigation and tool-card
+  review taps stay off when the flag is false
+- [x] P6: `getSessionDiff` returns HTTP 404 on v2 without calling the legacy
+  path
+- [x] P6: SSE diagnostic log includes `protocol=`
+- [x] P6: Protocol matrix unit tests (capabilities, last-turn gate, v2 skip)
 
 ## Android implementation
 
@@ -92,6 +99,13 @@
 - [x] P5: VCS info/diff dual remotes (`git` → `working`)
 - [x] P5: Add-project `GET /api/location` + `GET /api/fs/list`
 - [x] P5: Unit tests (session compact/revert/todos/vcs + filesystem protocol routing)
+- [x] P6: Hide last-turn review on v2 via `ServerCapabilities`
+- [x] P6: Keep working-tree VCS diffs; last-turn navigation and tool-card
+  review taps stay off when the flag is false
+- [x] P6: `getSessionDiff` returns HTTP 404 on v2 without calling the legacy
+  path
+- [x] P6: SSE diagnostic log includes `protocol=`
+- [x] P6: Protocol matrix unit tests (capabilities, last-turn gate, v2 skip)
 
 ## Blockers
 
@@ -106,5 +120,7 @@
 
 ## Remaining work
 
-- P6 as in [`plan.md`](plan.md).
-- Live v2 validation for P1–P5 is deferred.
+- Live v2 validation for P1–P6 is deferred.
+- Optional dead-API cleanup (`share`, `init`, children, sync `sendMessage`,
+  `getMessage`, `listProjects`) is deferred; those methods still sit on
+  repository interfaces used by many test fakes.
