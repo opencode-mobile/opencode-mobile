@@ -70,8 +70,13 @@ class ActiveConnectionManager(
                 runCatching { probing.probe(current) }.getOrElse {
                     return ServerProtocol.V1
                 }
-            connection = connection?.withProtocol(detected)
-            detected
+            val active = connection
+            if (active != null && active.hasSameIdentity(current)) {
+                connection = active.withProtocol(detected)
+                detected
+            } else {
+                connection?.serverProtocol ?: ServerProtocol.V1
+            }
         }
 
     suspend fun applyProfile(

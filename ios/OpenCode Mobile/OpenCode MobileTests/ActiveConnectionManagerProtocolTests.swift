@@ -64,6 +64,49 @@ struct ActiveConnectionManagerProtocolTests {
         #expect(probing.calls == 0)
     }
 
+    @Test func currentProtocolOrProbe_doesNotStampProtocolOntoReplacedConnection() async {
+        let probing = GatedProbe(result: .v2)
+        let manager = ActiveConnectionManager(connectionProbing: probing)
+        manager.apply(sampleProfile)
+
+        let original = Task { await manager.currentProtocolOrProbe() }
+        await probing.waitUntilStarted()
+        manager.apply(
+            ConnectionProfile(
+                baseURL: "http://10.0.0.1:4096/",
+                username: "opencode",
+                password: "y"
+            )
+        )
+        probing.release()
+
+        let originalResult = await original.value
+        #expect(originalResult == .v1)
+        #expect(manager.serverProtocol == nil)
+
+        let replacement = await manager.currentProtocolOrProbe()
+        #expect(replacement == .v2)
+        #expect(manager.serverProtocol == .v2)
+        #expect(probing.calls == 2)
+    }
+
+    @Test func currentProtocolOrProbe_doesNotStampProtocolAfterDisconnect() async {
+        let probing = GatedProbe(result: .v2)
+        let manager = ActiveConnectionManager(connectionProbing: probing)
+        manager.apply(sampleProfile)
+
+        let original = Task { await manager.currentProtocolOrProbe() }
+        await probing.waitUntilStarted()
+        manager.disconnect()
+        probing.release()
+
+        let originalResult = await original.value
+        #expect(originalResult == .v1)
+        #expect(manager.connection == nil)
+        #expect(manager.serverProtocol == nil)
+        #expect(probing.calls == 1)
+    }
+
     private var sampleProfile: ConnectionProfile {
         ConnectionProfile(
             baseURL: "http://127.0.0.1:4096/",
@@ -98,5 +141,74 @@ private final class CountingProbe: ConnectionProbing, @unchecked Sendable {
             try await Task.sleep(nanoseconds: delayNanoseconds)
         }
         return try result.get()
+    }
+}
+
+private final class GatedProbe: ConnectionProbing, @unchecked Sendable {
+    private let lock = NSLock()
+    private let result: ServerProtocol
+    private var startContinuation: CheckedContinuation<Void, Never>?
+    private var releaseContinuation: CheckedContinuation<Void, Never>?
+    private var started = false
+    private var released = false
+    private var _calls = 0
+
+    var calls: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _calls
+    }
+
+    init(result: ServerProtocol) {
+        self.result = result
+    }
+
+    func waitUntilStarted() async {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            if started {
+                lock.unlock()
+                continuation.resume()
+            } else {
+                startContinuation = continuation
+                lock.unlock()
+            }
+        }
+    }
+
+    func release() {
+        lock.lock()
+        released = true
+        let continuation = releaseContinuation
+        releaseContinuation = nil
+        lock.unlock()
+        continuation?.resume()
+    }
+
+    func probe(connection: ServerConnection) async throws -> ServerProtocol {
+        lock.lock()
+        _calls += 1
+        started = true
+        let startContinuation = startContinuation
+        self.startContinuation = nil
+        let alreadyReleased = released
+        lock.unlock()
+        startContinuation?.resume()
+
+        if alreadyReleased {
+            return result
+        }
+
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            if released {
+                lock.unlock()
+                continuation.resume()
+            } else {
+                releaseContinuation = continuation
+                lock.unlock()
+            }
+        }
+        return result
     }
 }

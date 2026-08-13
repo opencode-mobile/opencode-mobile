@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -150,6 +151,32 @@ class ActiveConnectionManagerProtocolTest {
 
             assertEquals(ServerProtocol.V1, manager.currentProtocolOrProbe())
             assertEquals(0, probes)
+        }
+
+    @Test
+    fun currentProtocolOrProbe_doesNotStampProtocolAfterDisconnect() =
+        runTest {
+            val started = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing {
+                        started.complete(Unit)
+                        release.await()
+                        ServerProtocol.V2
+                    },
+                )
+            manager.applyProfile(sampleProfile)
+
+            val probe = async { manager.currentProtocolOrProbe() }
+            started.await()
+            manager.disconnect()
+            release.complete(Unit)
+
+            assertEquals(ServerProtocol.V1, probe.await())
+            assertNull(manager.current())
+            assertNull(manager.currentProtocol())
         }
 }
 
