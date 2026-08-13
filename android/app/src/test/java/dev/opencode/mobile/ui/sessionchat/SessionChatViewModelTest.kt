@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
@@ -541,6 +542,44 @@ class SessionChatViewModelTest {
 
             assertEquals(ReviewChangesSummary(2, 4, 2), viewModel.uiState.value.reviewChangesSummary)
             assertEquals(FakeSessionRepository.DiffRequest("ses-1", "user-1", "/repo"), sessionRepository.diffRequest)
+        }
+
+    @Test
+    fun v2DoesNotLoadLastTurnReviewChangesSummary() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessionDiffs =
+                        listOf(
+                            FileDiff(
+                                path = "one.kt",
+                                patch = null,
+                                additions = 1,
+                                deletions = 2,
+                                status = FileDiffStatus.Modified,
+                            ),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(id = "user-1", role = MessageRole.User, text = "Change it", sentAtEpochMs = 1),
+                                    Message(id = "assistant-1", role = MessageRole.Assistant, text = "Done", sentAtEpochMs = 2),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                    serverProtocol = ServerProtocol.V2,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.reviewChangesSummary)
+            assertEquals(false, viewModel.uiState.value.supportsSessionMessageDiff)
+            assertEquals(null, sessionRepository.diffRequest)
         }
 
     @Test
@@ -2883,6 +2922,7 @@ class SessionChatViewModelTest {
         sessionReadyStore: SessionReadyStore = EmptySessionReadyStore,
         optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator = OptimisticSessionCreateCoordinator(),
         connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
+        serverProtocol: ServerProtocol = ServerProtocol.V1,
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -2893,7 +2933,7 @@ class SessionChatViewModelTest {
             val profile =
                 connectionProfileStore.activeProfile()
                     ?: ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", password = "")
-            activeConnectionManager.applyProfile(profile)
+            activeConnectionManager.applyProfile(profile, serverProtocol = serverProtocol)
         }
         val connectionSessionCoordinator =
             ConnectionSessionCoordinator(
@@ -2925,6 +2965,7 @@ class SessionChatViewModelTest {
                 ),
             optimisticSessionCreateCoordinator = optimisticSessionCreateCoordinator,
             connectionProfileStore = connectionProfileStore,
+            activeConnectionManager = activeConnectionManager,
         ).apply {
             ioDispatcher = testDispatcher
             // Mutations (send/rename/fork/new) require Live; default fakes start Connected.

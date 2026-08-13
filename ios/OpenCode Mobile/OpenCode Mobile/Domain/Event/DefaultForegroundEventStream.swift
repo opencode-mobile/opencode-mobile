@@ -171,17 +171,20 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
             do {
                 try await api.streamGlobalEvents(
                     onHTTPResponse: { statusCode in
-                        DiagnosticLog.info(.sse, "GET /global/event opened status=\(statusCode)")
+                        DiagnosticLog.info(.sse, "GET \(Self.eventPath(for: api)) opened status=\(statusCode) protocol=\(api.eventProtocolWireValue)")
                         owner.markStreamConnected()
                         retry.attempt = 0
                     },
                     onDataLine: { dataLine in
-                        guard let event = adapter.parseEvent(dataLine: dataLine) else {
+                        let parsed = adapter.parseEvents(dataLine: dataLine)
+                        if parsed.isEmpty {
                             DiagnosticLog.warning(.sse, "SSE event parse failed")
                             return
                         }
-                        if owner.handleStreamEvent(event) {
-                            retry.attempt = 0
+                        for event in parsed {
+                            if owner.handleStreamEvent(event) {
+                                retry.attempt = 0
+                            }
                         }
                     }
                 )
@@ -199,6 +202,10 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
             DiagnosticLog.debug(.sse, "foreground SSE retry in \(backoffMs)ms")
             try? await Task.sleep(for: .milliseconds(backoffMs))
         }
+    }
+
+    private static func eventPath(for api: EventsAPIClient) -> String {
+        "/\(api.eventSubscribePath)"
     }
 
     private func beginConnectAttempt() -> Bool {

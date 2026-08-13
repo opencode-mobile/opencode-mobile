@@ -84,13 +84,15 @@ release while the startup-crash issue remained confined to version 5. OPE-72
 and OPE-74 are complete.
 
 OPE-73 planning, repository implementation, and owner setup are active. The
-`Android App Distribution` workflow triggers only on pushes to protected
-`main`, signs and verifies one APK, authenticates with a dedicated protected
-secret, targets the private `android-internal` group, and summarizes only stable
-Firebase links. Runs serialize without cancellation. App Distribution uses a
-separate high version-code range and the upload-key certificate, so the owner
-must uninstall the differently signed Play-internal build once before installing
-the first Firebase release.
+`Android App Distribution` workflow still distributes on every push to
+protected `main`, and also accepts `workflow_dispatch` from `main`,
+`feature/*`, or `fix/*`, with an optional `source_ref` override. It signs and verifies one APK,
+authenticates with a dedicated protected secret, targets the private
+`android-internal` group, and summarizes only stable Firebase links. Runs
+serialize without cancellation. App Distribution uses a separate high
+version-code range and the upload-key certificate, so the owner must uninstall
+the differently signed Play-internal build once before installing the first
+Firebase release.
 
 The owner approved and completed the external setup. Firebase is linked to the
 existing Play app with AAB delivery enabled, the Internal App Sharing terms are

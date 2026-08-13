@@ -57,6 +57,86 @@ struct EventDomainAdapterTests {
         #expect(event?.sessionID == "ses-1")
     }
 
+    @Test func parseEvent_readsV2NativeEnvelope() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(dataLine: #"{"id":"evt_1","type":"server.connected","data":{}}"#)
+        #expect(event?.type == "server.connected")
+        #expect(event?.sessionID == nil)
+    }
+
+    @Test func parseEvent_projectsV2TextDeltaIntoMessagePartDelta() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"id":"evt_2","type":"session.next.text.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","textID":"prt-1","delta":"Hi"}}"#
+        )
+        #expect(event?.type == "message.part.delta")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.rawProperties?["messageID"]?.stringValue == "msg-2")
+        #expect(event?.rawProperties?["partID"]?.stringValue == "prt-1")
+        #expect(event?.rawProperties?["field"]?.stringValue == "text")
+        #expect(event?.rawProperties?["delta"]?.stringValue == "Hi")
+        #expect(event?.triggersMessageRefresh == true)
+    }
+
+    @Test func parseEvents_projectsStepStartedIntoAssistantMessageAndBusyStatus() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.next.step.started","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "session.status"])
+        #expect(events[0].sessionID == "ses-1")
+        #expect(events[0].rawProperties?["info"]?.dictionaryValue?["role"]?.stringValue == "assistant")
+        #expect(events[1].rawProperties?["status"]?.dictionaryValue?["type"]?.stringValue == "busy")
+    }
+
+    @Test func parseEvent_projectsPromptAdmittedIntoUserMessageUpdated() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.next.prompt.admitted","data":{"sessionID":"ses-1","messageID":"msg-1"}}"#
+        )
+        #expect(event?.type == "message.updated")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.rawProperties?["info"]?.dictionaryValue?["role"]?.stringValue == "user")
+        #expect(event?.rawProperties?["info"]?.dictionaryValue?["id"]?.stringValue == "msg-1")
+    }
+
+    @Test func parseEvents_projectsStepFailedIntoSessionErrorWithV2Message() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.next.step.failed","data":{"sessionID":"ses-1","error":{"type":"ProviderError","message":"model overloaded"}}}"#
+        )
+        #expect(events.map(\.type) == ["session.error", "session.idle"])
+        #expect(events[0].sessionID == "ses-1")
+        #expect(events[0].sessionErrorMessage == "model overloaded")
+    }
+
+    @Test func parseEvent_projectsStepEndedIntoSessionIdle() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.next.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
+        )
+        #expect(event?.type == "session.idle")
+        #expect(event?.sessionID == "ses-1")
+    }
+
+    @Test func parseEvent_remapsPermissionV2Asked() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"permission.v2.asked","data":{"sessionID":"ses-1"}}"#
+        )
+        #expect(event?.type == "permission.asked")
+        #expect(event?.sessionID == "ses-1")
+    }
+
+    @Test func parseEvent_readsV2SameNamedLegacyMessageUpdated() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"message.updated","data":{"sessionID":"ses-1","info":{"id":"msg-1","role":"user"}}}"#
+        )
+        #expect(event?.type == "message.updated")
+        #expect(event?.sessionID == "ses-1")
+    }
+
     @Test func statusLabel_mapsBusyAndRetry() {
         let adapter = EventDomainAdapter()
         let busy = adapter.statusLabel(from: SessionStatus(sessionID: "1", raw: ["type": "busy"]))

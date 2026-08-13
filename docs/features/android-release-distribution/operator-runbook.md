@@ -192,20 +192,32 @@ Its
 passed `MediumPhone.arm-36-en-portrait` and
 `MediumPhone.arm-35-en-portrait`.
 
-## Automatic Firebase App Distribution
+## Firebase App Distribution
 
-`Android App Distribution` triggers on every push to protected `main`. It builds
-one upload-key-signed APK from the exact merged commit, verifies the upload
-certificate, and distributes the APK to the private Firebase group alias
+`Android App Distribution` distributes on every push to protected `main`. It
+also accepts a manual `workflow_dispatch` from `main`, `feature/*`, or
+`fix/*`. Leave `source_ref` empty to distribute the selected workflow branch;
+set it to a branch, tag, or SHA to check out that commit instead. The
+`android-release` environment allows those same branch patterns. Play
+publishing stays main-only.
+
+It builds one upload-key-signed APK from the selected commit, verifies the
+upload certificate, and distributes the APK to the private Firebase group alias
 `android-internal`. It does not publish a Play testing-track release, run Test
 Lab, or expose credentials to pull requests.
 
+```bash
+gh workflow run "Android App Distribution" --ref main
+gh workflow run "Android App Distribution" --ref feature/ope-146-server-api-v2
+```
+
 The workflow uses Firebase CLI `15.24.0` with Application Default Credentials
-from `FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON`. It records the merge
-subject and short commit SHA as release notes, then places only the stable
-Firebase console and tester-experience links in the workflow summary. The
-signed APK artifact is retained for seven days. Firebase App Distribution
-releases remain available for 150 days.
+from `FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON`. It records the commit
+subject and short SHA as release notes (`Merge` on a `main` push, `Dispatch`
+on a manual run), then places only the stable Firebase console and
+tester-experience links in the workflow summary. The signed APK artifact is
+retained for seven days. Firebase App Distribution releases remain available
+for 150 days.
 
 App Distribution version codes use `1000000000 + github.run_number`, a
 monotonic range reserved for this workflow. The APK uses the upload-key
@@ -228,10 +240,10 @@ app to be published rather than an unreviewed draft. The direct APK path keeps
 the app private and avoids completing Play store-policy declarations or
 submitting it for review solely to support merge distribution.
 
-If automatic distribution fails, inspect the workflow's build, signature,
-authentication, and Firebase upload steps. A failed run does not revert the
-merge. Rotate only the dedicated App Distribution key if that credential is
-exposed, and replace its protected GitHub secret.
+If a distribution run fails, inspect the workflow's build, signature,
+authentication, and Firebase upload steps. A failed merge-triggered run does
+not revert the merge. Rotate only the dedicated App Distribution key if that
+credential is exposed, and replace its protected GitHub secret.
 
 ## Verify release observability
 

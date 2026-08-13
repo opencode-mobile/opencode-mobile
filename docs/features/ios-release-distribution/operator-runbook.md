@@ -121,13 +121,23 @@ user-managed servers such as LAN or Tailscale HTTP), not custom encryption.
 If that assumption changes, update the plist key and/or answer the ASC
 export-compliance questionnaire before the next upload.
 
-## Automatic Firebase App Distribution
+## Firebase App Distribution
 
-`iOS App Distribution` triggers on every push to protected `main`. It archives
-a Release build, exports a signed **Ad Hoc** IPA, verifies Team ID
+`iOS App Distribution` distributes on every push to protected `main`. It also
+accepts a manual `workflow_dispatch` from `main`, `feature/*`, or `fix/*`.
+Leave `source_ref` empty to distribute the selected workflow branch; set it to
+a branch, tag, or SHA to check out that commit instead. The `ios-release`
+environment allows those same branch patterns. TestFlight stays main-only.
+
+It archives a Release build, exports a signed **Ad Hoc** IPA, verifies Team ID
 `677MTXPXZZ` / bundle `dev.opencode.mobile`, and distributes the IPA to the
 private Firebase group alias `ios-internal`. It does **not** upload to
 TestFlight, submit for App Review, or change the App Store listing.
+
+```bash
+gh workflow run "iOS App Distribution" --ref main
+gh workflow run "iOS App Distribution" --ref feature/ope-146-server-api-v2
+```
 
 | Field | Value |
 | --- | --- |
@@ -143,17 +153,18 @@ The workflow reuses the persistent signing keychain and ASC API auth pattern
 from **iOS Release**, including the Release WMO workaround
 (`SWIFT_OPTIMIZATION_LEVEL=-Onone`). Firebase CLI `15.24.0` uses Application
 Default Credentials from `FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON`.
-Release notes are the merge subject plus short SHA. The workflow summary gets
-only the stable Firebase console and tester-experience links. The IPA artifact
-is retained for seven days.
+Release notes are the commit subject plus short SHA (`Merge` on a `main`
+push, `Dispatch` on a manual run). The workflow summary gets only the stable
+Firebase console and tester-experience links. The IPA artifact is retained
+for seven days.
 
 ### Install from Firebase (Ad Hoc)
 
 1. Confirm the verification device UDID is registered under Apple Developer →
    Certificates, Identifiers & Profiles → Devices (required for Ad Hoc).
-2. After a successful merge run, open the tester-experience link from the
-   workflow summary (or Firebase console → App Distribution → Releases) while
-   signed in as the private tester.
+2. After a successful merge or manual dispatch run, open the tester-experience
+   link from the workflow summary (or Firebase console → App Distribution →
+   Releases) while signed in as the private tester.
 3. Install and launch **OpenCode Mobile — Unofficial**.
 
 Ad Hoc installs only on registered devices. Adding a new tester device requires
@@ -161,11 +172,11 @@ registering its UDID, then cutting a new App Distribution build so the profile
 includes it. Switching between TestFlight and Ad Hoc on the same device may
 require uninstall/reinstall when the install channels conflict.
 
-If automatic distribution fails, inspect archive, Ad Hoc export, signature
-verification, and Firebase upload steps. A failed run does not revert the
-merge. Rotate only the dedicated App Distribution key if that credential is
-exposed, and replace its protected GitHub secret in both `ios-release` and
-`android-release`.
+If a distribution run fails, inspect archive, Ad Hoc export, signature
+verification, and Firebase upload steps. A failed merge-triggered run does not
+revert the merge. Rotate only the dedicated App Distribution key if that
+credential is exposed, and replace its protected GitHub secret in both
+`ios-release` and `android-release`.
 
 ## Verify release observability
 

@@ -15,8 +15,10 @@ Ownership: private Mac mini on LAN. No inbound ports, no relay.
 |---|---|
 | iOS Checks | `[self-hosted, macOS, mac-mini]` |
 | iOS Build | `[self-hosted, macOS, mac-mini]` |
+| iOS Release | `[self-hosted, macOS, mac-mini]` |
+| iOS App Distribution | `[self-hosted, macOS, mac-mini]` |
 | Smoke Mac mini (OPE-114 probe, keep until OPE-115 is stable) | `[self-hosted, macOS, mac-mini]` |
-| All Android workflows (`android-checks`, `android-build`, `android-release`, `android-app-distribution`, `android-test-lab`) | `blacksmith-4vcpu-ubuntu-2404` — unchanged |
+| All Android workflows (`android-checks`, `android-build`, `android-release`, `android-app-distribution`, `android-test-lab`) | `[self-hosted, Linux, X64, android]` (`fedora-box`) |
 
 ## Survives reboot / stays awake
 
@@ -67,7 +69,7 @@ No code change is needed beyond the 2-line `runs-on`. To fall back:
 +    runs-on: blacksmith-6vcpu-macos-26
 ```
 
-Commit on a branch or directly on `main` if the mini will be down for an extended window, then revert when it is back online. Keep Android unchanged. Do not switch to Blacksmith macOS permanently without updating this doc and the pinned Xcode note above.
+Commit on a branch or directly on `main` if the mini will be down for an extended window, then revert when it is back online. Keep Android on `fedora-box`. Do not switch iOS to Blacksmith macOS permanently without updating this doc and the pinned Xcode note above.
 
 ## Smoke probe
 

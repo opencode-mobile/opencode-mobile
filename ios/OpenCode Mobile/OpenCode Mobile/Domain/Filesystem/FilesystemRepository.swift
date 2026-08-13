@@ -7,23 +7,34 @@ protocol FilesystemRepository: Sendable {
 
 struct DefaultFilesystemRepository: FilesystemRepository, Sendable {
     private let api: FilesystemAPIClient
+    private let adapter: FilesystemDomainAdapter
+    private let activeConnectionManager: ActiveConnectionManager?
 
-    init(api: FilesystemAPIClient) {
+    init(
+        api: FilesystemAPIClient,
+        adapter: FilesystemDomainAdapter = FilesystemDomainAdapter(),
+        activeConnectionManager: ActiveConnectionManager? = nil
+    ) {
         self.api = api
+        self.adapter = adapter
+        self.activeConnectionManager = activeConnectionManager
     }
 
     func getPaths() async throws -> ServerPaths {
-        let dto = try await api.getPaths()
-        return ServerPaths(home: dto.home, directory: dto.directory, worktree: dto.worktree)
+        if await activeConnectionManager?.currentProtocolOrProbe() == .v2 {
+            return adapter.serverPaths(from: try await api.getLocationV2())
+        }
+        return adapter.serverPaths(from: try await api.getPaths())
     }
 
     func listDirectory(path: String) async throws -> [DirectoryNode] {
-        let nodes = try await api.listFiles(absoluteDirectory: path).map { dto in
-            DirectoryNode(
-                name: dto.name,
-                absolutePath: dto.absolute,
-                isDirectory: dto.type == "directory"
-            )
+        let nodes: [DirectoryNode]
+        if await activeConnectionManager?.currentProtocolOrProbe() == .v2 {
+            nodes = try await api.listFilesV2(absoluteDirectory: path).map {
+                adapter.directoryNode(from: $0, listingDirectory: path)
+            }
+        } else {
+            nodes = try await api.listFiles(absoluteDirectory: path).map(adapter.directoryNode(from:))
         }
         return DirectoryListingPolicy.prepare(nodes)
     }

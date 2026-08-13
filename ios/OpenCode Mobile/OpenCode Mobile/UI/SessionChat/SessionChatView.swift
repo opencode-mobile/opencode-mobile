@@ -226,7 +226,8 @@ struct SessionChatView: View {
                                 from: nil,
                                 for: nil
                             )
-                        }
+                        },
+                        supportsSessionMessageDiff: viewModel.uiState.supportsSessionMessageDiff
                     )
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

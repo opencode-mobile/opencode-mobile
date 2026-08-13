@@ -35,8 +35,24 @@ nonisolated struct SessionsAPIClient: Sendable {
         try await get(path: "permission", directory: directory)
     }
 
+    func listPendingPermissionsV2(directory: String? = nil) async throws -> [V2PermissionRequestDTO] {
+        let envelope: APIListEnvelope<V2PermissionRequestDTO> = try await get(
+            path: "api/permission/request",
+            locationDirectory: directory
+        )
+        return envelope.data
+    }
+
     func listPendingQuestions(directory: String? = nil) async throws -> [QuestionRequestDTO] {
         try await get(path: "question", directory: directory)
+    }
+
+    func listPendingQuestionsV2(directory: String? = nil) async throws -> [QuestionRequestDTO] {
+        let envelope: APIListEnvelope<QuestionRequestDTO> = try await get(
+            path: "api/question/request",
+            locationDirectory: directory
+        )
+        return envelope.data
     }
 
     func createSession(parentID: String?, title: String?, directory: String? = nil) async throws -> SessionDTO {
@@ -92,6 +108,10 @@ nonisolated struct SessionsAPIClient: Sendable {
 
     func abortSession(id: String, directory: String? = nil) async throws -> Bool {
         try await postEmpty(path: "session/\(id)/abort", body: EmptyBody(), directory: directory)
+    }
+
+    func interruptSessionV2(id: String) async throws -> Bool {
+        try await postWithoutBody(path: "api/session/\(id)/interrupt")
     }
 
     func shareSession(id: String, directory: String? = nil) async throws -> SessionDTO {
@@ -173,10 +193,157 @@ nonisolated struct SessionsAPIClient: Sendable {
         try await postEmpty(path: "question/\(questionID)/reject", body: EmptyBody(), directory: directory)
     }
 
-    private struct EmptyBody: Codable {}
+    func respondToPermissionV2(
+        sessionID: String,
+        permissionID: String,
+        body: V2PermissionReplyRequestDTO
+    ) async throws -> Bool {
+        try await postEmpty(
+            path: "api/session/\(sessionID)/permission/\(permissionID)/reply",
+            body: body
+        )
+    }
 
-    private func get<T: Decodable>(path: String, directory: String? = nil) async throws -> T {
-        let data = try await data(for: try requireConnection().authorizedRequest(path: path, directory: directory))
+    func replyToQuestionV2(
+        sessionID: String,
+        questionID: String,
+        body: QuestionReplyRequestDTO
+    ) async throws -> Bool {
+        try await postEmpty(
+            path: "api/session/\(sessionID)/question/\(questionID)/reply",
+            body: body
+        )
+    }
+
+    func rejectQuestionV2(sessionID: String, questionID: String) async throws -> Bool {
+        try await postWithoutBody(path: "api/session/\(sessionID)/question/\(questionID)/reject")
+    }
+
+    // MARK: - V2 home / session CRUD
+
+    func listSessionsV2(directory: String? = nil) async throws -> [V2SessionDTO] {
+        var sessions: [V2SessionDTO] = []
+        var cursor: String?
+        var pages = 0
+        repeat {
+            var query: [String: String] = [:]
+            if let cursor {
+                query["cursor"] = cursor
+            }
+            let envelope: APIListEnvelope<V2SessionDTO> = try await get(
+                path: "api/session",
+                directory: directory,
+                query: query
+            )
+            sessions.append(contentsOf: envelope.data)
+            cursor = envelope.cursor?.next.flatMap { $0.isEmpty ? nil : $0 }
+            pages += 1
+        } while cursor != nil && pages < Self.maxV2SessionListPages
+        return sessions
+    }
+
+    func createSessionV2(directory: String? = nil) async throws -> V2SessionDTO {
+        let envelope: APIDataEnvelope<V2SessionDTO> = try await post(
+            path: "api/session",
+            body: V2CreateSessionRequestDTO(location: directory.map { V2LocationDTO(directory: $0) })
+        )
+        return envelope.data
+    }
+
+    func getActiveSessionsV2() async throws -> [String: APISessionActiveDTO] {
+        let envelope: APIActiveSessionsEnvelope = try await get(path: "api/session/active")
+        return envelope.data
+    }
+
+    func getSessionV2(id: String) async throws -> V2SessionDTO {
+        let envelope: APIDataEnvelope<V2SessionDTO> = try await get(path: "api/session/\(id)")
+        return envelope.data
+    }
+
+    func renameSessionV2(id: String, title: String) async throws {
+        _ = try await postEmpty(path: "api/session/\(id)/rename", body: V2RenameSessionRequestDTO(title: title))
+    }
+
+    func archiveSessionV2(id: String) async throws {
+        _ = try await postWithoutBody(path: "api/session/\(id)/archive")
+    }
+
+    func deleteSessionV2(id: String) async throws -> Bool {
+        try await delete(path: "api/session/\(id)")
+    }
+
+    func forkSessionV2(id: String, messageID: String?) async throws -> V2SessionDTO {
+        let envelope: APIDataEnvelope<V2SessionDTO> = try await post(
+            path: "api/session/\(id)/fork",
+            body: V2ForkSessionRequestDTO(messageID: messageID)
+        )
+        return envelope.data
+    }
+
+    func compactSessionV2(id: String) async throws -> Bool {
+        var request = try requireConnection().authorizedRequest(path: "api/session/\(id)/compact", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(V2CompactSessionRequestDTO())
+        request.timeoutInterval = .infinity
+        let data = try await data(for: request)
+        if let value = try? decoder.decode(Bool.self, from: data) {
+            return value
+        }
+        return true
+    }
+
+    func stageRevertV2(id: String, messageID: String, partID: String?) async throws -> Bool {
+        try await postEmpty(
+            path: "api/session/\(id)/revert/stage",
+            body: V2RevertStageRequestDTO(messageID: messageID, partID: partID)
+        )
+    }
+
+    func clearRevertV2(id: String) async throws -> Bool {
+        try await postWithoutBody(path: "api/session/\(id)/revert/clear")
+    }
+
+    func getVcsInfoV2(directory: String? = nil) async throws -> V2VcsInfoDTO {
+        let envelope: APILocatedEnvelope<V2VcsInfoDTO> = try await get(
+            path: "api/vcs",
+            locationDirectory: directory
+        )
+        return envelope.data
+    }
+
+    func getVcsDiffV2(mode: String, directory: String? = nil, context: Int = 12) async throws -> [FileDiffDTO] {
+        let envelope: APILocatedEnvelope<[FileDiffDTO]> = try await get(
+            path: "api/vcs/diff",
+            locationDirectory: directory,
+            query: ["mode": mode, "context": String(context)]
+        )
+        return envelope.data
+    }
+
+    private struct EmptyBody: Codable {}
+    private static let maxV2SessionListPages = 20
+
+    private func get<T: Decodable>(
+        path: String,
+        directory: String? = nil,
+        locationDirectory: String? = nil,
+        query: [String: String] = [:]
+    ) async throws -> T {
+        var request = try requireConnection().authorizedRequest(
+            path: path,
+            directory: directory,
+            locationDirectory: locationDirectory
+        )
+        if !query.isEmpty, let url = request.url,
+           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            var items = components.queryItems ?? []
+            query.forEach { name, value in
+                items.append(URLQueryItem(name: name, value: value))
+            }
+            components.queryItems = items
+            request.url = components.url
+        }
+        let data = try await data(for: request)
         return try decoder.decode(T.self, from: data)
     }
 
@@ -191,6 +358,15 @@ nonisolated struct SessionsAPIClient: Sendable {
         var request = try requireConnection().authorizedRequest(path: path, method: "POST", directory: directory)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
+        let data = try await data(for: request)
+        if let value = try? decoder.decode(Bool.self, from: data) {
+            return value
+        }
+        return true
+    }
+
+    private func postWithoutBody(path: String, directory: String? = nil) async throws -> Bool {
+        let request = try requireConnection().authorizedRequest(path: path, method: "POST", directory: directory)
         let data = try await data(for: request)
         if let value = try? decoder.decode(Bool.self, from: data) {
             return value

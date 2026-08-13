@@ -197,6 +197,7 @@ struct SessionChatUiState: Equatable {
     var questionErrorMessage: String?
     var reviewChangesMessageID: String?
     var reviewChangesSummary: ReviewChangesSummary?
+    var supportsSessionMessageDiff: Bool = true
     var rename = SessionRenameUiState()
     var slashSuggestionsVisible = false
     var slashSuggestions: [SessionChatSlashSuggestion] = []
@@ -235,7 +236,9 @@ struct SessionChatUiState: Equatable {
     }
 
     func reviewChangesNavigationTarget(worktree: String) -> ChangesNavigationTarget? {
-        guard reviewChangesSummary?.fileCount ?? 0 > 0, let messageID = reviewChangesMessageID else { return nil }
+        guard supportsSessionMessageDiff,
+              reviewChangesSummary?.fileCount ?? 0 > 0,
+              let messageID = reviewChangesMessageID else { return nil }
         return ChangesNavigationTarget(
             sessionID: sessionID,
             worktree: worktree,
@@ -262,7 +265,8 @@ struct SessionChatUiState: Equatable {
         assistantMessageID: String,
         initialFilePath: String?
     ) -> ChangesNavigationTarget? {
-        guard let messageID = owningTurnMessageID(assistantMessageID: assistantMessageID) else { return nil }
+        guard supportsSessionMessageDiff,
+              let messageID = owningTurnMessageID(assistantMessageID: assistantMessageID) else { return nil }
         return ChangesNavigationTarget(
             sessionID: sessionID,
             worktree: worktree,

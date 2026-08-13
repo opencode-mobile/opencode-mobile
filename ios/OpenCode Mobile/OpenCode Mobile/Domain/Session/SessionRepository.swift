@@ -25,14 +25,22 @@ protocol SessionRepository: Sendable {
     func unrevertSession(id: String) async throws -> Bool
     func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?) async throws -> Bool
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool
+    func replyToQuestion(questionID: String, answers: [[String]], directory: String?, sessionID: String?) async throws -> Bool
     func rejectQuestion(questionID: String, directory: String?) async throws -> Bool
+    func rejectQuestion(questionID: String, directory: String?, sessionID: String?) async throws -> Bool
 }
 
 extension SessionRepository {
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] { [] }
     func listPendingQuestions(directory: String?) async throws -> [QuestionRequest] { [] }
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool { false }
+    func replyToQuestion(questionID: String, answers: [[String]], directory: String?, sessionID: String?) async throws -> Bool {
+        try await replyToQuestion(questionID: questionID, answers: answers, directory: directory)
+    }
     func rejectQuestion(questionID: String, directory: String?) async throws -> Bool { false }
+    func rejectQuestion(questionID: String, directory: String?, sessionID: String?) async throws -> Bool {
+        try await rejectQuestion(questionID: questionID, directory: directory)
+    }
 
     func getSession(id: String) async throws -> Session {
         try await getSession(id: id, directory: nil)
@@ -68,7 +76,7 @@ extension SessionRepository {
 }
 
 struct DefaultSessionRepository: SessionRepository, Sendable {
-    private let api: SessionsAPIClient
+    private let remote: any SessionRemote
     private let adapter: SessionDomainAdapter
     private let sessionModelSelectionStore: (any SessionModelSelectionStore)?
     private let activeConnectionManager: ActiveConnectionManager?
@@ -79,54 +87,50 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         sessionModelSelectionStore: (any SessionModelSelectionStore)? = nil,
         activeConnectionManager: ActiveConnectionManager? = nil
     ) {
-        self.api = api
+        self.remote = ProtocolSelectedSessionRemote(
+            v1: V1SessionRemote(api: api, adapter: adapter),
+            v2: V2SessionRemote(api: api, adapter: adapter),
+            activeConnectionManager: activeConnectionManager
+        )
         self.adapter = adapter
         self.sessionModelSelectionStore = sessionModelSelectionStore
         self.activeConnectionManager = activeConnectionManager
     }
 
-    func listSessions(directory: String?) async throws -> [Session] {
-        try await run { try await api.listSessions(directory: directory).map(adapter.session) }
-    }
-
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] {
-        try await run { try await api.listPendingPermissions(directory: directory).map { adapter.permissionRequest(from: $0) } }
+        try await run { try await remote.listPendingPermissions(directory: directory) }
     }
 
     func listPendingQuestions(directory: String?) async throws -> [QuestionRequest] {
-        try await run { try await api.listPendingQuestions(directory: directory).map { adapter.questionRequest(from: $0) } }
+        try await run { try await remote.listPendingQuestions(directory: directory) }
+    }
+
+    func listSessions(directory: String?) async throws -> [Session] {
+        try await run { try await remote.listSessions(directory: directory) }
     }
 
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {
-        try await run {
-            adapter.session(from: try await api.createSession(parentID: parentID, title: title, directory: directory))
-        }
+        try await run { try await remote.createSession(parentID: parentID, title: title, directory: directory) }
     }
 
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] {
-        try await run {
-            try await api.getAllSessionStatuses(directory: directory).map { adapter.sessionStatus(sessionID: $0.key, raw: $0.value) }
-        }
+        try await run { try await remote.getAllSessionStatuses(directory: directory) }
     }
 
     func getSession(id: String, directory: String?) async throws -> Session {
-        try await run { adapter.session(from: try await api.getSession(id: id, directory: directory)) }
+        try await run { try await remote.getSession(id: id, directory: directory) }
     }
 
     func updateSession(id: String, title: String?, directory: String?) async throws -> Session {
-        try await run { adapter.session(from: try await api.updateSession(id: id, title: title, directory: directory)) }
+        try await run { try await remote.updateSession(id: id, title: title, directory: directory) }
     }
 
     func archiveSession(id: String, directory: String?) async throws -> Session {
-        try await run {
-            adapter.session(
-                from: try await api.archiveSession(id: id, directory: directory)
-            )
-        }
+        try await run { try await remote.archiveSession(id: id, directory: directory) }
     }
 
     func deleteSession(id: String, directory: String?) async throws -> Bool {
-        let deleted = try await run { try await api.deleteSession(id: id, directory: directory) }
+        let deleted = try await run { try await remote.deleteSession(id: id, directory: directory) }
         if deleted,
            let profile = activeConnectionManager?.currentProfile(),
            let sessionModelSelectionStore {
@@ -142,75 +146,57 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
     }
 
     func listChildSessions(id: String) async throws -> [Session] {
-        try await run { try await api.listChildSessions(id: id).map(adapter.session) }
+        try await run { try await remote.listChildSessions(id: id) }
     }
 
     func listSessionTodos(id: String, directory: String?) async throws -> [SessionTodo] {
-        try await run {
-            adapter.todos(from: try await api.listSessionTodos(id: id, directory: directory))
-        }
+        try await run { try await remote.listSessionTodos(id: id, directory: directory) }
     }
 
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool {
         try await run {
-            try await api.initializeSessionAgents(
-                id: id,
-                body: InitSessionRequestDTO(messageID: messageID, providerID: providerID, modelID: modelID)
-            )
+            try await remote.initializeSessionAgents(id: id, messageID: messageID, providerID: providerID, modelID: modelID)
         }
     }
 
     func forkSession(id: String, atMessageID: String?) async throws -> Session {
-        try await run { adapter.session(from: try await api.forkSession(id: id, messageID: atMessageID)) }
+        try await run { try await remote.forkSession(id: id, atMessageID: atMessageID) }
     }
 
     func abortSession(id: String, directory: String?) async throws -> Bool {
-        try await run { try await api.abortSession(id: id, directory: directory) }
+        try await run { try await remote.abortSession(id: id, directory: directory) }
     }
 
     func shareSession(id: String) async throws -> Session {
-        try await run { adapter.session(from: try await api.shareSession(id: id)) }
+        try await run { try await remote.shareSession(id: id) }
     }
 
     func unshareSession(id: String) async throws -> Session {
-        try await run { adapter.session(from: try await api.unshareSession(id: id)) }
+        try await run { try await remote.unshareSession(id: id) }
     }
 
     func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] {
-        try await run {
-            try await api.getSessionDiff(id: id, messageID: messageID, directory: directory)
-                .map(adapter.fileDiff)
-        }
+        try await run { try await remote.getSessionDiff(id: id, messageID: messageID, directory: directory) }
     }
 
     func getVcsInfo(directory: String?) async throws -> VcsInfo {
-        try await run { adapter.vcsInfo(from: try await api.getVcsInfo(directory: directory)) }
+        try await run { try await remote.getVcsInfo(directory: directory) }
     }
 
     func getVcsDiff(mode: VcsDiffMode, directory: String?, context: Int) async throws -> [FileDiff] {
-        try await run {
-            try await api.getVcsDiff(mode: mode, directory: directory, context: context)
-                .map(adapter.fileDiff)
-        }
+        try await run { try await remote.getVcsDiff(mode: mode, directory: directory, context: context) }
     }
 
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool {
-        try await run {
-            try await api.summarizeSession(
-                id: id,
-                body: SummarizeSessionRequestDTO(providerID: providerID, modelID: modelID)
-            )
-        }
+        try await run { try await remote.summarizeSession(id: id, providerID: providerID, modelID: modelID) }
     }
 
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool {
-        try await run {
-            try await api.revertSession(id: id, body: RevertSessionRequestDTO(messageID: messageID, partID: partID))
-        }
+        try await run { try await remote.revertSession(id: id, messageID: messageID, partID: partID) }
     }
 
     func unrevertSession(id: String) async throws -> Bool {
-        try await run { try await api.unrevertSession(id: id) }
+        try await run { try await remote.unrevertSession(id: id) }
     }
 
     func respondToPermission(
@@ -220,27 +206,43 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         directory: String?
     ) async throws -> Bool {
         try await run {
-            try await api.respondToPermission(
+            try await remote.respondToPermission(
                 sessionID: sessionID,
                 permissionID: permissionID,
-                body: PermissionResponseRequestDTO(response: adapter.permissionResponse(decision)),
+                decision: decision,
                 directory: directory
             )
         }
     }
 
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool {
+        try await replyToQuestion(questionID: questionID, answers: answers, directory: directory, sessionID: nil)
+    }
+
+    func replyToQuestion(
+        questionID: String,
+        answers: [[String]],
+        directory: String?,
+        sessionID: String?
+    ) async throws -> Bool {
         try await run {
-            try await api.replyToQuestion(
+            try await remote.replyToQuestion(
                 questionID: questionID,
-                body: QuestionReplyRequestDTO(answers: answers),
-                directory: directory
+                answers: answers,
+                directory: directory,
+                sessionID: sessionID
             )
         }
     }
 
     func rejectQuestion(questionID: String, directory: String?) async throws -> Bool {
-        try await run { try await api.rejectQuestion(questionID: questionID, directory: directory) }
+        try await rejectQuestion(questionID: questionID, directory: directory, sessionID: nil)
+    }
+
+    func rejectQuestion(questionID: String, directory: String?, sessionID: String?) async throws -> Bool {
+        try await run {
+            try await remote.rejectQuestion(questionID: questionID, directory: directory, sessionID: sessionID)
+        }
     }
 
     private func run<T>(_ work: () async throws -> T) async throws -> T {

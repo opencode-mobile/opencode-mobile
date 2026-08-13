@@ -41,6 +41,7 @@ import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.SessionTodoList
+import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
@@ -78,6 +79,7 @@ class SessionChatViewModel
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         private val optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator,
         private val connectionProfileStore: ConnectionProfileStore,
+        private val activeConnectionManager: ActiveConnectionManager,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -116,6 +118,9 @@ class SessionChatViewModel
             SessionChatReviewChanges(
                 sessionRepository = sessionRepository,
                 scope = viewModelScope,
+                supportsSessionMessageDiff = {
+                    activeConnectionManager.currentCapabilities().supportsSessionMessageDiff
+                },
             )
         private val commands =
             SessionChatCommands(
@@ -781,7 +786,7 @@ class SessionChatViewModel
             publishUiState()
             viewModelScope.launch(ioDispatcher) {
                 runCatching {
-                    sessionRepository.replyToQuestion(request.id, answers, boundWorktree)
+                    sessionRepository.replyToQuestion(request.sessionId, request.id, answers, boundWorktree)
                 }.onFailure { handleQuestionMutationFailure(request.id, it, dismiss = false) }
             }
         }
@@ -800,7 +805,7 @@ class SessionChatViewModel
             publishUiState()
             viewModelScope.launch(ioDispatcher) {
                 runCatching {
-                    sessionRepository.rejectQuestion(request.id, boundWorktree)
+                    sessionRepository.rejectQuestion(request.sessionId, request.id, boundWorktree)
                 }.onFailure { handleQuestionMutationFailure(request.id, it, dismiss = true) }
             }
         }
@@ -1225,6 +1230,7 @@ class SessionChatViewModel
                     },
                 reviewChangesMessageId = reviewChangesState.messageId,
                 reviewChangesSummary = reviewChangesState.summary,
+                supportsSessionMessageDiff = activeConnectionManager.currentCapabilities().supportsSessionMessageDiff,
                 rename = infoState.rename,
                 slashSuggestionsVisible = composerState.slashSuggestionsVisible,
                 slashSuggestions = composerState.slashSuggestions,

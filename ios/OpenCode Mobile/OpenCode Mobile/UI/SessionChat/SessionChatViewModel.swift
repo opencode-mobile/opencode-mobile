@@ -119,7 +119,8 @@ final class SessionChatViewModel {
         self.reviewChanges = SessionChatReviewChanges(
             sessionID: sessionID,
             worktree: worktree,
-            sessionRepository: sessionRepository
+            sessionRepository: sessionRepository,
+            supportsSessionMessageDiff: { activeConnectionManager.capabilities.supportsSessionMessageDiff }
         )
         self.commands = SessionChatCommands(
             sessionID: sessionID,
@@ -639,7 +640,12 @@ final class SessionChatViewModel {
         OpenCodeLog.sessionChat.info("question reply request=\(request.id, privacy: .public) session=\(request.sessionID, privacy: .public)")
         publishUiState()
         do {
-            _ = try await sessionRepository.replyToQuestion(questionID: request.id, answers: answers, directory: worktree)
+            _ = try await sessionRepository.replyToQuestion(
+                questionID: request.id,
+                answers: answers,
+                directory: worktree,
+                sessionID: request.sessionID
+            )
         } catch {
             await handleQuestionMutationFailure(requestID: request.id, error: error, dismiss: false)
         }
@@ -654,7 +660,11 @@ final class SessionChatViewModel {
         OpenCodeLog.sessionChat.info("question dismiss request=\(request.id, privacy: .public) session=\(request.sessionID, privacy: .public)")
         publishUiState()
         do {
-            _ = try await sessionRepository.rejectQuestion(questionID: request.id, directory: worktree)
+            _ = try await sessionRepository.rejectQuestion(
+                questionID: request.id,
+                directory: worktree,
+                sessionID: request.sessionID
+            )
         } catch {
             await handleQuestionMutationFailure(requestID: request.id, error: error, dismiss: true)
         }
@@ -1112,6 +1122,7 @@ final class SessionChatViewModel {
                 : nil,
             reviewChangesMessageID: reviewChangesState.messageID,
             reviewChangesSummary: reviewChangesState.summary,
+            supportsSessionMessageDiff: activeConnectionManager.capabilities.supportsSessionMessageDiff,
             rename: infoState.rename,
             slashSuggestionsVisible: composerState.slashSuggestionsVisible,
             slashSuggestions: composerState.slashSuggestions,

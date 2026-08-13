@@ -1,6 +1,6 @@
 import Foundation
 
-struct AgentDTO: Codable, Sendable {
+nonisolated struct AgentDTO: Codable, Sendable {
     let name: String
     let description: String?
     let mode: String

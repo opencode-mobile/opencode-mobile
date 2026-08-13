@@ -37,15 +37,50 @@ struct EventsAPIClientTests {
         #expect(second == [heartbeat])
     }
 
-    private func makeClient(responseBody: String) -> EventsAPIClient {
+    @Test func streamGlobalEvents_usesV2PathWhenProtocolIsV2() async throws {
+        let body = "data: {\"type\":\"server.connected\",\"data\":{}}\n\n"
+        let client = makeClient(responseBody: body, serverProtocol: .v2)
+        var lines: [String] = []
+        try await client.streamGlobalEvents { line in
+            lines.append(line)
+        }
+        #expect(lines.count == 1)
+        #expect(client.eventSubscribePath == "api/event")
+        #expect(MockSSEURLProtocol.lastPath?.hasSuffix("/api/event") == true)
+    }
+
+    @Test func streamGlobalEvents_probesProtocolOnCacheMiss() async throws {
+        let body = "data: {\"type\":\"server.connected\",\"data\":{}}\n\n"
+        let client = makeClient(responseBody: body, serverProtocol: nil, resolvedProtocol: .v2)
+        var lines: [String] = []
+        try await client.streamGlobalEvents { line in
+            lines.append(line)
+        }
+        #expect(lines.count == 1)
+        #expect(MockSSEURLProtocol.lastPath?.hasSuffix("/api/event") == true)
+    }
+
+    private func makeClient(
+        responseBody: String,
+        serverProtocol: ServerProtocol? = nil,
+        resolvedProtocol: ServerProtocol? = nil
+    ) -> EventsAPIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockSSEURLProtocol.self]
         MockSSEURLProtocol.register(responseBody: Data(responseBody.utf8))
         let session = URLSession(configuration: configuration)
-        let connection = ServerConnection(baseURL: URL(string: "http://127.0.0.1:4096/")!, password: "secret")
+        let connection = ServerConnection(
+            baseURL: URL(string: "http://127.0.0.1:4096/")!,
+            password: "secret",
+            serverProtocol: serverProtocol
+        )
+        let resolver: (@Sendable () async -> ServerProtocol)? = resolvedProtocol.map { value in
+            { value }
+        }
         return EventsAPIClient(
             connectionProvider: { connection },
-            urlSession: session
+            urlSession: session,
+            protocolResolver: resolver
         )
     }
 }
@@ -53,15 +88,18 @@ struct EventsAPIClientTests {
 private final class MockSSEURLProtocol: URLProtocol {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var responseBody = Data()
+    nonisolated(unsafe) static var lastPath: String?
 
     static func register(responseBody: Data) {
         lock.lock()
         self.responseBody = responseBody
+        self.lastPath = nil
         lock.unlock()
     }
 
     override class func canInit(with request: URLRequest) -> Bool {
-        request.url?.path.hasSuffix("/global/event") == true
+        let path = request.url?.path ?? ""
+        return path.hasSuffix("/global/event") || path.hasSuffix("/api/event")
     }
 
     override class func canonicalRequest(for request: URLRequest) -> URLRequest {
@@ -71,6 +109,7 @@ private final class MockSSEURLProtocol: URLProtocol {
     override func startLoading() {
         Self.lock.lock()
         let body = Self.responseBody
+        Self.lastPath = request.url?.path
         Self.lock.unlock()
 
         let response = HTTPURLResponse(

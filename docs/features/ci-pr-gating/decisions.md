@@ -6,7 +6,7 @@
 workflows stay `workflow_dispatch`.
 
 **Why:** Checks already compile (unit tests / `xcodebuild test`). Requiring
-Build doubles Blacksmith minutes without stronger merge signal.
+Build doubles self-hosted runner time without stronger merge signal.
 
 ## Draft skip via job `if`, not trigger-only
 
