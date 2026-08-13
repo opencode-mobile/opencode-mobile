@@ -275,7 +275,10 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] {
         try await run {
-            try await api.getSessionDiff(id: id, messageID: messageID, directory: directory)
+            if await isV2() {
+                throw SessionError.http(statusCode: 404, message: "session message diff is not available")
+            }
+            return try await api.getSessionDiff(id: id, messageID: messageID, directory: directory)
                 .map(adapter.fileDiff)
         }
     }

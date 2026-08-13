@@ -387,6 +387,27 @@ struct SessionProtocolRepositoryTests {
         #expect(queryValue(url, "location[directory]") == "/repo")
     }
 
+    @Test func v2GetSessionDiffDoesNotCallLegacyPath() async {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json("[]")
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        do {
+            _ = try await repository.getSessionDiff(id: "ses-1", messageID: "msg-1", directory: "/repo")
+            Issue.record("expected session message diff to be unavailable on v2")
+        } catch let error as SessionError {
+            guard case let .http(statusCode, _) = error else {
+                Issue.record("unexpected session error \(error)")
+                return
+            }
+            #expect(statusCode == 404)
+        } catch {
+            Issue.record("unexpected error \(error)")
+        }
+        #expect(ProtocolRoutingURLProtocol.requests.isEmpty)
+    }
+
     @Test func v2ListCommandsUnwrapsLocationEnvelope() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
             .json(#"{"data":[{"name":"init","template":"do init","description":"Setup"}]}"#)

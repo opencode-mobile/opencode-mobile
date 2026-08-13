@@ -118,6 +118,7 @@ data class SessionChatUiState(
     val questionErrorMessage: String? = null,
     val reviewChangesMessageId: String? = null,
     val reviewChangesSummary: ReviewChangesSummary? = null,
+    val supportsSessionMessageDiff: Boolean = true,
     val rename: SessionRenameUiState = SessionRenameUiState(),
     val slashSuggestionsVisible: Boolean = false,
     val slashSuggestions: List<SessionChatSlashSuggestion> = emptyList(),
@@ -160,6 +161,7 @@ data class SessionChatUiState(
         )
 
     fun reviewChangesNavigationTarget(worktree: String): ChangesNavigationTarget? {
+        if (!supportsSessionMessageDiff) return null
         val messageId = reviewChangesMessageId ?: return null
         if ((reviewChangesSummary?.fileCount ?: 0) <= 0) return null
         return ChangesNavigationTarget(
@@ -188,6 +190,7 @@ data class SessionChatUiState(
         assistantMessageId: String,
         initialFilePath: String?,
     ): ChangesNavigationTarget? {
+        if (!supportsSessionMessageDiff) return null
         val messageId = owningTurnMessageId(assistantMessageId) ?: return null
         return ChangesNavigationTarget(
             sessionId = sessionId,

@@ -109,11 +109,12 @@ final class ChangesViewModel {
     private let worktree: String
     private let messageID: String?
     private let repository: SessionRepository
-    private var availableSources: [ChangeSource] = [.lastTurn]
+    private let capabilities: ServerCapabilities
+    private var availableSources: [ChangeSource]
     private var filter = ""
     private var loadRevision = 0
 
-    private(set) var state = ChangesState()
+    private(set) var state: ChangesState
 
     var content: ChangesContentState? {
         guard case let .content(content) = state.phase else { return nil }
@@ -125,13 +126,20 @@ final class ChangesViewModel {
         worktree: String,
         messageID: String?,
         initialSource: ChangeSource = .lastTurn,
-        repository: SessionRepository
+        repository: SessionRepository,
+        capabilities: ServerCapabilities = .forProtocol(.v1)
     ) {
         self.sessionID = sessionID
         self.worktree = worktree
         self.messageID = messageID
         self.repository = repository
-        state.selectedSource = initialSource
+        self.capabilities = capabilities
+        let sources = Self.capabilitySources(capabilities)
+        self.availableSources = sources
+        state = ChangesState(
+            selectedSource: Self.capabilitySelectedSource(initialSource, capabilities: capabilities),
+            availableSources: sources
+        )
     }
 
     #if DEBUG
@@ -140,7 +148,10 @@ final class ChangesViewModel {
         self.worktree = worktree
         self.messageID = messageID
         repository = PreviewChangesRepository(files: files)
-        state.selectedSource = initialSource
+        capabilities = .forProtocol(.v1)
+        let sources = Self.capabilitySources(capabilities)
+        availableSources = sources
+        state = ChangesState(selectedSource: initialSource, availableSources: sources)
     }
     #endif
 
@@ -186,7 +197,12 @@ final class ChangesViewModel {
         do {
             if refreshAvailability { availableSources = try await resolveAvailableSources() }
             guard revision == loadRevision else { return }
-            var selectedSource = availableSources.contains(requestedSource) ? requestedSource : .lastTurn
+            if availableSources.isEmpty {
+                log(source: requestedSource, fileCount: 0, startedAt: startedAt, result: "empty")
+                state = ChangesState(phase: .noChanges, selectedSource: requestedSource, availableSources: availableSources)
+                return
+            }
+            var selectedSource = preferredSource(from: requestedSource)
             if selectedSource != requestedSource {
                 log(source: requestedSource, fileCount: 0, startedAt: startedAt, result: "unsupported-fallback")
             }
@@ -198,6 +214,7 @@ final class ChangesViewModel {
             do {
                 loadedFiles = try await loadFiles(source: selectedSource)
             } catch let SessionError.http(statusCode, _) where statusCode == 404 && selectedSource == .workingTree {
+                guard capabilities.supportsSessionMessageDiff else { throw SessionError.http(statusCode: statusCode, message: "missing") }
                 log(source: selectedSource, fileCount: 0, startedAt: startedAt, result: "unsupported-fallback")
                 availableSources = [.lastTurn]
                 selectedSource = .lastTurn
@@ -252,18 +269,44 @@ final class ChangesViewModel {
     }
 
     private func resolveAvailableSources() async throws -> [ChangeSource] {
+        var sources: [ChangeSource] = []
         do {
-            let info = try await repository.getVcsInfo(directory: worktree)
-            return info.supportsGit ? [.workingTree, .lastTurn] : [.lastTurn]
+            if try await repository.getVcsInfo(directory: worktree).supportsGit {
+                sources.append(.workingTree)
+            }
         } catch let SessionError.http(statusCode, _) where statusCode == 404 {
-            return [.lastTurn]
+            // Git is unavailable; last-turn may still be.
         }
+        if capabilities.supportsSessionMessageDiff {
+            sources.append(.lastTurn)
+        }
+        return sources
+    }
+
+    private func preferredSource(from requested: ChangeSource) -> ChangeSource {
+        if availableSources.contains(requested) { return requested }
+        if availableSources.contains(.lastTurn) { return .lastTurn }
+        return availableSources[0]
+    }
+
+    private static func capabilitySources(_ capabilities: ServerCapabilities) -> [ChangeSource] {
+        capabilities.supportsSessionMessageDiff ? [.lastTurn] : [.workingTree]
+    }
+
+    private static func capabilitySelectedSource(
+        _ requested: ChangeSource,
+        capabilities: ServerCapabilities
+    ) -> ChangeSource {
+        if requested == .lastTurn, !capabilities.supportsSessionMessageDiff {
+            return .workingTree
+        }
+        return requested
     }
 
     private func loadFiles(source: ChangeSource) async throws -> [FileDiff] {
         switch source {
         case .lastTurn:
-            guard let messageID else { return [] }
+            guard capabilities.supportsSessionMessageDiff, let messageID else { return [] }
             return try await repository.getSessionDiff(id: sessionID, messageID: messageID, directory: worktree)
         case .workingTree:
             return try await repository.getVcsDiff(mode: .workingTree, directory: worktree, context: 12)

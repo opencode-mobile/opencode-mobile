@@ -437,6 +437,7 @@ fun SessionChatScreen(
                                         initialFilePath = initialFilePath,
                                     )?.let(onReviewChangesClick)
                             },
+                            supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
                         ),
                     modifier = Modifier.fillMaxSize(),
                 )

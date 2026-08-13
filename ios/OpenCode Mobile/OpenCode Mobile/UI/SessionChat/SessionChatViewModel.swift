@@ -119,7 +119,8 @@ final class SessionChatViewModel {
         self.reviewChanges = SessionChatReviewChanges(
             sessionID: sessionID,
             worktree: worktree,
-            sessionRepository: sessionRepository
+            sessionRepository: sessionRepository,
+            supportsSessionMessageDiff: { activeConnectionManager.capabilities.supportsSessionMessageDiff }
         )
         self.commands = SessionChatCommands(
             sessionID: sessionID,
@@ -1121,6 +1122,7 @@ final class SessionChatViewModel {
                 : nil,
             reviewChangesMessageID: reviewChangesState.messageID,
             reviewChangesSummary: reviewChangesState.summary,
+            supportsSessionMessageDiff: activeConnectionManager.capabilities.supportsSessionMessageDiff,
             rename: infoState.rename,
             slashSuggestionsVisible: composerState.slashSuggestionsVisible,
             slashSuggestions: composerState.slashSuggestions,

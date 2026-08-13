@@ -182,6 +182,66 @@ struct ChangesViewModelTests {
         #expect(viewModel.content?.files.first?.path == "last.swift")
     }
 
+    @Test func v2HidesLastTurnAndKeepsWorkingTree() async {
+        let repository = ChangesSessionRepository(
+            results: [],
+            vcsInfoResults: [.success(VcsInfo(currentBranch: "feature", defaultBranch: "main"))],
+            vcsDiffResults: [.success([Self.file("git.swift")])]
+        )
+        let viewModel = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/w",
+            messageID: "m",
+            initialSource: .lastTurn,
+            repository: repository,
+            capabilities: .forProtocol(.v2)
+        )
+        await viewModel.load()
+        #expect(viewModel.state.availableSources == [.workingTree])
+        #expect(viewModel.state.selectedSource == .workingTree)
+        #expect(repository.requests.isEmpty)
+        #expect(repository.vcsRequests == [.init(mode: .workingTree, directory: "/w", context: 12)])
+    }
+
+    @Test func v2DoesNotExposeLastTurnBeforeProbe() async {
+        let repository = ChangesSessionRepository(results: [])
+        let viewModel = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/w",
+            messageID: "m",
+            initialSource: .lastTurn,
+            repository: repository,
+            capabilities: .forProtocol(.v2)
+        )
+        #expect(viewModel.state.availableSources == [.workingTree])
+        #expect(viewModel.state.selectedSource == .workingTree)
+        await viewModel.selectSource(.lastTurn)
+        #expect(viewModel.state.selectedSource == .workingTree)
+        #expect(repository.requests.isEmpty)
+    }
+
+    @Test func v2WithoutGitShowsEmptyChanges() async {
+        let repository = ChangesSessionRepository(
+            results: [],
+            vcsInfoResults: [.success(VcsInfo(currentBranch: nil, defaultBranch: nil))]
+        )
+        let viewModel = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/w",
+            messageID: "m",
+            initialSource: .lastTurn,
+            repository: repository,
+            capabilities: .forProtocol(.v2)
+        )
+        await viewModel.load()
+        #expect(viewModel.state.availableSources.isEmpty)
+        guard case .noChanges = viewModel.state.phase else {
+            Issue.record("Expected empty changes on v2 without git")
+            return
+        }
+        #expect(repository.requests.isEmpty)
+    }
+
     @Test func viewerStartsCollapsedNavigatesHunksAndDisablesUnavailableActions() {
         let twoHunks = FileDiff(
             path: "A.swift",
@@ -222,6 +282,23 @@ struct ChangesViewModelTests {
         state.reviewChangesSummary = ReviewChangesSummary(fileCount: 1, additions: 1, deletions: 0)
         #expect(state.changesNavigationTarget(worktree: "/repo").initialSource == .workingTree)
         #expect(state.reviewChangesNavigationTarget(worktree: "/repo")?.initialSource == .lastTurn)
+    }
+
+    @Test func v2HidesLastTurnNavigationTargets() {
+        var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
+        state.timeline = .ready
+        state.messages = [row("user", .user), row("assistant", .assistant)]
+        state.reviewChangesMessageID = "user"
+        state.reviewChangesSummary = ReviewChangesSummary(fileCount: 1, additions: 1, deletions: 0)
+        state.supportsSessionMessageDiff = false
+        #expect(state.reviewChangesNavigationTarget(worktree: "/repo") == nil)
+        #expect(
+            state.fileChangeNavigationTarget(
+                worktree: "/repo",
+                assistantMessageID: "assistant",
+                initialFilePath: "src/Main.kt"
+            ) == nil
+        )
     }
 
     @Test func fileChangeNavigationUsesOwningTurnAndOptionalPath() {

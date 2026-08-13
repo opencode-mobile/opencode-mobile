@@ -424,6 +424,30 @@ struct SessionChatViewModelTests {
         #expect(sessionRepository.diffRequest == .init(sessionID: "ses-1", messageID: "user-1", directory: "/repo"))
     }
 
+    @Test func v2DoesNotLoadLastTurnReviewChangesSummary() async {
+        let sessionRepository = FakeChatSessionRepository(
+            sessionDiffs: [
+                FileDiff(path: "one.swift", patch: nil, additions: 1, deletions: 2, status: .modified),
+            ]
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: [
+                Message(id: "user-1", role: .user, text: "Change it", model: nil, mode: nil, sentAtEpochMs: 1),
+                Message(id: "assistant-1", role: .assistant, text: "Done", model: nil, mode: nil, sentAtEpochMs: 2),
+            ]),
+            sessionRepository: sessionRepository,
+            serverProtocol: .v2
+        )
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(viewModel.uiState.reviewChangesSummary == nil)
+        #expect(viewModel.uiState.supportsSessionMessageDiff == false)
+        #expect(sessionRepository.diffRequest == nil)
+    }
+
     @Test func newerLatestTurnCancelsStaleReviewChangesSummary() async {
         let sessionRepository = FakeChatSessionRepository(
             sessionDiffProvider: { messageID in
@@ -1987,7 +2011,8 @@ struct SessionChatViewModelTests {
         permissionLiveStore: (any PermissionLiveStore)? = nil,
         questionLiveStore: (any QuestionLiveStore)? = nil,
         sessionID: String = "ses-1",
-        sessionTitle: String = "Title"
+        sessionTitle: String = "Title",
+        serverProtocol: ServerProtocol = .v1
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         // Mutations (send/rename/fork/new/permissions) require Connected; default fakes start Idle.
@@ -2011,7 +2036,8 @@ struct SessionChatViewModelTests {
         let selectionStore = sessionModelSelectionStore ?? InMemorySessionModelSelectionStore()
         let activeConnectionManager = ActiveConnectionManager()
         activeConnectionManager.apply(
-            ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: "")
+            ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
+            serverProtocol: serverProtocol
         )
         let viewModel = SessionChatViewModel(
             sessionID: sessionID,

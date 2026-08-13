@@ -25,6 +25,7 @@ struct SessionChatTimelineViewProps {
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let onUserScrollDismissKeyboard: () -> Void
+    let supportsSessionMessageDiff: Bool
 
     init(
         timeline: SessionChatTimelineState,
@@ -48,7 +49,8 @@ struct SessionChatTimelineViewProps {
         onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in },
         onChildSessionTap: @escaping (String, String) -> Void = { _, _ in },
         onChangesReviewTap: @escaping (String, String?) -> Void = { _, _ in },
-        onUserScrollDismissKeyboard: @escaping () -> Void = {}
+        onUserScrollDismissKeyboard: @escaping () -> Void = {},
+        supportsSessionMessageDiff: Bool = true
     ) {
         self.timeline = timeline
         self.messages = messages
@@ -72,6 +74,7 @@ struct SessionChatTimelineViewProps {
         self.onChildSessionTap = onChildSessionTap
         self.onChangesReviewTap = onChangesReviewTap
         self.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
+        self.supportsSessionMessageDiff = supportsSessionMessageDiff
     }
 }
 
@@ -175,7 +178,8 @@ private struct SessionChatTimelineReadyView: View {
                     onMessageActionsTap: props.onMessageActionsTap,
                     onToolDetailTap: props.onToolDetailTap,
                     onChildSessionTap: props.onChildSessionTap,
-                    onChangesReviewTap: props.onChangesReviewTap
+                    onChangesReviewTap: props.onChangesReviewTap,
+                    supportsSessionMessageDiff: props.supportsSessionMessageDiff
                 )
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -309,6 +313,7 @@ private struct SessionChatTimelineHostRow: View {
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
+    let supportsSessionMessageDiff: Bool
 
     var body: some View {
         if message.id == SessionChatStatusChrome.workingRowID {
@@ -321,7 +326,8 @@ private struct SessionChatTimelineHostRow: View {
                         onMessageActionsTap: onMessageActionsTap,
                         onToolDetailTap: onToolDetailTap,
                         onChildSessionTap: onChildSessionTap,
-                        onChangesReviewTap: onChangesReviewTap
+                        onChangesReviewTap: onChangesReviewTap,
+                        supportsSessionMessageDiff: supportsSessionMessageDiff
                     )
                     Spacer(minLength: 0)
                 } else {
@@ -331,7 +337,8 @@ private struct SessionChatTimelineHostRow: View {
                         onMessageActionsTap: onMessageActionsTap,
                         onToolDetailTap: onToolDetailTap,
                         onChildSessionTap: onChildSessionTap,
-                        onChangesReviewTap: onChangesReviewTap
+                        onChangesReviewTap: onChangesReviewTap,
+                        supportsSessionMessageDiff: supportsSessionMessageDiff
                     )
                 }
             }
@@ -383,6 +390,7 @@ private struct SessionChatMessageRow: View {
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
+    let supportsSessionMessageDiff: Bool
 
     private func openMessageActions(showsRevertMessage: Bool) {
         onMessageActionsTap(
@@ -415,7 +423,8 @@ private struct SessionChatMessageRow: View {
                     onOpenMessageActions: { openMessageActions(showsRevertMessage: false) },
                     onToolDetailTap: onToolDetailTap,
                     onChildSessionTap: onChildSessionTap,
-                    onChangesReviewTap: onChangesReviewTap
+                    onChangesReviewTap: onChangesReviewTap,
+                    supportsSessionMessageDiff: supportsSessionMessageDiff
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
             case .command, .tool, .unknown:
@@ -472,6 +481,7 @@ private struct AssistantMessageContent: View {
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
+    let supportsSessionMessageDiff: Bool
 
     private var blocks: [SessionChatTimelineBlock] {
         if message.blocks.isEmpty {
@@ -546,7 +556,7 @@ private struct AssistantMessageContent: View {
         if let childSessionId = card.childSessionId {
             return { onChildSessionTap(childSessionId, card.title) }
         }
-        if card.opensChangesReview {
+        if card.opensChangesReview, supportsSessionMessageDiff {
             return { onChangesReviewTap(message.id, card.changesInitialFilePath) }
         }
         if let detail = card.detailText {

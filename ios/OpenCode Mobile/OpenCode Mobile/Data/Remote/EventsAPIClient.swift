@@ -80,6 +80,10 @@ nonisolated final class EventsAPIClient: Sendable {
         Self.subscribePath(for: connectionProvider()?.serverProtocol)
     }
 
+    var eventProtocolWireValue: String {
+        (connectionProvider()?.serverProtocol ?? .v1).wireValue
+    }
+
     private static func subscribePath(for serverProtocol: ServerProtocol?) -> String {
         serverProtocol == .v2 ? "api/event" : "global/event"
     }

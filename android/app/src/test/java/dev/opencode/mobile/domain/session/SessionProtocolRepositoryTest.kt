@@ -553,6 +553,31 @@ class SessionProtocolRepositoryTest {
             assertEquals("/repo", requests.single().url.parameters["location[directory]"])
         }
 
+    @Test
+    fun v2GetSessionDiff_doesNotCallLegacyPath() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson("[]")
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            try {
+                repository.getSessionDiff("ses-1", "msg-1", "/repo")
+                org.junit.Assert.fail("expected session message diff to be unavailable on v2")
+            } catch (error: SessionError.Http) {
+                assertEquals(404, error.statusCode)
+            }
+            assertTrue(requests.isEmpty())
+        }
+
     private suspend fun manager(protocol: ServerProtocol?): ActiveConnectionManager {
         val manager = ActiveConnectionManager(FakeProfileStore())
         manager.applyProfile(
