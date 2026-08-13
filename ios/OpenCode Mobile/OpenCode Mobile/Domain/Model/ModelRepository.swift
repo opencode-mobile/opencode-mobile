@@ -8,23 +8,20 @@ struct DefaultModelRepository: ModelRepository, Sendable {
     private let api: ModelsAPIClient
     private let adapter: ModelDomainAdapter
     private let activeConnectionManager: ActiveConnectionManager?
-    private let projectRepository: (any ProjectRepository)?
 
     init(
         api: ModelsAPIClient,
         adapter: ModelDomainAdapter,
-        activeConnectionManager: ActiveConnectionManager? = nil,
-        projectRepository: (any ProjectRepository)? = nil
+        activeConnectionManager: ActiveConnectionManager? = nil
     ) {
         self.api = api
         self.adapter = adapter
         self.activeConnectionManager = activeConnectionManager
-        self.projectRepository = projectRepository
     }
 
     func listModelOptions(directory: String?) async throws -> ModelSelectionCatalog {
         do {
-            if await isV2() {
+            if await activeConnectionManager?.currentProtocolOrProbe() == .v2 {
                 return adapter.catalog(
                     providers: try await api.listProvidersV2(directory: directory),
                     models: try await api.listModelsV2(directory: directory)
@@ -34,14 +31,5 @@ struct DefaultModelRepository: ModelRepository, Sendable {
         } catch {
             throw adapter.mapError(error)
         }
-    }
-
-    private func isV2() async -> Bool {
-        if let protocolValue = activeConnectionManager?.serverProtocol {
-            return protocolValue == .v2
-        }
-        guard let projectRepository else { return false }
-        _ = try? await projectRepository.probeServer()
-        return activeConnectionManager?.serverProtocol == .v2
     }
 }

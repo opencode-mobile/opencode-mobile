@@ -3,13 +3,12 @@ package dev.opencode.mobile.domain.session
 import dev.opencode.mobile.data.remote.HealthApi
 import dev.opencode.mobile.data.remote.ProjectsApi
 import dev.opencode.mobile.data.remote.SessionsApi
+import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.project.DefaultProjectRepository
-import dev.opencode.mobile.domain.project.Project
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
-import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import io.ktor.client.HttpClient
@@ -273,13 +272,12 @@ class SessionProtocolRepositoryTest {
                         """{"data":[{"id":"ses_2","title":"Two","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"}}],"cursor":{"next":null}}""",
                     )
                 }
-            val manager = manager(protocol = null)
+            val manager = manager(protocol = null, probing = ConnectionProbing { ServerProtocol.V2 })
             val repository =
                 DefaultSessionRepository(
                     SessionsApi(client, json),
                     SessionDomainAdapter(),
                     activeConnectionManager = manager,
-                    projectRepository = ProbeToV2ProjectRepository(manager),
                 )
 
             val sessions = repository.listSessions("/repo")
@@ -578,8 +576,11 @@ class SessionProtocolRepositoryTest {
             assertTrue(requests.isEmpty())
         }
 
-    private suspend fun manager(protocol: ServerProtocol?): ActiveConnectionManager {
-        val manager = ActiveConnectionManager(FakeProfileStore())
+    private suspend fun manager(
+        protocol: ServerProtocol?,
+        probing: ConnectionProbing? = null,
+    ): ActiveConnectionManager {
+        val manager = ActiveConnectionManager(FakeProfileStore(), probing)
         manager.applyProfile(
             ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", password = ""),
             serverProtocol = protocol,
@@ -636,16 +637,4 @@ private class FakeProfileStore : ConnectionProfileStore {
     override suspend fun clearAll() {
         profile = null
     }
-}
-
-private class ProbeToV2ProjectRepository(
-    private val manager: ActiveConnectionManager,
-) : ProjectRepository {
-    override suspend fun probeServer() {
-        manager.updateProtocol(ServerProtocol.V2)
-    }
-
-    override suspend fun listProjects(): List<Project> = emptyList()
-
-    override suspend fun getCurrentProject(directory: String?): Project = error("unused")
 }

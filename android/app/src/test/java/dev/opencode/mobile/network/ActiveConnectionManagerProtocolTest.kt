@@ -1,9 +1,14 @@
 package dev.opencode.mobile.network
 
+import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -55,7 +60,128 @@ class ActiveConnectionManagerProtocolTest {
             assertNull(manager.current())
             assertNull(manager.currentProtocol())
         }
+
+    @Test
+    fun currentProtocolOrProbe_returnsCachedProtocolWithoutProbing() =
+        runTest {
+            var probes = 0
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing {
+                        probes += 1
+                        ServerProtocol.V1
+                    },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+
+            assertEquals(ServerProtocol.V2, manager.currentProtocolOrProbe())
+            assertEquals(0, probes)
+        }
+
+    @Test
+    fun currentProtocolOrProbe_probesOnceOnCacheMiss() =
+        runTest {
+            var probes = 0
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing {
+                        probes += 1
+                        ServerProtocol.V2
+                    },
+                )
+            manager.applyProfile(sampleProfile)
+
+            assertEquals(ServerProtocol.V2, manager.currentProtocolOrProbe())
+            assertEquals(ServerProtocol.V2, manager.currentProtocol())
+            assertEquals(ServerProtocol.V2, manager.currentProtocolOrProbe())
+            assertEquals(1, probes)
+        }
+
+    @Test
+    fun currentProtocolOrProbe_parallelCallersShareOneProbe() =
+        runTest {
+            var probes = 0
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing {
+                        probes += 1
+                        delay(50)
+                        ServerProtocol.V2
+                    },
+                )
+            manager.applyProfile(sampleProfile)
+
+            val first = async { manager.currentProtocolOrProbe() }
+            val second = async { manager.currentProtocolOrProbe() }
+
+            assertEquals(ServerProtocol.V2, first.await())
+            assertEquals(ServerProtocol.V2, second.await())
+            assertEquals(1, probes)
+        }
+
+    @Test
+    fun currentProtocolOrProbe_failedProbeReturnsV1WithoutThrowing() =
+        runTest {
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing { error("unreachable") },
+                )
+            manager.applyProfile(sampleProfile)
+
+            assertEquals(ServerProtocol.V1, manager.currentProtocolOrProbe())
+            assertNull(manager.currentProtocol())
+        }
+
+    @Test
+    fun currentProtocolOrProbe_missingConnectionReturnsV1WithoutProbing() =
+        runTest {
+            var probes = 0
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing {
+                        probes += 1
+                        ServerProtocol.V2
+                    },
+                )
+
+            assertEquals(ServerProtocol.V1, manager.currentProtocolOrProbe())
+            assertEquals(0, probes)
+        }
+
+    @Test
+    fun currentProtocolOrProbe_doesNotStampProtocolAfterDisconnect() =
+        runTest {
+            val started = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing {
+                        started.complete(Unit)
+                        release.await()
+                        ServerProtocol.V2
+                    },
+                )
+            manager.applyProfile(sampleProfile)
+
+            val probe = async { manager.currentProtocolOrProbe() }
+            started.await()
+            manager.disconnect()
+            release.complete(Unit)
+
+            assertEquals(ServerProtocol.V1, probe.await())
+            assertNull(manager.current())
+            assertNull(manager.currentProtocol())
+        }
 }
+
+private val sampleProfile =
+    ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", password = "x")
 
 private class FakeProfileStore : ConnectionProfileStore {
     private var profile: ConnectionProfile? = null

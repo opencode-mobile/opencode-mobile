@@ -3,7 +3,7 @@ import Foundation
 
 extension Container {
     var activeConnectionManager: Factory<ActiveConnectionManager> {
-        self { ActiveConnectionManager() }.singleton
+        self { ActiveConnectionManager(connectionProbing: self.connectionProbing()) }.singleton
     }
 
     var connectionProfileStore: Factory<any ConnectionProfileStore> {
@@ -79,8 +79,7 @@ extension Container {
             DefaultFilesystemRepository(
                 api: self.filesystemAPIClient(),
                 adapter: FilesystemDomainAdapter(),
-                activeConnectionManager: self.activeConnectionManager(),
-                projectRepository: self.projectRepository()
+                activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
     }
@@ -91,8 +90,7 @@ extension Container {
                 api: self.sessionsAPIClient(),
                 adapter: self.sessionDomainAdapter(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),
-                activeConnectionManager: self.activeConnectionManager(),
-                projectRepository: self.projectRepository()
+                activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
     }
@@ -105,13 +103,12 @@ extension Container {
         self { MessageDomainAdapter() }.singleton
     }
 
-    var messageProtocolRouter: Factory<MessageProtocolRouter> {
+    var messageRemote: Factory<any MessageRemote> {
         self {
-            MessageProtocolRouter(
+            ProtocolSelectedMessageRemote(
                 api: self.messagesAPIClient(),
                 adapter: self.messageDomainAdapter(),
-                activeConnectionManager: self.activeConnectionManager(),
-                projectRepository: self.projectRepository()
+                activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
     }
@@ -160,7 +157,7 @@ extension Container {
 
     var messageSync: Factory<MessageSync> {
         self {
-            let router = self.messageProtocolRouter()
+            let router = self.messageRemote()
             let adapter = self.messageDomainAdapter()
             let manager = self.activeConnectionManager()
             return MessageSync(
@@ -214,7 +211,7 @@ extension Container {
                 messageSync: self.messageSync(),
                 displayMessagePipeline: self.displayMessagePipeline(),
                 contentPreparer: self.messageContentPreparer(),
-                protocolRouter: self.messageProtocolRouter()
+                messageRemote: self.messageRemote()
             )
         }.singleton
     }
@@ -232,8 +229,7 @@ extension Container {
             DefaultModelRepository(
                 api: self.modelsAPIClient(),
                 adapter: self.modelDomainAdapter(),
-                activeConnectionManager: self.activeConnectionManager(),
-                projectRepository: self.projectRepository()
+                activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
     }
@@ -251,8 +247,7 @@ extension Container {
             DefaultCommandRepository(
                 api: self.commandsAPIClient(),
                 adapter: self.commandDomainAdapter(),
-                activeConnectionManager: self.activeConnectionManager(),
-                projectRepository: self.projectRepository()
+                activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
     }
@@ -270,8 +265,7 @@ extension Container {
             DefaultAgentRepository(
                 api: self.agentsAPIClient(),
                 adapter: self.agentDomainAdapter(),
-                activeConnectionManager: self.activeConnectionManager(),
-                projectRepository: self.projectRepository()
+                activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
     }

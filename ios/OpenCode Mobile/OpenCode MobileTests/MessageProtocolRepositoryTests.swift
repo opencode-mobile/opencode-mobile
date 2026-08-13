@@ -76,12 +76,11 @@ struct MessageProtocolRepositoryTests {
             {"data":[{"id":"msg_v2","type":"user","text":"V2","time":{"created":1}}],"cursor":{"next":null}}
             """#)
         ])
-        let manager = makeManager(serverProtocol: nil)
-        let router = MessageProtocolRouter(
+        let manager = makeManager(serverProtocol: nil, probing: StubV2Probe())
+        let router = ProtocolSelectedMessageRemote(
             api: MessagesAPIClient(connectionProvider: { manager.connection }, urlSession: makeURLSession()),
             adapter: MessageDomainAdapter(),
-            activeConnectionManager: manager,
-            projectRepository: MessageProbeToV2ProjectRepository(manager: manager)
+            activeConnectionManager: manager
         )
 
         let messages = try await router.listMessages(sessionID: "ses_2", directory: "/repo")
@@ -140,8 +139,8 @@ struct MessageProtocolRepositoryTests {
         #expect(MessageProtocolURLProtocol.requests[2].url?.path.hasSuffix("/api/session/ses_2/prompt") == true)
     }
 
-    private func makeManager(serverProtocol: ServerProtocol?) -> ActiveConnectionManager {
-        let manager = ActiveConnectionManager()
+    private func makeManager(serverProtocol: ServerProtocol?, probing: (any ConnectionProbing)? = nil) -> ActiveConnectionManager {
+        let manager = ActiveConnectionManager(connectionProbing: probing)
         manager.applyConnection(
             ServerConnection(
                 baseURL: URL(string: "https://example.test")!,
@@ -159,9 +158,9 @@ struct MessageProtocolRepositoryTests {
         return URLSession(configuration: configuration)
     }
 
-    private func makeRouter(serverProtocol: ServerProtocol) -> MessageProtocolRouter {
+    private func makeRouter(serverProtocol: ServerProtocol) -> ProtocolSelectedMessageRemote {
         let manager = makeManager(serverProtocol: serverProtocol)
-        return MessageProtocolRouter(
+        return ProtocolSelectedMessageRemote(
             api: MessagesAPIClient(connectionProvider: { manager.connection }, urlSession: makeURLSession()),
             adapter: MessageDomainAdapter(),
             activeConnectionManager: manager
@@ -217,16 +216,6 @@ private final class MessageProtocolURLProtocol: URLProtocol {
     override func stopLoading() {}
 }
 
-private struct MessageProbeToV2ProjectRepository: ProjectRepository {
-    let manager: ActiveConnectionManager
-
-    func probeServer() async throws {
-        manager.updateProtocol(.v2)
-    }
-
-    func listProjects() async throws -> [Project] { [] }
-
-    func getCurrentProject(directory: String?) async throws -> Project {
-        Project(id: "unused", worktree: directory ?? "", displayName: "unused")
-    }
+private struct StubV2Probe: ConnectionProbing {
+    func probe(connection: ServerConnection) async throws -> ServerProtocol { .v2 }
 }

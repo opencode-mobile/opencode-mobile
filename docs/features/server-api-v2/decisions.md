@@ -133,6 +133,44 @@ file changes the way v1 revert does.
 
 **Alternative rejected:** Auto-commit after stage — irreversible, no redo.
 
+## Deepen protocol remotes after the epic ships (2026-08-13)
+
+**Choice:** Keep per-method `isV2()` dispatch inside existing repository
+implementations for P0–P6. After `feature/ope-146-server-api-v2` is on `main`,
+extract protocol-selected remotes (`V1SessionRemote` / `V2SessionRemote`, and
+the same shape for other ports) behind the current repository interfaces.
+Tracked as [OPE-155](https://linear.app/opencode-mobile/issue/OPE-155/isolate-v1-and-v2-http-remotes-behind-repository-ports).
+
+**Why:** The repository port is already the right seam — Screen Models stay on
+domain types and `ServerCapabilities`. The if/else forest is an implementation
+smell inside a deep module, not protocol leaking into product UI. Extracting
+remotes now would conflict with the stacked dual-stack PRs on both platforms
+for no user-facing gain.
+
+**Alternative rejected:** Swap `V1SessionRepository` / `V2SessionRepository` in
+DI on connect (protocol is unknown at singleton construction; LiveStores hold
+the bound instance). One `OpencodeServer` god facade. Protocol flags in Screen
+Models.
+
+## Protocol-or-probe lives on ActiveConnectionManager (2026-08-13)
+
+**Choice:** Implicit protocol resolution is `ActiveConnectionManager.currentProtocolOrProbe()`:
+cache, else probe the active connection through `ConnectionProbing` /
+`ConnectionProbeService`, else v1. Session and Message HTTP dialects live in
+`V1`/`V2` remotes behind a protocol-selected facade. Command, Filesystem, Model,
+Agent, and Project keep per-method dispatch but share the same probe. Home
+`probeServer()` still throws; Test Connection still probes the candidate
+connection.
+
+**Why:** Probe-on-miss is cache fill, so it belongs on the cache owner. Per-repo
+`isV2()` copies stampeded probes. `ProjectRepository` / `HealthApi` cannot be
+injected into ACM without a Hilt cycle. Two remote adapters make the dialect
+seam real; the port adapter keeps error mapping and delete cleanup.
+
+**Alternative rejected:** Inject `ProjectRepository` into ACM. Swap V1/V2
+repositories in DI on connect. Extract remotes for every repository in this
+change.
+
 ## V2 last-turn review is capability-gated (2026-08-13)
 
 **Choice:** Screen Models read `ServerCapabilities.supportsSessionMessageDiff`

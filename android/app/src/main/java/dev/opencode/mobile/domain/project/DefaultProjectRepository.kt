@@ -16,25 +16,15 @@ class DefaultProjectRepository
         private val adapter: ProjectDomainAdapter,
         private val activeConnectionManager: ActiveConnectionManager,
     ) : ProjectRepository {
-        private val protocolMutex = Mutex()
-
-        private suspend fun isV2(): Boolean {
-            protocolMutex.withLock {
-                activeConnectionManager.currentProtocol()?.let { return it == ServerProtocol.V2 }
-                runCatching { probeServerLocked() }
-                return activeConnectionManager.currentProtocol() == ServerProtocol.V2
-            }
-        }
+        private val probeMutex = Mutex()
 
         override suspend fun probeServer() {
-            protocolMutex.withLock { probeServerLocked() }
-        }
-
-        private suspend fun probeServerLocked() {
-            runCatching {
-                val protocol = healthApi.detectProtocol()
-                activeConnectionManager.updateProtocol(protocol)
-            }.getOrElse { throw adapter.mapProbeError(it) }
+            probeMutex.withLock {
+                runCatching {
+                    val protocol = healthApi.detectProtocol()
+                    activeConnectionManager.updateProtocol(protocol)
+                }.getOrElse { throw adapter.mapProbeError(it) }
+            }
         }
 
         override suspend fun listProjects(): List<Project> =
@@ -44,7 +34,7 @@ class DefaultProjectRepository
         override suspend fun getCurrentProject(directory: String?): Project =
             runCatching {
                 val dto =
-                    if (isV2()) {
+                    if (activeConnectionManager.currentProtocolOrProbe() == ServerProtocol.V2) {
                         projectsApi.getCurrentProjectV2(directory)
                     } else {
                         projectsApi.getCurrentProject(directory)

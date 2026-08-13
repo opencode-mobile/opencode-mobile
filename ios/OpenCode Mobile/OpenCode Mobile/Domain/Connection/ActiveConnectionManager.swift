@@ -2,7 +2,15 @@ import Foundation
 
 final class ActiveConnectionManager: @unchecked Sendable {
     private let lock = NSLock()
+    private let probeLock = NSLock()
+    private let connectionProbing: (any ConnectionProbing)?
     private var _connection: ServerConnection?
+    private var inFlightProbe: Task<ServerProtocol, Never>?
+    private var probeGeneration = 0
+
+    init(connectionProbing: (any ConnectionProbing)? = nil) {
+        self.connectionProbing = connectionProbing
+    }
 
     var connection: ServerConnection? {
         lock.lock()
@@ -34,12 +42,14 @@ final class ActiveConnectionManager: @unchecked Sendable {
         lock.lock()
         _connection = connection
         lock.unlock()
+        invalidateInFlightProbe()
     }
 
     func applyConnection(_ connection: ServerConnection) {
         lock.lock()
         _connection = connection
         lock.unlock()
+        invalidateInFlightProbe()
     }
 
     func updateProtocol(_ serverProtocol: ServerProtocol) {
@@ -49,10 +59,88 @@ final class ActiveConnectionManager: @unchecked Sendable {
         _connection = current.withProtocol(serverProtocol)
     }
 
+    /// Implicit protocol resolution for repository remotes.
+    /// Cache hit returns immediately. Cache miss probes the active connection,
+    /// caches the result, and returns it. Missing connection, missing probe, or
+    /// a thrown probe returns `.v1` without throwing.
+    func currentProtocolOrProbe() async -> ServerProtocol {
+        if let cached = serverProtocol {
+            return cached
+        }
+        guard connection != nil, connectionProbing != nil else {
+            return .v1
+        }
+
+        let task: Task<ServerProtocol, Never>
+        probeLock.lock()
+        if let cached = serverProtocol {
+            probeLock.unlock()
+            return cached
+        }
+        if let existing = inFlightProbe {
+            task = existing
+        } else {
+            let generation = probeGeneration
+            let created = Task { [self] in
+                await self.performProtocolProbe(generation: generation)
+            }
+            inFlightProbe = created
+            task = created
+        }
+        probeLock.unlock()
+        return await task.value
+    }
+
+    private func performProtocolProbe(generation: Int) async -> ServerProtocol {
+        defer {
+            probeLock.lock()
+            if probeGeneration == generation {
+                inFlightProbe = nil
+            }
+            probeLock.unlock()
+        }
+        if let cached = serverProtocol {
+            return cached
+        }
+        guard let current = connection, let probing = connectionProbing else {
+            return .v1
+        }
+        do {
+            let detected = try await probing.probe(connection: current)
+            return cacheDetectedProtocol(detected, for: current)
+        } catch {
+            return .v1
+        }
+    }
+
+    /// Caches `detected` only when the active connection is still the probed one.
+    /// A disconnect or profile switch during the await must not stamp the old
+    /// server's protocol onto a different connection.
+    private func cacheDetectedProtocol(
+        _ detected: ServerProtocol,
+        for probed: ServerConnection
+    ) -> ServerProtocol {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let active = _connection, active.hasSameIdentity(as: probed) else {
+            return _connection?.serverProtocol ?? .v1
+        }
+        _connection = active.withProtocol(detected)
+        return detected
+    }
+
+    private func invalidateInFlightProbe() {
+        probeLock.lock()
+        probeGeneration += 1
+        inFlightProbe = nil
+        probeLock.unlock()
+    }
+
     func disconnect() {
         lock.lock()
         _connection = nil
         lock.unlock()
+        invalidateInFlightProbe()
     }
 
     func currentProfile() -> ConnectionProfile? {

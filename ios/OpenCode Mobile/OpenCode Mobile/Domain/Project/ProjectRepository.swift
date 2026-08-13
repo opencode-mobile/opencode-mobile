@@ -37,19 +37,11 @@ struct DefaultProjectRepository: ProjectRepository, Sendable {
 
     func getCurrentProject(directory: String?) async throws -> Project {
         try await run {
-            if await isV2() {
+            if await activeConnectionManager?.currentProtocolOrProbe() == .v2 {
                 return adapter.project(from: try await api.getCurrentProjectV2(directory: directory))
             }
             return adapter.project(from: try await api.getCurrentProject(directory: directory))
         }
-    }
-
-    private func isV2() async -> Bool {
-        if let protocolValue = activeConnectionManager?.serverProtocol {
-            return protocolValue == .v2
-        }
-        _ = try? await probeServer()
-        return activeConnectionManager?.serverProtocol == .v2
     }
 
     private func run<T>(_ work: () async throws -> T) async throws -> T {

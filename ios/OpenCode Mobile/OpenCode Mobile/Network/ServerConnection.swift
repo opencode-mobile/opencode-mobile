@@ -35,6 +35,10 @@ nonisolated struct ServerConnection: Sendable {
         self.serverProtocol = serverProtocol
     }
 
+    func hasSameIdentity(as other: ServerConnection) -> Bool {
+        baseURL == other.baseURL && username == other.username
+    }
+
     func withProtocol(_ serverProtocol: ServerProtocol) -> ServerConnection {
         ServerConnection(
             baseURL: baseURL,
