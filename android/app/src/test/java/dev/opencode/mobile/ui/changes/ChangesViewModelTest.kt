@@ -217,6 +217,20 @@ class ChangesViewModelTest {
             assertEquals(listOf(VcsRequest(VcsDiffMode.WorkingTree, "/w", 12)), repository.vcsRequests)
         }
 
+    @Test fun v2DoesNotExposeLastTurnBeforeProbe() =
+        runTest(dispatcher) {
+            val repository = FakeRepository()
+            val viewModel =
+                ChangesViewModel(repository, ServerCapabilities.forProtocol(ServerProtocol.V2))
+            viewModel.bind("s", "/w", "m", ChangeSource.LastTurn)
+
+            assertEquals(listOf(ChangeSource.WorkingTree), viewModel.uiState.value.availableSources)
+            assertEquals(ChangeSource.WorkingTree, viewModel.uiState.value.selectedSource)
+            viewModel.selectSource(ChangeSource.LastTurn)
+            assertEquals(ChangeSource.WorkingTree, viewModel.uiState.value.selectedSource)
+            assertEquals(emptyList<Request>(), repository.requests)
+        }
+
     @Test fun v2WithoutGitShowsEmptyChanges() =
         runTest(dispatcher) {
             val repository =

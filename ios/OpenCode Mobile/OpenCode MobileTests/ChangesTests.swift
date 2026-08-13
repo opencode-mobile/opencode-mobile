@@ -203,6 +203,23 @@ struct ChangesViewModelTests {
         #expect(repository.vcsRequests == [.init(mode: .workingTree, directory: "/w", context: 12)])
     }
 
+    @Test func v2DoesNotExposeLastTurnBeforeProbe() async {
+        let repository = ChangesSessionRepository(results: [])
+        let viewModel = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/w",
+            messageID: "m",
+            initialSource: .lastTurn,
+            repository: repository,
+            capabilities: .forProtocol(.v2)
+        )
+        #expect(viewModel.state.availableSources == [.workingTree])
+        #expect(viewModel.state.selectedSource == .workingTree)
+        await viewModel.selectSource(.lastTurn)
+        #expect(viewModel.state.selectedSource == .workingTree)
+        #expect(repository.requests.isEmpty)
+    }
+
     @Test func v2WithoutGitShowsEmptyChanges() async {
         let repository = ChangesSessionRepository(
             results: [],

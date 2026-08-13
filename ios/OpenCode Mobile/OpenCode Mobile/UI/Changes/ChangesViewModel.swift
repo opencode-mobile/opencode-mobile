@@ -110,11 +110,11 @@ final class ChangesViewModel {
     private let messageID: String?
     private let repository: SessionRepository
     private let capabilities: ServerCapabilities
-    private var availableSources: [ChangeSource] = [.lastTurn]
+    private var availableSources: [ChangeSource]
     private var filter = ""
     private var loadRevision = 0
 
-    private(set) var state = ChangesState()
+    private(set) var state: ChangesState
 
     var content: ChangesContentState? {
         guard case let .content(content) = state.phase else { return nil }
@@ -134,7 +134,12 @@ final class ChangesViewModel {
         self.messageID = messageID
         self.repository = repository
         self.capabilities = capabilities
-        state.selectedSource = initialSource
+        let sources = Self.capabilitySources(capabilities)
+        self.availableSources = sources
+        state = ChangesState(
+            selectedSource: Self.capabilitySelectedSource(initialSource, capabilities: capabilities),
+            availableSources: sources
+        )
     }
 
     #if DEBUG
@@ -144,7 +149,9 @@ final class ChangesViewModel {
         self.messageID = messageID
         repository = PreviewChangesRepository(files: files)
         capabilities = .forProtocol(.v1)
-        state.selectedSource = initialSource
+        let sources = Self.capabilitySources(capabilities)
+        availableSources = sources
+        state = ChangesState(selectedSource: initialSource, availableSources: sources)
     }
     #endif
 
@@ -282,10 +289,24 @@ final class ChangesViewModel {
         return availableSources[0]
     }
 
+    private static func capabilitySources(_ capabilities: ServerCapabilities) -> [ChangeSource] {
+        capabilities.supportsSessionMessageDiff ? [.lastTurn] : [.workingTree]
+    }
+
+    private static func capabilitySelectedSource(
+        _ requested: ChangeSource,
+        capabilities: ServerCapabilities
+    ) -> ChangeSource {
+        if requested == .lastTurn, !capabilities.supportsSessionMessageDiff {
+            return .workingTree
+        }
+        return requested
+    }
+
     private func loadFiles(source: ChangeSource) async throws -> [FileDiff] {
         switch source {
         case .lastTurn:
-            guard let messageID else { return [] }
+            guard capabilities.supportsSessionMessageDiff, let messageID else { return [] }
             return try await repository.getSessionDiff(id: sessionID, messageID: messageID, directory: worktree)
         case .workingTree:
             return try await repository.getVcsDiff(mode: .workingTree, directory: worktree, context: 12)
