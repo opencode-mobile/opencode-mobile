@@ -206,12 +206,11 @@ struct SessionProtocolRepositoryTests {
             {"data":[{"id":"ses_2","title":"Two","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"}}],"cursor":{"next":null}}
             """#)
         ])
-        let manager = makeManager(serverProtocol: nil)
+        let manager = makeManager(serverProtocol: nil, probing: StubV2Probe())
         let repository = DefaultSessionRepository(
             api: SessionsAPIClient(connectionProvider: { manager.connection }, urlSession: makeURLSession()),
             adapter: SessionDomainAdapter(),
-            activeConnectionManager: manager,
-            projectRepository: ProbeToV2ProjectRepository(manager: manager)
+            activeConnectionManager: manager
         )
 
         let sessions = try await repository.listSessions(directory: "/repo")
@@ -495,8 +494,8 @@ struct SessionProtocolRepositoryTests {
 
     // MARK: - Helpers
 
-    private func makeManager(serverProtocol: ServerProtocol?) -> ActiveConnectionManager {
-        let manager = ActiveConnectionManager()
+    private func makeManager(serverProtocol: ServerProtocol?, probing: (any ConnectionProbing)? = nil) -> ActiveConnectionManager {
+        let manager = ActiveConnectionManager(connectionProbing: probing)
         manager.applyConnection(
             ServerConnection(
                 baseURL: URL(string: "https://example.test")!,
@@ -620,16 +619,6 @@ private extension URLRequest {
     }
 }
 
-private struct ProbeToV2ProjectRepository: ProjectRepository {
-    let manager: ActiveConnectionManager
-
-    func probeServer() async throws {
-        manager.updateProtocol(.v2)
-    }
-
-    func listProjects() async throws -> [Project] { [] }
-
-    func getCurrentProject(directory: String?) async throws -> Project {
-        Project(id: "unused", worktree: directory ?? "", displayName: "unused")
-    }
+private struct StubV2Probe: ConnectionProbing {
+    func probe(connection: ServerConnection) async throws -> ServerProtocol { .v2 }
 }

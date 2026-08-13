@@ -14,6 +14,8 @@
   - [x] [OPE-151](https://linear.app/opencode-mobile/issue/OPE-151/p4-permissions-questions-and-composer-catalogs-on-v2) P4
   - [x] [OPE-152](https://linear.app/opencode-mobile/issue/OPE-152/p5-compact-revert-todos-vcs-and-add-project-on-v2) P5
   - [x] [OPE-153](https://linear.app/opencode-mobile/issue/OPE-153/p6-capability-gates-cleanup-and-protocol-matrix-tests) P6
+  - [ ] [OPE-155](https://linear.app/opencode-mobile/issue/OPE-155/isolate-v1-and-v2-http-remotes-behind-repository-ports)
+    post-ship remote extract (probe + Session + Message done; other remotes deferred)
 
 ## Design-system dependencies
 
@@ -63,6 +65,11 @@
   path
 - [x] P6: SSE diagnostic log includes `protocol=`
 - [x] P6: Protocol matrix unit tests (capabilities, last-turn gate, v2 skip)
+- [x] OPE-155: `currentProtocolOrProbe()` on `ActiveConnectionManager`
+- [x] OPE-155: `V1SessionRemote` / `V2SessionRemote` behind `SessionRepository`
+- [x] OPE-155: `MessageProtocolRouter` lifted to v1/v2 message remotes
+- [x] OPE-155: Command, Filesystem, Model, Agent, Project use shared
+  protocol-or-probe (remotes deferred)
 
 ## Android implementation
 
@@ -106,6 +113,11 @@
   path
 - [x] P6: SSE diagnostic log includes `protocol=`
 - [x] P6: Protocol matrix unit tests (capabilities, last-turn gate, v2 skip)
+- [x] OPE-155: `currentProtocolOrProbe()` on `ActiveConnectionManager`
+- [x] OPE-155: `V1SessionRemote` / `V2SessionRemote` behind `SessionRepository`
+- [x] OPE-155: `MessageProtocolRouter` lifted to v1/v2 message remotes
+- [x] OPE-155: Command, Filesystem, Model, Agent, Project use shared
+  protocol-or-probe (remotes deferred)
 
 ## Blockers
 
@@ -124,3 +136,5 @@
 - Optional dead-API cleanup (`share`, `init`, children, sync `sendMessage`,
   `getMessage`, `listProjects`) is deferred; those methods still sit on
   repository interfaces used by many test fakes.
+- OPE-155: extract remotes for Command, Filesystem, Model, Agent, and Project
+  when those files are next edited.

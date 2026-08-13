@@ -18,7 +18,7 @@ class ConnectionProbeService(
     private val clientFactory: (ServerConnection) -> HttpClient = { connection ->
         KtorClientFactory.create(connection, json)
     },
-) {
+) : ConnectionProbing {
     private val detector = ServerProtocolDetector(adapter)
 
     /**
@@ -26,7 +26,7 @@ class ConnectionProbeService(
      *
      * Throws [ServerProbeError] when neither health endpoint is usable.
      */
-    suspend fun probe(connection: ServerConnection): ServerProtocol {
+    override suspend fun probe(connection: ServerConnection): ServerProtocol {
         val client = clientFactory(connection)
         try {
             return detector.detect(

@@ -11,6 +11,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProbeService
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
+import dev.opencode.mobile.network.ActiveConnectionManager
 import javax.inject.Singleton
 
 @Module
@@ -31,5 +32,16 @@ abstract class ConnectionModule {
             json: kotlinx.serialization.json.Json,
             adapter: ProjectDomainAdapter,
         ): ConnectionProbeService = ConnectionProbeService(json, adapter)
+
+        @Provides
+        @Singleton
+        fun provideActiveConnectionManager(
+            connectionProfileStore: ConnectionProfileStore,
+            connectionProbeService: ConnectionProbeService,
+        ): ActiveConnectionManager =
+            ActiveConnectionManager(
+                connectionProfileStore = connectionProfileStore,
+                connectionProbing = connectionProbeService,
+            )
     }
 }

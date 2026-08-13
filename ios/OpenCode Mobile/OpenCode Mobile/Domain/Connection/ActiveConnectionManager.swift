@@ -2,7 +2,14 @@ import Foundation
 
 final class ActiveConnectionManager: @unchecked Sendable {
     private let lock = NSLock()
+    private let probeLock = NSLock()
+    private let connectionProbing: (any ConnectionProbing)?
     private var _connection: ServerConnection?
+    private var inFlightProbe: Task<ServerProtocol, Never>?
+
+    init(connectionProbing: (any ConnectionProbing)? = nil) {
+        self.connectionProbing = connectionProbing
+    }
 
     var connection: ServerConnection? {
         lock.lock()
@@ -47,6 +54,58 @@ final class ActiveConnectionManager: @unchecked Sendable {
         defer { lock.unlock() }
         guard let current = _connection else { return }
         _connection = current.withProtocol(serverProtocol)
+    }
+
+    /// Implicit protocol resolution for repository remotes.
+    /// Cache hit returns immediately. Cache miss probes the active connection,
+    /// caches the result, and returns it. Missing connection, missing probe, or
+    /// a thrown probe returns `.v1` without throwing.
+    func currentProtocolOrProbe() async -> ServerProtocol {
+        if let cached = serverProtocol {
+            return cached
+        }
+        guard connection != nil, connectionProbing != nil else {
+            return .v1
+        }
+
+        let task: Task<ServerProtocol, Never>
+        probeLock.lock()
+        if let cached = serverProtocol {
+            probeLock.unlock()
+            return cached
+        }
+        if let existing = inFlightProbe {
+            task = existing
+        } else {
+            let created = Task { [self] in
+                await self.performProtocolProbe()
+            }
+            inFlightProbe = created
+            task = created
+        }
+        probeLock.unlock()
+        return await task.value
+    }
+
+    private func performProtocolProbe() async -> ServerProtocol {
+        defer {
+            probeLock.lock()
+            inFlightProbe = nil
+            probeLock.unlock()
+        }
+        if let cached = serverProtocol {
+            return cached
+        }
+        guard let current = connection, let probing = connectionProbing else {
+            return .v1
+        }
+        do {
+            let detected = try await probing.probe(connection: current)
+            updateProtocol(detected)
+            return detected
+        } catch {
+            return .v1
+        }
     }
 
     func disconnect() {

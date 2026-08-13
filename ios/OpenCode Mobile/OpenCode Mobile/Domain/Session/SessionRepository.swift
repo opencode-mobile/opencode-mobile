@@ -76,131 +76,61 @@ extension SessionRepository {
 }
 
 struct DefaultSessionRepository: SessionRepository, Sendable {
-    private let api: SessionsAPIClient
+    private let remote: any SessionRemote
     private let adapter: SessionDomainAdapter
     private let sessionModelSelectionStore: (any SessionModelSelectionStore)?
     private let activeConnectionManager: ActiveConnectionManager?
-    private let projectRepository: (any ProjectRepository)?
 
     init(
         api: SessionsAPIClient,
         adapter: SessionDomainAdapter,
         sessionModelSelectionStore: (any SessionModelSelectionStore)? = nil,
-        activeConnectionManager: ActiveConnectionManager? = nil,
-        projectRepository: (any ProjectRepository)? = nil
+        activeConnectionManager: ActiveConnectionManager? = nil
     ) {
-        self.api = api
+        self.remote = ProtocolSelectedSessionRemote(
+            v1: V1SessionRemote(api: api, adapter: adapter),
+            v2: V2SessionRemote(api: api, adapter: adapter),
+            activeConnectionManager: activeConnectionManager
+        )
         self.adapter = adapter
         self.sessionModelSelectionStore = sessionModelSelectionStore
         self.activeConnectionManager = activeConnectionManager
-        self.projectRepository = projectRepository
-    }
-
-    private func isV2() async -> Bool {
-        if let protocolValue = activeConnectionManager?.serverProtocol {
-            return protocolValue == .v2
-        }
-        guard let projectRepository else { return false }
-        _ = try? await projectRepository.probeServer()
-        return activeConnectionManager?.serverProtocol == .v2
-    }
-
-    func listSessions(directory: String?) async throws -> [Session] {
-        try await run {
-            if await isV2() {
-                return try await api.listSessionsV2(directory: directory).map { adapter.session(from: $0) }
-            }
-            return try await api.listSessions(directory: directory).map { adapter.session(from: $0) }
-        }
     }
 
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] {
-        try await run {
-            if await isV2() {
-                return try await api.listPendingPermissionsV2(directory: directory).map { adapter.permissionRequest(from: $0) }
-            }
-            return try await api.listPendingPermissions(directory: directory).map { adapter.permissionRequest(from: $0) }
-        }
+        try await run { try await remote.listPendingPermissions(directory: directory) }
     }
 
     func listPendingQuestions(directory: String?) async throws -> [QuestionRequest] {
-        try await run {
-            if await isV2() {
-                return try await api.listPendingQuestionsV2(directory: directory).map { adapter.questionRequest(from: $0) }
-            }
-            return try await api.listPendingQuestions(directory: directory).map { adapter.questionRequest(from: $0) }
-        }
+        try await run { try await remote.listPendingQuestions(directory: directory) }
+    }
+
+    func listSessions(directory: String?) async throws -> [Session] {
+        try await run { try await remote.listSessions(directory: directory) }
     }
 
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {
-        try await run {
-            guard await isV2() else {
-                return adapter.session(from: try await api.createSession(parentID: parentID, title: title, directory: directory))
-            }
-            // V2 create is location-scoped; title/parent are applied via follow-up when needed.
-            var created = adapter.session(from: try await api.createSessionV2(directory: directory))
-            if let title, !title.isEmpty {
-                try await api.renameSessionV2(id: created.id, title: title)
-                created.title = title
-            }
-            return created
-        }
+        try await run { try await remote.createSession(parentID: parentID, title: title, directory: directory) }
     }
 
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] {
-        try await run {
-            if await isV2() {
-                return adapter.sessionStatuses(fromActive: try await api.getActiveSessionsV2())
-            }
-            return try await api.getAllSessionStatuses(directory: directory).map { adapter.sessionStatus(sessionID: $0.key, raw: $0.value) }
-        }
+        try await run { try await remote.getAllSessionStatuses(directory: directory) }
     }
 
     func getSession(id: String, directory: String?) async throws -> Session {
-        try await run {
-            if await isV2() {
-                return adapter.session(from: try await api.getSessionV2(id: id))
-            }
-            return adapter.session(from: try await api.getSession(id: id, directory: directory))
-        }
+        try await run { try await remote.getSession(id: id, directory: directory) }
     }
 
     func updateSession(id: String, title: String?, directory: String?) async throws -> Session {
-        try await run {
-            guard await isV2() else {
-                return adapter.session(from: try await api.updateSession(id: id, title: title, directory: directory))
-            }
-            guard let title, !title.isEmpty else {
-                throw SessionError.transport("V2 rename requires a title")
-            }
-            try await api.renameSessionV2(id: id, title: title)
-            var renamed = adapter.session(from: try await api.getSessionV2(id: id))
-            renamed.title = title
-            return renamed
-        }
+        try await run { try await remote.updateSession(id: id, title: title, directory: directory) }
     }
 
     func archiveSession(id: String, directory: String?) async throws -> Session {
-        try await run {
-            guard await isV2() else {
-                return adapter.session(from: try await api.archiveSession(id: id, directory: directory))
-            }
-            try await api.archiveSessionV2(id: id)
-            var archived = adapter.session(from: try await api.getSessionV2(id: id))
-            if archived.archivedAtEpochMs == nil {
-                archived.archivedAtEpochMs = Int64(Date().timeIntervalSince1970 * 1000)
-            }
-            return archived
-        }
+        try await run { try await remote.archiveSession(id: id, directory: directory) }
     }
 
     func deleteSession(id: String, directory: String?) async throws -> Bool {
-        let deleted = try await run {
-            if await isV2() {
-                return try await api.deleteSessionV2(id: id)
-            }
-            return try await api.deleteSession(id: id, directory: directory)
-        }
+        let deleted = try await run { try await remote.deleteSession(id: id, directory: directory) }
         if deleted,
            let profile = activeConnectionManager?.currentProfile(),
            let sessionModelSelectionStore {
@@ -216,121 +146,57 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
     }
 
     func listChildSessions(id: String) async throws -> [Session] {
-        try await run {
-            if await isV2() {
-                // No dedicated children route on published v2; filter the location list.
-                return try await api.listSessionsV2()
-                    .filter { $0.parentID == id }
-                    .map { adapter.session(from: $0) }
-            }
-            return try await api.listChildSessions(id: id).map { adapter.session(from: $0) }
-        }
+        try await run { try await remote.listChildSessions(id: id) }
     }
 
     func listSessionTodos(id: String, directory: String?) async throws -> [SessionTodo] {
-        try await run {
-            if await isV2() {
-                // No REST snapshot on v2. Throw so the live store keeps event-seeded
-                // todos instead of replacing them with an empty list.
-                throw SessionError.http(statusCode: 404, message: "Todos REST is unavailable on v2")
-            }
-            return adapter.todos(from: try await api.listSessionTodos(id: id, directory: directory))
-        }
+        try await run { try await remote.listSessionTodos(id: id, directory: directory) }
     }
 
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool {
         try await run {
-            try await api.initializeSessionAgents(
-                id: id,
-                body: InitSessionRequestDTO(messageID: messageID, providerID: providerID, modelID: modelID)
-            )
+            try await remote.initializeSessionAgents(id: id, messageID: messageID, providerID: providerID, modelID: modelID)
         }
     }
 
     func forkSession(id: String, atMessageID: String?) async throws -> Session {
-        try await run {
-            if await isV2() {
-                return adapter.session(from: try await api.forkSessionV2(id: id, messageID: atMessageID))
-            }
-            return adapter.session(from: try await api.forkSession(id: id, messageID: atMessageID))
-        }
+        try await run { try await remote.forkSession(id: id, atMessageID: atMessageID) }
     }
 
     func abortSession(id: String, directory: String?) async throws -> Bool {
-        try await run {
-            if await isV2() {
-                return try await api.interruptSessionV2(id: id)
-            }
-            return try await api.abortSession(id: id, directory: directory)
-        }
+        try await run { try await remote.abortSession(id: id, directory: directory) }
     }
 
     func shareSession(id: String) async throws -> Session {
-        try await run { adapter.session(from: try await api.shareSession(id: id)) }
+        try await run { try await remote.shareSession(id: id) }
     }
 
     func unshareSession(id: String) async throws -> Session {
-        try await run { adapter.session(from: try await api.unshareSession(id: id)) }
+        try await run { try await remote.unshareSession(id: id) }
     }
 
     func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] {
-        try await run {
-            if await isV2() {
-                throw SessionError.http(statusCode: 404, message: "session message diff is not available")
-            }
-            return try await api.getSessionDiff(id: id, messageID: messageID, directory: directory)
-                .map(adapter.fileDiff)
-        }
+        try await run { try await remote.getSessionDiff(id: id, messageID: messageID, directory: directory) }
     }
 
     func getVcsInfo(directory: String?) async throws -> VcsInfo {
-        try await run {
-            if await isV2() {
-                return adapter.vcsInfo(from: try await api.getVcsInfoV2(directory: directory))
-            }
-            return adapter.vcsInfo(from: try await api.getVcsInfo(directory: directory))
-        }
+        try await run { try await remote.getVcsInfo(directory: directory) }
     }
 
     func getVcsDiff(mode: VcsDiffMode, directory: String?, context: Int) async throws -> [FileDiff] {
-        try await run {
-            if await isV2() {
-                return try await api.getVcsDiffV2(mode: mode.v2WireValue, directory: directory, context: context)
-                    .map(adapter.fileDiff)
-            }
-            return try await api.getVcsDiff(mode: mode, directory: directory, context: context)
-                .map(adapter.fileDiff)
-        }
+        try await run { try await remote.getVcsDiff(mode: mode, directory: directory, context: context) }
     }
 
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool {
-        try await run {
-            if await isV2() {
-                return try await api.compactSessionV2(id: id)
-            }
-            return try await api.summarizeSession(
-                id: id,
-                body: SummarizeSessionRequestDTO(providerID: providerID, modelID: modelID)
-            )
-        }
+        try await run { try await remote.summarizeSession(id: id, providerID: providerID, modelID: modelID) }
     }
 
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool {
-        try await run {
-            if await isV2() {
-                return try await api.stageRevertV2(id: id, messageID: messageID, partID: partID)
-            }
-            return try await api.revertSession(id: id, body: RevertSessionRequestDTO(messageID: messageID, partID: partID))
-        }
+        try await run { try await remote.revertSession(id: id, messageID: messageID, partID: partID) }
     }
 
     func unrevertSession(id: String) async throws -> Bool {
-        try await run {
-            if await isV2() {
-                return try await api.clearRevertV2(id: id)
-            }
-            return try await api.unrevertSession(id: id)
-        }
+        try await run { try await remote.unrevertSession(id: id) }
     }
 
     func respondToPermission(
@@ -340,17 +206,10 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         directory: String?
     ) async throws -> Bool {
         try await run {
-            if await isV2() {
-                return try await api.respondToPermissionV2(
-                    sessionID: sessionID,
-                    permissionID: permissionID,
-                    body: V2PermissionReplyRequestDTO(reply: adapter.permissionResponse(decision))
-                )
-            }
-            return try await api.respondToPermission(
+            try await remote.respondToPermission(
                 sessionID: sessionID,
                 permissionID: permissionID,
-                body: PermissionResponseRequestDTO(response: adapter.permissionResponse(decision)),
+                decision: decision,
                 directory: directory
             )
         }
@@ -367,17 +226,11 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         sessionID: String?
     ) async throws -> Bool {
         try await run {
-            if await isV2() {
-                return try await api.replyToQuestionV2(
-                    sessionID: sessionID ?? "",
-                    questionID: questionID,
-                    body: QuestionReplyRequestDTO(answers: answers)
-                )
-            }
-            return try await api.replyToQuestion(
+            try await remote.replyToQuestion(
                 questionID: questionID,
-                body: QuestionReplyRequestDTO(answers: answers),
-                directory: directory
+                answers: answers,
+                directory: directory,
+                sessionID: sessionID
             )
         }
     }
@@ -388,10 +241,7 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func rejectQuestion(questionID: String, directory: String?, sessionID: String?) async throws -> Bool {
         try await run {
-            if await isV2() {
-                return try await api.rejectQuestionV2(sessionID: sessionID ?? "", questionID: questionID)
-            }
-            return try await api.rejectQuestion(questionID: questionID, directory: directory)
+            try await remote.rejectQuestion(questionID: questionID, directory: directory, sessionID: sessionID)
         }
     }
 

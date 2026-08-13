@@ -228,9 +228,11 @@ Epic: [OPE-146](https://linear.app/opencode-mobile/issue/OPE-146/server-api-v2-c
 | P4 | [OPE-151](https://linear.app/opencode-mobile/issue/OPE-151/p4-permissions-questions-and-composer-catalogs-on-v2) |
 | P5 | [OPE-152](https://linear.app/opencode-mobile/issue/OPE-152/p5-compact-revert-todos-vcs-and-add-project-on-v2) |
 | P6 | [OPE-153](https://linear.app/opencode-mobile/issue/OPE-153/p6-capability-gates-cleanup-and-protocol-matrix-tests) |
+| Follow-up | [OPE-155](https://linear.app/opencode-mobile/issue/OPE-155/isolate-v1-and-v2-http-remotes-behind-repository-ports) isolate v1/v2 remotes |
 
 Each ticket: both platforms, tests, progress update, no UI rewrite unless
 capability gate. Phase PRs target `feature/ope-146-server-api-v2`.
+OPE-155 is post-ship and must not block the epic merge.
 
 ## Dependencies / Order
 

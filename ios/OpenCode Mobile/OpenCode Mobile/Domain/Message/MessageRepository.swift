@@ -31,7 +31,7 @@ final class DefaultMessageRepository: MessageRepository {
     private let messageSync: MessageSync
     private let displayMessagePipeline: DisplayMessagePipeline
     private let contentPreparer: MessageContentPreparer
-    private let protocolRouter: MessageProtocolRouter
+    private let messageRemote: any MessageRemote
 
     init(
         api: any MessagesAPI,
@@ -39,14 +39,14 @@ final class DefaultMessageRepository: MessageRepository {
         messageSync: MessageSync,
         displayMessagePipeline: DisplayMessagePipeline,
         contentPreparer: MessageContentPreparer,
-        protocolRouter: MessageProtocolRouter? = nil
+        messageRemote: (any MessageRemote)? = nil
     ) {
         self.api = api
         self.adapter = adapter
         self.messageSync = messageSync
         self.displayMessagePipeline = displayMessagePipeline
         self.contentPreparer = contentPreparer
-        self.protocolRouter = protocolRouter ?? MessageProtocolRouter(api: api, adapter: adapter)
+        self.messageRemote = messageRemote ?? ProtocolSelectedMessageRemote(api: api, adapter: adapter)
     }
 
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
@@ -79,7 +79,7 @@ final class DefaultMessageRepository: MessageRepository {
     }
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
-        try await run { try await protocolRouter.listMessages(sessionID: sessionID, directory: directory) }
+        try await run { try await messageRemote.listMessages(sessionID: sessionID, directory: directory) }
     }
 
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {
@@ -109,7 +109,7 @@ final class DefaultMessageRepository: MessageRepository {
             "prompt_async session=\(sessionID) fileParts=\(options.attachments.count) textCharacters=\(options.text.count)"
         )
         try await run {
-            try await protocolRouter.sendPromptAsync(
+            try await messageRemote.sendPromptAsync(
                 sessionID: sessionID,
                 options: options,
                 directory: directory
