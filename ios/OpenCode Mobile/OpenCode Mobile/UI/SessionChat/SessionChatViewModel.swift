@@ -150,6 +150,7 @@ final class SessionChatViewModel {
     }
 
     func startObserving() {
+        startCollapsePreferenceObservation()
         if OptimisticSessionCreate.isPlaceholder(sessionID) {
             beginOptimisticCreate()
             return
@@ -161,11 +162,6 @@ final class SessionChatViewModel {
         composer.startCatalogLoads()
         commands.start()
         sessionInfo.startObserving()
-        collapsePreferenceGeneration += 1
-        timeline.updateCollapseConsecutiveToolCalls(
-            SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
-        )
-        observeCollapsePreference()
         timeline.startObserving()
         startPermissionObservation()
         startQuestionObservation()
@@ -705,6 +701,14 @@ final class SessionChatViewModel {
         }
     }
 
+    private func startCollapsePreferenceObservation() {
+        collapsePreferenceGeneration += 1
+        timeline.updateCollapseConsecutiveToolCalls(
+            SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
+        )
+        observeCollapsePreference()
+    }
+
     /// Re-projects an open timeline when the collapse preference flips while
     /// Session Chat is on screen. The recursive `withObservationTracking` skips
     /// work once the generation is bumped by `stopObserving`.
@@ -1028,6 +1032,7 @@ final class SessionChatViewModel {
         sessionInfo.bind(sessionID: id, sessionTitle: title)
         commands.start()
         sessionInfo.startObserving()
+        startCollapsePreferenceObservation()
         timeline.startObserving()
         startPermissionObservation()
         startQuestionObservation()
