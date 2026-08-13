@@ -35,8 +35,22 @@ jobs:
       FIREBASE_APP_ID: 1:569439646238:ios:2ffd276bbaf8a1528df40f
       FIREBASE_TESTER_GROUP: ios-internal
       FIREBASE_TOOLS_VERSION: 15.24.0
+      SOURCE_REF: ${{ github.event.inputs.source_ref }}
 
     steps:
+      - name: Validate source ref
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${SOURCE_REF:-}" ]]; then
+            exit 0
+          fi
+          if [[ ! "$SOURCE_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "source_ref must be a branch, tag, or SHA (letters, digits, '.', '_', '/', '-')." >&2
+            exit 1
+          fi
+
       - name: Checkout source
         uses: actions/checkout@v4
         with:
@@ -48,7 +62,6 @@ jobs:
         run: |
           set -euo pipefail
           echo "DISTRIBUTED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-          echo "SOURCE_REF=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.source_ref || '' }}" >> "$GITHUB_ENV"
 
       - name: Set distribution build number
         shell: bash

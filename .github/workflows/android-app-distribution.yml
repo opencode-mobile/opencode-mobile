@@ -31,8 +31,22 @@ jobs:
       FIREBASE_TESTER_GROUP: android-internal
       FIREBASE_TOOLS_VERSION: 15.24.0
       EXPECTED_UPLOAD_CERT_SHA256: 9E:FB:99:19:6B:2D:F6:56:FD:FA:1D:88:3D:33:00:7E:0F:E0:DA:28:AB:FF:A6:F8:BC:C3:3D:42:0F:CA:E1:37
+      SOURCE_REF: ${{ github.event.inputs.source_ref }}
 
     steps:
+      - name: Validate source ref
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${SOURCE_REF:-}" ]]; then
+            exit 0
+          fi
+          if [[ ! "$SOURCE_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "source_ref must be a branch, tag, or SHA (letters, digits, '.', '_', '/', '-')." >&2
+            exit 1
+          fi
+
       - name: Checkout source
         uses: actions/checkout@v4
         with:
@@ -44,7 +58,6 @@ jobs:
         run: |
           set -euo pipefail
           echo "DISTRIBUTED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-          echo "SOURCE_REF=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.source_ref || '' }}" >> "$GITHUB_ENV"
 
       - name: Set distribution version
         shell: bash
