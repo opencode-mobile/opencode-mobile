@@ -60,17 +60,18 @@ npm run api:sync        # fetch OpenAPI spec and generate clients
 ## CI
 
 Checks run for every **ready-for-review** pull request (drafts are skipped).
-Android stays on Blacksmith Linux; iOS runs on the private Mac mini
-self-hosted runner. Android Build and iOS Build stay manual.
+Android runs on the private Fedora box (`self-hosted, Linux, X64, android`);
+iOS runs on the private Mac mini (`self-hosted, macOS, mac-mini`). Android
+Build and iOS Build stay manual.
 
 | Workflow | Trigger | Runner | What it does |
 |---|---|---|---|
-| Android Checks | PR (non-draft) + dispatch | Blacksmith Linux | ktlint/lint (soft-fail) + unit tests |
+| Android Checks | PR (non-draft) + dispatch | Fedora box (`self-hosted, Linux, X64, android`) | ktlint/lint (soft-fail) + unit tests |
 | iOS Checks | PR (non-draft) + dispatch | Mac mini (`self-hosted, macOS, mac-mini`) | Build, analyzer, unit tests |
-| Android Build | `workflow_dispatch` | Blacksmith Linux | Assemble debug APK |
-| Android Release | `workflow_dispatch` on `main` | Blacksmith Linux | Build and verify signed AAB + APK, then publish to Play internal |
-| Android App Distribution | `push` to `main`, or `workflow_dispatch` | Blacksmith Linux | Build and verify a signed APK, then distribute it to the private Firebase tester group |
-| Android Test Lab | `workflow_dispatch` on `main` | Blacksmith Linux | Run bounded Robo tests against a signed release APK |
+| Android Build | `workflow_dispatch` | Fedora box (`self-hosted, Linux, X64, android`) | Assemble debug APK |
+| Android Release | `workflow_dispatch` on `main` | Fedora box (`self-hosted, Linux, X64, android`) | Build and verify signed AAB + APK, then publish to Play internal |
+| Android App Distribution | `push` to `main`, or `workflow_dispatch` | Fedora box (`self-hosted, Linux, X64, android`) | Build and verify a signed APK, then distribute it to the private Firebase tester group |
+| Android Test Lab | `workflow_dispatch` on `main` | Fedora box (`self-hosted, Linux, X64, android`) | Run bounded Robo tests against a signed release APK |
 | iOS Build | `workflow_dispatch` | Mac mini (`self-hosted, macOS, mac-mini`) | Simulator build |
 | iOS App Distribution | `push` to `main`, or `workflow_dispatch` | Mac mini (`self-hosted, macOS, mac-mini`) | Build and verify a signed Ad Hoc IPA, then distribute it to the private Firebase tester group |
 

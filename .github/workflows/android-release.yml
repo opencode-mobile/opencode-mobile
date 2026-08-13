@@ -23,7 +23,7 @@ concurrency:
 jobs:
   release:
     if: github.ref == 'refs/heads/main'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: [self-hosted, Linux, X64, android]
     environment: android-release
     defaults:
       run:
