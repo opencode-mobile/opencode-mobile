@@ -469,7 +469,7 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
-    fun v2ListSessionTodos_skipsRestAndReturnsEmpty() =
+    fun v2ListSessionTodos_skipsRestAndSignalsUnavailable() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()
             val client =
@@ -484,9 +484,10 @@ class SessionProtocolRepositoryTest {
                     activeConnectionManager = manager(ServerProtocol.V2),
                 )
 
-            val todos = repository.listSessionTodos("ses_1", "/repo")
+            val error = runCatching { repository.listSessionTodos("ses_1", "/repo") }.exceptionOrNull()
 
-            assertTrue(todos.isEmpty())
+            val http = error as SessionError.Http
+            assertEquals(404, http.statusCode)
             assertTrue(requests.isEmpty())
         }
 

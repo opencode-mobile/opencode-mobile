@@ -197,8 +197,9 @@ class DefaultSessionRepository
         ): List<SessionTodo> =
             runCatching {
                 if (isV2()) {
-                    // Published v2 has no REST todo twin; live store seeds from events.
-                    emptyList()
+                    // No REST snapshot on v2. Throw so the live store keeps event-seeded
+                    // todos instead of replacing them with an empty list.
+                    throw SessionError.Http(404, "Todos REST is unavailable on v2")
                 } else {
                     adapter.toTodos(api.listSessionTodos(id, directory))
                 }

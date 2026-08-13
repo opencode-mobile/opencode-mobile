@@ -230,8 +230,9 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
     func listSessionTodos(id: String, directory: String?) async throws -> [SessionTodo] {
         try await run {
             if await isV2() {
-                // Published v2 has no REST todo twin; live store seeds from events.
-                return []
+                // No REST snapshot on v2. Throw so the live store keeps event-seeded
+                // todos instead of replacing them with an empty list.
+                throw SessionError.http(statusCode: 404, message: "Todos REST is unavailable on v2")
             }
             return adapter.todos(from: try await api.listSessionTodos(id: id, directory: directory))
         }

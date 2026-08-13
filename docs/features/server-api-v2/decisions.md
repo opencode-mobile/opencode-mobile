@@ -135,13 +135,15 @@ file changes the way v1 revert does.
 
 ## V2 todos seed from events only (2026-08-12)
 
-**Choice:** `listSessionTodos` returns an empty list on v2 and does not call a
-REST todo route. `DefaultSessionTodoLiveStore` still applies `todo.updated`
-events.
+**Choice:** `listSessionTodos` does not call a REST todo route on v2 and
+throws `SessionError.Http(404)` instead of returning `[]`.
+`DefaultSessionTodoLiveStore` already treats a failed seed as “keep current
+cache,” so `todo.updated` events survive go-live and reconnect.
 
-**Why:** Published v2 session API has no `GET .../todo` twin. Hitting the v1
-path would 404 on v2-only servers. Event-only seed matches the research gap
-until upstream adds a REST snapshot.
+**Why:** Published v2 session API has no `GET .../todo` twin. Returning an
+empty list would look like an authoritative snapshot and wipe event-seeded
+todos. Event-only seed matches the research gap until upstream adds a REST
+snapshot.
 
 ## V2 add-project starts at resolved location (2026-08-12)
 

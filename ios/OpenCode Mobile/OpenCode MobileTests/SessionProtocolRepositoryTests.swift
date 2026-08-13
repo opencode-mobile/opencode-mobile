@@ -336,13 +336,13 @@ struct SessionProtocolRepositoryTests {
         #expect(request.url?.path.hasSuffix("/api/session/ses_1/revert/clear") == true)
     }
 
-    @Test func v2ListSessionTodosSkipsRestAndReturnsEmpty() async throws {
+    @Test func v2ListSessionTodosSkipsRestAndSignalsUnavailable() async {
         ProtocolRoutingURLProtocol.reset(responses: [.json("[]")])
         let repository = makeSessionRepository(serverProtocol: .v2)
 
-        let todos = try await repository.listSessionTodos(id: "ses_1", directory: "/repo")
-
-        #expect(todos.isEmpty)
+        await #expect(throws: SessionError.http(statusCode: 404, message: "Todos REST is unavailable on v2")) {
+            _ = try await repository.listSessionTodos(id: "ses_1", directory: "/repo")
+        }
         #expect(ProtocolRoutingURLProtocol.requests.isEmpty)
     }
 
