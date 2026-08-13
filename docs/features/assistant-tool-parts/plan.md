@@ -37,10 +37,8 @@ Android.
 
 ## Domain objects
 
-- `Message` / `MessagePart.Tool` (enriched), including optional
-  `timeStartEpochMs` from tool `time.start` for the OPE-158 quiet row.
-- Session Chat Screen Model timeline rows that can interleave text, tool
-  cards, tool groups, and child session rows.
+- `Message` / `MessagePart.Tool` (enriched).
+- Session Chat Screen Model timeline rows that can interleave text and tool cards.
 
 ## Expected platform logs
 
@@ -52,8 +50,8 @@ Android.
 ## Screen Model
 
 - Session Chat timeline: one item per **message**, with ordered **timeline
-  blocks** (text block | tool card block | tool group block | child session
-  row). Generic cards first (OPE-49); specialized chrome in OPE-50+.
+  blocks** (text block | tool card block | tool group block). Generic cards
+  first (OPE-49); specialized chrome in OPE-50+.
 - OPE-49: Screen Model maps assistant parts → blocks; merges adjacent
   TextParts; applies hide rules (`todowrite`; in-flight `question`); omits
   messages with no visible blocks; rebuilds blocks on live part updates.
@@ -96,9 +94,6 @@ Android.
   Viewer or Changed Files list).
 - Feature-local mapping from tool ID → card chrome only where the shared card
   variants are insufficient.
-- **Feature-local:** Quiet row for pending/running `task` (OPE-158). Not a
-  Tool Call Card variant; it is child-session presence, not generic tool
-  status.
 
 ## Research
 

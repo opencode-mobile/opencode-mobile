@@ -22,8 +22,6 @@
   formatter-built compact tool labels so Session Chat looks unchanged.
 - Domain ToolPart omits `raw`, tool timing, and attachments for OPE-48; DTOs
   may still parse them. Android tool-state DTO gains `metadata` parity with iOS.
-  OPE-158 later lifts `time.start` onto ToolPart as `timeStartEpochMs` for the
-  quiet row.
 - Compact label formatter stays domain-side (beside the message adapter) so
   both platforms keep the same `Message.text` projection until cards land.
 - Completed edit/write/patch may already carry filediff-style metadata in
@@ -203,11 +201,8 @@ Call Card.
   description / prompt. Do not subscribe to the child session’s tool stream
   just to populate this row.
 - Elapsed: `m:ss` from existing tool `time.start` when that timestamp is
-  already on the payload; omit when missing. Do not invent a start time or a
-  new server API. When `time.start` is present, the quiet-row **view** ticks
-  locally (`now − start`) about once a second so elapsed advances without
-  rebuilding the Session Chat Screen Model. Do not run a ViewModel or
-  timeline-builder timer. On resume, recompute from `time.start`.
+  already on the payload; omit when missing. Do not invent a free-running
+  client clock or a new server API.
 - Tap / `childSessionId` navigation stays as OPE-52.
 - Feature-local Session Chat chrome. Do not extend the Tool Call Card for this
   row; that component stays collapsed tool-agnostic status chrome.

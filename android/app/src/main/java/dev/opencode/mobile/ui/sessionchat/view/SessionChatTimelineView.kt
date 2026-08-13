@@ -499,9 +499,7 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
                 )
             is SessionChatTimelineBlock.Attachment ->
                 OpenCodeOutgoingMessageContent.Attachment(AttachmentPresentationMapper.from(block.attachment))
-            is SessionChatTimelineBlock.ToolCard, is SessionChatTimelineBlock.ToolGroup,
-            is SessionChatTimelineBlock.ChildSessionRow,
-            -> null
+            is SessionChatTimelineBlock.ToolCard, is SessionChatTimelineBlock.ToolGroup -> null
         }
     }
 }
@@ -611,21 +609,6 @@ private fun AssistantMessageContent(
                             title = block.title,
                             subtitle = block.subtitle,
                             errorText = block.errorText,
-                        )
-                    is SessionChatTimelineBlock.ChildSessionRow ->
-                        SessionChatChildSessionRow(
-                            agentName = block.agentName,
-                            letter = block.letter,
-                            isBackground = block.isBackground,
-                            secondLine = block.secondLine,
-                            timeStartEpochMs = block.timeStartEpochMs,
-                            showsChevron = block.childSessionId != null,
-                            onClick =
-                                block.childSessionId?.let { childSessionId ->
-                                    {
-                                        onChildSessionTap(childSessionId, block.agentName)
-                                    }
-                                },
                         )
                 }
             }

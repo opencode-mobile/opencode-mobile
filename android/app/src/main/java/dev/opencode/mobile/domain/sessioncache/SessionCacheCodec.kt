@@ -155,7 +155,6 @@ internal data class CachedMessagePartPayload(
     val mime: String? = null,
     val attachmentKind: String? = null,
     val dataUrl: String? = null,
-    val timeStartEpochMs: Long? = null,
 )
 
 @Serializable
@@ -316,7 +315,6 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 input = input,
                 output = output,
                 metadata = metadata,
-                timeStartEpochMs = timeStartEpochMs,
             )
         is MessagePart.File ->
             CachedMessagePartPayload(
@@ -353,7 +351,6 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                 output = output,
                 metadata = metadata,
                 id = id,
-                timeStartEpochMs = timeStartEpochMs,
             )
         "file" -> {
             val fileId = id ?: return null

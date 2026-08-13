@@ -38,7 +38,6 @@ object WorkingTurnIndicator {
                 is SessionChatTimelineBlock.Attachment,
                 is SessionChatTimelineBlock.ToolCard,
                 is SessionChatTimelineBlock.ToolGroup,
-                is SessionChatTimelineBlock.ChildSessionRow,
                 -> true
             }
         }

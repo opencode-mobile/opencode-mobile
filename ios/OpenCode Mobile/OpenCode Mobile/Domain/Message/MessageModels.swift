@@ -148,7 +148,6 @@ nonisolated struct ToolPart: Equatable, Sendable {
     let input: [String: AnyCodable]?
     let output: String?
     let metadata: [String: AnyCodable]?
-    let timeStartEpochMs: Int64?
 
     init(
         id: String? = nil,
@@ -159,8 +158,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
         callID: String? = nil,
         input: [String: AnyCodable]? = nil,
         output: String? = nil,
-        metadata: [String: AnyCodable]? = nil,
-        timeStartEpochMs: Int64? = nil
+        metadata: [String: AnyCodable]? = nil
     ) {
         self.id = id
         self.toolName = toolName
@@ -171,7 +169,6 @@ nonisolated struct ToolPart: Equatable, Sendable {
         self.input = input
         self.output = output
         self.metadata = metadata
-        self.timeStartEpochMs = timeStartEpochMs
     }
 }
 

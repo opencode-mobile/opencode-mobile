@@ -84,7 +84,6 @@ sealed class MessagePart {
         val output: String? = null,
         val metadata: JsonObject? = null,
         val id: String? = null,
-        val timeStartEpochMs: Long? = null,
     ) : MessagePart()
 
     data class File(
