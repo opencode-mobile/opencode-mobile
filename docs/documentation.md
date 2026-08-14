@@ -51,6 +51,8 @@ I update it?".
         ├── feature/{SKILL.md, reference.md, agents/}
         ├── linear-project-tracking/{SKILL.md, reference.md}
         ├── pull-app-logs/{SKILL.md, ANDROID.md, IOS.md, TROUBLESHOOTING.md}
+        ├── publish-prototype/SKILL.md
+        ├── publish-ui-snapshots/{SKILL.md, reference.md, scripts/}
         ├── run-github-actions/{SKILL.md, FAILURE-PATTERNS.md}
         └── synced-native-feature/SKILL.md
 ```
@@ -58,7 +60,7 @@ I update it?".
 Scale today: **271 markdown files under `docs/`** (committed HTML companions are
 retired), **41 feature directories**, **6 ADRs**, **35 files under
 `docs/design-system/components/`** (README + 34 component docs), **3 agent
-how-to docs**, **7 skills**.
+how-to docs**, **8 skills**.
 
 ---
 

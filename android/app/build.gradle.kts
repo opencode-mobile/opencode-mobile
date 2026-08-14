@@ -69,6 +69,7 @@ ktlint {
     ignoreFailures.set(false)
     filter {
         exclude("**/OpenCodeIcons.kt")
+        exclude("**/GeneratedSnapshotEvidence/**")
     }
 }
 
