@@ -3,11 +3,6 @@ name: Android Checks
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-  # Fallback while pull_request delivery is unreliable: feature-branch pushes
-  # still run Checks. Ignore main so merges don't double-bill with other workflows.
-  push:
-    branches-ignore:
-      - main
   workflow_dispatch:
 
 concurrency:

@@ -17,6 +17,8 @@ Branch: `feature/ope-68-pr-ci-gating`
 - [x] Quarantine Android/iOS markdown load benchmarks from CI gates
 - [x] Restore Android Build to `workflow_dispatch` only (it had drifted onto
   PR and feature-branch push triggers)
+- [x] Drop the Checks feature-branch `push` fallback so a PR does not run the
+  same Android/iOS job twice
 
 ## Remaining
 
