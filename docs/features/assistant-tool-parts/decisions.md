@@ -190,8 +190,12 @@ Superseded by **OPE-51 file-change tool cards (grilling)** below.
 [OPE-158](https://linear.app/opencode-mobile/issue/OPE-158/running-child-session-chat-row).
 Locked from the running-child-session thread prototype, variant **A — Quiet
 row**. A pending/running `task` in the parent timeline is a person/thread row,
-not a Tool Call Card. Completed and error `task` parts keep the OPE-52 Tool
-Call Card.
+not a Tool Call Card.
+
+OPE-158 shipped this as feature-local Session Chat chrome. [OPE-162](https://linear.app/opencode-mobile/issue/OPE-162/design-system-child-session-row)
+promotes that chrome to the design-system Child Session Row and uses it for
+completed `task` parts as well. Error `task` parts still keep the OPE-52
+Tool Call Card.
 
 - Layout: circular letter avatar, agent name, optional `background` caption,
   live second line, optional elapsed, trailing chevron when tappable.
@@ -209,6 +213,18 @@ Call Card.
   rebuilding the Session Chat Screen Model. Do not run a ViewModel or
   timeline-builder timer. On resume, recompute from `time.start`.
 - Tap / `childSessionId` navigation stays as OPE-52.
-- Feature-local Session Chat chrome. Do not extend the Tool Call Card for this
-  row; that component stays collapsed tool-agnostic status chrome.
+- Design-system Child Session Row (OPE-162). Do not extend the Tool Call Card
+  for this row; that component stays collapsed tool-agnostic status chrome.
+  Session Chat keeps only the local elapsed tick and passes a formatted
+  string.
 - Prototype: `docs/prototypes/running-child-session-thread/` (`?variant=A`).
+
+## OPE-162 design-system Child Session Row
+
+- Promote the Quiet row into the Component Collection. Completed `task` parts
+  use the same row so they read as child sessions, not generic tool cards.
+- Error `task` parts keep the Tool Call Card so the error slot stays visible.
+- Elapsed stays feature-owned: the component does not tick. Pending/running
+  pass `m:ss` from `time.start`; completed omits elapsed.
+- Avatar is a letter from the title on `surface-raised`. No List Item
+  `LetterAccent` palette.

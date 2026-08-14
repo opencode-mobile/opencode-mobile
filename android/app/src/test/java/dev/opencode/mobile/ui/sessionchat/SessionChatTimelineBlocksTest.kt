@@ -634,7 +634,7 @@ class SessionChatTimelineBlocksTest {
 
     @Test
     fun build_taskUsesAgentTitleDescriptionAndChildSessionId() {
-        val tool =
+        val row =
             buildBlocks(
                 role = MessageRole.Assistant,
                 parts =
@@ -647,12 +647,14 @@ class SessionChatTimelineBlocksTest {
                             metadata = json("sessionId" to "ses-child-1"),
                         ),
                     ),
-            ).single() as SessionChatTimelineBlock.ToolCard
+            ).single() as SessionChatTimelineBlock.ChildSessionRow
 
-        assertEquals("explore", tool.title)
-        assertEquals("Find auth bugs", tool.subtitle)
-        assertEquals("ses-child-1", tool.childSessionId)
-        assertNull(tool.detailText)
+        assertEquals("explore", row.agentName)
+        assertEquals("E", row.letter)
+        assertEquals("Find auth bugs", row.secondLine)
+        assertEquals("ses-child-1", row.childSessionId)
+        assertFalse(row.isBackground)
+        assertNull(row.timeStartEpochMs)
     }
 
     @Test
@@ -714,7 +716,7 @@ class SessionChatTimelineBlocksTest {
 
     @Test
     fun build_taskUsesInputNameFallbackAndOmitsBareBackground() {
-        val tool =
+        val row =
             buildBlocks(
                 role = MessageRole.Assistant,
                 parts =
@@ -730,16 +732,19 @@ class SessionChatTimelineBlocksTest {
                                 ),
                         ),
                     ),
-            ).single() as SessionChatTimelineBlock.ToolCard
+            ).single() as SessionChatTimelineBlock.ChildSessionRow
 
-        assertEquals("coder", tool.title)
-        assertNull(tool.subtitle)
-        assertNull(tool.childSessionId)
+        assertEquals("coder", row.agentName)
+        assertEquals("C", row.letter)
+        assertNull(row.secondLine)
+        assertTrue(row.isBackground)
+        assertNull(row.childSessionId)
+        assertNull(row.timeStartEpochMs)
     }
 
     @Test
     fun build_taskAppendsBackgroundMarkerAndUsesMetadataAgent() {
-        val tool =
+        val row =
             buildBlocks(
                 role = MessageRole.Assistant,
                 parts =
@@ -759,11 +764,14 @@ class SessionChatTimelineBlocksTest {
                                 ),
                         ),
                     ),
-            ).single() as SessionChatTimelineBlock.ToolCard
+            ).single() as SessionChatTimelineBlock.ChildSessionRow
 
-        assertEquals("researcher", tool.title)
-        assertEquals("Long research (background)", tool.subtitle)
-        assertEquals("ses-bg", tool.childSessionId)
+        assertEquals("researcher", row.agentName)
+        assertEquals("R", row.letter)
+        assertEquals("Long research", row.secondLine)
+        assertTrue(row.isBackground)
+        assertEquals("ses-bg", row.childSessionId)
+        assertNull(row.timeStartEpochMs)
     }
 
     @Test
@@ -1254,8 +1262,8 @@ class SessionChatTimelineBlocksTest {
             )
 
         assertEquals(2, blocks.size)
-        val first = blocks[0] as SessionChatTimelineBlock.ToolCard
-        val second = blocks[1] as SessionChatTimelineBlock.ToolCard
+        val first = blocks[0] as SessionChatTimelineBlock.ChildSessionRow
+        val second = blocks[1] as SessionChatTimelineBlock.ChildSessionRow
         assertEquals(PresentationBlockId.direct("prt-1"), first.blockID)
         assertEquals(PresentationBlockId.direct("prt-2"), second.blockID)
         assertEquals("ses-1", first.childSessionId)
@@ -1277,7 +1285,7 @@ class SessionChatTimelineBlocksTest {
 
         assertEquals(3, blocks.size)
         assertTrue(blocks[0] is SessionChatTimelineBlock.ToolCard)
-        assertTrue(blocks[1] is SessionChatTimelineBlock.ToolCard)
+        assertTrue(blocks[1] is SessionChatTimelineBlock.ChildSessionRow)
         assertTrue(blocks[2] is SessionChatTimelineBlock.ToolCard)
     }
 

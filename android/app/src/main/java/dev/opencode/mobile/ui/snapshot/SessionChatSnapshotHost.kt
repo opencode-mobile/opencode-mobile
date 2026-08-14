@@ -106,11 +106,9 @@ fun SnapshotEvidenceChildSessionRow(
 ) {
     SessionChatChildSessionRow(
         agentName = mock.agentName,
-        letter = mock.letter,
         isBackground = mock.isBackground,
         secondLine = mock.secondLine,
         timeStartEpochMs = mock.timeStartEpochMs,
-        showsChevron = mock.showsChevron,
         onClick = if (mock.showsChevron) ({}) else null,
         modifier = modifier.fillMaxWidth(),
     )

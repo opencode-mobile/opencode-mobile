@@ -433,7 +433,7 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func toToolBlock(_ tool: ToolPart) -> SessionChatTimelineBlock? {
-        if tool.toolName.lowercased() == "task", tool.status == .pending || tool.status == .running {
+        if tool.toolName.lowercased() == "task", tool.status != .error {
             return toChildSessionRow(tool)
         }
         return toToolCard(tool)
@@ -452,7 +452,9 @@ nonisolated enum SessionChatTimelineBlocks {
                 letter: SessionChatChildSessionElapsed.letter(from: agentName),
                 isBackground: isTruthyMetadata(tool.metadata, key: "background"),
                 secondLine: secondLine,
-                timeStartEpochMs: tool.timeStartEpochMs,
+                timeStartEpochMs: (tool.status == .pending || tool.status == .running)
+                    ? tool.timeStartEpochMs
+                    : nil,
                 childSessionId: metadataString(tool.metadata, keys: "sessionId")
             )
         )

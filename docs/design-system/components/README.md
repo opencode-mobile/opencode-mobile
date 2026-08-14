@@ -102,6 +102,7 @@ applicable item is complete.
 - `message-list.md`
 - `outgoing-message.md`
 - `tool-call-card.md`
+- `child-session-row.md`
 - `top-bar.md`
 - `overflow-menu.md`
 - `bottom-sheet.md`

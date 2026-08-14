@@ -19,12 +19,16 @@
 | [OPE-51](https://linear.app/opencode-mobile/issue/OPE-51/file-change-tool-cards) | File change tool cards | OPE-50 |
 | [OPE-52](https://linear.app/opencode-mobile/issue/OPE-52/subagent-task-tool-card) | Subagent task tool card | None (parallel with OPE-51) |
 | [OPE-158](https://linear.app/opencode-mobile/issue/OPE-158/running-child-session-chat-row) | Running child session chat row | OPE-52 |
+| [OPE-162](https://linear.app/opencode-mobile/issue/OPE-162/design-system-child-session-row) | Design-system Child Session Row | OPE-158 |
 
 ## Design System
 
 - Tool Call Card shipped on iOS and Android with Component Gallery entries
   ([OPE-47](https://linear.app/opencode-mobile/issue/OPE-47/design-system-tool-call-card)).
   Contract: `docs/design-system/components/tool-call-card.md`.
+- Child Session Row shipped on iOS and Android with Component Gallery entries
+  ([OPE-162](https://linear.app/opencode-mobile/issue/OPE-162/design-system-child-session-row)).
+  Contract: `docs/design-system/components/child-session-row.md`.
 
 ## Android
 
@@ -59,8 +63,8 @@
 
 ## Remaining
 
-- Open pull request and merge Running child session chat row
-  ([OPE-158](https://linear.app/opencode-mobile/issue/OPE-158/running-child-session-chat-row)).
+- Open pull request and merge Design-system Child Session Row
+  ([OPE-162](https://linear.app/opencode-mobile/issue/OPE-162/design-system-child-session-row)).
 - Follow-up polish (per-block markdown) remains under parity gaps.
 
 ## Completed
@@ -73,3 +77,6 @@
 - File-change tool cards ([OPE-51](https://linear.app/opencode-mobile/issue/OPE-51/file-change-tool-cards)).
 - Running child session chat row Quiet row implemented on iOS and Android
   ([OPE-158](https://linear.app/opencode-mobile/issue/OPE-158/running-child-session-chat-row)).
+- Design-system Child Session Row implemented on iOS and Android; completed
+  `task` parts use it, error stays on the Tool Call Card
+  ([OPE-162](https://linear.app/opencode-mobile/issue/OPE-162/design-system-child-session-row)).

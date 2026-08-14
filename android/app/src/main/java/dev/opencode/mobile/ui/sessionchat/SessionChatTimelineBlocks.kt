@@ -381,9 +381,7 @@ object SessionChatTimelineBlocks {
     }
 
     private fun toToolBlock(tool: MessagePart.Tool): SessionChatTimelineBlock? {
-        if (tool.toolName.lowercase() == "task" &&
-            (tool.status == ToolStatus.Pending || tool.status == ToolStatus.Running)
-        ) {
+        if (tool.toolName.lowercase() == "task" && tool.status != ToolStatus.Error) {
             return toChildSessionRow(tool)
         }
         return toToolCard(tool)
@@ -401,7 +399,12 @@ object SessionChatTimelineBlocks {
             letter = SessionChatChildSessionElapsed.letter(from = agentName),
             isBackground = isTruthyMetadata(tool.metadata, "background"),
             secondLine = secondLine,
-            timeStartEpochMs = tool.timeStartEpochMs,
+            timeStartEpochMs =
+                if (tool.status == ToolStatus.Pending || tool.status == ToolStatus.Running) {
+                    tool.timeStartEpochMs
+                } else {
+                    null
+                },
             childSessionId = metadataString(tool.metadata, "sessionId"),
         )
     }
