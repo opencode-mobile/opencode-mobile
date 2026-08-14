@@ -21,6 +21,7 @@ import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatChildSessionRow
 
 @Composable
 fun SessionChatSnapshotHost(
@@ -90,5 +91,27 @@ private fun SnapshotEvidenceRow(message: SnapshotEvidenceMessage) {
             Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
                 SnapshotEvidenceAssistantBubble(text = message.text)
             }
+
+        SnapshotEvidenceRole.ChildSession ->
+            message.childSession?.let { childSession ->
+                SnapshotEvidenceChildSessionRow(mock = childSession)
+            }
     }
+}
+
+@Composable
+fun SnapshotEvidenceChildSessionRow(
+    mock: SnapshotEvidenceChildSession,
+    modifier: Modifier = Modifier,
+) {
+    SessionChatChildSessionRow(
+        agentName = mock.agentName,
+        letter = mock.letter,
+        isBackground = mock.isBackground,
+        secondLine = mock.secondLine,
+        timeStartEpochMs = mock.timeStartEpochMs,
+        showsChevron = mock.showsChevron,
+        onClick = if (mock.showsChevron) ({}) else null,
+        modifier = modifier.fillMaxWidth(),
+    )
 }

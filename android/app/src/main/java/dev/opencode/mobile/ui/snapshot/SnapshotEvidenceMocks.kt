@@ -5,6 +5,20 @@ import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
 enum class SnapshotEvidenceRole {
     User,
     Assistant,
+    ChildSession,
+}
+
+data class SnapshotEvidenceChildSession(
+    val agentName: String,
+    val letter: String,
+    val isBackground: Boolean,
+    val secondLine: String?,
+    /** Elapsed offset from now, so a snapshot captures a stable `m:ss`. */
+    val elapsedMs: Long?,
+    val showsChevron: Boolean,
+) {
+    val timeStartEpochMs: Long?
+        get() = elapsedMs?.let { System.currentTimeMillis() - it }
 }
 
 data class SnapshotEvidenceMessage(
@@ -12,11 +26,13 @@ data class SnapshotEvidenceMessage(
     val role: SnapshotEvidenceRole,
     val text: String,
     val metadataLabel: String? = null,
+    val childSession: SnapshotEvidenceChildSession? = null,
 )
 
 object SnapshotEvidenceMocks {
     const val SESSION_TITLE = "Assistant message"
     const val USER_METADATA = "Build · DeepSeek V4 Flash · 9:05 PM"
+    const val CHILD_SESSION_TITLE = "Find auth bugs"
 
     val userPrompt =
         SnapshotEvidenceMessage(
@@ -38,6 +54,35 @@ object SnapshotEvidenceMocks {
         )
 
     val conversation = listOf(userPrompt, assistantReply)
+
+    val childSessionUserPrompt =
+        SnapshotEvidenceMessage(
+            id = "snapshot-child-user-1",
+            role = SnapshotEvidenceRole.User,
+            text = "Find auth bugs in the login flow.",
+            metadataLabel = USER_METADATA,
+        )
+
+    val runningChildSession =
+        SnapshotEvidenceChildSession(
+            agentName = "explore",
+            letter = "E",
+            isBackground = true,
+            secondLine = "Find auth bugs",
+            elapsedMs = 84_000,
+            showsChevron = true,
+        )
+
+    val runningChildSessionMessage =
+        SnapshotEvidenceMessage(
+            id = "snapshot-child-1",
+            role = SnapshotEvidenceRole.ChildSession,
+            text = "",
+            childSession = runningChildSession,
+        )
+
+    val childSessionConversation =
+        listOf(childSessionUserPrompt, runningChildSessionMessage)
 
     val idleComposer =
         OpenCodeSessionComposerState.Prompt(

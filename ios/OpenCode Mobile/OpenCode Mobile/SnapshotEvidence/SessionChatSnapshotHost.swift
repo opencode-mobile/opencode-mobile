@@ -12,18 +12,20 @@ struct SessionChatSnapshotHost: View {
                 title: sessionTitle,
                 leading: .back(action: {})
             )
-            ScrollView {
-                VStack(spacing: 16) {
-                    ForEach(messages) { message in
-                        snapshotRow(message)
-                    }
+            // ImageRenderer collapses ScrollView + maxHeight infinity to zero
+            // height, which also lets UIViewRepresentable composer chrome expand.
+            VStack(spacing: 16) {
+                ForEach(messages) { message in
+                    snapshotRow(message)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             OpenCodeSessionComposer(state: composerState, onAction: { _ in })
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
     }
 
@@ -39,7 +41,28 @@ struct SessionChatSnapshotHost: View {
         case .assistant:
             SnapshotEvidenceAssistantBubble(text: message.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
+        case .childSession:
+            if let childSession = message.childSession {
+                SnapshotEvidenceChildSessionRow(mock: childSession)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
+    }
+}
+
+struct SnapshotEvidenceChildSessionRow: View {
+    let mock: SnapshotEvidenceChildSession
+
+    var body: some View {
+        SessionChatChildSessionRow(
+            agentName: mock.agentName,
+            letter: mock.letter,
+            isBackground: mock.isBackground,
+            secondLine: mock.secondLine,
+            timeStartEpochMs: mock.timeStartEpochMs,
+            showsChevron: mock.showsChevron,
+            action: mock.showsChevron ? {} : nil
+        )
     }
 }
 
