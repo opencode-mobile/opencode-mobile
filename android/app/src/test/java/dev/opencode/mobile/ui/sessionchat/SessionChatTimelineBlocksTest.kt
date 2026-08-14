@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.message.ToolStatus
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -656,7 +657,7 @@ class SessionChatTimelineBlocksTest {
 
     @Test
     fun build_taskFallsBackTitleAndOmitsNavWithoutSessionId() {
-        val tool =
+        val row =
             buildBlocks(
                 role = MessageRole.Assistant,
                 parts =
@@ -669,12 +670,46 @@ class SessionChatTimelineBlocksTest {
                             input = json("prompt" to "Investigate flaky tests"),
                         ),
                     ),
-            ).single() as SessionChatTimelineBlock.ToolCard
+            ).single() as SessionChatTimelineBlock.ChildSessionRow
 
-        assertEquals("Task", tool.title)
-        assertEquals("Investigate flaky tests", tool.subtitle)
-        assertNull(tool.childSessionId)
-        assertNull(tool.detailText)
+        assertEquals("Task", row.agentName)
+        assertEquals("T", row.letter)
+        assertEquals("Working…", row.secondLine)
+        assertNull(row.childSessionId)
+        assertFalse(row.isBackground)
+        assertNull(row.timeStartEpochMs)
+    }
+
+    @Test
+    fun build_pendingTaskQuietRowUsesPromptWhenTitleMissing() {
+        val row =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "task",
+                            status = ToolStatus.Pending,
+                            id = "prt-1",
+                            input = json("agent" to "explore", "description" to "Find auth bugs"),
+                            metadata =
+                                JsonObject(
+                                    mapOf(
+                                        "background" to JsonPrimitive(true),
+                                        "sessionId" to JsonPrimitive("ses-child-1"),
+                                    ),
+                                ),
+                            timeStartEpochMs = 1_710_000_000_000,
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ChildSessionRow
+
+        assertEquals("explore", row.agentName)
+        assertEquals("E", row.letter)
+        assertEquals("Find auth bugs", row.secondLine)
+        assertTrue(row.isBackground)
+        assertEquals("ses-child-1", row.childSessionId)
+        assertEquals(1_710_000_000_000, row.timeStartEpochMs)
     }
 
     @Test
@@ -1312,6 +1347,23 @@ class SessionChatTimelineBlocksTest {
         assertEquals(3, merged.size)
     }
 
+    @Test
+    fun merge_collapseOn_runningTaskRowBreaksRun() {
+        val bodies =
+            listOf(
+                toolOnlyBody("a1", "bash-1"),
+                toolOnlyBody("a2", "task-1", toolName = "task", status = ToolStatus.Running),
+                toolOnlyBody("a3", "bash-3"),
+            )
+        val merged =
+            SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+                bodies,
+                collapseConsecutiveToolCalls = true,
+            )
+        assertEquals(3, merged.size)
+        assertTrue(merged[1].blocks.single() is SessionChatTimelineBlock.ChildSessionRow)
+    }
+
     private fun buildBlocks(
         role: MessageRole,
         parts: List<MessagePart>,
@@ -1329,8 +1381,9 @@ class SessionChatTimelineBlocksTest {
         id: String,
         toolId: String,
         toolName: String = "bash",
+        status: ToolStatus = ToolStatus.Completed,
     ): DisplayMessageBody {
-        val parts = listOf(MessagePart.Tool(toolName = toolName, status = ToolStatus.Completed, id = toolId))
+        val parts = listOf(MessagePart.Tool(toolName = toolName, status = status, id = toolId))
         return DisplayMessageBody(
             message = Message(id = id, role = MessageRole.Assistant, text = "", parts = parts),
             blocks = buildBlocks(MessageRole.Assistant, parts, collapseConsecutiveToolCalls = true),

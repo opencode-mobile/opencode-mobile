@@ -437,6 +437,23 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun toMessagePart_runningMapsTimeStart() {
+        val state =
+            buildJsonObject {
+                put("status", "running")
+                put(
+                    "time",
+                    buildJsonObject {
+                        put("start", 1_710_000_000_000)
+                    },
+                )
+            }
+        val dto = MessagePartDto(id = "prt-1", type = "tool", tool = "task", state = state)
+        val tool = adapter.toMessagePart(dto) as MessagePart.Tool
+        assertEquals(1_710_000_000_000, tool.timeStartEpochMs)
+    }
+
+    @Test
     fun toMessagePart_errorPreservesErrorText() {
         val state =
             buildJsonObject {

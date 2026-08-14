@@ -125,6 +125,7 @@ class MessageDomainAdapter {
             output = state?.output,
             metadata = state?.metadata,
             id = id,
+            timeStartEpochMs = state?.time?.start,
         )
     }
 

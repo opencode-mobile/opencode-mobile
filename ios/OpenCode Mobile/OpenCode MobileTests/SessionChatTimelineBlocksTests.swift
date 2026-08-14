@@ -455,14 +455,49 @@ struct SessionChatTimelineBlocksTests {
                 ),
             ]
         )
-        guard case .toolCard(_, let tool) = blocks.first else {
-            Issue.record("Expected tool card")
+        guard case .childSessionRow(_, let row) = blocks.first else {
+            Issue.record("Expected child session row")
             return
         }
-        #expect(tool.title == "Task")
-        #expect(tool.subtitle == "Investigate flaky tests")
-        #expect(tool.childSessionId == nil)
-        #expect(tool.detailText == nil)
+        #expect(row.agentName == "Task")
+        #expect(row.letter == "T")
+        #expect(row.secondLine == "Working…")
+        #expect(row.childSessionId == nil)
+        #expect(row.isBackground == false)
+        #expect(row.timeStartEpochMs == nil)
+    }
+
+    @Test func build_pendingTaskQuietRowUsesPromptWhenTitleMissing() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "task-1",
+                        toolName: "task",
+                        status: .pending,
+                        input: [
+                            "agent": .string("explore"),
+                            "description": .string("Find auth bugs"),
+                        ],
+                        metadata: [
+                            "background": .bool(true),
+                            "sessionId": .string("ses-child-1"),
+                        ],
+                        timeStartEpochMs: 1_710_000_000_000
+                    )
+                ),
+            ]
+        )
+        guard case .childSessionRow(_, let row) = blocks.first else {
+            Issue.record("Expected child session row")
+            return
+        }
+        #expect(row.agentName == "explore")
+        #expect(row.letter == "E")
+        #expect(row.secondLine == "Find auth bugs")
+        #expect(row.isBackground == true)
+        #expect(row.childSessionId == "ses-child-1")
+        #expect(row.timeStartEpochMs == 1_710_000_000_000)
     }
 
     @Test func build_taskUsesInputNameFallbackAndOmitsBareBackground() {
@@ -1139,6 +1174,23 @@ struct SessionChatTimelineBlocksTests {
         #expect(merged.count == 3)
     }
 
+    @Test func merge_collapseOn_runningTaskRowBreaksRun() {
+        let bodies = [
+            toolOnlyBody(id: "a1", toolID: "bash-1"),
+            toolOnlyBody(id: "a2", toolID: "task-1", toolName: "task", status: .running),
+            toolOnlyBody(id: "a3", toolID: "bash-3"),
+        ]
+        let merged = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+            bodies,
+            collapseConsecutiveToolCalls: true
+        )
+        #expect(merged.count == 3)
+        guard case .childSessionRow = merged[1].blocks.single else {
+            Issue.record("Expected running task to stay a child-session row")
+            return
+        }
+    }
+
     @Test func build_collapseOff_mixedToolsContextStillGroups() {
         let blocks = okBlocks(
             parts: [
@@ -1184,8 +1236,13 @@ struct SessionChatTimelineBlocksTests {
         .text(TextPart(id: id, text: value, isStreaming: false))
     }
 
-    private func toolOnlyBody(id: String, toolID: String, toolName: String = "bash") -> DisplayMessageBody {
-        let part: MessagePart = .tool(ToolPart(id: toolID, toolName: toolName, status: .completed))
+    private func toolOnlyBody(
+        id: String,
+        toolID: String,
+        toolName: String = "bash",
+        status: ToolStatus = .completed
+    ) -> DisplayMessageBody {
+        let part: MessagePart = .tool(ToolPart(id: toolID, toolName: toolName, status: status))
         let message = Message(
             id: id,
             role: .assistant,

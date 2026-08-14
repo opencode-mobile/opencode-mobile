@@ -59,6 +59,16 @@ sealed class SessionChatTimelineBlock {
         val errorText: String? = null,
         val members: List<ToolCard>,
     ) : SessionChatTimelineBlock()
+
+    data class ChildSessionRow(
+        override val blockID: String,
+        val agentName: String,
+        val letter: String,
+        val isBackground: Boolean,
+        val secondLine: String? = null,
+        val timeStartEpochMs: Long? = null,
+        val childSessionId: String? = null,
+    ) : SessionChatTimelineBlock()
 }
 
 object SessionChatTimelineBlocks {
@@ -128,13 +138,13 @@ object SessionChatTimelineBlocks {
                             blocks += group
                             index = lookAhead
                         } else {
-                            val card = toToolCard(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                            blocks += card
+                            val block = toToolBlock(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                            blocks += block
                             index += 1
                         }
                     } else {
-                        val card = toToolCard(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                        blocks += card
+                        val block = toToolBlock(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                        blocks += block
                         index += 1
                     }
                 }
@@ -238,7 +248,10 @@ object SessionChatTimelineBlocks {
         when (block) {
             is SessionChatTimelineBlock.ToolGroup -> true
             is SessionChatTimelineBlock.ToolCard -> block.toolName.lowercase() != "task"
-            is SessionChatTimelineBlock.Text, is SessionChatTimelineBlock.Attachment -> false
+            is SessionChatTimelineBlock.Text,
+            is SessionChatTimelineBlock.Attachment,
+            is SessionChatTimelineBlock.ChildSessionRow,
+            -> false
         }
 
     /**
@@ -365,6 +378,32 @@ object SessionChatTimelineBlocks {
             return ToolStatus.Running
         }
         return ToolStatus.Completed
+    }
+
+    private fun toToolBlock(tool: MessagePart.Tool): SessionChatTimelineBlock? {
+        if (tool.toolName.lowercase() == "task" &&
+            (tool.status == ToolStatus.Pending || tool.status == ToolStatus.Running)
+        ) {
+            return toChildSessionRow(tool)
+        }
+        return toToolCard(tool)
+    }
+
+    private fun toChildSessionRow(tool: MessagePart.Tool): SessionChatTimelineBlock.ChildSessionRow? {
+        val partId = tool.id ?: return null
+        val agentName = taskAgentName(tool)
+        val secondLine =
+            tool.title?.takeIf { it.isNotEmpty() }
+                ?: inputString(tool.input, "description", "prompt")
+        return SessionChatTimelineBlock.ChildSessionRow(
+            blockID = PresentationBlockId.direct(partId),
+            agentName = agentName,
+            letter = SessionChatChildSessionElapsed.letter(from = agentName),
+            isBackground = isTruthyMetadata(tool.metadata, "background"),
+            secondLine = secondLine,
+            timeStartEpochMs = tool.timeStartEpochMs,
+            childSessionId = metadataString(tool.metadata, "sessionId"),
+        )
     }
 
     private fun toToolCard(tool: MessagePart.Tool): SessionChatTimelineBlock.ToolCard? {
@@ -558,10 +597,7 @@ object SessionChatTimelineBlocks {
     private fun positiveCount(value: Int?): Int? = value?.takeIf { it > 0 }
 
     private fun taskChrome(tool: MessagePart.Tool): Chrome {
-        val title =
-            inputString(tool.input, "agent", "name")
-                ?: metadataString(tool.metadata, "agent")
-                ?: "Task"
+        val title = taskAgentName(tool)
         val description =
             inputString(tool.input, "description", "prompt")
                 ?: runningTitleOverride(tool)
@@ -577,6 +613,11 @@ object SessionChatTimelineBlocks {
             childSessionId = metadataString(tool.metadata, "sessionId"),
         )
     }
+
+    private fun taskAgentName(tool: MessagePart.Tool): String =
+        inputString(tool.input, "agent", "name")
+            ?: metadataString(tool.metadata, "agent")
+            ?: "Task"
 
     private fun contextChrome(
         tool: MessagePart.Tool,
