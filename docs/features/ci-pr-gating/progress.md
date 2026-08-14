@@ -15,6 +15,8 @@ Branch: `feature/ope-68-pr-ci-gating`
   benchmark test dispatcher)
 - [x] Align iOS MessageSync tests with OPE-49 TextPart-only `Message.text`
 - [x] Quarantine Android/iOS markdown load benchmarks from CI gates
+- [x] Restore Android Build to `workflow_dispatch` only (it had drifted onto
+  PR and feature-branch push triggers)
 
 ## Remaining
 

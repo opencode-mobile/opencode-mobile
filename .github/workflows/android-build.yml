@@ -1,20 +1,10 @@
 name: Android Build
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-  push:
-    branches-ignore:
-      - main
   workflow_dispatch:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: [self-hosted, Linux, X64, android]
     defaults:
       run:
