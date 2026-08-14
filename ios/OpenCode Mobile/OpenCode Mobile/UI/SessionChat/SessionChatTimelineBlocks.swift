@@ -90,6 +90,7 @@ nonisolated struct SessionChatToolGroupBlock: Equatable, Sendable {
     let title: String
     let subtitle: String?
     let errorText: String?
+    let detailText: String
 }
 
 nonisolated enum SessionChatTimelineBlocks {
@@ -155,8 +156,12 @@ nonisolated enum SessionChatTimelineBlocks {
                     var groupTools: [ToolPart] = []
                     var lookAhead = index
                     while lookAhead < parts.count {
-                        guard case .tool(let candidate) = parts[lookAhead],
-                              isVisibleTool(candidate),
+                        let candidatePart = parts[lookAhead]
+                        if isTransparentPart(candidatePart) {
+                            lookAhead += 1
+                            continue
+                        }
+                        guard case .tool(let candidate) = candidatePart,
                               isGroupableTool(candidate, collapse: collapseConsecutiveToolCalls)
                         else { break }
                         groupTools.append(candidate)
@@ -212,6 +217,72 @@ nonisolated enum SessionChatTimelineBlocks {
         }
     }
 
+    /// When collapse is on, consecutive assistant messages whose visible blocks
+    /// are only groupable tools become one tool group. OpenCode emits each
+    /// sequential tool step as its own assistant message (`parentID` = user
+    /// turn); grouping only inside one message would leave a stack of Shell
+    /// cards. Visible text, attachments, and `task` tools still break a run.
+    static func mergeConsecutiveToolOnlyAssistantBodies(
+        _ bodies: [DisplayMessageBody],
+        collapseConsecutiveToolCalls: Bool
+    ) -> [DisplayMessageBody] {
+        guard collapseConsecutiveToolCalls, bodies.count >= 2 else { return bodies }
+        var merged: [DisplayMessageBody] = []
+        var index = 0
+        while index < bodies.count {
+            guard isMergeableToolOnlyAssistant(bodies[index]) else {
+                merged.append(bodies[index])
+                index += 1
+                continue
+            }
+            var end = index + 1
+            while end < bodies.count, isMergeableToolOnlyAssistant(bodies[end]) {
+                end += 1
+            }
+            if end == index + 1 {
+                merged.append(bodies[index])
+                index += 1
+                continue
+            }
+            let run = bodies[index..<end]
+            let parts = run.flatMap(\.message.parts)
+            let first = bodies[index]
+            let blocks = buildOrFallback(
+                role: .assistant,
+                parts: parts,
+                messageId: first.message.id,
+                fallbackText: "",
+                collapseConsecutiveToolCalls: true
+            )
+            merged.append(
+                DisplayMessageBody(
+                    message: first.message,
+                    isStreaming: run.contains(where: \.isStreaming),
+                    blocks: blocks,
+                    renderedMarkdown: nil
+                )
+            )
+            index = end
+        }
+        return merged
+    }
+
+    private static func isMergeableToolOnlyAssistant(_ body: DisplayMessageBody) -> Bool {
+        guard body.message.role == .assistant, !body.blocks.isEmpty else { return false }
+        return body.blocks.allSatisfy(isGroupableToolBlock)
+    }
+
+    private static func isGroupableToolBlock(_ block: SessionChatTimelineBlock) -> Bool {
+        switch block {
+        case .toolGroup:
+            true
+        case .toolCard(_, let card):
+            card.toolName.lowercased() != "task"
+        case .text, .attachment:
+            false
+        }
+    }
+
     /// Rewrites user text blocks that are expanded slash-command / skill
     /// templates into `[/name] args` for Session Chat display.
     static func collapseCommandInvocations(
@@ -241,6 +312,23 @@ nonisolated enum SessionChatTimelineBlocks {
         return true
     }
 
+    /// Parts that never become timeline blocks. Grouping looks through them so
+    /// hidden todos, empty text, and compaction markers do not split a visible
+    /// tool run (web filters to renderable parts before grouping).
+    private static func isTransparentPart(_ part: MessagePart) -> Bool {
+        switch part {
+        case .compaction:
+            true
+        case .text(let textPart):
+            !textPart.isDisplayable
+                || textPart.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .tool(let tool):
+            !isVisibleTool(tool)
+        case .file:
+            false
+        }
+    }
+
     private static func isContextTool(_ toolName: String) -> Bool {
         contextToolNames.contains(toolName.lowercased())
     }
@@ -267,17 +355,22 @@ nonisolated enum SessionChatTimelineBlocks {
             group: SessionChatToolGroupBlock(
                 count: tools.count,
                 status: status,
-                title: groupTitle(tools),
-                subtitle: nil,
-                errorText: errorText
+                title: groupTitle(tools.count),
+                subtitle: groupSubtitle(tools),
+                errorText: errorText,
+                detailText: groupDetailText(tools)
             )
         )
     }
 
-    /// Counts group members by tool family in encounter order, pluralizing the
-    /// context families while other families keep their raw name (e.g.
-    /// `2 reads · 1 bash · 1 edit`).
-    private static func groupTitle(_ tools: [ToolPart]) -> String {
+    /// Count headline for the Tool Call Card (`7 tools`).
+    private static func groupTitle(_ count: Int) -> String {
+        "\(count) tools"
+    }
+
+    /// Family one-liner in encounter order (`Edit · Write · 5 shells`).
+    /// A single member of a family is just the verb; multiples get a count.
+    private static func groupSubtitle(_ tools: [ToolPart]) -> String {
         var order: [String] = []
         var counts: [String: Int] = [:]
         for tool in tools {
@@ -288,17 +381,51 @@ nonisolated enum SessionChatTimelineBlocks {
             counts[key, default: 0] += 1
         }
         return order.map { name in
-            "\(counts[name, default: 0]) \(familyLabel(name, count: counts[name, default: 0]))"
+            familyPhrase(name, count: counts[name, default: 0])
         }.joined(separator: " · ")
     }
 
-    private static func familyLabel(_ name: String, count: Int) -> String {
+    private static func familyPhrase(_ name: String, count: Int) -> String {
         switch name {
-        case "read": return count == 1 ? "read" : "reads"
-        case "grep": return count == 1 ? "grep" : "greps"
-        case "glob": return count == 1 ? "glob" : "globs"
-        default: return name
+        case "read": return count == 1 ? "Read" : "\(count) reads"
+        case "grep": return count == 1 ? "Grep" : "\(count) greps"
+        case "glob": return count == 1 ? "Glob" : "\(count) globs"
+        case "bash": return count == 1 ? "Shell" : "\(count) shells"
+        case "edit": return count == 1 ? "Edit" : "\(count) edits"
+        case "write": return count == 1 ? "Write" : "\(count) writes"
+        case "webfetch": return count == 1 ? "Fetch" : "\(count) fetches"
+        case "websearch": return count == 1 ? "Search" : "\(count) searches"
+        case "question": return count == 1 ? "Question" : "\(count) questions"
+        case "skill": return count == 1 ? "Skill" : "\(count) skills"
+        case "apply_patch": return count == 1 ? "Patch" : "\(count) patches"
+        case "linear_get_issue": return count == 1 ? "Get issue" : "\(count) Get issues"
+        case "linear_save_issue": return count == 1 ? "Save issue" : "\(count) Save issues"
+        default:
+            return count == 1 ? name : "\(count) \(name)"
         }
+    }
+
+    private static func groupDetailText(_ tools: [ToolPart]) -> String {
+        tools.map { tool in
+            let chrome = specializedChrome(name: tool.toolName.lowercased(), tool: tool)
+                ?? genericChrome(tool)
+            var lines = [chrome.title]
+            if let subtitle = chrome.subtitle, !subtitle.isEmpty {
+                lines.append(subtitle)
+            }
+            let additions = chrome.additions ?? 0
+            let deletions = chrome.deletions ?? 0
+            if additions > 0 || deletions > 0 {
+                var counts: [String] = []
+                if additions > 0 { counts.append("+\(additions)") }
+                if deletions > 0 { counts.append("−\(deletions)") }
+                lines.append(counts.joined(separator: " "))
+            }
+            if tool.status == .error, let error = tool.error, !error.isEmpty {
+                lines.append(error)
+            }
+            return lines.joined(separator: "\n")
+        }.joined(separator: "\n\n")
     }
 
     private static func worstStatus(_ statuses: [ToolStatus]) -> ToolStatus {

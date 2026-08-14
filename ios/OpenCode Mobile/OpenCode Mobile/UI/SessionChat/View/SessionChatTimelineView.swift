@@ -545,7 +545,15 @@ private struct AssistantMessageContent: View {
                         status: group.status.toolCallCardStatus,
                         title: group.title,
                         subtitle: group.subtitle,
-                        errorText: group.errorText
+                        errorText: group.errorText,
+                        action: {
+                            onToolDetailTap(
+                                SessionChatToolDetailTarget(
+                                    title: group.title,
+                                    body: group.detailText
+                                )
+                            )
+                        }
                     )
                 }
             }

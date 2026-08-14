@@ -57,6 +57,7 @@ sealed class SessionChatTimelineBlock {
         val title: String,
         val subtitle: String? = null,
         val errorText: String? = null,
+        val detailText: String,
     ) : SessionChatTimelineBlock()
 }
 
@@ -112,8 +113,12 @@ object SessionChatTimelineBlocks {
                         val groupTools = mutableListOf<MessagePart.Tool>()
                         var lookAhead = index
                         while (lookAhead < parts.size) {
-                            val candidate = parts[lookAhead] as? MessagePart.Tool ?: break
-                            if (!isVisibleTool(candidate)) break
+                            val candidatePart = parts[lookAhead]
+                            if (isTransparentPart(candidatePart)) {
+                                lookAhead += 1
+                                continue
+                            }
+                            val candidate = candidatePart as? MessagePart.Tool ?: break
                             if (!isGroupableTool(candidate, collapseConsecutiveToolCalls)) break
                             groupTools += candidate
                             lookAhead += 1
@@ -179,6 +184,64 @@ object SessionChatTimelineBlocks {
     }
 
     /**
+     * When collapse is on, consecutive assistant messages whose visible blocks
+     * are only groupable tools become one tool group. OpenCode emits each
+     * sequential tool step as its own assistant message; grouping only inside
+     * one message would leave a stack of Shell cards. Visible text, attachments,
+     * and `task` tools still break a run.
+     */
+    fun mergeConsecutiveToolOnlyAssistantBodies(
+        bodies: List<DisplayMessageBody>,
+        collapseConsecutiveToolCalls: Boolean,
+    ): List<DisplayMessageBody> {
+        if (!collapseConsecutiveToolCalls || bodies.size < 2) return bodies
+        val merged = mutableListOf<DisplayMessageBody>()
+        var index = 0
+        while (index < bodies.size) {
+            if (!isMergeableToolOnlyAssistant(bodies[index])) {
+                merged += bodies[index]
+                index += 1
+                continue
+            }
+            var end = index + 1
+            while (end < bodies.size && isMergeableToolOnlyAssistant(bodies[end])) {
+                end += 1
+            }
+            if (end == index + 1) {
+                merged += bodies[index]
+                index += 1
+                continue
+            }
+            val run = bodies.subList(index, end)
+            val parts = run.flatMap { it.message.parts }
+            val first = bodies[index]
+            val blocks =
+                buildOrFallback(
+                    role = MessageRole.Assistant,
+                    parts = parts,
+                    messageId = first.message.id,
+                    fallbackText = "",
+                    collapseConsecutiveToolCalls = true,
+                )
+            merged += DisplayMessageBody(message = first.message, blocks = blocks)
+            index = end
+        }
+        return merged
+    }
+
+    private fun isMergeableToolOnlyAssistant(body: DisplayMessageBody): Boolean {
+        if (body.message.role != MessageRole.Assistant || body.blocks.isEmpty()) return false
+        return body.blocks.all { isGroupableToolBlock(it) }
+    }
+
+    private fun isGroupableToolBlock(block: SessionChatTimelineBlock): Boolean =
+        when (block) {
+            is SessionChatTimelineBlock.ToolGroup -> true
+            is SessionChatTimelineBlock.ToolCard -> block.toolName.lowercase() != "task"
+            is SessionChatTimelineBlock.Text, is SessionChatTimelineBlock.Attachment -> false
+        }
+
+    /**
      * Rewrites user text blocks that are expanded slash-command / skill
      * templates into `[/name] args` for Session Chat display.
      */
@@ -206,6 +269,19 @@ object SessionChatTimelineBlocks {
         return true
     }
 
+    /**
+     * Parts that never become timeline blocks. Grouping looks through them so
+     * hidden todos, empty text, and compaction markers do not split a visible
+     * tool run (web filters to renderable parts before grouping).
+     */
+    private fun isTransparentPart(part: MessagePart): Boolean =
+        when (part) {
+            is MessagePart.Compaction -> true
+            is MessagePart.Text -> !part.isDisplayable || part.text.isBlank()
+            is MessagePart.Tool -> !isVisibleTool(part)
+            is MessagePart.File -> false
+        }
+
     private fun isContextTool(toolName: String): Boolean = toolName.lowercase() in contextToolNames
 
     /**
@@ -231,18 +307,21 @@ object SessionChatTimelineBlocks {
             blockID = PresentationBlockId.toolGroup(memberIds),
             count = tools.size,
             status = status,
-            title = groupTitle(tools),
-            subtitle = null,
+            title = groupTitle(tools.size),
+            subtitle = groupSubtitle(tools),
             errorText = errorText,
+            detailText = groupDetailText(tools),
         )
     }
 
+    /** Count headline for the Tool Call Card (`7 tools`). */
+    private fun groupTitle(count: Int): String = "$count tools"
+
     /**
-     * Counts group members by tool family in encounter order, pluralizing the
-     * context families while other families keep their raw name (e.g.
-     * `2 reads · 1 bash · 1 edit`).
+     * Family one-liner in encounter order (`Edit · Write · 5 shells`).
+     * A single member of a family is just the verb; multiples get a count.
      */
-    private fun groupTitle(tools: List<MessagePart.Tool>): String {
+    private fun groupSubtitle(tools: List<MessagePart.Tool>): String {
         val order = mutableListOf<String>()
         val counts = mutableMapOf<String, Int>()
         for (tool in tools) {
@@ -251,17 +330,51 @@ object SessionChatTimelineBlocks {
             counts[key] = (counts[key] ?: 0) + 1
         }
         return order.joinToString(" · ") { name ->
-            val count = counts.getValue(name)
-            "$count ${familyLabel(name, count)}"
+            familyPhrase(name, counts.getValue(name))
         }
     }
 
-    private fun familyLabel(name: String, count: Int): String =
+    private fun familyPhrase(
+        name: String,
+        count: Int,
+    ): String =
         when (name) {
-            "read" -> if (count == 1) "read" else "reads"
-            "grep" -> if (count == 1) "grep" else "greps"
-            "glob" -> if (count == 1) "glob" else "globs"
-            else -> name
+            "read" -> if (count == 1) "Read" else "$count reads"
+            "grep" -> if (count == 1) "Grep" else "$count greps"
+            "glob" -> if (count == 1) "Glob" else "$count globs"
+            "bash" -> if (count == 1) "Shell" else "$count shells"
+            "edit" -> if (count == 1) "Edit" else "$count edits"
+            "write" -> if (count == 1) "Write" else "$count writes"
+            "webfetch" -> if (count == 1) "Fetch" else "$count fetches"
+            "websearch" -> if (count == 1) "Search" else "$count searches"
+            "question" -> if (count == 1) "Question" else "$count questions"
+            "skill" -> if (count == 1) "Skill" else "$count skills"
+            "apply_patch" -> if (count == 1) "Patch" else "$count patches"
+            "linear_get_issue" -> if (count == 1) "Get issue" else "$count Get issues"
+            "linear_save_issue" -> if (count == 1) "Save issue" else "$count Save issues"
+            else -> if (count == 1) name else "$count $name"
+        }
+
+    private fun groupDetailText(tools: List<MessagePart.Tool>): String =
+        tools.joinToString("\n\n") { tool ->
+            val chrome = specializedChrome(tool.toolName.lowercase(), tool) ?: genericChrome(tool)
+            buildList {
+                add(chrome.title)
+                chrome.subtitle?.takeIf { it.isNotEmpty() }?.let { add(it) }
+                val additions = chrome.additions ?: 0
+                val deletions = chrome.deletions ?: 0
+                if (additions > 0 || deletions > 0) {
+                    val counts =
+                        buildList {
+                            if (additions > 0) add("+$additions")
+                            if (deletions > 0) add("−$deletions")
+                        }
+                    add(counts.joinToString(" "))
+                }
+                if (tool.status == ToolStatus.Error) {
+                    tool.error?.takeIf { it.isNotEmpty() }?.let { add(it) }
+                }
+            }.joinToString("\n")
         }
 
     private fun worstStatus(statuses: List<ToolStatus>): ToolStatus {

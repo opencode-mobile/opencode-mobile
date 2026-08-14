@@ -209,7 +209,8 @@ struct SessionChatTimelineBlocksTests {
         #expect(blockID == PresentationBlockId.toolGroup(["r1", "g1", "l1"]))
         #expect(group.count == 3)
         #expect(group.status == .running)
-        #expect(group.title == "1 read · 1 grep · 1 glob")
+        #expect(group.title == "3 tools")
+        #expect(group.subtitle == "Read · Grep · Glob")
     }
 
     @Test func build_textBreaksContextGroup() {
@@ -901,7 +902,8 @@ struct SessionChatTimelineBlocksTests {
         }
         #expect(blockID == PresentationBlockId.toolGroup(["bash-1", "edit-1", "read-1"]))
         #expect(group.count == 3)
-        #expect(group.title == "1 bash · 1 edit · 1 read")
+        #expect(group.title == "3 tools")
+        #expect(group.subtitle == "Shell · Edit · Read")
     }
 
     @Test func build_collapseOn_mixedFamilyTitleCounts() {
@@ -919,7 +921,36 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(group.count == 4)
-        #expect(group.title == "2 reads · 1 bash · 1 edit")
+        #expect(group.title == "4 tools")
+        #expect(group.subtitle == "2 reads · Shell · Edit")
+    }
+
+    @Test func build_groupDetailTextUsesCommandAndPath() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(
+                    id: "bash-1",
+                    toolName: "bash",
+                    status: .completed,
+                    input: ["command": .string("xcodebuild build")]
+                )),
+                .tool(ToolPart(
+                    id: "edit-1",
+                    toolName: "edit",
+                    status: .completed,
+                    input: ["filePath": .string("App.swift")]
+                )),
+            ],
+            collapseConsecutiveToolCalls: true
+        )
+        guard case .toolGroup(_, let group) = blocks.single else {
+            Issue.record("Expected tool group")
+            return
+        }
+        #expect(group.title == "2 tools")
+        #expect(group.subtitle == "Shell · Edit")
+        #expect(group.detailText.contains("xcodebuild build"))
+        #expect(group.detailText.contains("App.swift"))
     }
 
     @Test func build_collapseOn_singleToolStaysCard() {
@@ -952,7 +983,25 @@ struct SessionChatTimelineBlocksTests {
         }
     }
 
-    @Test func build_collapseOn_hiddenToolBreaksGroup() {
+    @Test func build_collapseOn_emptyTextDoesNotBreakGroup() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "bash-1", toolName: "bash", status: .completed)),
+                text("gap-1", "  \n"),
+                .tool(ToolPart(id: "bash-2", toolName: "bash", status: .completed)),
+            ],
+            collapseConsecutiveToolCalls: true
+        )
+        guard case .toolGroup(_, let group) = blocks.single else {
+            Issue.record("Expected tool group")
+            return
+        }
+        #expect(group.count == 2)
+        #expect(group.title == "2 tools")
+        #expect(group.subtitle == "2 shells")
+    }
+
+    @Test func build_collapseOn_hiddenToolDoesNotBreakGroup() {
         let blocks = okBlocks(
             parts: [
                 .tool(ToolPart(id: "r1", toolName: "read", status: .completed)),
@@ -961,11 +1010,14 @@ struct SessionChatTimelineBlocksTests {
             ],
             collapseConsecutiveToolCalls: true
         )
-        #expect(blocks.count == 2)
-        guard case .toolCard = blocks[0], case .toolCard = blocks[1] else {
-            Issue.record("Expected two tool cards split by hidden tool")
+        guard case .toolGroup(let blockID, let group) = blocks.single else {
+            Issue.record("Expected tool group")
             return
         }
+        #expect(group.count == 2)
+        #expect(group.title == "2 tools")
+        #expect(group.subtitle == "2 reads")
+        #expect(blockID == PresentationBlockId.toolGroup(["r1", "r2"]))
     }
 
     @Test func build_collapseOn_groupStatusPrefersError() {
@@ -1020,6 +1072,69 @@ struct SessionChatTimelineBlocksTests {
         }
     }
 
+    @Test func merge_collapseOn_groupsConsecutiveToolOnlyAssistantMessages() {
+        let bodies = [
+            toolOnlyBody(id: "a1", toolID: "bash-1"),
+            toolOnlyBody(id: "a2", toolID: "bash-2"),
+            toolOnlyBody(id: "a3", toolID: "bash-3"),
+        ]
+        let merged = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+            bodies,
+            collapseConsecutiveToolCalls: true
+        )
+        #expect(merged.count == 1)
+        #expect(merged[0].message.id == "a1")
+        guard case .toolGroup(_, let group) = merged[0].blocks.single else {
+            Issue.record("Expected one tool group")
+            return
+        }
+        #expect(group.count == 3)
+        #expect(group.title == "3 tools")
+        #expect(group.subtitle == "3 shells")
+    }
+
+    @Test func merge_collapseOff_keepsConsecutiveBashMessagesSeparate() {
+        let bodies = [
+            toolOnlyBody(id: "a1", toolID: "bash-1"),
+            toolOnlyBody(id: "a2", toolID: "bash-2"),
+        ]
+        let merged = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+            bodies,
+            collapseConsecutiveToolCalls: false
+        )
+        #expect(merged.count == 2)
+        guard case .toolCard = merged[0].blocks.single, case .toolCard = merged[1].blocks.single else {
+            Issue.record("Expected two shell cards when collapse is off")
+            return
+        }
+    }
+
+    @Test func merge_collapseOn_textMessageBreaksRun() {
+        let bodies = [
+            toolOnlyBody(id: "a1", toolID: "bash-1"),
+            textBody(id: "a2", text: "note"),
+            toolOnlyBody(id: "a3", toolID: "bash-3"),
+        ]
+        let merged = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+            bodies,
+            collapseConsecutiveToolCalls: true
+        )
+        #expect(merged.count == 3)
+    }
+
+    @Test func merge_collapseOn_taskMessageBreaksRun() {
+        let bodies = [
+            toolOnlyBody(id: "a1", toolID: "bash-1"),
+            toolOnlyBody(id: "a2", toolID: "task-1", toolName: "task"),
+            toolOnlyBody(id: "a3", toolID: "bash-3"),
+        ]
+        let merged = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+            bodies,
+            collapseConsecutiveToolCalls: true
+        )
+        #expect(merged.count == 3)
+    }
+
     @Test func build_collapseOff_mixedToolsContextStillGroups() {
         let blocks = okBlocks(
             parts: [
@@ -1034,7 +1149,8 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(blockID == PresentationBlockId.toolGroup(["r1", "r2"]))
-        #expect(group.title == "2 reads")
+        #expect(group.title == "2 tools")
+        #expect(group.subtitle == "2 reads")
         guard case .toolCard = blocks[1] else {
             Issue.record("Expected bash card")
             return
@@ -1062,6 +1178,44 @@ struct SessionChatTimelineBlocksTests {
 
     private func text(_ id: String, _ value: String) -> MessagePart {
         .text(TextPart(id: id, text: value, isStreaming: false))
+    }
+
+    private func toolOnlyBody(id: String, toolID: String, toolName: String = "bash") -> DisplayMessageBody {
+        let part: MessagePart = .tool(ToolPart(id: toolID, toolName: toolName, status: .completed))
+        let message = Message(
+            id: id,
+            role: .assistant,
+            text: "",
+            parts: [part],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        return DisplayMessageBody(
+            message: message,
+            isStreaming: false,
+            blocks: okBlocks(parts: [part], collapseConsecutiveToolCalls: true),
+            renderedMarkdown: nil
+        )
+    }
+
+    private func textBody(id: String, text value: String) -> DisplayMessageBody {
+        let part = text("\(id)-t", value)
+        let message = Message(
+            id: id,
+            role: .assistant,
+            text: value,
+            parts: [part],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        return DisplayMessageBody(
+            message: message,
+            isStreaming: false,
+            blocks: okBlocks(parts: [part]),
+            renderedMarkdown: nil
+        )
     }
 
     private func okBlocks(

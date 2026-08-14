@@ -327,14 +327,19 @@ labels or attachment bytes into message `text` for Session Chat display.
 ### tool group
 
 A Session Chat timeline block that summarizes consecutive visible ToolParts
-inside one message as a single Tool Call Card. By default only consecutive
-context ToolParts (`read` / `glob` / `grep`) group; with the
+as a single Tool Call Card. Title is `N tools`; subtitle is a family one-liner
+in encounter order (`Edit · Write · 5 shells`). Status is the card’s status
+dot only. Tap opens the existing tool-detail sheet with each member’s verb,
+path or command, and error — not full shell output. By default only consecutive
+context ToolParts (`read` / `glob` / `grep`) group inside one message; with the
 **Collapse consecutive tool calls** Appearance preference on, any consecutive
-visible tool families group except subagent (`task`) spawns, which never group
-so their child-session tap stays available. A text block, an attachment, a
-hidden tool, or a `task` tool breaks the group.
+visible tool families group except `task` spawns, which never group so their
+child-session tap stays available. Sequential tool steps stored as adjacent
+assistant messages also group when collapse is on. A visible text block, an
+attachment, or a `task` tool breaks the group. Hidden tools, empty text, and
+compaction markers do not.
 _Avoid_: expanding each grouped tool inline; treating a group as multiple
-timeline messages.
+timeline messages; painting a status-colored outline on the group card.
 
 ### file-change tool
 

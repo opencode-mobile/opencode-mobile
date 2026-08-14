@@ -16,20 +16,46 @@
 
 ## Aggregation semantics
 
-- Operate on **timeline blocks inside one message**, not a new message role.
+- Operate on **visible timeline blocks**, not raw part arrays.
 - Product language: **tool group** (existing term), not “aggregate message.”
 - Minimum group size remains 2.
-- Title style: count labels by tool family (`2 reads · 1 bash · 1 edit`),
-  extending `contextGroupTitle` rather than a single “N tool calls” string when
-  families are mixed.
-- Status and error text follow existing tool-group worst-of rules.
+- Title is the count headline (`7 tools`). Subtitle is a family one-liner in
+  encounter order (`Edit · Write · 5 shells`). A family of one is just the
+  verb; multiples get a count. Human labels (`Shell`, not `bash`).
+- Status and error text follow existing tool-group worst-of rules. Status is
+  the Tool Call Card **dot only** — do not paint a warning/error outline on
+  the card.
 - Stable `blockID` continues to use ordered member part IDs.
+- Hidden tools, empty/non-displayable text, and compaction parts are
+  transparent: grouping looks through them (web filters to renderable parts
+  before grouping).
+- Visible text, attachments, and `task` tools still break a group.
 
-## Interaction trade-off
+## Sequential tool-call messages are the product
 
-- Collapsed groups are display-only. Losing per-tool taps while collapsed is
-  intentional; users who need taps leave the preference off.
-- No in-group expand in this slice (same as OPE-50 context groups).
+- The original “parts inside one message” framing was the wrong problem. When
+  several tools share one assistant message they already sit in one timeline
+  item; some models instead emit **message after message**, each a single
+  Shell / Edit / Read / etc. That stack is what collapse is for.
+- When collapse is on, consecutive **tool-only** assistant messages merge into
+  one tool group (mixed families allowed). `task` never joins and splits a run.
+- Visible assistant text, user messages, and attachments still break a run.
+- Collapse off still groups only within a message (OPE-50 context-only).
+- Merged rows keep the first message’s identity; absorbed messages drop out of
+  the timeline.
+
+## Interaction trade-off (option E)
+
+- The group card is compact: `N tools` plus the family one-liner. No in-list
+  accordion and no extra navigation stack.
+- Tap opens the **existing** Session Chat tool-detail Bottom Sheet. The body is
+  concatenated member chrome (verb + path or command, optional +/−, error). It
+  does **not** dump full shell or network output.
+- Specialized taps (Changes, child session, per-tool sheets with output) still
+  require the preference off. `task` never joins a group so its child-session
+  tap stays available.
+- Status color stays on the dot. A status-colored card outline was rejected:
+  the hairline is always `border.weaker`.
 
 ## Subagent (task) tools never group
 
@@ -48,15 +74,15 @@
   dependency) without putting preference knowledge in domain ToolPart.
 - Feature UI and Settings follow existing preference + Screen Model patterns.
 
-## Mixed-family title labels
+## Mixed-family subtitle labels
 
-- Title is encounter-order per family. Context families pluralize
-  (`read`/`reads`, `grep`/`greps`, `glob`/`globs`); every other family keeps its
-  raw tool name with no plural suffix (e.g. `2 reads · 1 bash · 1 edit`), since
-  a generic `+s` rule mis-pluralizes families like `bash`, `webfetch`, and
-  `apply_patch`. This matches the locked product example and keeps the title
-  generator deterministic across platforms.
-- The shared `groupTitle` is used by both the on and off paths, so pure-context
-  groups now also render in encounter order instead of OPE-50's fixed
-  `read → grep → glob`. This is an intended minor visual change; grouping
-  behavior itself is unchanged when the toggle is off.
+- Subtitle is encounter-order per family with a small phrase map so labels stay
+  human (`Shell` / `N shells`, `Fetch` / `N fetches`, `Get issue` /
+  `N Get issues`). Unknown names fall back to the raw tool name.
+- Count 1 is the verb alone (`Edit`); count > 1 includes the number
+  (`5 shells`). Joiner is ` · `.
+- The same generators are used by both the on and off paths, so pure-context
+  groups now also render as `N tools` / `Read · Grep · Glob` (or `2 reads`)
+  instead of OPE-50's census title and fixed `read → grep → glob` order. This is
+  an intended visual change; grouping behavior itself is unchanged when the
+  toggle is off.

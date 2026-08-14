@@ -4,30 +4,36 @@ Ticket: [OPE-144](https://linear.app/opencode-mobile/issue/OPE-144/collapse-cons
 
 ## User Goal
 
-Optionally collapse a run of back-to-back tool calls in Session Chat into one
-summary Tool Call Card so long tool sequences stay scannable. Control this from
+Optionally collapse a run of back-to-back **tool-call messages** in Session Chat
+into one summary Tool Call Card. Some models emit Shell, Edit, Read, and similar
+as one message after another; that stack is hard to scan. Control this from
 Settings → Appearance. Default remains expanded (today’s per-tool cards).
+`task` (child-session) cards never collapse.
 
 ## In Scope
 
 - Settings → Appearance toggle: **Collapse consecutive tool calls** (off by
   default).
-- When the toggle is **on**, any run of two or more consecutive **visible**
-  ToolParts in one assistant message becomes one **tool group** timeline block
-  (aggregated summary card), except **subagent (`task`) tools**, which never
-  group so their child-session tap stays available.
+- When the toggle is **on**, a run of two or more consecutive **tool-call
+  messages** (Shell, Edit, Read, Fetch, and other non-`task` tools) becomes
+  one **tool group** timeline entry. This is the primary case: one tool per
+  assistant message, stacked. Tools that happen to share one message also
+  group. `task` cards never group so their child-session tap stays available.
 - When the toggle is **off**, keep current OPE-50 behavior: only consecutive
   context tools (`read` / `glob` / `grep`) auto-group; all other tools stay
   individual Tool Call Cards with specialized chrome and taps.
-- Grouping still breaks on text blocks, attachments, hidden tools, or a
-  non-tool part.
+- Grouping still breaks on visible text blocks, attachments, or a `task` tool.
+  Hidden tools (`todowrite`, in-flight `question`), empty text, and compaction
+  markers are skipped so they do not split a visible run.
 - Hide rules unchanged (`todowrite` always hidden; in-flight `question` hidden).
 - Group status = worst-of members (error > running/pending > completed).
-- Group title counts tools by family in encounter order (extend today’s
-  context-group title style to mixed families).
-- Group card is display-only (no per-member expand, no shell/network sheet, no
-  Changes or child-session tap from the group). Turning the toggle off restores
-  individual cards and their taps.
+  Status is the Tool Call Card **dot only** — no status-colored outline on the
+  card.
+- Group card copy (option E): title is `N tools`; subtitle is a family
+  one-liner in encounter order (`Edit · Write · 5 shells`). A family of one is
+  just the verb; multiples get a count. Human labels (`Shell`, not `bash`).
+- Tap the group card to open the existing tool-detail sheet with each member’s
+  verb, path or command, and error when present. No in-list accordion.
 - Preference is device-local; cleared by Clear All Data.
 - Pure grouping rules mirrored on iOS and Android with unit tests.
 - Live rebuild: when parts/status update or the preference flips, re-project
@@ -36,7 +42,11 @@ Settings → Appearance. Default remains expanded (today’s per-tool cards).
 ## Out Of Scope
 
 - Expanding a group to show member cards in-place (accordion).
-- Cross-message aggregation.
+- Status-colored outline on the group card (status is the existing Tool Call
+  Card dot only).
+- Dumping full shell or network **output** into the group detail sheet.
+- Cross-message aggregation across **user** turns, or across visible text /
+  attachments / `task` tools.
 - Grouping across text interruptions.
 - Changing domain ToolPart schemas or server APIs.
 - New design-system component (reuse Tool Call Card).
@@ -71,13 +81,14 @@ Settings → Appearance. Default remains expanded (today’s per-tool cards).
 ## Native Navigation Entry Points
 
 - Settings → Appearance (alongside Hide User Directory / Recent window).
-- Session Chat timeline (consumes preference; no new navigation).
+- Session Chat timeline (consumes preference). Group tap uses the existing
+  tool-detail Bottom Sheet; no new navigation stack.
 
 ## Error States
 
 - Not applicable for preference storage beyond existing clear-data reset.
-- Tool error status still surfaces on the group card via worst-of + first error
-  text when present.
+- Tool error status still surfaces on the group card via the status **dot** and
+  first error text when present. Member errors also appear in the detail sheet.
 
 ## Permission Behavior
 
@@ -93,8 +104,10 @@ Settings → Appearance. Default remains expanded (today’s per-tool cards).
 
 | Choice | Value |
 | --- | --- |
-| What collapses | All consecutive visible tools in one message (not context-only) |
+| What collapses | Consecutive tool-call messages (and consecutive tools in one message), except `task` |
 | Default | Off |
 | Settings placement | Appearance |
 | Single tool | Still a normal Tool Call Card (group only when ≥ 2) |
-| Group interaction | Display-only summary; specialized taps require toggle off |
+| Group interaction | Tap opens the existing tool-detail sheet (concatenated member chrome; no shell output). Specialized taps (Changes, child session) still require toggle off |
+| Group card copy | Title `N tools`; subtitle family one-liner in encounter order (option E) |
+| Group status visual | Existing Tool Call Card status dot; hairline `border.weaker` — no status-colored outline |

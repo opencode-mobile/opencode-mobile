@@ -290,7 +290,7 @@ nonisolated enum SessionChatTimelineProjector {
             case .toolCard(let id, let card):
                 "c:\(id):\(card.toolName):\(card.status.rawValue):\(card.title)"
             case .toolGroup(let id, let group):
-                "g:\(id):\(group.count):\(group.status.rawValue):\(group.title)"
+                "g:\(id):\(group.count):\(group.status.rawValue):\(group.title):\(group.subtitle ?? ""):\(group.errorText ?? "")"
             }
         }.joined(separator: "|")
         return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(blockKey)"
@@ -318,7 +318,7 @@ nonisolated enum SessionChatTimelineProjector {
             case .toolCard(let id, let card):
                 "c:\(id):\(card.toolName):\(card.status.rawValue):\(card.title)"
             case .toolGroup(let id, let group):
-                "g:\(id):\(group.count):\(group.status.rawValue):\(group.title)"
+                "g:\(id):\(group.count):\(group.status.rawValue):\(group.title):\(group.subtitle ?? ""):\(group.errorText ?? "")"
             }
         }.joined(separator: "|")
         return "\(row.blocks.count)|\(attachments)|\(blocks)"

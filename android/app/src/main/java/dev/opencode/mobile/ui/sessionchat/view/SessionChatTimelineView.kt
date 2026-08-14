@@ -609,6 +609,14 @@ private fun AssistantMessageContent(
                             title = block.title,
                             subtitle = block.subtitle,
                             errorText = block.errorText,
+                            onClick = {
+                                onToolDetailTap(
+                                    SessionChatToolDetailTarget(
+                                        title = block.title,
+                                        body = block.detailText,
+                                    ),
+                                )
+                            },
                         )
                 }
             }

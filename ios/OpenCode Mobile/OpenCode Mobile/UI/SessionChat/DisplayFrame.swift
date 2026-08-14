@@ -97,6 +97,10 @@ nonisolated enum DisplayFrameBuilder {
                 )
             )
         }
+        bodies = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+            bodies,
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls
+        )
         return DisplayFrame(
             sessionKey: sessionKey,
             frameRevision: frameRevision,

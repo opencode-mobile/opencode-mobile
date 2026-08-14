@@ -534,9 +534,12 @@ class SessionChatTimeline(
         val projected =
             withContext(ioDispatcher) {
                 val bodies =
-                    sortedDisplayMessages(displayMessages).mapNotNull { display ->
-                        displayMessageBody(display, previousById[display.id])
-                    }
+                    SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+                        sortedDisplayMessages(displayMessages).mapNotNull { display ->
+                            displayMessageBody(display, previousById[display.id])
+                        },
+                        collapseConsecutiveToolCalls,
+                    )
                 TimelineProjector.project(
                     frame =
                         DisplayFrame(
