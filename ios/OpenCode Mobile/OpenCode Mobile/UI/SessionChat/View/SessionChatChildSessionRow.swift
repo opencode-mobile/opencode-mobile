@@ -10,18 +10,13 @@ struct SessionChatChildSessionRow: View {
     let action: (() -> Void)?
 
     var body: some View {
-        Group {
-            if timeStartEpochMs != nil {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    rowContent(nowEpochMs: Int64(context.date.timeIntervalSince1970 * 1000))
-                }
-            } else {
-                rowContent(nowEpochMs: 0)
+        if timeStartEpochMs != nil {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                rowContent(nowEpochMs: Int64(context.date.timeIntervalSince1970 * 1000))
             }
+        } else {
+            rowContent(nowEpochMs: 0)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityAddTraits(action == nil ? [] : .isButton)
     }
 
     @ViewBuilder
@@ -30,7 +25,23 @@ struct SessionChatChildSessionRow: View {
             startEpochMs: timeStartEpochMs,
             nowEpochMs: nowEpochMs
         )
-        let content = HStack(alignment: .center, spacing: 12) {
+        let label = accessibilityLabel(elapsed: elapsed)
+
+        if let action {
+            Button(action: action) {
+                visualContent(elapsed: elapsed)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(label)
+        } else {
+            visualContent(elapsed: elapsed)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(label)
+        }
+    }
+
+    private func visualContent(elapsed: String?) -> some View {
+        HStack(alignment: .center, spacing: 12) {
             letterAvatar
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -63,6 +74,7 @@ struct SessionChatChildSessionRow: View {
                 if showsChevron {
                     OpenCodeIconImage(icon: .chevronRight, size: 16)
                         .foregroundStyle(OpenCodeColors.iconBase)
+                        .accessibilityHidden(true)
                 }
             }
         }
@@ -76,13 +88,6 @@ struct SessionChatChildSessionRow: View {
                         .strokeBorder(OpenCodeColors.borderWeakerBase, lineWidth: 1)
                 )
         )
-
-        if let action {
-            Button(action: action) { content }
-                .buttonStyle(.plain)
-        } else {
-            content
-        }
     }
 
     private var letterAvatar: some View {
@@ -91,18 +96,14 @@ struct SessionChatChildSessionRow: View {
             .foregroundStyle(OpenCodeColors.textStrong)
             .frame(width: 32, height: 32)
             .background(OpenCodeColors.surfaceRaisedBase, in: Circle())
+            .accessibilityHidden(true)
     }
 
-    private var accessibilityLabel: String {
+    private func accessibilityLabel(elapsed: String?) -> String {
         var parts = [agentName]
         if isBackground { parts.append("background") }
         if let secondLine, !secondLine.isEmpty { parts.append(secondLine) }
-        if let elapsed = SessionChatChildSessionElapsed.format(
-            startEpochMs: timeStartEpochMs,
-            nowEpochMs: Int64(Date().timeIntervalSince1970 * 1000)
-        ) {
-            parts.append(elapsed)
-        }
+        if let elapsed { parts.append(elapsed) }
         return parts.joined(separator: ", ")
     }
 }
