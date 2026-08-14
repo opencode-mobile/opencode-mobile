@@ -925,7 +925,7 @@ struct SessionChatTimelineBlocksTests {
         #expect(group.subtitle == "2 reads · Shell · Edit")
     }
 
-    @Test func build_groupDetailTextUsesCommandAndPath() {
+    @Test func build_groupMembersUseCommandAndPath() {
         let blocks = okBlocks(
             parts: [
                 .tool(ToolPart(
@@ -949,8 +949,12 @@ struct SessionChatTimelineBlocksTests {
         }
         #expect(group.title == "2 tools")
         #expect(group.subtitle == "Shell · Edit")
-        #expect(group.detailText.contains("xcodebuild build"))
-        #expect(group.detailText.contains("App.swift"))
+        #expect(group.members.count == 2)
+        #expect(group.members[0].title == "Shell")
+        #expect(group.members[0].subtitle == "xcodebuild build")
+        #expect(group.members[1].title == "Edit")
+        #expect(group.members[1].subtitle == "App.swift")
+        #expect(group.members[1].opensChangesReview)
     }
 
     @Test func build_collapseOn_singleToolStaysCard() {

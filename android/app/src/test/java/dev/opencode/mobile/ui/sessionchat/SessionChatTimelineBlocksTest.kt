@@ -1056,7 +1056,7 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
-    fun build_groupDetailTextUsesCommandAndPath() {
+    fun build_groupMembersUseCommandAndPath() {
         val group =
             buildBlocks(
                 role = MessageRole.Assistant,
@@ -1080,8 +1080,12 @@ class SessionChatTimelineBlocksTest {
 
         assertEquals("2 tools", group.title)
         assertEquals("Shell · Edit", group.subtitle)
-        assertTrue(group.detailText.contains("xcodebuild build"))
-        assertTrue(group.detailText.contains("App.swift"))
+        assertEquals(2, group.members.size)
+        assertEquals("Shell", group.members[0].title)
+        assertEquals("xcodebuild build", group.members[0].subtitle)
+        assertEquals("Edit", group.members[1].title)
+        assertEquals("App.swift", group.members[1].subtitle)
+        assertTrue(group.members[1].opensChangesReview)
     }
 
     @Test

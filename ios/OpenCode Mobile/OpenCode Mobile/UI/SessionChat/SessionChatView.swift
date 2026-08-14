@@ -16,6 +16,7 @@ struct SessionChatView: View {
     @State private var showDeleteConfirmation = false
     @State private var messageActionsTarget: SessionChatMessageActionsTarget?
     @State private var toolDetailTarget: SessionChatToolDetailTarget?
+    @State private var toolGroupTarget: SessionChatToolGroupTarget?
     @State private var childSessionTarget: ChildSessionNavigationTarget?
     @State private var showAttachmentSources = false
     @State private var showFilesPicker = false
@@ -199,6 +200,10 @@ struct SessionChatView: View {
                                 trigger: ProductAnalytics.Trigger.present
                             )
                             toolDetailTarget = target
+                        },
+                        onToolGroupTap: { target in
+                            logChatAction(ProductAnalytics.Action.chatOpenToolGroup)
+                            toolGroupTarget = target
                         },
                         onChildSessionTap: { sessionID, title in
                             logChatAction(ProductAnalytics.Action.chatOpenChildSession)
@@ -389,6 +394,42 @@ struct SessionChatView: View {
                 initialSource: target.initialSource,
                 initialFilePath: target.initialFilePath
             )
+        }
+        .overlay {
+            if let toolGroupTarget {
+                SessionChatToolGroupView(
+                    target: toolGroupTarget,
+                    supportsSessionMessageDiff: viewModel.uiState.supportsSessionMessageDiff,
+                    onNavigateBack: { self.toolGroupTarget = nil },
+                    onToolDetailTap: { detail in
+                        logChatAction(ProductAnalytics.Action.chatOpenToolDetail)
+                        ProductAnalytics.logScreenView(
+                            screenId: ProductAnalytics.Screen.sessionToolDetail,
+                            presentation: ProductAnalytics.Presentation.sheet,
+                            trigger: ProductAnalytics.Trigger.present
+                        )
+                        toolDetailTarget = detail
+                    },
+                    onChildSessionTap: { sessionID, title in
+                        logChatAction(ProductAnalytics.Action.chatOpenChildSession)
+                        childSessionTarget = ChildSessionNavigationTarget(
+                            sessionID: sessionID,
+                            sessionTitle: title,
+                            worktree: session.worktree,
+                            optimisticNavigationInstanceID: nil
+                        )
+                    },
+                    onChangesReviewTap: { assistantMessageID, initialFilePath in
+                        logChatAction(ProductAnalytics.Action.chatOpenChangesFromTool)
+                        changesTarget = viewModel.uiState.fileChangeNavigationTarget(
+                            worktree: session.worktree,
+                            assistantMessageID: assistantMessageID,
+                            initialFilePath: initialFilePath
+                        )
+                    }
+                )
+                .sessionChatToolDetailSheet(target: $toolDetailTarget)
+            }
         }
         .navigationDestination(item: $childSessionTarget) { target in
             SessionChatView(

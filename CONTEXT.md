@@ -329,8 +329,9 @@ labels or attachment bytes into message `text` for Session Chat display.
 A Session Chat timeline block that summarizes consecutive visible ToolParts
 as a single Tool Call Card. Title is `N tools`; subtitle is a family one-liner
 in encounter order (`Edit · Write · 5 shells`). Status is the card’s status
-dot only. Tap opens the existing tool-detail sheet with each member’s verb,
-path or command, and error — not full shell output. By default only consecutive
+dot only. Tap opens a tool group overlay of member Tool Call Cards (same taps
+as the timeline: Changes, shell sheet). Back keeps the chat timeline where it
+was. By default only consecutive
 context ToolParts (`read` / `glob` / `grep`) group inside one message; with the
 **Collapse consecutive tool calls** Appearance preference on, any consecutive
 visible tool families group except `task` spawns, which never group so their

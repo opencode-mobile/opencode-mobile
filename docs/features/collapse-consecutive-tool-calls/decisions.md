@@ -47,13 +47,15 @@
 ## Interaction trade-off (option E)
 
 - The group card is compact: `N tools` plus the family one-liner. No in-list
-  accordion and no extra navigation stack.
-- Tap opens the **existing** Session Chat tool-detail Bottom Sheet. The body is
-  concatenated member chrome (verb + path or command, optional +/−, error). It
-  does **not** dump full shell or network output.
-- Specialized taps (Changes, child session, per-tool sheets with output) still
-  require the preference off. `task` never joins a group so its child-session
-  tap stays available.
+  accordion.
+- Tap **opens** a full-screen tool group (back, title, family subtitle, member
+  Tool Call Cards). Both platforms overlay it on Session Chat so the timeline
+  keeps its scroll position on back. This is the locked prototype, not a
+  concatenated bottom sheet.
+- Member cards reuse the same taps as timeline cards: file-change tools open
+  Changes; shell/network tools open the existing tool-detail sheet (command
+  plus output). The group screen itself does not dump full output.
+- `task` never joins a group so its child-session tap stays on the timeline.
 - Status color stays on the dot. A status-colored card outline was rejected:
   the hairline is always `border.weaker`.
 

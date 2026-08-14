@@ -90,7 +90,7 @@ nonisolated struct SessionChatToolGroupBlock: Equatable, Sendable {
     let title: String
     let subtitle: String?
     let errorText: String?
-    let detailText: String
+    let members: [SessionChatToolCardBlock]
 }
 
 nonisolated enum SessionChatTimelineBlocks {
@@ -345,6 +345,11 @@ nonisolated enum SessionChatTimelineBlocks {
     private static func toToolGroup(_ tools: [ToolPart]) -> SessionChatTimelineBlock? {
         let memberIds = tools.compactMap(\.id)
         guard memberIds.count == tools.count else { return nil }
+        let members: [SessionChatToolCardBlock] = tools.compactMap { tool in
+            guard case .toolCard(_, let card) = toToolCard(tool) else { return nil }
+            return card
+        }
+        guard members.count == tools.count else { return nil }
         let status = worstStatus(tools.map(\.status))
         let errorText = tools
             .first(where: { $0.status == .error })?
@@ -358,7 +363,7 @@ nonisolated enum SessionChatTimelineBlocks {
                 title: groupTitle(tools.count),
                 subtitle: groupSubtitle(tools),
                 errorText: errorText,
-                detailText: groupDetailText(tools)
+                members: members
             )
         )
     }
@@ -403,29 +408,6 @@ nonisolated enum SessionChatTimelineBlocks {
         default:
             return count == 1 ? name : "\(count) \(name)"
         }
-    }
-
-    private static func groupDetailText(_ tools: [ToolPart]) -> String {
-        tools.map { tool in
-            let chrome = specializedChrome(name: tool.toolName.lowercased(), tool: tool)
-                ?? genericChrome(tool)
-            var lines = [chrome.title]
-            if let subtitle = chrome.subtitle, !subtitle.isEmpty {
-                lines.append(subtitle)
-            }
-            let additions = chrome.additions ?? 0
-            let deletions = chrome.deletions ?? 0
-            if additions > 0 || deletions > 0 {
-                var counts: [String] = []
-                if additions > 0 { counts.append("+\(additions)") }
-                if deletions > 0 { counts.append("−\(deletions)") }
-                lines.append(counts.joined(separator: " "))
-            }
-            if tool.status == .error, let error = tool.error, !error.isEmpty {
-                lines.append(error)
-            }
-            return lines.joined(separator: "\n")
-        }.joined(separator: "\n\n")
     }
 
     private static func worstStatus(_ statuses: [ToolStatus]) -> ToolStatus {

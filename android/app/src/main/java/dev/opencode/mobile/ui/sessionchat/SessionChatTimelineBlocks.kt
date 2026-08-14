@@ -57,7 +57,7 @@ sealed class SessionChatTimelineBlock {
         val title: String,
         val subtitle: String? = null,
         val errorText: String? = null,
-        val detailText: String,
+        val members: List<ToolCard>,
     ) : SessionChatTimelineBlock()
 }
 
@@ -297,6 +297,10 @@ object SessionChatTimelineBlocks {
 
     private fun toToolGroup(tools: List<MessagePart.Tool>): SessionChatTimelineBlock.ToolGroup? {
         val memberIds = tools.map { it.id ?: return null }
+        val members =
+            tools.map { tool ->
+                toToolCard(tool) as? SessionChatTimelineBlock.ToolCard ?: return null
+            }
         val status = worstStatus(tools.map { it.status })
         val errorText =
             tools
@@ -310,7 +314,7 @@ object SessionChatTimelineBlocks {
             title = groupTitle(tools.size),
             subtitle = groupSubtitle(tools),
             errorText = errorText,
-            detailText = groupDetailText(tools),
+            members = members,
         )
     }
 
@@ -353,28 +357,6 @@ object SessionChatTimelineBlocks {
             "linear_get_issue" -> if (count == 1) "Get issue" else "$count Get issues"
             "linear_save_issue" -> if (count == 1) "Save issue" else "$count Save issues"
             else -> if (count == 1) name else "$count $name"
-        }
-
-    private fun groupDetailText(tools: List<MessagePart.Tool>): String =
-        tools.joinToString("\n\n") { tool ->
-            val chrome = specializedChrome(tool.toolName.lowercase(), tool) ?: genericChrome(tool)
-            buildList {
-                add(chrome.title)
-                chrome.subtitle?.takeIf { it.isNotEmpty() }?.let { add(it) }
-                val additions = chrome.additions ?: 0
-                val deletions = chrome.deletions ?: 0
-                if (additions > 0 || deletions > 0) {
-                    val counts =
-                        buildList {
-                            if (additions > 0) add("+$additions")
-                            if (deletions > 0) add("−$deletions")
-                        }
-                    add(counts.joinToString(" "))
-                }
-                if (tool.status == ToolStatus.Error) {
-                    tool.error?.takeIf { it.isNotEmpty() }?.let { add(it) }
-                }
-            }.joinToString("\n")
         }
 
     private fun worstStatus(statuses: List<ToolStatus>): ToolStatus {

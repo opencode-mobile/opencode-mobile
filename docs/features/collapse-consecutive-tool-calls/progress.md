@@ -15,7 +15,8 @@
 
 - Done. `SessionChatTimelineBlocks` gained `collapseConsecutiveToolCalls`
   (default `false`) on `build`/`buildOrFallback`. Group cards use option E
-  chrome (`N tools` + family subtitle) and tap the existing tool-detail sheet.
+  chrome (`N tools` + family subtitle). Tap opens the tool group overlay of
+  member Tool Call Cards. Back keeps the chat timeline scroll position.
 - `SessionChatDisplayPreferences` (device-local, default off) added, wired into
   `OpenCodeMobileApplication`, `SettingsScreen` Appearance, `Navigation.kt`,
   `SettingsViewModel`, and Clear All Data.
@@ -29,7 +30,7 @@
 
 - Done. Mirror of the Android changes in `SessionChatTimelineBlocks`,
   `DisplayFrameBuilder`, and `SessionChatTimeline`. Same option E chrome and
-  tool-detail sheet tap.
+  tool group overlay (not a NavigationStack push, so the timeline keeps scroll).
 - `SessionChatDisplayPreferences` (device-local, default off) added, wired into
   `SettingsView` Appearance and `AppContainer.clearAllData`.
 - Live re-project: `SessionChatTimeline.updateCollapseConsecutiveToolCalls`
@@ -51,7 +52,7 @@
 - [x] Widen `SessionChatTimelineBlocks` grouping when preference is on (all families)
 - [x] Keep OPE-50 context-only grouping when preference is off
 - [x] Mixed-family group title counts
-- [x] Option E group chrome (`N tools` + family one-liner) and sheet tap
+- [x] Option E group chrome (`N tools` + family one-liner) and tool group screen
 - [x] Group status via the Tool Call Card dot only (no status-colored outline)
 - [x] Clear All Data resets the preference
 - [x] Unit tests for on/off grouping rules on both platforms
@@ -62,5 +63,5 @@
 
 ## Checks
 
-- iOS: `SessionChatTimelineBlocksTests` 55 passed (option E chrome + grouping).
+- iOS: `SessionChatTimelineBlocksTests` 55 passed (group members + grouping).
 - Android: `SessionChatTimelineBlocksTest` and `TimelineProjectorTest` passed.

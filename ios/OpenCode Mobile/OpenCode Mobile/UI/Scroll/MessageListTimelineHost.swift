@@ -99,6 +99,10 @@ where Item.ID == String {
     /// Extra top inset so short threads (new session, first message) sit on the
     /// bottom edge instead of the top of the viewport.
     private var bottomAlignmentTopInset: CGFloat = 0
+    /// Unpinned content offset to restore after a covering destination (tool
+    /// group, Changes) pops. Navigation layout otherwise re-pins to the end.
+    private var preservedOffsetY: CGFloat?
+    private var isCoveredByNavigation = false
     private var userScrollEndTask: Task<Void, Never>?
     private var contentSizeObservation: NSKeyValueObservation?
     private var refreshControl: UIRefreshControl?
@@ -114,6 +118,15 @@ where Item.ID == String {
     private(set) var lastApplyUsedDeclaredIDs = false
     /// Test seam: how many times a Diffable snapshot was submitted.
     private(set) var diffableSnapshotApplyCount = 0
+    /// Test seam: current collection offset (navigation cover restore).
+    var testContentOffsetY: CGFloat { collectionView.contentOffset.y }
+    /// Test seam: true bottom pin offset for simulating a UIKit jump-to-end.
+    var testBottomContentOffsetY: CGFloat { bottomContentOffsetY() }
+
+    func testSetContentOffsetY(_ y: CGFloat) {
+        collectionView.setContentOffset(CGPoint(x: 0, y: y), animated: false)
+        reportGeometry()
+    }
 
     init(
         itemContent: @escaping (Item) -> ItemContent,
@@ -183,9 +196,38 @@ where Item.ID == String {
         configureRefreshControl()
     }
 
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        isCoveredByNavigation = true
+        preserveUnpinnedScrollPositionIfNeeded()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        isCoveredByNavigation = false
+        restorePreservedUnpinnedScrollPositionIfNeeded()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        restorePreservedUnpinnedScrollPositionIfNeeded()
+        reportGeometry()
+        // Keep the preserved offset through the appear layout turn so an
+        // in-flight pin-to-end (queued while covered) cannot win the race.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.restorePreservedUnpinnedScrollPositionIfNeeded()
+            self.reportGeometry()
+            self.preservedOffsetY = nil
+        }
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        guard !isCoveredByNavigation else { return }
+        restorePreservedUnpinnedScrollPositionIfNeeded()
         updateBottomAlignmentInset()
+        restorePreservedUnpinnedScrollPositionIfNeeded()
         reportGeometry()
     }
 
@@ -335,10 +377,13 @@ where Item.ID == String {
                 }
 
                 let shouldStayPinned =
-                    !self.hasCompletedInitialScroll
-                    || self.isSettlingInitialLoad
-                    || self.scrollController?.isPinnedToEnd == true
-                    || self.scrollController?.isProgrammaticScrolling == true
+                    self.preservedOffsetY == nil
+                    && (
+                        !self.hasCompletedInitialScroll
+                        || self.isSettlingInitialLoad
+                        || self.scrollController?.isPinnedToEnd == true
+                        || self.scrollController?.isProgrammaticScrolling == true
+                    )
                 let isReconfigureOnly =
                     self.hasCompletedInitialScroll
                     && self.orderedIDs.count == previousCount
@@ -427,7 +472,32 @@ where Item.ID == String {
         reportGeometry()
     }
 
+    private func preserveUnpinnedScrollPositionIfNeeded() {
+        guard collectionView.bounds.height > 1 else { return }
+        guard scrollController?.isPinnedToEnd != true else {
+            preservedOffsetY = nil
+            return
+        }
+        preservedOffsetY = collectionView.contentOffset.y
+    }
+
+    private func restorePreservedUnpinnedScrollPositionIfNeeded() {
+        guard collectionView.bounds.height > 1 else { return }
+        guard let y = preservedOffsetY else { return }
+        let minY = -collectionView.adjustedContentInset.top
+        let maxY = bottomContentOffsetY()
+        let clamped = min(max(y, minY), maxY)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        UIView.performWithoutAnimation {
+            collectionView.setContentOffset(CGPoint(x: 0, y: clamped), animated: false)
+        }
+        CATransaction.commit()
+        reportGeometry()
+    }
+
     func performScrollToEnd(animated: Bool) {
+        guard preservedOffsetY == nil else { return }
         guard !orderedIDs.isEmpty else { return }
         // Match content-growth anchoring: never yank the offset under an
         // active user pan or residual deceleration.
@@ -647,8 +717,10 @@ where Item.ID == String {
     }
 
     private func reportGeometry() {
+        guard !isCoveredByNavigation else { return }
         guard let collectionView else { return }
         let viewportHeight = collectionView.bounds.height
+        guard viewportHeight > 1 else { return }
         let contentHeight = collectionView.contentSize.height
         let distanceFromBottom = max(
             0,
@@ -692,10 +764,13 @@ where Item.ID == String {
         guard abs(targetInset - bottomAlignmentTopInset) > 0.5 else { return }
 
         let keepPinned =
-            !hasCompletedInitialScroll
-            || scrollController?.isPinnedToEnd == true
-            || scrollController?.isProgrammaticScrolling == true
-            || orderedIDs.count <= 1
+            preservedOffsetY == nil
+            && (
+                !hasCompletedInitialScroll
+                || scrollController?.isPinnedToEnd == true
+                || scrollController?.isProgrammaticScrolling == true
+                || orderedIDs.count <= 1
+            )
 
         bottomAlignmentTopInset = targetInset
         CATransaction.begin()
@@ -718,6 +793,10 @@ where Item.ID == String {
     }
 
     private func pinToBottomWithoutAnimation() {
+        guard preservedOffsetY == nil else {
+            restorePreservedUnpinnedScrollPositionIfNeeded()
+            return
+        }
         guard !collectionView.isDragging, !collectionView.isDecelerating else { return }
         guard !orderedIDs.isEmpty else { return }
 

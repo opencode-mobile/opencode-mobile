@@ -32,8 +32,11 @@ Settings → Appearance. Default remains expanded (today’s per-tool cards).
 - Group card copy (option E): title is `N tools`; subtitle is a family
   one-liner in encounter order (`Edit · Write · 5 shells`). A family of one is
   just the verb; multiples get a count. Human labels (`Shell`, not `bash`).
-- Tap the group card to open the existing tool-detail sheet with each member’s
-  verb, path or command, and error when present. No in-list accordion.
+- Tap the group card to open a **tool group** screen (option E): back, title
+  `N tools`, family subtitle, and one Tool Call Card per member. Member cards
+  keep the same taps as in the timeline (Changes, shell/network sheet). The
+  screen overlays Session Chat so returning leaves the timeline where it was.
+  No in-list accordion.
 - Preference is device-local; cleared by Clear All Data.
 - Pure grouping rules mirrored on iOS and Android with unit tests.
 - Live rebuild: when parts/status update or the preference flips, re-project
@@ -44,7 +47,8 @@ Settings → Appearance. Default remains expanded (today’s per-tool cards).
 - Expanding a group to show member cards in-place (accordion).
 - Status-colored outline on the group card (status is the existing Tool Call
   Card dot only).
-- Dumping full shell or network **output** into the group detail sheet.
+- Dumping full shell or network **output** onto the group screen (output stays
+  on the per-member tool-detail sheet).
 - Cross-message aggregation across **user** turns, or across visible text /
   attachments / `task` tools.
 - Grouping across text interruptions.
@@ -81,14 +85,16 @@ Settings → Appearance. Default remains expanded (today’s per-tool cards).
 ## Native Navigation Entry Points
 
 - Settings → Appearance (alongside Hide User Directory / Recent window).
-- Session Chat timeline (consumes preference). Group tap uses the existing
-  tool-detail Bottom Sheet; no new navigation stack.
+- Session Chat timeline (consumes preference). Group tap opens the tool group
+  overlay; Back returns to chat at the same scroll position. Member cards can
+  open Changes or the existing tool-detail sheet.
 
 ## Error States
 
 - Not applicable for preference storage beyond existing clear-data reset.
 - Tool error status still surfaces on the group card via the status **dot** and
-  first error text when present. Member errors also appear in the detail sheet.
+  first error text when present. Member cards on the group screen show their
+  own status dots and error text.
 
 ## Permission Behavior
 
@@ -96,7 +102,8 @@ Settings → Appearance. Default remains expanded (today’s per-tool cards).
 
 ## Design-System Components
 
-- Existing Tool Call Card for both single tools and groups.
+- Existing Tool Call Card for both single tools, groups, and group-screen members.
+- Existing Top Bar for the tool group screen (back, title, subtitle).
 - Existing Settings list item + switch pattern.
 - No new shared component.
 
@@ -108,6 +115,6 @@ Settings → Appearance. Default remains expanded (today’s per-tool cards).
 | Default | Off |
 | Settings placement | Appearance |
 | Single tool | Still a normal Tool Call Card (group only when ≥ 2) |
-| Group interaction | Tap opens the existing tool-detail sheet (concatenated member chrome; no shell output). Specialized taps (Changes, child session) still require toggle off |
+| Group interaction | Tap opens a tool group overlay of member Tool Call Cards. Edit/Write/Patch open Changes; Shell/Fetch open the existing tool-detail sheet |
 | Group card copy | Title `N tools`; subtitle family one-liner in encounter order (option E) |
 | Group status visual | Existing Tool Call Card status dot; hairline `border.weaker` — no status-colored outline |
