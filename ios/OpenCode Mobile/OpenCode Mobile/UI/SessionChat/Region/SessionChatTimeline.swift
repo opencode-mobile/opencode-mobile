@@ -25,6 +25,8 @@ final class SessionChatTimeline {
     private var networkCacheSyncConfirmed = false
     /// Catalog used to collapse expanded slash-command templates in user bubbles.
     private(set) var serverCommands: [ServerCommand] = []
+    /// Collapse-consecutive-tool-calls preference (OPE-144); widens grouping.
+    private(set) var collapseConsecutiveToolCalls = false
 
     init(
         sessionID: String,
@@ -41,6 +43,22 @@ final class SessionChatTimeline {
         let wasEmpty = serverCommands.isEmpty
         serverCommands = commands
         guard wasEmpty, !commands.isEmpty, !lastLoadedDisplayMessages.isEmpty else { return }
+        let snapshot = lastLoadedDisplayMessages
+        let fromCache = state.messagesFromCache
+        Task {
+            await applyLoadedDisplayMessagesTransform(
+                snapshot,
+                isRefreshing: false,
+                fromQuietRefresh: true,
+                messagesFromCache: fromCache
+            )
+        }
+    }
+
+    func updateCollapseConsecutiveToolCalls(_ enabled: Bool) {
+        guard enabled != collapseConsecutiveToolCalls else { return }
+        collapseConsecutiveToolCalls = enabled
+        guard !lastLoadedDisplayMessages.isEmpty else { return }
         let snapshot = lastLoadedDisplayMessages
         let fromCache = state.messagesFromCache
         Task {
@@ -286,7 +304,8 @@ final class SessionChatTimeline {
             frameRevision: 0,
             sourceRevision: 0,
             displayMessages: [display],
-            serverCommands: serverCommands
+            serverCommands: serverCommands,
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls
         )
         guard !frame.messages.isEmpty else { return nil }
         let previousTimeline: TimelineFrame? =
@@ -342,6 +361,7 @@ final class SessionChatTimeline {
         let frameRevision = displayFrameRevision
         let sessionKey = sessionID
         let commands = serverCommands
+        let collapse = collapseConsecutiveToolCalls
 
         let pendingRows: [TimelineRow]
         if fromQuietRefresh, isSending {
@@ -368,7 +388,8 @@ final class SessionChatTimeline {
                 frameRevision: frameRevision,
                 sourceRevision: frameRevision,
                 displayMessages: displayMessages,
-                serverCommands: commands
+                serverCommands: commands,
+                collapseConsecutiveToolCalls: collapse
             )
             return SessionChatTimelineProjector.project(
                 frame: frame,

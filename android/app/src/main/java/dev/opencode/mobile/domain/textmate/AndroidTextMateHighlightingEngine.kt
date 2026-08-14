@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Android's asynchronous platform-to-KMP adapter. The dispatcher keeps TextMate
@@ -110,7 +111,9 @@ class AndroidTextMateHighlightingEngine(
                                     active.highlightNow(job.request, shouldCancel = job.cancelRequested)
                                 else -> active.highlight(job.request)
                             }
-                        } catch (error: Exception) {
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (error: Throwable) {
                             emptyResult(
                                 request = job.request,
                                 outcome = TextMateParseOutcome.Failed,

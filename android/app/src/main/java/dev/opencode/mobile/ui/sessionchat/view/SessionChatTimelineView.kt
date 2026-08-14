@@ -105,6 +105,7 @@ internal data class SessionChatTimelineViewProps(
     val onSessionTodosClick: () -> Unit = {},
     val onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     val onToolDetailTap: (SessionChatToolDetailTarget) -> Unit = {},
+    val onToolGroupTap: (SessionChatToolGroupTarget) -> Unit = {},
     val onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit = { _, _ -> },
     val onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit = { _, _ -> },
     val supportsSessionMessageDiff: Boolean = true,
@@ -176,6 +177,7 @@ internal fun SessionChatTimelineView(
                 onSessionTodosClick = props.onSessionTodosClick,
                 onMessageActionsTap = props.onMessageActionsTap,
                 onToolDetailTap = props.onToolDetailTap,
+                onToolGroupTap = props.onToolGroupTap,
                 onChildSessionTap = props.onChildSessionTap,
                 onChangesReviewTap = props.onChangesReviewTap,
                 supportsSessionMessageDiff = props.supportsSessionMessageDiff,
@@ -205,6 +207,7 @@ private fun SessionChatTimelineReadyView(
     onSessionTodosClick: () -> Unit,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+    onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     supportsSessionMessageDiff: Boolean,
@@ -323,6 +326,7 @@ private fun SessionChatTimelineReadyView(
                     message = message,
                     onMessageActionsTap = onMessageActionsTap,
                     onToolDetailTap = onToolDetailTap,
+                    onToolGroupTap = onToolGroupTap,
                     onChildSessionTap = onChildSessionTap,
                     onChangesReviewTap = onChangesReviewTap,
                     supportsSessionMessageDiff = supportsSessionMessageDiff,
@@ -417,6 +421,7 @@ private fun SessionChatMessageRow(
     message: SessionChatMessageItem,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+    onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     supportsSessionMessageDiff: Boolean,
@@ -472,6 +477,7 @@ private fun SessionChatMessageRow(
                     message = message,
                     onOpenMessageActions = { openMessageActions(showsRevertMessage = false) },
                     onToolDetailTap = onToolDetailTap,
+                    onToolGroupTap = onToolGroupTap,
                     onChildSessionTap = onChildSessionTap,
                     onChangesReviewTap = onChangesReviewTap,
                     supportsSessionMessageDiff = supportsSessionMessageDiff,
@@ -499,7 +505,9 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
                 )
             is SessionChatTimelineBlock.Attachment ->
                 OpenCodeOutgoingMessageContent.Attachment(AttachmentPresentationMapper.from(block.attachment))
-            is SessionChatTimelineBlock.ToolCard, is SessionChatTimelineBlock.ToolGroup -> null
+            is SessionChatTimelineBlock.ToolCard, is SessionChatTimelineBlock.ToolGroup,
+            is SessionChatTimelineBlock.ChildSessionRow,
+            -> null
         }
     }
 }
@@ -530,6 +538,7 @@ private fun AssistantMessageContent(
     message: SessionChatMessageItem,
     onOpenMessageActions: () -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+    onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     supportsSessionMessageDiff: Boolean,
@@ -609,6 +618,32 @@ private fun AssistantMessageContent(
                             title = block.title,
                             subtitle = block.subtitle,
                             errorText = block.errorText,
+                            onClick = {
+                                onToolGroupTap(
+                                    SessionChatToolGroupTarget(
+                                        blockID = block.blockID,
+                                        title = block.title,
+                                        subtitle = block.subtitle,
+                                        members = block.members,
+                                        messageId = message.id,
+                                    ),
+                                )
+                            },
+                        )
+                    is SessionChatTimelineBlock.ChildSessionRow ->
+                        SessionChatChildSessionRow(
+                            agentName = block.agentName,
+                            letter = block.letter,
+                            isBackground = block.isBackground,
+                            secondLine = block.secondLine,
+                            timeStartEpochMs = block.timeStartEpochMs,
+                            showsChevron = block.childSessionId != null,
+                            onClick =
+                                block.childSessionId?.let { childSessionId ->
+                                    {
+                                        onChildSessionTap(childSessionId, block.agentName)
+                                    }
+                                },
                         )
                 }
             }

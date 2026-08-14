@@ -12,6 +12,7 @@ import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.textmate.TextMateProcessPressureObserver
 import dev.opencode.mobile.markdown.OpenCodeAndroidMarkdownAssets
 import dev.opencode.mobile.theme.ThemeManager
@@ -25,6 +26,7 @@ class OpenCodeMobileApplication : Application() {
         MarkdownHighlightPreferences.initialize(this)
         AnalyticsConsentPreferences.initialize(this)
         AppOnboardingPreferences.initialize(this)
+        SessionChatDisplayPreferences.initialize(this)
         OpenCodeAndroidMarkdownAssets.init(this)
         OpenCodeReleaseObservability.initialize(this)
         EntryPointAccessors

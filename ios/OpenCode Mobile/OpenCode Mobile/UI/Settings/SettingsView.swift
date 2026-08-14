@@ -37,6 +37,7 @@ struct SettingsView: View {
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var markdownHighlightPreferences = MarkdownHighlightPreferences.shared
     @State private var analyticsConsentPreferences = AnalyticsConsentPreferences.shared
+    @State private var sessionChatDisplayPreferences = SessionChatDisplayPreferences.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -129,6 +130,30 @@ struct SettingsView: View {
                                 trigger: ProductAnalytics.Trigger.present
                             )
                             showRecentWindowPicker = true
+                        }
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
+                        title: "Collapse Consecutive Tool Calls",
+                        subtitle: "Group back-to-back tools into one summary card",
+                        style: .card,
+                        startDecorator: .icon(.collapseContent, accessibilityLabel: "Collapse Consecutive Tool Calls"),
+                        trailing: {
+                            Toggle(
+                                "Collapse Consecutive Tool Calls",
+                                isOn: Binding(
+                                    get: { sessionChatDisplayPreferences.collapseConsecutiveToolCalls },
+                                    set: { newValue in
+                                        logSettingsAction(
+                                            ProductAnalytics.Action.settingsToggleCollapseConsecutiveToolCalls
+                                        )
+                                        sessionChatDisplayPreferences.setCollapseConsecutiveToolCalls(newValue)
+                                    }
+                                )
+                            )
+                            .labelsHidden()
+                            .tint(OpenCodeColors.interactive)
                         }
                     )
                     .padding(.horizontal, 16)

@@ -287,7 +287,9 @@ object TimelineProjector {
                 "c:${block.blockID}:${block.title}:${block.subtitle}:${block.status}:" +
                     "${block.errorText}:${block.additions}:${block.deletions}"
             is SessionChatTimelineBlock.ToolGroup ->
-                "g:${block.blockID}:${block.count}:${block.title}:${block.subtitle}:${block.status}"
+                "g:${block.blockID}:${block.count}:${block.title}:${block.subtitle}:${block.status}:${block.errorText}"
+            is SessionChatTimelineBlock.ChildSessionRow ->
+                "r:${block.blockID}:${block.agentName}:${block.secondLine}:${block.childSessionId}"
         }
 
     private data class LayoutKey(
@@ -416,7 +418,9 @@ object TimelineProjector {
                 "c:${block.blockID}:${block.title}:${block.subtitle}:${block.status}:" +
                     "${block.errorText}:${block.additions}:${block.deletions}"
             is SessionChatTimelineBlock.ToolGroup ->
-                "g:${block.blockID}:${block.count}:${block.title}:${block.subtitle}:${block.status}"
+                "g:${block.blockID}:${block.count}:${block.title}:${block.subtitle}:${block.status}:${block.errorText}"
+            is SessionChatTimelineBlock.ChildSessionRow ->
+                "r:${block.blockID}:${block.agentName}:${block.secondLine}:${block.childSessionId}"
         }
 
     private fun markdownFingerprint(row: TimelineRow): String =

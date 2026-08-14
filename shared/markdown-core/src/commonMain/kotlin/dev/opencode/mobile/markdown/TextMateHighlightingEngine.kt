@@ -247,7 +247,7 @@ class OpenCodeTextMateHighlightingEngine(
             )
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
+        } catch (error: Throwable) {
             result(
                 request = request,
                 canonicalLanguage = null,
@@ -257,7 +257,7 @@ class OpenCodeTextMateHighlightingEngine(
                     listOf(
                         MarkdownDiagnostic(
                             kind = MarkdownDiagnosticKind.HighlighterFallback,
-                            message = "TextMate highlighting failed; semantic fallback was preserved.",
+                            message = error.message ?: "TextMate highlighting failed; semantic fallback was preserved.",
                         ),
                     ),
                 metrics = metrics,

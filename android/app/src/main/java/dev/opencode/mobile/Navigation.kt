@@ -54,6 +54,7 @@ import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScr
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.ui.componentgallery.components.SessionListDockGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
@@ -216,6 +217,10 @@ fun MainNavigation() {
                                                 recentWindowHours = HomeDisplayPreferences.recentWindowHours,
                                                 onRecentWindowHoursChange =
                                                     settingsViewModel::setRecentWindowHours,
+                                                collapseConsecutiveToolCalls =
+                                                    SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
+                                                onCollapseConsecutiveToolCallsChange =
+                                                    settingsViewModel::setCollapseConsecutiveToolCalls,
                                                 textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
                                                 onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
                                                 productAnalyticsConsented =
