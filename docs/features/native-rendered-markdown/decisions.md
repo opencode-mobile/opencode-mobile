@@ -1,5 +1,19 @@
 # Native Rendered Markdown Decisions
 
+## Keep Android Joni/jcodings Out Of R8 Rewrites
+
+- Decision: ship `-keep class org.joni.**` and `-keep class org.jcodings.**` in
+  `markdown-core` consumer rules and the app `proguard-rules.pro`. Treat Joni
+  class-init `Error`s (including `ExceptionInInitializerError`) as a failed
+  highlight with semantic fallback rather than an uncaught process crash.
+- Reason: Joni `QuantifierNode` initializes a nested `ReduceType` enum into a
+  static `REDUCE_TABLE`. R8 rewriting that `<clinit>` NPEs on the first TextMate
+  pattern with `*`, `+`, or `?`. `ExceptionInInitializerError` is an `Error`, so
+  `catch (Exception)` on the highlight pump did not contain it.
+- Date: 2026-08-14.
+- Revisit when: Joni is replaced, or an R8 version is proven not to rewrite that
+  initializer on a minified release build.
+
 ## Format-Always Streaming Markdown; Color Later
 
 - Decision: when markdown is detected on streaming text-lane coalesce, always

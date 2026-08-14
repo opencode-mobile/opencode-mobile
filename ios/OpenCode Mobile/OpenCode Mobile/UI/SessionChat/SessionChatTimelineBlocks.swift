@@ -90,12 +90,17 @@ nonisolated struct SessionChatToolGroupBlock: Equatable, Sendable {
     let title: String
     let subtitle: String?
     let errorText: String?
+    let members: [SessionChatToolCardBlock]
 }
 
 nonisolated enum SessionChatTimelineBlocks {
     private static let contextToolNames: Set<String> = ["read", "glob", "grep"]
 
-    static func build(role: MessageRole, parts: [MessagePart]) -> SessionChatTimelineBlocksResult {
+    static func build(
+        role: MessageRole,
+        parts: [MessagePart],
+        collapseConsecutiveToolCalls: Bool = false
+    ) -> SessionChatTimelineBlocksResult {
         guard !parts.isEmpty else { return .ok([]) }
 
         let allowToolCards = role == .assistant
@@ -147,13 +152,17 @@ nonisolated enum SessionChatTimelineBlocks {
                     continue
                 }
                 flushText()
-                if isContextTool(tool.toolName) {
+                if isGroupableTool(tool, collapse: collapseConsecutiveToolCalls) {
                     var groupTools: [ToolPart] = []
                     var lookAhead = index
                     while lookAhead < parts.count {
-                        guard case .tool(let candidate) = parts[lookAhead],
-                              isVisibleTool(candidate),
-                              isContextTool(candidate.toolName)
+                        let candidatePart = parts[lookAhead]
+                        if isTransparentPart(candidatePart) {
+                            lookAhead += 1
+                            continue
+                        }
+                        guard case .tool(let candidate) = candidatePart,
+                              isGroupableTool(candidate, collapse: collapseConsecutiveToolCalls)
                         else { break }
                         groupTools.append(candidate)
                         lookAhead += 1
@@ -185,7 +194,8 @@ nonisolated enum SessionChatTimelineBlocks {
         role: MessageRole,
         parts: [MessagePart],
         messageId: String,
-        fallbackText: String
+        fallbackText: String,
+        collapseConsecutiveToolCalls: Bool = false
     ) -> [SessionChatTimelineBlock] {
         func fallbackBlocks() -> [SessionChatTimelineBlock] {
             let trimmed = fallbackText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -199,11 +209,77 @@ nonisolated enum SessionChatTimelineBlocks {
             ]
         }
 
-        switch build(role: role, parts: parts) {
+        switch build(role: role, parts: parts, collapseConsecutiveToolCalls: collapseConsecutiveToolCalls) {
         case .ok(let blocks):
             return blocks.isEmpty ? fallbackBlocks() : blocks
         case .missingPartIds:
             return fallbackBlocks()
+        }
+    }
+
+    /// When collapse is on, consecutive assistant messages whose visible blocks
+    /// are only groupable tools become one tool group. OpenCode emits each
+    /// sequential tool step as its own assistant message (`parentID` = user
+    /// turn); grouping only inside one message would leave a stack of Shell
+    /// cards. Visible text, attachments, and `task` tools still break a run.
+    static func mergeConsecutiveToolOnlyAssistantBodies(
+        _ bodies: [DisplayMessageBody],
+        collapseConsecutiveToolCalls: Bool
+    ) -> [DisplayMessageBody] {
+        guard collapseConsecutiveToolCalls, bodies.count >= 2 else { return bodies }
+        var merged: [DisplayMessageBody] = []
+        var index = 0
+        while index < bodies.count {
+            guard isMergeableToolOnlyAssistant(bodies[index]) else {
+                merged.append(bodies[index])
+                index += 1
+                continue
+            }
+            var end = index + 1
+            while end < bodies.count, isMergeableToolOnlyAssistant(bodies[end]) {
+                end += 1
+            }
+            if end == index + 1 {
+                merged.append(bodies[index])
+                index += 1
+                continue
+            }
+            let run = bodies[index..<end]
+            let parts = run.flatMap(\.message.parts)
+            let first = bodies[index]
+            let blocks = buildOrFallback(
+                role: .assistant,
+                parts: parts,
+                messageId: first.message.id,
+                fallbackText: "",
+                collapseConsecutiveToolCalls: true
+            )
+            merged.append(
+                DisplayMessageBody(
+                    message: first.message,
+                    isStreaming: run.contains(where: \.isStreaming),
+                    blocks: blocks,
+                    renderedMarkdown: nil
+                )
+            )
+            index = end
+        }
+        return merged
+    }
+
+    private static func isMergeableToolOnlyAssistant(_ body: DisplayMessageBody) -> Bool {
+        guard body.message.role == .assistant, !body.blocks.isEmpty else { return false }
+        return body.blocks.allSatisfy(isGroupableToolBlock)
+    }
+
+    private static func isGroupableToolBlock(_ block: SessionChatTimelineBlock) -> Bool {
+        switch block {
+        case .toolGroup:
+            true
+        case .toolCard(_, let card):
+            card.toolName.lowercased() != "task"
+        case .text, .attachment:
+            false
         }
     }
 
@@ -236,13 +312,44 @@ nonisolated enum SessionChatTimelineBlocks {
         return true
     }
 
+    /// Parts that never become timeline blocks. Grouping looks through them so
+    /// hidden todos, empty text, and compaction markers do not split a visible
+    /// tool run (web filters to renderable parts before grouping).
+    private static func isTransparentPart(_ part: MessagePart) -> Bool {
+        switch part {
+        case .compaction:
+            true
+        case .text(let textPart):
+            !textPart.isDisplayable
+                || textPart.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .tool(let tool):
+            !isVisibleTool(tool)
+        case .file:
+            false
+        }
+    }
+
     private static func isContextTool(_ toolName: String) -> Bool {
         contextToolNames.contains(toolName.lowercased())
+    }
+
+    /// A visible tool can join a group. Subagent (`task`) spawns never group so
+    /// their child-session tap stays available; when collapse is on every other
+    /// visible tool groups, otherwise only context tools do.
+    private static func isGroupableTool(_ tool: ToolPart, collapse: Bool) -> Bool {
+        if tool.toolName.lowercased() == "task" { return false }
+        if collapse { return true }
+        return isContextTool(tool.toolName)
     }
 
     private static func toToolGroup(_ tools: [ToolPart]) -> SessionChatTimelineBlock? {
         let memberIds = tools.compactMap(\.id)
         guard memberIds.count == tools.count else { return nil }
+        let members: [SessionChatToolCardBlock] = tools.compactMap { tool in
+            guard case .toolCard(_, let card) = toToolCard(tool) else { return nil }
+            return card
+        }
+        guard members.count == tools.count else { return nil }
         let status = worstStatus(tools.map(\.status))
         let errorText = tools
             .first(where: { $0.status == .error })?
@@ -253,38 +360,54 @@ nonisolated enum SessionChatTimelineBlocks {
             group: SessionChatToolGroupBlock(
                 count: tools.count,
                 status: status,
-                title: contextGroupTitle(tools),
-                subtitle: nil,
-                errorText: errorText
+                title: groupTitle(tools.count),
+                subtitle: groupSubtitle(tools),
+                errorText: errorText,
+                members: members
             )
         )
     }
 
-    private static func contextGroupTitle(_ tools: [ToolPart]) -> String {
-        var counts: [(String, Int)] = [
-            ("read", 0),
-            ("grep", 0),
-            ("glob", 0),
-        ]
+    /// Count headline for the Tool Call Card (`7 tools`).
+    private static func groupTitle(_ count: Int) -> String {
+        "\(count) tools"
+    }
+
+    /// Family one-liner in encounter order (`Edit · Write · 5 shells`).
+    /// A single member of a family is just the verb; multiples get a count.
+    private static func groupSubtitle(_ tools: [ToolPart]) -> String {
+        var order: [String] = []
+        var counts: [String: Int] = [:]
         for tool in tools {
             let key = tool.toolName.lowercased()
-            if let index = counts.firstIndex(where: { $0.0 == key }) {
-                counts[index].1 += 1
+            if counts[key] == nil {
+                order.append(key)
             }
+            counts[key, default: 0] += 1
         }
-        return counts
-            .filter { $0.1 > 0 }
-            .map { name, count in
-                let label: String =
-                    switch name {
-                    case "read": count == 1 ? "read" : "reads"
-                    case "grep": count == 1 ? "grep" : "greps"
-                    case "glob": count == 1 ? "glob" : "globs"
-                    default: name
-                    }
-                return "\(count) \(label)"
-            }
-            .joined(separator: " · ")
+        return order.map { name in
+            familyPhrase(name, count: counts[name, default: 0])
+        }.joined(separator: " · ")
+    }
+
+    private static func familyPhrase(_ name: String, count: Int) -> String {
+        switch name {
+        case "read": return count == 1 ? "Read" : "\(count) reads"
+        case "grep": return count == 1 ? "Grep" : "\(count) greps"
+        case "glob": return count == 1 ? "Glob" : "\(count) globs"
+        case "bash": return count == 1 ? "Shell" : "\(count) shells"
+        case "edit": return count == 1 ? "Edit" : "\(count) edits"
+        case "write": return count == 1 ? "Write" : "\(count) writes"
+        case "webfetch": return count == 1 ? "Fetch" : "\(count) fetches"
+        case "websearch": return count == 1 ? "Search" : "\(count) searches"
+        case "question": return count == 1 ? "Question" : "\(count) questions"
+        case "skill": return count == 1 ? "Skill" : "\(count) skills"
+        case "apply_patch": return count == 1 ? "Patch" : "\(count) patches"
+        case "linear_get_issue": return count == 1 ? "Get issue" : "\(count) Get issues"
+        case "linear_save_issue": return count == 1 ? "Save issue" : "\(count) Save issues"
+        default:
+            return count == 1 ? name : "\(count) \(name)"
+        }
     }
 
     private static func worstStatus(_ statuses: [ToolStatus]) -> ToolStatus {

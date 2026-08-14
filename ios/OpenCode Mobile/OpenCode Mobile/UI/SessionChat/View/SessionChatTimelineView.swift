@@ -22,6 +22,7 @@ struct SessionChatTimelineViewProps {
     let onSessionTodosTap: () -> Void
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let onUserScrollDismissKeyboard: () -> Void
@@ -47,6 +48,7 @@ struct SessionChatTimelineViewProps {
         onSessionTodosTap: @escaping () -> Void = {},
         onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
         onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in },
+        onToolGroupTap: @escaping (SessionChatToolGroupTarget) -> Void = { _ in },
         onChildSessionTap: @escaping (String, String) -> Void = { _, _ in },
         onChangesReviewTap: @escaping (String, String?) -> Void = { _, _ in },
         onUserScrollDismissKeyboard: @escaping () -> Void = {},
@@ -71,6 +73,7 @@ struct SessionChatTimelineViewProps {
         self.onSessionTodosTap = onSessionTodosTap
         self.onMessageActionsTap = onMessageActionsTap
         self.onToolDetailTap = onToolDetailTap
+        self.onToolGroupTap = onToolGroupTap
         self.onChildSessionTap = onChildSessionTap
         self.onChangesReviewTap = onChangesReviewTap
         self.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
@@ -177,6 +180,7 @@ private struct SessionChatTimelineReadyView: View {
                     message: message,
                     onMessageActionsTap: props.onMessageActionsTap,
                     onToolDetailTap: props.onToolDetailTap,
+                    onToolGroupTap: props.onToolGroupTap,
                     onChildSessionTap: props.onChildSessionTap,
                     onChangesReviewTap: props.onChangesReviewTap,
                     supportsSessionMessageDiff: props.supportsSessionMessageDiff
@@ -311,6 +315,7 @@ private struct SessionChatTimelineHostRow: View {
     let message: SessionChatRow
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let supportsSessionMessageDiff: Bool
@@ -325,6 +330,7 @@ private struct SessionChatTimelineHostRow: View {
                         message: message,
                         onMessageActionsTap: onMessageActionsTap,
                         onToolDetailTap: onToolDetailTap,
+                        onToolGroupTap: onToolGroupTap,
                         onChildSessionTap: onChildSessionTap,
                         onChangesReviewTap: onChangesReviewTap,
                         supportsSessionMessageDiff: supportsSessionMessageDiff
@@ -336,6 +342,7 @@ private struct SessionChatTimelineHostRow: View {
                         message: message,
                         onMessageActionsTap: onMessageActionsTap,
                         onToolDetailTap: onToolDetailTap,
+                        onToolGroupTap: onToolGroupTap,
                         onChildSessionTap: onChildSessionTap,
                         onChangesReviewTap: onChangesReviewTap,
                         supportsSessionMessageDiff: supportsSessionMessageDiff
@@ -388,6 +395,7 @@ private struct SessionChatMessageRow: View {
     let message: SessionChatRow
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let supportsSessionMessageDiff: Bool
@@ -422,6 +430,7 @@ private struct SessionChatMessageRow: View {
                     message: message,
                     onOpenMessageActions: { openMessageActions(showsRevertMessage: false) },
                     onToolDetailTap: onToolDetailTap,
+                    onToolGroupTap: onToolGroupTap,
                     onChildSessionTap: onChildSessionTap,
                     onChangesReviewTap: onChangesReviewTap,
                     supportsSessionMessageDiff: supportsSessionMessageDiff
@@ -479,6 +488,7 @@ private struct AssistantMessageContent: View {
     let message: SessionChatRow
     let onOpenMessageActions: () -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let supportsSessionMessageDiff: Bool
@@ -540,12 +550,23 @@ private struct AssistantMessageContent: View {
                         errorText: card.errorText,
                         action: toolCardAction(for: card)
                     )
-                case .toolGroup(_, let group):
+                case .toolGroup(let blockID, let group):
                     OpenCodeToolCallCard(
                         status: group.status.toolCallCardStatus,
                         title: group.title,
                         subtitle: group.subtitle,
-                        errorText: group.errorText
+                        errorText: group.errorText,
+                        action: {
+                            onToolGroupTap(
+                                SessionChatToolGroupTarget(
+                                    blockID: blockID,
+                                    title: group.title,
+                                    subtitle: group.subtitle,
+                                    members: group.members,
+                                    messageID: message.id
+                                )
+                            )
+                        }
                     )
                 }
             }
