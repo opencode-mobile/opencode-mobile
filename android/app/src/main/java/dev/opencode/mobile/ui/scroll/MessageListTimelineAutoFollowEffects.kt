@@ -82,7 +82,7 @@ internal fun rememberMessageListScrollToEndVisibility(
     messageCount: Int,
     revealThresholdMinPx: Int,
     hideSlackPx: Int,
-    isUserScrolling: Boolean,
+    isProgrammaticScrolling: Boolean,
     isSettlingToEnd: Boolean,
 ): Boolean {
     var currentlyShown by remember(listState) { mutableStateOf(false) }
@@ -91,7 +91,7 @@ internal fun rememberMessageListScrollToEndVisibility(
         messageCount,
         revealThresholdMinPx,
         hideSlackPx,
-        isUserScrolling,
+        isProgrammaticScrolling,
         isSettlingToEnd,
         currentlyShown,
     ) {
@@ -100,7 +100,11 @@ internal fun rememberMessageListScrollToEndVisibility(
                 messageCount = messageCount,
                 revealThresholdMinPx = revealThresholdMinPx,
                 hideSlackPx = hideSlackPx,
-                isUserScrolling = isUserScrolling,
+                isUserScrolling =
+                    isUserTimelineScrolling(
+                        isScrollInProgress = listState.isScrollInProgress,
+                        isProgrammaticScrolling = isProgrammaticScrolling,
+                    ),
                 isSettlingToEnd = isSettlingToEnd,
                 currentlyShown = currentlyShown,
             )

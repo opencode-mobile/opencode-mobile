@@ -116,7 +116,7 @@ internal fun rememberMessageListTimeline(
             messageCount = messageCount,
             revealThresholdMinPx = revealThresholdMinPx,
             hideSlackPx = hideSlackPx,
-            isUserScrolling = resolvedUserScroll.inProgress,
+            isProgrammaticScrolling = scrollController.isProgrammaticScrolling,
             isSettlingToEnd = isSettlingToEnd,
         )
     val onLastMessageContentSizeSettled =

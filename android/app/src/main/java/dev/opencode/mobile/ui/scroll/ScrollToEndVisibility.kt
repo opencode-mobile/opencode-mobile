@@ -77,6 +77,11 @@ internal fun shouldShowScrollToEnd(
     return gap > revealThresholdPx(viewportHeightPx, revealThresholdMinPx)
 }
 
+internal fun isUserTimelineScrolling(
+    isScrollInProgress: Boolean,
+    isProgrammaticScrolling: Boolean,
+): Boolean = isScrollInProgress && !isProgrammaticScrolling
+
 internal fun shouldShowScrollToEndPill(
     isUserScrolling: Boolean,
     isSettlingToEnd: Boolean,

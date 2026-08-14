@@ -101,6 +101,50 @@ class ScrollToEndVisibilityTest {
     }
 
     @Test
+    fun treatNonProgrammaticInProgressScrollAsUserScrolling() {
+        assertTrue(
+            isUserTimelineScrolling(
+                isScrollInProgress = true,
+                isProgrammaticScrolling = false,
+            ),
+        )
+        assertFalse(
+            isUserTimelineScrolling(
+                isScrollInProgress = true,
+                isProgrammaticScrolling = true,
+            ),
+        )
+        assertFalse(
+            isUserTimelineScrolling(
+                isScrollInProgress = false,
+                isProgrammaticScrolling = false,
+            ),
+        )
+    }
+
+    @Test
+    fun hidePillDuringInProgressScrollEvenWithoutNestedUserInput() {
+        assertFalse(
+            shouldShowScrollToEndPill(
+                isUserScrolling =
+                    isUserTimelineScrolling(
+                        isScrollInProgress = true,
+                        isProgrammaticScrolling = false,
+                    ),
+                isSettlingToEnd = false,
+                currentlyShown = true,
+                messageCount = 3,
+                viewportHeightPx = 2000,
+                viewportEndOffset = 2000,
+                afterContentPadding = 0,
+                revealThresholdMinPx = 120,
+                hideSlackPx = 16,
+                visibleItems = scrolledPastReveal(),
+            ),
+        )
+    }
+
+    @Test
     fun hidePillWhileUserScrollingEvenWhenPastReveal() {
         assertFalse(
             shouldShowScrollToEndPill(
