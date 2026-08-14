@@ -431,14 +431,16 @@ struct SessionChatTimelineBlocksTests {
                 ),
             ]
         )
-        guard case .toolCard(_, let tool) = blocks.first else {
-            Issue.record("Expected tool card")
+        guard case .childSessionRow(_, let row) = blocks.first else {
+            Issue.record("Expected child session row")
             return
         }
-        #expect(tool.title == "explore")
-        #expect(tool.subtitle == "Find auth bugs")
-        #expect(tool.childSessionId == "ses-child-1")
-        #expect(tool.detailText == nil)
+        #expect(row.agentName == "explore")
+        #expect(row.letter == "E")
+        #expect(row.secondLine == "Find auth bugs")
+        #expect(row.childSessionId == "ses-child-1")
+        #expect(row.isBackground == false)
+        #expect(row.timeStartEpochMs == nil)
     }
 
     @Test func build_taskFallsBackTitleAndOmitsNavWithoutSessionId() {
@@ -514,13 +516,16 @@ struct SessionChatTimelineBlocksTests {
                 ),
             ]
         )
-        guard case .toolCard(_, let tool) = blocks.first else {
-            Issue.record("Expected tool card")
+        guard case .childSessionRow(_, let row) = blocks.first else {
+            Issue.record("Expected child session row")
             return
         }
-        #expect(tool.title == "coder")
-        #expect(tool.subtitle == nil)
-        #expect(tool.childSessionId == nil)
+        #expect(row.agentName == "coder")
+        #expect(row.letter == "C")
+        #expect(row.secondLine == nil)
+        #expect(row.isBackground == true)
+        #expect(row.childSessionId == nil)
+        #expect(row.timeStartEpochMs == nil)
     }
 
     @Test func build_taskAppendsBackgroundMarkerAndUsesMetadataAgent() {
@@ -541,13 +546,16 @@ struct SessionChatTimelineBlocksTests {
                 ),
             ]
         )
-        guard case .toolCard(_, let tool) = blocks.first else {
-            Issue.record("Expected tool card")
+        guard case .childSessionRow(_, let row) = blocks.first else {
+            Issue.record("Expected child session row")
             return
         }
-        #expect(tool.title == "researcher")
-        #expect(tool.subtitle == "Long research (background)")
-        #expect(tool.childSessionId == "ses-bg")
+        #expect(row.agentName == "researcher")
+        #expect(row.letter == "R")
+        #expect(row.secondLine == "Long research")
+        #expect(row.isBackground == true)
+        #expect(row.childSessionId == "ses-bg")
+        #expect(row.timeStartEpochMs == nil)
     }
 
     @Test func build_taskErrorKeepsSpecializedChrome() {
@@ -1085,9 +1093,9 @@ struct SessionChatTimelineBlocksTests {
             collapseConsecutiveToolCalls: true
         )
         #expect(blocks.count == 2)
-        guard case .toolCard(let firstID, let first) = blocks[0],
-              case .toolCard(let secondID, _) = blocks[1] else {
-            Issue.record("Expected two task cards, not a group")
+        guard case .childSessionRow(let firstID, let first) = blocks[0],
+              case .childSessionRow(let secondID, _) = blocks[1] else {
+            Issue.record("Expected two child-session rows, not a group")
             return
         }
         #expect(firstID == PresentationBlockId.direct("task-1"))
@@ -1105,8 +1113,10 @@ struct SessionChatTimelineBlocksTests {
             collapseConsecutiveToolCalls: true
         )
         #expect(blocks.count == 3)
-        guard case .toolCard = blocks[0], case .toolCard = blocks[1], case .toolCard = blocks[2] else {
-            Issue.record("Expected task to break grouping into three cards")
+        guard case .toolCard = blocks[0],
+              case .childSessionRow = blocks[1],
+              case .toolCard = blocks[2] else {
+            Issue.record("Expected task to break grouping as a child-session row")
             return
         }
     }

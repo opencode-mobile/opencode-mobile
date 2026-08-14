@@ -67,6 +67,7 @@ import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ServerAddressInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ChildSessionRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolCallCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.UnifiedDiffGalleryScreen
@@ -317,6 +318,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.Attachment -> AttachmentGalleryScreen()
                                                         ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()
                                                         ComponentGalleryEntryId.ToolCallCard -> ToolCallCardGalleryScreen()
+                                                        ComponentGalleryEntryId.ChildSessionRow -> ChildSessionRowGalleryScreen()
                                                         ComponentGalleryEntryId.TopBar -> TopBarGalleryScreen()
                                                         ComponentGalleryEntryId.OverflowMenu -> OverflowMenuGalleryScreen()
                                                         ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()

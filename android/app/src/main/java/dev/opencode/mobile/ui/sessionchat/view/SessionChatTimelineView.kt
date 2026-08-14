@@ -633,11 +633,9 @@ private fun AssistantMessageContent(
                     is SessionChatTimelineBlock.ChildSessionRow ->
                         SessionChatChildSessionRow(
                             agentName = block.agentName,
-                            letter = block.letter,
                             isBackground = block.isBackground,
                             secondLine = block.secondLine,
                             timeStartEpochMs = block.timeStartEpochMs,
-                            showsChevron = block.childSessionId != null,
                             onClick =
                                 block.childSessionId?.let { childSessionId ->
                                     {

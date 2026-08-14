@@ -613,6 +613,24 @@ shared `success` / `warning` / `error` semantic tokens; +/− counts reuse
 | `toolCallCard.contentSpacing` | 4 (logical px) |
 | `toolCallCard.metaRowSpacing` | 8 (logical px) |
 
+### Child session row
+
+Quiet person/thread row for a child session. Reuses shared surface, text, and
+icon semantic tokens. Do not use List Item `LetterAccent` colors.
+
+| Token | Value |
+| --- | --- |
+| `childSessionRow.cornerRadius` | 8 (logical px; matches `toolCallCard.cornerRadius`) |
+| `childSessionRow.paddingHorizontal` | 12 (logical px) |
+| `childSessionRow.paddingVertical` | 10 (logical px) |
+| `childSessionRow.avatarSize` | 32 (logical px) |
+| `childSessionRow.avatarGlyphSize` | 14 (logical px; bold rounded) |
+| `childSessionRow.contentSpacing` | 12 (logical px) |
+| `childSessionRow.titleRowSpacing` | 8 (logical px) |
+| `childSessionRow.textStackSpacing` | 2 (logical px) |
+| `childSessionRow.trailingSpacing` | 6 (logical px) |
+| `childSessionRow.chevronSize` | 16 (logical px) |
+
 ## Platform Mappings
 
 Platform mappings translate semantic and component tokens into native APIs:

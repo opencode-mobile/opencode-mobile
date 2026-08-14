@@ -56,11 +56,9 @@ struct SnapshotEvidenceChildSessionRow: View {
     var body: some View {
         SessionChatChildSessionRow(
             agentName: mock.agentName,
-            letter: mock.letter,
             isBackground: mock.isBackground,
             secondLine: mock.secondLine,
             timeStartEpochMs: mock.timeStartEpochMs,
-            showsChevron: mock.showsChevron,
             action: mock.showsChevron ? {} : nil
         )
     }
