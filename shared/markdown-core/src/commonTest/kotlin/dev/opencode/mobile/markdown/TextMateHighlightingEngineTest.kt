@@ -7,6 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotSame
+import kotlin.test.assertTrue
 
 class TextMateHighlightingEngineTest {
     @Test
@@ -51,6 +52,36 @@ class TextMateHighlightingEngineTest {
         assertEquals(1, result.observation.fenceIndex)
         assertEquals(2, result.observation.fenceCount)
         assertEquals(30, result.observation.messageCharacters)
+    }
+
+    @Test
+    fun highlightNowTreatsInitializerErrorAsFailedFallback() {
+        val engine =
+            OpenCodeTextMateHighlightingEngine(
+                object : OpenCodeCodeHighlighter {
+                    override fun supportsLanguage(languageOrAlias: String?): Boolean = true
+
+                    override fun highlight(
+                        languageOrAlias: String?,
+                        code: String,
+                    ): SyntaxHighlightResult = throw Error("QuantifierNode clinit")
+                },
+            )
+
+        val result =
+            engine.highlightNow(
+                HighlightRequest(
+                    key = CodeBlockKey("message:fence"),
+                    revision = HighlightRevision(1),
+                    language = "kotlin",
+                    source = "val value = 1",
+                    intent = HighlightIntent.InteractiveFinal,
+                    policyEpoch = 1,
+                ),
+            )
+
+        assertEquals(TextMateParseOutcome.Failed, result.outcome)
+        assertTrue(result.diagnostics.any { it.kind == MarkdownDiagnosticKind.HighlighterFallback })
     }
 
     @Test
