@@ -99,4 +99,236 @@ class ScrollToEndVisibilityTest {
             ),
         )
     }
+
+    @Test
+    fun hidePillWhileUserScrollingEvenWhenPastReveal() {
+        assertFalse(
+            shouldShowScrollToEndPill(
+                isUserScrolling = true,
+                isSettlingToEnd = false,
+                currentlyShown = false,
+                messageCount = 3,
+                viewportHeightPx = 2000,
+                viewportEndOffset = 2000,
+                afterContentPadding = 0,
+                revealThresholdMinPx = 120,
+                hideSlackPx = 16,
+                visibleItems = scrolledPastReveal(),
+            ),
+        )
+    }
+
+    @Test
+    fun showPillAfterUserScrollSettlesPastReveal() {
+        assertTrue(
+            shouldShowScrollToEndPill(
+                isUserScrolling = false,
+                isSettlingToEnd = false,
+                currentlyShown = false,
+                messageCount = 3,
+                viewportHeightPx = 2000,
+                viewportEndOffset = 2000,
+                afterContentPadding = 0,
+                revealThresholdMinPx = 120,
+                hideSlackPx = 16,
+                visibleItems = scrolledPastReveal(),
+            ),
+        )
+    }
+
+    @Test
+    fun hidePillWhileSettlingToEndEvenWhenPastReveal() {
+        assertFalse(
+            shouldShowScrollToEndPill(
+                isUserScrolling = false,
+                isSettlingToEnd = true,
+                currentlyShown = false,
+                messageCount = 3,
+                viewportHeightPx = 2000,
+                viewportEndOffset = 2000,
+                afterContentPadding = 0,
+                revealThresholdMinPx = 120,
+                hideSlackPx = 16,
+                visibleItems = scrolledPastReveal(),
+            ),
+        )
+    }
+
+    @Test
+    fun keepPillHiddenWhenSettledJustInsideRevealThreshold() {
+        assertFalse(
+            shouldShowScrollToEndPill(
+                isUserScrolling = false,
+                isSettlingToEnd = false,
+                currentlyShown = false,
+                messageCount = 3,
+                viewportHeightPx = 2000,
+                viewportEndOffset = 2000,
+                afterContentPadding = 0,
+                revealThresholdMinPx = 120,
+                hideSlackPx = 16,
+                visibleItems = justInsideReveal(),
+            ),
+        )
+    }
+
+    @Test
+    fun keepPillShownUntilDistanceDropsBelowHideSlack() {
+        assertTrue(
+            shouldShowScrollToEndPill(
+                isUserScrolling = false,
+                isSettlingToEnd = false,
+                currentlyShown = true,
+                messageCount = 3,
+                viewportHeightPx = 2000,
+                viewportEndOffset = 2000,
+                afterContentPadding = 0,
+                revealThresholdMinPx = 120,
+                hideSlackPx = 16,
+                visibleItems = justInsideReveal(),
+            ),
+        )
+    }
+
+    @Test
+    fun stayHiddenThroughUserFlingThenSettleToEnd() {
+        var shown = false
+        shown =
+            shouldShowScrollToEndPill(
+                isUserScrolling = true,
+                isSettlingToEnd = false,
+                currentlyShown = shown,
+                messageCount = 3,
+                viewportHeightPx = 2000,
+                viewportEndOffset = 2000,
+                afterContentPadding = 0,
+                revealThresholdMinPx = 120,
+                hideSlackPx = 16,
+                visibleItems = scrolledPastReveal(),
+            )
+        assertFalse(shown)
+        shown =
+            shouldShowScrollToEndPill(
+                isUserScrolling = false,
+                isSettlingToEnd = true,
+                currentlyShown = shown,
+                messageCount = 3,
+                viewportHeightPx = 2000,
+                viewportEndOffset = 2000,
+                afterContentPadding = 0,
+                revealThresholdMinPx = 120,
+                hideSlackPx = 16,
+                visibleItems = scrolledPastReveal(),
+            )
+        assertFalse(shown)
+        shown =
+            shouldShowScrollToEndPill(
+                isUserScrolling = false,
+                isSettlingToEnd = false,
+                currentlyShown = shown,
+                messageCount = 3,
+                viewportHeightPx = 2000,
+                viewportEndOffset = 2000,
+                afterContentPadding = 0,
+                revealThresholdMinPx = 120,
+                hideSlackPx = 16,
+                visibleItems = nearEnd(),
+            )
+        assertFalse(shown)
+    }
+
+    @Test
+    fun showOnceAfterScrollAwayAndStayUntilNearEnd() {
+        var shown = false
+        shown =
+            shouldShowScrollToEndPill(
+                isUserScrolling = true,
+                isSettlingToEnd = false,
+                currentlyShown = shown,
+                messageCount = 3,
+                viewportHeightPx = 2000,
+                viewportEndOffset = 2000,
+                afterContentPadding = 0,
+                revealThresholdMinPx = 120,
+                hideSlackPx = 16,
+                visibleItems = scrolledPastReveal(),
+            )
+        assertFalse(shown)
+        shown =
+            shouldShowScrollToEndPill(
+                isUserScrolling = false,
+                isSettlingToEnd = false,
+                currentlyShown = shown,
+                messageCount = 3,
+                viewportHeightPx = 2000,
+                viewportEndOffset = 2000,
+                afterContentPadding = 0,
+                revealThresholdMinPx = 120,
+                hideSlackPx = 16,
+                visibleItems = scrolledPastReveal(),
+            )
+        assertTrue(shown)
+        shown =
+            shouldShowScrollToEndPill(
+                isUserScrolling = false,
+                isSettlingToEnd = false,
+                currentlyShown = shown,
+                messageCount = 3,
+                viewportHeightPx = 2000,
+                viewportEndOffset = 2000,
+                afterContentPadding = 0,
+                revealThresholdMinPx = 120,
+                hideSlackPx = 16,
+                visibleItems = justInsideReveal(),
+            )
+        assertTrue(shown)
+        shown =
+            shouldShowScrollToEndPill(
+                isUserScrolling = false,
+                isSettlingToEnd = false,
+                currentlyShown = shown,
+                messageCount = 3,
+                viewportHeightPx = 2000,
+                viewportEndOffset = 2000,
+                afterContentPadding = 0,
+                revealThresholdMinPx = 120,
+                hideSlackPx = 16,
+                visibleItems = nearEnd(),
+            )
+        assertFalse(shown)
+    }
+
+    @Test
+    fun hideShownPillOnceDistanceDropsBelowHideSlack() {
+        assertFalse(
+            shouldShowScrollToEndPill(
+                isUserScrolling = false,
+                isSettlingToEnd = false,
+                currentlyShown = true,
+                messageCount = 3,
+                viewportHeightPx = 2000,
+                viewportEndOffset = 2000,
+                afterContentPadding = 0,
+                revealThresholdMinPx = 120,
+                hideSlackPx = 16,
+                visibleItems = nearEnd(),
+            ),
+        )
+    }
+
+    private fun scrolledPastReveal(): List<TimelineVisibleItem> =
+        listOf(
+            TimelineVisibleItem(index = 1, offset = -4400, size = 6900),
+        )
+
+    private fun justInsideReveal(): List<TimelineVisibleItem> =
+        listOf(
+            TimelineVisibleItem(index = 1, offset = -4511, size = 6900),
+        )
+
+    private fun nearEnd(): List<TimelineVisibleItem> =
+        listOf(
+            TimelineVisibleItem(index = 0, offset = 1900, size = 1),
+            TimelineVisibleItem(index = 1, offset = -5000, size = 6900),
+        )
 }

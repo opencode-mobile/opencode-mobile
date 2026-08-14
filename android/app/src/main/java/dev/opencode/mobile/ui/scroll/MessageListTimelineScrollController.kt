@@ -2,8 +2,11 @@ package dev.opencode.mobile.ui.scroll
 
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -14,6 +17,9 @@ internal class MessageListTimelineScrollController(
     private val scope: CoroutineScope,
     private val autoFollowState: MessageListAutoFollowState,
 ) {
+    var isProgrammaticScrolling by mutableStateOf(false)
+        private set
+
     private var scrollJob: Job? = null
 
     fun animateToEnd(
@@ -71,10 +77,18 @@ internal class MessageListTimelineScrollController(
 
     private fun launchScroll(block: suspend () -> Unit) {
         scrollJob?.cancel()
-        scrollJob =
+        isProgrammaticScrolling = true
+        val job =
             scope.launch {
-                block()
+                try {
+                    block()
+                } finally {
+                    if (scrollJob === coroutineContext[Job]) {
+                        isProgrammaticScrolling = false
+                    }
+                }
             }
+        scrollJob = job
     }
 
     private suspend fun settleScroll(

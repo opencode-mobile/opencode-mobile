@@ -34,14 +34,9 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -71,6 +66,7 @@ import dev.opencode.mobile.ui.scroll.MessageListTimelineApplyHold
 import dev.opencode.mobile.ui.scroll.messageListAnimateLastMessageSize
 import dev.opencode.mobile.ui.scroll.messageListTimelineItemSpacing
 import dev.opencode.mobile.ui.scroll.rememberMessageListTimeline
+import dev.opencode.mobile.ui.scroll.rememberMessageListUserScroll
 import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
 import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
@@ -217,28 +213,8 @@ private fun SessionChatTimelineReadyView(
     // Only user drag/fling holds applies — not programmatic auto-follow
     // (listState.isScrollInProgress is true for both; iOS holds on isDragging /
     // isDecelerating / isUserScrolling only).
-    var isUserScrollInProgress by remember { mutableStateOf(false) }
-    val userScrollConnection =
-        remember {
-            object : NestedScrollConnection {
-                override fun onPreScroll(
-                    available: Offset,
-                    source: NestedScrollSource,
-                ): Offset {
-                    if (source == NestedScrollSource.UserInput) {
-                        isUserScrollInProgress = true
-                    }
-                    return Offset.Zero
-                }
-            }
-        }
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.isScrollInProgress }.collect { inProgress ->
-            if (!inProgress) {
-                isUserScrollInProgress = false
-            }
-        }
-    }
+    val userScroll = rememberMessageListUserScroll(listState)
+    val isUserScrollInProgress = userScroll.inProgress
 
     // Host-side latest-wins hold under user drag/fling (iOS pendingApply parity).
     // Required frames flush immediately; other kinds keep the committed snapshot.
@@ -280,6 +256,7 @@ private fun SessionChatTimelineReadyView(
             autoFollowEnabled = true,
             messageIdsChronological = messageIds,
             listState = listState,
+            userScroll = userScroll,
         )
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -293,9 +270,7 @@ private fun SessionChatTimelineReadyView(
                 items = committedMessages,
                 bottomAnchorKey = SESSION_CHAT_BOTTOM_ANCHOR_KEY,
                 modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .nestedScroll(userScrollConnection),
+                    Modifier.fillMaxSize(),
                 contentPadding =
                     PaddingValues(
                         start = 16.dp,

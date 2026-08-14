@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -16,6 +17,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -40,25 +44,71 @@ internal fun Modifier.messageListAnimateLastMessageSize(
         this
     }
 
+internal data class MessageListUserScroll(
+    val inProgress: Boolean,
+    val connection: NestedScrollConnection,
+)
+
+@Composable
+internal fun rememberMessageListUserScroll(listState: LazyListState): MessageListUserScroll {
+    var inProgress by remember { mutableStateOf(false) }
+    val connection =
+        remember {
+            object : NestedScrollConnection {
+                override fun onPreScroll(
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    if (source == NestedScrollSource.UserInput) {
+                        inProgress = true
+                    }
+                    return Offset.Zero
+                }
+            }
+        }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
+            if (!scrolling) {
+                inProgress = false
+            }
+        }
+    }
+    return MessageListUserScroll(inProgress = inProgress, connection = connection)
+}
+
 @Composable
 internal fun rememberMessageListScrollToEndVisibility(
     listState: LazyListState,
     messageCount: Int,
     revealThresholdMinPx: Int,
+    hideSlackPx: Int,
+    isUserScrolling: Boolean,
+    isSettlingToEnd: Boolean,
 ): Boolean {
+    var currentlyShown by remember(listState) { mutableStateOf(false) }
     val showScrollToEnd by remember(
         listState,
         messageCount,
         revealThresholdMinPx,
+        hideSlackPx,
+        isUserScrolling,
+        isSettlingToEnd,
+        currentlyShown,
     ) {
         derivedStateOf {
             listState.shouldShowScrollToEndPill(
                 messageCount = messageCount,
                 revealThresholdMinPx = revealThresholdMinPx,
+                hideSlackPx = hideSlackPx,
+                isUserScrolling = isUserScrolling,
+                isSettlingToEnd = isSettlingToEnd,
+                currentlyShown = currentlyShown,
             )
         }
     }
-
+    SideEffect {
+        currentlyShown = showScrollToEnd
+    }
     return showScrollToEnd
 }
 

@@ -1,5 +1,18 @@
 # Session Chat Progress
 
+## OPE-145 Android scroll-to-end pill blink (2026-08-14)
+
+- Status: implemented on Android (unit-tested). iOS already hid on user scroll
+  and programmatic settle.
+- Plan: [ope-145-plan.md](./ope-145-plan.md)
+- Done:
+  - Pill hides on user drag/fling only; programmatic auto-follow no longer
+    toggles `isScrollInProgress` visibility.
+  - Pill stays hidden while snap-to-end / armed unpinned follow is settling.
+  - 16dp hide slack so reveal-threshold jitter cannot blink the pill.
+- Remaining: device smoke (scroll away and stop → pill stays; fling to end →
+  no flash; streaming auto-follow → no flicker; Scroll XOR Review still holds).
+
 ## OPE-138 Dismiss keyboard on send (2026-08-10)
 
 - Status: implemented on both platforms in `OpenCodeSessionComposer`.
