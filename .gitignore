@@ -69,6 +69,14 @@ icons/cache/
 research/
 research/
 
+# Throwaway on-demand UI snapshot evidence (OPE-161)
+.snapshot-evidence/
+ios/OpenCode Mobile/OpenCode MobileTests/GeneratedSnapshotEvidence/
+android/app/src/test/java/dev/opencode/mobile/ui/snapshot/GeneratedSnapshotEvidence/
+android/app/src/test/snapshots/
+**/*SnapshotEvidence.swift
+**/*SnapshotEvidence.kt
+
 # markdown-core native Oniguruma build artifacts
 shared/markdown-core/native/build/
 shared/markdown-core/native/libs/

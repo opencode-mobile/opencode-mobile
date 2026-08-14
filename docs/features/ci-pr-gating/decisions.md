@@ -16,6 +16,15 @@ Build doubles self-hosted runner time without stronger merge signal.
 **Why:** Default PR types do not fire when a draft becomes ready. Job-level
 skip reports skipped (success for required checks); drafts still cannot merge.
 
+## No feature-branch push fallback for Checks
+
+**Decision:** Checks trigger on `pull_request` and `workflow_dispatch` only.
+
+**Why:** `push` and `pull_request` use different concurrency groups, so the same
+commit ran twice on a PR. The push fallback existed while PR delivery was
+unreliable; it now doubles self-hosted runner time without a stronger merge
+signal.
+
 ## No path filters on required workflows
 
 **Decision:** Always run both platform Checks on ready PRs.

@@ -169,6 +169,8 @@ them.
   feature docs directory, merge checklist, and pull request for a feature task.
 - Use `.agents/skills/publish-prototype/SKILL.md` when building a throwaway
   browser prototype and publishing it to the artifact server for remote review.
+- Use `.agents/skills/publish-ui-snapshots/SKILL.md` when the user asks to
+  create ui snapshots to illustrate the changes and publish artifacts.
 
 ## Branch naming
 
