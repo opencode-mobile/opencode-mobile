@@ -50,8 +50,10 @@
   accordion.
 - Tap **opens** a full-screen tool group (back, title, family subtitle, member
   Tool Call Cards). Both platforms overlay it on Session Chat so the timeline
-  keeps its scroll position on back. This is the locked prototype, not a
-  concatenated bottom sheet.
+  keeps its scroll position on back. Native Back (iOS leading-edge swipe,
+  Android system Back) must dismiss that overlay rather than the Session Chat
+  underneath; later pushes such as Changes still pop one level. This is the
+  locked prototype, not a concatenated bottom sheet.
 - Member cards reuse the same taps as timeline cards: file-change tools open
   Changes; shell/network tools open the existing tool-detail sheet (command
   plus output). The group screen itself does not dump full output.

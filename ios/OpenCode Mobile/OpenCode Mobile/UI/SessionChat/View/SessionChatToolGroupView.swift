@@ -33,7 +33,7 @@ struct SessionChatToolGroupView: View {
             OpenCodeTopBar(
                 title: target.title,
                 subtitle: target.subtitle,
-                leading: .back(action: {
+                leading: .back(consumesInteractivePop: true, action: {
                     ProductAnalytics.logUserAction(
                         screenId: ProductAnalytics.Screen.sessionToolGroup,
                         actionId: ProductAnalytics.Action.sessionToolGroupBack
