@@ -1,5 +1,20 @@
 # Session Chat Decisions
 
+## OPE-145 Android scroll-to-end pill uses user-scroll and settle gates
+
+- Date: 2026-08-14
+- Decision: Android Scroll to end visibility hides during user drag/fling and
+  while the timeline is settling to end (programmatic snap or armed unpinned
+  follow). Distance uses the existing reveal threshold with 16dp hide slack.
+  Session Chat still mounts the pill without fade.
+- Reason: `isScrollInProgress` is true for auto-follow as well as user input, so
+  a fling that stops near the end flashed the pill on settle then hid it again
+  when follow snapped. Fade was rejected because OPE-106 `spacedBy` ghost gaps
+  return if invisible pills stay composed.
+- Evidence: [ope-145-plan.md](./ope-145-plan.md)
+- Revisit when: iOS needs the same hide slack, or a fade can be restored without
+  reintroducing float-stack gaps.
+
 ## OPE-113 immediate status + optimistic busy + Working row
 
 - Date: 2026-08-07

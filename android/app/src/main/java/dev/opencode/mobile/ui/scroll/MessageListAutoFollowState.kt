@@ -1,10 +1,14 @@
 package dev.opencode.mobile.ui.scroll
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+
 internal class MessageListAutoFollowState(
     initialMessageCount: Int,
 ) {
     private var observedMessageCount = initialMessageCount
-    private var shouldFollowNextAppend = false
+    private var shouldFollowNextAppend by mutableStateOf(false)
 
     fun updatePinnedState(
         isPinnedToEnd: Boolean,
