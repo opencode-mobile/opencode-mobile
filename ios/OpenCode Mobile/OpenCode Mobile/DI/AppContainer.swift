@@ -491,6 +491,7 @@ extension Container {
             MarkdownHighlightPreferences.shared.clear()
             AnalyticsConsentPreferences.shared.clear()
             AppOnboardingPreferences.shared.clear()
+            SessionChatDisplayPreferences.shared.clear()
             MessageContentPreparer.shared.clearDocumentCache()
             BlockDecorationCache.shared.clear()
             await TextMateLogbook.shared.clear()

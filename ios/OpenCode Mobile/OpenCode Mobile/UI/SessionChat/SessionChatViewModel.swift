@@ -25,6 +25,8 @@ final class SessionChatViewModel {
     private var permissionTask: Task<Void, Never>?
     private var questionTask: Task<Void, Never>?
     private var todoTask: Task<Void, Never>?
+    /// Invalidates in-flight `withObservationTracking` for the collapse preference.
+    private var collapsePreferenceGeneration = 0
     private var permissionSessions: [Session] = []
     private var permissionRequests: [PermissionRequest] = []
     private var permissionSubmittingID: String?
@@ -148,6 +150,7 @@ final class SessionChatViewModel {
     }
 
     func startObserving() {
+        startCollapsePreferenceObservation()
         if OptimisticSessionCreate.isPlaceholder(sessionID) {
             beginOptimisticCreate()
             return
@@ -698,6 +701,32 @@ final class SessionChatViewModel {
         }
     }
 
+    private func startCollapsePreferenceObservation() {
+        collapsePreferenceGeneration += 1
+        timeline.updateCollapseConsecutiveToolCalls(
+            SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
+        )
+        observeCollapsePreference()
+    }
+
+    /// Re-projects an open timeline when the collapse preference flips while
+    /// Session Chat is on screen. The recursive `withObservationTracking` skips
+    /// work once the generation is bumped by `stopObserving`.
+    private func observeCollapsePreference() {
+        let generation = collapsePreferenceGeneration
+        withObservationTracking {
+            _ = SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self, self.collapsePreferenceGeneration == generation else { return }
+                self.timeline.updateCollapseConsecutiveToolCalls(
+                    SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
+                )
+                self.observeCollapsePreference()
+            }
+        }
+    }
+
     private func respondToPermission(
         requestID: String,
         sessionID: String,
@@ -888,6 +917,7 @@ final class SessionChatViewModel {
         permissionTask?.cancel()
         questionTask?.cancel()
         todoTask?.cancel()
+        collapsePreferenceGeneration += 1
         sessionTodoLiveStore.setLive(false, sessionID: sessionID, directory: worktree)
         sessionReadyStore.setFocusedSession(sessionID: nil, directory: nil)
         reviewChanges.stop()
@@ -1002,6 +1032,7 @@ final class SessionChatViewModel {
         sessionInfo.bind(sessionID: id, sessionTitle: title)
         commands.start()
         sessionInfo.startObserving()
+        startCollapsePreferenceObservation()
         timeline.startObserving()
         startPermissionObservation()
         startQuestionObservation()

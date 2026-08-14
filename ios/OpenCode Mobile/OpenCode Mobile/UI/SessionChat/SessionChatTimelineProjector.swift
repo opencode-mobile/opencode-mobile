@@ -290,7 +290,7 @@ nonisolated enum SessionChatTimelineProjector {
             case .toolCard(let id, let card):
                 "c:\(id):\(card.toolName):\(card.status.rawValue):\(card.title)"
             case .toolGroup(let id, let group):
-                "g:\(id):\(group.count):\(group.status.rawValue):\(group.title)"
+                "g:\(id):\(group.count):\(group.status.rawValue):\(group.title):\(group.subtitle ?? ""):\(group.errorText ?? "")"
             case .childSessionRow(let id, let row):
                 "r:\(id):\(row.agentName):\(row.secondLine ?? ""):\(row.childSessionId ?? "")"
             }
@@ -320,7 +320,7 @@ nonisolated enum SessionChatTimelineProjector {
             case .toolCard(let id, let card):
                 "c:\(id):\(card.toolName):\(card.status.rawValue):\(card.title)"
             case .toolGroup(let id, let group):
-                "g:\(id):\(group.count):\(group.status.rawValue):\(group.title)"
+                "g:\(id):\(group.count):\(group.status.rawValue):\(group.title):\(group.subtitle ?? ""):\(group.errorText ?? "")"
             case .childSessionRow(let id, let row):
                 "r:\(id):\(row.agentName):\(row.secondLine ?? ""):\(row.childSessionId ?? "")"
             }

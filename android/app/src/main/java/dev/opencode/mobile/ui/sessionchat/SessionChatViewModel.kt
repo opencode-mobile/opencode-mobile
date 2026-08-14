@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import android.util.Log
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -10,6 +11,7 @@ import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.smartProjectLabel
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
@@ -53,6 +55,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -204,6 +207,13 @@ class SessionChatViewModel
                     )
                     publishUiState(timelineState, composerState, infoState, reviewChangesState, commandsState)
                 }
+            }
+            viewModelScope.launch {
+                snapshotFlow { SessionChatDisplayPreferences.collapseConsecutiveToolCalls }
+                    .distinctUntilChanged()
+                    .collect { enabled ->
+                        timeline.updateCollapseConsecutiveToolCalls(enabled)
+                    }
             }
         }
 

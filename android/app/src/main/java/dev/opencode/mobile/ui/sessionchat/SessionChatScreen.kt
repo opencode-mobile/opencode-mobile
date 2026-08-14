@@ -70,6 +70,8 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolGroupScreen
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolGroupTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -116,6 +118,7 @@ fun SessionChatScreen(
     var modelFilterText by remember { mutableStateOf("") }
     var messageActionsTarget by remember { mutableStateOf<SessionChatMessageActionsTarget?>(null) }
     var toolDetailTarget by remember { mutableStateOf<SessionChatToolDetailTarget?>(null) }
+    var toolGroupTarget by remember { mutableStateOf<SessionChatToolGroupTarget?>(null) }
     var showSessionTodosSheet by rememberSaveable { mutableStateOf(false) }
     var holdingFinishedTodos by remember { mutableStateOf(false) }
     var composerOverlayHeightPx by remember { mutableStateOf(0) }
@@ -418,6 +421,10 @@ fun SessionChatScreen(
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
                                 toolDetailTarget = it
                             },
+                            onToolGroupTap = {
+                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_GROUP)
+                                toolGroupTarget = it
+                            },
                             onChildSessionTap = { childSessionId, childTitle ->
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
                                 onChildSessionClick(
@@ -653,6 +660,38 @@ fun SessionChatScreen(
                     )
                 }
             }
+        }
+
+        toolGroupTarget?.let { target ->
+            SessionChatToolGroupScreen(
+                target = target,
+                supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
+                onNavigateBack = { toolGroupTarget = null },
+                onToolDetailTap = {
+                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
+                    toolDetailTarget = it
+                },
+                onChildSessionTap = { childSessionId, childTitle ->
+                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
+                    onChildSessionClick(
+                        ChildSessionNavigationTarget(
+                            sessionId = childSessionId,
+                            sessionTitle = childTitle,
+                            worktree = worktree,
+                        ),
+                    )
+                },
+                onChangesReviewTap = { assistantMessageId, initialFilePath ->
+                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES_FROM_TOOL)
+                    uiState
+                        .fileChangeNavigationTarget(
+                            worktree = worktree,
+                            assistantMessageId = assistantMessageId,
+                            initialFilePath = initialFilePath,
+                        )?.let(onReviewChangesClick)
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
         }
 
         SessionChatMessageActionsSheet(

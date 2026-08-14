@@ -5,6 +5,7 @@ import dev.opencode.mobile.markdown.HighlightIntent
 import dev.opencode.mobile.markdown.HighlightRequest
 import dev.opencode.mobile.markdown.HighlightResult
 import dev.opencode.mobile.markdown.HighlightRevision
+import dev.opencode.mobile.markdown.MarkdownDiagnosticKind
 import dev.opencode.mobile.markdown.TextMateHighlightingEngine
 import dev.opencode.mobile.markdown.TextMateParseObservation
 import dev.opencode.mobile.markdown.TextMateParseOutcome
@@ -130,6 +131,33 @@ class AndroidTextMateHighlightingEngineTest {
                 release.complete(Unit)
                 assertEquals(TextMateParseOutcome.Cancelled, first.await().outcome)
                 assertEquals(TextMateParseOutcome.Highlighted, second.await().outcome)
+            } finally {
+                dispatcher.close()
+                executor.shutdownNow()
+            }
+        }
+
+    @Test
+    fun initializerErrorDuringHighlightDoesNotEscapePump() =
+        runBlocking {
+            val delegate =
+                object : TextMateHighlightingEngine {
+                    override suspend fun highlight(request: HighlightRequest): HighlightResult =
+                        throw ExceptionInInitializerError(NullPointerException("QuantifierNode clinit"))
+                }
+            val executor =
+                Executors.newSingleThreadExecutor { runnable ->
+                    Thread(runnable, "textmate-owner-test")
+                }
+            val dispatcher = executor.asCoroutineDispatcher()
+            try {
+                val engine = AndroidTextMateHighlightingEngine(delegate, dispatcher)
+                val result =
+                    withTimeout(2_000) {
+                        engine.highlight(request(key = "block", revision = 1))
+                    }
+                assertEquals(TextMateParseOutcome.Failed, result.outcome)
+                assertTrue(result.diagnostics.any { it.kind == MarkdownDiagnosticKind.HighlighterFallback })
             } finally {
                 dispatcher.close()
                 executor.shutdownNow()
