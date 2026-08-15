@@ -71,7 +71,8 @@ class DefaultForegroundEventStream
                             generation,
                         )
                         try {
-                            val protocol = activeConnectionManager.currentProtocolOrProbe()
+                            val protocol = activeConnectionManager.protocolHint()
+                            launch { activeConnectionManager.currentProtocolOrProbe() }
                             val path = if (protocol == ServerProtocol.V2) "/api/event" else "/global/event"
                             eventsApi.streamGlobalEvents(
                                 protocol = protocol,

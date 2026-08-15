@@ -4,4 +4,5 @@ data class ConnectionProfile(
     val baseUrl: String,
     val username: String,
     val password: String = "",
+    val serverProtocol: ServerProtocol? = null,
 )

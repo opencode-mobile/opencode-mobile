@@ -3,7 +3,12 @@ import Foundation
 
 extension Container {
     var activeConnectionManager: Factory<ActiveConnectionManager> {
-        self { ActiveConnectionManager(connectionProbing: self.connectionProbing()) }.singleton
+        self {
+            ActiveConnectionManager(
+                connectionProbing: self.connectionProbing(),
+                profileStore: self.connectionProfileStore()
+            )
+        }.singleton
     }
 
     var connectionProfileStore: Factory<any ConnectionProfileStore> {

@@ -90,3 +90,18 @@
 - Revisit when: a durable modal or settings-embedded connection editor is
   designed with stable keyboard behavior on both platforms.
 - Supersedes: [Connection setup uses form-mode bottom sheet](#connection-setup-uses-form-mode-bottom-sheet).
+
+## Protocol hint opens the stream
+
+- Date: 2026-08-15
+- Decision: persist last-known `ServerProtocol` on the Connection Profile.
+  SSE opens on that hint (or v1) without awaiting dual-health. Detect runs
+  in the background with overlapping `/global/health` + `/api/health`.
+  Android bounds that pair at 3s connect / 5s request; iOS at 5s request
+  and resource (no connect-only timeout). Classify is unchanged. A failed
+  implicit probe returns v1 once until the connection changes or home
+  `probeServer`. Cancellation is not a miss.
+- Reason: connecting→live after process death was dual-health plus SSE.
+  Warm resume already had a cache hit; cold resume did not.
+- Revisit when: a measured Tailscale connect budget replaces the 10s
+  Android / unbounded iOS SSE connect wait.

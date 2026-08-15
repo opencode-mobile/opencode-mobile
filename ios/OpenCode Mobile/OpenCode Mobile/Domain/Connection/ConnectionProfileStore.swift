@@ -16,6 +16,7 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
     private let worktreePrefix = "addedProjectWorktrees."
     private let activeBaseURLKey = "active_profile_base_url"
     private let activeUsernameKey = "active_profile_username"
+    private let activeProtocolKey = "active_profile_protocol"
 
     init(
         defaults: UserDefaults = .standard,
@@ -35,7 +36,13 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
         let username = defaults.string(forKey: activeUsernameKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedUsername = (username?.isEmpty == false) ? username! : ServerConnectionDefaults.username
         let password = secureCredentialStore.readPassword(serverBaseURL: normalized) ?? ""
-        return ConnectionProfile(baseURL: normalized, username: resolvedUsername, password: password)
+        let serverProtocol = defaults.string(forKey: activeProtocolKey).flatMap(ServerProtocol.init(rawValue:))
+        return ConnectionProfile(
+            baseURL: normalized,
+            username: resolvedUsername,
+            password: password,
+            serverProtocol: serverProtocol
+        )
     }
 
     func saveProfile(_ profile: ConnectionProfile) async {
@@ -43,6 +50,11 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
         defaults.set(normalized, forKey: activeBaseURLKey)
         let username = profile.username.trimmingCharacters(in: .whitespacesAndNewlines)
         defaults.set(username.isEmpty ? ServerConnectionDefaults.username : username, forKey: activeUsernameKey)
+        if let serverProtocol = profile.serverProtocol {
+            defaults.set(serverProtocol.rawValue, forKey: activeProtocolKey)
+        } else {
+            defaults.removeObject(forKey: activeProtocolKey)
+        }
         secureCredentialStore.writePassword(serverBaseURL: normalized, password: profile.password)
     }
 
@@ -72,6 +84,7 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
     func clearAll() async {
         defaults.removeObject(forKey: activeBaseURLKey)
         defaults.removeObject(forKey: activeUsernameKey)
+        defaults.removeObject(forKey: activeProtocolKey)
         let allKeys = defaults.dictionaryRepresentation().keys.filter { $0.hasPrefix(worktreePrefix) }
         for key in allKeys {
             defaults.removeObject(forKey: key)

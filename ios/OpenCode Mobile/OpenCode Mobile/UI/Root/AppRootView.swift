@@ -72,6 +72,7 @@ final class AppRootViewModel {
 struct AppRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var rootViewModel = Container.makeAppRootViewModel()
+    @State private var stopTask: Task<Void, Never>?
 
     var body: some View {
         Group {
@@ -109,6 +110,8 @@ struct AppRootView: View {
             let stream = Container.shared.foregroundEventStream()
             switch phase {
             case .active:
+                stopTask?.cancel()
+                stopTask = nil
                 if previousPhase == .background {
                     ProductAnalytics.logScreenView(
                         screenId: ProductAnalytics.Screen.home,
@@ -118,7 +121,12 @@ struct AppRootView: View {
                 }
                 stream.start()
             case .background:
-                stream.stop()
+                stopTask?.cancel()
+                stopTask = Task {
+                    try? await Task.sleep(for: .seconds(5))
+                    guard !Task.isCancelled else { return }
+                    stream.stop()
+                }
             case .inactive:
                 break
             @unknown default:

@@ -51,3 +51,7 @@
       generation-guarded cancel handlers, no offline flash while SSE retries,
       MessageSync catch-up on Connecting with one coalesced reload per
       ConnectionEpoch (iOS + Android).
+- [x] [OPE-172](https://linear.app/opencode-mobile/issue/OPE-172/faster-protocol-probe-on-resume)
+      Faster protocol probe on resume — SSE opens on a protocol hint;
+      dual-health is bounded and off the first byte. See
+      [`../server-connection/ope-172-plan.md`](../server-connection/ope-172-plan.md).

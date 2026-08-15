@@ -10,8 +10,9 @@ import dev.opencode.mobile.domain.project.ServerProbeError
 object ServerProtocolProbeErrors {
     fun prefer(
         previous: Throwable?,
-        next: Throwable,
-    ): Throwable {
+        next: Throwable?,
+    ): Throwable? {
+        if (next == null) return previous
         if (previous == null) return next
         return if (rank(next) > rank(previous)) next else previous
     }

@@ -1,6 +1,5 @@
 package dev.opencode.mobile.domain.session
 
-import dev.opencode.mobile.data.remote.HealthApi
 import dev.opencode.mobile.data.remote.ProjectsApi
 import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.domain.connection.ConnectionProbing
@@ -10,7 +9,6 @@ import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.project.DefaultProjectRepository
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.network.ActiveConnectionManager
-import dev.opencode.mobile.network.OpencodeHttpClient
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandler
@@ -178,7 +176,6 @@ class SessionProtocolRepositoryTest {
             val manager = manager(ServerProtocol.V2)
             val repository =
                 DefaultProjectRepository(
-                    healthApi = HealthApi(OpencodeHttpClient(json, manager)),
                     projectsApi = ProjectsApi(client),
                     adapter = ProjectDomainAdapter(),
                     activeConnectionManager = manager,

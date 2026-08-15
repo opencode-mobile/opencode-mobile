@@ -23,9 +23,12 @@ struct DefaultProjectRepository: ProjectRepository, Sendable {
 
     func probeServer() async throws {
         do {
-            let detected = try await api.detectProtocol()
-            DiagnosticLog.info(.connection, "protocol=\(detected.wireValue)")
-            activeConnectionManager?.updateProtocol(detected)
+            if let manager = activeConnectionManager {
+                _ = try await manager.probeActive()
+            } else {
+                let detected = try await api.detectProtocol()
+                DiagnosticLog.info(.connection, "protocol=\(detected.wireValue)")
+            }
         } catch {
             throw adapter.mapProbeError(error)
         }

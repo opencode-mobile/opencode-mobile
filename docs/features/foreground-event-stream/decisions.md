@@ -48,7 +48,8 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
 - **App foreground:** Android `ProcessLifecycleOwner` start/stop with a **5s
   stop grace** so photo/document pickers (system activities that briefly stop
   the process) do not tear down SSE; iOS `scenePhase` `.active` / `.background`
-  on `AppRootView` (`.inactive` keeps the stream, which covers pickers). Both
+  on `AppRootView` with the same **5s stop grace**, while `.inactive` keeps
+  the stream (pickers). Both
   platforms treat `start()` as idempotent while a stream job is active.
   Cancelled SSE tasks must not publish Idle/Disconnected over a newer
   generation's Connecting state. While a foreground retry is in flight, chrome

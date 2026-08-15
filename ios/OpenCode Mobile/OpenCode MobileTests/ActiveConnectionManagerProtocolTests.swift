@@ -54,6 +54,45 @@ struct ActiveConnectionManagerProtocolTests {
         #expect(probing.calls == 1)
     }
 
+    @Test func currentProtocolOrProbe_cancelledProbeDoesNotLatchMiss() async {
+        let probing = CancelThenSucceedProbe()
+        let manager = ActiveConnectionManager(connectionProbing: probing)
+        manager.apply(sampleProfile)
+
+        let first = await manager.currentProtocolOrProbe()
+        let second = await manager.currentProtocolOrProbe()
+
+        #expect(first == .v1)
+        #expect(second == .v2)
+        #expect(manager.serverProtocol == .v2)
+        #expect(probing.calls == 2)
+    }
+
+    @Test func currentProtocolOrProbe_failedProbeDoesNotReprobeUntilForced() async {
+        let probing = CountingProbe(result: .failure(ServerProbeError.transport("unreachable")))
+        let manager = ActiveConnectionManager(connectionProbing: probing)
+        manager.apply(sampleProfile)
+
+        _ = await manager.currentProtocolOrProbe()
+        _ = await manager.currentProtocolOrProbe()
+        #expect(probing.calls == 1)
+
+        do {
+            _ = try await manager.probeActive()
+            Issue.record("expected forced probe to throw")
+        } catch {
+            #expect(probing.calls == 2)
+        }
+    }
+
+    @Test func protocolHint_defaultsToV1WhenUnknown() {
+        let manager = ActiveConnectionManager()
+        manager.apply(sampleProfile)
+        #expect(manager.protocolHint() == .v1)
+        manager.apply(sampleProfile, serverProtocol: .v2)
+        #expect(manager.protocolHint() == .v2)
+    }
+
     @Test func currentProtocolOrProbe_missingConnectionReturnsV1WithoutProbing() async {
         let probing = CountingProbe(result: .success(.v2))
         let manager = ActiveConnectionManager(connectionProbing: probing)
@@ -113,6 +152,28 @@ struct ActiveConnectionManagerProtocolTests {
             username: "opencode",
             password: "x"
         )
+    }
+}
+
+private final class CancelThenSucceedProbe: ConnectionProbing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _calls = 0
+
+    var calls: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _calls
+    }
+
+    func probe(connection: ServerConnection) async throws -> ServerProtocol {
+        lock.lock()
+        _calls += 1
+        let call = _calls
+        lock.unlock()
+        if call == 1 {
+            throw CancellationError()
+        }
+        return .v2
     }
 }
 

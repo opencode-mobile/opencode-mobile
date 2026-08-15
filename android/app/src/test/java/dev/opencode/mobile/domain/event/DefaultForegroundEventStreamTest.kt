@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class DefaultForegroundEventStreamTest {
     @Test
-    fun coldStart_probesProtocolBeforeOpeningSse() =
+    fun coldStart_opensV1HintWithoutWaitingForProbe() =
         runBlocking {
             val requests = mutableListOf<HttpRequestData>()
             val opened = CompletableDeferred<Unit>()
@@ -47,7 +47,10 @@ class DefaultForegroundEventStreamTest {
             val manager =
                 ActiveConnectionManager(
                     FakeProfileStore(),
-                    ConnectionProbing { ServerProtocol.V2 },
+                    ConnectionProbing {
+                        delay(5_000)
+                        ServerProtocol.V2
+                    },
                 )
             manager.applyProfile(sampleProfile)
             assertEquals(null, manager.currentProtocol())
@@ -61,9 +64,49 @@ class DefaultForegroundEventStreamTest {
                 )
             try {
                 stream.start()
+                withTimeout(1_000) { opened.await() }
+                assertTrue(requests.single().url.encodedPath.contains("/global/event"))
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun cachedProtocol_opensMatchingSsePath() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val opened = CompletableDeferred<Unit>()
+            val client =
+                HttpClient(
+                    MockEngine { request ->
+                        requests += request
+                        opened.complete(Unit)
+                        respond(
+                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing { ServerProtocol.V1 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                )
+            try {
+                stream.start()
                 withTimeout(5_000) { opened.await() }
                 assertTrue(requests.single().url.encodedPath.contains("/api/event"))
-                assertEquals(ServerProtocol.V2, manager.currentProtocol())
             } finally {
                 stream.stop()
                 client.close()

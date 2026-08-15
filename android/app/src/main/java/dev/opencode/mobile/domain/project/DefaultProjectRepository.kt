@@ -1,6 +1,5 @@
 package dev.opencode.mobile.domain.project
 
-import dev.opencode.mobile.data.remote.HealthApi
 import dev.opencode.mobile.data.remote.ProjectsApi
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -11,7 +10,6 @@ import javax.inject.Inject
 class DefaultProjectRepository
     @Inject
     constructor(
-        private val healthApi: HealthApi,
         private val projectsApi: ProjectsApi,
         private val adapter: ProjectDomainAdapter,
         private val activeConnectionManager: ActiveConnectionManager,
@@ -21,8 +19,7 @@ class DefaultProjectRepository
         override suspend fun probeServer() {
             probeMutex.withLock {
                 runCatching {
-                    val protocol = healthApi.detectProtocol()
-                    activeConnectionManager.updateProtocol(protocol)
+                    activeConnectionManager.probeActive()
                 }.getOrElse { throw adapter.mapProbeError(it) }
             }
         }

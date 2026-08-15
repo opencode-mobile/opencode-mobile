@@ -20,7 +20,7 @@ nonisolated struct ServerConnection: Sendable {
         let trimmedUsername = profile.username.trimmingCharacters(in: .whitespacesAndNewlines)
         self.username = trimmedUsername.isEmpty ? Self.defaultUsername : trimmedUsername
         self.password = profile.password.isEmpty ? nil : profile.password
-        self.serverProtocol = serverProtocol
+        self.serverProtocol = serverProtocol ?? profile.serverProtocol
     }
 
     init(

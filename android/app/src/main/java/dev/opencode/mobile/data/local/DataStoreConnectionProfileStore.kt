@@ -7,6 +7,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -24,7 +25,16 @@ class DataStoreConnectionProfileStore
             val baseUrl = prefs[ACTIVE_BASE_URL_KEY]?.takeIf { it.isNotBlank() } ?: return null
             val username = prefs[ACTIVE_USERNAME_KEY]?.takeIf { it.isNotBlank() } ?: ServerConnectionDefaults.USERNAME
             val password = secureCredentialStore.readPassword(baseUrl).orEmpty()
-            return ConnectionProfile(baseUrl = baseUrl, username = username, password = password)
+            val serverProtocol =
+                prefs[ACTIVE_PROTOCOL_KEY]?.let { wire ->
+                    ServerProtocol.entries.firstOrNull { it.wireValue == wire }
+                }
+            return ConnectionProfile(
+                baseUrl = baseUrl,
+                username = username,
+                password = password,
+                serverProtocol = serverProtocol,
+            )
         }
 
         override suspend fun saveProfile(profile: ConnectionProfile) {
@@ -32,6 +42,12 @@ class DataStoreConnectionProfileStore
             context.connectionProfileDataStore.edit { prefs ->
                 prefs[ACTIVE_BASE_URL_KEY] = normalized
                 prefs[ACTIVE_USERNAME_KEY] = profile.username.ifBlank { ServerConnectionDefaults.USERNAME }
+                val protocol = profile.serverProtocol
+                if (protocol != null) {
+                    prefs[ACTIVE_PROTOCOL_KEY] = protocol.wireValue
+                } else {
+                    prefs.remove(ACTIVE_PROTOCOL_KEY)
+                }
             }
             secureCredentialStore.writePassword(normalized, profile.password)
         }
@@ -96,6 +112,7 @@ class DataStoreConnectionProfileStore
         private companion object {
             val ACTIVE_BASE_URL_KEY = stringPreferencesKey("active_profile_base_url")
             val ACTIVE_USERNAME_KEY = stringPreferencesKey("active_profile_username")
+            val ACTIVE_PROTOCOL_KEY = stringPreferencesKey("active_profile_protocol")
         }
     }
 

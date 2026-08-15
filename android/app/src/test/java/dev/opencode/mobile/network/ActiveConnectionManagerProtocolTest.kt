@@ -6,6 +6,8 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -134,6 +136,64 @@ class ActiveConnectionManagerProtocolTest {
 
             assertEquals(ServerProtocol.V1, manager.currentProtocolOrProbe())
             assertNull(manager.currentProtocol())
+        }
+
+    @Test
+    fun currentProtocolOrProbe_cancelledProbeDoesNotLatchMiss() =
+        runTest {
+            var probes = 0
+            val started = CompletableDeferred<Unit>()
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing {
+                        probes += 1
+                        if (probes == 1) {
+                            started.complete(Unit)
+                            awaitCancellation()
+                        }
+                        ServerProtocol.V2
+                    },
+                )
+            manager.applyProfile(sampleProfile)
+
+            val probe = async { manager.currentProtocolOrProbe() }
+            started.await()
+            probe.cancelAndJoin()
+
+            assertEquals(ServerProtocol.V2, manager.currentProtocolOrProbe())
+            assertEquals(2, probes)
+        }
+
+    @Test
+    fun currentProtocolOrProbe_failedProbeDoesNotReprobeUntilForced() =
+        runTest {
+            var probes = 0
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing {
+                        probes += 1
+                        error("unreachable")
+                    },
+                )
+            manager.applyProfile(sampleProfile)
+
+            assertEquals(ServerProtocol.V1, manager.currentProtocolOrProbe())
+            assertEquals(ServerProtocol.V1, manager.currentProtocolOrProbe())
+            assertEquals(1, probes)
+            runCatching { manager.probeActive() }
+            assertEquals(2, probes)
+        }
+
+    @Test
+    fun protocolHint_defaultsToV1WhenUnknown() =
+        runTest {
+            val manager = ActiveConnectionManager(FakeProfileStore())
+            manager.applyProfile(sampleProfile)
+            assertEquals(ServerProtocol.V1, manager.protocolHint())
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            assertEquals(ServerProtocol.V2, manager.protocolHint())
         }
 
     @Test

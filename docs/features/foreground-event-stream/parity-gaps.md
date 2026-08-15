@@ -12,12 +12,10 @@
   catch-up starts on Connecting and coalesces with `server.connected`.
 - **iOS state:** `start()` is idempotent (no stop-then-start); cancel
   handlers are generation-guarded so Idle cannot overwrite Connecting.
-  `.background` still stops; `.inactive` keeps the stream. Retry and
-  MessageSync catch-up match Android.
-- **Reason:** Closed in OPE-165.
-- **Owner or next action:** None — intentional lifecycle differences (5s
-  Android stop grace vs iOS `.inactive`) remain under Lifecycle in
-  [decisions.md](decisions.md).
+  `.background` uses the same 5s stop grace as Android; `.inactive` keeps
+  the stream. Retry and MessageSync catch-up match Android.
+- **Reason:** Closed in OPE-165. Stop-grace parity landed in OPE-172.
+- **Owner or next action:** None.
 
 ## Live Store subscriber lifecycle
 

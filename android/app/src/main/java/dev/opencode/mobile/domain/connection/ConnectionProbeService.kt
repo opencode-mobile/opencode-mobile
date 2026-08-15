@@ -16,7 +16,7 @@ class ConnectionProbeService(
     private val json: Json,
     private val adapter: ProjectDomainAdapter,
     private val clientFactory: (ServerConnection) -> HttpClient = { connection ->
-        KtorClientFactory.create(connection, json)
+        KtorClientFactory.create(connection, json, probe = true)
     },
 ) : ConnectionProbing {
     private val detector = ServerProtocolDetector(adapter)

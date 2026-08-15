@@ -49,7 +49,7 @@ struct EventsAPIClientTests {
         #expect(MockSSEURLProtocol.lastPath?.hasSuffix("/api/event") == true)
     }
 
-    @Test func streamGlobalEvents_probesProtocolOnCacheMiss() async throws {
+    @Test func streamGlobalEvents_cacheMissOpensV1HintPath() async throws {
         let body = "data: {\"type\":\"server.connected\",\"data\":{}}\n\n"
         let client = makeClient(responseBody: body, serverProtocol: nil, resolvedProtocol: .v2)
         var lines: [String] = []
@@ -57,7 +57,7 @@ struct EventsAPIClientTests {
             lines.append(line)
         }
         #expect(lines.count == 1)
-        #expect(MockSSEURLProtocol.lastPath?.hasSuffix("/api/event") == true)
+        #expect(MockSSEURLProtocol.lastPath?.hasSuffix("/global/event") == true)
     }
 
     private func makeClient(
