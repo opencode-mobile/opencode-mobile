@@ -31,7 +31,7 @@ data class ServerConnection(
                 baseUrl = profile.baseUrl,
                 username = profile.username.ifBlank { ServerConnectionDefaults.USERNAME },
                 password = profile.password.takeIf { it.isNotEmpty() },
-                serverProtocol = serverProtocol,
+                serverProtocol = serverProtocol ?: profile.serverProtocol,
             )
     }
 }

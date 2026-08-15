@@ -137,6 +137,37 @@ class ActiveConnectionManagerProtocolTest {
         }
 
     @Test
+    fun currentProtocolOrProbe_failedProbeDoesNotReprobeUntilForced() =
+        runTest {
+            var probes = 0
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing {
+                        probes += 1
+                        error("unreachable")
+                    },
+                )
+            manager.applyProfile(sampleProfile)
+
+            assertEquals(ServerProtocol.V1, manager.currentProtocolOrProbe())
+            assertEquals(ServerProtocol.V1, manager.currentProtocolOrProbe())
+            assertEquals(1, probes)
+            runCatching { manager.probeActive() }
+            assertEquals(2, probes)
+        }
+
+    @Test
+    fun protocolHint_defaultsToV1WhenUnknown() =
+        runTest {
+            val manager = ActiveConnectionManager(FakeProfileStore())
+            manager.applyProfile(sampleProfile)
+            assertEquals(ServerProtocol.V1, manager.protocolHint())
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            assertEquals(ServerProtocol.V2, manager.protocolHint())
+        }
+
+    @Test
     fun currentProtocolOrProbe_missingConnectionReturnsV1WithoutProbing() =
         runTest {
             var probes = 0

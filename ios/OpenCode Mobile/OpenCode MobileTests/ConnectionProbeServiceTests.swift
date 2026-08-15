@@ -12,7 +12,7 @@ struct ConnectionProbeServiceTests {
         let detected = try await service.probe(connection: sampleConnection)
 
         #expect(detected == .v1)
-        #expect(requestedPaths == ["/global/health"])
+        #expect(requestedPaths.contains("/global/health"))
     }
 
     @Test func probe_detectsV2FromApiHealthPidWhenGlobalMissing() async throws {
@@ -25,7 +25,7 @@ struct ConnectionProbeServiceTests {
         let detected = try await service.probe(connection: sampleConnection)
 
         #expect(detected == .v2)
-        #expect(requestedPaths == ["/global/health", "/api/health"])
+        #expect(Set(requestedPaths) == ["/global/health", "/api/health"])
     }
 
     @Test func probe_detectsTransitionalV1FromApiHealthWithoutPid() async throws {
@@ -50,7 +50,7 @@ struct ConnectionProbeServiceTests {
         let detected = try await service.probe(connection: sampleConnection)
 
         #expect(detected == .v1)
-        #expect(requestedPaths == ["/global/health"])
+        #expect(requestedPaths.contains("/global/health"))
     }
 
     @Test func probe_failsWhenNeitherHealthEndpointIsUsable() async {

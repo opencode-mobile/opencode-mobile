@@ -3,7 +3,8 @@ import Foundation
 /// Prefers the most actionable dual-probe failure when classification cannot
 /// pick a protocol (auth over unreachable, unhealthy bodies over generic miss).
 nonisolated enum ServerProtocolProbeErrors {
-    static func prefer(previous: Error?, next: Error) -> Error {
+    static func prefer(previous: Error?, next: Error?) -> Error? {
+        guard let next else { return previous }
         guard let previous else { return next }
         return rank(next) > rank(previous) ? next : previous
     }

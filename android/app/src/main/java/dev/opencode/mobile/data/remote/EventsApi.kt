@@ -37,6 +37,9 @@ class EventsApi private constructor(
                 // Match iOS: keep SSE uncompressed so framing stays line-oriented under burst.
                 header(HttpHeaders.AcceptEncoding, "identity")
             }.execute { response ->
+                if (response.status.value !in 200..299) {
+                    throw IllegalStateException("SSE HTTP ${response.status.value}")
+                }
                 onHTTPResponse(response.status.value)
                 val channel = response.bodyAsChannel()
                 val parser = SseDataLineParser()

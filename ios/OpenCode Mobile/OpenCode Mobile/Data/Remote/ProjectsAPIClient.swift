@@ -51,63 +51,57 @@ nonisolated struct ProjectsAPIClient: Sendable {
 
     /// Dual-probe health endpoints and return the detected protocol.
     func detectProtocol() async throws -> ServerProtocol {
-        var lastError: Error?
-        let globalHealth: HealthDTO? = await {
-            do {
-                return try await getGlobalHealth()
-            } catch {
-                lastError = ServerProtocolProbeErrors.prefer(
-                    previous: lastError,
-                    next: adapter.mapProbeError(error)
-                )
-                return nil
-            }
-        }()
-
-        let apiHealth: HealthDTO?
-        if globalHealth?.healthy == true {
-            apiHealth = nil
-        } else {
-            apiHealth = await {
-                do {
-                    return try await getApiHealth()
-                } catch {
-                    lastError = ServerProtocolProbeErrors.prefer(
-                        previous: lastError,
-                        next: adapter.mapProbeError(error)
-                    )
-                    return nil
-                }
-            }()
-        }
+        async let globalFetch = fetchHealth { try await getGlobalHealth() }
+        async let apiFetch = fetchHealth { try await getApiHealth() }
+        let globalResult = await globalFetch
+        let apiResult = await apiFetch
+        let resolvedGlobal = globalResult.health
+        let resolvedApi = apiResult.health
+        let lastError = ServerProtocolProbeErrors.prefer(
+            previous: globalResult.error,
+            next: apiResult.error
+        )
 
         guard let detected = ServerProtocolClassifier.classify(
-            globalHealth: globalHealth,
-            apiHealth: apiHealth
+            globalHealth: resolvedGlobal,
+            apiHealth: resolvedApi
         ) else {
             throw adapter.mapProbeError(
                 ServerProtocolProbeErrors.unresolved(
-                    globalHealth: globalHealth,
-                    apiHealth: apiHealth,
+                    globalHealth: resolvedGlobal,
+                    apiHealth: resolvedApi,
                     fetchError: lastError
                 )
             )
         }
 
         switch detected {
-        case .v1 where globalHealth?.healthy == true:
-            try adapter.requireHealthy(globalHealth!)
+        case .v1 where resolvedGlobal?.healthy == true:
+            try adapter.requireHealthy(resolvedGlobal!)
         case .v2:
-            if let apiHealth, apiHealth.healthy == false {
-                throw ServerProbeError.unhealthy(version: apiHealth.version)
+            if let resolvedApi, resolvedApi.healthy == false {
+                throw ServerProbeError.unhealthy(version: resolvedApi.version)
             }
         case .v1:
-            if let apiHealth {
-                try adapter.requireHealthy(apiHealth)
+            if let resolvedApi {
+                try adapter.requireHealthy(resolvedApi)
             }
         }
 
         return detected
+    }
+
+    private struct HealthFetch: Sendable {
+        var health: HealthDTO?
+        var error: Error?
+    }
+
+    private func fetchHealth(_ run: () async throws -> HealthDTO) async -> HealthFetch {
+        do {
+            return HealthFetch(health: try await run(), error: nil)
+        } catch {
+            return HealthFetch(health: nil, error: adapter.mapProbeError(error))
+        }
     }
 
     private func get<T: Decodable>(

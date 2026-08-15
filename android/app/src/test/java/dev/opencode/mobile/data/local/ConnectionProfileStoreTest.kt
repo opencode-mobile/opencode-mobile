@@ -20,6 +20,25 @@ class ConnectionProfileStoreTest {
             assertEquals(server, loaded?.baseUrl)
             assertEquals("opencode", loaded?.username)
             assertEquals("secret", loaded?.password)
+            assertEquals(null, loaded?.serverProtocol)
+        }
+
+    @Test
+    fun saveAndLoadPersistsProtocolHint() =
+        runTest {
+            val store = InMemoryConnectionProfileStore()
+            store.saveProfile(
+                ConnectionProfile(
+                    baseUrl = server,
+                    username = "opencode",
+                    password = "secret",
+                    serverProtocol = dev.opencode.mobile.domain.connection.ServerProtocol.V2,
+                ),
+            )
+            assertEquals(
+                dev.opencode.mobile.domain.connection.ServerProtocol.V2,
+                store.activeProfile()?.serverProtocol,
+            )
         }
 
     @Test

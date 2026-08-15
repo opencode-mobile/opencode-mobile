@@ -42,11 +42,10 @@ nonisolated final class EventsAPIClient: Sendable {
             throw EventsAPIError.noActiveConnection
         }
 
-        let resolvedProtocol = if let protocolResolver {
-            await protocolResolver()
-        } else {
-            connection.serverProtocol ?? .v1
+        if let protocolResolver {
+            Task { _ = await protocolResolver() }
         }
+        let resolvedProtocol = connection.serverProtocol ?? .v1
         let normalizedPath = Self.subscribePath(for: resolvedProtocol)
         let url = connection.apiBaseURL.appendingPathComponent(normalizedPath)
         var request = URLRequest(url: url)

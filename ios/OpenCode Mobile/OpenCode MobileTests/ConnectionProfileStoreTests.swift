@@ -16,6 +16,17 @@ struct ConnectionProfileStoreTests {
         #expect(loaded?.baseURL == server)
         #expect(loaded?.username == "opencode")
         #expect(loaded?.password == "secret")
+        #expect(loaded?.serverProtocol == nil)
+    }
+
+    @Test func saveAndLoadPersistsProtocolHint() async {
+        let defaults = isolatedDefaults()
+        let store = UserDefaultsConnectionProfileStore(defaults: defaults, secureCredentialStore: InMemorySecureCredentialStore())
+        await store.saveProfile(
+            ConnectionProfile(baseURL: server, username: "opencode", password: "secret", serverProtocol: .v2)
+        )
+        let loaded = await store.activeProfile()
+        #expect(loaded?.serverProtocol == .v2)
     }
 
     @Test func addWorktree_preservesInsertionOrder() async {

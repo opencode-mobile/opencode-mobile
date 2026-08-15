@@ -54,6 +54,31 @@ struct ActiveConnectionManagerProtocolTests {
         #expect(probing.calls == 1)
     }
 
+    @Test func currentProtocolOrProbe_failedProbeDoesNotReprobeUntilForced() async {
+        let probing = CountingProbe(result: .failure(ServerProbeError.transport("unreachable")))
+        let manager = ActiveConnectionManager(connectionProbing: probing)
+        manager.apply(sampleProfile)
+
+        _ = await manager.currentProtocolOrProbe()
+        _ = await manager.currentProtocolOrProbe()
+        #expect(probing.calls == 1)
+
+        do {
+            _ = try await manager.probeActive()
+            Issue.record("expected forced probe to throw")
+        } catch {
+            #expect(probing.calls == 2)
+        }
+    }
+
+    @Test func protocolHint_defaultsToV1WhenUnknown() {
+        let manager = ActiveConnectionManager()
+        manager.apply(sampleProfile)
+        #expect(manager.protocolHint() == .v1)
+        manager.apply(sampleProfile, serverProtocol: .v2)
+        #expect(manager.protocolHint() == .v2)
+    }
+
     @Test func currentProtocolOrProbe_missingConnectionReturnsV1WithoutProbing() async {
         let probing = CountingProbe(result: .success(.v2))
         let manager = ActiveConnectionManager(connectionProbing: probing)

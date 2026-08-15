@@ -34,7 +34,10 @@ class ConnectionSessionCoordinator
             profile: ConnectionProfile,
             serverProtocol: ServerProtocol? = null,
         ) {
-            activeConnectionManager.applyProfile(profile, serverProtocol)
+            activeConnectionManager.applyProfile(
+                profile.copy(serverProtocol = serverProtocol ?: profile.serverProtocol),
+                serverProtocol ?: profile.serverProtocol,
+            )
             httpClient.rebuild()
             sseHttpClient.rebuild()
             profileSavedEvents.emit(Unit)

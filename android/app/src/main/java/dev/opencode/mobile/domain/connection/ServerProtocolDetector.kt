@@ -5,6 +5,8 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ServerProbeError
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 /**
  * Shared dual-health detection used by connection setup and home probe.
@@ -16,19 +18,24 @@ class ServerProtocolDetector(
         fetchGlobalHealth: suspend () -> HealthDto,
         fetchApiHealth: suspend () -> HealthDto,
     ): ServerProtocol {
-        var lastError: Throwable? = null
-        val globalHealth =
-            runCatching { fetchGlobalHealth() }
-                .onFailure { lastError = ServerProtocolProbeErrors.prefer(lastError, it) }
-                .getOrNull()
-
-        val apiHealth =
-            if (globalHealth?.healthy == true) {
-                null
-            } else {
-                runCatching { fetchApiHealth() }
-                    .onFailure { lastError = ServerProtocolProbeErrors.prefer(lastError, it) }
-                    .getOrNull()
+        val (globalHealth, apiHealth, lastError) =
+            coroutineScope {
+                val global = async {
+                    runCatching { fetchGlobalHealth() }
+                }
+                val api = async {
+                    runCatching { fetchApiHealth() }
+                }
+                val globalResult = global.await()
+                val apiResult = api.await()
+                Triple(
+                    globalResult.getOrNull(),
+                    apiResult.getOrNull(),
+                    ServerProtocolProbeErrors.prefer(
+                        globalResult.exceptionOrNull(),
+                        apiResult.exceptionOrNull(),
+                    ),
+                )
             }
 
         val protocol =

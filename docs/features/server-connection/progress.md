@@ -37,6 +37,16 @@
 - [x] Home / Settings edit connection entry points.
 - [x] Unit tests.
 
+## OPE-172 Faster protocol probe
+
+- [x] Persist last-known protocol on the Connection Profile
+- [x] Open SSE on protocol hint (cached / persisted / v1)
+- [x] Bound dual-health (parallel GETs; 3s connect / 5s request)
+- [x] One in-flight probe; Android lock not held across HTTP
+- [x] No re-probe on every SSE retry after a miss
+- [x] Android SSE requires 2xx before live
+- [x] iOS 5s stop grace (parity with Android)
+
 ## Remaining
 
 - None for OPE-94 after checks.
