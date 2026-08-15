@@ -330,12 +330,12 @@ A Session Chat timeline block that summarizes consecutive visible ToolParts
 as a single Tool Call Card. Title is `N tools`; subtitle is a family one-liner
 in encounter order (`Edit · Write · 5 shells`). Status is the card’s status
 dot only. Tap opens a tool group overlay of member Tool Call Cards (same taps
-as the timeline: Changes, shell sheet). Back keeps the chat timeline where it
-was. By default only consecutive
-context ToolParts (`read` / `glob` / `grep`) group inside one message; with the
-**Collapse consecutive tool calls** Appearance preference on, any consecutive
-visible tool families group except `task` spawns, which never group so their
-child-session tap stays available. Sequential tool steps stored as adjacent
+as the timeline: Changes, shell sheet). Top-bar Back and the platform-native
+Back gesture both dismiss the overlay and keep the chat timeline where it was.
+By default only consecutive context ToolParts (`read` / `glob` / `grep`) group
+inside one message; with the **Collapse consecutive tool calls** Appearance
+preference on, any consecutive visible tool families group except `task`
+spawns, which never group so their child-session tap stays available. Sequential tool steps stored as adjacent
 assistant messages also group when collapse is on. A visible text block, an
 attachment, or a `task` tool breaks the group. Hidden tools, empty text, and
 compaction markers do not.

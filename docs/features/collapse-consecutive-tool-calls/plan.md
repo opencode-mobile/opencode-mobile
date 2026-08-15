@@ -86,8 +86,9 @@ Settings → Appearance. Default remains expanded (today’s per-tool cards).
 
 - Settings → Appearance (alongside Hide User Directory / Recent window).
 - Session Chat timeline (consumes preference). Group tap opens the tool group
-  overlay; Back returns to chat at the same scroll position. Member cards can
-  open Changes or the existing tool-detail sheet.
+  overlay; Back — top-bar button and the platform-native Back gesture — returns
+  to chat at the same scroll position. Member cards can open Changes or the
+  existing tool-detail sheet.
 
 ## Error States
 

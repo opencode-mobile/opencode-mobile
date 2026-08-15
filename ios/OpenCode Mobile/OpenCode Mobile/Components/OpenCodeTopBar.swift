@@ -21,9 +21,20 @@ enum OpenCodeTopBarSubtitleLeading {
 
 enum OpenCodeTopBarLeading {
     case none
-    case back(accessibilityLabel: String = "Back", action: () -> Void)
+    case back(
+        accessibilityLabel: String = "Back",
+        consumesInteractivePop: Bool = false,
+        action: () -> Void
+    )
     case close(accessibilityLabel: String = "Close", action: () -> Void)
     case customIcon(OpenCodeIcon, accessibilityLabel: String, action: () -> Void)
+
+    var consumesInteractivePop: Bool {
+        if case let .back(_, consumesInteractivePop, _) = self {
+            return consumesInteractivePop
+        }
+        return false
+    }
 }
 
 enum OpenCodeTopBarAction {
@@ -94,8 +105,10 @@ struct OpenCodeTopBar: View {
         .frame(maxWidth: .infinity, alignment: .top)
         .background(OpenCodeColors.backgroundBase)
         .background {
-            if case .back = leading {
-                OpenCodeInteractivePopGestureBridge()
+            if case let .back(_, consumesInteractivePop, action) = leading {
+                OpenCodeInteractivePopGestureBridge(
+                    onConsume: consumesInteractivePop ? action : nil
+                )
             }
         }
     }
@@ -117,7 +130,7 @@ struct OpenCodeTopBar: View {
         switch leading {
         case .none:
             EmptyView()
-        case let .back(accessibilityLabel, action):
+        case let .back(accessibilityLabel, _, action):
             topBarIconButton(
                 icon: .arrowBack,
                 accessibilityLabel: accessibilityLabel,

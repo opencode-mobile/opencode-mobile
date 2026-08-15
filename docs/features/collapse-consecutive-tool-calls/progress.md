@@ -2,14 +2,15 @@
 
 ## Shared Planning
 
-- Status: implemented on iOS and Android; not yet merged.
-- Linear: [OPE-144](https://linear.app/opencode-mobile/issue/OPE-144/collapse-consecutive-tool-calls) (In Progress)
+- Status: implemented on iOS and Android; merged. Follow-up [OPE-163](https://linear.app/opencode-mobile/issue/OPE-163/ios-tool-group-swipe-back-skips-session-chat) in progress.
+- Linear: [OPE-144](https://linear.app/opencode-mobile/issue/OPE-144/collapse-consecutive-tool-calls) (Done); [OPE-163](https://linear.app/opencode-mobile/issue/OPE-163/ios-tool-group-swipe-back-skips-session-chat) (In Progress)
 - Docs: `docs/features/collapse-consecutive-tool-calls/`
 
 ## Design System
 
 - No new component. Reuses Tool Call Card and Settings list-item + switch.
 - New Settings Appearance row uses the existing `collapseContent` icon.
+- Top Bar `back` gained iOS `consumesInteractivePop` for overlay pages (OPE-163).
 
 ## Android
 
@@ -17,6 +18,7 @@
   (default `false`) on `build`/`buildOrFallback`. Group cards use option E
   chrome (`N tools` + family subtitle). Tap opens the tool group overlay of
   member Tool Call Cards. Back keeps the chat timeline scroll position.
+- Tool group overlay installs `BackHandler` so system Back dismisses the overlay.
 - `SessionChatDisplayPreferences` (device-local, default off) added, wired into
   `OpenCodeMobileApplication`, `SettingsScreen` Appearance, `Navigation.kt`,
   `SettingsViewModel`, and Clear All Data.
@@ -31,6 +33,8 @@
 - Done. Mirror of the Android changes in `SessionChatTimelineBlocks`,
   `DisplayFrameBuilder`, and `SessionChatTimeline`. Same option E chrome and
   tool group overlay (not a NavigationStack push, so the timeline keeps scroll).
+- Tool group overlay `back` consumes the interactive-pop gesture so swipe
+  dismisses the overlay instead of popping Session Chat (OPE-163).
 - `SessionChatDisplayPreferences` (device-local, default off) added, wired into
   `SettingsView` Appearance and `AppContainer.clearAllData`.
 - Live re-project: `SessionChatTimeline.updateCollapseConsecutiveToolCalls`
@@ -41,7 +45,7 @@
 
 ## Remaining
 
-- [ ] Open pull request and merge.
+- [ ] Open OPE-163 pull request and merge.
 
 ## Completed
 
@@ -60,8 +64,9 @@
 - [x] Subagent (`task`) tools excluded from collapse and break groups
 - [x] Consecutive tool-only assistant messages merge when collapse is on
 - [x] Hidden/empty parts no longer split a visible tool run
+- [x] OPE-144 merged
+- [x] iOS tool group overlay consumes interactive pop (OPE-163)
 
 ## Checks
 
-- iOS: `SessionChatTimelineBlocksTests` 55 passed (group members + grouping).
-- Android: `SessionChatTimelineBlocksTest` and `TimelineProjectorTest` passed.
+- iOS: `InteractivePopBeginPolicyTests` 9 passed.

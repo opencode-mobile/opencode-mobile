@@ -18,7 +18,7 @@ search fields, or arbitrary custom content.
   - two-line title when `subtitle` and/or `subtitleAccessory` is provided.
 - Leading variants:
   - `none`
-  - `back`
+  - `back` (optional `consumesInteractivePop` for overlay pages; default off)
   - `close`
   - `customIcon`
 - States:
@@ -84,11 +84,15 @@ there is no second-line content at all.
 
 Leading actions use semantic meaning rather than arbitrary placement:
 
-- `back` returns to the previous screen. It also opts a pushed screen into the
+- `back` returns one visible level. It also opts the current page into the
   platform-native Back gesture: iOS uses the navigation controller's standard
   leading-edge interactive pop, while Android continues to use system and
   predictive Back. A completed gesture is equivalent to invoking the visible
   Back action; a canceled gesture leaves the current screen active.
+- Overlay pages that use `back` chrome without a navigation push must consume
+  that native Back input so it dismisses the overlay rather than the screen
+  underneath. On iOS, set `consumesInteractivePop` on `back`. On Android, the
+  overlay screen installs `BackHandler` (the top bar does not).
 - `close` dismisses the current flow.
 - `customIcon` is for a product-specific leading affordance that still behaves
   like a compact navigation control.
@@ -110,7 +114,9 @@ one label.
   use iOS 26+ Liquid Glass circles (`.glassEffect` interactive circle) with
   `OpenCodeButton` `iconCircle` material fallback below iOS 26. Labeled trailing
   actions still use `OpenCodeButton` `compactText`. The `back` variant restores
-  UIKit's standard leading-edge interactive pop for pushed screens.
+  UIKit's standard leading-edge interactive pop for pushed screens. Overlay
+  pages pass `consumesInteractivePop` so the same gesture invokes the Back
+  action instead of popping the destination underneath.
 - Android: custom Compose bar with start-aligned title. Leading and trailing
   affordances reuse **`OpenCodeButton`** (`IconCircle` / `CompactText`). System
   and predictive Back remain owned by the Navigation 3 host.
