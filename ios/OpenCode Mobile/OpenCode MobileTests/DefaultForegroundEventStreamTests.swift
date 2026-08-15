@@ -84,6 +84,102 @@ struct DefaultForegroundEventStreamTests {
         #expect(events.filter { $0.type == "stream.reconnected" }.count == 1)
     }
 
+    @Test func startIsIdempotentWhileStreamIsRunning() async {
+        let stream = makeStream(
+            responses: [
+                #"data: {"payload":{"type":"server.heartbeat","properties":{}}}"# + "\n\n",
+            ]
+        )
+        var states: [EventStreamConnectionState] = []
+        let stateTask = Task { @MainActor in
+            for await state in stream.connectionStateUpdates() {
+                states.append(state)
+            }
+        }
+
+        await Task.yield()
+        stream.start()
+        let connected = await waitUntil(timeoutMs: 2_000) { states.contains(.connected) }
+        #expect(connected)
+        let countAfterFirst = states.count
+        stream.start()
+        try? await Task.sleep(for: .milliseconds(80))
+        let countAfterSecondStart = states.count
+        stream.stop()
+        stateTask.cancel()
+
+        // Second start must not tear down (no new Idle/Connecting while live).
+        #expect(countAfterSecondStart == countAfterFirst)
+    }
+
+    @Test func successfulResumeDoesNotPublishDisconnectedWhileRetrying() async {
+        // Stream body ends after the first event; the loop retries while still
+        // occupied. Chrome must stay connecting/reconnecting — not offline.
+        let stream = makeStream(
+            responses: [
+                #"data: {"payload":{"type":"server.connected","properties":{}}}"# + "\n\n",
+                #"data: {"payload":{"type":"server.connected","properties":{}}}"# + "\n\n",
+            ]
+        )
+        var states: [EventStreamConnectionState] = []
+        let stateTask = Task { @MainActor in
+            for await state in stream.connectionStateUpdates() {
+                states.append(state)
+            }
+        }
+
+        await Task.yield()
+        stream.start()
+        let reconnected = await waitUntil(timeoutMs: 3_500) {
+            states.filter { $0 == .connected }.count >= 2
+        }
+        stream.stop()
+        stateTask.cancel()
+
+        #expect(reconnected)
+        #expect(!states.contains(.disconnected))
+    }
+
+    @Test func stopThenStartDoesNotLeaveCancelledTaskIdleOverConnecting() async {
+        let stream = makeStream(
+            responses: [
+                #"data: {"payload":{"type":"server.heartbeat","properties":{}}}"# + "\n\n",
+                #"data: {"payload":{"type":"server.heartbeat","properties":{}}}"# + "\n\n",
+            ]
+        )
+        var states: [EventStreamConnectionState] = []
+        let stateTask = Task { @MainActor in
+            for await state in stream.connectionStateUpdates() {
+                states.append(state)
+            }
+        }
+
+        await Task.yield()
+        stream.start()
+        let firstLive = await waitUntil(timeoutMs: 2_000) { states.contains(.connected) }
+        #expect(firstLive)
+        stream.stop()
+        let stopped = await waitUntil(timeoutMs: 1_000) { states.last == .idle }
+        #expect(stopped)
+        let indexAfterStop = states.count
+        stream.start()
+        let secondLive = await waitUntil(timeoutMs: 2_000) {
+            states[indexAfterStop...].contains(.connected)
+        }
+        #expect(secondLive)
+        // After the second start, Idle from the cancelled first task must not
+        // appear after Connecting for the new generation (before Connected).
+        let slice = Array(states[indexAfterStop...])
+        if let connectingIdx = slice.firstIndex(of: .connecting),
+           let connectedIdx = slice.firstIndex(of: .connected),
+           connectingIdx < connectedIdx
+        {
+            #expect(!slice[connectingIdx..<connectedIdx].contains(.idle))
+        }
+        stream.stop()
+        stateTask.cancel()
+    }
+
     private func makeStream(responses: [String]) -> DefaultForegroundEventStream {
         let streamID = UUID().uuidString
         let configuration = URLSessionConfiguration.ephemeral

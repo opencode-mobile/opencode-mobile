@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,6 +33,9 @@ class DefaultForegroundEventStream
     ) : ForegroundEventStream {
         private val scope = CoroutineScope(SupervisorJob())
         private var streamJob: Job? = null
+
+        /** Invalidates in-flight cancel/error handlers after stop() or a newer start(). */
+        private val streamGeneration = AtomicLong(0)
         private var wasConnected = false
         private var currentStreamWasConnected = false
         private var emittedReconnectForCurrentStream = false
@@ -43,17 +47,28 @@ class DefaultForegroundEventStream
         override val events: SharedFlow<OpencodeEvent> = _events.asSharedFlow()
 
         override fun start() {
-            if (streamJob?.isActive == true) return
+            if (streamJob?.isActive == true) {
+                diagnosticLogger.debug(DiagnosticLogArea.Sse, "foreground SSE start ignored; already running")
+                return
+            }
             diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream starting")
+            val generation = streamGeneration.incrementAndGet()
             ConnectionEpoch.shared.bump()
             streamJob =
                 scope.launch {
                     var retryAttempt = 0
                     while (true) {
+                        if (generation != streamGeneration.get()) return@launch
                         currentStreamWasConnected = false
                         emittedReconnectForCurrentStream = false
+                        val previouslyConnected = wasConnected
                         setConnectionState(
-                            if (wasConnected) EventStreamConnectionState.Reconnecting else EventStreamConnectionState.Connecting,
+                            if (previouslyConnected) {
+                                EventStreamConnectionState.Reconnecting
+                            } else {
+                                EventStreamConnectionState.Connecting
+                            },
+                            generation,
                         )
                         try {
                             val protocol = activeConnectionManager.currentProtocolOrProbe()
@@ -95,9 +110,22 @@ class DefaultForegroundEventStream
                                     }
                                 }
                             }
-                            setConnectionState(EventStreamConnectionState.Disconnected)
+                            // Stream ended while still occupied — keep chrome on connecting /
+                            // reconnecting through the retry sleep (OPE-165). Do not publish
+                            // offline (Disconnected) while a foreground retry is in flight.
+                            setConnectionState(
+                                if (previouslyConnected || wasConnected) {
+                                    EventStreamConnectionState.Reconnecting
+                                } else {
+                                    EventStreamConnectionState.Connecting
+                                },
+                                generation,
+                            )
                         } catch (_: CancellationException) {
-                            setConnectionState(EventStreamConnectionState.Idle)
+                            if (generation == streamGeneration.get()) {
+                                streamJob = null
+                                setConnectionState(EventStreamConnectionState.Idle, generation)
+                            }
                             return@launch
                         } catch (throwable: Throwable) {
                             diagnosticLogger.warning(
@@ -106,7 +134,12 @@ class DefaultForegroundEventStream
                                 throwable,
                             )
                             setConnectionState(
-                                if (wasConnected) EventStreamConnectionState.Reconnecting else EventStreamConnectionState.Disconnected,
+                                if (previouslyConnected || wasConnected) {
+                                    EventStreamConnectionState.Reconnecting
+                                } else {
+                                    EventStreamConnectionState.Connecting
+                                },
+                                generation,
                             )
                         }
 
@@ -120,6 +153,7 @@ class DefaultForegroundEventStream
 
         override fun stop() {
             diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream stopping")
+            streamGeneration.incrementAndGet()
             streamJob?.cancel()
             streamJob = null
             wasConnected = false
@@ -143,7 +177,11 @@ class DefaultForegroundEventStream
             wasConnected = true
         }
 
-        private fun setConnectionState(state: EventStreamConnectionState) {
+        private fun setConnectionState(
+            state: EventStreamConnectionState,
+            generation: Long? = null,
+        ) {
+            if (generation != null && generation != streamGeneration.get()) return
             if (_connectionState.value != state) {
                 diagnosticLogger.debug(
                     DiagnosticLogArea.Sse,

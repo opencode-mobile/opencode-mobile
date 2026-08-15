@@ -139,6 +139,19 @@ class MessageSync(
             val storeSlot = key.storeSlot
             val directory = key.directory.ifEmpty { null }
             val cacheHandle = messageCacheHandle(key)
+            // One authoritative reconnect catch-up per ConnectionEpoch (OPE-165).
+            val lastReconnectCatchUpEpoch = AtomicLong(Long.MIN_VALUE)
+            val resumeCatchUpRequestedEpoch = AtomicLong(Long.MIN_VALUE)
+            val seenConnected = AtomicBoolean(false)
+
+            fun claimReconnectCatchUp(): Boolean {
+                val epoch = connectionEpoch.current()
+                while (true) {
+                    val previous = lastReconnectCatchUpEpoch.get()
+                    if (previous == epoch) return false
+                    if (lastReconnectCatchUpEpoch.compareAndSet(previous, epoch)) return true
+                }
+            }
 
             suspend fun emitMessages(
                 messages: List<Message>,
@@ -264,6 +277,22 @@ class MessageSync(
                 observationEpoch.set(connectionEpoch.current())
             }
 
+            fun requestResumeCatchUp(): Boolean {
+                if (!seenConnected.get()) return false
+                val needsCatchUp =
+                    health.get() is MessageSyncHealth.Stale || !isCurrentEpoch()
+                if (!needsCatchUp) return false
+                val epoch = connectionEpoch.current()
+                while (true) {
+                    val previous = resumeCatchUpRequestedEpoch.get()
+                    if (previous == epoch) return false
+                    if (resumeCatchUpRequestedEpoch.compareAndSet(previous, epoch)) {
+                        staging.trySend(StagedItem.TransportResumed)
+                        return true
+                    }
+                }
+            }
+
             val producer =
                 launch {
                     eventStream.events.collect { event ->
@@ -295,7 +324,6 @@ class MessageSync(
 
             val connectionWatcher =
                 launch {
-                    var seenConnected = false
                     eventStream.connectionState.collect { state ->
                         when (state) {
                             EventStreamConnectionState.Connected -> {
@@ -304,21 +332,21 @@ class MessageSync(
                                 // adopt the bumped epoch and fullReload — otherwise a
                                 // latched streaming turn blocks the poll watchdog forever.
                                 val shouldRecover =
-                                    seenConnected &&
+                                    seenConnected.get() &&
                                         (
                                             health.get() is MessageSyncHealth.Stale ||
                                                 !isCurrentEpoch()
                                         )
-                                seenConnected = true
+                                seenConnected.set(true)
                                 if (shouldRecover) {
-                                    staging.trySend(StagedItem.TransportResumed)
+                                    requestResumeCatchUp()
                                 }
                             }
                             EventStreamConnectionState.Disconnected,
                             EventStreamConnectionState.Reconnecting,
                             EventStreamConnectionState.Idle,
                             -> {
-                                if (!seenConnected) return@collect
+                                if (!seenConnected.get()) return@collect
                                 if (lastPublishedFrames[storeSlot] == null) return@collect
                                 // Unlatch streaming so the poll watchdog can catch up even
                                 // before Connected triggers TransportResumed recovery.
@@ -329,7 +357,11 @@ class MessageSync(
                                     MessageSyncHealth.Stale(MessageSyncRecoveryReason.TransportUnavailable),
                                 )
                             }
-                            EventStreamConnectionState.Connecting -> Unit
+                            EventStreamConnectionState.Connecting -> {
+                                // OPE-165: catch up as soon as cold resume occupies the stream
+                                // (Connecting after stop cleared wasConnected), before live.
+                                requestResumeCatchUp()
+                            }
                         }
                     }
                 }
@@ -381,6 +413,7 @@ class MessageSync(
                 if (event.type == "stream.reconnected") {
                     serverConnectedReloadJob?.cancel()
                     serverConnectedReloadJob = null
+                    if (!claimReconnectCatchUp()) return
                     adoptCurrentEpoch()
                     enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
                     performClosedLoopRecovery(MessageSyncRecoveryReason.Reconnect)
@@ -391,6 +424,7 @@ class MessageSync(
                     serverConnectedReloadJob =
                         launch {
                             delay(LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS)
+                            if (!claimReconnectCatchUp()) return@launch
                             adoptCurrentEpoch()
                             enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
                             performClosedLoopRecovery(MessageSyncRecoveryReason.Reconnect)
@@ -627,6 +661,7 @@ class MessageSync(
                         is StagedItem.TransportResumed -> {
                             serverConnectedReloadJob?.cancel()
                             serverConnectedReloadJob = null
+                            if (!claimReconnectCatchUp()) continue
                             adoptCurrentEpoch()
                             enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
                             performClosedLoopRecovery(MessageSyncRecoveryReason.Reconnect)

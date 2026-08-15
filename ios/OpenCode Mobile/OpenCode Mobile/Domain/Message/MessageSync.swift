@@ -206,6 +206,24 @@ nonisolated final class MessageSync: @unchecked Sendable {
         let connectionWatcher = Task { [eventStream, weak self] in
             guard let self else { return }
             var seenConnected = false
+            var resumeCatchUpRequestedEpoch: UInt64?
+            func shouldRequestResumeCatchUp() -> Bool {
+                guard seenConnected else { return false }
+                let health = self.syncHealth(
+                    sessionID: key.sessionID,
+                    directory: key.directory.isEmpty ? nil : key.directory
+                )
+                let needsCatchUp: Bool = {
+                    if case .stale = health { return true }
+                    return self.connectionEpoch.current() != observationEpoch.current
+                }()
+                guard needsCatchUp else { return false }
+                let epoch = self.connectionEpoch.current()
+                // One TransportResumed enqueue per ConnectionEpoch (OPE-165).
+                if resumeCatchUpRequestedEpoch == epoch { return false }
+                resumeCatchUpRequestedEpoch = epoch
+                return true
+            }
             for await state in eventStream.connectionStateUpdates() {
                 switch state {
                 case .connected:
@@ -213,19 +231,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     // stream.reconnected. If server.connected is missed, still
                     // adopt the bumped epoch and fullReload — otherwise a
                     // latched streaming turn blocks the poll watchdog forever.
-                    let health = self.syncHealth(
-                        sessionID: key.sessionID,
-                        directory: key.directory.isEmpty ? nil : key.directory
-                    )
-                    let shouldRecover =
-                        seenConnected &&
-                        (
-                            {
-                                if case .stale = health { return true }
-                                return false
-                            }()
-                                || self.connectionEpoch.current() != observationEpoch.current
-                        )
+                    let shouldRecover = shouldRequestResumeCatchUp()
                     seenConnected = true
                     if shouldRecover {
                         staging.requestTransportResume()
@@ -242,7 +248,11 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     staging.enterStale(.transportUnavailable)
                     self.setHealth(.stale(.transportUnavailable), for: key)
                 case .connecting:
-                    continue
+                    // OPE-165: catch up as soon as cold resume occupies the stream
+                    // (Connecting after stop cleared wasConnected), before live.
+                    if shouldRequestResumeCatchUp() {
+                        staging.requestTransportResume()
+                    }
                 }
             }
         }
@@ -533,6 +543,9 @@ nonisolated final class MessageSync: @unchecked Sendable {
         publishMessages: @escaping @Sendable ([Message]) -> Void
     ) async {
         var debounceTask: Task<Void, Never>?
+        // One authoritative reconnect catch-up per ConnectionEpoch (OPE-165).
+        // Coalesces TransportResumed, server.connected, and stream.reconnected.
+        let catchUpGate = ReconnectCatchUpGate()
         defer { debounceTask?.cancel() }
 
         while let item = await staging.dequeue() {
@@ -552,6 +565,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             case .transportResumed:
                 debounceTask?.cancel()
                 debounceTask = nil
+                guard catchUpGate.claim(connectionEpoch.current()) else { continue }
                 observationEpoch.adopt(connectionEpoch.current())
                 staging.enterRecovering(.reconnect, wakeConsumer: false)
                 setHealth(staging.currentHealth, for: key)
@@ -585,6 +599,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     staging: staging,
                     observationEpoch: observationEpoch,
                     debounceTask: &debounceTask,
+                    catchUpGate: catchUpGate,
                     publishMessages: publishMessages
                 )
             }
@@ -597,11 +612,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
         staging: MessageEventStaging,
         observationEpoch: ObservationEpoch,
         debounceTask: inout Task<Void, Never>?,
+        catchUpGate: ReconnectCatchUpGate,
         publishMessages: @escaping @Sendable ([Message]) -> Void
     ) async {
         if event.type == "stream.reconnected" {
             debounceTask?.cancel()
             debounceTask = nil
+            guard catchUpGate.claim(connectionEpoch.current()) else { return }
             observationEpoch.adopt(connectionEpoch.current())
             staging.enterRecovering(.reconnect, wakeConsumer: false)
             setHealth(staging.currentHealth, for: key)
@@ -620,6 +637,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             debounceTask = Task { [weak self] in
                 try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.messageDebounceMs))
                 guard !Task.isCancelled, let self else { return }
+                guard catchUpGate.claim(self.connectionEpoch.current()) else { return }
                 observationEpoch.adopt(self.connectionEpoch.current())
                 staging.enterRecovering(.reconnect, wakeConsumer: false)
                 self.setHealth(staging.currentHealth, for: key)

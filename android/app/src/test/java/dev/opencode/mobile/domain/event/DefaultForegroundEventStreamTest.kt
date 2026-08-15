@@ -16,12 +16,15 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.atomic.AtomicInteger
 
 class DefaultForegroundEventStreamTest {
     @Test
@@ -63,6 +66,101 @@ class DefaultForegroundEventStreamTest {
                 assertEquals(ServerProtocol.V2, manager.currentProtocol())
             } finally {
                 stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun start_isIdempotentWhileStreamIsRunning() =
+        runBlocking {
+            val openCount = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine { request ->
+                        openCount.incrementAndGet()
+                        respond(
+                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                )
+            try {
+                stream.start()
+                withTimeout(5_000) {
+                    while (openCount.get() < 1) {
+                        delay(10)
+                    }
+                }
+                stream.start()
+                delay(50)
+                assertEquals(1, openCount.get())
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun retryAfterStreamEnd_doesNotPublishDisconnected() =
+        runBlocking {
+            val opens = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine {
+                        opens.incrementAndGet()
+                        respond(
+                            content = "data: {\"payload\":{\"type\":\"server.connected\",\"properties\":{}}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                )
+            val states = mutableListOf<EventStreamConnectionState>()
+            val collectJob =
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+                    stream.connectionState.collect { states.add(it) }
+                }
+            try {
+                stream.start()
+                withTimeout(5_000) {
+                    while (opens.get() < 2) {
+                        delay(20)
+                    }
+                }
+                assertTrue(states.contains(EventStreamConnectionState.Connected))
+                assertTrue(
+                    states.none { it == EventStreamConnectionState.Disconnected },
+                )
+            } finally {
+                stream.stop()
+                collectJob.cancel()
                 client.close()
             }
         }
