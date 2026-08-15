@@ -15,6 +15,20 @@
 - Evidence: [ope-170-plan.md](./ope-170-plan.md)
 - Revisit when: mobile should send follow-up prompts into a child session.
 
+## OPE-169 promote assistant bubble; keep paint deferral local
+
+- Date: 2026-08-15
+- Decision: Promote the Session Chat assistant text bubble to
+  `OpenCodeAssistantMessage`. Session Chat keeps message-action gestures and
+  the ≥3k late-markdown paint deferral in a thin wrapper, passing
+  `renderedMarkdown` only when it is ready to paint.
+- Reason: Outgoing Message is already a collection primitive; the assistant
+  card is the matching incoming chrome and was duplicated by snapshot-evidence
+  hosts. Paint deferral is a Session Chat performance seam, not component
+  chrome.
+- Evidence: [ope-169-plan.md](./ope-169-plan.md)
+- Revisit when: another surface needs the same late-markdown deferral.
+
 ## OPE-167 top overlay stack; Scroll to end stays at the bottom
 
 - Date: 2026-08-15

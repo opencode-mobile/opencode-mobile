@@ -119,3 +119,5 @@ is a thin facade. Any change to the facade is an architectural decision — see
   foreground SSE state, and context usage.
 - Reuse **`OpenCodeBottomSheet`** for composer option pickers (model, mode,
   Variant).
+- Use **`OpenCodeOutgoingMessage`** for sent prompts and
+  **`OpenCodeAssistantMessage`** for assistant text blocks.

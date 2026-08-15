@@ -39,7 +39,7 @@ struct SessionChatSnapshotHost: View {
             )
             .frame(maxWidth: .infinity, alignment: .trailing)
         case .assistant:
-            SnapshotEvidenceAssistantBubble(text: message.text)
+            OpenCodeAssistantMessage(text: message.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
         case .childSession:
             if let childSession = message.childSession {
@@ -61,23 +61,5 @@ struct SnapshotEvidenceChildSessionRow: View {
             timeStartEpochMs: mock.timeStartEpochMs,
             action: mock.showsChevron ? {} : nil
         )
-    }
-}
-
-struct SnapshotEvidenceAssistantBubble: View {
-    let text: String
-
-    var body: some View {
-        Text(text.isEmpty ? "…" : text)
-            .font(OpenCodeTypography.body)
-            .lineSpacing(4)
-            .foregroundStyle(OpenCodeColors.textStrong)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
-            )
     }
 }

@@ -72,7 +72,7 @@ bash "$REPO/.agents/skills/publish-ui-snapshots/scripts/write-report.sh" \
 
 ## Throwaway test shape
 
-See [reference.md](reference.md) for copy-paste iOS and Android templates (assistant message). Isolated renders `SnapshotEvidenceAssistantBubble` only. In-session renders `SessionChatSnapshotHost` with `SnapshotEvidenceMocks.conversation`.
+See [reference.md](reference.md) for copy-paste iOS and Android templates (assistant message). Isolated renders `OpenCodeAssistantMessage` only. In-session renders `SessionChatSnapshotHost` with `SnapshotEvidenceMocks.conversation`.
 
 ## Report
 

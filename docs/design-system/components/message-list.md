@@ -7,8 +7,9 @@ screens that need a bottom-anchored, variable-height message column with
 auto-follow, scroll-to-end affordance, and optional pull-to-refresh.
 
 The Message List is infrastructure, not a single visual cell. Feature screens
-supply row content (for example `OpenCodeOutgoingMessage`, assistant markdown,
-and tool rows) through a generic item slot. Session Chat owns message
+supply row content (for example `OpenCodeOutgoingMessage`,
+`OpenCodeAssistantMessage`, and tool rows) through a generic item slot.
+Session Chat owns message
 presentation; the host owns scroll geometry, pin state, and overlay placement.
 
 ## Public API

@@ -19,7 +19,7 @@ struct AssistantMessageSnapshotEvidence {
             name: "ios-isolated-light",
             appearance: .light
         ) {
-            SnapshotEvidenceAssistantBubble(text: SnapshotEvidenceMocks.assistantReply.text)
+            OpenCodeAssistantMessage(text: SnapshotEvidenceMocks.assistantReply.text)
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(OpenCodeColors.backgroundBase)
@@ -63,8 +63,8 @@ import androidx.compose.ui.unit.dp
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.ui.components.OpenCodeAssistantMessage
 import dev.opencode.mobile.ui.snapshot.SessionChatSnapshotHost
-import dev.opencode.mobile.ui.snapshot.SnapshotEvidenceAssistantBubble
 import dev.opencode.mobile.ui.snapshot.SnapshotEvidenceMocks
 import org.junit.Rule
 import org.junit.Test
@@ -81,7 +81,7 @@ class AssistantMessageSnapshotEvidence {
     fun isolatedLight() {
         paparazzi.snapshot("android-isolated-light") {
             OpenCodeTheme(darkTheme = false) {
-                SnapshotEvidenceAssistantBubble(
+                OpenCodeAssistantMessage(
                     text = SnapshotEvidenceMocks.assistantReply.text,
                     modifier =
                         Modifier

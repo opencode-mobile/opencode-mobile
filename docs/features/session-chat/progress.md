@@ -12,6 +12,19 @@
 - Remaining: device smoke (open a child session → no prompt; back returns to
   parent; pending permission/question still appear).
 
+## OPE-169 design-system Assistant Message (2026-08-15)
+
+- Status: implemented on iOS and Android.
+- Plan: [ope-169-plan.md](./ope-169-plan.md)
+- Linear: [OPE-169](https://linear.app/opencode-mobile/issue/OPE-169/design-system-assistant-message)
+- Done:
+  - `OpenCodeAssistantMessage` in the Component Collection with tokens,
+    gallery, and previews.
+  - Session Chat text blocks and snapshot-evidence hosts use the component.
+  - Message-action gestures and ≥3k late-markdown paint deferral stay in
+    Session Chat wrappers.
+- Remaining: none.
+
 ## OPE-167 top overlay pills (2026-08-15)
 
 - Status: implemented on iOS and Android (unit-tested visibility).
