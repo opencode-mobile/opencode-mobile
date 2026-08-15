@@ -8,6 +8,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.connection.DeviceNetworkPath
+import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.smartProjectLabel
@@ -83,6 +85,7 @@ class SessionChatViewModel
         private val optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator,
         private val connectionProfileStore: ConnectionProfileStore,
         private val activeConnectionManager: ActiveConnectionManager,
+        deviceNetworkPath: DeviceNetworkPath = ReadyDeviceNetworkPath,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -116,6 +119,7 @@ class SessionChatViewModel
                 foregroundEventStream = foregroundEventStream,
                 eventDomainAdapter = eventDomainAdapter,
                 scope = viewModelScope,
+                deviceNetworkPath = deviceNetworkPath,
             )
         private val reviewChanges =
             SessionChatReviewChanges(

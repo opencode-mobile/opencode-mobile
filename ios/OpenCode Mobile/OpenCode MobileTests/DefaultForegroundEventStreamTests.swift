@@ -180,7 +180,36 @@ struct DefaultForegroundEventStreamTests {
         stateTask.cancel()
     }
 
-    private func makeStream(responses: [String]) -> DefaultForegroundEventStream {
+    @Test func unavailablePath_doesNotOpenSseUntilReady() async {
+        let path = FakeDeviceNetworkPath(status: .unavailable)
+        var states: [EventStreamConnectionState] = []
+        let stream = makeStream(
+            responses: [
+                #"data: {"payload":{"type":"server.heartbeat","properties":{}}}"# + "\n\n",
+            ],
+            deviceNetworkPath: path
+        )
+        let stateTask = Task { @MainActor in
+            for await state in stream.connectionStateUpdates() {
+                states.append(state)
+            }
+        }
+        await Task.yield()
+        stream.start()
+        try? await Task.sleep(for: .milliseconds(80))
+        let stayedIdle = !states.contains(.connecting) && !states.contains(.connected)
+        path.set(.ready)
+        let becameConnected = await waitUntil(timeoutMs: 2_000) { states.contains(.connected) }
+        stream.stop()
+        stateTask.cancel()
+        #expect(stayedIdle)
+        #expect(becameConnected)
+    }
+
+    private func makeStream(
+        responses: [String],
+        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath()
+    ) -> DefaultForegroundEventStream {
         let streamID = UUID().uuidString
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockForegroundSSEURLProtocol.self]
@@ -194,7 +223,11 @@ struct DefaultForegroundEventStreamTests {
             password: "secret"
         )
         let client = EventsAPIClient(connectionProvider: { connection }, urlSession: session)
-        return DefaultForegroundEventStream(api: client, adapter: EventDomainAdapter())
+        return DefaultForegroundEventStream(
+            api: client,
+            adapter: EventDomainAdapter(),
+            deviceNetworkPath: deviceNetworkPath
+        )
     }
 
     private func waitUntil(

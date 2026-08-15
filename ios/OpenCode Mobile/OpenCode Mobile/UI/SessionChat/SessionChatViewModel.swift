@@ -54,6 +54,7 @@ final class SessionChatViewModel {
     private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver
     private let activeConnectionManager: ActiveConnectionManager
     private let connectionProfileStore: any ConnectionProfileStore
+    private let deviceNetworkPath: any DeviceNetworkPath
     private var projectLabel: String?
     private var projectLetter: Character?
     private var projectLetterAccent: LetterAccent?
@@ -77,7 +78,8 @@ final class SessionChatViewModel {
         sessionModelSelectionStore: any SessionModelSelectionStore,
         activeConnectionManager: ActiveConnectionManager,
         connectionProfileStore: any ConnectionProfileStore,
-        newSessionModelSelectionResolver: NewSessionModelSelectionResolver
+        newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
+        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath()
     ) {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
@@ -85,6 +87,7 @@ final class SessionChatViewModel {
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.activeConnectionManager = activeConnectionManager
         self.connectionProfileStore = connectionProfileStore
+        self.deviceNetworkPath = deviceNetworkPath
         self.uiState = .initial(
             sessionID: sessionID,
             sessionTitle: sessionTitle,
@@ -116,7 +119,8 @@ final class SessionChatViewModel {
             worktree: worktree,
             sessionRepository: sessionRepository,
             sessionStatusLiveStore: sessionStatusLiveStore,
-            foregroundEventStream: foregroundEventStream
+            foregroundEventStream: foregroundEventStream,
+            deviceNetworkPath: deviceNetworkPath
         )
         self.reviewChanges = SessionChatReviewChanges(
             sessionID: sessionID,
@@ -865,9 +869,10 @@ final class SessionChatViewModel {
     }
 
     private var isConnectionLive: Bool {
-        // Prefer the live event-stream state over SessionInfo's mirrored status so
-        // mutations are not blocked while connection observation is still catching up.
-        foregroundEventStream.connectionState == .connected
+        SessionConnectionStatus(
+            connectionState: foregroundEventStream.connectionState,
+            path: deviceNetworkPath.status
+        ) == .live
     }
 
     private func visibleQuestionRequest() -> QuestionRequest? {

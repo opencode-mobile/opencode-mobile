@@ -1464,6 +1464,8 @@ struct SessionChatViewModelTests {
         #expect(SessionConnectionStatus(connectionState: .reconnecting) == .connecting)
         #expect(SessionConnectionStatus(connectionState: .idle) == .offline)
         #expect(SessionConnectionStatus(connectionState: .disconnected) == .offline)
+        #expect(SessionConnectionStatus(connectionState: .connected, path: .unavailable) == .offline)
+        #expect(SessionConnectionStatus(connectionState: .connecting, path: .unavailable) == .offline)
     }
 
     // MARK: - isStreaming propagation
