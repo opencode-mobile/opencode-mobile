@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -27,7 +28,12 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import dev.opencode.mobile.domain.connection.ConnectionProfile
+import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
+import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
+import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.ui.changes.ChangeSource
 import dev.opencode.mobile.ui.changes.ChangesScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntries
@@ -35,59 +41,59 @@ import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntryId
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryThemeMode
 import dev.opencode.mobile.ui.componentgallery.components.ActionPillGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.SyncingPillGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.ComposerSuggestionOverlayGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.AssistantMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.AttachmentGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ChildSessionRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChoiceBadgeGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.FilterTabsGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ComposerSuggestionOverlayGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DialogGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.SnackbarGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.FilterTabsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.HunkNavigationPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListGroupGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.MessageListGalleryDetailScreen
-import dev.opencode.mobile.ui.componentgallery.components.AssistantMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScreen
-import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
-import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
-import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
-import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
-import dev.opencode.mobile.ui.componentgallery.components.SessionListDockGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.SessionTodosPillGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.SessionTodoItemGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.SessionComposerGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ServerAddressInputGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SessionComposerGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SessionListDockGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SessionTodoItemGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SessionTodosPillGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SnackbarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.ChildSessionRowGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SyncingPillGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolCallCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.UnifiedDiffGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
+import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.connection.ConnectionSetupScreen
 import dev.opencode.mobile.ui.connection.ConnectionSetupViewModel
 import dev.opencode.mobile.ui.main.MainScreen
-import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.onboarding.AppOnboardingScreen
 import dev.opencode.mobile.ui.root.AppRootState
 import dev.opencode.mobile.ui.root.AppRootViewModel
 import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolGroupScreen
+import dev.opencode.mobile.ui.sessionchat.view.toTarget
 import dev.opencode.mobile.ui.sessioncontext.SessionContextScreen
+import dev.opencode.mobile.ui.settings.DiagnosticLogsScreen
+import dev.opencode.mobile.ui.settings.DiagnosticLogsViewModel
 import dev.opencode.mobile.ui.settings.SettingsScreen
 import dev.opencode.mobile.ui.settings.SettingsViewModel
 import dev.opencode.mobile.ui.settings.TextMateLanguagesRoute
-import dev.opencode.mobile.ui.settings.DiagnosticLogsScreen
-import dev.opencode.mobile.ui.settings.DiagnosticLogsViewModel
 import dev.opencode.mobile.ui.settings.TextMateLogbookScreen
 import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
 
@@ -400,6 +406,9 @@ fun MainNavigation() {
                                                         ),
                                                     )
                                                 },
+                                                onToolGroupClick = { target ->
+                                                    backStack.add(target)
+                                                },
                                                 onSessionReplaceRequested = { target ->
                                                     backStack.removeLastOrNull()
                                                     backStack.add(
@@ -435,6 +444,62 @@ fun MainNavigation() {
                                                 initialSource = key.initialSource,
                                                 initialFilePath = key.initialFilePath,
                                                 onNavigateBack = { backStack.removeLastOrNull() },
+                                            )
+                                        }
+                                    }
+                                    entry<SessionToolGroup> { key ->
+                                        RouteSurface {
+                                            var toolDetailTarget by remember {
+                                                mutableStateOf<SessionChatToolDetailTarget?>(null)
+                                            }
+                                            SessionChatToolGroupScreen(
+                                                target = key.toTarget(),
+                                                supportsSessionMessageDiff = key.supportsSessionMessageDiff,
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onToolDetailTap = {
+                                                    ProductAnalytics.logUserAction(
+                                                        screenId = ProductAnalytics.Screen.SESSION_CHAT,
+                                                        actionId = ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL,
+                                                    )
+                                                    toolDetailTarget = it
+                                                },
+                                                onChildSessionTap = { childSessionId, childTitle ->
+                                                    ProductAnalytics.logUserAction(
+                                                        screenId = ProductAnalytics.Screen.SESSION_CHAT,
+                                                        actionId = ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION,
+                                                    )
+                                                    backStack.add(
+                                                        SessionChat(
+                                                            sessionId = childSessionId,
+                                                            sessionTitle = childTitle,
+                                                            worktree = key.worktree,
+                                                            parentId = key.sessionId,
+                                                        ),
+                                                    )
+                                                },
+                                                onChangesReviewTap = changesReview@{ _, initialFilePath ->
+                                                    val owningTurn = key.owningTurnMessageId
+                                                    if (!key.supportsSessionMessageDiff || owningTurn == null) {
+                                                        return@changesReview
+                                                    }
+                                                    ProductAnalytics.logUserAction(
+                                                        screenId = ProductAnalytics.Screen.SESSION_CHAT,
+                                                        actionId = ProductAnalytics.Action.CHAT_OPEN_CHANGES_FROM_TOOL,
+                                                    )
+                                                    backStack.add(
+                                                        Changes(
+                                                            sessionId = key.sessionId,
+                                                            worktree = key.worktree,
+                                                            messageId = owningTurn,
+                                                            initialSource = ChangeSource.LastTurn,
+                                                            initialFilePath = initialFilePath,
+                                                        ),
+                                                    )
+                                                },
+                                            )
+                                            SessionChatToolDetailSheet(
+                                                target = toolDetailTarget,
+                                                onDismiss = { toolDetailTarget = null },
                                             )
                                         }
                                     }

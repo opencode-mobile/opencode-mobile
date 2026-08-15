@@ -399,41 +399,20 @@ struct SessionChatView: View {
                 initialFilePath: target.initialFilePath
             )
         }
-        .overlay {
-            if let toolGroupTarget {
-                SessionChatToolGroupView(
-                    target: toolGroupTarget,
-                    supportsSessionMessageDiff: viewModel.uiState.supportsSessionMessageDiff,
-                    onNavigateBack: { self.toolGroupTarget = nil },
-                    onToolDetailTap: { detail in
-                        logChatAction(ProductAnalytics.Action.chatOpenToolDetail)
-                        ProductAnalytics.logScreenView(
-                            screenId: ProductAnalytics.Screen.sessionToolDetail,
-                            presentation: ProductAnalytics.Presentation.sheet,
-                            trigger: ProductAnalytics.Trigger.present
-                        )
-                        toolDetailTarget = detail
-                    },
-                    onChildSessionTap: { sessionID, title in
-                        logChatAction(ProductAnalytics.Action.chatOpenChildSession)
-                        childSessionTarget = ChildSessionNavigationTarget(
-                            sessionID: sessionID,
-                            sessionTitle: title,
-                            worktree: session.worktree,
-                            optimisticNavigationInstanceID: nil
-                        )
-                    },
-                    onChangesReviewTap: { assistantMessageID, initialFilePath in
-                        logChatAction(ProductAnalytics.Action.chatOpenChangesFromTool)
-                        changesTarget = viewModel.uiState.fileChangeNavigationTarget(
-                            worktree: session.worktree,
-                            assistantMessageID: assistantMessageID,
-                            initialFilePath: initialFilePath
-                        )
-                    }
-                )
-                .sessionChatToolDetailSheet(target: $toolDetailTarget)
-            }
+        .navigationDestination(item: $toolGroupTarget) { target in
+            SessionChatToolGroupView(
+                target: target,
+                worktree: session.worktree,
+                parentSessionID: session.id,
+                supportsSessionMessageDiff: viewModel.uiState.supportsSessionMessageDiff,
+                makeChangesTarget: { assistantMessageID, initialFilePath in
+                    viewModel.uiState.fileChangeNavigationTarget(
+                        worktree: session.worktree,
+                        assistantMessageID: assistantMessageID,
+                        initialFilePath: initialFilePath
+                    )
+                }
+            )
         }
         .navigationDestination(item: $childSessionTarget) { target in
             SessionChatView(
