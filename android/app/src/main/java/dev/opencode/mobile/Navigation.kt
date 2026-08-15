@@ -371,6 +371,7 @@ fun MainNavigation() {
                                                 sessionTitle = key.sessionTitle,
                                                 worktree = key.worktree,
                                                 optimisticNavigationInstanceId = key.optimisticNavigationInstanceId,
+                                                parentId = key.parentId,
                                                 onNavigateBack = { backStack.removeLastOrNull() },
                                                 onSessionContextClick = {
                                                     backStack.add(SessionContext(key.sessionId, key.worktree))
@@ -393,6 +394,7 @@ fun MainNavigation() {
                                                             sessionTitle = target.sessionTitle,
                                                             worktree = target.worktree,
                                                             optimisticNavigationInstanceId = target.optimisticNavigationInstanceId,
+                                                            parentId = key.sessionId,
                                                         ),
                                                     )
                                                 },

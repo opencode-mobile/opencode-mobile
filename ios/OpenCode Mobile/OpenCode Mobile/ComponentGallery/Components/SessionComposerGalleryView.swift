@@ -6,6 +6,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
     case mentions
     case active
     case attachments
+    case childLockout
     case permission
     case queued
     case submitting
@@ -26,6 +27,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
         case .mentions: "Mentions"
         case .active: "Active"
         case .attachments: "Attachments"
+        case .childLockout: "Child"
         case .permission: "Permission"
         case .queued: "Queued"
         case .submitting: "Submitting"
@@ -119,6 +121,14 @@ struct SessionComposerGalleryView: View {
                 .init(id: "pdf", filename: "requirements.pdf", variant: .pdf),
                 .init(id: "text", filename: "notes.md", variant: .text),
             ])
+        case .childLockout:
+            .childLockout(
+                .init(
+                    selectedModelLabel: "Claude Sonnet 4",
+                    selectedVariantLabel: "High",
+                    showVariant: true
+                )
+            )
         case .permission:
             permissionState()
         case .queued:
@@ -351,6 +361,7 @@ private extension OpenCodeSessionComposerAction {
         case .questionNext: "Next"
         case .submitQuestion: "Submit"
         case .dismissQuestion: "Dismiss"
+        case .backToMainSession: "Back to main session"
         }
     }
 }

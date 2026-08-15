@@ -86,6 +86,7 @@ fun SessionChatScreen(
     worktree: String,
     modifier: Modifier = Modifier,
     optimisticNavigationInstanceId: String? = null,
+    parentId: String? = null,
     onNavigateBack: () -> Unit = {},
     onSessionContextClick: () -> Unit = {},
     onReviewChangesClick: (ChangesNavigationTarget) -> Unit = {},
@@ -477,7 +478,12 @@ fun SessionChatScreen(
                                 }
                             },
                 ) {
-                    if (uiState.permissionRequest == null && uiState.questionRequest == null) {
+                    if (SessionChatComposerKind.resolve(
+                            isChildSession = parentId != null,
+                            hasPermission = uiState.permissionRequest != null,
+                            hasQuestion = uiState.questionRequest != null,
+                        ) == SessionChatComposerKind.Prompt
+                    ) {
                         when {
                             uiState.atSuggestionsVisible ->
                                 OpenCodeComposerSuggestionOverlay(
@@ -521,79 +527,98 @@ fun SessionChatScreen(
                         }
                     }
 
-                    val composerState =
-                        uiState.permissionRequest?.let { request ->
-                            OpenCodeSessionComposerState.Permission(
-                                requestId = request.id,
-                                sessionId = request.sessionId,
-                                permission = request.permission,
-                                patterns = request.patterns,
-                                queueCount = uiState.permissionQueueCount,
-                                submitting = uiState.permissionSubmitting,
-                                actionsEnabled = uiState.connectionStatus == SessionConnectionStatus.Live,
-                                errorMessage = uiState.permissionErrorMessage,
-                            )
-                        } ?: uiState.questionRequest?.let { request ->
-                            val question = request.questions.getOrNull(uiState.questionWizardIndex)
-                            val questionCount = request.questions.size.coerceAtLeast(1)
-                            val index = uiState.questionWizardIndex.coerceIn(0, questionCount - 1)
-                            val answered =
-                                if (uiState.questionCustomSelected) {
-                                    uiState.questionCustomText.isNotBlank()
-                                } else {
-                                    uiState.questionSelectedLabels.isNotEmpty()
-                                }
-                            val submitting = uiState.questionSubmitting
-                            OpenCodeSessionComposerState.Question(
-                                requestId = request.id,
-                                sessionId = request.sessionId,
-                                questionIndex = index,
-                                questionCount = questionCount,
-                                header = question?.header.orEmpty(),
-                                question = question?.question.orEmpty(),
-                                options =
-                                    question?.options.orEmpty().map { option ->
-                                        OpenCodeSessionComposerState.QuestionOption(
-                                            label = option.label,
-                                            description = option.description,
-                                        )
-                                    },
-                                multiple = question?.multiple == true,
-                                customAllowed = question?.custom != false,
-                                selectedLabels = uiState.questionSelectedLabels,
-                                customText = uiState.questionCustomText,
-                                customSelected = uiState.questionCustomSelected,
-                                backEnabled = index > 0 && !submitting,
-                                nextEnabled = answered && index < questionCount - 1 && !submitting,
-                                submitEnabled = answered && index == questionCount - 1 && !submitting,
-                                submitting = submitting,
-                                errorMessage = uiState.questionErrorMessage,
-                            )
-                        } ?: OpenCodeSessionComposerState.Prompt(
-                            text = uiState.composer.text,
-                            mentionRanges = uiState.composer.agentMentions.map { it.start until it.end },
-                            selectionStart = uiState.composer.cursor,
-                            selectionEnd = uiState.composer.cursor,
-                            selectionRevision = uiState.composer.selectionRevision,
-                            attachments =
-                                uiState.composer.attachments.map(AttachmentPresentationMapper::from),
-                            selectedModelLabel = uiState.composer.selectedModelLabel,
-                            selectedModeLabel = uiState.composer.selectedMode,
-                            selectedVariantLabel = uiState.composer.selectedVariantLabel,
-                            showVariant = uiState.composer.canSelectVariant,
-                            sendEnabled =
-                                uiState.composer.canSend &&
-                                    uiState.composer.selectedModel != null &&
-                                    uiState.composer.isModelSelectionReady &&
-                                    !uiState.isSending &&
-                                    uiState.timeline != SessionChatTimelineState.Creating &&
-                                    uiState.connectionStatus == SessionConnectionStatus.Live,
-                            attachEnabled = uiState.composer.canAttach && uiState.composer.isModelSelectionReady,
-                            showStop = uiState.sessionStatusLabel != null,
-                            stopEnabled =
-                                !uiState.isAborting &&
-                                    uiState.connectionStatus == SessionConnectionStatus.Live,
+                    val composerKind =
+                        SessionChatComposerKind.resolve(
+                            isChildSession = parentId != null,
+                            hasPermission = uiState.permissionRequest != null,
+                            hasQuestion = uiState.questionRequest != null,
                         )
+                    val composerState =
+                        when (composerKind) {
+                            SessionChatComposerKind.Permission -> {
+                                val request = uiState.permissionRequest
+                                OpenCodeSessionComposerState.Permission(
+                                    requestId = request?.id.orEmpty(),
+                                    sessionId = request?.sessionId.orEmpty(),
+                                    permission = request?.permission.orEmpty(),
+                                    patterns = request?.patterns.orEmpty(),
+                                    queueCount = uiState.permissionQueueCount,
+                                    submitting = uiState.permissionSubmitting,
+                                    actionsEnabled = uiState.connectionStatus == SessionConnectionStatus.Live,
+                                    errorMessage = uiState.permissionErrorMessage,
+                                )
+                            }
+                            SessionChatComposerKind.Question -> {
+                                val request = uiState.questionRequest
+                                val question = request?.questions?.getOrNull(uiState.questionWizardIndex)
+                                val questionCount = request?.questions?.size?.coerceAtLeast(1) ?: 1
+                                val index = uiState.questionWizardIndex.coerceIn(0, questionCount - 1)
+                                val answered =
+                                    if (uiState.questionCustomSelected) {
+                                        uiState.questionCustomText.isNotBlank()
+                                    } else {
+                                        uiState.questionSelectedLabels.isNotEmpty()
+                                    }
+                                val submitting = uiState.questionSubmitting
+                                OpenCodeSessionComposerState.Question(
+                                    requestId = request?.id.orEmpty(),
+                                    sessionId = request?.sessionId.orEmpty(),
+                                    questionIndex = index,
+                                    questionCount = questionCount,
+                                    header = question?.header.orEmpty(),
+                                    question = question?.question.orEmpty(),
+                                    options =
+                                        question?.options.orEmpty().map { option ->
+                                            OpenCodeSessionComposerState.QuestionOption(
+                                                label = option.label,
+                                                description = option.description,
+                                            )
+                                        },
+                                    multiple = question?.multiple == true,
+                                    customAllowed = question?.custom != false,
+                                    selectedLabels = uiState.questionSelectedLabels,
+                                    customText = uiState.questionCustomText,
+                                    customSelected = uiState.questionCustomSelected,
+                                    backEnabled = index > 0 && !submitting,
+                                    nextEnabled = answered && index < questionCount - 1 && !submitting,
+                                    submitEnabled = answered && index == questionCount - 1 && !submitting,
+                                    submitting = submitting,
+                                    errorMessage = uiState.questionErrorMessage,
+                                )
+                            }
+                            SessionChatComposerKind.ChildLockout ->
+                                OpenCodeSessionComposerState.ChildLockout(
+                                    selectedModelLabel = uiState.composer.selectedModelLabel,
+                                    selectedVariantLabel = uiState.composer.selectedVariantLabel,
+                                    showVariant = uiState.composer.canSelectVariant,
+                                )
+                            SessionChatComposerKind.Prompt ->
+                                OpenCodeSessionComposerState.Prompt(
+                                    text = uiState.composer.text,
+                                    mentionRanges = uiState.composer.agentMentions.map { it.start until it.end },
+                                    selectionStart = uiState.composer.cursor,
+                                    selectionEnd = uiState.composer.cursor,
+                                    selectionRevision = uiState.composer.selectionRevision,
+                                    attachments =
+                                        uiState.composer.attachments.map(AttachmentPresentationMapper::from),
+                                    selectedModelLabel = uiState.composer.selectedModelLabel,
+                                    selectedModeLabel = uiState.composer.selectedMode,
+                                    selectedVariantLabel = uiState.composer.selectedVariantLabel,
+                                    showVariant = uiState.composer.canSelectVariant,
+                                    sendEnabled =
+                                        uiState.composer.canSend &&
+                                            uiState.composer.selectedModel != null &&
+                                            uiState.composer.isModelSelectionReady &&
+                                            !uiState.isSending &&
+                                            uiState.timeline != SessionChatTimelineState.Creating &&
+                                            uiState.connectionStatus == SessionConnectionStatus.Live,
+                                    attachEnabled = uiState.composer.canAttach && uiState.composer.isModelSelectionReady,
+                                    showStop = uiState.sessionStatusLabel != null,
+                                    stopEnabled =
+                                        !uiState.isAborting &&
+                                            uiState.connectionStatus == SessionConnectionStatus.Live,
+                                )
+                        }
                     OpenCodeSessionComposer(
                         state = composerState,
                         onAction = { action ->
@@ -655,6 +680,10 @@ fun SessionChatScreen(
                                     viewModel.submitQuestion(action.requestId, action.sessionId)
                                 is OpenCodeSessionComposerAction.DismissQuestion ->
                                     viewModel.dismissQuestion(action.requestId, action.sessionId)
+                                OpenCodeSessionComposerAction.BackToMainSession -> {
+                                    logChatAction(ProductAnalytics.Action.CHAT_BACK)
+                                    onNavigateBack()
+                                }
                             }
                         },
                     )

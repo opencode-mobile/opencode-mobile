@@ -251,7 +251,11 @@ struct SessionChatView: View {
                 .padding(.bottom, max(composerOverlayHeight, 168))
 
                 VStack(spacing: 0) {
-                    if viewModel.uiState.permissionRequest == nil, viewModel.uiState.questionRequest == nil {
+                    if SessionChatComposerKind.resolve(
+                        isChildSession: session.parentID != nil,
+                        hasPermission: viewModel.uiState.permissionRequest != nil,
+                        hasQuestion: viewModel.uiState.questionRequest != nil
+                    ) == .prompt {
                         if viewModel.uiState.atSuggestionsVisible {
                             OpenCodeComposerSuggestionOverlay(
                                 items: viewModel.uiState.atSuggestions.map { suggestion in
@@ -437,7 +441,8 @@ struct SessionChatView: View {
                     id: target.sessionID,
                     title: target.sessionTitle,
                     worktree: target.worktree,
-                    optimisticNavigationInstanceID: target.optimisticNavigationInstanceID
+                    optimisticNavigationInstanceID: target.optimisticNavigationInstanceID,
+                    parentID: session.id
                 )
             )
         }
@@ -762,9 +767,14 @@ struct SessionChatView: View {
     private var composer: some View {
         let composer = viewModel.uiState.composer
         let isSending = viewModel.uiState.isSending
+        let kind = SessionChatComposerKind.resolve(
+            isChildSession: session.parentID != nil,
+            hasPermission: viewModel.uiState.permissionRequest != nil,
+            hasQuestion: viewModel.uiState.questionRequest != nil
+        )
         let state: OpenCodeSessionComposerState
 
-        if let request = viewModel.uiState.permissionRequest {
+        if kind == .permission, let request = viewModel.uiState.permissionRequest {
             state = .permission(
                 .init(
                     requestID: request.id,
@@ -777,7 +787,7 @@ struct SessionChatView: View {
                     errorMessage: viewModel.uiState.permissionErrorMessage
                 )
             )
-        } else if let request = viewModel.uiState.questionRequest {
+        } else if kind == .question, let request = viewModel.uiState.questionRequest {
             let draft = viewModel.uiState
             let questionCount = max(request.questions.count, 1)
             let index = min(max(draft.questionWizardIndex, 0), questionCount - 1)
@@ -811,6 +821,14 @@ struct SessionChatView: View {
                     submitEnabled: isValid && index == questionCount - 1 && !draft.questionSubmitting,
                     submitting: draft.questionSubmitting,
                     errorMessage: draft.questionErrorMessage
+                )
+            )
+        } else if kind == .childLockout {
+            state = .childLockout(
+                .init(
+                    selectedModelLabel: composer.selectedModelLabel,
+                    selectedVariantLabel: composer.selectedVariantLabel,
+                    showVariant: composer.canSelectVariant
                 )
             )
         } else {
@@ -903,6 +921,9 @@ struct SessionChatView: View {
                     Task { await viewModel.submitQuestion(requestID: requestID, sessionID: sessionID) }
                 case let .dismissQuestion(requestID, sessionID):
                     Task { await viewModel.dismissQuestion(requestID: requestID, sessionID: sessionID) }
+                case .backToMainSession:
+                    logChatAction(ProductAnalytics.Action.chatBack)
+                    leaveSession()
                 }
             }
         )

@@ -299,6 +299,20 @@ struct SessionChatUiState: Equatable {
     }
 }
 
+enum SessionChatComposerKind: Equatable {
+    case permission
+    case question
+    case childLockout
+    case prompt
+
+    static func resolve(isChildSession: Bool, hasPermission: Bool, hasQuestion: Bool) -> SessionChatComposerKind {
+        if hasPermission { return .permission }
+        if hasQuestion { return .question }
+        if isChildSession { return .childLockout }
+        return .prompt
+    }
+}
+
 enum ReviewChangesPillVisibility {
     static func shouldShow(summary: ReviewChangesSummary?) -> Bool {
         (summary?.fileCount ?? 0) > 0

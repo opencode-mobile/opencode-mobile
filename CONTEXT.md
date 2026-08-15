@@ -358,7 +358,9 @@ A session spawned from a parent session to carry out delegated work.
 
 The parent timeline surfaces that work as a `task` ToolPart. Opening the card
 navigates into the child session when a session id is available. A child
-session has the same title and rename behavior as any other session.
+session has the same title and rename behavior as any other session. It cannot
+be prompted from mobile; the composer shows the model and thinking effort used
+and returns to the main session.
 _Avoid_: subagent (informal/desktop slang for the same child session; also avoid
 using subagent as the name for a **mentionable agent**).
 

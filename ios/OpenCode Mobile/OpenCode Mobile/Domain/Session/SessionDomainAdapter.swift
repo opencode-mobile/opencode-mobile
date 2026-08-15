@@ -61,7 +61,8 @@ nonisolated struct SessionDomainAdapter: Sendable {
             statusLabel: statusLabel,
             updatedAtLabel: session.updatedAtEpochMs.map(Self.updatedAtLabel),
             updatedAtEpochMs: session.updatedAtEpochMs,
-            isReady: isReady
+            isReady: isReady,
+            parentID: session.parentID
         )
     }
 
