@@ -51,6 +51,11 @@ class DefaultSessionTodoLiveStore
             val key = SessionKey(sessionId, directory.orEmpty())
             val state = sessions.getOrPut(key) { SessionState() }
             ensureEventLoop(key, state)
+            if (!state.hasCache) {
+                liveStoreScope.coroutineScope.launch {
+                    fetch(key, state, force = false)
+                }
+            }
             return state.updates
                 .onStart { emit(state.todos) }
                 .distinctUntilChanged()
@@ -66,13 +71,9 @@ class DefaultSessionTodoLiveStore
             val wasLive = state.isLive
             state.isLive = isLive
             ensureEventLoop(key, state)
-            if (wasLive == isLive) return
+            if (wasLive == isLive || !isLive) return
             liveStoreScope.coroutineScope.launch {
-                if (isLive) {
-                    fetch(key, state, force = state.hasCache)
-                } else {
-                    replace(state, emptyList(), markCache = false)
-                }
+                fetch(key, state, force = state.hasCache)
             }
         }
 
@@ -91,13 +92,11 @@ class DefaultSessionTodoLiveStore
                     eventStream.events.collect { event ->
                         when {
                             event.type == "todo.updated" && event.sessionId == key.sessionId -> {
-                                if (!state.isLive) return@collect
                                 adapter.toTodosFromEventProperties(event.rawProperties)?.let { todos ->
                                     replace(state, todos, markCache = true)
                                 }
                             }
-                            (event.type == "stream.reconnected" || event.type == "server.connected") &&
-                                state.isLive -> {
+                            event.type == "stream.reconnected" || event.type == "server.connected" -> {
                                 fetch(key, state, force = true)
                             }
                         }
@@ -110,7 +109,6 @@ class DefaultSessionTodoLiveStore
             state: SessionState,
             force: Boolean,
         ) {
-            if (!state.isLive) return
             if (state.hasCache && !force) return
             val directory = key.directory.ifEmpty { null }
             val todos =

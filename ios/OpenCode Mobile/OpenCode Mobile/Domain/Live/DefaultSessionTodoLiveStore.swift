@@ -43,6 +43,9 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
             let id = UUID()
             handle.continuations[id] = continuation
             continuation.yield(handle.todos)
+            if !handle.hasCache {
+                Task { await self.fetch(key: key, force: false) }
+            }
             if handle.eventTask == nil {
                 let sessionRepository = self.sessionRepository
                 let eventStream = self.eventStream
@@ -51,8 +54,6 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
                     let store = self
                     for await event in eventStream.events() {
                         if event.type == "todo.updated", event.sessionID == key.sessionID {
-                            let isLive = await MainActor.run { store?.handles[key]?.isLive == true }
-                            guard isLive else { continue }
                             if let todos = adapter.todos(fromEventProperties: event.rawProperties) {
                                 await MainActor.run {
                                     store?.replace(todos: todos, key: key, markCache: true)
@@ -82,12 +83,9 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
         let wasLive = handle.isLive
         handle.isLive = isLive
         guard wasLive != isLive else { return }
+        guard isLive else { return }
         Task {
-            if isLive {
-                await self.fetch(key: key, force: handle.hasCache)
-            } else {
-                self.replace(todos: [], key: key, markCache: false)
-            }
+            await self.fetch(key: key, force: handle.hasCache)
         }
     }
 
@@ -111,7 +109,7 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
     }
 
     private func fetch(key: SessionKey, force: Bool) async {
-        guard let handle = handles[key], handle.isLive else { return }
+        guard let handle = handles[key] else { return }
         if handle.hasCache, !force { return }
         let directory = key.directory.isEmpty ? nil : key.directory
         guard let todos = try? await sessionRepository.listSessionTodos(

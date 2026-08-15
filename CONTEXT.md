@@ -89,21 +89,19 @@ The model maintains the list while working; the mobile client reads it and does
 not let the user check off or edit items in v1. The Session Todo List is the
 only user-facing surface for that data: `todowrite` tool parts stay hidden in
 the Session Chat timeline. The client loads the list with `GET` when the session
-becomes live, applies SSE `todo.updated` as a full-list replace, clears the
-local cache when the session goes idle, and force-refetches on the next live
-turn.
+is open, applies SSE `todo.updated` as a full-list replace while observing,
+keeps the local cache when the session goes idle, and force-refetches when the
+session becomes live again.
 
 On mobile, the compact Session Todos entry is a floating pill over the top of
 Session Chat, stacked with Syncing and Review Changes. Only Scroll to end stays
 above the composer. While the Session Todo List sheet is open, Todos and Review
 are hidden; Syncing may stay. A pending permission request takes priority over the Session Todo List
 sheet: the sheet is dismissed or not opened while the user must approve or deny;
-the pill may remain visible under the live visibility rule. The pill is visible
-only while the session is live — busy or blocked on a permission/question — and
-the list is non-empty and not fully finished. When every item is completed or
-cancelled while still live, the pill stays briefly visible then closes; when
-the session becomes idle, the client clears its local list cache so stale items
-do not reopen on the next visit.
+the pill may remain visible. The pill is visible whenever the list is
+non-empty and not fully finished, including after the session goes idle —
+matching TUI sidebar visibility. When every item is completed or cancelled, the
+pill stays briefly visible then closes.
 
 The pill preview line prefers the first `in_progress` Session Todo, else the
 first `pending`, else the last `completed`, else the first item. Progress on

@@ -126,7 +126,7 @@ private struct SessionChatTimelineReadyView: View {
     let props: SessionChatTimelineViewProps
 
     @State private var scrollController = TimelineScrollController()
-    /// Last positive pill values. Kept so a sudden totalCount=0 (abort/idle clear)
+    /// Last positive pill values. Kept so a sudden totalCount=0
     /// cannot rebuild the pill with an invalid contract if exit animation is added.
     @State private var sessionTodosPillCompletedCount = 0
     @State private var sessionTodosPillTotalCount = 1

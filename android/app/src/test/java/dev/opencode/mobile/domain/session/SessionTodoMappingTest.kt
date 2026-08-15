@@ -92,9 +92,8 @@ class SessionTodoMappingTest {
             )
         assertTrue(SessionTodoList.isFinished(finished))
         assertEquals(1, SessionTodoList.completedCount(finished))
-        assertFalse(SessionTodoList.isVisible(finished, isLive = true))
-        assertTrue(SessionTodoList.isVisible(todos, isLive = true))
-        assertFalse(SessionTodoList.isVisible(todos, isLive = false))
+        assertFalse(SessionTodoList.isVisible(finished))
+        assertTrue(SessionTodoList.isVisible(todos))
         assertNull(SessionTodoList.activePreview(emptyList()))
     }
 }

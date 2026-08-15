@@ -1127,7 +1127,7 @@ final class SessionChatViewModel {
                 ? SessionMessageSyncChrome.statusLabel
                 : nil,
             sessionTodos: sessionTodos,
-            sessionTodosVisible: SessionTodoList.isVisible(todos: sessionTodos, isLive: isLive),
+            sessionTodosVisible: SessionTodoList.isVisible(sessionTodos),
             sessionTodosFinished: SessionTodoList.isFinished(sessionTodos),
             sessionTodoActivePreview: SessionTodoList.activePreview(in: sessionTodos),
             sessionTodoCompletedCount: SessionTodoList.completedCount(in: sessionTodos),
