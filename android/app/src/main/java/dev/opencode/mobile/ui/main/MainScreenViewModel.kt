@@ -22,6 +22,7 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
+import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
@@ -42,6 +43,7 @@ import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
+import dev.opencode.mobile.ui.components.SessionListScrollPin
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -85,6 +87,9 @@ class MainScreenViewModel
         val removalSnackbar: StateFlow<OpenCodeSnackbarMessage?> = _removalSnackbar.asStateFlow()
         private val _sessionActions = MutableStateFlow(HomeSessionActionsUiState())
         val sessionActions: StateFlow<HomeSessionActionsUiState> = _sessionActions.asStateFlow()
+        private val _revealNewestToken = MutableStateFlow(0)
+        val revealNewestToken: StateFlow<Int> = _revealNewestToken.asStateFlow()
+        private var lastHomeHiddenAtEpochMs: Long? = HomeDisplayPreferences.lastHomeHiddenAtEpochMs()
         val liveUpdatesConnectionState: StateFlow<EventStreamConnectionState> =
             foregroundEventStream.connectionState
                 .stateIn(
@@ -259,6 +264,7 @@ class MainScreenViewModel
                 return
             }
             clearProjectSessionCreateError()
+            _revealNewestToken.update { it + 1 }
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) {
                     state.copy(
@@ -280,6 +286,24 @@ class MainScreenViewModel
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) state.copy(pendingOpenSession = null) else state
             }
+        }
+
+        fun markHomeHidden(nowEpochMs: Long = System.currentTimeMillis()) {
+            if (lastHomeHiddenAtEpochMs != null) return
+            lastHomeHiddenAtEpochMs = nowEpochMs
+            HomeDisplayPreferences.setLastHomeHiddenAtEpochMs(nowEpochMs)
+        }
+
+        fun onHomeRevealed(nowEpochMs: Long = System.currentTimeMillis()) {
+            if (SessionListScrollPin.shouldResetForStaleAbsence(
+                    lastHiddenAtEpochMs = lastHomeHiddenAtEpochMs,
+                    nowEpochMs = nowEpochMs,
+                )
+            ) {
+                _revealNewestToken.update { it + 1 }
+            }
+            lastHomeHiddenAtEpochMs = null
+            HomeDisplayPreferences.setLastHomeHiddenAtEpochMs(null)
         }
 
         fun requestRemoveProject(worktree: String) {

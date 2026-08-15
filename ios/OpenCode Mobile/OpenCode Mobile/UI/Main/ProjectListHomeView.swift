@@ -9,6 +9,7 @@ struct ProjectListHomeView: View {
     @State private var connectionSetupViewModel: ConnectionSetupViewModel?
     @State private var showNewSessionProjectPicker = false
     @State private var selectedSessionFilterId = SessionListFilterTab.allId
+    @Environment(\.scenePhase) private var scenePhase
     @Binding private var presentConnectionSetupOnAppear: Bool
 
     init(
@@ -73,6 +74,18 @@ struct ProjectListHomeView: View {
                 if let session = viewModel.pendingSessionOpen {
                     openSession(session)
                     viewModel.consumePendingSessionOpen()
+                }
+            }
+            .onChange(of: isHomeVisible) { _, visible in
+                if visible {
+                    viewModel.onHomeRevealed()
+                } else {
+                    viewModel.markHomeHidden()
+                }
+            }
+            .onAppear {
+                if isHomeVisible {
+                    viewModel.onHomeRevealed()
                 }
             }
             .openCodeBottomSheet(
@@ -343,6 +356,10 @@ struct ProjectListHomeView: View {
         viewModel.pendingProjectRemoval
     }
 
+    private var isHomeVisible: Bool {
+        navigationPath.isEmpty && !showSettings && scenePhase == .active
+    }
+
     private var newSessionPickerProjects: [(worktree: String, displayName: String)] {
         switch viewModel.state {
         case let .loaded(sections, _, _, _):
@@ -527,6 +544,7 @@ struct ProjectListHomeView: View {
             },
             onRefresh: { await viewModel.pullToRefresh() },
             onRemoveProject: { worktree in viewModel.requestRemoveProject(worktree: worktree) },
+            revealNewestToken: viewModel.revealNewestToken,
             showsEmptyContent: sections.isEmpty,
             emptyContent: { NoProjectsEmptyState() }
         )

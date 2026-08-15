@@ -159,6 +159,7 @@ final class ProjectListHomeViewModel {
         self.connectionSessionCoordinator = connectionSessionCoordinator
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.sessionCache = sessionCache
+        lastHomeHiddenAtEpochMs = HomeDisplayPreferences.shared.lastHomeHiddenAtEpochMs()
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
                 self?.sessionReadyStore.clearCache()
@@ -322,6 +323,7 @@ final class ProjectListHomeViewModel {
         }
         setProjectSessionCreateError(nil)
         logCreateSession(outcome: "started")
+        revealNewestToken += 1
         pendingSessionOpen = SessionListItem(
             id: OptimisticSessionCreate.placeholderSessionID,
             title: "New Session",
@@ -339,9 +341,28 @@ final class ProjectListHomeViewModel {
     }
 
     private(set) var pendingSessionOpen: SessionListItem?
+    private(set) var revealNewestToken = 0
+    private var lastHomeHiddenAtEpochMs: Int64?
 
     func consumePendingSessionOpen() {
         pendingSessionOpen = nil
+    }
+
+    func markHomeHidden(nowEpochMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000)) {
+        guard lastHomeHiddenAtEpochMs == nil else { return }
+        lastHomeHiddenAtEpochMs = nowEpochMs
+        HomeDisplayPreferences.shared.setLastHomeHiddenAtEpochMs(nowEpochMs)
+    }
+
+    func onHomeRevealed(nowEpochMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000)) {
+        if SessionListScrollPin.shouldResetForStaleAbsence(
+            lastHiddenAtEpochMs: lastHomeHiddenAtEpochMs,
+            nowEpochMs: nowEpochMs
+        ) {
+            revealNewestToken += 1
+        }
+        lastHomeHiddenAtEpochMs = nil
+        HomeDisplayPreferences.shared.setLastHomeHiddenAtEpochMs(nil)
     }
 
     func requestRemoveProject(worktree: String) {
