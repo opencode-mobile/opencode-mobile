@@ -21,24 +21,28 @@ struct SessionChatToolGroupTarget: Hashable {
 }
 
 struct SessionChatToolGroupView: View {
+    @Environment(\.dismiss) private var dismiss
     let target: SessionChatToolGroupTarget
+    let worktree: String
+    let parentSessionID: String
     let supportsSessionMessageDiff: Bool
-    let onNavigateBack: () -> Void
-    let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
-    let onChildSessionTap: (String, String) -> Void
-    let onChangesReviewTap: (String, String?) -> Void
+    let makeChangesTarget: (String, String?) -> ChangesNavigationTarget?
+
+    @State private var changesTarget: ChangesNavigationTarget?
+    @State private var childSessionTarget: ChildSessionNavigationTarget?
+    @State private var toolDetailTarget: SessionChatToolDetailTarget?
 
     var body: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
                 title: target.title,
                 subtitle: target.subtitle,
-                leading: .back(consumesInteractivePop: true, action: {
+                leading: .back(action: {
                     ProductAnalytics.logUserAction(
                         screenId: ProductAnalytics.Screen.sessionToolGroup,
                         actionId: ProductAnalytics.Action.sessionToolGroupBack
                     )
-                    onNavigateBack()
+                    dismiss()
                 }),
                 showDivider: true
             )
@@ -64,6 +68,27 @@ struct SessionChatToolGroupView: View {
         .background(OpenCodeColors.backgroundBase)
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
+        .sessionChatToolDetailSheet(target: $toolDetailTarget)
+        .navigationDestination(item: $changesTarget) { destination in
+            ChangesView(
+                sessionID: destination.sessionID,
+                worktree: destination.worktree,
+                messageID: destination.messageID,
+                initialSource: destination.initialSource,
+                initialFilePath: destination.initialFilePath
+            )
+        }
+        .navigationDestination(item: $childSessionTarget) { destination in
+            SessionChatView(
+                session: SessionListItem(
+                    id: destination.sessionID,
+                    title: destination.sessionTitle,
+                    worktree: destination.worktree,
+                    optimisticNavigationInstanceID: destination.optimisticNavigationInstanceID,
+                    parentID: parentSessionID
+                )
+            )
+        }
         .task {
             ProductAnalytics.logScreenView(
                 screenId: ProductAnalytics.Screen.sessionToolGroup,
@@ -74,18 +99,42 @@ struct SessionChatToolGroupView: View {
 
     private func toolCardAction(for card: SessionChatToolCardBlock) -> (() -> Void)? {
         if let childSessionId = card.childSessionId {
-            return { onChildSessionTap(childSessionId, card.title) }
+            return {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.sessionChat,
+                    actionId: ProductAnalytics.Action.chatOpenChildSession
+                )
+                childSessionTarget = ChildSessionNavigationTarget(
+                    sessionID: childSessionId,
+                    sessionTitle: card.title,
+                    worktree: worktree,
+                    optimisticNavigationInstanceID: nil
+                )
+            }
         }
         if card.opensChangesReview, supportsSessionMessageDiff {
-            return { onChangesReviewTap(target.messageID, card.changesInitialFilePath) }
+            return {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.sessionChat,
+                    actionId: ProductAnalytics.Action.chatOpenChangesFromTool
+                )
+                changesTarget = makeChangesTarget(target.messageID, card.changesInitialFilePath)
+            }
         }
         if let detail = card.detailText {
             return {
-                onToolDetailTap(
-                    SessionChatToolDetailTarget(
-                        title: card.title,
-                        body: detail
-                    )
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.sessionChat,
+                    actionId: ProductAnalytics.Action.chatOpenToolDetail
+                )
+                ProductAnalytics.logScreenView(
+                    screenId: ProductAnalytics.Screen.sessionToolDetail,
+                    presentation: ProductAnalytics.Presentation.sheet,
+                    trigger: ProductAnalytics.Trigger.present
+                )
+                toolDetailTarget = SessionChatToolDetailTarget(
+                    title: card.title,
+                    body: detail
                 )
             }
         }

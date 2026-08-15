@@ -9,8 +9,9 @@
 
 ## Preference
 
-- Default **off** so specialized chrome (shell sheet, file-change Changes tap,
-  task → child session) stays available unless the user opts into denser chat.
+- Default **on**. Specialized chrome stays on member cards inside the tool
+  group screen (shell sheet, file-change Changes tap). `task` still never
+  groups. Users can turn the preference off under Settings → Appearance.
 - Store device-locally like other display prefs; include in Clear All Data.
 - Place the control under Settings → Appearance.
 
@@ -49,11 +50,12 @@
 - The group card is compact: `N tools` plus the family one-liner. No in-list
   accordion.
 - Tap **opens** a full-screen tool group (back, title, family subtitle, member
-  Tool Call Cards). Both platforms overlay it on Session Chat so the timeline
-  keeps its scroll position on back. Native Back (iOS leading-edge swipe,
-  Android system Back) must dismiss that overlay rather than the Session Chat
-  underneath; later pushes such as Changes still pop one level. This is the
-  locked prototype, not a concatenated bottom sheet.
+  Tool Call Cards). Both platforms push it as a real navigation destination
+  (iOS `NavigationStack`, Android Navigation 3) so Back and the platform
+  swipe/predictive-back gesture pop the group like Changes. Session Chat stays
+  on the stack, so the timeline keeps its scroll position. Later pushes such
+  as Changes stack on top of the group. This is not an overlay and not a
+  concatenated bottom sheet.
 - Member cards reuse the same taps as timeline cards: file-change tools open
   Changes; shell/network tools open the existing tool-detail sheet (command
   plus output). The group screen itself does not dump full output.

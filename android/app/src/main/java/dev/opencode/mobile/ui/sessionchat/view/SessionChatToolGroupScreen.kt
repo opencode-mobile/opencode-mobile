@@ -1,6 +1,5 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,6 +14,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.SessionToolGroup
+import dev.opencode.mobile.SessionToolGroupMember
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
@@ -30,6 +31,67 @@ internal data class SessionChatToolGroupTarget(
     val messageId: String,
 )
 
+internal fun SessionChatToolGroupTarget.toRoute(
+    sessionId: String,
+    worktree: String,
+    parentId: String?,
+    owningTurnMessageId: String?,
+    supportsSessionMessageDiff: Boolean,
+): SessionToolGroup =
+    SessionToolGroup(
+        sessionId = sessionId,
+        worktree = worktree,
+        parentId = parentId,
+        blockID = blockID,
+        title = title,
+        subtitle = subtitle,
+        messageId = messageId,
+        owningTurnMessageId = owningTurnMessageId,
+        supportsSessionMessageDiff = supportsSessionMessageDiff,
+        members = members.map { it.toRouteMember() },
+    )
+
+internal fun SessionToolGroup.toTarget(): SessionChatToolGroupTarget =
+    SessionChatToolGroupTarget(
+        blockID = blockID,
+        title = title,
+        subtitle = subtitle,
+        members = members.map { it.toToolCard() },
+        messageId = messageId,
+    )
+
+private fun SessionChatTimelineBlock.ToolCard.toRouteMember(): SessionToolGroupMember =
+    SessionToolGroupMember(
+        blockID = blockID,
+        toolName = toolName,
+        status = status.name,
+        title = title,
+        subtitle = subtitle,
+        errorText = errorText,
+        additions = additions,
+        deletions = deletions,
+        detailText = detailText,
+        childSessionId = childSessionId,
+        opensChangesReview = opensChangesReview,
+        changesInitialFilePath = changesInitialFilePath,
+    )
+
+private fun SessionToolGroupMember.toToolCard(): SessionChatTimelineBlock.ToolCard =
+    SessionChatTimelineBlock.ToolCard(
+        blockID = blockID,
+        toolName = toolName,
+        status = ToolStatus.entries.firstOrNull { it.name == status } ?: ToolStatus.Completed,
+        title = title,
+        subtitle = subtitle,
+        errorText = errorText,
+        additions = additions,
+        deletions = deletions,
+        detailText = detailText,
+        childSessionId = childSessionId,
+        opensChangesReview = opensChangesReview,
+        changesInitialFilePath = changesInitialFilePath,
+    )
+
 @Composable
 internal fun SessionChatToolGroupScreen(
     target: SessionChatToolGroupTarget,
@@ -40,10 +102,6 @@ internal fun SessionChatToolGroupScreen(
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    BackHandler(onBack = {
-        logToolGroupAction(ProductAnalytics.Action.SESSION_TOOL_GROUP_BACK)
-        onNavigateBack()
-    })
     LaunchedEffect(target.blockID) {
         ProductAnalytics.logScreenView(
             screenId = ProductAnalytics.Screen.SESSION_TOOL_GROUP,

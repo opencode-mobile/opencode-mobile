@@ -32,6 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.SessionToolGroup
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -40,12 +41,12 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomFade
 import dev.opencode.mobile.ui.components.OpenCodeBottomFadeOverhang
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
+import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionItem
+import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionOverlay
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
-import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionItem
-import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionOverlay
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
@@ -68,11 +69,10 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolGroupScreen
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolGroupTarget
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
+import dev.opencode.mobile.ui.sessionchat.view.toRoute
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -91,10 +91,12 @@ fun SessionChatScreen(
     onSessionContextClick: () -> Unit = {},
     onReviewChangesClick: (ChangesNavigationTarget) -> Unit = {},
     onChildSessionClick: (ChildSessionNavigationTarget) -> Unit = {},
+    onToolGroupClick: (SessionToolGroup) -> Unit = {},
     onSessionReplaceRequested: (ChildSessionNavigationTarget) -> Unit = {},
-    viewModel: SessionChatViewModel = hiltViewModel(
-        key = sessionChatViewModelKey(sessionId, worktree, optimisticNavigationInstanceId),
-    ),
+    viewModel: SessionChatViewModel =
+        hiltViewModel(
+            key = sessionChatViewModelKey(sessionId, worktree, optimisticNavigationInstanceId),
+        ),
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -119,7 +121,6 @@ fun SessionChatScreen(
     var modelFilterText by remember { mutableStateOf("") }
     var messageActionsTarget by remember { mutableStateOf<SessionChatMessageActionsTarget?>(null) }
     var toolDetailTarget by remember { mutableStateOf<SessionChatToolDetailTarget?>(null) }
-    var toolGroupTarget by remember { mutableStateOf<SessionChatToolGroupTarget?>(null) }
     var showSessionTodosSheet by rememberSaveable { mutableStateOf(false) }
     var holdingFinishedTodos by remember { mutableStateOf(false) }
     var composerOverlayHeightPx by remember { mutableStateOf(0) }
@@ -422,9 +423,17 @@ fun SessionChatScreen(
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
                                 toolDetailTarget = it
                             },
-                            onToolGroupTap = {
+                            onToolGroupTap = { target ->
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_GROUP)
-                                toolGroupTarget = it
+                                onToolGroupClick(
+                                    target.toRoute(
+                                        sessionId = sessionId,
+                                        worktree = worktree,
+                                        parentId = parentId,
+                                        owningTurnMessageId = uiState.owningTurnMessageId(target.messageId),
+                                        supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
+                                    ),
+                                )
                             },
                             onChildSessionTap = { childSessionId, childTitle ->
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
@@ -691,38 +700,6 @@ fun SessionChatScreen(
             }
         }
 
-        toolGroupTarget?.let { target ->
-            SessionChatToolGroupScreen(
-                target = target,
-                supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
-                onNavigateBack = { toolGroupTarget = null },
-                onToolDetailTap = {
-                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
-                    toolDetailTarget = it
-                },
-                onChildSessionTap = { childSessionId, childTitle ->
-                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
-                    onChildSessionClick(
-                        ChildSessionNavigationTarget(
-                            sessionId = childSessionId,
-                            sessionTitle = childTitle,
-                            worktree = worktree,
-                        ),
-                    )
-                },
-                onChangesReviewTap = { assistantMessageId, initialFilePath ->
-                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES_FROM_TOOL)
-                    uiState
-                        .fileChangeNavigationTarget(
-                            worktree = worktree,
-                            assistantMessageId = assistantMessageId,
-                            initialFilePath = initialFilePath,
-                        )?.let(onReviewChangesClick)
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-
         SessionChatMessageActionsSheet(
             target = messageActionsTarget,
             onDismiss = { messageActionsTarget = null },
@@ -957,8 +934,7 @@ internal fun sessionChatViewModelKey(
     sessionId: String,
     worktree: String,
     optimisticNavigationInstanceId: String?,
-): String =
-    optimisticNavigationInstanceId?.let { "$sessionId-$worktree-$it" } ?: "$sessionId-$worktree"
+): String = optimisticNavigationInstanceId?.let { "$sessionId-$worktree-$it" } ?: "$sessionId-$worktree"
 
 @Preview(showBackground = true)
 @Composable

@@ -7,12 +7,12 @@ Ticket: [OPE-144](https://linear.app/opencode-mobile/issue/OPE-144/collapse-cons
 Optionally collapse a run of back-to-back **tool-call messages** in Session Chat
 into one summary Tool Call Card. Some models emit Shell, Edit, Read, and similar
 as one message after another; that stack is hard to scan. Control this from
-Settings → Appearance. Default remains expanded (today’s per-tool cards).
+Settings → Appearance. Default is collapsed (grouped tool cards).
 `task` (child-session) cards never collapse.
 
 ## In Scope
 
-- Settings → Appearance toggle: **Collapse consecutive tool calls** (off by
+- Settings → Appearance toggle: **Collapse consecutive tool calls** (on by
   default).
 - When the toggle is **on**, a run of two or more consecutive **tool-call
   messages** (Shell, Edit, Read, Fetch, and other non-`task` tools) becomes
@@ -35,7 +35,7 @@ Settings → Appearance. Default remains expanded (today’s per-tool cards).
 - Tap the group card to open a **tool group** screen (option E): back, title
   `N tools`, family subtitle, and one Tool Call Card per member. Member cards
   keep the same taps as in the timeline (Changes, shell/network sheet). The
-  screen overlays Session Chat so returning leaves the timeline where it was.
+  screen is a pushed destination so returning leaves the timeline where it was.
   No in-list accordion.
 - Preference is device-local; cleared by Clear All Data.
 - Pure grouping rules mirrored on iOS and Android with unit tests.
@@ -85,8 +85,8 @@ Settings → Appearance. Default remains expanded (today’s per-tool cards).
 ## Native Navigation Entry Points
 
 - Settings → Appearance (alongside Hide User Directory / Recent window).
-- Session Chat timeline (consumes preference). Group tap opens the tool group
-  overlay; Back — top-bar button and the platform-native Back gesture — returns
+- Session Chat timeline (consumes preference). Group tap pushes the tool group
+  screen; Back — top-bar button and the platform-native Back gesture — returns
   to chat at the same scroll position. Member cards can open Changes or the
   existing tool-detail sheet.
 
@@ -113,9 +113,9 @@ Settings → Appearance. Default remains expanded (today’s per-tool cards).
 | Choice | Value |
 | --- | --- |
 | What collapses | Consecutive tool-call messages (and consecutive tools in one message), except `task` |
-| Default | Off |
+| Default | On |
 | Settings placement | Appearance |
 | Single tool | Still a normal Tool Call Card (group only when ≥ 2) |
-| Group interaction | Tap opens a tool group overlay of member Tool Call Cards. Edit/Write/Patch open Changes; Shell/Fetch open the existing tool-detail sheet |
+| Group interaction | Tap pushes a tool group screen of member Tool Call Cards. Edit/Write/Patch open Changes; Shell/Fetch open the existing tool-detail sheet |
 | Group card copy | Title `N tools`; subtitle family one-liner in encounter order (option E) |
 | Group status visual | Existing Tool Call Card status dot; hairline `border.weaker` — no status-colored outline |
