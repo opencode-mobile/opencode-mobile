@@ -16,19 +16,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
-import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
+import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
@@ -46,13 +46,13 @@ import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
-import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 
 /** Long-press session actions on home: sheet, rename/fork dialogs, delete confirm. */
 data class HomeSessionActionsCallbacks(
@@ -80,6 +80,8 @@ fun MainScreen(
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnectionClick: (dev.opencode.mobile.domain.connection.ConnectionProfile?) -> Unit,
     onConnectClick: () -> Unit,
+    onAddServerClick: () -> Unit = onConnectClick,
+    onManageServersClick: () -> Unit = onSettingsClick,
     modifier: Modifier = Modifier,
     viewModel: MainScreenViewModel = hiltViewModel(),
 ) {
@@ -89,6 +91,7 @@ fun MainScreen(
     val removalSnackbar by viewModel.removalSnackbar.collectAsStateWithLifecycle()
     val sessionActions by viewModel.sessionActions.collectAsStateWithLifecycle()
     val revealNewestToken by viewModel.revealNewestToken.collectAsStateWithLifecycle()
+    val serversChrome by viewModel.serversChrome.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
         viewModel.onHomeRevealed()
     }
@@ -145,6 +148,17 @@ fun MainScreen(
         onConfirmRemoveProject = viewModel::confirmRemoveProject,
         onDismissProjectRemoval = viewModel::dismissProjectRemoval,
         onConsumeProjectRemovalSnackbar = viewModel::consumeProjectRemovalSnackbar,
+        onTitleClick = viewModel::showServersSheet,
+        onDismissServersSheet = viewModel::dismissServersSheet,
+        onSwitchProfile = viewModel::switchProfile,
+        onAddServerClick = {
+            viewModel.dismissServersSheet()
+            onAddServerClick()
+        },
+        onManageServersClick = {
+            viewModel.dismissServersSheet()
+            onManageServersClick()
+        },
         modifier = modifier,
     )
 }
@@ -178,6 +192,12 @@ internal fun MainScreen(
     sessionActions: HomeSessionActionsUiState = HomeSessionActionsUiState(),
     sessionActionsCallbacks: HomeSessionActionsCallbacks = HomeSessionActionsCallbacks(),
     revealNewestToken: Int = 0,
+    serversChrome: HomeServersChrome = HomeServersChrome(),
+    onTitleClick: () -> Unit = {},
+    onDismissServersSheet: () -> Unit = {},
+    onSwitchProfile: (String) -> Unit = {},
+    onAddServerClick: () -> Unit = {},
+    onManageServersClick: () -> Unit = {},
 ) {
     val pendingOpenSession = (uiState as? MainScreenUiState.Loaded)?.pendingOpenSession
     LaunchedEffect(pendingOpenSession) {
@@ -235,7 +255,9 @@ internal fun MainScreen(
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBar(
-                title = "Sessions",
+                title = serversChrome.title,
+                onTitleClick = if (serversChrome.isSwitcher) onTitleClick else null,
+                titleMenuExpanded = serversChrome.sheetVisible,
                 subtitleAccessory =
                     if (showsLiveUpdatesStatus(uiState)) {
                         OpenCodeTopBarSubtitleAccessory.StatusDot(
@@ -339,6 +361,49 @@ internal fun MainScreen(
             message = removalSnackbar,
             onDismissed = onConsumeProjectRemovalSnackbar,
             modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+
+    OpenCodeBottomSheet(
+        visible = serversChrome.sheetVisible,
+        title = "Servers",
+        onDismissRequest = onDismissServersSheet,
+    ) {
+        val active = serversChrome.active
+        if (active != null) {
+            Text(
+                text = "Using now",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            OpenCodeBottomSheetEntry(
+                title = "${active.displayName} · ${active.baseUrl.trimEnd('/')}",
+                endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Active"),
+                onClick = onDismissServersSheet,
+            )
+        }
+        if (serversChrome.others.isNotEmpty()) {
+            Text(
+                text = "Switch to",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            serversChrome.others.forEach { profile ->
+                OpenCodeBottomSheetEntry(
+                    title = "${profile.displayName} · ${profile.baseUrl.trimEnd('/')}",
+                    onClick = { onSwitchProfile(profile.id) },
+                )
+            }
+        }
+        OpenCodeBottomSheetEntry(
+            title = "Add server",
+            onClick = onAddServerClick,
+        )
+        OpenCodeBottomSheetEntry(
+            title = "Manage in Settings",
+            onClick = onManageServersClick,
         )
     }
 

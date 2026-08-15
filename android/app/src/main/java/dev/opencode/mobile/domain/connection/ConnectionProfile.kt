@@ -5,4 +5,9 @@ data class ConnectionProfile(
     val username: String,
     val password: String = "",
     val serverProtocol: ServerProtocol? = null,
-)
+    val id: String = "",
+    val name: String = "",
+) {
+    val displayName: String
+        get() = name.trim().ifBlank { ConnectionProfileIdentity.hostLabel(baseUrl) }
+}

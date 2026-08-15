@@ -30,6 +30,7 @@ search fields, or arbitrary custom content.
   - native icon identifier and accessibility label for icon actions
 - Optional content:
   - single-line `title`
+  - `onTitleClick` switcher control (chevron after the title; `titleMenuExpanded` rotates it)
   - single-line `subtitle`
   - `subtitleLeading.letter` compact project letter badge (character +
     `LetterAccent`) shown before subtitle text on the second line
@@ -100,6 +101,11 @@ Leading actions use semantic meaning rather than arbitrary placement:
 The title and subtitle are optional, independent, and each truncates to one
 line. They should remain concise and page-identifying rather than descriptive
 body copy.
+
+When `onTitleClick` is set, the title becomes a compact switcher: the label
+stays start-aligned and truncates, and a chevron indicates the menu. Use this
+for choosing among saved Connection Profiles on home, not for arbitrary page
+actions.
 
 Trailing actions are compact and remain secondary to the page title. Icon
 actions should supply accessibility labels. Disabled actions stay visible but

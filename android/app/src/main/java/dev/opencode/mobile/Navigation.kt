@@ -77,6 +77,7 @@ import dev.opencode.mobile.ui.componentgallery.components.UnifiedDiffGalleryScre
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
+import dev.opencode.mobile.ui.connection.ConnectionSetupMode
 import dev.opencode.mobile.ui.connection.ConnectionSetupScreen
 import dev.opencode.mobile.ui.connection.ConnectionSetupViewModel
 import dev.opencode.mobile.ui.main.MainScreen
@@ -91,6 +92,8 @@ import dev.opencode.mobile.ui.sessionchat.view.toTarget
 import dev.opencode.mobile.ui.sessioncontext.SessionContextScreen
 import dev.opencode.mobile.ui.settings.DiagnosticLogsScreen
 import dev.opencode.mobile.ui.settings.DiagnosticLogsViewModel
+import dev.opencode.mobile.ui.settings.ServersScreen
+import dev.opencode.mobile.ui.settings.ServersViewModel
 import dev.opencode.mobile.ui.settings.SettingsScreen
 import dev.opencode.mobile.ui.settings.SettingsViewModel
 import dev.opencode.mobile.ui.settings.TextMateLanguagesRoute
@@ -107,11 +110,17 @@ fun MainNavigation() {
     val settingsViewModel: SettingsViewModel = hiltViewModel()
     val setupUiState by setupViewModel.uiState.collectAsStateWithLifecycle()
     val sessionCacheSizeLabel by settingsViewModel.sessionCacheSizeLabel.collectAsStateWithLifecycle()
+    val serversSummary by settingsViewModel.serversSummary.collectAsStateWithLifecycle()
+    val serversViewModel: ServersViewModel = hiltViewModel()
+    val serversUiState by serversViewModel.uiState.collectAsStateWithLifecycle()
 
     val backStack = rememberNavBackStack(ProjectListHome)
 
-    fun presentConnectionSetup(initialProfile: ConnectionProfile?) {
-        setupViewModel.configure(initialProfile)
+    fun presentConnectionSetup(
+        initialProfile: ConnectionProfile?,
+        mode: ConnectionSetupMode = if (initialProfile == null) ConnectionSetupMode.First else ConnectionSetupMode.Edit,
+    ) {
+        setupViewModel.configure(initialProfile, mode)
         if (backStack.lastOrNull() != ConnectionSetupHome) {
             backStack.add(ConnectionSetupHome)
         }
@@ -189,9 +198,15 @@ fun MainNavigation() {
                                                     )
                                                 },
                                                 onEditConnectionClick = { profile ->
-                                                    presentConnectionSetup(initialProfile = profile)
+                                                    presentConnectionSetup(initialProfile = profile, mode = ConnectionSetupMode.Edit)
                                                 },
-                                                onConnectClick = { presentConnectionSetup(initialProfile = null) },
+                                                onConnectClick = {
+                                                    presentConnectionSetup(initialProfile = null, mode = ConnectionSetupMode.First)
+                                                },
+                                                onAddServerClick = {
+                                                    presentConnectionSetup(initialProfile = null, mode = ConnectionSetupMode.Add)
+                                                },
+                                                onManageServersClick = { backStack.add(SettingsHome) },
                                             )
                                         }
                                     }
@@ -200,18 +215,22 @@ fun MainNavigation() {
                                             ProductRouteScreenViewEffect(
                                                 screenId = ProductAnalytics.Screen.SETTINGS,
                                             )
+                                            LaunchedEffect(Unit) {
+                                                settingsViewModel.refreshServersSummary()
+                                            }
                                             SettingsScreen(
                                                 onComponentGalleryClick = { backStack.add(ComponentGalleryHome) },
                                                 onTextMateLanguagesClick = { backStack.add(TextMateLanguagesHome) },
                                                 onTextMateLogbookClick = { backStack.add(TextMateLogbookHome) },
                                                 onDiagnosticLogsClick = { backStack.add(DiagnosticLogsHome) },
                                                 onNavigateBack = { backStack.removeLastOrNull() },
-                                                onConnectionSetup = {
-                                                    setupViewModel.configureFromCurrentProfile()
-                                                    if (backStack.lastOrNull() != ConnectionSetupHome) {
-                                                        backStack.add(ConnectionSetupHome)
+                                                onServersClick = {
+                                                    serversViewModel.refresh()
+                                                    if (backStack.lastOrNull() != ServersHome) {
+                                                        backStack.add(ServersHome)
                                                     }
                                                 },
+                                                serversSummary = serversSummary,
                                                 onClearData = settingsViewModel::clearAllData,
                                                 onClearSessionCache = settingsViewModel::clearSessionCache,
                                                 sessionCacheSizeLabel = sessionCacheSizeLabel,
@@ -238,6 +257,32 @@ fun MainNavigation() {
                                             )
                                         }
                                     }
+                                    entry<ServersHome> {
+                                        RouteSurface {
+                                            LaunchedEffect(Unit) {
+                                                serversViewModel.refresh()
+                                            }
+                                            ServersScreen(
+                                                uiState = serversUiState,
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onAddServer = {
+                                                    presentConnectionSetup(
+                                                        initialProfile = null,
+                                                        mode = ConnectionSetupMode.Add,
+                                                    )
+                                                },
+                                                onEditProfile = { profile ->
+                                                    presentConnectionSetup(
+                                                        initialProfile = profile,
+                                                        mode = ConnectionSetupMode.Edit,
+                                                    )
+                                                },
+                                                onRequestRemove = serversViewModel::requestRemove,
+                                                onConfirmRemove = serversViewModel::confirmRemove,
+                                                onDismissRemove = serversViewModel::dismissRemove,
+                                            )
+                                        }
+                                    }
                                     entry<ConnectionSetupHome> {
                                         RouteSurface {
                                             ProductRouteScreenViewEffect(
@@ -246,12 +291,22 @@ fun MainNavigation() {
                                             ConnectionSetupScreen(
                                                 uiState = setupUiState,
                                                 onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNameChanged = setupViewModel::onNameChanged,
                                                 onBaseUrlChanged = setupViewModel::onBaseUrlChanged,
                                                 onUsernameChanged = setupViewModel::onUsernameChanged,
                                                 onPasswordChanged = setupViewModel::onPasswordChanged,
                                                 onTestConnection = setupViewModel::testConnection,
                                                 onSave = {
                                                     setupViewModel.saveConnection {
+                                                        serversViewModel.refresh()
+                                                        settingsViewModel.refreshServersSummary()
+                                                        backStack.removeLastOrNull()
+                                                    }
+                                                },
+                                                onRemove = {
+                                                    setupViewModel.removeConnection {
+                                                        serversViewModel.refresh()
+                                                        settingsViewModel.refreshServersSummary()
                                                         backStack.removeLastOrNull()
                                                     }
                                                 },

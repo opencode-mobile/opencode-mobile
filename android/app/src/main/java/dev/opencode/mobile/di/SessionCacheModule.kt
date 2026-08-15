@@ -54,8 +54,13 @@ abstract class SessionCacheModule {
             DefaultSessionCache(
                 store = store,
                 connectionIdProvider = {
-                    val connection = activeConnectionManager.current() ?: return@DefaultSessionCache null
-                    CacheUrlNormalizer.connectionId(connection.baseUrl, connection.username)
+                    val profileId = activeConnectionManager.currentProfile()?.id?.takeIf { it.isNotBlank() }
+                    if (profileId != null) {
+                        profileId
+                    } else {
+                        val connection = activeConnectionManager.current() ?: return@DefaultSessionCache null
+                        CacheUrlNormalizer.connectionId(connection.baseUrl, connection.username)
+                    }
                 },
                 scope = liveStoreScope.coroutineScope,
                 json = json,

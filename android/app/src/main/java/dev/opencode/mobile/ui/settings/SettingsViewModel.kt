@@ -53,6 +53,20 @@ class SettingsViewModel
     ) : ViewModel() {
         private val _sessionCacheSizeLabel = MutableStateFlow("Empty")
         val sessionCacheSizeLabel: StateFlow<String> = _sessionCacheSizeLabel.asStateFlow()
+        private val _serversSummary = MutableStateFlow(ServersSummary())
+        val serversSummary: StateFlow<ServersSummary> = _serversSummary.asStateFlow()
+
+        fun refreshServersSummary() {
+            viewModelScope.launch {
+                val profiles = connectionSessionCoordinator.listProfiles()
+                val active = connectionSessionCoordinator.currentProfile()
+                _serversSummary.value =
+                    ServersSummary(
+                        count = profiles.size,
+                        activeName = active?.displayName,
+                    )
+            }
+        }
 
         fun refreshSessionCacheSize() {
             viewModelScope.launch {
@@ -124,3 +138,16 @@ class SettingsViewModel
             AnalyticsConsentPreferences.updateProductAnalyticsConsented(enabled)
         }
     }
+
+data class ServersSummary(
+    val count: Int = 0,
+    val activeName: String? = null,
+) {
+    val subtitle: String
+        get() =
+            when {
+                count == 0 -> "No servers saved"
+                activeName != null -> "$count saved · $activeName active"
+                else -> "$count saved"
+            }
+}

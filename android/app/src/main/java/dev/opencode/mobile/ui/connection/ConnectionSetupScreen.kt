@@ -12,6 +12,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.tooling.preview.Preview
@@ -19,7 +23,10 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.OpenCodeButton
+import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodeDialog
+import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 
@@ -27,13 +34,16 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 fun ConnectionSetupScreen(
     uiState: ConnectionSetupUiState,
     onNavigateBack: () -> Unit,
+    onNameChanged: (String) -> Unit,
     onBaseUrlChanged: (String) -> Unit,
     onUsernameChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
     onTestConnection: () -> Unit,
     onSave: () -> Unit,
+    onRemove: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
+    var showRemoveConfirm by remember { mutableStateOf(false) }
     Column(
         modifier =
             modifier
@@ -41,7 +51,7 @@ fun ConnectionSetupScreen(
                 .imePadding(),
     ) {
         OpenCodeTopBar(
-            title = "Connect to server",
+            title = uiState.screenTitle,
             leading =
                 OpenCodeTopBarLeading.Back(
                     onClick = {
@@ -56,6 +66,7 @@ fun ConnectionSetupScreen(
         )
         ConnectionSetupFields(
             uiState = uiState,
+            onNameChanged = onNameChanged,
             onBaseUrlChanged = onBaseUrlChanged,
             onUsernameChanged = onUsernameChanged,
             onPasswordChanged = onPasswordChanged,
@@ -70,6 +81,12 @@ fun ConnectionSetupScreen(
             uiState = uiState,
             onTestConnection = onTestConnection,
             onSave = onSave,
+            onRemove =
+                if (uiState.canRemove) {
+                    { showRemoveConfirm = true }
+                } else {
+                    null
+                },
             modifier =
                 Modifier
                     .fillMaxWidth()
@@ -77,6 +94,28 @@ fun ConnectionSetupScreen(
                     .padding(bottom = 24.dp),
         )
     }
+
+    OpenCodeDialog(
+        visible = showRemoveConfirm,
+        title = "Remove “${uiState.name.ifBlank { "server" }}”?",
+        subtitle =
+            "This device forgets the Connection Profile. Sessions stay on that server. If it’s the active server, you’ll pick another — or land on Connect if none remain.",
+        primaryOption =
+            OpenCodeDialogOption(
+                title = "Remove",
+                destructive = true,
+                onClick = {
+                    showRemoveConfirm = false
+                    onRemove?.invoke()
+                },
+            ),
+        secondaryOption =
+            OpenCodeDialogOption(
+                title = "Cancel",
+                onClick = { showRemoveConfirm = false },
+            ),
+        onDismissRequest = { showRemoveConfirm = false },
+    )
 }
 
 @Composable
@@ -84,6 +123,7 @@ private fun ConnectionSetupActions(
     uiState: ConnectionSetupUiState,
     onTestConnection: () -> Unit,
     onSave: () -> Unit,
+    onRemove: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -109,6 +149,15 @@ private fun ConnectionSetupActions(
             enabled = uiState.canSave && !uiState.isSaving,
             onClick = onSave,
         )
+        if (onRemove != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.FullWidthText("Remove server"),
+                contrast = OpenCodeButtonContrast.Destructive,
+                enabled = !uiState.isSaving && !uiState.isTesting,
+                onClick = onRemove,
+            )
+        }
     }
 }
 
@@ -119,6 +168,7 @@ private fun ConnectionSetupScreenPreview() {
         ConnectionSetupScreen(
             uiState = ConnectionSetupUiState(),
             onNavigateBack = {},
+            onNameChanged = {},
             onBaseUrlChanged = {},
             onUsernameChanged = {},
             onPasswordChanged = {},
@@ -139,6 +189,7 @@ private fun ConnectionSetupScreenReachablePreview() {
                     testResultMessage = "Server reachable",
                 ),
             onNavigateBack = {},
+            onNameChanged = {},
             onBaseUrlChanged = {},
             onUsernameChanged = {},
             onPasswordChanged = {},

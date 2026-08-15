@@ -51,7 +51,7 @@ fun SettingsScreen(
     onTextMateLogbookClick: () -> Unit,
     onDiagnosticLogsClick: () -> Unit,
     onNavigateBack: () -> Unit,
-    onConnectionSetup: () -> Unit,
+    onServersClick: () -> Unit,
     onClearData: () -> Unit,
     onClearSessionCache: () -> Unit,
     sessionCacheSizeLabel: String,
@@ -68,6 +68,7 @@ fun SettingsScreen(
     onTextMateEnabledChange: (Boolean) -> Unit,
     productAnalyticsConsented: Boolean,
     onProductAnalyticsConsentedChange: (Boolean) -> Unit,
+    serversSummary: ServersSummary = ServersSummary(),
     modifier: Modifier = Modifier,
 ) {
     var showClearConfirmation by remember { mutableStateOf(false) }
@@ -140,13 +141,13 @@ fun SettingsScreen(
             SectionHeader(title = "Server")
 
             OpenCodeListItem(
-                title = "Server Connection",
-                subtitle = "Configure server URL and credentials",
+                title = "Servers",
+                subtitle = serversSummary.subtitle,
                 style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Cloud, "Server Connection"),
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Cloud, "Servers"),
                 onClick = {
                     logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_CONNECTION)
-                    onConnectionSetup()
+                    onServersClick()
                 },
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
@@ -534,7 +535,7 @@ private fun SettingsScreenLightPreview() {
             onTextMateLogbookClick = {},
             onDiagnosticLogsClick = {},
             onNavigateBack = {},
-            onConnectionSetup = {},
+            onServersClick = {},
             onClearData = {},
             onClearSessionCache = {},
             sessionCacheSizeLabel = "Empty",
@@ -566,7 +567,7 @@ private fun SettingsScreenDarkPreview() {
             onTextMateLogbookClick = {},
             onDiagnosticLogsClick = {},
             onNavigateBack = {},
-            onConnectionSetup = {},
+            onServersClick = {},
             onClearData = {},
             onClearSessionCache = {},
             sessionCacheSizeLabel = "Empty",

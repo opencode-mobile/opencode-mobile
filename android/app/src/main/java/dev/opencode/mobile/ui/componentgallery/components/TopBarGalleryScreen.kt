@@ -45,6 +45,8 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
     var showProjectMeta by rememberSaveable { mutableStateOf(false) }
     var statusName by rememberSaveable { mutableStateOf(OpenCodeSessionConnectionStatus.Live.name) }
     var actionsEnabled by rememberSaveable { mutableStateOf(true) }
+    var titleSwitcher by rememberSaveable { mutableStateOf(false) }
+    var titleMenuExpanded by rememberSaveable { mutableStateOf(false) }
 
     val leadingSelection =
         try {
@@ -157,6 +159,11 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
                     selected = actionsEnabled,
                     onClick = { actionsEnabled = !actionsEnabled },
                 )
+                OpenCodeChoiceBadge(
+                    label = "Title switcher",
+                    selected = titleSwitcher,
+                    onClick = { titleSwitcher = !titleSwitcher },
+                )
             }
 
             if (showStatusDot || showProjectMeta) {
@@ -186,6 +193,13 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
             subtitle = subtitle,
             subtitleLeading = subtitleLeading,
             subtitleAccessory = subtitleAccessory,
+            onTitleClick =
+                if (titleSwitcher) {
+                    { titleMenuExpanded = !titleMenuExpanded }
+                } else {
+                    null
+                },
+            titleMenuExpanded = titleMenuExpanded,
             leading = leading,
             actions = actions,
             showDivider = showDivider,

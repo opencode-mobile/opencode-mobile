@@ -1,7 +1,14 @@
 # Multiple Connection Profiles — Parity Gaps
 
-## No gaps recorded
+## iOS not implemented
 
-- Planning only. No iOS/Android implementation difference yet. The locked UX
-  is shared; native sheet and top-bar wiring may still diverge and should be
-  recorded here if they stay visible to the user.
+- Expected shared intent: save more than one Connection Profile, switch from
+  the home title sheet, and manage add/edit/remove under Settings → Servers.
+- Current iOS state: still the v1 single-profile Server Connection flow.
+- Current Android state: multi-profile persistence, home switcher, setup Name,
+  and Settings → Servers shipped on this branch.
+- Affected area: missing implementation.
+- Reason: OPE-159 implementation started Android-first.
+- Owner or next action: implement the same slice on iOS, including the
+  `OpenCodeTopBar` title-switcher API.
+- Status: temporary.
