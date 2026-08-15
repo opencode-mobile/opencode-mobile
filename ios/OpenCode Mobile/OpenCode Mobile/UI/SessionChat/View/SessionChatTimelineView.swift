@@ -137,11 +137,15 @@ private struct SessionChatTimelineReadyView: View {
     }
 
     private var showReviewChanges: Bool {
-        ReviewChangesPillVisibility.shouldShow(
-            summary: props.reviewChangesSummary,
-            isPinnedToEnd: scrollController.isPinnedToEnd,
-            showScrollToEnd: showScrollToEnd
-        )
+        !props.hideFloatStack && ReviewChangesPillVisibility.shouldShow(summary: props.reviewChangesSummary)
+    }
+
+    private var showSessionTodosPill: Bool {
+        !props.hideFloatStack && props.sessionTodosVisible && props.sessionTodoTotalCount > 0
+    }
+
+    private var showTopOverlayStack: Bool {
+        props.syncingIndicatorLabel != nil || showSessionTodosPill || showReviewChanges
     }
 
     private var displayMessages: [SessionChatRow] {
@@ -194,6 +198,12 @@ private struct SessionChatTimelineReadyView: View {
                     ProgressView()
                 }
             }
+            .overlay(alignment: .top) {
+                if showTopOverlayStack {
+                    topOverlayContent
+                        .padding(.top, 10)
+                }
+            }
             .onChange(of: props.timelineFrame.frameRevision) { _, rev in
                 let layoutIDs = props.timelineFrame.layoutAffectingRowIDs
                 if !layoutIDs.isEmpty {
@@ -203,47 +213,29 @@ private struct SessionChatTimelineReadyView: View {
                 }
             }
 
-            if let label = props.syncingIndicatorLabel {
-                VStack {
-                    OpenCodeSyncingPill(label: label)
-                        .padding(.top, 10)
-                    Spacer(minLength: 0)
+            if !props.hideFloatStack, showScrollToEnd {
+                OpenCodeActionPill(variant: .scrollToEnd) {
+                    logScroll("pill-click count=\(props.messages.count)")
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.sessionChat,
+                        actionId: ProductAnalytics.Action.chatScrollToEnd
+                    )
+                    scrollController.scrollToEndAnimated()
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .allowsHitTesting(false)
-            }
-
-            if !props.hideFloatStack {
-                // Primary (nearest composer): Scroll XOR Review. Secondary above: Todos.
-                // Only present children so spacing never reserves room for hidden pills.
-                let showSessionTodosPill = props.sessionTodosVisible && props.sessionTodoTotalCount > 0
-                let showFloatStack = showSessionTodosPill || showScrollToEnd || showReviewChanges
-                Group {
-                    if showFloatStack {
-                        floatStackContent(
-                            showSessionTodosPill: showSessionTodosPill,
-                            showScrollToEnd: showScrollToEnd,
-                            showReviewChanges: showReviewChanges
-                        )
-                        // bottomOverlayInset is already composer + 16 end-pin gap.
-                        .padding(.bottom, props.bottomOverlayInset)
-                    }
-                }
-                .onChange(of: props.sessionTodoTotalCount) { _, total in
-                    refreshSessionTodosPillSnapshot(totalCount: total)
-                }
-                .onChange(of: props.sessionTodoCompletedCount) { _, _ in
-                    refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
-                }
-                .onChange(of: props.sessionTodoActivePreview) { _, _ in
-                    refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
-                }
-                .onAppear {
-                    refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
-                }
+                .padding(.bottom, props.bottomOverlayInset)
             }
         }
+        .onChange(of: props.sessionTodoTotalCount) { _, total in
+            refreshSessionTodosPillSnapshot(totalCount: total)
+        }
+        .onChange(of: props.sessionTodoCompletedCount) { _, _ in
+            refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
+        }
+        .onChange(of: props.sessionTodoActivePreview) { _, _ in
+            refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
+        }
         .onAppear {
+            refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
             scrollController.autoFollowEnabled = true
             logScroll("appear count=\(props.messages.count) pinned=\(scrollController.isPinnedToEnd)")
         }
@@ -257,12 +249,13 @@ private struct SessionChatTimelineReadyView: View {
     }
 
     @ViewBuilder
-    private func floatStackContent(
-        showSessionTodosPill: Bool,
-        showScrollToEnd: Bool,
-        showReviewChanges: Bool
-    ) -> some View {
+    private var topOverlayContent: some View {
         let pills = VStack(spacing: 8) {
+            if let label = props.syncingIndicatorLabel {
+                OpenCodeSyncingPill(label: label)
+                    .allowsHitTesting(false)
+            }
+
             if showSessionTodosPill {
                 OpenCodeSessionTodosPill(
                     completedCount: sessionTodosPillCompletedCount,
@@ -270,17 +263,6 @@ private struct SessionChatTimelineReadyView: View {
                     activePreview: sessionTodosPillActivePreview,
                     action: props.onSessionTodosTap
                 )
-            }
-
-            if showScrollToEnd {
-                OpenCodeActionPill(variant: .scrollToEnd) {
-                    logScroll("pill-click count=\(props.messages.count)")
-                    ProductAnalytics.logUserAction(
-                        screenId: ProductAnalytics.Screen.sessionChat,
-                        actionId: ProductAnalytics.Action.chatScrollToEnd
-                    )
-                    scrollController.scrollToEndAnimated()
-                }
             }
 
             if showReviewChanges, let summary = props.reviewChangesSummary {

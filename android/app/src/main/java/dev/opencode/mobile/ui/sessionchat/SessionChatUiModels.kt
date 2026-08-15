@@ -216,11 +216,7 @@ data class SessionChatUiState(
 }
 
 object ReviewChangesPillVisibility {
-    fun shouldShow(
-        summary: ReviewChangesSummary?,
-        isPinnedToEnd: Boolean,
-        showScrollToEnd: Boolean,
-    ): Boolean = (summary?.fileCount ?: 0) > 0 && isPinnedToEnd && !showScrollToEnd
+    fun shouldShow(summary: ReviewChangesSummary?): Boolean = (summary?.fileCount ?: 0) > 0
 }
 
 data class ReviewChangesSummary(

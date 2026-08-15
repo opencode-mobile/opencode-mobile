@@ -300,8 +300,8 @@ struct SessionChatUiState: Equatable {
 }
 
 enum ReviewChangesPillVisibility {
-    static func shouldShow(summary: ReviewChangesSummary?, isPinnedToEnd: Bool, showScrollToEnd: Bool) -> Bool {
-        (summary?.fileCount ?? 0) > 0 && isPinnedToEnd && !showScrollToEnd
+    static func shouldShow(summary: ReviewChangesSummary?) -> Bool {
+        (summary?.fileCount ?? 0) > 0
     }
 }
 

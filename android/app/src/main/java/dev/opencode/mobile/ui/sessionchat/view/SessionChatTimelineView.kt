@@ -314,79 +314,68 @@ private fun SessionChatTimelineReadyView(
             }
         }
 
-        if (syncingIndicatorLabel != null) {
-            OpenCodeSyncingPill(
-                label = syncingIndicatorLabel,
+        val showScrollToEnd = !hideFloatStack && timeline.showScrollToEnd
+        val showReviewChanges =
+            !hideFloatStack && ReviewChangesPillVisibility.shouldShow(reviewChangesSummary)
+        val showSessionTodosPill = !hideFloatStack && sessionTodosVisible && sessionTodoTotalCount > 0
+        val showTopOverlayStack =
+            syncingIndicatorLabel != null || showSessionTodosPill || showReviewChanges
+        if (showTopOverlayStack) {
+            Column(
                 modifier =
                     Modifier
                         .align(Alignment.TopCenter)
                         .padding(top = 10.dp),
-            )
-        }
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (syncingIndicatorLabel != null) {
+                    OpenCodeSyncingPill(label = syncingIndicatorLabel)
+                }
 
-        if (!hideFloatStack) {
-            // Primary (nearest composer): Scroll XOR Review. Secondary above: Todos.
-            // Compose only visible pills so spacedBy never reserves gaps for ghosts
-            // (empty AnimatedVisibility + spacedBy lifted Scroll ~8dp with no Todos).
-            val showScrollToEnd = timeline.showScrollToEnd
-            val showReviewChanges =
-                ReviewChangesPillVisibility.shouldShow(
-                    summary = reviewChangesSummary,
-                    isPinnedToEnd = timeline.isPinnedToEnd,
-                    showScrollToEnd = showScrollToEnd,
-                )
-            val showSessionTodosPill = sessionTodosVisible && sessionTodoTotalCount > 0
-            val showFloatStack = showSessionTodosPill || showScrollToEnd || showReviewChanges
-            if (showFloatStack) {
-                // bottomOverlayInset is already composer + 16 end-pin gap.
-                Column(
-                    modifier =
-                        Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = bottomOverlayInset),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (showSessionTodosPill) {
-                        OpenCodeSessionTodosPill(
-                            completedCount = sessionTodoCompletedCount,
-                            totalCount = sessionTodoTotalCount,
-                            activePreview = sessionTodoActivePreview,
-                            onClick = onSessionTodosClick,
+                if (showSessionTodosPill) {
+                    OpenCodeSessionTodosPill(
+                        completedCount = sessionTodoCompletedCount,
+                        totalCount = sessionTodoTotalCount,
+                        activePreview = sessionTodoActivePreview,
+                        onClick = onSessionTodosClick,
+                    )
+                }
+
+                if (showReviewChanges) {
+                    reviewChangesSummary?.let { summary ->
+                        OpenCodeReviewChangesPill(
+                            variant = OpenCodeReviewChangesPillVariant.LatestTurn,
+                            changedFileCount = summary.fileCount,
+                            additions = summary.additions,
+                            deletions = summary.deletions,
+                            onClick = onReviewChangesClick,
                         )
-                    }
-
-                    if (showScrollToEnd) {
-                        OpenCodeActionPill(
-                            variant = OpenCodeActionPillVariant.ScrollToEnd,
-                            onClick = {
-                                ProductAnalytics.logUserAction(
-                                    screenId = ProductAnalytics.Screen.SESSION_CHAT,
-                                    actionId = ProductAnalytics.Action.CHAT_SCROLL_TO_END,
-                                )
-                                timeline.scrollController.animateToEnd(
-                                    messageCount = timeline.messageCount,
-                                    tolerancePx = timeline.autoFollowTolerancePx,
-                                    bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
-                                    autoFollowEnabled = true,
-                                )
-                            },
-                        )
-                    }
-
-                    if (showReviewChanges) {
-                        reviewChangesSummary?.let { summary ->
-                            OpenCodeReviewChangesPill(
-                                variant = OpenCodeReviewChangesPillVariant.LatestTurn,
-                                changedFileCount = summary.fileCount,
-                                additions = summary.additions,
-                                deletions = summary.deletions,
-                                onClick = onReviewChangesClick,
-                            )
-                        }
                     }
                 }
             }
+        }
+
+        if (showScrollToEnd) {
+            OpenCodeActionPill(
+                variant = OpenCodeActionPillVariant.ScrollToEnd,
+                onClick = {
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.SESSION_CHAT,
+                        actionId = ProductAnalytics.Action.CHAT_SCROLL_TO_END,
+                    )
+                    timeline.scrollController.animateToEnd(
+                        messageCount = timeline.messageCount,
+                        tolerancePx = timeline.autoFollowTolerancePx,
+                        bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
+                        autoFollowEnabled = true,
+                    )
+                },
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = bottomOverlayInset),
+            )
         }
     }
 }

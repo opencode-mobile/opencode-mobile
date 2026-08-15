@@ -40,7 +40,7 @@ Canonical naming and UX live in `CONTEXT.md` (**Session Todo List** /
 | Progress | `N` = completed only; `M` = total; cancelled finishes list without bumping `N` |
 | Priority | Not shown or sorted in v1 |
 | Sheet | Progress-first header; view-only status rows |
-| Float stack | Todos on top; Scroll to end XOR Changes below; hide stack while sheet open |
+| Float stack | Todos + Review + Syncing at top; Scroll to end only at bottom; hide Todos and Review while sheet open |
 | Permission | Wins over the todos sheet (dismiss/block sheet; pill may stay) |
 | Timeline | Keep `todowrite` hidden |
 | Sync | GET on live + SSE full replace + idle clear + force-GET next live |

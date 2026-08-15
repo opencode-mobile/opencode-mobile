@@ -42,9 +42,9 @@ copy and omits each zero-valued line total:
 Tapping the enabled pill invokes the supplied action. Disabled presentation
 reduces emphasis and blocks interaction.
 
-The caller owns visibility. Session Chat shows it only when the latest user
-turn is complete, that turn changed at least one file, and the timeline is at
-its end. It is mutually exclusive with Scroll to end.
+The caller owns visibility. Session Chat shows it when the latest user turn
+is complete and that turn changed at least one file. It overlays the top of
+the timeline and can appear together with Scroll to end.
 
 The enabled file summary uses `text-strong`, additions use `diff-add`, and
 deletions use `diff-delete`. Disabled content uses the existing disabled text
