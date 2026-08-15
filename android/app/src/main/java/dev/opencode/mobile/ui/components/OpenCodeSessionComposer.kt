@@ -8,6 +8,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
@@ -34,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.onSizeChanged
@@ -516,6 +520,9 @@ private fun ChildLockoutContent(
         } else {
             "Model ${state.selectedModelLabel}"
         }
+    val textStrong = openCodeColor("text-strong")
+    val ctaFill = textStrong.copy(alpha = 0.14f)
+    val chipShape = RoundedCornerShape(percent = 50)
     Row(
         modifier =
             Modifier
@@ -526,21 +533,9 @@ private fun ChildLockoutContent(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OpenCodeChoiceBadge(
-            label = state.selectedModelLabel,
-            selected = false,
-            enabled = false,
-            variant = OpenCodeChoiceBadgeVariant.Glass,
-            onClick = {},
-        )
+        LockoutChip(label = state.selectedModelLabel, fill = ctaFill, textColor = textStrong, shape = chipShape)
         if (state.showVariant) {
-            OpenCodeChoiceBadge(
-                label = state.selectedVariantLabel,
-                selected = false,
-                enabled = false,
-                variant = OpenCodeChoiceBadgeVariant.Glass,
-                onClick = {},
-            )
+            LockoutChip(label = state.selectedVariantLabel, fill = ctaFill, textColor = textStrong, shape = chipShape)
         }
     }
     Text(
@@ -549,9 +544,40 @@ private fun ChildLockoutContent(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 4.dp),
     )
-    OpenCodeButton(
-        variant = OpenCodeButtonVariant.FullWidthText("Back to main session"),
-        onClick = { onAction(OpenCodeSessionComposerAction.BackToMainSession) },
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .clip(chipShape)
+                .background(ctaFill)
+                .clickable { onAction(OpenCodeSessionComposerAction.BackToMainSession) },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "Back to main session",
+            color = textStrong,
+            style = MaterialTheme.typography.titleSmall,
+        )
+    }
+}
+
+@Composable
+private fun LockoutChip(
+    label: String,
+    fill: Color,
+    textColor: Color,
+    shape: RoundedCornerShape,
+) {
+    Text(
+        text = label,
+        color = textColor,
+        style = MaterialTheme.typography.titleSmall,
+        maxLines = 1,
+        modifier =
+            Modifier
+                .background(fill, shape)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
     )
 }
 

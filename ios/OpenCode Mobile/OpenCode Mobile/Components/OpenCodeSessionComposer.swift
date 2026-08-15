@@ -336,49 +336,42 @@ struct OpenCodeSessionComposer: View {
 
     @ViewBuilder
     private func childLockoutContent(_ lockout: OpenCodeSessionComposerState.ChildLockout) -> some View {
-        lockoutChipsRow(lockout)
+        HStack(spacing: 8) {
+            lockoutChip(lockout.selectedModelLabel)
+            if lockout.showVariant {
+                lockoutChip(lockout.selectedVariantLabel)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(lockoutAccessibilityLabel(lockout))
         Text("Child sessions cannot be prompted.")
             .font(OpenCodeTypography.caption)
             .foregroundStyle(OpenCodeColors.textBase)
             .padding(.horizontal, 4)
-        OpenCodeButton(
-            variant: .fullWidthText(title: "Back to main session"),
-            action: { onAction(.backToMainSession) }
-        )
+        Button(action: { onAction(.backToMainSession) }) {
+            Text("Back to main session")
+                .font(OpenCodeTypography.button)
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(
+                    OpenCodeColors.textStrong.opacity(0.14),
+                    in: Capsule()
+                )
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
-    @ViewBuilder
-    private func lockoutChipsRow(_ lockout: OpenCodeSessionComposerState.ChildLockout) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            let chips = HStack(spacing: 8) {
-                OpenCodeChoiceBadge(
-                    label: lockout.selectedModelLabel,
-                    selected: false,
-                    enabled: false,
-                    variant: .glass,
-                    action: {}
-                )
-                if lockout.showVariant {
-                    OpenCodeChoiceBadge(
-                        label: lockout.selectedVariantLabel,
-                        selected: false,
-                        enabled: false,
-                        variant: .glass,
-                        action: {}
-                    )
-                }
-            }
-            if #available(iOS 26, *) {
-                GlassEffectContainer(spacing: 8) {
-                    chips
-                }
-            } else {
-                chips
-            }
-        }
-        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(lockoutAccessibilityLabel(lockout))
+    private func lockoutChip(_ label: String) -> some View {
+        Text(label)
+            .font(OpenCodeTypography.button)
+            .foregroundStyle(OpenCodeColors.textStrong)
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(minHeight: 36)
+            .background(OpenCodeColors.textStrong.opacity(0.14), in: Capsule())
     }
 
     private func lockoutAccessibilityLabel(_ lockout: OpenCodeSessionComposerState.ChildLockout) -> String {

@@ -109,4 +109,25 @@ enum SnapshotEvidenceMocks {
             )
         )
     }
+
+    static let childLockoutAssistantReply = SnapshotEvidenceMessage(
+        id: "snapshot-child-assistant-1",
+        role: .assistant,
+        text: "Login sets a session cookie without SameSite. CSRF on POST /login is missing."
+    )
+
+    static let childLockoutConversation: [SnapshotEvidenceMessage] = [
+        childSessionUserPrompt,
+        childLockoutAssistantReply,
+    ]
+
+    static var childLockoutComposer: OpenCodeSessionComposerState {
+        .childLockout(
+            .init(
+                selectedModelLabel: "Claude Sonnet 4",
+                selectedVariantLabel: "High",
+                showVariant: true
+            )
+        )
+    }
 }

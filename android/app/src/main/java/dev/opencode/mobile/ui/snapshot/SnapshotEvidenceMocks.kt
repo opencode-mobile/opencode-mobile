@@ -95,4 +95,21 @@ object SnapshotEvidenceMocks {
             showStop = false,
             stopEnabled = false,
         )
+
+    val childLockoutAssistantReply =
+        SnapshotEvidenceMessage(
+            id = "snapshot-child-assistant-1",
+            role = SnapshotEvidenceRole.Assistant,
+            text = "Login sets a session cookie without SameSite. CSRF on POST /login is missing.",
+        )
+
+    val childLockoutConversation =
+        listOf(childSessionUserPrompt, childLockoutAssistantReply)
+
+    val childLockoutComposer =
+        OpenCodeSessionComposerState.ChildLockout(
+            selectedModelLabel = "Claude Sonnet 4",
+            selectedVariantLabel = "High",
+            showVariant = true,
+        )
 }
