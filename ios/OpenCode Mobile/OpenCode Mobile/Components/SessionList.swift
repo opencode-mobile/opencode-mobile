@@ -75,12 +75,14 @@ struct SessionList<EmptyContent: View>: View {
     let onNewSession: () -> Void
     let onRefresh: (() async -> Void)?
     let onRemoveProject: ((String) -> Void)?
+    let revealNewestToken: Int
     let showsEmptyContent: Bool
     let emptyContent: EmptyContent
 
     @State private var bottomSafeAreaInset: CGFloat = 0
     @State private var dockHeight: CGFloat = 0
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
+    @State private var followingTop = true
 
     init(
         sessions: [SessionListSession],
@@ -94,6 +96,7 @@ struct SessionList<EmptyContent: View>: View {
         onNewSession: @escaping () -> Void,
         onRefresh: (() async -> Void)? = nil,
         onRemoveProject: ((String) -> Void)? = nil,
+        revealNewestToken: Int = 0,
         showsEmptyContent: Bool = false,
         @ViewBuilder emptyContent: () -> EmptyContent = { EmptyView() }
     ) {
@@ -108,6 +111,7 @@ struct SessionList<EmptyContent: View>: View {
         self.onNewSession = onNewSession
         self.onRefresh = onRefresh
         self.onRemoveProject = onRemoveProject
+        self.revealNewestToken = revealNewestToken
         self.showsEmptyContent = showsEmptyContent
         self.emptyContent = emptyContent()
     }
@@ -138,22 +142,20 @@ struct SessionList<EmptyContent: View>: View {
                 .background(OpenCodeColors.backgroundBase)
                 .modifier(SessionListRefreshableModifier(onRefresh: onRefresh))
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 0, pinnedViews: []) {
-                        ForEach(ladderSections, id: \.id) { section in
-                            switch section.kind {
-                            case .recent:
-                                recentStack(section)
-                            case .day, .week:
-                                dayOrWeekSection(section)
-                            }
-                        }
+                SessionListScrollView(
+                    ladderSections: ladderSections,
+                    newestSessionId: visibleSessions.first?.id,
+                    revealNewestToken: revealNewestToken,
+                    followingTop: $followingTop,
+                    onRefresh: onRefresh
+                ) { section in
+                    switch section.kind {
+                    case .recent:
+                        recentStack(section)
+                    case .day, .week:
+                        dayOrWeekSection(section)
                     }
-                    Color.clear.frame(height: sessionListFallbackBottomSpacer)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(OpenCodeColors.backgroundBase)
-                .modifier(SessionListRefreshableModifier(onRefresh: onRefresh))
             }
 
             OpenCodeBottomFade(
@@ -265,6 +267,95 @@ struct SessionList<EmptyContent: View>: View {
         case .ready:
             OpenCodeListItemStatus(text: "Ready", tone: .success)
         }
+    }
+}
+
+private let sessionListTopAnchorID = "session-list-top"
+
+private struct SessionListScrollView<SectionContent: View>: View {
+    let ladderSections: [HomeSessionLadderSection<SessionListSession>]
+    let newestSessionId: String?
+    let revealNewestToken: Int
+    @Binding var followingTop: Bool
+    let onRefresh: (() async -> Void)?
+    let sectionContent: (HomeSessionLadderSection<SessionListSession>) -> SectionContent
+
+    init(
+        ladderSections: [HomeSessionLadderSection<SessionListSession>],
+        newestSessionId: String?,
+        revealNewestToken: Int,
+        followingTop: Binding<Bool>,
+        onRefresh: (() async -> Void)?,
+        @ViewBuilder sectionContent: @escaping (HomeSessionLadderSection<SessionListSession>) -> SectionContent
+    ) {
+        self.ladderSections = ladderSections
+        self.newestSessionId = newestSessionId
+        self.revealNewestToken = revealNewestToken
+        _followingTop = followingTop
+        self.onRefresh = onRefresh
+        self.sectionContent = sectionContent
+    }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 0, pinnedViews: []) {
+                    Color.clear
+                        .frame(height: 0)
+                        .id(sessionListTopAnchorID)
+                    ForEach(ladderSections, id: \.id) { section in
+                        sectionContent(section)
+                    }
+                }
+                Color.clear.frame(height: sessionListFallbackBottomSpacer)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(OpenCodeColors.backgroundBase)
+            .overlay {
+                SessionListScrollOffsetReader { offsetFromTop, isUserScrolling in
+                    let next = SessionListScrollPin.followingTop(
+                        currentlyFollowing: followingTop,
+                        isUserScrolling: isUserScrolling,
+                        isAtTop: SessionListScrollPin.isAtTop(offsetFromTop: offsetFromTop)
+                    )
+                    if next != followingTop {
+                        followingTop = next
+                    }
+                }
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
+            }
+            .modifier(SessionListRefreshableModifier(onRefresh: onRefresh))
+            .onChange(of: newestSessionId) { _, _ in
+                pinToTopIfNeeded(
+                    proxy: proxy,
+                    newestIdentityChanged: true,
+                    forceRevealNewest: false
+                )
+            }
+            .onChange(of: revealNewestToken) { _, token in
+                guard token > 0 else { return }
+                followingTop = true
+                pinToTopIfNeeded(
+                    proxy: proxy,
+                    newestIdentityChanged: false,
+                    forceRevealNewest: true
+                )
+            }
+        }
+    }
+
+    private func pinToTopIfNeeded(
+        proxy: ScrollViewProxy,
+        newestIdentityChanged: Bool,
+        forceRevealNewest: Bool
+    ) {
+        guard SessionListScrollPin.shouldScrollToTrueTop(
+            followingTop: followingTop,
+            newestIdentityChanged: newestIdentityChanged,
+            forceRevealNewest: forceRevealNewest
+        ) else { return }
+        proxy.scrollTo(sessionListTopAnchorID, anchor: .top)
     }
 }
 

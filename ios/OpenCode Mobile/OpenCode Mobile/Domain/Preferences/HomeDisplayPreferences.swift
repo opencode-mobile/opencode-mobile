@@ -9,6 +9,7 @@ final class HomeDisplayPreferences {
         static let showSessionListOnHome = "showSessionListOnHome"
         static let hideUserDirectoryPrefix = "hideUserDirectoryPrefix"
         static let recentWindowHours = "recentWindowHours"
+        static let lastHomeHiddenAtEpochMs = "lastHomeHiddenAtEpochMs"
     }
 
     private let defaults: UserDefaults
@@ -38,6 +39,22 @@ final class HomeDisplayPreferences {
         defaults.set(value, forKey: StorageKeys.hideUserDirectoryPrefix)
     }
 
+    func lastHomeHiddenAtEpochMs() -> Int64? {
+        guard defaults.object(forKey: StorageKeys.lastHomeHiddenAtEpochMs) != nil else {
+            return nil
+        }
+        return defaults.object(forKey: StorageKeys.lastHomeHiddenAtEpochMs) as? Int64
+            ?? Int64(defaults.integer(forKey: StorageKeys.lastHomeHiddenAtEpochMs))
+    }
+
+    func setLastHomeHiddenAtEpochMs(_ value: Int64?) {
+        if let value {
+            defaults.set(value, forKey: StorageKeys.lastHomeHiddenAtEpochMs)
+        } else {
+            defaults.removeObject(forKey: StorageKeys.lastHomeHiddenAtEpochMs)
+        }
+    }
+
     func setRecentWindowHours(_ value: Int) {
         let sanitized = HomeSessionLadder.sanitizeWindowHours(value)
         recentWindowHours = sanitized
@@ -48,6 +65,7 @@ final class HomeDisplayPreferences {
         defaults.removeObject(forKey: StorageKeys.showSessionListOnHome)
         defaults.removeObject(forKey: StorageKeys.hideUserDirectoryPrefix)
         defaults.removeObject(forKey: StorageKeys.recentWindowHours)
+        defaults.removeObject(forKey: StorageKeys.lastHomeHiddenAtEpochMs)
         hideUserDirectoryPrefix = true
         recentWindowHours = HomeSessionLadder.defaultWindowHours
     }

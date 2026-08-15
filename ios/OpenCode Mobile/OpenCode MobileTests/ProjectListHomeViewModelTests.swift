@@ -300,8 +300,10 @@ struct ProjectListHomeViewModelTests {
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
+        #expect(viewModel.revealNewestToken == 0)
         await viewModel.createSession(in: "/repo")
         #expect(sessionRepository.createdDirectories.isEmpty)
+        #expect(viewModel.revealNewestToken == 1)
         #expect(viewModel.pendingSessionOpen?.id == OptimisticSessionCreate.placeholderSessionID)
         #expect(viewModel.pendingSessionOpen?.worktree == "/repo")
         #expect(viewModel.pendingSessionOpen?.optimisticNavigationInstanceID != nil)
@@ -327,6 +329,32 @@ struct ProjectListHomeViewModelTests {
         #expect(first != nil)
         #expect(second != nil)
         #expect(first != second)
+    }
+
+    @Test func homeReveal_afterStaleAbsenceIncrementsRevealToken() async {
+        HomeDisplayPreferences.shared.setLastHomeHiddenAtEpochMs(nil)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: FakeSessionRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.markHomeHidden(nowEpochMs: 0)
+        viewModel.onHomeRevealed(nowEpochMs: SessionListScrollPin.staleAfterMs)
+        #expect(viewModel.revealNewestToken == 1)
+    }
+
+    @Test func homeReveal_beforeStaleAbsenceKeepsScroll() async {
+        HomeDisplayPreferences.shared.setLastHomeHiddenAtEpochMs(nil)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: FakeSessionRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.markHomeHidden(nowEpochMs: 0)
+        viewModel.onHomeRevealed(nowEpochMs: SessionListScrollPin.staleAfterMs - 1)
+        #expect(viewModel.revealNewestToken == 0)
     }
 
     @Test func optimisticCreateFailureStoresInlineError() async {

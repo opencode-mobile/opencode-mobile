@@ -16,6 +16,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -86,12 +88,20 @@ fun MainScreen(
     val liveUpdatesConnectionState by viewModel.liveUpdatesConnectionState.collectAsStateWithLifecycle()
     val removalSnackbar by viewModel.removalSnackbar.collectAsStateWithLifecycle()
     val sessionActions by viewModel.sessionActions.collectAsStateWithLifecycle()
+    val revealNewestToken by viewModel.revealNewestToken.collectAsStateWithLifecycle()
+    LifecycleEventEffect(Lifecycle.Event.ON_START) {
+        viewModel.onHomeRevealed()
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        viewModel.markHomeHidden()
+    }
     MainScreen(
         uiState = state,
         isRefreshing = isRefreshing,
         liveUpdatesConnectionState = liveUpdatesConnectionState,
         removalSnackbar = removalSnackbar,
         sessionActions = sessionActions,
+        revealNewestToken = revealNewestToken,
         sessionActionsCallbacks =
             HomeSessionActionsCallbacks(
                 onSessionLongPress = { session ->
@@ -167,6 +177,7 @@ internal fun MainScreen(
     isRefreshing: Boolean = false,
     sessionActions: HomeSessionActionsUiState = HomeSessionActionsUiState(),
     sessionActionsCallbacks: HomeSessionActionsCallbacks = HomeSessionActionsCallbacks(),
+    revealNewestToken: Int = 0,
 ) {
     val pendingOpenSession = (uiState as? MainScreenUiState.Loaded)?.pendingOpenSession
     LaunchedEffect(pendingOpenSession) {
@@ -317,6 +328,7 @@ internal fun MainScreen(
                         },
                         onRemoveProject = onRemoveProject,
                         onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
+                        revealNewestToken = revealNewestToken,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -679,6 +691,7 @@ private fun HomeProjectsContent(
     onRequestNewSessionProjectPicker: () -> Unit,
     onRemoveProject: (String) -> Unit,
     onSessionLongPress: (SessionListSession) -> Unit,
+    revealNewestToken: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     PullToRefreshBox(
@@ -726,6 +739,7 @@ private fun HomeProjectsContent(
             onNewSession = onRequestNewSessionProjectPicker,
             onRemoveProject = onRemoveProject,
             onSessionLongPress = onSessionLongPress,
+            revealNewestToken = revealNewestToken,
             modifier = Modifier.fillMaxSize(),
             emptyContent =
                 if (sections.isEmpty()) {

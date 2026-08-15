@@ -12,6 +12,7 @@ object HomeDisplayPreferences {
     private const val KEY_SHOW_SESSION_LIST_ON_HOME = "show_session_list_on_home"
     private const val KEY_HIDE_USER_DIRECTORY_PREFIX = "hide_user_directory_prefix"
     private const val KEY_RECENT_WINDOW_HOURS = "recent_window_hours"
+    private const val KEY_LAST_HOME_HIDDEN_AT_EPOCH_MS = "last_home_hidden_at_epoch_ms"
 
     /** When true, replace remote `/Users/…` or `/home/…` with `~` in path labels. */
     var hideUserDirectoryPrefix: Boolean by mutableStateOf(true)
@@ -42,6 +43,22 @@ object HomeDisplayPreferences {
         prefs()?.edit()?.putBoolean(KEY_HIDE_USER_DIRECTORY_PREFIX, value)?.apply()
     }
 
+    fun lastHomeHiddenAtEpochMs(): Long? {
+        val prefs = prefs() ?: return null
+        if (!prefs.contains(KEY_LAST_HOME_HIDDEN_AT_EPOCH_MS)) return null
+        return prefs.getLong(KEY_LAST_HOME_HIDDEN_AT_EPOCH_MS, 0L)
+    }
+
+    fun setLastHomeHiddenAtEpochMs(value: Long?) {
+        val editor = prefs()?.edit() ?: return
+        if (value == null) {
+            editor.remove(KEY_LAST_HOME_HIDDEN_AT_EPOCH_MS)
+        } else {
+            editor.putLong(KEY_LAST_HOME_HIDDEN_AT_EPOCH_MS, value)
+        }
+        editor.apply()
+    }
+
     fun updateRecentWindowHours(value: Int) {
         val sanitized = HomeSessionLadder.sanitizeWindowHours(value)
         recentWindowHours = sanitized
@@ -54,6 +71,7 @@ object HomeDisplayPreferences {
             ?.remove(KEY_SHOW_SESSION_LIST_ON_HOME)
             ?.remove(KEY_HIDE_USER_DIRECTORY_PREFIX)
             ?.remove(KEY_RECENT_WINDOW_HOURS)
+            ?.remove(KEY_LAST_HOME_HIDDEN_AT_EPOCH_MS)
             ?.apply()
         hideUserDirectoryPrefix = true
         recentWindowHours = HomeSessionLadder.DEFAULT_WINDOW_HOURS
