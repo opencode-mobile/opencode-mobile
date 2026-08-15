@@ -93,10 +93,10 @@ becomes live, applies SSE `todo.updated` as a full-list replace, clears the
 local cache when the session goes idle, and force-refetches on the next live
 turn.
 
-On mobile, the compact Session Todos entry is a floating pill over Session Chat
-(above the composer). It sits above the existing Scroll-to-end / Changes float
-band; while the Session Todo List sheet is open, that whole float stack is
-hidden. A pending permission request takes priority over the Session Todo List
+On mobile, the compact Session Todos entry is a floating pill over the top of
+Session Chat, stacked with Syncing and Review Changes. Only Scroll to end stays
+above the composer. While the Session Todo List sheet is open, Todos and Review
+are hidden; Syncing may stay. A pending permission request takes priority over the Session Todo List
 sheet: the sheet is dismissed or not opened while the user must approve or deny;
 the pill may remain visible under the live visibility rule. The pill is visible
 only while the session is live — busy or blocked on a permission/question — and

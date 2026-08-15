@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pills on top — Session Chat prototype</title>
+<style>
+  :root {
+    --bg: #1C1C1C;
+    --surface: #1C1C1C;
+    --raised: #232323;
+    --raised-hover: #2A2A2A;
+    --text: #EDEDED;
+    --text-base: #A0A0A0;
+    --text-weak: #707070;
+    --text-weaker: #505050;
+    --border: #282828;
+    --border-weaker: #232323;
+    --icon: #7E7E7E;
+    --icon-strong: #EDEDED;
+    --success: #3DDC84;
+    --warning: #E8B339;
+    --error: #FC533A;
+    --interactive: #8CB0FF;
+    --diff-add: #C8FFC4;
+    --diff-delete: #FC533A;
+    --phone-w: 390px;
+    --phone-h: 844px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    background: #0e0e0e;
+    color: var(--text);
+    padding: 28px 20px 140px;
+  }
+
+  .page-meta {
+    max-width: 920px;
+    margin: 0 auto 28px;
+  }
+  .page-meta h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+  }
+  .page-meta p {
+    margin: 0 0 8px;
+    color: var(--text-base);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    max-width: 42rem;
+  }
+  .page-meta .tag {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-weak);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 10px;
+  }
+
+  .stage {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+  .phone {
+    width: var(--phone-w);
+    height: var(--phone-h);
+    background: var(--bg);
+    border-radius: 44px;
+    border: 1px solid #333;
+    box-shadow: 0 0 0 1px #111, 0 24px 80px rgba(0,0,0,0.55);
+    overflow: hidden;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .phone-notch {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 34px;
+    background: #000;
+    border-radius: 20px;
+    z-index: 30;
+    pointer-events: none;
+  }
+  .status-bar {
+    height: 54px;
+    padding: 18px 28px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    position: relative;
+    z-index: 5;
+  }
+  .status-bar .right {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    font-size: 12px;
+    opacity: 0.9;
+  }
+  .app {
+    height: calc(100% - 54px);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px 10px 8px;
+    min-height: 56px;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 6;
+    background: var(--bg);
+  }
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    border: none;
+    color: var(--icon-strong);
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .icon-btn svg { width: 18px; height: 18px; }
+  .title-block {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-height: 40px;
+  }
+  .title {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+  }
+  .subtitle-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    flex-shrink: 0;
+    box-shadow: 0 0 0 2px rgba(61, 220, 132, 0.18);
+  }
+  .status-label {
+    font-size: 12px;
+    color: var(--text-base);
+    text-transform: lowercase;
+  }
+
+  .timeline-host {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+  }
+  .timeline {
+    height: 100%;
+    overflow: auto;
+    padding: 8px 16px 168px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .phone[data-variant="B"] .timeline { padding-top: 4px; }
+
+  .msg-user {
+    align-self: flex-end;
+    max-width: 82%;
+    background: var(--raised);
+    border-radius: 16px 16px 4px 16px;
+    padding: 10px 14px;
+    font-size: 15px;
+    line-height: 1.4;
+    color: var(--text);
+  }
+  .msg-user .foot {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-weaker);
+    text-align: right;
+  }
+  .msg-assistant {
+    align-self: stretch;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--text);
+  }
+  .msg-assistant p { margin: 0 0 10px; }
+  .msg-assistant p:last-child { margin-bottom: 0; }
+  .tool-card {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--surface);
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .tool-card .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    margin-top: 6px; flex-shrink: 0;
+    background: var(--success);
+  }
+  .tool-card .t { font-size: 15px; font-weight: 600; line-height: 1.25; }
+  .tool-card .s {
+    font-size: 12px;
+    color: var(--text-base);
+    margin-top: 4px;
+  }
+  .working {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-base);
+    padding: 2px 0 4px;
+  }
+  .working .pulse {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--text-base);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  .last-msg-mark {
+    outline: 1px dashed rgba(140,176,255,0.35);
+    outline-offset: 6px;
+    border-radius: 4px;
+  }
+
+  /* pills */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 999px;
+    background: rgba(35,35,35,0.92);
+    color: var(--text);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.06);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    cursor: pointer;
+    max-width: 320px;
+    white-space: nowrap;
+  }
+  .pill:active { transform: scale(0.98); opacity: 0.92; }
+  .pill.sync {
+    color: var(--text-base);
+    cursor: default;
+    pointer-events: none;
+  }
+  .pill .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--interactive);
+    box-shadow: 0 0 0 3px rgba(140,176,255,0.25);
+    flex-shrink: 0;
+  }
+  .pill .count { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .pill .preview {
+    color: var(--text-base);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .pill .files { font-weight: 600; }
+  .pill .add { color: var(--diff-add); }
+  .pill .del { color: var(--diff-delete); }
+  .pill svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .spinner {
+    width: 14px; height: 14px;
+    border: 1.6px solid rgba(160,160,160,0.28);
+    border-top-color: var(--text-base);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  .float-top {
+    position: absolute;
+    top: 10px;
+    left: 12px;
+    right: 12px;
+    z-index: 8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .float-top > * { pointer-events: auto; }
+
+  .float-bottom {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 168px;
+    z-index: 9;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .float-bottom > * { pointer-events: auto; }
+
+  .top-fade {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 56px;
+    background: linear-gradient(to bottom, var(--bg) 0%, rgba(28,28,28,0.7) 55%, transparent 100%);
+    pointer-events: none;
+    z-index: 7;
+  }
+
+  /* B — reserved strip */
+  .strip {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 16px 10px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .strip::-webkit-scrollbar { display: none; }
+
+  /* C — folded into chrome */
+  .top-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .mini {
+    min-height: 28px;
+    padding: 4px 10px;
+    font-size: 12px;
+    gap: 5px;
+    max-width: 92px;
+  }
+  .mini .dot { width: 6px; height: 6px; box-shadow: 0 0 0 2px rgba(140,176,255,0.25); }
+  .sub-link {
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .sub-link .count { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); font-size: 12px; }
+  .sub-link .preview {
+    color: var(--text-base);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sub-sep { color: var(--text-weaker); font-size: 12px; }
+  .sub-files { font-size: 12px; font-weight: 600; color: var(--text); }
+  .sub-add { font-size: 12px; color: var(--diff-add); }
+  .sub-del { font-size: 12px; color: var(--diff-delete); }
+
+  /* D — combined island */
+  .island {
+    display: flex;
+    align-items: stretch;
+    border-radius: 999px;
+    background: rgba(35,35,35,0.92);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.06);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    overflow: hidden;
+    max-width: 100%;
+  }
+  .island button {
+    background: none;
+    border: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    min-height: 36px;
+    padding: 8px 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .island button:active { background: rgba(255,255,255,0.04); }
+  .island button + button { border-left: 1px solid rgba(255,255,255,0.08); }
+  .island .preview {
+    color: var(--text-base);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 132px;
+  }
+
+  .composer-wrap {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 18px;
+    z-index: 10;
+  }
+  .bottom-fade {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 184px;
+    background: linear-gradient(to top, var(--bg) 0%, var(--bg) 42%, rgba(28,28,28,0.7) 72%, transparent 100%);
+    pointer-events: none;
+    z-index: 8;
+  }
+  .composer {
+    background: rgba(35,35,35,0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 26px;
+    padding: 12px 12px 10px 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+  }
+  .composer-input {
+    color: var(--text-weak);
+    font-size: 15px;
+    padding: 2px 0 10px;
+  }
+  .chips {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .choice {
+    font-size: 13px;
+    color: var(--text);
+    background: rgba(237,237,237,0.08);
+    border-radius: 999px;
+    padding: 8px 12px;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .composer-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ghost {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.08);
+    color: var(--icon-strong);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
+  .ghost svg { width: 18px; height: 18px; }
+  .send {
+    margin-left: auto;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--text);
+    color: #111;
+    display: grid;
+    place-items: center;
+  }
+  .send svg { width: 16px; height: 16px; }
+
+  .toast {
+    position: absolute;
+    left: 24px;
+    right: 24px;
+    bottom: 196px;
+    z-index: 20;
+    background: #f5f5f5;
+    color: #111;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 550;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  .scenes {
+    max-width: 920px;
+    margin: 22px auto 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+  .scenes button {
+    border: 1px solid var(--border);
+    background: #151515;
+    color: var(--text-base);
+    border-radius: 999px;
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 550;
+    cursor: pointer;
+  }
+  .scenes button[aria-pressed="true"] {
+    background: #ededed;
+    color: #111;
+    border-color: #ededed;
+  }
+
+  .switcher {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #f5f5f5;
+    color: #111;
+    border-radius: 999px;
+    padding: 6px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.08);
+    font-size: 13px;
+    font-weight: 600;
+    max-width: calc(100vw - 24px);
+  }
+  .switcher button {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: #e8e8e8;
+    color: #111;
+    cursor: pointer;
+    font-size: 16px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+  .switcher button:hover { background: #ddd; }
+  .switcher .label {
+    padding: 0 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: min(380px, 62vw);
+    text-align: center;
+  }
+  .switcher .label small {
+    display: block;
+    font-weight: 500;
+    font-size: 11px;
+    color: #666;
+    margin-top: 1px;
+  }
+
+  .state-dump {
+    max-width: 920px;
+    margin: 18px auto 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    color: var(--text-weak);
+    background: #151515;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    white-space: pre-wrap;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.35; }
+    50% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+  <!--
+    PROTOTYPE — throwaway.
+    Question: How should Session Todos + Review Changes sit at the TOP so they stop covering the last message, while only Scroll to end stays at the bottom?
+    Four variants via ?variant=A|B|C|D.
+  -->
+
+  <header class="page-meta">
+    <h1>Pills on top</h1>
+    <p>
+      Today Todos + Review/Scroll stack above the composer and cover the last message.
+      These four ideas keep <strong style="color:var(--text);font-weight:600">only Scroll to end</strong> at the bottom.
+      Todos, Review, and Syncing live up top.
+    </p>
+    <p>
+      Toggle scenes under the phone: pinned vs scrolled, and which pills are live.
+      The last assistant paragraph is outlined so you can judge whether it stays readable.
+    </p>
+    <span class="tag">Prototype · not production</span>
+  </header>
+
+  <div class="stage">
+    <div class="phone" id="phone" data-variant="A">
+      <div class="phone-notch"></div>
+      <div class="status-bar">
+        <span>9:41</span>
+        <span class="right">●●●● ▮</span>
+      </div>
+      <div class="app" id="app"></div>
+      <div class="toast" id="toast"></div>
+    </div>
+  </div>
+
+  <div class="scenes" id="scenes" role="group" aria-label="Scene toggles"></div>
+  <div class="state-dump" id="state"></div>
+
+  <div class="switcher" id="switcher" role="toolbar" aria-label="Prototype variant switcher">
+    <button type="button" id="prev" aria-label="Previous variant">←</button>
+    <div class="label" id="label">A — Overlay stack</div>
+    <button type="button" id="next" aria-label="Next variant">→</button>
+  </div>
+
+<script>
+const VARIANTS = [
+  { key: "A", name: "Overlay stack", blurb: "Same capsules, flipped to top-center. Last message stays clear." },
+  { key: "B", name: "Reserved strip", blurb: "Inline chip row under the top bar. Never covers messages." },
+  { key: "C", name: "Folded chrome", blurb: "No extra layer. Progress + files live in the subtitle." },
+  { key: "D", name: "Combined island", blurb: "One two-segment glass island. Single object, two taps." },
+];
+
+const ui = {
+  variant: "A",
+  pinned: true,
+  todos: true,
+  review: true,
+  syncing: false,
+  lastAction: null,
+  toastTimer: null,
+};
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  })[c]);
+}
+
+function backBtn() {
+  return `<button class="icon-btn" aria-label="Back">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>`;
+}
+function moreBtn() {
+  return `<button class="icon-btn" aria-label="More">
+    <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="6" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="18" r="1.6"/></svg>
+  </button>`;
+}
+function downArrow() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>`;
+}
+
+function todosPill(extraClass = "") {
+  return `<button class="pill ${extraClass}" type="button" data-action="toast" data-msg="Would open Session Todos sheet">
+    <span class="dot"></span>
+    <span class="count">2/5</span>
+    <span class="preview">Implement auth middleware</span>
+  </button>`;
+}
+function reviewPill(extraClass = "") {
+  return `<button class="pill ${extraClass}" type="button" data-action="toast" data-msg="Would open last-turn diffs">
+    <span class="files">4 files</span>
+    <span class="add">+12</span>
+    <span class="del">−3</span>
+  </button>`;
+}
+function syncPill() {
+  return `<div class="pill sync"><span class="spinner"></span>Syncing…</div>`;
+}
+function scrollPill() {
+  return `<button class="pill" type="button" data-action="pin">
+    ${downArrow()}
+    Scroll to end
+  </button>`;
+}
+
+function topBarC() {
+  const bits = [];
+  if (ui.todos) {
+    bits.push(`<button class="sub-link" type="button" data-action="toast" data-msg="Would open Session Todos sheet">
+      <span class="dot" style="width:6px;height:6px;border-radius:50%;background:var(--interactive);box-shadow:0 0 0 2px rgba(140,176,255,0.25);flex-shrink:0"></span>
+      <span class="count">2/5</span>
+      <span class="preview">Implement auth middleware</span>
+    </button>`);
+  }
+  if (ui.todos && ui.review) bits.push(`<span class="sub-sep">·</span>`);
+  if (ui.review) {
+    bits.push(`<button class="sub-link" type="button" data-action="toast" data-msg="Would open last-turn diffs">
+      <span class="sub-files">4 files</span>
+      <span class="sub-add">+12</span>
+      <span class="sub-del">−3</span>
+    </button>`);
+  }
+  if (ui.syncing) {
+    bits.unshift(`<span class="sub-sep" style="display:inline-flex;align-items:center;gap:5px"><span class="spinner" style="width:10px;height:10px"></span>syncing</span>${bits.length ? `<span class="sub-sep">·</span>` : ""}`);
+  }
+  const sub = bits.length
+    ? bits.join("")
+    : `<span class="status-dot"></span><span class="status-label">live</span>`;
+
+  return `
+    <div class="topbar">
+      ${backBtn()}
+      <div class="title-block">
+        <div class="title">Implement session auth</div>
+        <div class="subtitle-row">${sub}</div>
+      </div>
+      ${moreBtn()}
+    </div>`;
+}
+
+function topBarDefault() {
+  return `
+    <div class="topbar">
+      ${backBtn()}
+      <div class="title-block">
+        <div class="title">Implement session auth</div>
+        <div class="subtitle-row"><span class="status-dot"></span><span class="status-label">live</span></div>
+      </div>
+      ${moreBtn()}
+    </div>`;
+}
+
+function messages() {
+  const last = ui.pinned ? `
+    <div class="msg-assistant last-msg-mark">
+      <p>Auth middleware now checks the session cookie before any <code style="color:var(--text-base)">/session</code> write. Unsigned tokens fail closed.</p>
+      <p>I still need to wire the Keychain / Keystore read on cold start, then the last message will stay fully readable under the composer — nothing stacked on top of this paragraph.</p>
+    </div>
+    <div class="working"><span class="pulse"></span>Working</div>
+  ` : `
+    <div class="msg-assistant">
+      <p>Earlier turn: mapped the float stack so Todos sit above Review, both sharing the composer inset. That is why they cover this ending.</p>
+    </div>
+    <div class="tool-card">
+      <span class="dot"></span>
+      <div>
+        <div class="t">Read</div>
+        <div class="s">SessionChatTimelineView.swift</div>
+      </div>
+    </div>
+  `;
+
+  return `
+    <div class="msg-user">
+      Keep going on auth. When you finish a file I want to review the diff without losing the last reply under the pills.
+      <div class="foot">Build · GPT-5.4 · 9:38 PM</div>
+    </div>
+    <div class="tool-card">
+      <span class="dot"></span>
+      <div>
+        <div class="t">Edit</div>
+        <div class="s">SessionAuthMiddleware.kt</div>
+      </div>
+    </div>
+    <div class="msg-assistant">
+      <p>Added the cookie gate and the unsigned-token reject. Next I’ll persist the credential in Keychain / Keystore and keep the composer chips where they are.</p>
+    </div>
+    ${last}`;
+}
+
+function composer() {
+  return `
+    <div class="bottom-fade"></div>
+    <div class="composer-wrap">
+      <div class="composer">
+        <div class="composer-input">Ask anything...</div>
+        <div class="chips">
+          <span class="choice">GPT-5.4</span>
+          <span class="choice">Build</span>
+          <span class="choice">Max</span>
+        </div>
+        <div class="composer-row">
+          <button class="ghost" type="button" aria-label="Attach">${plus()}</button>
+          <button class="ghost" type="button" aria-label="Slash">${slash()}</button>
+          <button class="send" type="button" aria-label="Send">${arrowUp()}</button>
+        </div>
+      </div>
+    </div>`;
+}
+function plus() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
+}
+function slash() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 18L16 6"/></svg>`;
+}
+function arrowUp() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>`;
+}
+
+function topPillsStack() {
+  const items = [];
+  if (ui.syncing) items.push(syncPill());
+  if (ui.todos) items.push(todosPill());
+  if (ui.review) items.push(reviewPill());
+  if (!items.length) return "";
+  return `<div class="float-top">${items.join("")}</div>`;
+}
+
+function island() {
+  const segs = [];
+  if (ui.syncing) {
+    segs.push(`<button type="button" disabled style="opacity:.8;cursor:default"><span class="spinner"></span>Syncing…</button>`);
+  }
+  if (ui.todos) {
+    segs.push(`<button type="button" data-action="toast" data-msg="Would open Session Todos sheet">
+      <span class="dot"></span><span class="count">2/5</span><span class="preview">Implement auth middleware</span>
+    </button>`);
+  }
+  if (ui.review) {
+    segs.push(`<button type="button" data-action="toast" data-msg="Would open last-turn diffs">
+      <span class="files">4 files</span> <span class="add">+12</span> <span class="del">−3</span>
+    </button>`);
+  }
+  if (!segs.length) return "";
+  return `<div class="float-top"><div class="island">${segs.join("")}</div></div>`;
+}
+
+function strip() {
+  const items = [];
+  if (ui.syncing) items.push(syncPill());
+  if (ui.todos) items.push(todosPill());
+  if (ui.review) items.push(reviewPill());
+  if (!items.length) return "";
+  return `<div class="strip">${items.join("")}</div>`;
+}
+
+function scrollOverlay() {
+  if (ui.pinned) return "";
+  return `<div class="float-bottom">${scrollPill()}</div>`;
+}
+
+function render() {
+  const v = ui.variant;
+  document.getElementById("phone").dataset.variant = v;
+
+  let chrome;
+  if (v === "C") chrome = topBarC();
+  else chrome = topBarDefault();
+
+  let extras = "";
+  if (v === "A") extras = `<div class="top-fade"></div>${topPillsStack()}`;
+  if (v === "D") extras = `<div class="top-fade"></div>${island()}`;
+
+  const stripRow = v === "B" ? strip() : "";
+
+  document.getElementById("app").innerHTML = `
+    ${chrome}
+    ${stripRow}
+    <div class="timeline-host">
+      <div class="timeline" id="timeline">
+        ${messages()}
+      </div>
+      ${extras}
+      ${scrollOverlay()}
+    </div>
+    ${composer()}`;
+
+  const tl = document.getElementById("timeline");
+  if (ui.pinned) tl.scrollTop = tl.scrollHeight;
+  else tl.scrollTop = 0;
+
+  const meta = VARIANTS.find(x => x.key === v);
+  document.getElementById("label").innerHTML =
+    `${v} — ${esc(meta.name)}<small>${esc(meta.blurb)}</small>`;
+
+  document.getElementById("state").textContent = JSON.stringify({
+    variant: v,
+    name: meta.name,
+    pinnedToEnd: ui.pinned,
+    showTodos: ui.todos,
+    showReview: ui.review,
+    showSyncing: ui.syncing,
+    showScrollToEnd: !ui.pinned,
+    lastMessageCovered: false,
+    lastAction: ui.lastAction,
+  }, null, 2);
+
+  renderScenes();
+}
+
+function renderScenes() {
+  const items = [
+    { key: "pinned", on: ui.pinned, label: ui.pinned ? "Pinned to end" : "Scrolled away" },
+    { key: "todos", on: ui.todos, label: "Todos" },
+    { key: "review", on: ui.review, label: "Review" },
+    { key: "syncing", on: ui.syncing, label: "Syncing" },
+  ];
+  document.getElementById("scenes").innerHTML = items.map(i =>
+    `<button type="button" data-scene="${i.key}" aria-pressed="${i.on}">${esc(i.label)}</button>`
+  ).join("");
+}
+
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(ui.toastTimer);
+  ui.toastTimer = setTimeout(() => el.classList.remove("show"), 1400);
+}
+
+function setVariant(key) {
+  ui.variant = key;
+  const url = new URL(location.href);
+  url.searchParams.set("variant", key);
+  history.replaceState(null, "", url);
+  ui.lastAction = `variant=${key}`;
+  render();
+}
+
+function cycle(dir) {
+  const i = VARIANTS.findIndex(v => v.key === ui.variant);
+  const next = VARIANTS[(i + dir + VARIANTS.length) % VARIANTS.length];
+  setVariant(next.key);
+}
+
+document.getElementById("prev").addEventListener("click", () => cycle(-1));
+document.getElementById("next").addEventListener("click", () => cycle(1));
+
+document.addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+  if (e.key === "ArrowLeft") cycle(-1);
+  if (e.key === "ArrowRight") cycle(1);
+});
+
+document.addEventListener("click", (e) => {
+  const scene = e.target.closest("[data-scene]");
+  if (scene) {
+    const k = scene.dataset.scene;
+    if (k === "pinned") ui.pinned = !ui.pinned;
+    else ui[k] = !ui[k];
+    ui.lastAction = `toggle ${k}`;
+    render();
+    return;
+  }
+  const act = e.target.closest("[data-action]");
+  if (!act) return;
+  if (act.dataset.action === "pin") {
+    ui.pinned = true;
+    ui.lastAction = "scroll to end";
+    toast("Scrolled to end");
+    render();
+    return;
+  }
+  if (act.dataset.action === "toast") {
+    ui.lastAction = act.dataset.msg;
+    toast(act.dataset.msg);
+  }
+});
+
+const initial = new URLSearchParams(location.search).get("variant");
+ui.variant = VARIANTS.some(v => v.key === initial) ? initial : "A";
+render();
+</script>
+</body>
+</html>

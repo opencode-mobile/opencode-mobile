@@ -1,5 +1,21 @@
 # Session Chat Decisions
 
+## OPE-167 top overlay stack; Scroll to end stays at the bottom
+
+- Date: 2026-08-15
+- Decision: Session Todos, Review Changes, and Syncing overlay the **top** of
+  the Session Chat timeline (Syncing, then Todos, then Review; 8pt gap;
+  top-center + 10pt). Only Scroll to end stays above the composer. Review
+  Changes is no longer XOR with Scroll to end and is not gated on pin — it
+  shows whenever the latest completed turn changed at least one file. Hide
+  Todos and Review while the Session Todos sheet is open; Syncing may stay.
+  Timeline pin / fade inset stays composer + 16.
+- Reason: The bottom stack covered the last message. Prototype variant A
+  (`docs/prototypes/pills-on-top/`) keeps the same capsules and leaves only
+  the scroll action at the bottom.
+- Evidence: [ope-167-plan.md](./ope-167-plan.md)
+- Revisit when: a reserved strip or top-bar fold is preferred over the overlay.
+
 ## OPE-145 Android scroll-to-end pill uses user-scroll and settle gates
 
 - Date: 2026-08-14

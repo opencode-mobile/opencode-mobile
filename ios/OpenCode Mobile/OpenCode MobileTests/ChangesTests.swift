@@ -376,6 +376,20 @@ struct ChangesViewModelTests {
     }
 }
 
+struct ReviewChangesPillVisibilityTests {
+    @Test func showsWhenLatestTurnChangedFiles() {
+        let summary = ReviewChangesSummary(fileCount: 2, additions: 4, deletions: 1)
+        #expect(ReviewChangesPillVisibility.shouldShow(summary: summary))
+    }
+
+    @Test func hidesWhenSummaryMissingOrEmpty() {
+        #expect(!ReviewChangesPillVisibility.shouldShow(summary: nil))
+        #expect(!ReviewChangesPillVisibility.shouldShow(
+            summary: ReviewChangesSummary(fileCount: 0, additions: 0, deletions: 0)
+        ))
+    }
+}
+
 private final class ChangesSessionRepository: SessionRepository, @unchecked Sendable {
     struct Request: Equatable { let sessionID: String; let messageID: String?; let directory: String? }
     struct VcsRequest: Equatable { let mode: VcsDiffMode; let directory: String?; let context: Int }

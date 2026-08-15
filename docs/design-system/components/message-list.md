@@ -68,8 +68,8 @@ bottom disarms follow until they return or tap scroll to end.
 **Scroll to end** uses `MessageListScrollToEndOverlay`, which wraps
 `OpenCodeActionPill` (`scrollToEnd`). The pill hides while the user is actively
 scrolling and reappears after scrolling settles when the reveal threshold is
-still met. Callers may also hide the pill while overlays such as Review Changes
-are visible.
+still met. Session Chat keeps this pill at the bottom and places Review Changes
+in the top overlay instead of hiding one for the other.
 
 **Pull-to-refresh** is available when the host receives a refresh handler;
 otherwise the control is omitted. On iOS, `MessageListTimelineHost.onRefresh`

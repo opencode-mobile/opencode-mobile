@@ -36,6 +36,16 @@
   the Component Gallery without expanding List Item’s pill/letter API.
 - Ticket: OPE-97.
 
+## Top overlay for Todos and Review (OPE-167)
+
+- Decision: Session Todos and Review Changes overlay the **top** of Session
+  Chat with Syncing (Syncing, then Todos, then Review). Only Scroll to end
+  stays above the composer. Review is not XOR with Scroll to end. Hide Todos
+  and Review while the Session Todos sheet is open; Syncing may stay.
+- Why: The bottom stack covered the last message. Same capsules, new place.
+- Ticket: OPE-167. Supersedes the bottom-stack slots in the OPE-106 decision
+  below for product placement; still compose only visible pills.
+
 ## Float-stack slots and layout ghosts
 
 - Decision: Session Chat float stack is at most two pills:

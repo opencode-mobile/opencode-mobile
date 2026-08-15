@@ -1,5 +1,17 @@
 # Session Chat Progress
 
+## OPE-167 top overlay pills (2026-08-15)
+
+- Status: implemented on iOS and Android (unit-tested visibility).
+- Plan: [ope-167-plan.md](./ope-167-plan.md)
+- Done:
+  - Top overlay: Syncing, then Todos, then Review (8pt, top-center + 10pt).
+  - Bottom overlay: Scroll to end only.
+  - Review shows on latest-turn file changes; not XOR with Scroll; not pin-gated.
+  - Hide Todos + Review while the Session Todos sheet is open; Syncing may stay.
+- Remaining: device smoke (pinned last message readable; scrolled shows Scroll
+  to end at bottom and Review at top; sheet hides Todos/Review).
+
 ## OPE-145 Android scroll-to-end pill blink (2026-08-14)
 
 - Status: implemented on Android (unit-tested). iOS already hid on user scroll
