@@ -962,19 +962,6 @@ private func sessionChatTimelineBottomInset(_ composerOverlayHeight: CGFloat) ->
     return height + OpenCodeBottomFade.overhang
 }
 
-private extension SessionConnectionStatus {
-    var openCodeStatus: OpenCodeSessionConnectionStatus {
-        switch self {
-        case .live:
-            .live
-        case .connecting:
-            .connecting
-        case .offline:
-            .offline
-        }
-    }
-}
-
 private extension SessionChatSnackbar {
     func mapToOpenCodeSnackbarMessage() -> OpenCodeSnackbarMessage {
         OpenCodeSnackbarMessage(

@@ -10,8 +10,9 @@ import dev.opencode.mobile.domain.command.ClientSlashMessageRef
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.connection.DeviceNetworkPath
+import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
 import dev.opencode.mobile.domain.event.EventDomainAdapter
-import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.SessionLiveStore
@@ -44,6 +45,8 @@ import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
 import dev.opencode.mobile.ui.components.SessionListScrollPin
+import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
+import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -78,6 +81,7 @@ class MainScreenViewModel
         private val newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         private val sessionCache: SessionCache,
         private val optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator,
+        private val deviceNetworkPath: DeviceNetworkPath = ReadyDeviceNetworkPath,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
@@ -90,13 +94,20 @@ class MainScreenViewModel
         private val _revealNewestToken = MutableStateFlow(0)
         val revealNewestToken: StateFlow<Int> = _revealNewestToken.asStateFlow()
         private var lastHomeHiddenAtEpochMs: Long? = HomeDisplayPreferences.lastHomeHiddenAtEpochMs()
-        val liveUpdatesConnectionState: StateFlow<EventStreamConnectionState> =
-            foregroundEventStream.connectionState
-                .stateIn(
-                    scope = viewModelScope,
-                    started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
-                    initialValue = EventStreamConnectionState.Idle,
-                )
+        val liveUpdatesConnectionStatus: StateFlow<SessionConnectionStatus> =
+            combine(
+                foregroundEventStream.connectionState,
+                deviceNetworkPath.status,
+            ) { connectionState, path ->
+                connectionState.toSessionConnectionStatus(path)
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
+                initialValue =
+                    foregroundEventStream.connectionState.value.toSessionConnectionStatus(
+                        deviceNetworkPath.status.value,
+                    ),
+            )
 
         private val serverBaseUrl: String
             get() = activeConnectionManager.current()?.baseUrl.orEmpty()
@@ -259,7 +270,7 @@ class MainScreenViewModel
 
         fun createSession(worktree: String) {
             logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_CREATE_SESSION)
-            if (foregroundEventStream.connectionState.value != EventStreamConnectionState.Connected) {
+            if (liveUpdatesConnectionStatus.value != SessionConnectionStatus.Live) {
                 setProjectSessionCreateError("Reconnect to create a session")
                 return
             }

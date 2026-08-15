@@ -26,7 +26,7 @@ struct ProjectListHomeView: View {
                 OpenCodeTopBar(
                     title: "Sessions",
                     subtitleAccessory: showsLiveUpdatesStatus
-                        ? .statusDot(viewModel.liveUpdatesConnectionState.openCodeSessionConnectionStatus)
+                        ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
                         : nil,
                     actions: [
                         .icon(.settings, accessibilityLabel: "Settings", action: {

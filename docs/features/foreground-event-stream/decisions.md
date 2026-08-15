@@ -57,6 +57,21 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
   (Disconnected).
 - **Session Chat (iOS):** `startObserving()` on appear; `stopObserving()` on explicit back or after a short delayed disappear (avoids killing SSE when the home Screen Model refresh re-renders the navigation parent). Android relies on scoped `ViewModel` cancellation on navigate back.
 
+## Device path is a second signal
+
+- Date: 2026-08-15
+- Decision: keep `EventStreamConnectionState` as SSE occupancy. Add
+  `DeviceNetworkPath` (`ready` / `unavailable`). Chrome and mutations compose
+  `(SSE × path)`. Unavailable is **offline** even if SSE is still Connected.
+  Radio-off cancels the current SSE read and parks until a path exists; it does
+  not `stop()` the stream or re-probe. **Ready** means some IP path, including
+  LAN and Tailscale. Captive / `requiresConnection` is unavailable. No roam
+  debounce.
+- Reason: radio-off leaves URLSession / OkHttp SSE reads hanging, so chrome
+  stayed **live**. OPE-165 must not publish Disconnected while a foreground
+  retry is in flight; radio-off is a different cause and belongs on the overlay.
+- Revisit when: Wi-Fi roam flashes offline and needs a short debounce.
+
 ## Heartbeats
 
 `server.heartbeat` updates connection state only. `server.connected` schedules

@@ -289,11 +289,16 @@ extension Container {
         self { EventDomainAdapter() }.singleton
     }
 
+    var deviceNetworkPath: Factory<any DeviceNetworkPath> {
+        self { SystemDeviceNetworkPath() }.singleton
+    }
+
     var foregroundEventStream: Factory<DefaultForegroundEventStream> {
         self { @MainActor in
             DefaultForegroundEventStream(
                 api: self.eventsAPIClient(),
-                adapter: self.eventDomainAdapter()
+                adapter: self.eventDomainAdapter(),
+                deviceNetworkPath: self.deviceNetworkPath()
             )
         }.singleton
     }
@@ -404,7 +409,8 @@ extension Container {
                     store: self.sessionModelSelectionStore(),
                     modelRepository: self.modelRepository()
                 ),
-                sessionCache: self.sessionCache()
+                sessionCache: self.sessionCache(),
+                deviceNetworkPath: self.deviceNetworkPath()
             )
         }
     }
@@ -432,7 +438,8 @@ extension Container {
                 newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
                     store: self.sessionModelSelectionStore(),
                     modelRepository: self.modelRepository()
-                )
+                ),
+                deviceNetworkPath: self.deviceNetworkPath()
             )
         }
     }

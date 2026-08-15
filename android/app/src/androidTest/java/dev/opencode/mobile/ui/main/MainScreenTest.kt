@@ -3,7 +3,7 @@ package dev.opencode.mobile.ui.main
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import dev.opencode.mobile.domain.event.EventStreamConnectionState
+import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -17,7 +17,7 @@ class MainScreenTest {
         composeTestRule.setContent {
             MainScreen(
                 uiState = MainScreenUiState.Disconnected,
-                liveUpdatesConnectionState = EventStreamConnectionState.Idle,
+                liveUpdatesConnectionStatus = SessionConnectionStatus.Offline,
                 removalSnackbar = null,
                 onSettingsClick = {},
                 onSessionClick = {},

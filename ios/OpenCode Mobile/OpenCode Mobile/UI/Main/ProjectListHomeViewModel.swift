@@ -113,11 +113,12 @@ final class ProjectListHomeViewModel {
     private let sessionStatusLiveStore: any SessionStatusLiveStore
     private let sessionReadyStore: any SessionReadyStore
     private let foregroundEventStream: any ForegroundEventStream
+    private let deviceNetworkPath: any DeviceNetworkPath
     private let sessionCache: any SessionCache
     private let eventAdapter = EventDomainAdapter()
     private let sessionAdapter = SessionDomainAdapter()
     private var connectionStateObservationTask: Task<Void, Never>?
-    private(set) var liveUpdatesConnectionState: EventStreamConnectionState = .idle
+    private(set) var liveUpdatesConnectionStatus: SessionConnectionStatus = .offline
     private var serverBaseURL: String {
         activeConnectionManager.connection?.baseURL.absoluteString ?? ""
     }
@@ -144,7 +145,8 @@ final class ProjectListHomeViewModel {
         foregroundEventStream: any ForegroundEventStream,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver? = nil,
-        sessionCache: any SessionCache = NoOpSessionCache.shared
+        sessionCache: any SessionCache = NoOpSessionCache.shared,
+        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath()
     ) {
         self.projectRepository = projectRepository
         self.filesystemRepository = filesystemRepository
@@ -156,6 +158,7 @@ final class ProjectListHomeViewModel {
         self.sessionStatusLiveStore = sessionStatusLiveStore
         self.sessionReadyStore = sessionReadyStore
         self.foregroundEventStream = foregroundEventStream
+        self.deviceNetworkPath = deviceNetworkPath
         self.connectionSessionCoordinator = connectionSessionCoordinator
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.sessionCache = sessionCache
@@ -180,12 +183,32 @@ final class ProjectListHomeViewModel {
 
     private func startObservingConnectionState() {
         connectionStateObservationTask?.cancel()
-        liveUpdatesConnectionState = foregroundEventStream.connectionState
+        applyComposedConnectionStatus()
         connectionStateObservationTask = Task {
-            for await state in foregroundEventStream.connectionStateUpdates() {
-                liveUpdatesConnectionState = state
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { [weak self] in
+                    guard let stream = self?.foregroundEventStream else { return }
+                    for await _ in stream.connectionStateUpdates() {
+                        await self?.applyComposedConnectionStatus()
+                    }
+                }
+                group.addTask { [weak self] in
+                    guard let path = self?.deviceNetworkPath else { return }
+                    for await _ in path.updates() {
+                        await self?.applyComposedConnectionStatus()
+                    }
+                }
+                await group.next()
+                group.cancelAll()
             }
         }
+    }
+
+    private func applyComposedConnectionStatus() {
+        liveUpdatesConnectionStatus = SessionConnectionStatus(
+            connectionState: foregroundEventStream.connectionState,
+            path: deviceNetworkPath.status
+        )
     }
 
     func refresh() async {
@@ -316,7 +339,7 @@ final class ProjectListHomeViewModel {
     }
 
     func createSession(in worktree: String) async {
-        guard foregroundEventStream.connectionState == .connected else {
+        guard liveUpdatesConnectionStatus == .live else {
             logCreateSession(outcome: ProductAnalytics.Outcome.blocked)
             setProjectSessionCreateError("Reconnect to create a session")
             return

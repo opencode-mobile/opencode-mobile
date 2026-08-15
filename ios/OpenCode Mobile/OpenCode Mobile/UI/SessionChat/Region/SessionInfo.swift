@@ -11,6 +11,7 @@ final class SessionInfo {
     private let sessionRepository: any SessionRepository
     private let sessionStatusLiveStore: any SessionStatusLiveStore
     private let foregroundEventStream: any ForegroundEventStream
+    private let deviceNetworkPath: any DeviceNetworkPath
     private let eventAdapter = EventDomainAdapter()
     private var observationTask: Task<Void, Never>?
     private var eventFanoutTask: Task<Void, Never>?
@@ -20,12 +21,14 @@ final class SessionInfo {
         worktree: String,
         sessionRepository: any SessionRepository,
         sessionStatusLiveStore: any SessionStatusLiveStore,
-        foregroundEventStream: any ForegroundEventStream
+        foregroundEventStream: any ForegroundEventStream,
+        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath()
     ) {
         self.worktree = worktree
         self.sessionRepository = sessionRepository
         self.sessionStatusLiveStore = sessionStatusLiveStore
         self.foregroundEventStream = foregroundEventStream
+        self.deviceNetworkPath = deviceNetworkPath
     }
 
     func bind(sessionID: String, sessionTitle: String) {
@@ -280,16 +283,34 @@ final class SessionInfo {
     }
 
     private func observeConnectionState() async {
-        state.connectionStatus = SessionConnectionStatus(connectionState: foregroundEventStream.connectionState)
-        notifyChange()
-        for await connectionState in foregroundEventStream.connectionStateUpdates() {
-            OpenCodeLog.sessionChat.debug(
-                "live connection session=\(self.state.sessionID, privacy: .public) state=\(String(describing: connectionState), privacy: .public)"
-            )
-            DiagnosticLog.debug(.session, "live connection session=\(state.sessionID) state=\(connectionState)")
-            state.connectionStatus = SessionConnectionStatus(connectionState: connectionState)
-            notifyChange()
+        applyComposedConnectionStatus()
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { [weak self] in
+                guard let stream = self?.foregroundEventStream else { return }
+                for await _ in stream.connectionStateUpdates() {
+                    await self?.applyComposedConnectionStatus()
+                }
+            }
+            group.addTask { [weak self] in
+                guard let path = self?.deviceNetworkPath else { return }
+                for await _ in path.updates() {
+                    await self?.applyComposedConnectionStatus()
+                }
+            }
+            await group.next()
+            group.cancelAll()
         }
+    }
+
+    private func applyComposedConnectionStatus() {
+        let connectionState = foregroundEventStream.connectionState
+        let path = deviceNetworkPath.status
+        OpenCodeLog.sessionChat.debug(
+            "live connection session=\(self.state.sessionID, privacy: .public) state=\(String(describing: connectionState), privacy: .public) path=\(String(describing: path), privacy: .public)"
+        )
+        DiagnosticLog.debug(.session, "live connection session=\(state.sessionID) state=\(connectionState) path=\(path)")
+        state.connectionStatus = SessionConnectionStatus(connectionState: connectionState, path: path)
+        notifyChange()
     }
 
     private func applySessionUpdatedTitle(_ event: OpencodeEvent) {

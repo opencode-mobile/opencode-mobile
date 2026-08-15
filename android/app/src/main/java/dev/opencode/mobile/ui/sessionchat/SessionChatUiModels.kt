@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.agent.MentionableAgent
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
+import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.MessageRole
@@ -421,15 +422,21 @@ enum class SessionConnectionStatus(
     Offline("offline"),
 }
 
-fun EventStreamConnectionState.toSessionConnectionStatus(): SessionConnectionStatus =
-    when (this) {
-        EventStreamConnectionState.Connected -> SessionConnectionStatus.Live
-        EventStreamConnectionState.Connecting,
-        EventStreamConnectionState.Reconnecting,
-        -> SessionConnectionStatus.Connecting
-        EventStreamConnectionState.Idle,
-        EventStreamConnectionState.Disconnected,
-        -> SessionConnectionStatus.Offline
+fun EventStreamConnectionState.toSessionConnectionStatus(
+    path: DeviceNetworkPathStatus = DeviceNetworkPathStatus.Ready,
+): SessionConnectionStatus =
+    if (path == DeviceNetworkPathStatus.Unavailable) {
+        SessionConnectionStatus.Offline
+    } else {
+        when (this) {
+            EventStreamConnectionState.Connected -> SessionConnectionStatus.Live
+            EventStreamConnectionState.Connecting,
+            EventStreamConnectionState.Reconnecting,
+            -> SessionConnectionStatus.Connecting
+            EventStreamConnectionState.Idle,
+            EventStreamConnectionState.Disconnected,
+            -> SessionConnectionStatus.Offline
+        }
     }
 
 enum class SessionChatTimelineState {

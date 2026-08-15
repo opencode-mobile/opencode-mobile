@@ -4,6 +4,8 @@ import dev.opencode.mobile.data.remote.EventsApi
 import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
+import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
+import dev.opencode.mobile.domain.connection.FakeDeviceNetworkPath
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
@@ -107,6 +109,51 @@ class DefaultForegroundEventStreamTest {
                 stream.start()
                 withTimeout(5_000) { opened.await() }
                 assertTrue(requests.single().url.encodedPath.contains("/api/event"))
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun unavailablePath_doesNotOpenSseUntilReady() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val opened = CompletableDeferred<Unit>()
+            val client =
+                HttpClient(
+                    MockEngine { request ->
+                        requests += request
+                        opened.complete(Unit)
+                        respond(
+                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing { ServerProtocol.V1 },
+                )
+            manager.applyProfile(sampleProfile)
+            val path = FakeDeviceNetworkPath(DeviceNetworkPathStatus.Unavailable)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    deviceNetworkPath = path,
+                )
+            try {
+                stream.start()
+                delay(80)
+                assertTrue(requests.isEmpty())
+                path.set(DeviceNetworkPathStatus.Ready)
+                withTimeout(1_000) { opened.await() }
+                assertTrue(requests.single().url.encodedPath.contains("/global/event"))
             } finally {
                 stream.stop()
                 client.close()

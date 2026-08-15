@@ -521,7 +521,14 @@ enum SessionConnectionStatus: String, Equatable, Sendable {
     case connecting
     case offline
 
-    init(connectionState: EventStreamConnectionState) {
+    init(
+        connectionState: EventStreamConnectionState,
+        path: DeviceNetworkPathStatus = .ready
+    ) {
+        if path == .unavailable {
+            self = .offline
+            return
+        }
         switch connectionState {
         case .connected:
             self = .live
@@ -529,6 +536,17 @@ enum SessionConnectionStatus: String, Equatable, Sendable {
             self = .connecting
         case .idle, .disconnected:
             self = .offline
+        }
+    }
+
+    var openCodeStatus: OpenCodeSessionConnectionStatus {
+        switch self {
+        case .live:
+            .live
+        case .connecting:
+            .connecting
+        case .offline:
+            .offline
         }
     }
 }

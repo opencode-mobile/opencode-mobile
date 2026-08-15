@@ -27,7 +27,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
-import dev.opencode.mobile.domain.event.EventStreamConnectionState
+import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -85,7 +85,7 @@ fun MainScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
-    val liveUpdatesConnectionState by viewModel.liveUpdatesConnectionState.collectAsStateWithLifecycle()
+    val liveUpdatesConnectionStatus by viewModel.liveUpdatesConnectionStatus.collectAsStateWithLifecycle()
     val removalSnackbar by viewModel.removalSnackbar.collectAsStateWithLifecycle()
     val sessionActions by viewModel.sessionActions.collectAsStateWithLifecycle()
     val revealNewestToken by viewModel.revealNewestToken.collectAsStateWithLifecycle()
@@ -98,7 +98,7 @@ fun MainScreen(
     MainScreen(
         uiState = state,
         isRefreshing = isRefreshing,
-        liveUpdatesConnectionState = liveUpdatesConnectionState,
+        liveUpdatesConnectionStatus = liveUpdatesConnectionStatus,
         removalSnackbar = removalSnackbar,
         sessionActions = sessionActions,
         revealNewestToken = revealNewestToken,
@@ -153,7 +153,7 @@ fun MainScreen(
 @Composable
 internal fun MainScreen(
     uiState: MainScreenUiState,
-    liveUpdatesConnectionState: EventStreamConnectionState,
+    liveUpdatesConnectionStatus: SessionConnectionStatus,
     removalSnackbar: OpenCodeSnackbarMessage?,
     onSettingsClick: () -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
@@ -239,7 +239,7 @@ internal fun MainScreen(
                 subtitleAccessory =
                     if (showsLiveUpdatesStatus(uiState)) {
                         OpenCodeTopBarSubtitleAccessory.StatusDot(
-                            liveUpdatesConnectionState.toOpenCodeSessionConnectionStatus(),
+                            liveUpdatesConnectionStatus.toOpenCodeSessionConnectionStatus(),
                         )
                     } else {
                         null
@@ -800,15 +800,11 @@ private fun showsLiveUpdatesStatus(uiState: MainScreenUiState): Boolean =
         else -> true
     }
 
-private fun EventStreamConnectionState.toOpenCodeSessionConnectionStatus(): OpenCodeSessionConnectionStatus =
+private fun SessionConnectionStatus.toOpenCodeSessionConnectionStatus(): OpenCodeSessionConnectionStatus =
     when (this) {
-        EventStreamConnectionState.Connected -> OpenCodeSessionConnectionStatus.Live
-        EventStreamConnectionState.Connecting,
-        EventStreamConnectionState.Reconnecting,
-        -> OpenCodeSessionConnectionStatus.Connecting
-        EventStreamConnectionState.Idle,
-        EventStreamConnectionState.Disconnected,
-        -> OpenCodeSessionConnectionStatus.Offline
+        SessionConnectionStatus.Live -> OpenCodeSessionConnectionStatus.Live
+        SessionConnectionStatus.Connecting -> OpenCodeSessionConnectionStatus.Connecting
+        SessionConnectionStatus.Offline -> OpenCodeSessionConnectionStatus.Offline
     }
 
 @Preview(showBackground = true)
@@ -834,7 +830,7 @@ fun MainScreenPreview() {
                             ),
                         ),
                 ),
-            liveUpdatesConnectionState = EventStreamConnectionState.Connected,
+            liveUpdatesConnectionStatus = SessionConnectionStatus.Live,
             isRefreshing = false,
             removalSnackbar = null,
             onSettingsClick = {},

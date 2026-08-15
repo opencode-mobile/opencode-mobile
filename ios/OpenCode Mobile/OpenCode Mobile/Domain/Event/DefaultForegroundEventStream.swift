@@ -14,6 +14,7 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
 
     private let api: EventsAPIClient
     private let adapter: EventDomainAdapter
+    private let deviceNetworkPath: any DeviceNetworkPath
     private var streamTask: Task<Void, Never>?
     /// Invalidates in-flight cancel/error handlers after `stop()` or a newer `start()`.
     private var streamGeneration: UInt64 = 0
@@ -23,9 +24,14 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
     private var subscriberContinuations: [UUID: AsyncStream<OpencodeEvent>.Continuation] = [:]
     private var connectionStateContinuations: [UUID: AsyncStream<EventStreamConnectionState>.Continuation] = [:]
 
-    init(api: EventsAPIClient, adapter: EventDomainAdapter) {
+    init(
+        api: EventsAPIClient,
+        adapter: EventDomainAdapter,
+        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath()
+    ) {
         self.api = api
         self.adapter = adapter
+        self.deviceNetworkPath = deviceNetworkPath
     }
 
     func events() -> AsyncStream<OpencodeEvent> {
@@ -75,10 +81,17 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
         _ = ConnectionEpoch.shared.bump()
         let api = api
         let adapter = adapter
+        let deviceNetworkPath = deviceNetworkPath
         // Byte read + line parse + event publish must not occupy MainActor.
         lock.lock()
         streamTask = Task(priority: .userInitiated) { [weak self] in
-            await Self.runStreamLoop(api: api, adapter: adapter, owner: self, generation: generation)
+            await Self.runStreamLoop(
+                api: api,
+                adapter: adapter,
+                deviceNetworkPath: deviceNetworkPath,
+                owner: self,
+                generation: generation
+            )
         }
         lock.unlock()
     }
@@ -179,6 +192,7 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
     private static func runStreamLoop(
         api: EventsAPIClient,
         adapter: EventDomainAdapter,
+        deviceNetworkPath: any DeviceNetworkPath,
         owner: DefaultForegroundEventStream?,
         generation: UInt64
     ) async {
@@ -188,9 +202,14 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
         let retry = RetryBox()
         while !Task.isCancelled {
             guard let owner else { return }
+            await deviceNetworkPath.waitUntilReady()
+            guard !Task.isCancelled else {
+                owner.clearStreamTaskIfCurrent(generation: generation)
+                owner.applyConnectionState(.idle, generation: generation)
+                return
+            }
             let wasConnected = owner.beginConnectAttempt(generation: generation)
-
-            do {
+            let readTask = Task {
                 try await api.streamGlobalEvents(
                     onHTTPResponse: { statusCode in
                         DiagnosticLog.info(.sse, "GET \(Self.eventPath(for: api)) opened status=\(statusCode) protocol=\(api.eventProtocolWireValue)")
@@ -210,23 +229,44 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
                         }
                     }
                 )
-                // Stream ended while still occupied — keep chrome on connecting /
-                // reconnecting through the retry sleep (OPE-165). Do not publish
-                // offline (Disconnected) while a foreground retry is in flight.
+            }
+            let watchTask = Task {
+                for await status in deviceNetworkPath.updates() {
+                    if status == .unavailable {
+                        readTask.cancel()
+                        return
+                    }
+                }
+            }
+            do {
+                try await readTask.value
                 owner.applyConnectionState(
                     wasConnected ? .reconnecting : .connecting,
                     generation: generation
                 )
             } catch is CancellationError {
-                owner.clearStreamTaskIfCurrent(generation: generation)
-                owner.applyConnectionState(.idle, generation: generation)
-                return
+                watchTask.cancel()
+                if Task.isCancelled {
+                    owner.clearStreamTaskIfCurrent(generation: generation)
+                    owner.applyConnectionState(.idle, generation: generation)
+                    return
+                }
+                owner.applyConnectionState(
+                    wasConnected ? .reconnecting : .connecting,
+                    generation: generation
+                )
+                continue
             } catch {
                 DiagnosticLog.warning(.sse, "foreground SSE stream failed error=\(String(describing: error))")
                 owner.applyConnectionState(
                     wasConnected ? .reconnecting : .connecting,
                     generation: generation
                 )
+            }
+            watchTask.cancel()
+
+            if deviceNetworkPath.status == .unavailable {
+                continue
             }
 
             retry.attempt += 1

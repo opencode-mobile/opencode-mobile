@@ -5,7 +5,7 @@ nonisolated final class EventsAPIClient: Sendable {
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = TimeInterval.infinity
         configuration.timeoutIntervalForResource = TimeInterval.infinity
-        configuration.waitsForConnectivity = true
+        configuration.waitsForConnectivity = false
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.urlCache = nil
         return URLSession(configuration: configuration)
