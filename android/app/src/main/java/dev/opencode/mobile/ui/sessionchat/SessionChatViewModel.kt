@@ -34,6 +34,7 @@ import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
+import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.session.PermissionDecision
 import dev.opencode.mobile.domain.session.PermissionRequest
@@ -81,6 +82,7 @@ class SessionChatViewModel
         eventDomainAdapter: EventDomainAdapter,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         sessionModelSelectionStore: SessionModelSelectionStore,
+        composerDraftStore: ComposerDraftStore,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         private val optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator,
         private val connectionProfileStore: ConnectionProfileStore,
@@ -110,6 +112,7 @@ class SessionChatViewModel
                 sessionRepository = sessionRepository,
                 connectionSessionCoordinator = connectionSessionCoordinator,
                 sessionModelSelectionStore = sessionModelSelectionStore,
+                composerDraftStore = composerDraftStore,
                 scope = viewModelScope,
             )
         private val sessionInfo =
@@ -1311,6 +1314,7 @@ class SessionChatViewModel
         }
 
         override fun onCleared() {
+            composer.flushDraft()
             clearSessionReadyFocus()
             super.onCleared()
         }

@@ -863,6 +863,88 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun composerDraft_restoresTextAndMentionsForSameSessionOnly() =
+        runTest(testDispatcher) {
+            val draftStore = dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore()
+            val first = createViewModel(FakeMessageRepository(), composerDraftStore = draftStore)
+            first.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            first.updateComposerText("@", cursor = 1)
+            first.selectAtSuggestion("explore")
+            advanceTimeBy(300)
+            advanceUntilIdle()
+
+            val other = createViewModel(FakeMessageRepository(), composerDraftStore = draftStore)
+            other.bind("ses-2", "Other", "/repo")
+            advanceUntilIdle()
+            assertEquals("", other.uiState.value.composer.text)
+
+            val restored = createViewModel(FakeMessageRepository(), composerDraftStore = draftStore)
+            restored.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals("@explore ", restored.uiState.value.composer.text)
+            assertEquals(
+                listOf("explore"),
+                restored.uiState.value.composer.agentMentions
+                    .map { it.name },
+            )
+        }
+
+    @Test
+    fun composerDraft_successfulSendClearsStoredDraft() =
+        runTest(testDispatcher) {
+            val draftStore = dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore()
+            val first = createViewModel(FakeMessageRepository(), composerDraftStore = draftStore)
+            first.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            first.updateComposerText("send me")
+            first.sendPrompt()
+            advanceUntilIdle()
+            assertEquals("", first.uiState.value.composer.text)
+
+            val restored = createViewModel(FakeMessageRepository(), composerDraftStore = draftStore)
+            restored.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals("", restored.uiState.value.composer.text)
+        }
+
+    @Test
+    fun composerDraft_promoteOptimisticCreatePersistsUnderRealSessionId() =
+        runTest(testDispatcher) {
+            val draftStore = dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore()
+            val sessionRepository =
+                FakeSessionRepository(
+                    createSessionResult = Session(id = "ses-new", title = "Created", directory = "/repo"),
+                )
+            val first =
+                createViewModel(
+                    FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    composerDraftStore = draftStore,
+                )
+            first.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            first.updateComposerText("typed during create")
+            advanceUntilIdle()
+            assertEquals("typed during create", first.uiState.value.composer.text)
+            assertEquals("ses-new", first.uiState.value.sessionId)
+
+            val restored = createViewModel(FakeMessageRepository(), composerDraftStore = draftStore)
+            restored.bind("ses-new", "Created", "/repo")
+            advanceUntilIdle()
+            assertEquals("typed during create", restored.uiState.value.composer.text)
+            assertNull(
+                draftStore.load(
+                    dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity(
+                        "http://127.0.0.1:4096/",
+                        "opencode",
+                    ),
+                    "/repo",
+                    OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                ),
+            )
+        }
+
+    @Test
     fun bind_sameSessionReuse_reassertsReadyFocus() =
         runTest(testDispatcher) {
             val readyStore = RecordingSessionReadyStore()
@@ -2929,6 +3011,8 @@ class SessionChatViewModelTest {
         commandRepository: FakeCommandRepository = FakeCommandRepository(),
         agentRepository: FakeAgentRepository = FakeAgentRepository(),
         sessionModelSelectionStore: FakeSessionModelSelectionStore = FakeSessionModelSelectionStore(),
+        composerDraftStore: dev.opencode.mobile.domain.composer.ComposerDraftStore =
+            dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore(),
         sessionRepository: FakeSessionRepository = FakeSessionRepository(),
         permissionLiveStore: PermissionLiveStore = FakePermissionLiveStore(emptyList()),
         questionLiveStore: QuestionLiveStore = FakeQuestionLiveStore(emptyList()),
@@ -2954,6 +3038,7 @@ class SessionChatViewModelTest {
                 connectionProfileStore = connectionProfileStore,
                 secureCredentialStore = FakeSecureCredentialStore(),
                 sessionModelSelectionStore = sessionModelSelectionStore,
+                composerDraftStore = composerDraftStore,
                 httpClient = OpencodeHttpClient(json, activeConnectionManager),
                 sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
             )
@@ -2971,6 +3056,7 @@ class SessionChatViewModelTest {
             eventDomainAdapter = EventDomainAdapter(json),
             connectionSessionCoordinator = connectionSessionCoordinator,
             sessionModelSelectionStore = sessionModelSelectionStore,
+            composerDraftStore = composerDraftStore,
             newSessionModelSelectionResolver =
                 dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver(
                     store = sessionModelSelectionStore,

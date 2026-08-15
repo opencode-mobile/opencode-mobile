@@ -15,6 +15,7 @@ final class SessionChatComposer {
     private let agentRepository: any AgentRepository
     private let sessionRepository: any SessionRepository
     private let sessionModelSelectionStore: any SessionModelSelectionStore
+    private let composerDraftStore: any ComposerDraftStore
     private let activeConnectionManager: ActiveConnectionManager
     private let sentTimeFormatter: DateFormatter
     private var loadedCatalog: ModelSelectionCatalog?
@@ -25,6 +26,8 @@ final class SessionChatComposer {
     private var latestHistoryHints: ModelSelectionHistoryHints?
     private var lastSelectionTimestamp: Int64 = 0
     private var draftRevision = 0
+    private var draftLoadGeneration = 0
+    private var persistDraftTask: Task<Void, Never>?
     private var attachmentRevision = 0
     private var attachmentRevisions: [String: Int] = [:]
     private var serverCommandsTask: Task<Void, Never>?
@@ -39,6 +42,7 @@ final class SessionChatComposer {
         agentRepository: any AgentRepository,
         sessionRepository: any SessionRepository,
         sessionModelSelectionStore: any SessionModelSelectionStore,
+        composerDraftStore: any ComposerDraftStore,
         activeConnectionManager: ActiveConnectionManager
     ) {
         self.sessionID = sessionID
@@ -49,12 +53,16 @@ final class SessionChatComposer {
         self.agentRepository = agentRepository
         self.sessionRepository = sessionRepository
         self.sessionModelSelectionStore = sessionModelSelectionStore
+        self.composerDraftStore = composerDraftStore
         self.activeConnectionManager = activeConnectionManager
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "h:mm a"
         self.sentTimeFormatter = formatter
-        Task { await self.loadCachedSelection() }
+        Task {
+            await self.loadCachedSelection()
+            await self.applyOrLoadDraft(preserve: nil)
+        }
     }
 
     /// Catalog loads that used to run from `init` — keep them off View construction.
@@ -62,6 +70,17 @@ final class SessionChatComposer {
     /// one live ViewModel; orphan inits must not hit the network.
     func rebind(sessionID: String) {
         guard sessionID != self.sessionID else { return }
+        let previousSessionID = self.sessionID
+        let preserve: ComposerDraft? =
+            if OptimisticSessionCreate.isPlaceholder(previousSessionID),
+               !OptimisticSessionCreate.isPlaceholder(sessionID) {
+                currentDraft()
+            } else {
+                nil
+            }
+        persistDraftTask?.cancel()
+        let snapshot = currentDraft()
+        Task { await persistDraft(sessionID: previousSessionID, draft: snapshot) }
         self.sessionID = sessionID
         loadedCatalog = nil
         cachedSelection = nil
@@ -74,7 +93,10 @@ final class SessionChatComposer {
         attachmentRevisions = [:]
         state = SessionChatComposerRegionState()
         notifyChange()
-        Task { await self.loadCachedSelection() }
+        Task {
+            await self.loadCachedSelection()
+            await self.applyOrLoadDraft(preserve: preserve)
+        }
         loadServerCommands()
         loadMentionableAgents()
     }
@@ -306,6 +328,7 @@ final class SessionChatComposer {
         }
         refreshComposerSuggestions(for: reconciled.text, cursor: reconciled.cursor, mentions: reconciled.mentions)
         notifyChange()
+        schedulePersistDraft()
     }
 
     func selectSlashSuggestion(commandName: String) {
@@ -333,6 +356,7 @@ final class SessionChatComposer {
         state.slashSuggestionsVisible = false
         state.slashSuggestions = []
         notifyChange()
+        schedulePersistDraft()
     }
 
     func dismissSuggestions() {
@@ -484,6 +508,7 @@ final class SessionChatComposer {
             $0.cursor = text.count
             $0.selectionRevision += 1
         }
+        schedulePersistDraft()
     }
 
     func sendPrompt(
@@ -660,6 +685,76 @@ final class SessionChatComposer {
         notifyChange()
     }
 
+    private func currentDraft() -> ComposerDraft {
+        ComposerDraft(text: state.composer.text, agentMentions: state.composer.agentMentions)
+    }
+
+    private func applyDraft(_ draft: ComposerDraft) {
+        state.composer.text = draft.text
+        state.composer.agentMentions = draft.agentMentions
+        state.composer.cursor = draft.text.count
+        state.composer.selectionRevision += 1
+        refreshComposerSuggestions(for: draft.text, cursor: draft.text.count, mentions: draft.agentMentions)
+        notifyChange()
+    }
+
+    private func applyOrLoadDraft(preserve: ComposerDraft?) async {
+        if OptimisticSessionCreate.isPlaceholder(sessionID) { return }
+        if let preserve, !preserve.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            applyDraft(preserve)
+            draftRevision += 1
+            schedulePersistDraft()
+            return
+        }
+        draftLoadGeneration += 1
+        let generation = draftLoadGeneration
+        guard let identity = currentIdentity() else { return }
+        let loaded = await composerDraftStore.load(
+            connectionIdentity: identity,
+            worktree: worktree,
+            sessionID: sessionID
+        )
+        guard generation == draftLoadGeneration, draftRevision == 0 else { return }
+        if let loaded, !loaded.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            applyDraft(loaded)
+        }
+    }
+
+    private func schedulePersistDraft() {
+        persistDraftTask?.cancel()
+        let sessionID = sessionID
+        let draft = currentDraft()
+        persistDraftTask = Task {
+            try? await Task.sleep(for: .milliseconds(Self.draftPersistDebounceMs))
+            guard !Task.isCancelled else { return }
+            await persistDraft(sessionID: sessionID, draft: draft)
+        }
+    }
+
+    private func persistDraft(sessionID: String, draft: ComposerDraft) async {
+        if OptimisticSessionCreate.isPlaceholder(sessionID) { return }
+        guard let identity = currentIdentity() else { return }
+        if draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            await composerDraftStore.delete(
+                connectionIdentity: identity,
+                worktree: worktree,
+                sessionID: sessionID
+            )
+        } else {
+            await composerDraftStore.save(
+                connectionIdentity: identity,
+                worktree: worktree,
+                sessionID: sessionID,
+                draft: draft
+            )
+        }
+    }
+
+    private func currentIdentity() -> ModelSelectionConnectionIdentity? {
+        guard let profile = activeConnectionManager.currentProfile() else { return nil }
+        return ModelSelectionConnectionIdentity(serverBaseURL: profile.baseURL, username: profile.username)
+    }
+
     private func loadCachedSelection() async {
         if let profile = activeConnectionManager.currentProfile() {
             let identity = ModelSelectionConnectionIdentity(serverBaseURL: profile.baseURL, username: profile.username)
@@ -826,6 +921,14 @@ final class SessionChatComposer {
         state.composer = composer
         refreshComposerSuggestions(for: composer.text, cursor: composer.cursor)
         notifyChange()
+        persistDraftTask?.cancel()
+        Task { await persistDraft(sessionID: sessionID, draft: currentDraft()) }
+    }
+
+    func flushDraft() async {
+        persistDraftTask?.cancel()
+        persistDraftTask = nil
+        await persistDraft(sessionID: sessionID, draft: currentDraft())
     }
 
     private func errorMessage(_ error: Error) -> String {
@@ -868,6 +971,8 @@ final class SessionChatComposer {
             contextInputTokens: optimistic.contextInputTokens
         )
     }
+
+    private static let draftPersistDebounceMs = 300
 
     private enum InitialSelection {
         case cached(SessionModelSelection)
