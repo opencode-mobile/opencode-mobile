@@ -7,7 +7,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,11 +48,10 @@ import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
+import dev.opencode.mobile.ui.components.OpenCodeAssistantMessage
 import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageContent
-import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
-import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPill
 import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeSessionTodosPill
@@ -620,12 +618,6 @@ private fun AssistantMessageBubble(
     isStreaming: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val bubbleModifier =
-        modifier
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-
     val shouldDeferMarkdown =
         SessionChatMarkdownPaint.shouldDefer(
             textLength = text.length,
@@ -657,23 +649,12 @@ private fun AssistantMessageBubble(
         paintMarkdown = true
     }
 
-    when {
-        paintMarkdown && renderedMarkdown != null ->
-            OpenCodeRenderedMarkdown(
-                document = renderedMarkdown,
-                variant = OpenCodeRenderedMarkdownVariant.AssistantMessage,
-                isStreaming = isStreaming,
-                modifier = bubbleModifier,
-            )
-
-        else ->
-            Text(
-                text = text.ifBlank { "…" },
-                modifier = bubbleModifier,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-    }
+    OpenCodeAssistantMessage(
+        text = text,
+        renderedMarkdown = renderedMarkdown.takeIf { paintMarkdown },
+        isStreaming = isStreaming,
+        modifier = modifier,
+    )
 }
 
 /**

@@ -615,26 +615,10 @@ private struct AssistantMessageBubble: View {
     }
 
     var body: some View {
-        Group {
-            if paintMarkdown, let renderedMarkdown {
-                OpenCodeRenderedMarkdown(
-                    document: renderedMarkdown,
-                    variant: .assistantMessage,
-                    isStreaming: isStreaming
-                )
-            } else {
-                Text(text.isEmpty ? "…" : text)
-                    .font(OpenCodeTypography.body)
-                    .lineSpacing(4)
-                    .foregroundStyle(OpenCodeColors.textStrong)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
+        OpenCodeAssistantMessage(
+            text: text,
+            renderedMarkdown: paintMarkdown ? renderedMarkdown : nil,
+            isStreaming: isStreaming
         )
         .task(id: paintTaskID) {
             guard renderedMarkdown != nil, !paintMarkdown else { return }

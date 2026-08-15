@@ -94,12 +94,12 @@ Not applicable.
 ## Design-System Components
 
 - **Existing:** `OpenCodeTopBar`, `OpenCodeSessionComposer`, timeline row
-  renderers (`OpenCodeOutgoingMessage`, `OpenCodeRenderedMarkdown` assistant
-  variant, `OpenCodeToolCallCard`, child-session row, Message List host).
+  renderers (`OpenCodeOutgoingMessage`, `OpenCodeAssistantMessage`,
+  `OpenCodeRenderedMarkdown` assistant variant, `OpenCodeToolCallCard`,
+  child-session row, Message List host).
   Gallery mocks (`MessageListGalleryMocks`, `RenderedMarkdownGalleryMocks`)
   are a starting catalog, not the in-session fixture.
-- **New/extended:** none in the Component Collection. The Session Chat
-  fixture host is **intentionally feature-local** to this tooling slice:
-  it is a snapshot seam, not reusable product chrome.
+- **New/extended:** none in this tooling slice. Assistant Message lives in
+  the Component Collection (OPE-169).
 - **Feature-local:** `SessionChatSnapshotHost` (iOS and Android) that
   renders production child views from mock timeline blocks.

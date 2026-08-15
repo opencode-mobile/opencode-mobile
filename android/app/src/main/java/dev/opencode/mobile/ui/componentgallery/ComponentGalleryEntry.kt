@@ -21,6 +21,7 @@ enum class ComponentGalleryEntryId {
     Icons,
     Attachment,
     OutgoingMessage,
+    AssistantMessage,
     ToolCallCard,
     ChildSessionRow,
     TopBar,
@@ -198,6 +199,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.OutgoingMessage,
             title = "Outgoing Message",
             description = "Trailing prompt card that renders sent prompts at full height.",
+            category = ComponentGalleryCategory.Chat,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.AssistantMessage,
+            title = "Assistant Message",
+            description = "Leading reply card for assistant text in Session Chat.",
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(

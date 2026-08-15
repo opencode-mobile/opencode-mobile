@@ -19,7 +19,7 @@ Branch: `feature/ope-161-ui-snapshot-evidence`
 ## Design-system dependencies
 
 None. Fixture host is feature-local tooling. It reuses existing timeline
-child views (`OpenCodeOutgoingMessage`, assistant bubble chrome, top bar,
+child views (`OpenCodeOutgoingMessage`, `OpenCodeAssistantMessage`, top bar,
 composer).
 
 ## iOS implementation

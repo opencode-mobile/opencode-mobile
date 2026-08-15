@@ -6,8 +6,8 @@ Render a user's outgoing prompt inside a session conversation. Use this
 component when a feature needs to show a sent mobile prompt as a compact,
 trailing-aligned message card.
 
-This component is intentionally outgoing-only. Assistant and tool messages need
-separate treatment before they become reusable design-system components.
+This component is intentionally outgoing-only. Assistant replies use Assistant
+Message. Tool messages use Tool Call Card.
 
 Message actions such as restore and copy are not part of this component. Session
 Chat handles those through a feature-local bottom sheet when the user taps an

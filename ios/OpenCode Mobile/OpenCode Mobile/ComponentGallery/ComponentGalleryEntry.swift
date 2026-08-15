@@ -16,6 +16,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case icons
     case attachment
     case outgoingMessage
+    case assistantMessage
     case toolCallCard
     case childSessionRow
     case topBar
@@ -186,6 +187,12 @@ let componentGalleryEntries = [
         id: .outgoingMessage,
         title: "Outgoing Message",
         description: "Trailing prompt card that renders sent prompts at full height.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
+        id: .assistantMessage,
+        title: "Assistant Message",
+        description: "Leading reply card for assistant text in Session Chat.",
         category: .chat
     ),
     ComponentGalleryEntry(

@@ -596,6 +596,17 @@ Reusable outgoing prompt card for session conversations.
 | `outgoingMessage.paddingVertical` | 8 (logical px) |
 | `outgoingMessage.footerSpacing` | 6 (logical px) |
 
+### Assistant message
+
+Reusable leading-aligned assistant reply card for session conversations.
+
+| Token | Value |
+| --- | --- |
+| `assistantMessage.cornerRadius` | 8 (logical px; matches `listItem.cornerRadius`) |
+| `assistantMessage.paddingHorizontal` | 12 (logical px) |
+| `assistantMessage.paddingVertical` | 8 (logical px) |
+| `assistantMessage.borderWidth` | 1 (logical px) |
+
 ### Tool call card
 
 Collapsed, tool-agnostic assistant tool-call row. Status chrome reuses the
