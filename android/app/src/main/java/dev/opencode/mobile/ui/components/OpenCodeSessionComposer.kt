@@ -40,6 +40,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -109,6 +110,12 @@ sealed interface OpenCodeSessionComposerState {
         val submitEnabled: Boolean = false,
         val submitting: Boolean = false,
         val errorMessage: String? = null,
+    ) : OpenCodeSessionComposerState
+
+    data class ChildLockout(
+        val selectedModelLabel: String,
+        val selectedVariantLabel: String,
+        val showVariant: Boolean,
     ) : OpenCodeSessionComposerState
 }
 
@@ -183,6 +190,8 @@ sealed interface OpenCodeSessionComposerAction {
         val requestId: String,
         val sessionId: String,
     ) : OpenCodeSessionComposerAction
+
+    data object BackToMainSession : OpenCodeSessionComposerAction
 }
 
 /** ~5 body lines — enough for a long prompt without swallowing the chat (OPE-127). */
@@ -199,6 +208,7 @@ fun OpenCodeSessionComposer(
             is OpenCodeSessionComposerState.Permission ->
                 if (state.errorMessage == null) openCodeColor("warning") else openCodeColor("error")
             is OpenCodeSessionComposerState.Question,
+            is OpenCodeSessionComposerState.ChildLockout,
             is OpenCodeSessionComposerState.Prompt,
             -> MaterialTheme.colorScheme.outlineVariant
         }
@@ -266,6 +276,12 @@ fun OpenCodeSessionComposer(
 
                             is OpenCodeSessionComposerState.Question ->
                                 QuestionRequestContent(
+                                    state = state,
+                                    onAction = onAction,
+                                )
+
+                            is OpenCodeSessionComposerState.ChildLockout ->
+                                ChildLockoutContent(
                                     state = state,
                                     onAction = onAction,
                                 )
@@ -487,6 +503,56 @@ private fun PickerChipsRow(
             }
         }
     }
+}
+
+@Composable
+private fun ChildLockoutContent(
+    state: OpenCodeSessionComposerState.ChildLockout,
+    onAction: (OpenCodeSessionComposerAction) -> Unit,
+) {
+    val lockoutLabel =
+        if (state.showVariant) {
+            "Model ${state.selectedModelLabel}, effort ${state.selectedVariantLabel}"
+        } else {
+            "Model ${state.selectedModelLabel}"
+        }
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .semantics(mergeDescendants = true) {
+                    contentDescription = lockoutLabel
+                },
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OpenCodeChoiceBadge(
+            label = state.selectedModelLabel,
+            selected = false,
+            enabled = false,
+            variant = OpenCodeChoiceBadgeVariant.Glass,
+            onClick = {},
+        )
+        if (state.showVariant) {
+            OpenCodeChoiceBadge(
+                label = state.selectedVariantLabel,
+                selected = false,
+                enabled = false,
+                variant = OpenCodeChoiceBadgeVariant.Glass,
+                onClick = {},
+            )
+        }
+    }
+    Text(
+        text = "Child sessions cannot be prompted.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 4.dp),
+    )
+    OpenCodeButton(
+        variant = OpenCodeButtonVariant.FullWidthText("Back to main session"),
+        onClick = { onAction(OpenCodeSessionComposerAction.BackToMainSession) },
+    )
 }
 
 @Composable
@@ -797,6 +863,33 @@ private fun QuestionComposerPreviewContent() {
                     selectedLabels = listOf("Minimal patch"),
                     submitEnabled = false,
                     nextEnabled = true,
+                ),
+            onAction = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun ChildLockoutComposerPreview() {
+    ChildLockoutComposerPreviewContent()
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun ChildLockoutComposerDarkPreview() {
+    ChildLockoutComposerPreviewContent()
+}
+
+@Composable
+private fun ChildLockoutComposerPreviewContent() {
+    OpenCodeTheme {
+        OpenCodeSessionComposer(
+            state =
+                OpenCodeSessionComposerState.ChildLockout(
+                    selectedModelLabel = "Claude Sonnet 4",
+                    selectedVariantLabel = "High",
+                    showVariant = true,
                 ),
             onAction = {},
         )

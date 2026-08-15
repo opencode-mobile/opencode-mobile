@@ -1,5 +1,18 @@
 # Session Chat Parity Gaps
 
+## Temporary — OPE-170 device smoke
+
+- Date: 2026-08-15
+- Expected shared intent: A child session shows lockout (model + effort, no
+  prompt) and Back returns to the parent; permission/question still replace it.
+- Current iOS state: implemented; device smoke not run in this change.
+- Current Android state: implemented; unit tests pass; device smoke not run.
+- Affected area: behavior
+- Reason: composer-kind unit tests cover priority; live child navigation needs
+  a device session with a `task` child.
+- Owner / next action: open a child session on both platforms before merge.
+- Status: temporary
+
 ## Intentional — OPE-145 Android 16dp scroll-pill hide slack
 
 - Date: 2026-08-14

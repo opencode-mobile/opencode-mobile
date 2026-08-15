@@ -149,9 +149,16 @@ enum OpenCodeSessionComposerState {
         }
     }
 
+    struct ChildLockout {
+        let selectedModelLabel: String
+        let selectedVariantLabel: String
+        let showVariant: Bool
+    }
+
     case prompt(Prompt)
     case permission(Permission)
     case question(Question)
+    case childLockout(ChildLockout)
 }
 
 enum OpenCodeSessionComposerAction {
@@ -173,6 +180,7 @@ enum OpenCodeSessionComposerAction {
     case questionNext(requestID: String, sessionID: String)
     case submitQuestion(requestID: String, sessionID: String)
     case dismissQuestion(requestID: String, sessionID: String)
+    case backToMainSession
 }
 
 struct OpenCodeSessionComposer: View {
@@ -186,6 +194,8 @@ struct OpenCodeSessionComposer: View {
                 permissionApprovalContent(permission)
             case let .question(question):
                 questionRequestContent(question)
+            case let .childLockout(lockout):
+                childLockoutContent(lockout)
             case let .prompt(prompt):
                 promptEntryContent(prompt)
             }
@@ -322,6 +332,61 @@ struct OpenCodeSessionComposer: View {
             }
         }
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+    }
+
+    @ViewBuilder
+    private func childLockoutContent(_ lockout: OpenCodeSessionComposerState.ChildLockout) -> some View {
+        lockoutChipsRow(lockout)
+        Text("Child sessions cannot be prompted.")
+            .font(OpenCodeTypography.caption)
+            .foregroundStyle(OpenCodeColors.textBase)
+            .padding(.horizontal, 4)
+        OpenCodeButton(
+            variant: .fullWidthText(title: "Back to main session"),
+            action: { onAction(.backToMainSession) }
+        )
+    }
+
+    @ViewBuilder
+    private func lockoutChipsRow(_ lockout: OpenCodeSessionComposerState.ChildLockout) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            let chips = HStack(spacing: 8) {
+                OpenCodeChoiceBadge(
+                    label: lockout.selectedModelLabel,
+                    selected: false,
+                    enabled: false,
+                    variant: .glass,
+                    action: {}
+                )
+                if lockout.showVariant {
+                    OpenCodeChoiceBadge(
+                        label: lockout.selectedVariantLabel,
+                        selected: false,
+                        enabled: false,
+                        variant: .glass,
+                        action: {}
+                    )
+                }
+            }
+            if #available(iOS 26, *) {
+                GlassEffectContainer(spacing: 8) {
+                    chips
+                }
+            } else {
+                chips
+            }
+        }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(lockoutAccessibilityLabel(lockout))
+    }
+
+    private func lockoutAccessibilityLabel(_ lockout: OpenCodeSessionComposerState.ChildLockout) -> String {
+        if lockout.showVariant {
+            "Model \(lockout.selectedModelLabel), effort \(lockout.selectedVariantLabel)"
+        } else {
+            "Model \(lockout.selectedModelLabel)"
+        }
     }
 
     @ViewBuilder
@@ -513,7 +578,7 @@ struct OpenCodeSessionComposer: View {
 
     private var outlineColor: Color {
         switch state {
-        case .prompt, .question:
+        case .prompt, .question, .childLockout:
             OpenCodeColors.borderWeakerBase
         case let .permission(permission):
             permission.errorMessage == nil ? OpenCodeColors.warning : OpenCodeColors.error
@@ -525,6 +590,7 @@ struct OpenCodeSessionComposer: View {
         case .prompt: "prompt"
         case .permission: "permission"
         case .question: "question"
+        case .childLockout: "childLockout"
         }
     }
 
@@ -678,6 +744,35 @@ private struct QuestionCustomTextField: View {
                 ],
                 selectedLabels: ["Minimal patch"],
                 nextEnabled: true
+            )
+        ),
+        onAction: { _ in }
+    )
+    .openCodeTheme()
+    .environment(\.colorScheme, .dark)
+}
+
+#Preview("Child lockout composer") {
+    OpenCodeSessionComposer(
+        state: .childLockout(
+            .init(
+                selectedModelLabel: "Claude Sonnet 4",
+                selectedVariantLabel: "High",
+                showVariant: true
+            )
+        ),
+        onAction: { _ in }
+    )
+    .openCodeTheme()
+}
+
+#Preview("Child lockout composer dark") {
+    OpenCodeSessionComposer(
+        state: .childLockout(
+            .init(
+                selectedModelLabel: "Claude Sonnet 4",
+                selectedVariantLabel: "High",
+                showVariant: true
             )
         ),
         onAction: { _ in }

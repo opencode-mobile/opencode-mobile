@@ -215,6 +215,28 @@ data class SessionChatUiState(
     }
 }
 
+enum class SessionChatComposerKind {
+    Permission,
+    Question,
+    ChildLockout,
+    Prompt,
+    ;
+
+    companion object {
+        fun resolve(
+            isChildSession: Boolean,
+            hasPermission: Boolean,
+            hasQuestion: Boolean,
+        ): SessionChatComposerKind =
+            when {
+                hasPermission -> Permission
+                hasQuestion -> Question
+                isChildSession -> ChildLockout
+                else -> Prompt
+            }
+    }
+}
+
 object ReviewChangesPillVisibility {
     fun shouldShow(summary: ReviewChangesSummary?): Boolean = (summary?.fileCount ?: 0) > 0
 }

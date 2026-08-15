@@ -561,6 +561,7 @@ struct SessionListItem: Identifiable, Hashable {
     let isReady: Bool
     /// Unique per optimistic new-session navigation so back-stack entries do not reuse a promoted chat.
     let optimisticNavigationInstanceID: UUID?
+    let parentID: String?
 
     init(
         id: String,
@@ -570,7 +571,8 @@ struct SessionListItem: Identifiable, Hashable {
         updatedAtLabel: String? = nil,
         updatedAtEpochMs: Int64? = nil,
         isReady: Bool = false,
-        optimisticNavigationInstanceID: UUID? = nil
+        optimisticNavigationInstanceID: UUID? = nil,
+        parentID: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -580,6 +582,7 @@ struct SessionListItem: Identifiable, Hashable {
         self.updatedAtEpochMs = updatedAtEpochMs
         self.isReady = isReady
         self.optimisticNavigationInstanceID = optimisticNavigationInstanceID
+        self.parentID = parentID
     }
 }
 

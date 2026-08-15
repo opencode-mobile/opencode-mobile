@@ -1,5 +1,20 @@
 # Session Chat Decisions
 
+## OPE-170 child sessions cannot be prompted
+
+- Date: 2026-08-15
+- Decision: A child session replaces prompt entry with Session Composer
+  `childLockout`: display-only model and thinking-effort chips, the caption
+  “Child sessions cannot be prompted.”, and a high-contrast
+  “Back to main session” button. Permission and question still replace that
+  state. Child navigation passes the parent session id so the lockout appears
+  immediately.
+- Reason: Web already blocks prompting in a child session. Mobile had the same
+  composer as a root session. Prototype variant A kept the composer shell and
+  made back the primary action.
+- Evidence: [ope-170-plan.md](./ope-170-plan.md)
+- Revisit when: mobile should send follow-up prompts into a child session.
+
 ## OPE-167 top overlay stack; Scroll to end stays at the bottom
 
 - Date: 2026-08-15

@@ -1,5 +1,17 @@
 # Session Chat Progress
 
+## OPE-170 Lock child session composer (2026-08-15)
+
+- Status: implemented on both platforms (unit-tested composer kind).
+- Plan: [ope-170-plan.md](./ope-170-plan.md)
+- Done:
+  - Session Composer `childLockout` state: locked model/effort chips, caption,
+    primary Back to main session.
+  - Child navigation seeds `parentID` / `parentId`; lockout wins over prompt.
+  - Permission and question still replace the lockout.
+- Remaining: device smoke (open a child session → no prompt; back returns to
+  parent; pending permission/question still appear).
+
 ## OPE-167 top overlay pills (2026-08-15)
 
 - Status: implemented on iOS and Android (unit-tested visibility).
