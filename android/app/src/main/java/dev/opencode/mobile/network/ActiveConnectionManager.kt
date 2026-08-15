@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerCapabilities
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -107,25 +108,25 @@ class ActiveConnectionManager(
             return fallback
         }
         val result =
-            runCatching { probing.probe(current) }
-                .fold(
-                    onSuccess = { detected ->
-                        mutex.withLock {
-                            val active = connection
-                            if (active != null && active.hasSameIdentity(current)) {
-                                connection = active.withProtocol(detected)
-                                persistLocked()
-                                Result.success(detected)
-                            } else {
-                                Result.success(connection?.serverProtocol ?: ServerProtocol.V1)
-                            }
-                        }
-                    },
-                    onFailure = { error ->
-                        mutex.withLock { probeFailed = true }
-                        Result.failure(error)
-                    },
-                )
+            try {
+                val detected = probing.probe(current)
+                mutex.withLock {
+                    val active = connection
+                    if (active != null && active.hasSameIdentity(current)) {
+                        connection = active.withProtocol(detected)
+                        persistLocked()
+                        Result.success(detected)
+                    } else {
+                        Result.success(connection?.serverProtocol ?: ServerProtocol.V1)
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                completeInFlight(Result.failure(cancelled))
+                throw cancelled
+            } catch (error: Throwable) {
+                mutex.withLock { probeFailed = true }
+                Result.failure(error)
+            }
         completeInFlight(result)
         return result
     }

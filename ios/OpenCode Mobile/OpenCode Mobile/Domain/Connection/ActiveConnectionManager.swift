@@ -150,6 +150,8 @@ final class ActiveConnectionManager: @unchecked Sendable {
         do {
             let detected = try await probing.probe(connection: current)
             return .success(cacheDetectedProtocol(detected, for: current))
+        } catch is CancellationError {
+            return .failure(CancellationError())
         } catch {
             lock.lock()
             probeFailed = true
