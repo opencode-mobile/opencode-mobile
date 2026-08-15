@@ -70,39 +70,40 @@ fun OpenCodeSessionListDock(
                 )
             }
 
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                filterTabs.forEach { tab ->
-                    val selected = tab.id == selectedFilterId
-                    val showRemove =
-                        tab.id != SessionListFilterTab.ALL_ID &&
-                            selected &&
-                            onRemoveProject != null
-                    val bringIntoViewRequester = remember(tab.id) { BringIntoViewRequester() }
-                    // Re-run when × appears so the widened selected chip stays fully visible.
-                    LaunchedEffect(selected, showRemove) {
-                        if (selected) {
-                            bringIntoViewRequester.bringIntoView()
+            if (filterTabs.isNotEmpty()) {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    filterTabs.forEach { tab ->
+                        val selected = tab.id == selectedFilterId
+                        val showRemove =
+                            tab.id != SessionListFilterTab.ALL_ID &&
+                                selected &&
+                                onRemoveProject != null
+                        val bringIntoViewRequester = remember(tab.id) { BringIntoViewRequester() }
+                        LaunchedEffect(selected, showRemove) {
+                            if (selected) {
+                                bringIntoViewRequester.bringIntoView()
+                            }
                         }
+                        OpenCodeFilterChip(
+                            title = tab.title,
+                            count = tab.count,
+                            selected = selected,
+                            onClick = { onFilterSelected(tab.id) },
+                            onRemove =
+                                if (showRemove) {
+                                    onRemoveProject?.let { remove -> { remove(tab.id) } }
+                                } else {
+                                    null
+                                },
+                            modifier = Modifier.bringIntoViewRequester(bringIntoViewRequester),
+                        )
                     }
-                    OpenCodeFilterChip(
-                        title = tab.title,
-                        count = tab.count,
-                        selected = selected,
-                        onClick = { onFilterSelected(tab.id) },
-                        onRemove =
-                            if (showRemove) {
-                                onRemoveProject?.let { remove -> { remove(tab.id) } }
-                            } else {
-                                null
-                            },
-                        modifier = Modifier.bringIntoViewRequester(bringIntoViewRequester),
-                    )
                 }
             }
 

@@ -16,19 +16,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
-import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
+import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
@@ -46,13 +46,13 @@ import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
-import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 
 /** Long-press session actions on home: sheet, rename/fork dialogs, delete confirm. */
 data class HomeSessionActionsCallbacks(
@@ -326,6 +326,7 @@ internal fun MainScreen(
                             )
                             showNewSessionProjectPicker = true
                         },
+                        onCreateSession = onNewSession,
                         onRemoveProject = onRemoveProject,
                         onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
                         revealNewestToken = revealNewestToken,
@@ -689,6 +690,7 @@ private fun HomeProjectsContent(
     onBrowseProjectsClick: () -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
     onRequestNewSessionProjectPicker: () -> Unit,
+    onCreateSession: (String) -> Unit,
     onRemoveProject: (String) -> Unit,
     onSessionLongPress: (SessionListSession) -> Unit,
     revealNewestToken: Int = 0,
@@ -700,16 +702,25 @@ private fun HomeProjectsContent(
         modifier = modifier.fillMaxSize(),
     ) {
         val sessions = sections.toCrossProjectSessionListSessions()
-        val filterTabs = sections.toSessionListFilterTabs(sessionCount = sessions.size)
+        val chromeProjects = sections.toHomeChromeProjects()
+        val filterTabs =
+            SessionListHomeChrome.filterTabs(
+                projects = chromeProjects,
+                sessionCount = sessions.size,
+            )
         var selectedFilterId by rememberSaveable {
             mutableStateOf(SessionListFilterTab.ALL_ID)
         }
         val resolvedFilterId =
-            if (filterTabs.any { it.id == selectedFilterId }) {
-                selectedFilterId
-            } else {
-                SessionListFilterTab.ALL_ID
+            SessionListHomeChrome.resolvedFilterId(
+                selectedId = selectedFilterId,
+                tabs = filterTabs,
+            )
+        LaunchedEffect(resolvedFilterId) {
+            if (selectedFilterId != resolvedFilterId) {
+                selectedFilterId = resolvedFilterId
             }
+        }
         SessionList(
             sessions = sessions,
             filterTabs = filterTabs,
@@ -736,7 +747,15 @@ private fun HomeProjectsContent(
                 )
             },
             onAddProject = onBrowseProjectsClick,
-            onNewSession = onRequestNewSessionProjectPicker,
+            onNewSession = {
+                when (val action = SessionListHomeChrome.newSessionAction(chromeProjects)) {
+                    SessionListHomeChrome.NewSessionAction.None -> Unit
+                    SessionListHomeChrome.NewSessionAction.PresentPicker ->
+                        onRequestNewSessionProjectPicker()
+                    is SessionListHomeChrome.NewSessionAction.Create ->
+                        onCreateSession(action.worktree)
+                }
+            },
             onRemoveProject = onRemoveProject,
             onSessionLongPress = onSessionLongPress,
             revealNewestToken = revealNewestToken,
@@ -771,21 +790,14 @@ private fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Ses
             )
         }
 
-private fun List<ProjectSectionUi>.toSessionListFilterTabs(sessionCount: Int): List<SessionListFilterTab> =
-    listOf(
-        SessionListFilterTab(
-            id = SessionListFilterTab.ALL_ID,
-            title = "All",
-            count = sessionCount,
-        ),
-    ) +
-        map { section ->
-            SessionListFilterTab(
-                id = section.worktree,
-                title = section.displayName,
-                count = section.allSessions.size,
-            )
-        }
+private fun List<ProjectSectionUi>.toHomeChromeProjects(): List<SessionListHomeChrome.Project> =
+    map { section ->
+        SessionListHomeChrome.Project(
+            worktree = section.worktree,
+            title = section.displayName,
+            sessionCount = section.allSessions.size,
+        )
+    }
 
 @Suppress("UNUSED_PARAMETER")
 private fun SessionSummary.toSessionListStatus(hasPendingPermission: Boolean = false): SessionListStatus =

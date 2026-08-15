@@ -2,17 +2,34 @@ import SwiftUI
 
 struct SessionListGalleryView: View {
     @State private var selectedFilterId = SessionListFilterTab.allId
+    @State private var oneProject = false
 
     var body: some View {
-        SessionList(
-            sessions: sessionListGallerySamples,
-            filterTabs: sessionListGalleryFilterTabs,
-            selectedFilterId: selectedFilterId,
-            onFilterSelected: { selectedFilterId = $0 },
-            onSessionSelected: { _ in },
-            onAddProject: {},
-            onNewSession: {}
-        )
+        ZStack(alignment: .topLeading) {
+            SessionList(
+                sessions: sessionListGallerySamples,
+                filterTabs: oneProject
+                    ? sessionListGalleryOneProjectFilterTabs
+                    : sessionListGalleryFilterTabs,
+                selectedFilterId: selectedFilterId,
+                onFilterSelected: { selectedFilterId = $0 },
+                onSessionSelected: { _ in },
+                onAddProject: {},
+                onNewSession: {}
+            )
+            OpenCodeChoiceBadge(
+                label: "1 project",
+                selected: oneProject,
+                action: {
+                    oneProject.toggle()
+                    selectedFilterId = oneProject
+                        ? sessionListGalleryOneProjectFilterTabs[0].id
+                        : SessionListFilterTab.allId
+                }
+            )
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+        }
     }
 }
 
@@ -71,6 +88,10 @@ private let sessionListGalleryFilterTabs: [SessionListFilterTab] = [
     SessionListFilterTab(id: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 2),
     SessionListFilterTab(id: "/Users/demo/playground", title: "playground", count: 1),
     SessionListFilterTab(id: "/Users/demo/api-client", title: "api-client", count: 1),
+]
+
+private let sessionListGalleryOneProjectFilterTabs: [SessionListFilterTab] = [
+    SessionListFilterTab(id: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 2),
 ]
 
 #Preview {
