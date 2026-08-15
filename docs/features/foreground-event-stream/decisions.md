@@ -26,12 +26,15 @@ stream** is active:
   synchronization for it; synthetic `stream.reconnected` reloads immediately
   and cancels a pending connected-event reload when one exists. After a
   transport drop (`Idle` / `Disconnected` / `Reconnecting`), returning to
-  `Connected` also triggers the same reconnect fullReload (cold resume after
-  `stop()` clears `wasConnected` and may miss `server.connected`). Transport
-  drop clears any latched streaming text so the poll watchdog is not blocked.
-  Home does not run a broad section reload per SSE event. Explicit project
-  additions can reload with `skipProbe = true`; saved profile changes run the
-  normal probe-backed refresh path.
+  `Connecting` (cold resume after `stop()` clears `wasConnected`) or
+  `Connected` triggers the same reconnect fullReload when `server.connected`
+  is missed (OPE-119 / OPE-165). TransportResumed, `server.connected`, and
+  `stream.reconnected` share one catch-up per ConnectionEpoch so overlapping
+  signals do not double-fetch. Transport drop clears any latched streaming
+  text so the poll watchdog is not blocked. Home does not run a broad section
+  reload per SSE event. Explicit project additions can reload with
+  `skipProbe = true`; saved profile changes run the normal probe-backed
+  refresh path.
 - **Quiet refresh:** MessageSync/display-pipeline updates in Session Chat
   preserve in-flight send state (pending optimistic bubble and `isSending`).
   See [Message Repository decisions](../message-repository/decisions.md#post-send-ux).
@@ -45,7 +48,12 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
 - **App foreground:** Android `ProcessLifecycleOwner` start/stop with a **5s
   stop grace** so photo/document pickers (system activities that briefly stop
   the process) do not tear down SSE; iOS `scenePhase` `.active` / `.background`
-  on `AppRootView` (`.inactive` keeps the stream, which covers pickers).
+  on `AppRootView` (`.inactive` keeps the stream, which covers pickers). Both
+  platforms treat `start()` as idempotent while a stream job is active.
+  Cancelled SSE tasks must not publish Idle/Disconnected over a newer
+  generation's Connecting state. While a foreground retry is in flight, chrome
+  stays **connecting** (Connecting/Reconnecting) rather than **offline**
+  (Disconnected).
 - **Session Chat (iOS):** `startObserving()` on appear; `stopObserving()` on explicit back or after a short delayed disappear (avoids killing SSE when the home Screen Model refresh re-renders the navigation parent). Android relies on scoped `ViewModel` cancellation on navigate back.
 
 ## Heartbeats
