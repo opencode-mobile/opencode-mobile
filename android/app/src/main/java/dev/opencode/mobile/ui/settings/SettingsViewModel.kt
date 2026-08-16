@@ -7,6 +7,9 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.theme.letterAccentForWorktree
+import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.PermissionLiveStore
@@ -64,6 +67,8 @@ class SettingsViewModel
                     ServersSummary(
                         count = profiles.size,
                         activeName = active?.displayName,
+                        letter = letterCharacterForProject(active?.displayName ?: "Servers"),
+                        letterAccent = letterAccentForWorktree(active?.id ?: active?.displayName ?: "servers"),
                     )
             }
         }
@@ -142,6 +147,8 @@ class SettingsViewModel
 data class ServersSummary(
     val count: Int = 0,
     val activeName: String? = null,
+    val letter: Char = 'S',
+    val letterAccent: LetterAccent = LetterAccent.Blue,
 ) {
     val subtitle: String
         get() =

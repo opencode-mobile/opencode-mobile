@@ -79,9 +79,10 @@ every server on one screen.
 **Connection setup** (first / add / edit)
 
 - Fields: Name, host, username, password.
-- `testConnectionTapped` / `saveTapped` as today; Save still requires a
-  successful test.
-- Edit mode: `removeServerTapped` → confirm.
+- `testConnectionTapped` is a text link under the fields; `saveTapped` is
+  the only full-width footer action. Save still requires a successful test
+  unless the connection is unchanged (rename-only).
+- Edit mode: `removeServerTapped` is the top-bar trash icon → confirm.
 
 **Settings**
 
@@ -124,7 +125,10 @@ every server on one screen.
   Existing, likely extended or composed; do not invent a second sheet system.
 - `OpenCodeListItem` — Settings Servers row and management list. Existing.
 - `OpenCodeTextInput` — Name on connection setup. Existing.
-- `OpenCodeServerAddressInput`, Test/Save `OpenCodeButton` — existing setup.
+- `OpenCodeServerAddressInput`, Save `OpenCodeButton` — existing setup.
+- Test connection — feature-local text link (`text-interactive-base`); a
+  filled `OpenCodeButton` would compete with Save.
+- `delete` catalog icon — Edit server top-bar remove.
 - `OpenCodeDialog` — remove-profile confirm (destructive primary). Existing.
 - Session List + dock — existing; callers pass only the active profile’s
   sessions and projects.

@@ -9,7 +9,7 @@ struct ConnectionProfileStoreTests {
         let defaults = isolatedDefaults()
         let secure = InMemorySecureCredentialStore()
         let store = UserDefaultsConnectionProfileStore(defaults: defaults, secureCredentialStore: secure)
-        await store.saveProfile(
+        try await store.saveProfile(
             ConnectionProfile(baseURL: server, username: "opencode", password: "secret")
         )
         let loaded = await store.activeProfile()
@@ -22,7 +22,7 @@ struct ConnectionProfileStoreTests {
     @Test func saveAndLoadPersistsProtocolHint() async {
         let defaults = isolatedDefaults()
         let store = UserDefaultsConnectionProfileStore(defaults: defaults, secureCredentialStore: InMemorySecureCredentialStore())
-        await store.saveProfile(
+        try await store.saveProfile(
             ConnectionProfile(baseURL: server, username: "opencode", password: "secret", serverProtocol: .v2)
         )
         let loaded = await store.activeProfile()

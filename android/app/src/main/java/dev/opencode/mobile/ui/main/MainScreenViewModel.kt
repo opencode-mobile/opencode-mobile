@@ -170,6 +170,7 @@ class MainScreenViewModel
         private suspend fun refreshServersChrome() {
             val profiles = connectionProfileStore.listProfiles()
             val active = connectionProfileStore.activeProfile()
+                ?: activeConnectionManager.currentProfile()
             _serversChrome.update { current ->
                 current.copy(
                     title = active?.displayName ?: "Sessions",

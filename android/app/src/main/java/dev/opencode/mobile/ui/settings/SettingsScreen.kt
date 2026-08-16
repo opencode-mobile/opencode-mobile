@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -144,10 +145,21 @@ fun SettingsScreen(
                 title = "Servers",
                 subtitle = serversSummary.subtitle,
                 style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Cloud, "Servers"),
+                startDecorator =
+                    StartDecorator.Letter(
+                        serversSummary.letter,
+                        serversSummary.letterAccent,
+                    ),
                 onClick = {
                     logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_CONNECTION)
                     onServersClick()
+                },
+                trailing = {
+                    Icon(
+                        imageVector = OpenCodeIcons.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 },
                 modifier = Modifier.padding(horizontal = 16.dp),
             )

@@ -79,6 +79,13 @@
 - Decision: New writes use the opaque profile id. Dual-read the old URL keys only for the migrated profile.
 - Reason: URL-only keys cannot scope two profiles or survive a URL edit.
 
+## Edit server chrome: trash, one Save, Test as a link
+
+- Date: 2026-08-16
+- Decision: On connection setup, **Save** is the only full-width footer action. **Test** is a text link under the fields (`Test connection` / `Test again`). **Remove** is a top-bar trash icon in edit mode only, then the existing confirm dialog.
+- Reason: Three stacked full-width buttons made edit feel crowded. Locked from `docs/prototypes/edit-server-test-placement/` variant A (B chrome + Test off the host row).
+- Prototype: `docs/prototypes/edit-server-test-placement/index.html`.
+
 ## Add-save activates; edit-save does not switch
 
 - Date: 2026-08-15

@@ -41,6 +41,8 @@ struct TopBarGalleryView: View {
     @State private var showProjectMeta = false
     @State private var connectionStatus: OpenCodeSessionConnectionStatus = .live
     @State private var actionsEnabled = true
+    @State private var titleSwitcher = false
+    @State private var titleMenuExpanded = false
 
     private var title: String {
         switch actions {
@@ -152,6 +154,11 @@ struct TopBarGalleryView: View {
                             selected: actionsEnabled,
                             action: { actionsEnabled.toggle() }
                         )
+                        OpenCodeChoiceBadge(
+                            label: "Title switcher",
+                            selected: titleSwitcher,
+                            action: { titleSwitcher.toggle() }
+                        )
                     }
                 }
 
@@ -182,7 +189,9 @@ struct TopBarGalleryView: View {
                 subtitleAccessory: subtitleAccessory,
                 leading: leadingVariant,
                 actions: actionVariants,
-                showDivider: showDivider
+                showDivider: showDivider,
+                onTitleClick: titleSwitcher ? { titleMenuExpanded.toggle() } : nil,
+                titleMenuExpanded: titleMenuExpanded
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)

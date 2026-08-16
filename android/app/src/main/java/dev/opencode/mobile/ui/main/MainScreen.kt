@@ -29,8 +29,11 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
+import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.letterAccentForWorktree
+import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
@@ -45,7 +48,12 @@ import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
+import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeListItemStatus
+import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
+import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
+import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListSession
@@ -105,6 +113,7 @@ fun MainScreen(
         removalSnackbar = removalSnackbar,
         sessionActions = sessionActions,
         revealNewestToken = revealNewestToken,
+        serversChrome = serversChrome,
         sessionActionsCallbacks =
             HomeSessionActionsCallbacks(
                 onSessionLongPress = { session ->
@@ -372,38 +381,60 @@ internal fun MainScreen(
         val active = serversChrome.active
         if (active != null) {
             Text(
-                text = "Using now",
+                text = "USING NOW",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
             )
-            OpenCodeBottomSheetEntry(
-                title = "${active.displayName} · ${active.baseUrl.trimEnd('/')}",
-                endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Active"),
+            OpenCodeListItem(
+                title = active.displayName,
+                subtitle = active.baseUrl.trimEnd('/'),
+                status = OpenCodeListItemStatus("Active", OpenCodeListItemStatusTone.Interactive),
+                style = OpenCodeListItemStyle.Card,
+                startDecorator =
+                    StartDecorator.Letter(
+                        letterCharacterForProject(active.displayName),
+                        letterAccentForWorktree(active.id.ifBlank { active.displayName }),
+                    ),
                 onClick = onDismissServersSheet,
+                modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
         if (serversChrome.others.isNotEmpty()) {
             Text(
-                text = "Switch to",
+                text = "SWITCH TO",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
             )
             serversChrome.others.forEach { profile ->
-                OpenCodeBottomSheetEntry(
-                    title = "${profile.displayName} · ${profile.baseUrl.trimEnd('/')}",
+                OpenCodeListItem(
+                    title = profile.displayName,
+                    subtitle = ConnectionProfileIdentity.hostLabel(profile.baseUrl),
+                    startDecorator =
+                        StartDecorator.Letter(
+                            letterCharacterForProject(profile.displayName),
+                            letterAccentForWorktree(profile.id.ifBlank { profile.displayName }),
+                        ),
                     onClick = { onSwitchProfile(profile.id) },
+                    modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
         }
-        OpenCodeBottomSheetEntry(
+        OpenCodeListItem(
             title = "Add server",
+            subtitle = "New Connection Profile",
+            startDecorator = StartDecorator.Icon(OpenCodeIcons.Add, "Add server"),
             onClick = onAddServerClick,
+            modifier = Modifier.padding(horizontal = 16.dp),
         )
-        OpenCodeBottomSheetEntry(
+        OpenCodeListItem(
             title = "Manage in Settings",
             onClick = onManageServersClick,
+            modifier =
+                Modifier
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 8.dp),
         )
     }
 

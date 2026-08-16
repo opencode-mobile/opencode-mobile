@@ -6,6 +6,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
     private let connectionProbing: (any ConnectionProbing)?
     private let profileStore: (any ConnectionProfileStore)?
     private var _connection: ServerConnection?
+    private var _profile: ConnectionProfile?
     private var inFlightProbe: Task<Result<ServerProtocol, Error>, Never>?
     private var probeGeneration = 0
     private var probeFailed = false
@@ -43,9 +44,21 @@ final class ActiveConnectionManager: @unchecked Sendable {
         }
     }
 
+    func reloadFromStore() async {
+        guard let store = profileStore else { return }
+        if let profile = await store.activeProfile() {
+            apply(profile)
+        } else {
+            disconnect()
+        }
+    }
+
     func apply(_ profile: ConnectionProfile, serverProtocol: ServerProtocol? = nil) {
-        let connection = ServerConnection(profile: profile, serverProtocol: serverProtocol)
+        var stamped = profile
+        stamped.serverProtocol = serverProtocol ?? profile.serverProtocol
+        let connection = ServerConnection(profile: stamped, serverProtocol: stamped.serverProtocol)
         lock.lock()
+        _profile = stamped
         _connection = connection
         probeFailed = false
         lock.unlock()
@@ -180,18 +193,17 @@ final class ActiveConnectionManager: @unchecked Sendable {
     private func persistLocked() {
         guard let store = profileStore, let profile = currentProfileLocked() else { return }
         Task {
-            await store.saveProfile(profile)
+            try? await store.saveProfile(profile)
         }
     }
 
     private func currentProfileLocked() -> ConnectionProfile? {
-        guard let connection = _connection else { return nil }
-        return ConnectionProfile(
-            baseURL: connection.baseURL.absoluteString,
-            username: connection.username,
-            password: connection.password ?? "",
-            serverProtocol: connection.serverProtocol
-        )
+        guard var profile = _profile else { return nil }
+        if let connection = _connection {
+            profile.password = connection.password ?? ""
+            profile.serverProtocol = connection.serverProtocol ?? profile.serverProtocol
+        }
+        return profile
     }
 
     private func invalidateInFlightProbe() {
@@ -204,6 +216,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
     func disconnect() {
         lock.lock()
         _connection = nil
+        _profile = nil
         probeFailed = false
         lock.unlock()
         invalidateInFlightProbe()
@@ -249,11 +262,51 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         lock.unlock()
     }
 
-    func saveProfile(_ profile: ConnectionProfile, serverProtocol: ServerProtocol? = nil) async {
+    func listProfiles() async -> [ConnectionProfile] {
+        await connectionProfileStore.listProfiles()
+    }
+
+    func saveProfile(_ profile: ConnectionProfile, serverProtocol: ServerProtocol? = nil) async throws {
         var stamped = profile
         stamped.serverProtocol = serverProtocol ?? profile.serverProtocol
-        await connectionProfileStore.saveProfile(stamped)
-        activeConnectionManager.apply(stamped, serverProtocol: stamped.serverProtocol)
+        let wasNew = stamped.id.isEmpty
+        try await connectionProfileStore.saveProfile(stamped)
+        let active = await connectionProfileStore.activeProfile()
+        let savedIsActive = wasNew || (!stamped.id.isEmpty && active?.id == stamped.id)
+        if savedIsActive {
+            await rebindActive()
+        }
+        notifySaved()
+    }
+
+    func switchProfile(id: String) async {
+        await connectionProfileStore.applyProfile(id: id)
+        await rebindActive()
+        notifySaved()
+    }
+
+    func removeProfile(id: String) async {
+        await connectionProfileStore.removeProfile(id: id)
+        if await connectionProfileStore.activeProfile() == nil {
+            activeConnectionManager.disconnect()
+            let handlers = profileClearedHandlers
+            handlers.forEach { $0() }
+        } else {
+            await rebindActive()
+            notifySaved()
+        }
+    }
+
+    private func rebindActive() async {
+        await activeConnectionManager.reloadFromStore()
+        if activeConnectionManager.currentProfile() == nil,
+           let active = await connectionProfileStore.activeProfile()
+        {
+            activeConnectionManager.apply(active)
+        }
+    }
+
+    private func notifySaved() {
         lock.lock()
         let handlers = profileSavedHandlers
         lock.unlock()

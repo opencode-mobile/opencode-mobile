@@ -146,6 +146,9 @@ extension Container {
             return DefaultSessionCache(
                 store: self.sessionCacheStore(),
                 connectionIdProvider: {
+                    if let id = manager.currentProfile()?.id, !id.isEmpty {
+                        return id
+                    }
                     guard let connection = manager.connection else { return nil }
                     return CacheUrlNormalizer.connectionId(
                         baseURL: connection.baseURL.absoluteString,
@@ -462,11 +465,15 @@ extension Container {
     }
 
     @MainActor
-    static func makeConnectionSetupViewModel(initialProfile: ConnectionProfile?) -> ConnectionSetupViewModel {
+    static func makeConnectionSetupViewModel(
+        initialProfile: ConnectionProfile?,
+        mode: ConnectionSetupMode = .first
+    ) -> ConnectionSetupViewModel {
         ConnectionSetupViewModel(
             connectionProbeService: shared.connectionProbing(),
             connectionSessionCoordinator: shared.connectionSessionCoordinator(),
-            initialProfile: initialProfile
+            initialProfile: initialProfile,
+            mode: mode
         )
     }
 

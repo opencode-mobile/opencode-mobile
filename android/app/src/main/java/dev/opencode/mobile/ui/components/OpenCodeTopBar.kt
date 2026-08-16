@@ -24,7 +24,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -255,13 +254,10 @@ private fun TopBarTitleRow(
     ) {
         Box(modifier = Modifier.weight(1f, fill = false)) { titleText() }
         Icon(
-            imageVector = OpenCodeIcons.ChevronRight,
+            imageVector = OpenCodeIcons.KeyboardArrowDown,
             contentDescription = null,
             tint = openCodeColor("text-base"),
-            modifier =
-                Modifier
-                    .size(16.dp)
-                    .rotate(if (titleMenuExpanded) 270f else 90f),
+            modifier = Modifier.size(18.dp),
         )
     }
 }

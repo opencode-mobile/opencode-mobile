@@ -15,7 +15,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.connection.ConnectionProfile
+import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
+import dev.opencode.mobile.theme.letterAccentForWorktree
+import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.OpenCodeButton
+import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
@@ -25,6 +29,7 @@ import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
@@ -62,7 +67,7 @@ fun ServersScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = "Saved",
+                    text = "SAVED",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -70,7 +75,7 @@ fun ServersScreen(
                 uiState.profiles.forEach { profile ->
                     OpenCodeListItem(
                         title = profile.displayName,
-                        subtitle = profile.baseUrl.trimEnd('/'),
+                        subtitle = ConnectionProfileIdentity.hostLabel(profile.baseUrl),
                         status =
                             if (profile.id == uiState.activeId) {
                                 OpenCodeListItemStatus("Active", OpenCodeListItemStatusTone.Interactive)
@@ -78,10 +83,16 @@ fun ServersScreen(
                                 null
                             },
                         style = OpenCodeListItemStyle.Card,
+                        startDecorator =
+                            StartDecorator.Letter(
+                                letterCharacterForProject(profile.displayName),
+                                letterAccentForWorktree(profile.id.ifBlank { profile.displayName }),
+                            ),
                         onClick = { onEditProfile(profile) },
                         trailing = {
                             OpenCodeButton(
                                 variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, "Remove ${profile.displayName}"),
+                                contrast = OpenCodeButtonContrast.Low,
                                 onClick = { onRequestRemove(profile) },
                             )
                         },

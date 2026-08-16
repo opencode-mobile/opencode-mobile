@@ -30,7 +30,8 @@ search fields, or arbitrary custom content.
   - native icon identifier and accessibility label for icon actions
 - Optional content:
   - single-line `title`
-  - `onTitleClick` switcher control (chevron after the title; `titleMenuExpanded` rotates it)
+  - `onTitleClick` switcher control (`keyboard_arrow_down` immediately after
+    the title; the chevron stays down)
   - single-line `subtitle`
   - `subtitleLeading.letter` compact project letter badge (character +
     `LetterAccent`) shown before subtitle text on the second line

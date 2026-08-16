@@ -16,9 +16,11 @@ private var _arrow_upward: ImageVector? = null
 private var _arrow_downward: ImageVector? = null
 private var _check: ImageVector? = null
 private var _chevron_right: ImageVector? = null
+private var _keyboard_arrow_down: ImageVector? = null
 private var _close: ImageVector? = null
 private var _content_copy: ImageVector? = null
 private var _collapse_content: ImageVector? = null
+private var _delete: ImageVector? = null
 private var _description: ImageVector? = null
 private var _edit: ImageVector? = null
 private var _expand_content: ImageVector? = null
@@ -154,6 +156,25 @@ private var _widgets: ImageVector? = null
       return _chevron_right!!
     }
 
+  val KeyboardArrowDown: ImageVector
+    get() {
+      if (_keyboard_arrow_down != null) return _keyboard_arrow_down!!
+      _keyboard_arrow_down = ImageVector.Builder(
+        name = "KeyboardArrowDown",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z").toNodes(),
+      fill = SolidColor(Color.Black),
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _keyboard_arrow_down!!
+    }
+
   val Close: ImageVector
     get() {
       if (_close != null) return _close!!
@@ -214,6 +235,25 @@ private var _widgets: ImageVector? = null
     }
       }.build()
       return _collapse_content!!
+    }
+
+  val Delete: ImageVector
+    get() {
+      if (_delete != null) return _delete!!
+      _delete = ImageVector.Builder(
+        name = "Delete",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z").toNodes(),
+      fill = SolidColor(Color.Black),
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _delete!!
     }
 
   val Description: ImageVector

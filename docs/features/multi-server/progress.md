@@ -27,7 +27,11 @@
 
 ## iOS
 
-- Not started.
+- Persistence catalog, migration, switch, and remove.
+- Home title switcher + Servers sheet.
+- Connection setup Name + first / add / edit / remove.
+- Settings → Servers management.
+- Edit chrome: top-bar trash, Test as a text link, one Save.
 
 ## Android
 
@@ -35,6 +39,7 @@
 - Home title switcher + Servers sheet.
 - Connection setup Name + first / add / edit / remove.
 - Settings → Servers management.
+- Edit chrome: top-bar trash, Test as a text link, one Save.
 
 ## Blockers
 
@@ -42,5 +47,4 @@ None.
 
 ## Remaining
 
-- iOS implementation of the same slice.
 - CONTEXT.md glossary when both platforms ship.
