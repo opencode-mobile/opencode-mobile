@@ -124,7 +124,29 @@ nonisolated struct QuestionOptionDTO: Codable, Sendable {
 
 nonisolated struct QuestionToolDTO: Codable, Sendable {
     let messageID: String
-    let callID: String
+    let callID: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case messageID, callID, id
+    }
+
+    init(messageID: String, callID: String? = nil) {
+        self.messageID = messageID
+        self.callID = callID
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        messageID = try container.decode(String.self, forKey: .messageID)
+        callID = try container.decodeIfPresent(String.self, forKey: .callID)
+            ?? container.decodeIfPresent(String.self, forKey: .id)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(messageID, forKey: .messageID)
+        try container.encodeIfPresent(callID, forKey: .callID)
+    }
 }
 
 struct TodoDTO: Codable, Sendable {

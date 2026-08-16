@@ -27,6 +27,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -205,7 +206,6 @@ class MessageDomainAdapter {
                     V2PromptFileDto(
                         uri = attachment.dataUrl,
                         name = attachment.filename,
-                        mime = attachment.mime,
                     )
                 }.takeIf { it.isNotEmpty() }
         val agents =
@@ -318,7 +318,7 @@ class MessageDomainAdapter {
                 MessageContextEstimate(
                     userCharacters =
                         text.length +
-                            dto.files.sumOf { (it.mention ?: it.source)?.text?.length ?: 0 } +
+                            dto.files.sumOf { it.mention?.text?.length ?: it.source?.text?.length ?: 0 } +
                             dto.agents.sumOf { it.source?.text?.length ?: 0 },
                 ),
         )
@@ -406,7 +406,7 @@ class MessageDomainAdapter {
                             status = if (completed) ToolStatus.Completed else ToolStatus.Running,
                             title = "Shell",
                             callId = dto.callId,
-                            output = dto.output,
+                            output = v2ShellOutput(dto.output),
                             id = "${dto.id}:tool",
                         ),
                     ),
@@ -523,7 +523,7 @@ class MessageDomainAdapter {
         file: V2FileAttachmentDto,
         fallbackId: String,
     ): MessagePart.File? {
-        val dataUrl = file.uri ?: return null
+        val dataUrl = v2FileDataUrl(file) ?: return null
         val mime = (file.mime ?: AttachmentDataUrl.mimeFromDataUrl(dataUrl))?.lowercase() ?: return null
         if (!AttachmentDataUrl.validates(dataUrl, mime)) return null
         val kind = AttachmentDataUrl.kind(mime) ?: return null
@@ -535,6 +535,24 @@ class MessageDomainAdapter {
             dataUrl = dataUrl,
         )
     }
+
+    private fun v2FileDataUrl(file: V2FileAttachmentDto): String? {
+        file.uri?.takeIf { it.isNotBlank() }?.let { return it }
+        file.source?.uri?.takeIf { it.isNotBlank() }?.let { return it }
+        val mime = file.mime ?: return null
+        val base64 = jsonString(file.data) ?: return null
+        return AttachmentDataUrl.fromBase64(base64, mime)
+    }
+
+    private fun v2ShellOutput(output: JsonElement?): String? =
+        when (output) {
+            is JsonPrimitive -> output.contentOrNull
+            is JsonObject -> jsonString(output["output"])
+            else -> null
+        }
+
+    private fun jsonString(element: JsonElement?): String? =
+        (element as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 
     private fun jsonObjectFromInput(input: JsonElement?): JsonObject? =
         when (input) {

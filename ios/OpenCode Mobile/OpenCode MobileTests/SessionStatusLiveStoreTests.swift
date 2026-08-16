@@ -33,6 +33,36 @@ struct SessionStatusLiveStoreTests {
         #expect(repository.statusFetchCount == fetchesAfterBootstrap)
     }
 
+    @Test func observeStatuses_emptyActiveSnapshotDoesNotClearSseBusy() async throws {
+        let repository = StatusLiveStoreFakeSessionRepository(statuses: [])
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionStatusLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream
+        )
+
+        let collector = StatusCollector(store: store, directory: "/repo")
+        _ = try await collector.awaitEmission(matching: { _ in true })
+
+        eventStream.emit(
+            OpencodeEvent(
+                type: "session.status",
+                sessionID: "ses-1",
+                rawProperties: [
+                    "sessionID": .string("ses-1"),
+                    "status": .dictionary(["type": .string("busy")]),
+                ]
+            )
+        )
+        _ = try await collector.awaitEmission { $0["ses-1"]?.raw["type"] == "busy" }
+
+        eventStream.emit(OpencodeEvent(type: "session.active.snapshot", sessionID: "ses-1"))
+        try await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs + 80))
+        collector.cancel()
+
+        #expect(collector.emissions.last?["ses-1"]?.raw["type"] == "busy")
+    }
+
     @Test func observeStatuses_removesSessionOnIdleEvent() async throws {
         let repository = StatusLiveStoreFakeSessionRepository(
             statuses: [SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]

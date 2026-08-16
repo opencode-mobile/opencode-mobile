@@ -67,6 +67,7 @@ data class V2PermissionSourceDto(
     val type: String? = null,
     @SerialName("messageID") val messageId: String? = null,
     @SerialName("callID") val callId: String? = null,
+    val id: String? = null,
 )
 
 @Serializable

@@ -61,7 +61,7 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
-    fun labelForActiveTurn_hidesWhenAssistantHasToolCard() {
+    fun labelForActiveTurn_hidesWhenAssistantHasRunningToolCard() {
         assertNull(
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel = "Working",
@@ -77,6 +77,33 @@ class WorkingTurnIndicatorTest {
                                         blockID = "tool-1",
                                         toolName = "bash",
                                         status = ToolStatus.Running,
+                                        title = "bash",
+                                    ),
+                                ),
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun labelForActiveTurn_showsWorkingAfterCompletedToolCard() {
+        assertEquals(
+            "Working",
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Working",
+                messages =
+                    listOf(
+                        user("u1"),
+                        assistant(
+                            id = "a1",
+                            text = "",
+                            blocks =
+                                listOf(
+                                    SessionChatTimelineBlock.ToolCard(
+                                        blockID = "tool-1",
+                                        toolName = "bash",
+                                        status = ToolStatus.Completed,
                                         title = "bash",
                                     ),
                                 ),

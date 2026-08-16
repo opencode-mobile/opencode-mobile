@@ -18,7 +18,6 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -43,6 +42,16 @@ class ModelProtocolRepositoryTest {
                           "limit":{"context":200000,"output":8192}
                         }]}
                         """.trimIndent(),
+                        """
+                        {"location":{"directory":"/repo"},"data":{
+                          "id":"claude-sonnet",
+                          "modelID":"claude-sonnet",
+                          "providerID":"anthropic",
+                          "name":"Claude Sonnet",
+                          "enabled":true,
+                          "status":"active"
+                        }}
+                        """.trimIndent(),
                     ),
                 )
             val client =
@@ -66,10 +75,11 @@ class ModelProtocolRepositoryTest {
             assertEquals(listOf("high", "low"), catalog.options.single().variants)
             assertEquals(true, catalog.options.single().supportsImageInput)
             assertEquals(false, catalog.options.single().supportsPdfInput)
-            assertNull(catalog.serverDefault)
-            assertEquals(2, requests.size)
+            assertEquals("claude-sonnet", catalog.serverDefault?.modelId)
+            assertEquals(3, requests.size)
             assertTrue(requests[0].url.encodedPath.contains("/api/provider"))
             assertTrue(requests[1].url.encodedPath.contains("/api/model"))
+            assertTrue(requests[2].url.encodedPath.contains("/api/model/default"))
             assertEquals("/repo", requests[0].url.parameters["location[directory]"])
         }
 

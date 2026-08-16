@@ -80,6 +80,9 @@ class DefaultSessionStatusLiveStore
                                     launch {
                                         delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
                                         reloadFromServer()?.let { statuses ->
+                                            // Empty active maps are a between-step gap on v2,
+                                            // not idle. True idle is session.idle / execution.*.
+                                            if (statuses.isEmpty() && current.isNotEmpty()) return@let
                                             current = statuses
                                             send(current)
                                         }

@@ -2,6 +2,8 @@
 
 Related research:
 [`../server-connection/research-opencode-api-v2.md`](../server-connection/research-opencode-api-v2.md)
+(mobile v1 usage vs v2). Official public HttpApi inventory:
+[`official-docs-inventory.md`](official-docs-inventory.md).
 
 ## User Goal
 

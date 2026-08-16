@@ -48,7 +48,7 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
-    @Test func labelForActiveTurn_hidesWhenAssistantHasToolCard() {
+    @Test func labelForActiveTurn_hidesWhenAssistantHasRunningToolCard() {
         let toolCard: SessionChatTimelineBlock = .toolCard(
             blockID: "tool-1",
             card: SessionChatToolCardBlock(
@@ -62,6 +62,23 @@ struct WorkingTurnIndicatorTests {
                 statusLabel: "Working",
                 messages: [user("u1"), assistant("a1", text: "", blocks: [toolCard])]
             ) == nil
+        )
+    }
+
+    @Test func labelForActiveTurn_showsWorkingAfterCompletedToolCard() {
+        let toolCard: SessionChatTimelineBlock = .toolCard(
+            blockID: "tool-1",
+            card: SessionChatToolCardBlock(
+                toolName: "bash",
+                status: .completed,
+                title: "bash"
+            )
+        )
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                messages: [user("u1"), assistant("a1", text: "", blocks: [toolCard])]
+            ) == "Working"
         )
     }
 

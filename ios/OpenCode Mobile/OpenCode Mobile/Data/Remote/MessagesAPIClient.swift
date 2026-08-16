@@ -73,7 +73,9 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
                 query: query
             )
             messages.append(contentsOf: envelope.data)
-            cursor = envelope.cursor?.next.flatMap { $0.isEmpty ? nil : $0 }
+            let next = envelope.cursor?.next.flatMap { $0.isEmpty ? nil : $0 }
+            if next == cursor { break }
+            cursor = next
             pages += 1
         } while cursor != nil && pages < Self.maxV2MessageListPages
         return messages
@@ -170,5 +172,5 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         return data
     }
 
-    private static let maxV2MessageListPages = 20
+    private static let maxV2MessageListPages = 500
 }

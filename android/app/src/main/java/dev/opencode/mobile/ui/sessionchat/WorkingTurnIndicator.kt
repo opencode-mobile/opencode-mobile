@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.ToolStatus
 
 /**
  * In-chat Working/Retrying/Compacting chrome for an active turn.
@@ -15,11 +16,11 @@ object WorkingTurnIndicator {
     ): String? {
         if (isCompacting) return SessionCompactChrome.STATUS_LABEL
         if (statusLabel == null) return null
-        if (hasVisibleAssistantContentAfterLastUser(messages)) return null
+        if (hasInProgressAssistantContentAfterLastUser(messages)) return null
         return statusLabel
     }
 
-    private fun hasVisibleAssistantContentAfterLastUser(messages: List<SessionChatMessageItem>): Boolean {
+    private fun hasInProgressAssistantContentAfterLastUser(messages: List<SessionChatMessageItem>): Boolean {
         val lastUserIndex = messages.indexOfLast { it.role == MessageRole.User }
         val candidates =
             if (lastUserIndex < 0) {
@@ -27,20 +28,25 @@ object WorkingTurnIndicator {
             } else {
                 messages.drop(lastUserIndex + 1)
             }
-        return candidates.any { it.role == MessageRole.Assistant && hasVisibleContent(it) }
+        return candidates.any { it.role == MessageRole.Assistant && hasInProgressContent(it) }
     }
 
-    private fun hasVisibleContent(message: SessionChatMessageItem): Boolean {
+    private fun hasInProgressContent(message: SessionChatMessageItem): Boolean {
+        if (message.isStreaming) return true
         if (message.text.isNotBlank()) return true
         return message.blocks.any { block ->
             when (block) {
                 is SessionChatTimelineBlock.Text -> block.text.isNotBlank()
                 is SessionChatTimelineBlock.Attachment,
-                is SessionChatTimelineBlock.ToolCard,
-                is SessionChatTimelineBlock.ToolGroup,
                 is SessionChatTimelineBlock.ChildSessionRow,
                 -> true
+                is SessionChatTimelineBlock.ToolCard -> block.status.isInProgress
+                is SessionChatTimelineBlock.ToolGroup ->
+                    block.status.isInProgress || block.members.any { it.status.isInProgress }
             }
         }
     }
 }
+
+private val ToolStatus.isInProgress: Boolean
+    get() = this == ToolStatus.Pending || this == ToolStatus.Running

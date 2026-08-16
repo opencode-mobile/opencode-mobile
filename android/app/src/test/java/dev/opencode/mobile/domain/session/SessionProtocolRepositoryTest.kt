@@ -386,7 +386,7 @@ class SessionProtocolRepositoryTest {
                           "action":"edit",
                           "resources":["src/a.kt"],
                           "save":["src/*"],
-                          "source":{"type":"tool","messageID":"msg_1","callID":"call_1"}
+                          "source":{"type":"tool","messageID":"msg_1","id":"call_1"}
                         }]}
                         """.trimIndent(),
                     )
@@ -404,6 +404,7 @@ class SessionProtocolRepositoryTest {
             assertEquals("edit", permissions.single().permission)
             assertEquals(listOf("src/a.kt"), permissions.single().patterns)
             assertEquals("msg_1", permissions.single().toolMessageId)
+            assertEquals("call_1", permissions.single().toolCallId)
             assertTrue(requests.single().url.encodedPath.contains("/api/permission/request"))
             assertEquals("/repo", requests.single().url.parameters["location[directory]"])
         }

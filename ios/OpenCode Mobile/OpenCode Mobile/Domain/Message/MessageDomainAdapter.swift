@@ -171,7 +171,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
     }
 
     func v2PromptRequest(options: PromptSendOptions) -> V2PromptRequestDTO {
-        let files = options.attachments.map { V2PromptFileDTO(uri: $0.dataURL, name: $0.filename, mime: $0.mime) }
+        let files = options.attachments.map { V2PromptFileDTO(uri: $0.dataURL, name: $0.filename) }
         let agents = ComposerMentionRouting.agentParts(text: options.text, mentions: options.agentMentions).map { part in
             V2PromptAgentDTO(
                 name: part.name,
@@ -273,7 +273,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             sentAtEpochMs: dto.time?.created,
             contextEstimate: MessageContextEstimate(
                 userCharacters: text.count
-                    + dto.files.reduce(0) { $0 + (($1.mention ?? $1.source)?.text?.count ?? 0) }
+                    + dto.files.reduce(0) { $0 + ($1.mention?.text?.count ?? $1.source?.text?.count ?? 0) }
                     + dto.agents.reduce(0) { $0 + ($1.source?.text?.count ?? 0) }
             )
         )
@@ -441,7 +441,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
     }
 
     private func v2FilePart(_ file: V2FileAttachmentDTO, fallbackID: String) -> MessagePart? {
-        guard let url = file.uri else { return nil }
+        guard let url = v2FileDataURL(file) else { return nil }
         let mime = (file.mime ?? AttachmentDataURL.mime(fromDataURL: url))?.lowercased()
         guard let mime,
               url.lowercased().hasPrefix("data:"),
@@ -457,6 +457,15 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 dataURL: url
             )
         )
+    }
+
+    private func v2FileDataURL(_ file: V2FileAttachmentDTO) -> String? {
+        if let uri = file.uri?.nilIfEmpty { return uri }
+        if let uri = file.source?.uri?.nilIfEmpty { return uri }
+        guard let mime = file.mime, let data = file.data, let decoded = Data(base64Encoded: data) else {
+            return nil
+        }
+        return AttachmentDataURL.make(data: decoded, mime: mime)
     }
 
     private func dictionaryFromInput(_ input: AnyCodable?) -> [String: AnyCodable]? {

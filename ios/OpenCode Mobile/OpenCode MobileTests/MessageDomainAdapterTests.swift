@@ -143,7 +143,6 @@ struct MessageDomainAdapterTests {
         #expect(body.delivery == "steer")
         #expect(body.files?.first?.uri == "data:text/plain;base64,SGk=")
         #expect(body.files?.first?.name == "notes.txt")
-        #expect(body.files?.first?.mime == "text/plain")
         #expect(body.agents?.first?.name == "explore")
         #expect(body.agents?.first?.mention?.text == "@explore")
     }
@@ -801,6 +800,62 @@ struct MessageDomainAdapterTests {
         #expect(tool.input?["agent"]?.stringValue == "explore")
         #expect(tool.metadata?["sessionID"]?.stringValue == "ses_child")
         #expect(tool.timeStartEpochMs == 10)
+    }
+
+    @Test func projectV2UserInlineFileDataBuildsDataURL() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"see file",
+                    "files":[{
+                      "name":"notes.txt",
+                      "mime":"text/plain",
+                      "data":"SGk=",
+                      "source":{"type":"inline"}
+                    }]
+                  }
+                ]
+                """.utf8
+            )
+        )
+        let messages = adapter.messages(fromV2: dtos)
+        guard case let .file(file) = messages.first?.parts.last else {
+            Issue.record("expected file part")
+            return
+        }
+        #expect(file.filename == "notes.txt")
+        #expect(file.mime == "text/plain")
+        #expect(file.dataURL == "data:text/plain;base64,SGk=")
+    }
+
+    @Test func projectV2ShellOutputObjectDoesNotFailDecode() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_shell",
+                    "type":"shell",
+                    "command":"pwd",
+                    "output":{"output":"/repo","truncated":false},
+                    "time":{"created":1,"completed":2}
+                  }
+                ]
+                """.utf8
+            )
+        )
+        let messages = adapter.messages(fromV2: dtos)
+        guard case let .tool(shellTool) = messages[1].parts.first else {
+            Issue.record("expected shell tool")
+            return
+        }
+        #expect(shellTool.output == "/repo")
     }
 
     private func decodeMessage(_ json: String) throws -> MessageDTO {

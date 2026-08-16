@@ -239,7 +239,9 @@ nonisolated struct SessionsAPIClient: Sendable {
                 query: query
             )
             sessions.append(contentsOf: envelope.data)
-            cursor = envelope.cursor?.next.flatMap { $0.isEmpty ? nil : $0 }
+            let next = envelope.cursor?.next.flatMap { $0.isEmpty ? nil : $0 }
+            if next == cursor { break }
+            cursor = next
             pages += 1
         } while cursor != nil && pages < Self.maxV2SessionListPages
         return sessions
@@ -332,7 +334,7 @@ nonisolated struct SessionsAPIClient: Sendable {
     }
 
     private struct EmptyBody: Codable {}
-    private static let maxV2SessionListPages = 20
+    private static let maxV2SessionListPages = 500
 
     private func get<T: Decodable>(
         path: String,

@@ -60,4 +60,18 @@ class QuestionRequestMappingTest {
             )
         assertFalse(info.custom)
     }
+
+    @Test
+    fun `maps published tool id when callID is absent`() {
+        val request =
+            adapter.toQuestionRequest(
+                QuestionRequestDto(
+                    id = "que_1",
+                    sessionId = "ses_1",
+                    tool = QuestionToolDto(messageId = "msg_1", id = "call_1"),
+                ),
+            )
+        assertEquals("call_1", request.toolCallId)
+        assertEquals("msg_1", request.toolMessageId)
+    }
 }

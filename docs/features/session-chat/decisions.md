@@ -91,6 +91,19 @@
   gain.
 - Revisit when: a shared timeline host abstraction lands.
 
+## Working row stays after completed tools while SSE says busy (2026-08-17)
+
+- Date: 2026-08-17
+- Decision: Hide the in-chat Working/Retrying row only for in-progress assistant
+  activity after the last user message (streaming text, pending/running tools).
+  Completed tools do not hide it. `session.active.snapshot` GET that returns an
+  empty active map does not clear SSE-applied busy; true idle stays
+  `session.idle` / `session.execution.*`.
+- Reason: v2 turns are multi-step. After a finished shell card, Android hid
+  Working even while SSE still reported busy. Step-end snapshots can briefly
+  return `{}` and were wiping that busy bit.
+- Revisit when: product wants Working hidden whenever any assistant chrome exists.
+
 ## Ship Android region row-reuse (Phase 4)
 
 - Date: 2026-07-28

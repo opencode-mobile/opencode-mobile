@@ -187,12 +187,10 @@ nonisolated struct V2PromptRequestDTO: Codable, Sendable {
 nonisolated struct V2PromptFileDTO: Codable, Sendable {
     let uri: String
     let name: String?
-    let mime: String?
 
-    init(uri: String, name: String? = nil, mime: String? = nil) {
+    init(uri: String, name: String? = nil) {
         self.uri = uri
         self.name = name
-        self.mime = mime
     }
 }
 

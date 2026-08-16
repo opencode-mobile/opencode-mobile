@@ -611,7 +611,24 @@ struct SessionChatViewModelTests {
         #expect(repository.sentOptions?.model?.modelID == "claude-sonnet")
         #expect(repository.sentOptions?.variant == nil)
         #expect(repository.sentOptions?.mode == "build")
-        #expect(messages.contains { $0.text == "Hello" })
+        #expect(messages.map(\.text) == ["Hello", "New prompt"])
+        #expect(messages.contains { $0.text == "New prompt" && $0.isPending })
+    }
+
+    @Test func sendPrompt_postSendReloadMatchingUser_dropsOptimistic() async {
+        let repository = FakeMessageRepository(echoSentPrompt: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("New prompt")
+        await viewModel.sendPrompt()
+        guard viewModel.uiState.timeline == .ready else {
+            Issue.record("Expected ready timeline")
+            return
+        }
+        let messages = viewModel.uiState.messages
+        #expect(viewModel.uiState.isSending == false)
+        #expect(messages.map(\.text) == ["Hello", "New prompt"])
+        #expect(!messages.contains { $0.isPending })
     }
 
     @Test func sendPrompt_matchingServerCommand_runsCommandApi() async {
@@ -2414,6 +2431,7 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     let shouldFailLoad: Bool
     let shouldFailSend: Bool
     let failListMessagesAfterSend: Bool
+    let echoSentPrompt: Bool
     let holdSend: Bool
     var sendPromptAsyncCalled = false
     var sentOptions: PromptSendOptions?
@@ -2428,12 +2446,14 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
         shouldFailLoad: Bool = false,
         shouldFailSend: Bool = false,
         failListMessagesAfterSend: Bool = false,
+        echoSentPrompt: Bool = false,
         holdSend: Bool = false
     ) {
         self.messages = messages
         self.shouldFailLoad = shouldFailLoad
         self.shouldFailSend = shouldFailSend
         self.failListMessagesAfterSend = failListMessagesAfterSend
+        self.echoSentPrompt = echoSentPrompt
         self.holdSend = holdSend
     }
 
@@ -2509,6 +2529,11 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
             throw MessageError.transport("send failed")
         } else if holdSend, !sendReleaseRequested {
             await withCheckedContinuation { sendContinuation = $0 }
+        }
+        if echoSentPrompt, !options.text.isEmpty {
+            messages.append(
+                Message(id: "msg-sent", role: .user, text: options.text, model: nil, mode: nil, sentAtEpochMs: nil)
+            )
         }
     }
 }

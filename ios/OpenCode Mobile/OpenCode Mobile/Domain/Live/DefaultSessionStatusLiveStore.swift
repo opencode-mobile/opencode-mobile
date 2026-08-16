@@ -77,6 +77,9 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         directory: directory,
                         sessionRepository: sessionRepository
                     ) {
+                        // Empty active maps are a between-step gap on v2, not idle.
+                        // True idle is session.idle / execution.*.
+                        if statuses.isEmpty, !current.isEmpty { return }
                         current = statuses
                         yield(current)
                     }

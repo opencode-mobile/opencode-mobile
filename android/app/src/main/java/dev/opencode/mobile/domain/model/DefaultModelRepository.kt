@@ -15,7 +15,11 @@ class DefaultModelRepository
         override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog =
             runCatching {
                 if (activeConnectionManager?.currentProtocolOrProbe() == ServerProtocol.V2) {
-                    adapter.toCatalog(api.listProvidersV2(directory), api.listModelsV2(directory))
+                    adapter.toCatalog(
+                        api.listProvidersV2(directory),
+                        api.listModelsV2(directory),
+                        runCatching { api.getDefaultModelV2(directory) }.getOrNull(),
+                    )
                 } else {
                     adapter.toCatalog(api.listProviders(directory))
                 }

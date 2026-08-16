@@ -113,7 +113,8 @@ keep today's permission, question, command, agent, and model types.
 - Agents: v2 `id` → `MentionableAgent.name`; still drop `primary` / `hidden`.
 - Models: join `/api/provider` + `/api/model`; skip disabled providers,
   `enabled == false`, and `deprecated`; empty `capabilities.input` keeps the
-  v1 image+pdf default; `serverDefault` is `null` on v2.
+  v1 image+pdf default; `serverDefault` comes from `GET /api/model/default`
+  when that model is in the catalog.
 
 **Why:** Permission dock, question dock, stop, slash commands, @ mentions, and
 the model picker already consume those domain types. Live stores already listen
@@ -365,15 +366,60 @@ reload, and that reload used to wait on a false idle.
 **Why:** Generated SSE uses `event` + string `data`. Parsing only `{ type, data }`
 dropped the live bus.
 
+## V2 prompt files omit mime (2026-08-17)
+
+**Choice:** `POST /api/session/{id}/prompt` and `.../command` file attachments
+are `{ uri, name }` only. Do not send `mime`.
+
+**Why:** Published `PromptInput.FileAttachment` is `uri`, `name`, `description`,
+`mention`. Extra `mime` is the same extra-key class that 400'd `partID` on
+revert. Mime belongs on history file payloads, not the request.
+
+## V2 history files and shell output match published message shapes (2026-08-17)
+
+**Choice:** Project user files from `uri`, `source.uri`, or inline `data` +
+`mime` into a data URL. Decode shell `output` as a string or
+`{ output, ... }` object.
+
+**Why:** Message list user files are `{ data, mime, source }`. Shell rows use an
+output object. Treating `output` as a required string failed the whole page.
+
+## V2 permission and question tool ids use `id` (2026-08-17)
+
+**Choice:** Map `source.id` / `tool.id` when `callID` is absent.
+
+**Why:** Published permission and question sources use `{ messageID, id }`, not
+v1 `callID`. Required `callID` decode dropped pending questions.
+
+## Keep optimistic user rows until the timeline matches them (2026-08-17)
+
+**Choice:** Merge pending send rows on every timeline apply, including
+post-send REST reload. Clear them only after the projector reconciles a
+matching authoritative user message, or when the send fails.
+
+**Why:** `POST /api/session/{id}/prompt` admits an inbox item before
+`GET /api/session/{id}/message` necessarily contains the user row. Dropping
+the optimistic bubble on that reload made the sent message vanish, then
+reappear when SSE or a later list included it. Quiet live refreshes already
+merged pending rows; required post-send applies did not.
+
+## V2 model default and list paging (2026-08-17)
+
+**Choice:** `GET /api/model/default` fills `serverDefault` when the model is in
+the catalog. Session and message lists page until the cursor ends, with a 500
+page safety cap and a repeated-cursor stop.
+
+**Why:** The default route is published. A 20-page cap truncated long histories.
+
 ## V2 leftovers stay documented, not dual-pathed (2026-08-16)
 
 **Choice:** Do not call published `/api/form/*`, durable
-`GET /api/session/{id}/event|history`, experimental session log,
-`GET /api/model/default`, or raise the 20-page list caps in this pass.
-Keep questions on `/api/question/*`. Leave `serverDefault` null. Leave
-reasoning unrendered.
+`GET /api/session/{id}/event|history`, or experimental session log in this
+pass. Keep questions on `/api/question/*`. Leave reasoning unrendered. Do not
+send prompt `skills[]`.
 
-**Why:** Form reply `{ answer }` is not pinned live. Durable catch-up routes are
-experimental or unused by MessageSync. Page caps and reasoning are existing
-product limits, not v2 contract bugs.
+**Why:** Form reply `{ answer }` is a different product model than the question
+dock. Durable catch-up routes are experimental; MessageSync already REST-reloads
+messages on reconnect. Reasoning stays at v1 timeline parity. Skills need
+composer UI. Home still has no documented `session.created` event.
 

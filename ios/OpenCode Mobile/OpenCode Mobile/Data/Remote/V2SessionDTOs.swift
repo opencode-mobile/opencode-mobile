@@ -150,6 +150,18 @@ nonisolated struct V2PermissionSourceDTO: Decodable, Sendable {
     let type: String?
     let messageID: String?
     let callID: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case type, messageID, callID, id
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        type = try container.decodeIfPresent(String.self, forKey: .type)
+        messageID = try container.decodeIfPresent(String.self, forKey: .messageID)
+        callID = try container.decodeIfPresent(String.self, forKey: .callID)
+            ?? container.decodeIfPresent(String.self, forKey: .id)
+    }
 }
 
 nonisolated struct V2PermissionReplyRequestDTO: Encodable, Sendable {

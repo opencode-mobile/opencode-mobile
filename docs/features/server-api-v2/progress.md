@@ -3,6 +3,7 @@
 ## Shared planning
 
 - [x] Research: [`../server-connection/research-opencode-api-v2.md`](../server-connection/research-opencode-api-v2.md)
+- [x] Official HttpApi inventory: [`official-docs-inventory.md`](official-docs-inventory.md)
 - [x] Work-split plan: [`plan.md`](plan.md)
 - [x] Integration branch `feature/ope-146-server-api-v2` (phase PRs target this,
   not `main`; ship when epic is ready)
@@ -79,9 +80,16 @@
 - [x] Live v2: completed compaction snapshots do not keep Compacting…
 - [x] Live v2: SSE `session.execution.*` / `session.text.*` project into Working
   and message patches
-- [x] Published v2 contracts: fork `boundary`, create `title`, prompt `mime`,
-  command `{model,files,delivery}`, revert without `partID`, no illegal
-  `?directory=` on session-scoped message/prompt/command
+- [x] Published v2 contracts: fork `boundary`, create `title`, prompt files
+  omit `mime`, command `{model,files,delivery}`, revert without `partID`, no
+  illegal `?directory=` on session-scoped message/prompt/command
+- [x] Live v2: `GET /api/model/default` fills `serverDefault`
+- [x] Live v2: message/session lists page until the cursor ends (500-page cap)
+- [x] Live v2: history files from `data`/`source.uri`; shell `output` object
+- [x] Live v2: permission/question tool `id` when `callID` is absent
+- [x] Live v2: keep the optimistic user bubble until an authoritative user
+  message matches (post-send reload no longer drops it while the inbox is
+  still catching up)
 - [x] Live v2: `session.next.step.ended` is not idle; Working catch-up uses
   `GET /api/session/active` via `session.active.snapshot`
 - [x] Live v2: project `session.next.tool.*` / `.shell.*` / `.compaction.*`
@@ -145,9 +153,16 @@
 - [x] Live v2: completed compaction snapshots do not keep Compacting…
 - [x] Live v2: SSE `session.execution.*` / `session.text.*` project into Working
   and message patches
-- [x] Published v2 contracts: fork `boundary`, create `title`, prompt `mime`,
-  command `{model,files,delivery}`, revert without `partID`, no illegal
-  `?directory=` on session-scoped message/prompt/command
+- [x] Published v2 contracts: fork `boundary`, create `title`, prompt files
+  omit `mime`, command `{model,files,delivery}`, revert without `partID`, no
+  illegal `?directory=` on session-scoped message/prompt/command
+- [x] Live v2: `GET /api/model/default` fills `serverDefault`
+- [x] Live v2: message/session lists page until the cursor ends (500-page cap)
+- [x] Live v2: history files from `data`/`source.uri`; shell `output` object
+- [x] Live v2: permission/question tool `id` when `callID` is absent
+- [x] Live v2: keep the optimistic user bubble until an authoritative user
+  message matches (post-send reload no longer drops it while the inbox is
+  still catching up)
 - [x] Live v2: `session.next.step.ended` is not idle; Working catch-up uses
   `GET /api/session/active` via `session.active.snapshot`
 - [x] Live v2: project `session.next.tool.*` / `.shell.*` / `.compaction.*`
@@ -181,10 +196,9 @@
   when those files are next edited.
 - Map published `/api/form/*` onto the question dock, or keep dual-path, once
   live form reply `{ answer }` is confirmed.
-- Durable reconnect catch-up (`GET /api/session/{id}/event` or experimental
-  session log) once the route is stable.
-- `GET /api/model/default` for v2 `serverDefault`.
-- Raise the 20-page session/message list caps, or page until the cursor ends.
+- Durable reconnect catch-up (`GET /api/experimental/session/{id}/log`) once
+  the route is stable. MessageSync already REST-reloads messages on reconnect.
 - Render assistant `reasoning` in history/live (v1 also hides it).
-- Home has no v2 `session.created` twin; list refresh still depends on remapped
-  `session.updated` (`moved` / agent / model / renamed).
+- Prompt `skills[]` needs composer skill mentions.
+- Home has no documented v2 `session.created` event; list refresh still
+  depends on remapped `session.updated` (`moved` / agent / model / renamed).

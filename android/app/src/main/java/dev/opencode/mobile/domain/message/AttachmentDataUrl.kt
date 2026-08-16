@@ -25,6 +25,15 @@ object AttachmentDataUrl {
     }
 
     @OptIn(ExperimentalEncodingApi::class)
+    fun fromBase64(
+        base64: String,
+        mime: String,
+    ): String? {
+        val bytes = runCatching { Base64.Default.decode(base64) }.getOrNull() ?: return null
+        return make(bytes, mime)
+    }
+
+    @OptIn(ExperimentalEncodingApi::class)
     fun decode(
         value: String,
         expectedMime: String,

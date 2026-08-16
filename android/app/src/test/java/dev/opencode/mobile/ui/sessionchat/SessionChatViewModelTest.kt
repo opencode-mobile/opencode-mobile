@@ -1333,10 +1333,37 @@ class SessionChatViewModelTest {
             assertEquals(null, repository.sentOptions?.variant)
             assertEquals("build", repository.sentOptions?.mode)
             assertEquals(
-                "Hello",
+                listOf("Hello", "New prompt"),
                 viewModel.uiState.value.messages
-                    .single()
-                    .text,
+                    .map { it.text },
+            )
+            assertTrue(
+                viewModel.uiState.value.messages
+                    .any { it.text == "New prompt" && it.isPending },
+            )
+        }
+
+    @Test
+    fun sendPrompt_postSendReloadMatchingUser_dropsOptimistic() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository(echoSentPrompt = true)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("New prompt")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.uiState.value.isSending)
+            assertEquals(
+                listOf("Hello", "New prompt"),
+                viewModel.uiState.value.messages
+                    .map { it.text },
+            )
+            assertFalse(
+                viewModel.uiState.value.messages
+                    .any { it.isPending },
             )
         }
 
@@ -3406,6 +3433,7 @@ private class FakeMessageRepository(
     var shouldFailLoad: Boolean = false,
     private val shouldFailSend: Boolean = false,
     var failListMessagesAfterSend: Boolean = false,
+    private val echoSentPrompt: Boolean = false,
     private val holdSendUntil: CompletableDeferred<Unit>? = null,
     private val contentPreparer: MessageContentPreparer =
         MessageContentPreparer(OpenCodeTextMateHighlightingEngine(OpenCodeSyntaxHighlighter.default)).apply {
@@ -3514,6 +3542,14 @@ private class FakeMessageRepository(
         sentOptions = options
         holdSendUntil?.await()
         if (shouldFailSend) error("send failed")
+        if (echoSentPrompt && options.text.isNotEmpty()) {
+            messages = messages +
+                Message(
+                    id = "msg-sent",
+                    role = MessageRole.User,
+                    text = options.text,
+                )
+        }
     }
 }
 

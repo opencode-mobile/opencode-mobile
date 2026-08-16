@@ -23,6 +23,7 @@ nonisolated struct V2ProviderInfoDTO: Decodable, Sendable {
 
 nonisolated struct V2ModelInfoDTO: Decodable, Sendable {
     let id: String
+    let modelID: String?
     let providerID: String
     let name: String?
     let enabled: Bool?
@@ -33,6 +34,7 @@ nonisolated struct V2ModelInfoDTO: Decodable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id
+        case modelID
         case providerID
         case name
         case enabled
@@ -45,6 +47,7 @@ nonisolated struct V2ModelInfoDTO: Decodable, Sendable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
+        modelID = try container.decodeIfPresent(String.self, forKey: .modelID)
         providerID = try container.decode(String.self, forKey: .providerID)
         name = try container.decodeIfPresent(String.self, forKey: .name)
         enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled)

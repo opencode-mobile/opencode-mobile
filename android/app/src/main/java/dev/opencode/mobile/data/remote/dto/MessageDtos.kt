@@ -168,7 +168,6 @@ data class V2PromptRequestDto(
 data class V2PromptFileDto(
     val uri: String,
     val name: String? = null,
-    val mime: String? = null,
 )
 
 @Serializable

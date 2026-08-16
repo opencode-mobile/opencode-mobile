@@ -261,7 +261,6 @@ class MessageDomainAdapterTest {
         assertEquals("steer", body.delivery)
         assertEquals("data:text/plain;base64,SGk=", body.files?.single()?.uri)
         assertEquals("notes.txt", body.files?.single()?.name)
-        assertEquals("text/plain", body.files?.single()?.mime)
         assertEquals("explore", body.agents?.single()?.name)
         assertEquals("@explore", body.agents?.single()?.mention?.text)
     }
@@ -966,5 +965,64 @@ class MessageDomainAdapterTest {
         assertEquals("explore", tool.input?.get("agent")?.jsonPrimitive?.content)
         assertEquals("ses_child", tool.metadata?.get("sessionID")?.jsonPrimitive?.content)
         assertEquals(10L, tool.timeStartEpochMs)
+    }
+
+    @Test
+    fun projectV2_userInlineFileDataBuildsDataUrl() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"see file",
+                    "files":[{
+                      "name":"notes.txt",
+                      "mime":"text/plain",
+                      "data":"SGk=",
+                      "source":{"type":"inline"}
+                    }]
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val file =
+            adapter
+                .projectV2(dtos)
+                .single()
+                .parts
+                .filterIsInstance<MessagePart.File>()
+                .single()
+        assertEquals("notes.txt", file.filename)
+        assertEquals("text/plain", file.mime)
+        assertEquals("data:text/plain;base64,SGk=", file.dataUrl)
+    }
+
+    @Test
+    fun projectV2_shellOutputObjectDoesNotFailDecode() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {
+                    "id":"msg_shell",
+                    "type":"shell",
+                    "command":"pwd",
+                    "output":{"output":"/repo","truncated":false},
+                    "time":{"created":1,"completed":2}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val tool =
+            adapter
+                .projectV2(dtos)[1]
+                .parts
+                .filterIsInstance<MessagePart.Tool>()
+                .single()
+        assertEquals("/repo", tool.output)
     }
 }

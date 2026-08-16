@@ -1716,6 +1716,41 @@ class SessionStatusLiveStoreTest {
         }
 
     @Test
+    fun observeStatuses_emptyActiveSnapshotDoesNotClearSseBusy() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(statuses = emptyList())
+            val eventStream = FakeForegroundEventStream()
+            val store = createStatusStore(repository, eventStream)
+            val emissions = mutableListOf<Map<String, SessionStatus>>()
+            val collectJob =
+                launch {
+                    store.observeStatuses("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+
+            eventStream.emit(
+                OpencodeEvent(
+                    type = "session.status",
+                    sessionId = "ses-1",
+                    rawProperties =
+                        buildJsonObject {
+                            put("sessionID", "ses-1")
+                            putJsonObject("status") { put("type", "busy") }
+                        },
+                ),
+            )
+            advanceUntilIdle()
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+
+            eventStream.emit(OpencodeEvent(type = "session.active.snapshot", sessionId = "ses-1"))
+            advanceTimeBy(350)
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+        }
+
+    @Test
     fun observeStatuses_removesSessionOnIdleEvent() =
         runTest(testDispatcher) {
             val repository =

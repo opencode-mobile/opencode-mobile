@@ -385,7 +385,9 @@ class SessionsApi private constructor(
                         cursor?.let { parameter("cursor", it) }
                     }.body<ApiListEnvelope<V2SessionDto>>()
             sessions += envelope.data
-            cursor = envelope.cursor?.next?.takeIf { it.isNotBlank() }
+            val next = envelope.cursor?.next?.takeIf { it.isNotBlank() }
+            if (next == cursor) break
+            cursor = next
             pages++
         } while (cursor != null && pages < MAX_V2_SESSION_LIST_PAGES)
         return sessions
@@ -528,6 +530,6 @@ class SessionsApi private constructor(
     }
 
     private companion object {
-        const val MAX_V2_SESSION_LIST_PAGES = 20
+        const val MAX_V2_SESSION_LIST_PAGES = 500
     }
 }

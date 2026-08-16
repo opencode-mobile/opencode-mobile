@@ -59,7 +59,9 @@ class MessagesApi private constructor(
                         }
                     }.body<ApiListEnvelope<V2SessionMessageDto>>()
             messages += envelope.data
-            cursor = envelope.cursor?.next?.takeIf { it.isNotBlank() }
+            val next = envelope.cursor?.next?.takeIf { it.isNotBlank() }
+            if (next == cursor) break
+            cursor = next
             pages++
         } while (cursor != null && pages < MAX_V2_MESSAGE_LIST_PAGES)
         return messages
@@ -149,6 +151,6 @@ class MessagesApi private constructor(
     }
 
     private companion object {
-        const val MAX_V2_MESSAGE_LIST_PAGES = 20
+        const val MAX_V2_MESSAGE_LIST_PAGES = 500
     }
 }

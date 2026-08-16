@@ -23,6 +23,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.TimelineApply
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
 import dev.opencode.mobile.ui.sessionchat.TimelineProjector
+import dev.opencode.mobile.ui.sessionchat.TimelineRow
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -519,7 +520,7 @@ class SessionChatTimeline(
         val previousFrame = lastTimelineFrame
         val sessionKey = sourceSessionId
         val optimisticInputs =
-            if (fromQuietRefresh && mergePendingWhileSending) {
+            if (mergePendingWhileSending) {
                 val pendingItems =
                     pendingOptimisticRows.ifEmpty { stateSnapshot.messages.filter { it.isPending } }
                 OptimisticInputs(
@@ -607,11 +608,7 @@ class SessionChatTimeline(
                     },
             )
         }
-        if (!fromQuietRefresh) {
-            mergePendingWhileSending = false
-            pendingOptimisticRows = emptyList()
-            pendingBaselineSignatures = emptyMap()
-        }
+        clearOptimisticIfReconciled(stamped.rows)
         onPublished?.invoke()
     }
 
@@ -642,6 +639,21 @@ class SessionChatTimeline(
                 errorMessage = errorMessage(throwable),
             )
         }
+    }
+
+    private fun clearOptimisticIfReconciled(rows: List<TimelineRow>) {
+        if (!mergePendingWhileSending) return
+        val pendingIds = pendingOptimisticRows.map { it.id }.toSet()
+        val stillPending =
+            if (pendingIds.isNotEmpty()) {
+                rows.any { it.id in pendingIds }
+            } else {
+                rows.any { it.isPending }
+            }
+        if (stillPending) return
+        mergePendingWhileSending = false
+        pendingOptimisticRows = emptyList()
+        pendingBaselineSignatures = emptyMap()
     }
 
     private fun isCurrentBinding(

@@ -183,7 +183,7 @@ class SessionDomainAdapter {
             metadata = dto.metadata,
             always = dto.save,
             toolMessageId = dto.source?.messageId,
-            toolCallId = dto.source?.callId,
+            toolCallId = dto.source?.callId ?: dto.source?.id,
         )
 
     fun toQuestionRequest(dto: QuestionRequestDto): QuestionRequest =
@@ -192,7 +192,7 @@ class SessionDomainAdapter {
             sessionId = dto.sessionId,
             questions = dto.questions.map(::toQuestionInfo),
             toolMessageId = dto.tool?.messageId,
-            toolCallId = dto.tool?.callId,
+            toolCallId = dto.tool?.callId ?: dto.tool?.id,
         )
 
     fun toQuestionInfo(dto: QuestionInfoDto): QuestionInfo =

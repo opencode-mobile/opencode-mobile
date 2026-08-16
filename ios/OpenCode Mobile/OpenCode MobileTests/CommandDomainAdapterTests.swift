@@ -106,7 +106,6 @@ struct CommandDomainAdapterTests {
         #expect(request.model?.variant == "high")
         #expect(request.files?.count == 1)
         #expect(request.files?.first?.uri == "data:image/png;base64,abc")
-        #expect(request.files?.first?.mime == "image/png")
         #expect(request.delivery == "steer")
     }
 

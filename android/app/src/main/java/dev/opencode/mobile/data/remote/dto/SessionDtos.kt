@@ -137,7 +137,8 @@ data class QuestionOptionDto(
 @Serializable
 data class QuestionToolDto(
     @SerialName("messageID") val messageId: String,
-    @SerialName("callID") val callId: String,
+    @SerialName("callID") val callId: String? = null,
+    val id: String? = null,
 )
 
 @Serializable

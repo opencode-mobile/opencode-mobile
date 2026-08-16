@@ -70,7 +70,6 @@ class CommandDomainAdapter {
                         V2PromptFileDto(
                             uri = attachment.dataUrl,
                             name = attachment.filename,
-                            mime = attachment.mime,
                         )
                     }.takeIf { it.isNotEmpty() },
             delivery = "steer",

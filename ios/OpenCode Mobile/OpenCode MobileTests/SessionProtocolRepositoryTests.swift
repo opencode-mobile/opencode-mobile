@@ -290,7 +290,7 @@ struct SessionProtocolRepositoryTests {
               "action":"edit",
               "resources":["src/a.kt"],
               "save":["src/*"],
-              "source":{"type":"tool","messageID":"msg_1","callID":"call_1"}
+              "source":{"type":"tool","messageID":"msg_1","id":"call_1"}
             }]}
             """#)
         ])
@@ -303,6 +303,7 @@ struct SessionProtocolRepositoryTests {
         #expect(permission.permission == "edit")
         #expect(permission.patterns == ["src/a.kt"])
         #expect(permission.toolMessageID == "msg_1")
+        #expect(permission.toolCallID == "call_1")
         let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
         #expect(url.path.hasSuffix("/api/permission/request"))
         #expect(queryValue(url, "location[directory]") == "/repo")
@@ -552,6 +553,16 @@ struct SessionProtocolRepositoryTests {
               "capabilities":{"tools":true,"input":["text","image"]},
               "limit":{"context":200000,"output":8192}
             }]}
+            """#),
+            .json(#"""
+            {"location":{"directory":"/repo"},"data":{
+              "id":"claude-sonnet",
+              "modelID":"claude-sonnet",
+              "providerID":"anthropic",
+              "name":"Claude Sonnet",
+              "enabled":true,
+              "status":"active"
+            }}
             """#)
         ])
         let manager = makeManager(serverProtocol: .v2)
@@ -571,10 +582,11 @@ struct SessionProtocolRepositoryTests {
         #expect(option.variants == ["high", "low"])
         #expect(option.supportsImageInput)
         #expect(!option.supportsPdfInput)
-        #expect(catalog.serverDefault == nil)
-        #expect(ProtocolRoutingURLProtocol.requests.count == 2)
+        #expect(catalog.serverDefault?.modelID == "claude-sonnet")
+        #expect(ProtocolRoutingURLProtocol.requests.count == 3)
         #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.hasSuffix("/api/provider") == true)
         #expect(ProtocolRoutingURLProtocol.requests[1].url?.path.hasSuffix("/api/model") == true)
+        #expect(ProtocolRoutingURLProtocol.requests[2].url?.path.hasSuffix("/api/model/default") == true)
         #expect(queryValue(try #require(ProtocolRoutingURLProtocol.requests[0].url), "location[directory]") == "/repo")
     }
 

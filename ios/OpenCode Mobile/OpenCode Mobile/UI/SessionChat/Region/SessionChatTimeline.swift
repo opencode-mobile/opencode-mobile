@@ -352,7 +352,6 @@ final class SessionChatTimeline {
         guard !Task.isCancelled else { return }
 
         let stateSnapshot = state
-        let isSending = fromQuietRefresh ? mergePendingWhileSending : false
         let previousErrorMessage = fromQuietRefresh ? stateSnapshot.errorMessage : nil
         let previousByID = Dictionary(uniqueKeysWithValues: stateSnapshot.messages.map { ($0.id, $0) })
         let applyStartedAt = ContinuousClock.now
@@ -364,7 +363,7 @@ final class SessionChatTimeline {
         let collapse = collapseConsecutiveToolCalls
 
         let pendingRows: [TimelineRow]
-        if fromQuietRefresh, isSending {
+        if mergePendingWhileSending {
             let source = pendingOptimisticRows.isEmpty
                 ? stateSnapshot.messages.filter(\.isPending)
                 : pendingOptimisticRows
@@ -375,7 +374,7 @@ final class SessionChatTimeline {
         let optimistic = OptimisticInputs(
             pendingRows: pendingRows,
             baselineSignatureCounts: pendingBaselineSignatureCounts,
-            mergePending: fromQuietRefresh && isSending
+            mergePending: mergePendingWhileSending
         )
         let previousFrame = timelineFrame.frameRevision == 0 && timelineFrame.rows.isEmpty
             ? nil
@@ -468,15 +467,26 @@ final class SessionChatTimeline {
         state.messagesFromCache = fromCache
         state.isSyncingMessages = fromCache
         state.errorMessage = resolvedErrorMessage
-        if !fromQuietRefresh {
-            mergePendingWhileSending = false
-            pendingOptimisticRows = []
-            pendingBaselineSignatureCounts = [:]
-        }
+        clearOptimisticIfReconciled(rows: stamped.rows)
         notifyChange()
         SessionPerformanceProbe.emit("styled_timeline_published")
         MessagePipelineProbe.emit(.styledPaintCompleted)
         onPublished?()
+    }
+
+    private func clearOptimisticIfReconciled(rows: [TimelineRow]) {
+        guard mergePendingWhileSending else { return }
+        let pendingIDs = Set(pendingOptimisticRows.map(\.id))
+        let stillPending =
+            if pendingIDs.isEmpty {
+                rows.contains(where: \.isPending)
+            } else {
+                rows.contains { pendingIDs.contains($0.id) }
+            }
+        guard !stillPending else { return }
+        mergePendingWhileSending = false
+        pendingOptimisticRows = []
+        pendingBaselineSignatureCounts = [:]
     }
 
     private func confirmCacheSync() {
