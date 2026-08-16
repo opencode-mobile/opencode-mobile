@@ -4,6 +4,9 @@ import dev.opencode.mobile.data.remote.dto.CommandDto
 import dev.opencode.mobile.data.remote.dto.CommandFilePartDto
 import dev.opencode.mobile.data.remote.dto.RunCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CommandDto
+import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
+import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
+import dev.opencode.mobile.data.remote.dto.V2RunCommandRequestDto
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
 
@@ -46,6 +49,31 @@ class CommandDomainAdapter {
                         filename = attachment.filename,
                     )
                 },
+        )
+
+    fun toV2RunRequest(options: CommandRunOptions): V2RunCommandRequestDto =
+        V2RunCommandRequestDto(
+            command = options.command,
+            arguments = options.arguments.takeIf { it.isNotBlank() },
+            agent = options.mode,
+            model =
+                options.model?.let { selection ->
+                    V2ModelRefDto(
+                        id = selection.modelId,
+                        providerId = selection.providerId,
+                        variant = options.variant,
+                    )
+                },
+            files =
+                options.attachments
+                    .map { attachment ->
+                        V2PromptFileDto(
+                            uri = attachment.dataUrl,
+                            name = attachment.filename,
+                            mime = attachment.mime,
+                        )
+                    }.takeIf { it.isNotEmpty() },
+            delivery = "steer",
         )
 
     fun mapError(throwable: Throwable): CommandError =

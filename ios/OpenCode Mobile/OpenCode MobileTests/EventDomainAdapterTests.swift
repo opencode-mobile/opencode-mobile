@@ -110,15 +110,6 @@ struct EventDomainAdapterTests {
         #expect(events[0].sessionErrorMessage == "model overloaded")
     }
 
-    @Test func parseEvent_projectsStepEndedIntoSessionIdle() {
-        let adapter = EventDomainAdapter()
-        let event = adapter.parseEvent(
-            dataLine: #"{"type":"session.next.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
-        )
-        #expect(event?.type == "session.idle")
-        #expect(event?.sessionID == "ses-1")
-    }
-
     @Test func parseEvent_projectsLiveExecutionStartedIntoBusyStatus() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(
@@ -148,6 +139,28 @@ struct EventDomainAdapterTests {
         #expect(event?.type == "session.step.ended")
         #expect(event?.sessionID == "ses-1")
         #expect(event?.triggersStatusRefresh == false)
+    }
+
+    @Test func parseEvents_projectsStepEndedIntoAssistantMessageAndActiveSnapshot() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.next.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "session.active.snapshot"])
+        #expect(events[0].sessionID == "ses-1")
+        #expect(events[0].rawProperties?["info"]?.dictionaryValue?["role"]?.stringValue == "assistant")
+        #expect(events[1].triggersStatusRefresh == true)
+    }
+
+    @Test func parseEvent_readsOfficialSSEEnvelopeWithEventAndJSONStringData() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"id":"evt_9","event":"session.next.tool.called","data":"{\"sessionID\":\"ses-1\",\"assistantMessageID\":\"msg-2\",\"callID\":\"call-1\",\"tool\":\"bash\",\"input\":{}}"}"#
+        )
+        #expect(event?.type == "message.part.updated")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.rawProperties?["part"]?.dictionaryValue?["tool"]?.stringValue == "bash")
+        #expect(event?.rawProperties?["part"]?.dictionaryValue?["state"]?.dictionaryValue?["status"]?.stringValue == "running")
     }
 
     @Test func parseEvent_projectsLiveTextDeltaUsingOrdinalPartID() {

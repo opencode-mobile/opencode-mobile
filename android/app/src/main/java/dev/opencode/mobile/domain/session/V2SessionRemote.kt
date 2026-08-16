@@ -1,7 +1,6 @@
 package dev.opencode.mobile.domain.session
 
 import dev.opencode.mobile.data.remote.SessionsApi
-import dev.opencode.mobile.data.remote.dto.InitSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.QuestionReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 
@@ -22,12 +21,9 @@ internal class V2SessionRemote(
         title: String?,
         directory: String?,
     ): Session {
-        var created = adapter.toSession(api.createSessionV2(directory))
-        if (!title.isNullOrBlank()) {
-            api.renameSessionV2(created.id, title)
+        var created = adapter.toSession(api.createSessionV2(directory, title))
+        if (!title.isNullOrBlank() && created.title != title) {
             created = created.copy(title = title)
-        } else if (created.title.isEmpty()) {
-            created = created.copy(title = "New Session")
         }
         return created
     }
@@ -55,16 +51,7 @@ internal class V2SessionRemote(
     override suspend fun archiveSession(
         id: String,
         directory: String?,
-    ): Session {
-        api.archiveSessionV2(id)
-        return adapter.toSession(api.getSessionV2(id)).let { session ->
-            if (session.archivedAtEpochMs != null) {
-                session
-            } else {
-                session.copy(archivedAtEpochMs = System.currentTimeMillis())
-            }
-        }
-    }
+    ): Session = throw SessionError.Http(404, "session archive is not available")
 
     override suspend fun deleteSession(
         id: String,
@@ -74,7 +61,7 @@ internal class V2SessionRemote(
     override suspend fun listChildSessions(
         id: String,
         directory: String?,
-    ): List<Session> = api.listSessionsV2(directory).filter { it.parentId == id }.map(adapter::toSession)
+    ): List<Session> = api.listSessionsV2(directory, parentId = id).map(adapter::toSession)
 
     override suspend fun listSessionTodos(
         id: String,
@@ -87,12 +74,7 @@ internal class V2SessionRemote(
         providerId: String,
         modelId: String,
         directory: String?,
-    ): Boolean =
-        api.initializeSessionAgents(
-            id,
-            InitSessionRequestDto(messageId = messageId, providerId = providerId, modelId = modelId),
-            directory,
-        )
+    ): Boolean = throw SessionError.Http(404, "session init is not available")
 
     override suspend fun forkSession(
         id: String,
@@ -108,12 +90,12 @@ internal class V2SessionRemote(
     override suspend fun shareSession(
         id: String,
         directory: String?,
-    ): Session = adapter.toSession(api.shareSession(id, directory))
+    ): Session = throw SessionError.Http(404, "session share is not available")
 
     override suspend fun unshareSession(
         id: String,
         directory: String?,
-    ): Session = adapter.toSession(api.unshareSession(id, directory))
+    ): Session = throw SessionError.Http(404, "session share is not available")
 
     override suspend fun getSessionDiff(
         id: String,

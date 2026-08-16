@@ -68,6 +68,7 @@ nonisolated struct OpencodeEvent: Sendable, Equatable {
     private static let statusRefreshTypes: Set<String> = [
         "session.status",
         "session.idle",
+        "session.active.snapshot",
     ]
 }
 

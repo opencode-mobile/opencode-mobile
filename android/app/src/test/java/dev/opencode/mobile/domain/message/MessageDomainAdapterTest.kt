@@ -261,6 +261,7 @@ class MessageDomainAdapterTest {
         assertEquals("steer", body.delivery)
         assertEquals("data:text/plain;base64,SGk=", body.files?.single()?.uri)
         assertEquals("notes.txt", body.files?.single()?.name)
+        assertEquals("text/plain", body.files?.single()?.mime)
         assertEquals("explore", body.agents?.single()?.name)
         assertEquals("@explore", body.agents?.single()?.mention?.text)
     }

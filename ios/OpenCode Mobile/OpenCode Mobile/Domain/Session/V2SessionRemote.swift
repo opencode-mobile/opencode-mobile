@@ -22,9 +22,8 @@ struct V2SessionRemote: SessionRemote, Sendable {
     }
 
     func createSession(parentID _: String?, title: String?, directory: String?) async throws -> Session {
-        var created = adapter.session(from: try await api.createSessionV2(directory: directory))
-        if let title, !title.isEmpty {
-            try await api.renameSessionV2(id: created.id, title: title)
+        var created = adapter.session(from: try await api.createSessionV2(directory: directory, title: title))
+        if let title, !title.isEmpty, created.title != title {
             created.title = title
         } else if created.title.isEmpty {
             created.title = "New Session"
@@ -50,13 +49,8 @@ struct V2SessionRemote: SessionRemote, Sendable {
         return renamed
     }
 
-    func archiveSession(id: String, directory _: String?) async throws -> Session {
-        try await api.archiveSessionV2(id: id)
-        var archived = adapter.session(from: try await api.getSessionV2(id: id))
-        if archived.archivedAtEpochMs == nil {
-            archived.archivedAtEpochMs = Int64(Date().timeIntervalSince1970 * 1000)
-        }
-        return archived
+    func archiveSession(id _: String, directory _: String?) async throws -> Session {
+        throw SessionError.http(statusCode: 404, message: "session archive is not available")
     }
 
     func deleteSession(id: String, directory _: String?) async throws -> Bool {
@@ -64,8 +58,7 @@ struct V2SessionRemote: SessionRemote, Sendable {
     }
 
     func listChildSessions(id: String) async throws -> [Session] {
-        try await api.listSessionsV2()
-            .filter { $0.parentID == id }
+        try await api.listSessionsV2(parentID: id)
             .map { adapter.session(from: $0) }
     }
 
@@ -73,11 +66,8 @@ struct V2SessionRemote: SessionRemote, Sendable {
         throw SessionError.http(statusCode: 404, message: "Todos REST is unavailable on v2")
     }
 
-    func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool {
-        try await api.initializeSessionAgents(
-            id: id,
-            body: InitSessionRequestDTO(messageID: messageID, providerID: providerID, modelID: modelID)
-        )
+    func initializeSessionAgents(id _: String, messageID _: String, providerID _: String, modelID _: String) async throws -> Bool {
+        throw SessionError.http(statusCode: 404, message: "session init is not available")
     }
 
     func forkSession(id: String, atMessageID: String?) async throws -> Session {
@@ -88,12 +78,12 @@ struct V2SessionRemote: SessionRemote, Sendable {
         try await api.interruptSessionV2(id: id)
     }
 
-    func shareSession(id: String) async throws -> Session {
-        adapter.session(from: try await api.shareSession(id: id))
+    func shareSession(id _: String) async throws -> Session {
+        throw SessionError.http(statusCode: 404, message: "session share is not available")
     }
 
-    func unshareSession(id: String) async throws -> Session {
-        adapter.session(from: try await api.unshareSession(id: id))
+    func unshareSession(id _: String) async throws -> Session {
+        throw SessionError.http(statusCode: 404, message: "session share is not available")
     }
 
     func getSessionDiff(id _: String, messageID _: String?, directory _: String?) async throws -> [FileDiff] {

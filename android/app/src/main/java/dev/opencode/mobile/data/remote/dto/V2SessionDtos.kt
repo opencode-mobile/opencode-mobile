@@ -11,11 +11,17 @@ data class V2LocationDto(
 )
 
 @Serializable
+data class V2SessionForkDto(
+    @SerialName("sessionID") val sessionId: String? = null,
+)
+
+@Serializable
 data class V2SessionDto(
     val id: String,
     val title: String = "",
     @SerialName("projectID") val projectId: String? = null,
     @SerialName("parentID") val parentId: String? = null,
+    val fork: V2SessionForkDto? = null,
     val cost: Double? = null,
     val tokens: MessageTokensDto? = null,
     val time: SessionTimeDto? = null,
@@ -25,6 +31,7 @@ data class V2SessionDto(
 
 @Serializable
 data class V2CreateSessionRequestDto(
+    val title: String? = null,
     val location: V2LocationDto? = null,
 )
 
@@ -34,8 +41,14 @@ data class V2RenameSessionRequestDto(
 )
 
 @Serializable
-data class V2ForkSessionRequestDto(
+data class V2ForkBoundaryDto(
+    val type: String,
     @SerialName("messageID") val messageId: String? = null,
+)
+
+@Serializable
+data class V2ForkSessionRequestDto(
+    val boundary: V2ForkBoundaryDto,
 )
 
 @Serializable
@@ -69,7 +82,6 @@ data class V2CompactSessionRequestDto(
 @Serializable
 data class V2RevertStageRequestDto(
     @SerialName("messageID") val messageId: String,
-    @SerialName("partID") val partId: String? = null,
     val files: Boolean,
 )
 

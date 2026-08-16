@@ -21,11 +21,16 @@ nonisolated struct V2LocationDTO: Codable, Sendable {
     }
 }
 
+nonisolated struct V2SessionForkDTO: Decodable, Sendable {
+    let sessionID: String?
+}
+
 nonisolated struct V2SessionDTO: Decodable, Sendable {
     let id: String
     let title: String
     let projectID: String?
     let parentID: String?
+    let fork: V2SessionForkDTO?
     let cost: Double?
     let tokens: MessageTokensDTO?
     let time: SessionTimeDTO?
@@ -37,6 +42,7 @@ nonisolated struct V2SessionDTO: Decodable, Sendable {
         case title
         case projectID
         case parentID
+        case fork
         case cost
         case tokens
         case time
@@ -50,6 +56,7 @@ nonisolated struct V2SessionDTO: Decodable, Sendable {
         title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
         projectID = try container.decodeIfPresent(String.self, forKey: .projectID)
         parentID = try container.decodeIfPresent(String.self, forKey: .parentID)
+        fork = try container.decodeIfPresent(V2SessionForkDTO.self, forKey: .fork)
         cost = try container.decodeIfPresent(Double.self, forKey: .cost)
         tokens = try container.decodeIfPresent(MessageTokensDTO.self, forKey: .tokens)
         time = try container.decodeIfPresent(SessionTimeDTO.self, forKey: .time)
@@ -59,15 +66,53 @@ nonisolated struct V2SessionDTO: Decodable, Sendable {
 }
 
 nonisolated struct V2CreateSessionRequestDTO: Encodable, Sendable {
+    let title: String?
     let location: V2LocationDTO?
+
+    init(title: String? = nil, location: V2LocationDTO? = nil) {
+        self.title = title
+        self.location = location
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case title
+        case location
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(title, forKey: .title)
+        try container.encodeIfPresent(location, forKey: .location)
+    }
 }
 
 nonisolated struct V2RenameSessionRequestDTO: Encodable, Sendable {
     let title: String
 }
 
-nonisolated struct V2ForkSessionRequestDTO: Encodable, Sendable {
+nonisolated struct V2ForkBoundaryDTO: Encodable, Sendable {
+    let type: String
     let messageID: String?
+
+    init(type: String, messageID: String? = nil) {
+        self.type = type
+        self.messageID = messageID
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case messageID
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(type, forKey: .type)
+        try container.encodeIfPresent(messageID, forKey: .messageID)
+    }
+}
+
+nonisolated struct V2ForkSessionRequestDTO: Encodable, Sendable {
+    let boundary: V2ForkBoundaryDTO
 }
 
 nonisolated struct V2PermissionRequestDTO: Decodable, Sendable {
@@ -121,12 +166,10 @@ nonisolated struct V2CompactSessionRequestDTO: Encodable, Sendable {
 
 nonisolated struct V2RevertStageRequestDTO: Encodable, Sendable {
     let messageID: String
-    let partID: String?
     let files: Bool
 
-    init(messageID: String, partID: String? = nil, files: Bool = true) {
+    init(messageID: String, files: Bool = true) {
         self.messageID = messageID
-        self.partID = partID
         self.files = files
     }
 }

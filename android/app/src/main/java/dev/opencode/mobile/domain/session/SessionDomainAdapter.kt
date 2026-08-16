@@ -52,7 +52,7 @@ class SessionDomainAdapter {
             slug = null,
             projectId = dto.projectId,
             directory = dto.location?.directory?.takeIf { it.isNotEmpty() },
-            parentId = dto.parentId,
+            parentId = dto.parentId ?: dto.fork?.sessionId,
             cost = dto.cost,
             tokens = toTokenUsage(dto.tokens),
             createdAtEpochMs = dto.time?.created,

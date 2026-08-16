@@ -28,7 +28,7 @@ nonisolated struct SessionDomainAdapter: Sendable {
                 guard let directory = dto.location?.directory, !directory.isEmpty else { return nil }
                 return directory
             }(),
-            parentID: dto.parentID,
+            parentID: dto.parentID ?? dto.fork?.sessionID,
             cost: dto.cost,
             tokens: tokenUsage(from: dto.tokens),
             createdAtEpochMs: dto.time?.created,

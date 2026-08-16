@@ -69,7 +69,7 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
             }
             let envelope: APIListEnvelope<V2SessionMessageDTO> = try await get(
                 path: "api/session/\(sessionID)/message",
-                directory: directory,
+                directory: nil,
                 query: query
             )
             messages.append(contentsOf: envelope.data)
@@ -95,19 +95,19 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
     }
 
     func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, directory: String? = nil) async throws {
-        try await postNoContent(path: "api/session/\(sessionID)/prompt", body: body, directory: directory)
+        try await postNoContent(path: "api/session/\(sessionID)/prompt", body: body, directory: nil)
     }
 
     func switchSessionAgent(sessionID: String, agent: String, directory: String? = nil) async throws {
         try await postNoContent(
             path: "api/session/\(sessionID)/agent",
             body: V2SwitchAgentRequestDTO(agent: agent),
-            directory: directory
+            directory: nil
         )
     }
 
     func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String? = nil) async throws {
-        try await postNoContent(path: "api/session/\(sessionID)/model", body: body, directory: directory)
+        try await postNoContent(path: "api/session/\(sessionID)/model", body: body, directory: nil)
     }
 
     private func postNoContent<B: Encodable>(path: String, body: B, directory: String?) async throws {

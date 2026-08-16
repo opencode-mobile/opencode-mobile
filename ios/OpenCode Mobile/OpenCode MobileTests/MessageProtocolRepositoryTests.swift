@@ -48,7 +48,7 @@ struct MessageProtocolRepositoryTests {
         #expect(messages[1].text == "Hi")
         let url = try #require(MessageProtocolURLProtocol.requests.first?.url)
         #expect(url.path.contains("/api/session/ses_2/message"))
-        #expect(queryValue(url, "directory") == "/repo")
+        #expect(queryValue(url, "directory") == nil)
         #expect(queryValue(url, "order") == "asc")
     }
 

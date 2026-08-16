@@ -74,6 +74,17 @@ class DefaultSessionStatusLiveStore
                                         }
                                     }
                             }
+                            event.type == "session.active.snapshot" -> {
+                                reconnectRefresh?.cancel()
+                                reconnectRefresh =
+                                    launch {
+                                        delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
+                                        reloadFromServer()?.let { statuses ->
+                                            current = statuses
+                                            send(current)
+                                        }
+                                    }
+                            }
                             event.triggersStatusRefresh -> {
                                 val next = applyStatusEvent(current, event) ?: return@collect
                                 if (next != current) {

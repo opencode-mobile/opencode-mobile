@@ -641,12 +641,14 @@ private fun HomeSessionActions(
                 onClick = callbacks.onChooseFork,
             )
         }
-        OpenCodeBottomSheetEntry(
-            title = "Archive",
-            enabled = !state.lifecycleInFlight,
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Archive, null),
-            onClick = callbacks.onChooseArchive,
-        )
+        if (state.canArchive) {
+            OpenCodeBottomSheetEntry(
+                title = "Archive",
+                enabled = !state.lifecycleInFlight,
+                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Archive, null),
+                onClick = callbacks.onChooseArchive,
+            )
+        }
         OpenCodeBottomSheetEntry(
             title = "Delete",
             enabled = !state.lifecycleInFlight,

@@ -221,12 +221,15 @@ nonisolated struct SessionsAPIClient: Sendable {
 
     // MARK: - V2 home / session CRUD
 
-    func listSessionsV2(directory: String? = nil) async throws -> [V2SessionDTO] {
+    func listSessionsV2(directory: String? = nil, parentID: String? = nil) async throws -> [V2SessionDTO] {
         var sessions: [V2SessionDTO] = []
         var cursor: String?
         var pages = 0
         repeat {
             var query: [String: String] = [:]
+            if let parentID {
+                query["parentID"] = parentID
+            }
             if let cursor {
                 query["cursor"] = cursor
             }
@@ -242,10 +245,13 @@ nonisolated struct SessionsAPIClient: Sendable {
         return sessions
     }
 
-    func createSessionV2(directory: String? = nil) async throws -> V2SessionDTO {
+    func createSessionV2(directory: String? = nil, title: String? = nil) async throws -> V2SessionDTO {
         let envelope: APIDataEnvelope<V2SessionDTO> = try await post(
             path: "api/session",
-            body: V2CreateSessionRequestDTO(location: directory.map { V2LocationDTO(directory: $0) })
+            body: V2CreateSessionRequestDTO(
+                title: title.flatMap { $0.isEmpty ? nil : $0 },
+                location: directory.map { V2LocationDTO(directory: $0) }
+            )
         )
         return envelope.data
     }
@@ -275,7 +281,12 @@ nonisolated struct SessionsAPIClient: Sendable {
     func forkSessionV2(id: String, messageID: String?) async throws -> V2SessionDTO {
         let envelope: APIDataEnvelope<V2SessionDTO> = try await post(
             path: "api/session/\(id)/fork",
-            body: V2ForkSessionRequestDTO(messageID: messageID)
+            body: V2ForkSessionRequestDTO(
+                boundary: V2ForkBoundaryDTO(
+                    type: (messageID?.isEmpty == false) ? "before" : "through",
+                    messageID: messageID.flatMap { $0.isEmpty ? nil : $0 }
+                )
+            )
         )
         return envelope.data
     }
@@ -295,7 +306,7 @@ nonisolated struct SessionsAPIClient: Sendable {
     func stageRevertV2(id: String, messageID: String, partID: String?) async throws -> Bool {
         try await postEmpty(
             path: "api/session/\(id)/revert/stage",
-            body: V2RevertStageRequestDTO(messageID: messageID, partID: partID)
+            body: V2RevertStageRequestDTO(messageID: messageID)
         )
     }
 

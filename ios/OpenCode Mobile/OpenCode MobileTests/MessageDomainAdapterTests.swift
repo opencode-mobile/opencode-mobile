@@ -143,6 +143,7 @@ struct MessageDomainAdapterTests {
         #expect(body.delivery == "steer")
         #expect(body.files?.first?.uri == "data:text/plain;base64,SGk=")
         #expect(body.files?.first?.name == "notes.txt")
+        #expect(body.files?.first?.mime == "text/plain")
         #expect(body.agents?.first?.name == "explore")
         #expect(body.agents?.first?.mention?.text == "@explore")
     }

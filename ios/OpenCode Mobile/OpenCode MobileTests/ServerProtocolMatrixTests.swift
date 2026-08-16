@@ -3,12 +3,13 @@ import Testing
 
 struct ServerProtocolMatrixTests {
     @Test func capabilitiesAndLastTurnAvailabilityMatchProtocol() {
-        let rows: [(ServerProtocol, Bool)] = [
-            (.v1, true),
-            (.v2, false),
+        let rows: [(ServerProtocol, Bool, Bool)] = [
+            (.v1, true, true),
+            (.v2, false, false),
         ]
-        for (serverProtocol, supportsSessionMessageDiff) in rows {
+        for (serverProtocol, supportsSessionMessageDiff, supportsSessionArchive) in rows {
             #expect(ServerCapabilities.forProtocol(serverProtocol).supportsSessionMessageDiff == supportsSessionMessageDiff)
+            #expect(ServerCapabilities.forProtocol(serverProtocol).supportsSessionArchive == supportsSessionArchive)
         }
     }
 }

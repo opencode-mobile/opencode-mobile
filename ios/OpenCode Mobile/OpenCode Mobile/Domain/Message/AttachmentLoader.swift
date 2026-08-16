@@ -43,6 +43,14 @@ enum AttachmentDataURL {
     nonisolated static func validates(_ value: String, mime: String) -> Bool {
         kind(for: mime) != nil && decodedData(from: value, expectedMime: mime) != nil
     }
+
+    nonisolated static func mime(fromDataURL value: String) -> String? {
+        guard value.lowercased().hasPrefix("data:") else { return nil }
+        let header = value.dropFirst(5).split(separator: ",", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? ""
+        let mime = header.split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        guard !mime.isEmpty, kind(for: mime) != nil else { return nil }
+        return mime
+    }
 }
 
 struct AttachmentLoader: Sendable {

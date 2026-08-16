@@ -95,6 +95,7 @@ data class MessagePartDto(
     val hash: String? = null,
     val files: List<String>? = null,
     val auto: Boolean? = null,
+    val completed: Boolean? = null,
 )
 
 @Serializable
@@ -167,6 +168,7 @@ data class V2PromptRequestDto(
 data class V2PromptFileDto(
     val uri: String,
     val name: String? = null,
+    val mime: String? = null,
 )
 
 @Serializable

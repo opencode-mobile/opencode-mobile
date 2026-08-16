@@ -198,6 +198,7 @@ struct SessionChatUiState: Equatable {
     var reviewChangesMessageID: String?
     var reviewChangesSummary: ReviewChangesSummary?
     var supportsSessionMessageDiff: Bool = true
+    var supportsSessionArchive: Bool = true
     var rename = SessionRenameUiState()
     var slashSuggestionsVisible = false
     var slashSuggestions: [SessionChatSlashSuggestion] = []

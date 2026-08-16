@@ -16,13 +16,14 @@ nonisolated enum ServerProtocol: String, Sendable, Equatable {
 /// flags instead of branching on protocol themselves.
 nonisolated struct ServerCapabilities: Sendable, Equatable {
     let supportsSessionMessageDiff: Bool
+    let supportsSessionArchive: Bool
 
     static func forProtocol(_ serverProtocol: ServerProtocol) -> ServerCapabilities {
         switch serverProtocol {
         case .v1:
-            return ServerCapabilities(supportsSessionMessageDiff: true)
+            return ServerCapabilities(supportsSessionMessageDiff: true, supportsSessionArchive: true)
         case .v2:
-            return ServerCapabilities(supportsSessionMessageDiff: false)
+            return ServerCapabilities(supportsSessionMessageDiff: false, supportsSessionArchive: false)
         }
     }
 }

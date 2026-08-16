@@ -50,7 +50,6 @@ class MessagesApi private constructor(
                 httpClient
                     .get()
                     .get("api/session/$sessionId/message") {
-                        applyDirectory(directory)
                         // Cursor tokens already encode order. Sending `order` with
                         // `cursor` returns InvalidCursorError 400 on live v2.
                         if (cursor == null) {
@@ -137,7 +136,6 @@ class MessagesApi private constructor(
     ) {
         val response =
             httpClient.get().post(path) {
-                applyDirectory(directory)
                 setJsonBody(json, body)
             }
         if (!response.status.isSuccess()) {

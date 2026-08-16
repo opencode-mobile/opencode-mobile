@@ -246,12 +246,14 @@ struct ProjectListHomeView: View {
                         action: { viewModel.openSessionFork() }
                     )
                 }
-                OpenCodeBottomSheetEntry(
-                    title: "Archive",
-                    enabled: !viewModel.sessionActionInFlight,
-                    startDecorator: .icon(.archive),
-                    action: { Task { await viewModel.archiveSessionAction() } }
-                )
+                if viewModel.sessionActionsCanArchive {
+                    OpenCodeBottomSheetEntry(
+                        title: "Archive",
+                        enabled: !viewModel.sessionActionInFlight,
+                        startDecorator: .icon(.archive),
+                        action: { Task { await viewModel.archiveSessionAction() } }
+                    )
+                }
                 OpenCodeBottomSheetEntry(
                     title: "Delete",
                     enabled: !viewModel.sessionActionInFlight,

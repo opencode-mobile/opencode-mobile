@@ -36,11 +36,10 @@ nonisolated struct CommandsAPIClient: Sendable {
         try await post(path: "session/\(sessionID)/command", body: body, directory: directory)
     }
 
-    func runCommandV2(sessionID: String, body: RunCommandRequestDTO, directory: String? = nil) async throws {
+    func runCommandV2(sessionID: String, body: V2RunCommandRequestDTO) async throws {
         try await post(
             path: "api/session/\(sessionID)/command",
-            body: body,
-            locationDirectory: directory
+            body: body
         )
     }
 

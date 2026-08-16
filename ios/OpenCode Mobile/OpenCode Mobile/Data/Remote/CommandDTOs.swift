@@ -57,3 +57,47 @@ nonisolated struct CommandFilePartDTO: Codable, Sendable {
         self.id = id
     }
 }
+
+nonisolated struct V2RunCommandRequestDTO: Encodable, Sendable {
+    let command: String
+    let arguments: String?
+    let agent: String?
+    let model: V2PromptModelRefDTO?
+    let files: [V2PromptFileDTO]?
+    let delivery: String
+
+    init(
+        command: String,
+        arguments: String? = nil,
+        agent: String? = nil,
+        model: V2PromptModelRefDTO? = nil,
+        files: [V2PromptFileDTO]? = nil,
+        delivery: String = "steer"
+    ) {
+        self.command = command
+        self.arguments = arguments
+        self.agent = agent
+        self.model = model
+        self.files = files
+        self.delivery = delivery
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case command
+        case arguments
+        case agent
+        case model
+        case files
+        case delivery
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(command, forKey: .command)
+        try container.encodeIfPresent(arguments, forKey: .arguments)
+        try container.encodeIfPresent(agent, forKey: .agent)
+        try container.encodeIfPresent(model, forKey: .model)
+        try container.encodeIfPresent(files, forKey: .files)
+        try container.encode(delivery, forKey: .delivery)
+    }
+}

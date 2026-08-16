@@ -4,6 +4,7 @@ import dev.opencode.mobile.data.remote.dto.ApiListEnvelope
 import dev.opencode.mobile.data.remote.dto.CommandDto
 import dev.opencode.mobile.data.remote.dto.RunCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CommandDto
+import dev.opencode.mobile.data.remote.dto.V2RunCommandRequestDto
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
 import dev.opencode.mobile.network.applyLocationDirectory
@@ -50,10 +51,16 @@ class CommandsApi private constructor(
 
     suspend fun runCommandV2(
         sessionId: String,
-        body: RunCommandRequestDto,
-        directory: String? = null,
+        body: V2RunCommandRequestDto,
     ) {
-        postCommand("api/session/$sessionId/command", body, directory)
+        val response =
+            httpClient.get().post("api/session/$sessionId/command") {
+                setJsonBody(json, body)
+            }
+        if (!response.status.isSuccess()) {
+            throw ResponseException(response, "session.command failed with status ${response.status.value}")
+        }
+        response.bodyAsText()
     }
 
     private suspend fun postCommand(
@@ -63,11 +70,7 @@ class CommandsApi private constructor(
     ) {
         val response =
             httpClient.get().post(path) {
-                if (path.startsWith("api/")) {
-                    applyLocationDirectory(directory)
-                } else {
-                    applyDirectory(directory)
-                }
+                applyDirectory(directory)
                 setJsonBody(json, body)
             }
         if (!response.status.isSuccess()) {

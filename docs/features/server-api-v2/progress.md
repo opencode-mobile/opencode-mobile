@@ -79,6 +79,15 @@
 - [x] Live v2: completed compaction snapshots do not keep Compacting…
 - [x] Live v2: SSE `session.execution.*` / `session.text.*` project into Working
   and message patches
+- [x] Published v2 contracts: fork `boundary`, create `title`, prompt `mime`,
+  command `{model,files,delivery}`, revert without `partID`, no illegal
+  `?directory=` on session-scoped message/prompt/command
+- [x] Live v2: `session.next.step.ended` is not idle; Working catch-up uses
+  `GET /api/session/active` via `session.active.snapshot`
+- [x] Live v2: project `session.next.tool.*` / `.shell.*` / `.compaction.*`
+- [x] Live v2: SSE `{id,event,data}` with JSON-string `data`
+- [x] Hide Archive on v2 via `supportsSessionArchive`
+- [x] Child list uses `parentID`; share/init 404 without v1 fallback
 
 ## Android implementation
 
@@ -136,6 +145,15 @@
 - [x] Live v2: completed compaction snapshots do not keep Compacting…
 - [x] Live v2: SSE `session.execution.*` / `session.text.*` project into Working
   and message patches
+- [x] Published v2 contracts: fork `boundary`, create `title`, prompt `mime`,
+  command `{model,files,delivery}`, revert without `partID`, no illegal
+  `?directory=` on session-scoped message/prompt/command
+- [x] Live v2: `session.next.step.ended` is not idle; Working catch-up uses
+  `GET /api/session/active` via `session.active.snapshot`
+- [x] Live v2: project `session.next.tool.*` / `.shell.*` / `.compaction.*`
+- [x] Live v2: SSE `{id,event,data}` with JSON-string `data`
+- [x] Hide Archive on v2 via `supportsSessionArchive`
+- [x] Child list uses `parentID`; share/init 404 without v1 fallback
 
 ## Blockers
 
@@ -144,15 +162,29 @@
   v2-only (`pid`), dual (prefer v1), and transitional `/api/health` without
   `pid`.
 - Upstream: no clear v2 twin for `GET /session/{id}/diff` (P6 degrade).
-- Upstream: `POST /api/session/{id}/archive` is desktop-targeted but absent from
-  the published OpenAPI index scraped for research; P1 calls it and may 404
-  until upstream lands.
+- Upstream: published v2 has no session archive route. Archive is
+  capability-gated off on v2 (`supportsSessionArchive`).
+- Upstream: published questions are migrating to forms (`/api/form/*`);
+  mobile still uses session-scoped `/api/question/*` until the form reply
+  body is pinned.
+- Upstream: `/api/event` is volatile. Durable session logs are experimental
+  (`GET /api/experimental/session/{id}/log`) and unused.
 
 ## Remaining work
 
 - Live v2 validation for P1–P6 is deferred.
 - Optional dead-API cleanup (`share`, `init`, children, sync `sendMessage`,
   `getMessage`, `listProjects`) is deferred; those methods still sit on
-  repository interfaces used by many test fakes.
+  repository interfaces used by many test fakes. v2 remotes now 404 share/init
+  without calling unprefixed paths.
 - OPE-155: extract remotes for Command, Filesystem, Model, Agent, and Project
   when those files are next edited.
+- Map published `/api/form/*` onto the question dock, or keep dual-path, once
+  live form reply `{ answer }` is confirmed.
+- Durable reconnect catch-up (`GET /api/session/{id}/event` or experimental
+  session log) once the route is stable.
+- `GET /api/model/default` for v2 `serverDefault`.
+- Raise the 20-page session/message list caps, or page until the cursor ends.
+- Render assistant `reasoning` in history/live (v1 also hides it).
+- Home has no v2 `session.created` twin; list refresh still depends on remapped
+  `session.updated` (`moved` / agent / model / renamed).

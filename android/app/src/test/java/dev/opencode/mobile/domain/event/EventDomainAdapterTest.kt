@@ -126,14 +126,16 @@ class EventDomainAdapterTest {
     }
 
     @Test
-    fun parseEvent_projectsStepEndedIntoSessionIdle() {
-        val event =
-            adapter.parseEvent(
+    fun parseEvents_projectsStepEndedIntoAssistantMessageAndActiveSnapshot() {
+        val events =
+            adapter.parseEvents(
                 """{"type":"session.next.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
             )
 
-        assertEquals("session.idle", event?.type)
-        assertEquals("ses-1", event?.sessionId)
+        assertEquals(listOf("message.updated", "session.active.snapshot"), events.map { it.type })
+        assertEquals("ses-1", events[0].sessionId)
+        assertEquals("assistant", events[0].rawProperties?.get("info")?.jsonObject?.get("role")?.jsonPrimitive?.content)
+        assertTrue(events[1].triggersStatusRefresh)
     }
 
     @Test
@@ -280,5 +282,18 @@ class EventDomainAdapterTest {
             )
 
         assertNull(adapter.sessionTitleUpdate(event!!))
+    }
+
+    @Test
+    fun parseEvent_readsOfficialSseEnvelopeWithEventAndJsonStringData() {
+        val event =
+            adapter.parseEvent(
+                """{"id":"evt_9","event":"session.next.tool.called","data":"{\"sessionID\":\"ses-1\",\"assistantMessageID\":\"msg-2\",\"callID\":\"call-1\",\"tool\":\"bash\",\"input\":{}}"}""",
+            )
+
+        assertEquals("message.part.updated", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        assertEquals("bash", event?.rawProperties?.get("part")?.jsonObject?.get("tool")?.jsonPrimitive?.content)
+        assertEquals("running", event?.rawProperties?.get("part")?.jsonObject?.get("state")?.jsonObject?.get("status")?.jsonPrimitive?.content)
     }
 }

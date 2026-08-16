@@ -442,6 +442,7 @@ class MainScreenViewModel
                             worktree = worktree,
                         ),
                     sheetVisible = true,
+                    canArchive = activeConnectionManager.currentCapabilities().supportsSessionArchive,
                 )
             forkGateJob = viewModelScope.launch { resolveForkAvailability(sessionId, worktree) }
         }
@@ -695,6 +696,7 @@ class MainScreenViewModel
         fun chooseArchive() {
             val state = _sessionActions.value
             val target = state.target ?: return
+            if (!state.canArchive) return
             if (state.lifecycleInFlight) return
             logAction(
                 ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
@@ -1281,6 +1283,7 @@ data class HomeSessionActionsUiState(
     val target: HomeSessionActionTarget? = null,
     val sheetVisible: Boolean = false,
     val canFork: Boolean = false,
+    val canArchive: Boolean = true,
     val renameVisible: Boolean = false,
     val renameDraft: String = "",
     val renameSubmitting: Boolean = false,

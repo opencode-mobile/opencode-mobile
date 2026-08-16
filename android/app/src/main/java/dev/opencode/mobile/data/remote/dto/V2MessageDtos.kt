@@ -55,6 +55,7 @@ data class V2FileAttachmentDto(
     val name: String? = null,
     val description: String? = null,
     val source: V2PromptSourceDto? = null,
+    val mention: V2PromptSourceDto? = null,
 )
 
 @Serializable

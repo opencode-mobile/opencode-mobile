@@ -32,3 +32,13 @@ data class CommandFilePartDto(
     val filename: String? = null,
     val id: String? = null,
 )
+
+@Serializable
+data class V2RunCommandRequestDto(
+    val command: String,
+    val arguments: String? = null,
+    val agent: String? = null,
+    val model: V2ModelRefDto? = null,
+    val files: List<V2PromptFileDto>? = null,
+    val delivery: String,
+)

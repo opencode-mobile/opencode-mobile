@@ -78,7 +78,7 @@ class MessageProtocolRepositoryTest {
             assertEquals(listOf("msg_user", "msg_asst"), messages.map { it.id })
             assertEquals("Hello", messages[0].text)
             assertEquals("Hi", messages[1].text)
-            assertEquals("/repo", requests.single().url.parameters["directory"])
+            assertEquals(null, requests.single().url.parameters["directory"])
             assertEquals("asc", requests.single().url.parameters["order"])
             assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_2/message"))
         }

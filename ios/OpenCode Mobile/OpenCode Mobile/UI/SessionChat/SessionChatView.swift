@@ -691,7 +691,7 @@ struct SessionChatView: View {
 
     private var sessionOverflowMenuEntries: [OpenCodeOverflowMenuEntry] {
         let lifecycleEnabled = !viewModel.uiState.isLifecycleActionInFlight
-        return [
+        var entries = [
             OpenCodeOverflowMenuEntry(
                 title: "Rename session",
                 icon: .edit,
@@ -728,16 +728,22 @@ struct SessionChatView: View {
                     UIPasteboard.general.string = viewModel.uiState.sessionID
                 }
             ),
-            OpenCodeOverflowMenuEntry(
-                title: "Archive",
-                icon: .archive,
-                enabled: lifecycleEnabled,
-                action: {
-                    logOverflowAction(ProductAnalytics.Action.chatOverflowArchive)
-                    menuExpanded = false
-                    viewModel.archiveSession()
-                }
-            ),
+        ]
+        if viewModel.uiState.supportsSessionArchive {
+            entries.append(
+                OpenCodeOverflowMenuEntry(
+                    title: "Archive",
+                    icon: .archive,
+                    enabled: lifecycleEnabled,
+                    action: {
+                        logOverflowAction(ProductAnalytics.Action.chatOverflowArchive)
+                        menuExpanded = false
+                        viewModel.archiveSession()
+                    }
+                )
+            )
+        }
+        entries.append(
             OpenCodeOverflowMenuEntry(
                 title: "Delete",
                 icon: .close,
@@ -753,8 +759,9 @@ struct SessionChatView: View {
                     menuExpanded = false
                     showDeleteConfirmation = true
                 }
-            ),
-        ]
+            )
+        )
+        return entries
     }
 
     private var composer: some View {

@@ -74,6 +74,7 @@ nonisolated struct V2FileAttachmentDTO: Decodable, Sendable {
     let name: String?
     let description: String?
     let source: V2PromptSourceDTO?
+    let mention: V2PromptSourceDTO?
 }
 
 nonisolated struct V2AgentAttachmentDTO: Decodable, Sendable {

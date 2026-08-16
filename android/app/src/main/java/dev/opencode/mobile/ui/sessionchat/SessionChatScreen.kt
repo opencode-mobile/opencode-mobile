@@ -280,63 +280,77 @@ fun SessionChatScreen(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false },
                 entries =
-                    listOf(
-                        OpenCodeOverflowMenuEntry(
-                            title = "Rename session",
-                            icon = OpenCodeIcons.Edit,
-                            onClick = {
-                                menuExpanded = false
-                                viewModel.openRenameSession()
-                            },
-                        ),
-                        OpenCodeOverflowMenuEntry(
-                            title = "Review changes",
-                            icon = OpenCodeIcons.Description,
-                            onClick = {
-                                logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_REVIEW_CHANGES)
-                                menuExpanded = false
-                                onReviewChangesClick(uiState.changesNavigationTarget(worktree))
-                            },
-                        ),
-                        OpenCodeOverflowMenuEntry(
-                            title = "Session context",
-                            icon = OpenCodeIcons.Architecture,
-                            onClick = {
-                                logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_SESSION_CONTEXT)
-                                menuExpanded = false
-                                onSessionContextClick()
-                            },
-                        ),
-                        OpenCodeOverflowMenuEntry(
-                            title = "Copy session ID",
-                            icon = OpenCodeIcons.ContentCopy,
-                            onClick = {
-                                logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_COPY_SESSION_ID)
-                                menuExpanded = false
-                                copySessionIdToClipboard(context, uiState.sessionId)
-                            },
-                        ),
-                        OpenCodeOverflowMenuEntry(
-                            title = "Archive",
-                            icon = OpenCodeIcons.Archive,
-                            enabled = lifecycleActionsEnabled,
-                            onClick = {
-                                menuExpanded = false
-                                viewModel.archiveSession()
-                            },
-                        ),
-                        OpenCodeOverflowMenuEntry(
-                            title = "Delete",
-                            icon = OpenCodeIcons.Close,
-                            enabled = lifecycleActionsEnabled,
-                            destructive = true,
-                            onClick = {
-                                logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_DELETE)
-                                menuExpanded = false
-                                showDeleteConfirmation = true
-                            },
-                        ),
-                    ),
+                    buildList {
+                        add(
+                            OpenCodeOverflowMenuEntry(
+                                title = "Rename session",
+                                icon = OpenCodeIcons.Edit,
+                                onClick = {
+                                    menuExpanded = false
+                                    viewModel.openRenameSession()
+                                },
+                            ),
+                        )
+                        add(
+                            OpenCodeOverflowMenuEntry(
+                                title = "Review changes",
+                                icon = OpenCodeIcons.Description,
+                                onClick = {
+                                    logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_REVIEW_CHANGES)
+                                    menuExpanded = false
+                                    onReviewChangesClick(uiState.changesNavigationTarget(worktree))
+                                },
+                            ),
+                        )
+                        add(
+                            OpenCodeOverflowMenuEntry(
+                                title = "Session context",
+                                icon = OpenCodeIcons.Architecture,
+                                onClick = {
+                                    logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_SESSION_CONTEXT)
+                                    menuExpanded = false
+                                    onSessionContextClick()
+                                },
+                            ),
+                        )
+                        add(
+                            OpenCodeOverflowMenuEntry(
+                                title = "Copy session ID",
+                                icon = OpenCodeIcons.ContentCopy,
+                                onClick = {
+                                    logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_COPY_SESSION_ID)
+                                    menuExpanded = false
+                                    copySessionIdToClipboard(context, uiState.sessionId)
+                                },
+                            ),
+                        )
+                        if (uiState.supportsSessionArchive) {
+                            add(
+                                OpenCodeOverflowMenuEntry(
+                                    title = "Archive",
+                                    icon = OpenCodeIcons.Archive,
+                                    enabled = lifecycleActionsEnabled,
+                                    onClick = {
+                                        menuExpanded = false
+                                        viewModel.archiveSession()
+                                    },
+                                ),
+                            )
+                        }
+                        add(
+                            OpenCodeOverflowMenuEntry(
+                                title = "Delete",
+                                icon = OpenCodeIcons.Close,
+                                enabled = lifecycleActionsEnabled,
+                                destructive = true,
+                                onClick = {
+                                    logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_DELETE)
+                                    menuExpanded = false
+                                    showDeleteConfirmation = true
+                                },
+                            ),
+                        )
+                    },
             ) {
                 OpenCodeTopBar(
                     title = uiState.sessionTitle.ifBlank { sessionTitle },

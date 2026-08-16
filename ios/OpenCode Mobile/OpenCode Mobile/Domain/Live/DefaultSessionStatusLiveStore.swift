@@ -68,6 +68,21 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                 }
                 continue
             }
+            if event.type == "session.active.snapshot" {
+                reconnectTask?.cancel()
+                reconnectTask = Task {
+                    try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs))
+                    guard !Task.isCancelled else { return }
+                    if let statuses = await loadStatuses(
+                        directory: directory,
+                        sessionRepository: sessionRepository
+                    ) {
+                        current = statuses
+                        yield(current)
+                    }
+                }
+                continue
+            }
             guard event.triggersStatusRefresh else { continue }
             guard let next = applyStatusEvent(current: current, event: event, eventAdapter: eventAdapter),
                   next != current

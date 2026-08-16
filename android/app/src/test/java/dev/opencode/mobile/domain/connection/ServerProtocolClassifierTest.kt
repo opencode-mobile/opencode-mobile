@@ -62,5 +62,13 @@ class ServerProtocolClassifierTest {
             false,
             ServerCapabilities.forProtocol(ServerProtocol.V2).supportsSessionMessageDiff,
         )
+        assertEquals(
+            true,
+            ServerCapabilities.forProtocol(ServerProtocol.V1).supportsSessionArchive,
+        )
+        assertEquals(
+            false,
+            ServerCapabilities.forProtocol(ServerProtocol.V2).supportsSessionArchive,
+        )
     }
 }

@@ -46,12 +46,8 @@ reachable). Classification matrix still matches desktop for v1-only, v2-only
 
 ## V2 fork body uses `messageID` (2026-08-12)
 
-**Choice:** P1 fork on v2 posts `{ messageID }` per the published OpenAPI
-fixture and desktop dialog, not a nested `boundary` object.
-
-**Why:** Research noted a possible `boundary: { type, messageID }` shape, but
-the OpenAPI fixture and current desktop fork call use flat `messageID`. Prefer
-the published contract until upstream documents otherwise.
+**Choice:** P1 originally posted `{ messageID }`. Superseded 2026-08-16: live
+published docs require `boundary`. See “V2 fork uses boundary”.
 
 ## V2 chat history projects into domain Message (2026-08-12)
 
@@ -76,11 +72,10 @@ MessageSync and timeline rendering per protocol.
 `EventDomainAdapter` and project live v2 event names (and the older
 `session.next.*` aliases, plus `permission.v2.*` / `question.v2.*`) into
 today’s `OpencodeEvent` types before MessageSync and LiveStores see them.
-Text streaming uses synthetic `message.part.delta`; turn completion
-(`session.execution.succeeded|failed|interrupted`, or legacy
-`session.next.step.ended`) becomes `session.idle` so reconnect-style full
-reload remains the authority catch-up. Live `session.step.ended` is not
-idle — a turn can include multiple steps.
+Text streaming uses synthetic `message.part.delta`. True idle is
+`session.execution.succeeded|interrupted` (and unpublished
+`session.compaction.ended|failed`). `session.next.step.ended` is not idle —
+see “V2 step.ended is not idle” (2026-08-16).
 
 **Why:** MessageSync already applies `message.*` / `session.idle`. Live v2
 (`0.0.0-beta-17498`) OpenAPI `V2Event` uses `session.execution.*` /
@@ -112,8 +107,9 @@ keep today's permission, question, command, agent, and model types.
 - Question: ViewModels pass `sessionId` so v2 can
   `POST /api/session/{sid}/question/{id}/reply|reject`; v1 ignores it.
 - Abort: v2 `POST /api/session/{id}/interrupt` (204).
-- Commands: v2 list has no `source` (treat as `.command`); run still posts
-  `RunCommandRequest` to `POST /api/session/{id}/command`.
+- Commands: v2 list has no `source` (treat as `.command`); run posts the
+  published v2 body (`command`, `arguments`, `model: {id, providerID, variant}`,
+  `files[]`, `delivery: steer`), not v1 `parts[]`.
 - Agents: v2 `id` → `MentionableAgent.name`; still drop `primary` / `hidden`.
 - Models: join `/api/provider` + `/api/model`; skip disabled providers,
   `enabled == false`, and `deprecated`; empty `capabilities.input` keeps the
@@ -128,7 +124,7 @@ to remapped `permission.asked` / `question.*` from P3.
 ## V2 revert uses stage/clear, not commit (2026-08-12)
 
 **Choice:** Map Commands undo to `POST /api/session/{id}/revert/stage`
-(`messageID`, optional `partID`, `files: true`) and redo to
+(`messageID`, `files: true`; no `partID`) and redo to
 `POST /api/session/{id}/revert/clear`. Do not call `revert/commit`.
 
 **Why:** v1 revert/unrevert is reversible. v2 commit permanently applies the
@@ -290,4 +286,94 @@ not treat every folder as nameless and hide it.
 **Why:** Add Project only needs a browse root plus child directories. Users can
 still navigate up from the resolved location. Avoid inventing a home path the
 server does not expose.
+
+## V2 fork uses boundary (2026-08-16)
+
+**Choice:** `POST /api/session/{id}/fork` sends
+`{ boundary: { type: "before"|"through", messageID } }`. `before` when a
+message id is present; `through` when it is blank. `messageID` is a string.
+
+**Why:** Live published docs (2026-08-16) require `boundary`. Flat `{ messageID }`
+is not the contract and 400s.
+
+**Alternative rejected:** Keep the P1 OpenAPI-fixture body until a live 400
+is observed — the published operation page is already the contract.
+
+## V2 create sends title on the create body (2026-08-16)
+
+**Choice:** `POST /api/session` sends `title` plus `location`. Do not follow up
+with rename. Do not send `parentID` (not on the published create body). If the
+server omits or changes the mapped title, copy the requested title onto the
+returned session.
+
+**Why:** Untitled create plus a second rename round-trip failed when create
+returned sparse `Session.Info`. Published create accepts `title`.
+
+## V2 session-scoped routes omit `directory` (2026-08-16)
+
+**Choice:** Message list, prompt, agent/model switch, command run, and fork on
+v2 do not send `?directory=` or `location[directory]`. Session list still uses
+top-level `directory`. VCS and the command catalog still use
+`location[directory]`.
+
+**Why:** Session routes resolve location from the session. Extra query params
+can 400 (`InvalidCursorError` was the live example for combining `order` with
+`cursor`).
+
+## V2 revert stage omits `partID` (2026-08-16)
+
+**Choice:** Stage body is `{ messageID, files: true }` only.
+
+**Why:** Published stage decode has no `partID`. Strict servers 400 on extra
+keys.
+
+## V2 archive is capability-gated (2026-08-16)
+
+**Choice:** `ServerCapabilities.supportsSessionArchive` is true on v1 and false
+on v2. Home and Session Chat hide Archive. The v2 remote throws HTTP 404
+without calling `POST .../archive`.
+
+**Why:** Published session index has no archive route. Showing the action would
+404. Same degrade pattern as last-turn review.
+
+## V2 live step.ended is not idle (2026-08-16)
+
+**Choice:** `session.next.step.ended` projects `message.updated` (assistant) plus
+`session.active.snapshot`. True idle remains `session.execution.succeeded` /
+`interrupted` (and unpublished `session.compaction.ended|failed`). Status live
+store refetches `GET /api/session/active` on `session.active.snapshot`.
+MessageSync does not full-reload on that type.
+
+**Why:** v2 turns are multi-step. Treating step-end as `session.idle` cleared
+Working and reloaded history mid-turn.
+
+## V2 live tool, shell, and compaction project into message parts (2026-08-16)
+
+**Choice:** Map `session.next.tool.*`, `session.next.shell.*`, and
+`session.next.compaction.*` into v1-shaped `message.part.updated` /
+`message.part.delta`. Do not project live reasoning (v1 timeline parity).
+
+**Why:** Without this, tools and compaction only appear after a full REST
+reload, and that reload used to wait on a false idle.
+
+## V2 SSE envelope accepts `event` and string `data` (2026-08-16)
+
+**Choice:** Parse both Effect `{ type, data }` objects and OpenAPI
+`{ id, event, data }` frames where `data` may be a JSON string. Nested
+`properties` / `data` unwrap the same way.
+
+**Why:** Generated SSE uses `event` + string `data`. Parsing only `{ type, data }`
+dropped the live bus.
+
+## V2 leftovers stay documented, not dual-pathed (2026-08-16)
+
+**Choice:** Do not call published `/api/form/*`, durable
+`GET /api/session/{id}/event|history`, experimental session log,
+`GET /api/model/default`, or raise the 20-page list caps in this pass.
+Keep questions on `/api/question/*`. Leave `serverDefault` null. Leave
+reasoning unrendered.
+
+**Why:** Form reply `{ answer }` is not pinned live. Durable catch-up routes are
+experimental or unused by MessageSync. Page caps and reasoning are existing
+product limits, not v2 contract bugs.
 

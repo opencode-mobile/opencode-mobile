@@ -97,7 +97,12 @@ class MessageDomainAdapter {
                 toToolPart(toolName = toolName, callId = dto.callId, state = stateDto, id = dto.id)
             }
             "file" -> toFilePart(dto)
-            "compaction" -> MessagePart.Compaction(id = dto.id, auto = dto.auto == true)
+            "compaction" ->
+                MessagePart.Compaction(
+                    id = dto.id,
+                    auto = dto.auto == true,
+                    completed = dto.completed == true,
+                )
             else -> null
         }
     }
@@ -197,7 +202,11 @@ class MessageDomainAdapter {
         val files =
             options.attachments
                 .map { attachment ->
-                    V2PromptFileDto(uri = attachment.dataUrl, name = attachment.filename)
+                    V2PromptFileDto(
+                        uri = attachment.dataUrl,
+                        name = attachment.filename,
+                        mime = attachment.mime,
+                    )
                 }.takeIf { it.isNotEmpty() }
         val agents =
             ComposerMentionRouting
@@ -255,7 +264,9 @@ class MessageDomainAdapter {
         var model: V2ModelRefDto? = null
         dtos.forEach { dto ->
             when (dto.type) {
-                "agent-switched" -> agent = dto.agent.orEmpty()
+                "agent-switched",
+                "location-switched",
+                -> agent = dto.agent ?: agent
                 "model-switched" -> model = dto.model
                 "user" -> {
                     messages += projectV2User(dto, agent, model)
@@ -307,7 +318,7 @@ class MessageDomainAdapter {
                 MessageContextEstimate(
                     userCharacters =
                         text.length +
-                            dto.files.sumOf { it.source?.text?.length ?: 0 } +
+                            dto.files.sumOf { (it.mention ?: it.source)?.text?.length ?: 0 } +
                             dto.agents.sumOf { it.source?.text?.length ?: 0 },
                 ),
         )
@@ -513,7 +524,7 @@ class MessageDomainAdapter {
         fallbackId: String,
     ): MessagePart.File? {
         val dataUrl = file.uri ?: return null
-        val mime = file.mime?.lowercase() ?: return null
+        val mime = (file.mime ?: AttachmentDataUrl.mimeFromDataUrl(dataUrl))?.lowercase() ?: return null
         if (!AttachmentDataUrl.validates(dataUrl, mime)) return null
         val kind = AttachmentDataUrl.kind(mime) ?: return null
         return MessagePart.File(

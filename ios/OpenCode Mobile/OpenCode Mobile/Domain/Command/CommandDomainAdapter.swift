@@ -40,6 +40,20 @@ struct CommandDomainAdapter: Sendable {
         )
     }
 
+    func toV2RunRequest(_ options: CommandRunOptions) -> V2RunCommandRequestDTO {
+        V2RunCommandRequestDTO(
+            command: options.command,
+            arguments: options.arguments.isEmpty ? nil : options.arguments,
+            agent: options.mode,
+            model: options.model.map {
+                V2PromptModelRefDTO(id: $0.modelID, providerID: $0.providerID, variant: options.variant)
+            },
+            files: options.attachments.isEmpty ? nil : options.attachments.map { attachment in
+                V2PromptFileDTO(uri: attachment.dataURL, name: attachment.filename, mime: attachment.mime)
+            }
+        )
+    }
+
     func mapError(_ error: Error) -> CommandError {
         if let commandError = error as? CommandError {
             return commandError

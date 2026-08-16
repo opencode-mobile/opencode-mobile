@@ -19,6 +19,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -68,6 +69,10 @@ class CommandProtocolRepositoryTest {
             assertEquals(HttpMethod.Post, requests.single().method)
             assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/command"))
             assertTrue((requests.single().body as io.ktor.http.content.TextContent).text.contains("\"command\":\"init\""))
+            assertTrue((requests.single().body as io.ktor.http.content.TextContent).text.contains("\"delivery\":\"steer\""))
+            assertTrue(!(requests.single().body as io.ktor.http.content.TextContent).text.contains("\"parts\""))
+            assertNull(requests.single().url.parameters["directory"])
+            assertNull(requests.single().url.parameters["location[directory]"])
         }
 
     private suspend fun manager(protocol: ServerProtocol): ActiveConnectionManager {

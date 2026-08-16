@@ -1254,6 +1254,7 @@ class SessionChatViewModel
                 reviewChangesMessageId = reviewChangesState.messageId,
                 reviewChangesSummary = reviewChangesState.summary,
                 supportsSessionMessageDiff = activeConnectionManager.currentCapabilities().supportsSessionMessageDiff,
+                supportsSessionArchive = activeConnectionManager.currentCapabilities().supportsSessionArchive,
                 rename = infoState.rename,
                 slashSuggestionsVisible = composerState.slashSuggestionsVisible,
                 slashSuggestions = composerState.slashSuggestions,

@@ -19,6 +19,7 @@ import dev.opencode.mobile.data.remote.dto.TodoDto
 import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CompactSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CreateSessionRequestDto
+import dev.opencode.mobile.data.remote.dto.V2ForkBoundaryDto
 import dev.opencode.mobile.data.remote.dto.V2ForkSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2LocationDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
@@ -367,7 +368,10 @@ class SessionsApi private constructor(
 
     // --- V2 home / session CRUD ---
 
-    suspend fun listSessionsV2(directory: String? = null): List<V2SessionDto> {
+    suspend fun listSessionsV2(
+        directory: String? = null,
+        parentId: String? = null,
+    ): List<V2SessionDto> {
         val sessions = mutableListOf<V2SessionDto>()
         var cursor: String? = null
         var pages = 0
@@ -377,6 +381,7 @@ class SessionsApi private constructor(
                     .get()
                     .get("api/session") {
                         applyDirectory(directory)
+                        parentId?.let { parameter("parentID", it) }
                         cursor?.let { parameter("cursor", it) }
                     }.body<ApiListEnvelope<V2SessionDto>>()
             sessions += envelope.data
@@ -386,13 +391,17 @@ class SessionsApi private constructor(
         return sessions
     }
 
-    suspend fun createSessionV2(directory: String? = null): V2SessionDto =
+    suspend fun createSessionV2(
+        directory: String? = null,
+        title: String? = null,
+    ): V2SessionDto =
         httpClient
             .get()
             .post("api/session") {
                 setJsonBody(
                     json,
                     V2CreateSessionRequestDto(
+                        title = title?.takeIf { it.isNotBlank() },
                         location = directory?.let { V2LocationDto(directory = it) },
                     ),
                 )
@@ -442,7 +451,16 @@ class SessionsApi private constructor(
         httpClient
             .get()
             .post("api/session/$id/fork") {
-                setJsonBody(json, V2ForkSessionRequestDto(messageId = messageId))
+                setJsonBody(
+                    json,
+                    V2ForkSessionRequestDto(
+                        boundary =
+                            V2ForkBoundaryDto(
+                                type = if (messageId.isNullOrBlank()) "through" else "before",
+                                messageId = messageId?.takeIf { it.isNotBlank() },
+                            ),
+                    ),
+                )
             }.decodeV2Session()
 
     suspend fun compactSessionV2(id: String): Boolean =
@@ -464,7 +482,7 @@ class SessionsApi private constructor(
         httpClient
             .get()
             .post("api/session/$id/revert/stage") {
-                setJsonBody(json, V2RevertStageRequestDto(messageId = messageId, partId = partId, files = true))
+                setJsonBody(json, V2RevertStageRequestDto(messageId = messageId, files = true))
             }.ensureSuccess()
 
     suspend fun clearRevertV2(id: String): Boolean =

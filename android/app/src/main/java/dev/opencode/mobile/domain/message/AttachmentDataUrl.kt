@@ -38,4 +38,11 @@ object AttachmentDataUrl {
         value: String,
         mime: String,
     ): Boolean = kind(mime) != null && decode(value, mime) != null
+
+    fun mimeFromDataUrl(value: String): String? {
+        if (!value.startsWith("data:", ignoreCase = true)) return null
+        val header = value.substringAfter("data:").substringBefore(',', missingDelimiterValue = "")
+        val mime = header.substringBefore(';').trim().lowercase()
+        return mime.takeIf { it.isNotEmpty() && kind(it) != null }
+    }
 }

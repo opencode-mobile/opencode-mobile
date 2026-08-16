@@ -79,7 +79,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             guard let toolName = dto.tool else { return nil }
             return .tool(toolPart(id: dto.id, toolName: toolName, callID: dto.callID, state: dto.state))
         case "compaction":
-            return .compaction(CompactionPart(id: dto.id, auto: dto.auto == true))
+            return .compaction(CompactionPart(id: dto.id, auto: dto.auto == true, completed: dto.completed == true))
         default:
             return nil
         }
@@ -171,7 +171,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
     }
 
     func v2PromptRequest(options: PromptSendOptions) -> V2PromptRequestDTO {
-        let files = options.attachments.map { V2PromptFileDTO(uri: $0.dataURL, name: $0.filename) }
+        let files = options.attachments.map { V2PromptFileDTO(uri: $0.dataURL, name: $0.filename, mime: $0.mime) }
         let agents = ComposerMentionRouting.agentParts(text: options.text, mentions: options.agentMentions).map { part in
             V2PromptAgentDTO(
                 name: part.name,
@@ -222,8 +222,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
         var model: V2ModelRefDTO?
         for dto in dtos {
             switch dto.type {
-            case "agent-switched":
-                agent = dto.agent ?? ""
+            case "agent-switched", "location-switched":
+                agent = dto.agent ?? agent
             case "model-switched":
                 model = dto.model
             case "user":
@@ -273,7 +273,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             sentAtEpochMs: dto.time?.created,
             contextEstimate: MessageContextEstimate(
                 userCharacters: text.count
-                    + dto.files.reduce(0) { $0 + ($1.source?.text?.count ?? 0) }
+                    + dto.files.reduce(0) { $0 + (($1.mention ?? $1.source)?.text?.count ?? 0) }
                     + dto.agents.reduce(0) { $0 + ($1.source?.text?.count ?? 0) }
             )
         )
@@ -441,8 +441,9 @@ nonisolated struct MessageDomainAdapter: Sendable {
     }
 
     private func v2FilePart(_ file: V2FileAttachmentDTO, fallbackID: String) -> MessagePart? {
-        guard let url = file.uri,
-              let mime = file.mime?.lowercased(),
+        guard let url = file.uri else { return nil }
+        let mime = (file.mime ?? AttachmentDataURL.mime(fromDataURL: url))?.lowercased()
+        guard let mime,
               url.lowercased().hasPrefix("data:"),
               AttachmentDataURL.validates(url, mime: mime),
               let kind = AttachmentDataURL.kind(for: mime)

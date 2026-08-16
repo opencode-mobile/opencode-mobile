@@ -1171,6 +1171,7 @@ final class SessionChatViewModel {
             reviewChangesMessageID: reviewChangesState.messageID,
             reviewChangesSummary: reviewChangesState.summary,
             supportsSessionMessageDiff: activeConnectionManager.capabilities.supportsSessionMessageDiff,
+            supportsSessionArchive: activeConnectionManager.capabilities.supportsSessionArchive,
             rename: infoState.rename,
             slashSuggestionsVisible: composerState.slashSuggestionsVisible,
             slashSuggestions: composerState.slashSuggestions,

@@ -12,14 +12,39 @@ nonisolated struct EventDomainAdapter: Sendable {
         else { return [] }
 
         let payload = json["payload"] as? [String: Any]
-        let type = payload?["type"] as? String ?? json["type"] as? String
+        let dataProperties = properties(fromData: json["data"])
+        let type = payload?["type"] as? String
+            ?? json["type"] as? String
+            ?? json["event"] as? String
+            ?? dataProperties?["type"] as? String
         guard let type else { return [] }
 
         let properties = payload?["properties"] as? [String: Any]
             ?? json["properties"] as? [String: Any]
-            ?? json["data"] as? [String: Any]
+            ?? nestedEventProperties(dataProperties)
             ?? [:]
         return project(type: type, properties: properties)
+    }
+
+    private func properties(fromData data: Any?) -> [String: Any]? {
+        if let object = data as? [String: Any] {
+            return object
+        }
+        if let raw = data as? String, let encoded = raw.data(using: .utf8) {
+            return (try? JSONSerialization.jsonObject(with: encoded)) as? [String: Any]
+        }
+        return nil
+    }
+
+    private func nestedEventProperties(_ data: [String: Any]?) -> [String: Any]? {
+        guard let data else { return nil }
+        if let properties = data["properties"] as? [String: Any] {
+            return properties
+        }
+        if let nested = properties(fromData: data["data"]) {
+            return nested
+        }
+        return data
     }
 
     private func project(type: String, properties: [String: Any]) -> [OpencodeEvent] {
@@ -39,14 +64,17 @@ nonisolated struct EventDomainAdapter: Sendable {
             [userMessageUpdated(properties)]
         case "session.next.step.started", "session.step.started":
             stepStarted(properties)
-        case "session.execution.started", "session.compaction.started", "session.shell.started":
+        case "session.execution.started":
             [statusEvent(properties, statusType: "busy")]
-        case "session.next.step.ended",
-             "session.execution.succeeded",
+        case "session.next.step.ended":
+            [
+                assistantMessageUpdated(properties),
+                event(type: "session.active.snapshot", properties: properties),
+            ]
+        case "session.execution.succeeded",
              "session.execution.interrupted",
              "session.compaction.ended",
-             "session.compaction.failed",
-             "session.shell.ended":
+             "session.compaction.failed":
             [event(type: "session.idle", properties: properties)]
         case "session.next.step.failed", "session.execution.failed":
             [
@@ -55,6 +83,38 @@ nonisolated struct EventDomainAdapter: Sendable {
             ]
         case "session.next.retried", "session.retry.scheduled":
             [statusEvent(properties, statusType: "retry")]
+        case "session.next.tool.input.started",
+             "session.next.tool.called",
+             "session.next.tool.progress",
+             "session.next.tool.success",
+             "session.next.tool.failed":
+            [toolPartUpdated(type: type, properties: properties)]
+        case "session.next.shell.started":
+            [
+                statusEvent(properties, statusType: "busy"),
+                shellPartUpdated(properties, status: "running"),
+            ]
+        case "session.next.shell.ended":
+            [
+                shellPartUpdated(properties, status: "completed"),
+                event(type: "session.active.snapshot", properties: properties),
+            ]
+        case "session.shell.started":
+            [statusEvent(properties, statusType: "busy")]
+        case "session.shell.ended":
+            [event(type: "session.idle", properties: properties)]
+        case "session.next.compaction.started", "session.compaction.started":
+            [
+                statusEvent(properties, statusType: "busy"),
+                compactionPartUpdated(properties, completed: false),
+            ]
+        case "session.next.compaction.delta":
+            [compactionTextDelta(properties)]
+        case "session.next.compaction.ended":
+            [
+                compactionPartUpdated(properties, completed: true),
+                event(type: "session.active.snapshot", properties: properties),
+            ]
         case "session.next.text.started", "session.text.started":
             textStarted(properties)
         case "session.next.text.delta", "session.text.delta":
@@ -108,18 +168,131 @@ nonisolated struct EventDomainAdapter: Sendable {
     }
 
     private func stepStarted(_ properties: [String: Any]) -> [OpencodeEvent] {
+        [
+            assistantMessageUpdated(properties),
+            statusEvent(properties, statusType: "busy"),
+        ]
+    }
+
+    private func assistantMessageUpdated(_ properties: [String: Any]) -> OpencodeEvent {
         let sessionID = sessionID(from: properties)
         var info: [String: Any] = ["role": "assistant"]
-        if let assistantID = string(in: properties, key: "assistantMessageID") {
+        if let assistantID = string(in: properties, key: "assistantMessageID") ?? string(in: properties, key: "messageID") {
             info["id"] = assistantID
         }
         if let sessionID {
             info["sessionID"] = sessionID
         }
-        return [
-            event(type: "message.updated", properties: ["info": info]),
-            statusEvent(properties, statusType: "busy"),
+        return event(type: "message.updated", properties: ["info": info])
+    }
+
+    private func toolPartUpdated(type: String, properties: [String: Any]) -> OpencodeEvent {
+        let status: String
+        switch type {
+        case "session.next.tool.input.started":
+            status = "pending"
+        case "session.next.tool.success":
+            status = "completed"
+        case "session.next.tool.failed":
+            status = "error"
+        default:
+            status = "running"
+        }
+        let name = string(in: properties, key: "tool") ?? string(in: properties, key: "name") ?? "tool"
+        let callID = string(in: properties, key: "callID")
+        var output = string(in: properties, key: "output")
+        if output == nil, let content = properties["content"] as? [[String: Any]] {
+            let texts = content.compactMap { $0["text"] as? String }
+            if !texts.isEmpty {
+                output = texts.joined()
+            }
+        }
+        let error = (properties["error"] as? [String: Any]).flatMap { $0["message"] as? String }
+        return toolLikePartUpdated(
+            properties: properties,
+            messageID: string(in: properties, key: "assistantMessageID"),
+            partID: callID,
+            toolName: name,
+            status: status,
+            callID: callID,
+            input: properties["input"] as? [String: Any],
+            output: output,
+            error: error,
+            metadata: properties["structured"] as? [String: Any]
+        )
+    }
+
+    private func shellPartUpdated(_ properties: [String: Any], status: String) -> OpencodeEvent {
+        toolLikePartUpdated(
+            properties: properties,
+            messageID: string(in: properties, key: "messageID") ?? string(in: properties, key: "assistantMessageID"),
+            partID: string(in: properties, key: "callID"),
+            toolName: "bash",
+            status: status,
+            callID: string(in: properties, key: "callID"),
+            output: string(in: properties, key: "output"),
+            title: "Shell"
+        )
+    }
+
+    private func compactionPartUpdated(_ properties: [String: Any], completed: Bool) -> OpencodeEvent {
+        let sessionID = sessionID(from: properties)
+        let messageID = string(in: properties, key: "messageID")
+        var part: [String: Any] = [
+            "type": "compaction",
+            "auto": string(in: properties, key: "reason") == "auto",
+            "completed": completed,
         ]
+        if let messageID {
+            part["id"] = messageID
+            part["messageID"] = messageID
+        }
+        if let sessionID {
+            part["sessionID"] = sessionID
+        }
+        return event(type: "message.part.updated", properties: ["part": part])
+    }
+
+    private func compactionTextDelta(_ properties: [String: Any]) -> OpencodeEvent {
+        var projected: [String: Any] = ["field": "text"]
+        if let sessionID = sessionID(from: properties) {
+            projected["sessionID"] = sessionID
+        }
+        if let messageID = string(in: properties, key: "messageID") {
+            projected["messageID"] = messageID
+            projected["partID"] = "\(messageID):text:0"
+        }
+        if let text = string(in: properties, key: "text") {
+            projected["delta"] = text
+        }
+        return event(type: "message.part.delta", properties: projected)
+    }
+
+    private func toolLikePartUpdated(
+        properties: [String: Any],
+        messageID: String?,
+        partID: String?,
+        toolName: String,
+        status: String,
+        callID: String?,
+        input: [String: Any]? = nil,
+        output: String? = nil,
+        error: String? = nil,
+        metadata: [String: Any]? = nil,
+        title: String? = nil
+    ) -> OpencodeEvent {
+        var state: [String: Any] = ["status": status]
+        if let title { state["title"] = title }
+        if let input { state["input"] = input }
+        if let output { state["output"] = output }
+        if let error { state["error"] = error }
+        if let metadata { state["metadata"] = metadata }
+        var part: [String: Any] = ["type": "tool", "tool": toolName, "state": state]
+        if let partID { part["id"] = partID }
+        if let sessionID = sessionID(from: properties) { part["sessionID"] = sessionID }
+        if let messageID { part["messageID"] = messageID }
+        if let callID { part["callID"] = callID }
+        return event(type: "message.part.updated", properties: ["part": part])
     }
 
     private func textStarted(_ properties: [String: Any]) -> [OpencodeEvent] {

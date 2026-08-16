@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.event
 import dev.opencode.mobile.data.remote.dto.EventEnvelopeDto
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -20,13 +21,36 @@ class EventDomainAdapter(
     fun parseEvents(dataLine: String): List<OpencodeEvent> {
         val envelope = runCatching { json.decodeFromString<EventEnvelopeDto>(dataLine) }.getOrNull() ?: return emptyList()
         val payload = envelope.payload
-        val type = payload?.type ?: envelope.type ?: return emptyList()
+        val dataProperties = propertiesFromData(envelope.data)
+        val type =
+            payload?.type
+                ?: envelope.type
+                ?: envelope.event
+                ?: dataProperties?.string("type")
+                ?: return emptyList()
         val properties =
             payload?.properties
                 ?: envelope.properties
-                ?: envelope.data
+                ?: nestedEventProperties(dataProperties)
                 ?: JsonObject(emptyMap())
         return project(type, properties)
+    }
+
+    private fun propertiesFromData(data: JsonElement?): JsonObject? =
+        when (data) {
+            is JsonObject -> data
+            is JsonPrimitive ->
+                data.contentOrNull?.let { raw ->
+                    runCatching { json.parseToJsonElement(raw) }.getOrNull() as? JsonObject
+                }
+            else -> null
+        }
+
+    private fun nestedEventProperties(data: JsonObject?): JsonObject? {
+        if (data == null) return null
+        data["properties"]?.jsonObject?.let { return it }
+        data["data"]?.let { nested -> propertiesFromData(nested) }?.let { return it }
+        return data
     }
 
     private fun project(
@@ -47,16 +71,16 @@ class EventDomainAdapter(
             "session.next.step.started",
             "session.step.started",
             -> stepStarted(properties)
-            "session.execution.started",
-            "session.compaction.started",
-            "session.shell.started",
-            -> listOf(statusEvent(properties, "busy"))
-            "session.next.step.ended",
+            "session.execution.started" -> listOf(statusEvent(properties, "busy"))
+            "session.next.step.ended" ->
+                listOf(
+                    assistantMessageUpdated(properties),
+                    event("session.active.snapshot", properties),
+                )
             "session.execution.succeeded",
             "session.execution.interrupted",
             "session.compaction.ended",
             "session.compaction.failed",
-            "session.shell.ended",
             -> listOf(event("session.idle", properties))
             "session.next.step.failed",
             "session.execution.failed",
@@ -68,6 +92,37 @@ class EventDomainAdapter(
             "session.next.retried",
             "session.retry.scheduled",
             -> listOf(statusEvent(properties, "retry"))
+            "session.next.tool.input.started",
+            "session.next.tool.called",
+            "session.next.tool.progress",
+            "session.next.tool.success",
+            "session.next.tool.failed",
+            -> listOf(toolPartUpdated(type, properties))
+            "session.next.shell.started" ->
+                listOf(
+                    statusEvent(properties, "busy"),
+                    shellPartUpdated(properties, status = "running"),
+                )
+            "session.next.shell.ended" ->
+                listOf(
+                    shellPartUpdated(properties, status = "completed"),
+                    event("session.active.snapshot", properties),
+                )
+            "session.shell.started" -> listOf(statusEvent(properties, "busy"))
+            "session.shell.ended" -> listOf(event("session.idle", properties))
+            "session.next.compaction.started",
+            "session.compaction.started",
+            ->
+                listOf(
+                    statusEvent(properties, "busy"),
+                    compactionPartUpdated(properties, completed = false),
+                )
+            "session.next.compaction.delta" -> listOf(compactionTextDelta(properties))
+            "session.next.compaction.ended" ->
+                listOf(
+                    compactionPartUpdated(properties, completed = true),
+                    event("session.active.snapshot", properties),
+                )
             "session.next.text.started",
             "session.text.started",
             -> textStarted(properties)
@@ -124,19 +179,150 @@ class EventDomainAdapter(
         return event("message.updated", buildJsonObject { put("info", info) })
     }
 
-    private fun stepStarted(properties: JsonObject): List<OpencodeEvent> {
+    private fun stepStarted(properties: JsonObject): List<OpencodeEvent> =
+        listOf(
+            assistantMessageUpdated(properties),
+            statusEvent(properties, "busy"),
+        )
+
+    private fun assistantMessageUpdated(properties: JsonObject): OpencodeEvent {
         val sessionId = sessionIdFromProperties(properties)
-        val assistantId = properties.string("assistantMessageID")
+        val assistantId = properties.string("assistantMessageID") ?: properties.string("messageID")
         val info =
             buildJsonObject {
                 assistantId?.let { put("id", it) }
                 sessionId?.let { put("sessionID", it) }
                 put("role", "assistant")
             }
-        return listOf(
-            event("message.updated", buildJsonObject { put("info", info) }),
-            statusEvent(properties, "busy"),
+        return event("message.updated", buildJsonObject { put("info", info) })
+    }
+
+    private fun toolPartUpdated(
+        type: String,
+        properties: JsonObject,
+    ): OpencodeEvent {
+        val status =
+            when (type) {
+                "session.next.tool.input.started" -> "pending"
+                "session.next.tool.success" -> "completed"
+                "session.next.tool.failed" -> "error"
+                else -> "running"
+            }
+        val name = properties.string("tool") ?: properties.string("name") ?: "tool"
+        val callId = properties.string("callID")
+        val error =
+            properties["error"]
+                ?.jsonObject
+                ?.string("message")
+        val output =
+            properties.string("output")
+                ?: properties["content"]
+                    ?.let { content ->
+                        if (content is kotlinx.serialization.json.JsonArray) {
+                            content.mapNotNull { item ->
+                                item.jsonObject.string("text")
+                            }.joinToString("")
+                        } else {
+                            null
+                        }
+                    }?.takeIf { it.isNotEmpty() }
+        val input = properties["input"]
+        val metadata = properties["structured"]?.jsonObject
+        return toolLikePartUpdated(
+            properties = properties,
+            messageId = properties.string("assistantMessageID"),
+            partId = callId,
+            toolName = name,
+            status = status,
+            callId = callId,
+            input = input,
+            output = output,
+            error = error,
+            metadata = metadata,
         )
+    }
+
+    private fun shellPartUpdated(
+        properties: JsonObject,
+        status: String,
+    ): OpencodeEvent =
+        toolLikePartUpdated(
+            properties = properties,
+            messageId = properties.string("messageID") ?: properties.string("assistantMessageID"),
+            partId = properties.string("callID"),
+            toolName = "bash",
+            status = status,
+            callId = properties.string("callID"),
+            output = properties.string("output"),
+            title = "Shell",
+        )
+
+    private fun compactionPartUpdated(
+        properties: JsonObject,
+        completed: Boolean,
+    ): OpencodeEvent {
+        val sessionId = sessionIdFromProperties(properties)
+        val messageId = properties.string("messageID")
+        val part =
+            buildJsonObject {
+                messageId?.let { put("id", it) }
+                sessionId?.let { put("sessionID", it) }
+                messageId?.let { put("messageID", it) }
+                put("type", "compaction")
+                put("auto", properties.string("reason") == "auto")
+                put("completed", completed)
+            }
+        return event("message.part.updated", buildJsonObject { put("part", part) })
+    }
+
+    private fun compactionTextDelta(properties: JsonObject): OpencodeEvent {
+        val sessionId = sessionIdFromProperties(properties)
+        val messageId = properties.string("messageID")
+        val projected =
+            buildJsonObject {
+                sessionId?.let { put("sessionID", it) }
+                messageId?.let { put("messageID", it) }
+                messageId?.let { put("partID", "$it:text:0") }
+                put("field", "text")
+                properties.string("text")?.let { put("delta", it) }
+            }
+        return event("message.part.delta", projected)
+    }
+
+    private fun toolLikePartUpdated(
+        properties: JsonObject,
+        messageId: String?,
+        partId: String?,
+        toolName: String,
+        status: String,
+        callId: String?,
+        input: JsonElement? = null,
+        output: String? = null,
+        error: String? = null,
+        metadata: JsonObject? = null,
+        title: String? = null,
+    ): OpencodeEvent {
+        val sessionId = sessionIdFromProperties(properties)
+        val state =
+            buildJsonObject {
+                put("status", status)
+                title?.let { put("title", it) }
+                if (input is JsonObject) put("input", input)
+                output?.let { put("output", it) }
+                error?.let { put("error", it) }
+                metadata?.let { put("metadata", it) }
+            }
+        val part =
+            buildJsonObject {
+                partId?.let { put("id", it) }
+                sessionId?.let { put("sessionID", it) }
+                messageId?.let { put("messageID", it) }
+                put("type", "tool")
+                put("tool", toolName)
+                callId?.let { put("callID", it) }
+                put("state", state)
+            }
+        return event("message.part.updated", buildJsonObject { put("part", part) })
     }
 
     private fun textStarted(properties: JsonObject): List<OpencodeEvent> {

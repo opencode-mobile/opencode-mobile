@@ -121,6 +121,7 @@ data class SessionChatUiState(
     val reviewChangesMessageId: String? = null,
     val reviewChangesSummary: ReviewChangesSummary? = null,
     val supportsSessionMessageDiff: Boolean = true,
+    val supportsSessionArchive: Boolean = true,
     val rename: SessionRenameUiState = SessionRenameUiState(),
     val slashSuggestionsVisible: Boolean = false,
     val slashSuggestions: List<SessionChatSlashSuggestion> = emptyList(),
