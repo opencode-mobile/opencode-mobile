@@ -815,6 +815,7 @@ class MainScreenViewModelTest {
                 connectionProfileStore = connectionProfileStore,
                 secureCredentialStore = FakeSecureCredentialStore(),
                 sessionModelSelectionStore = selectionStore,
+                composerDraftStore = dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore(),
                 httpClient = OpencodeHttpClient(json, activeConnectionManager),
                 sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
             )

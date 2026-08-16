@@ -5,7 +5,9 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import dev.opencode.mobile.data.local.DataStoreComposerDraftStore
 import dev.opencode.mobile.data.local.DataStoreSessionModelSelectionStore
+import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.model.DefaultModelRepository
 import dev.opencode.mobile.domain.model.ModelDomainAdapter
 import dev.opencode.mobile.domain.model.ModelRepository
@@ -22,6 +24,10 @@ abstract class ModelModule {
     @Binds
     @Singleton
     abstract fun bindSessionModelSelectionStore(impl: DataStoreSessionModelSelectionStore): SessionModelSelectionStore
+
+    @Binds
+    @Singleton
+    abstract fun bindComposerDraftStore(impl: DataStoreComposerDraftStore): ComposerDraftStore
 
     companion object {
         @Provides

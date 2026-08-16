@@ -79,12 +79,14 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
     private let remote: any SessionRemote
     private let adapter: SessionDomainAdapter
     private let sessionModelSelectionStore: (any SessionModelSelectionStore)?
+    private let composerDraftStore: (any ComposerDraftStore)?
     private let activeConnectionManager: ActiveConnectionManager?
 
     init(
         api: SessionsAPIClient,
         adapter: SessionDomainAdapter,
         sessionModelSelectionStore: (any SessionModelSelectionStore)? = nil,
+        composerDraftStore: (any ComposerDraftStore)? = nil,
         activeConnectionManager: ActiveConnectionManager? = nil
     ) {
         self.remote = ProtocolSelectedSessionRemote(
@@ -94,6 +96,7 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         )
         self.adapter = adapter
         self.sessionModelSelectionStore = sessionModelSelectionStore
+        self.composerDraftStore = composerDraftStore
         self.activeConnectionManager = activeConnectionManager
     }
 
@@ -132,15 +135,23 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
     func deleteSession(id: String, directory: String?) async throws -> Bool {
         let deleted = try await run { try await remote.deleteSession(id: id, directory: directory) }
         if deleted,
-           let profile = activeConnectionManager?.currentProfile(),
-           let sessionModelSelectionStore {
-            await sessionModelSelectionStore.deleteSessionEntries(
-                connectionIdentity: ModelSelectionConnectionIdentity(
-                    serverBaseURL: profile.baseURL,
-                    username: profile.username
-                ),
-                sessionID: id
+           let profile = activeConnectionManager?.currentProfile() {
+            let identity = ModelSelectionConnectionIdentity(
+                serverBaseURL: profile.baseURL,
+                username: profile.username
             )
+            if let sessionModelSelectionStore {
+                await sessionModelSelectionStore.deleteSessionEntries(
+                    connectionIdentity: identity,
+                    sessionID: id
+                )
+            }
+            if let composerDraftStore {
+                composerDraftStore.deleteSessionEntries(
+                    connectionIdentity: identity,
+                    sessionID: id
+                )
+            }
         }
         return deleted
     }

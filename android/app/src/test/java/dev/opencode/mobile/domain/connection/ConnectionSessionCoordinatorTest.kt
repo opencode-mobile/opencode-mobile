@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.connection
 
+import dev.opencode.mobile.domain.composer.ComposerDraft
+import dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
@@ -16,6 +18,7 @@ class ConnectionSessionCoordinatorTest {
     fun clearConnectionData_clearsModelSelectionCache() =
         runBlocking {
             val store = FakeSessionModelSelectionStore()
+            val draftStore = InMemoryComposerDraftStore()
             store.seed(
                 serverBaseUrl = "http://127.0.0.1:4096/",
                 worktree = "/repo",
@@ -34,9 +37,17 @@ class ConnectionSessionCoordinatorTest {
                     connectionProfileStore = connectionProfileStore,
                     secureCredentialStore = FakeSecureCredentialStore(),
                     sessionModelSelectionStore = store,
+                    composerDraftStore = draftStore,
                     httpClient = OpencodeHttpClient(json, activeConnectionManager),
                     sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
                 )
+
+            draftStore.save(
+                ModelSelectionConnectionIdentity("http://127.0.0.1:4096/", "opencode"),
+                "/repo",
+                "ses-1",
+                ComposerDraft(text = "draft"),
+            )
 
             coordinator.clearConnectionData()
 
@@ -45,6 +56,13 @@ class ConnectionSessionCoordinatorTest {
                     serverBaseUrl = "http://127.0.0.1:4096/",
                     worktree = "/repo",
                     sessionId = "ses-1",
+                ),
+            )
+            assertNull(
+                draftStore.load(
+                    ModelSelectionConnectionIdentity("http://127.0.0.1:4096/", "opencode"),
+                    "/repo",
+                    "ses-1",
                 ),
             )
         }
