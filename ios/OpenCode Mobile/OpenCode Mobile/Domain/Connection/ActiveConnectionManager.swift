@@ -267,7 +267,7 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         secureCredentialStore.clearAll()
         await connectionProfileStore.clearAll()
         await sessionModelSelectionStore.clearAll()
-        await composerDraftStore.clearAll()
+        composerDraftStore.clearAll()
         activeConnectionManager.disconnect()
         let handlers = profileClearedHandlers
         handlers.forEach { $0() }

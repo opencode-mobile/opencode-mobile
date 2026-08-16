@@ -17,23 +17,23 @@ protocol ComposerDraftStore: Sendable {
         connectionIdentity: ModelSelectionConnectionIdentity,
         worktree: String,
         sessionID: String
-    ) async -> ComposerDraft?
+    ) -> ComposerDraft?
     func save(
         connectionIdentity: ModelSelectionConnectionIdentity,
         worktree: String,
         sessionID: String,
         draft: ComposerDraft
-    ) async
+    )
     func delete(
         connectionIdentity: ModelSelectionConnectionIdentity,
         worktree: String,
         sessionID: String
-    ) async
+    )
     func deleteSessionEntries(
         connectionIdentity: ModelSelectionConnectionIdentity,
         sessionID: String
-    ) async
-    func clearAll() async
+    )
+    func clearAll()
 }
 
 struct UserDefaultsComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
@@ -47,7 +47,7 @@ struct UserDefaultsComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
         connectionIdentity: ModelSelectionConnectionIdentity,
         worktree: String,
         sessionID: String
-    ) async -> ComposerDraft? {
+    ) -> ComposerDraft? {
         decode(defaults.data(forKey: sessionKey(connectionIdentity, worktree: worktree, sessionID: sessionID)))
     }
 
@@ -56,7 +56,7 @@ struct UserDefaultsComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
         worktree: String,
         sessionID: String,
         draft: ComposerDraft
-    ) async {
+    ) {
         saveIfNewer(withTimestamp(draft), key: sessionKey(connectionIdentity, worktree: worktree, sessionID: sessionID))
         evictOldestSessions(connectionIdentity)
     }
@@ -65,21 +65,21 @@ struct UserDefaultsComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
         connectionIdentity: ModelSelectionConnectionIdentity,
         worktree: String,
         sessionID: String
-    ) async {
+    ) {
         defaults.removeObject(forKey: sessionKey(connectionIdentity, worktree: worktree, sessionID: sessionID))
     }
 
     func deleteSessionEntries(
         connectionIdentity: ModelSelectionConnectionIdentity,
         sessionID: String
-    ) async {
+    ) {
         let sessionSuffix = "|\(encoded(sessionID))"
         defaults.dictionaryRepresentation().keys
             .filter { $0.hasPrefix(sessionPrefix(connectionIdentity)) && $0.hasSuffix(sessionSuffix) }
             .forEach(defaults.removeObject)
     }
 
-    func clearAll() async {
+    func clearAll() {
         let keys = defaults.dictionaryRepresentation().keys.filter { $0.hasPrefix(Self.versionPrefix) }
         for key in keys {
             defaults.removeObject(forKey: key)

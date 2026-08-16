@@ -913,13 +913,13 @@ final class SessionChatViewModel {
         return sessionOrder.flatMap { requestsBySession[$0] ?? [] }
     }
 
-    func flushComposerDraft() async {
-        await composer.flushDraft()
+    func flushComposerDraft() {
+        composer.flushDraft()
     }
 
     func stopObserving() {
         OpenCodeLog.sessionChat.info("stop observing session=\(self.sessionID, privacy: .public)")
-        Task { await composer.flushDraft() }
+        composer.flushDraft()
         optimisticCreateTask?.cancel()
         optimisticCreateTask = nil
         projectIdentityTask?.cancel()

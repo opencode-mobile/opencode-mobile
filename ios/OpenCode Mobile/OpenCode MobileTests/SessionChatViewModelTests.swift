@@ -924,7 +924,7 @@ struct SessionChatViewModelTests {
         await first.loadMessages()
         first.updateComposerText("@", cursor: 1)
         first.selectAtSuggestion(agentName: "explore")
-        await first.flushComposerDraft()
+        first.flushComposerDraft()
         first.stopObserving()
 
         let other = makeViewModel(
@@ -944,13 +944,27 @@ struct SessionChatViewModelTests {
         restored.stopObserving()
     }
 
+    @Test func composerDraft_stopObservingFlushesPendingDebounce() async {
+        let draftStore = InMemoryComposerDraftStore()
+        let first = makeViewModel(messageRepository: FakeMessageRepository(), composerDraftStore: draftStore)
+        await first.loadMessages()
+        first.updateComposerText("pending leave")
+        first.stopObserving()
+
+        let restored = makeViewModel(messageRepository: FakeMessageRepository(), composerDraftStore: draftStore)
+        await restored.loadMessages()
+        await waitUntil { restored.uiState.composer.text == "pending leave" }
+        #expect(restored.uiState.composer.text == "pending leave")
+        restored.stopObserving()
+    }
+
     @Test func composerDraft_successfulSendClearsStoredDraft() async {
         let draftStore = InMemoryComposerDraftStore()
         let first = makeViewModel(messageRepository: FakeMessageRepository(), composerDraftStore: draftStore)
         await first.loadMessages()
         first.updateComposerText("send me")
         await first.sendPrompt()
-        await first.flushComposerDraft()
+        first.flushComposerDraft()
         #expect(first.uiState.composer.text == "")
         first.stopObserving()
 
@@ -2588,7 +2602,7 @@ private final class InMemoryComposerDraftStore: ComposerDraftStore, @unchecked S
         connectionIdentity: ModelSelectionConnectionIdentity,
         worktree: String,
         sessionID: String
-    ) async -> ComposerDraft? {
+    ) -> ComposerDraft? {
         saved[key(connectionIdentity, worktree, sessionID)]
     }
 
@@ -2597,7 +2611,7 @@ private final class InMemoryComposerDraftStore: ComposerDraftStore, @unchecked S
         worktree: String,
         sessionID: String,
         draft: ComposerDraft
-    ) async {
+    ) {
         saved[key(connectionIdentity, worktree, sessionID)] = draft
     }
 
@@ -2605,20 +2619,20 @@ private final class InMemoryComposerDraftStore: ComposerDraftStore, @unchecked S
         connectionIdentity: ModelSelectionConnectionIdentity,
         worktree: String,
         sessionID: String
-    ) async {
+    ) {
         saved.removeValue(forKey: key(connectionIdentity, worktree, sessionID))
     }
 
     func deleteSessionEntries(
         connectionIdentity: ModelSelectionConnectionIdentity,
         sessionID: String
-    ) async {
+    ) {
         saved.keys
             .filter { $0.hasPrefix(connectionIdentity.serverBaseURL) && $0.hasSuffix("|\(sessionID)") }
             .forEach { saved.removeValue(forKey: $0) }
     }
 
-    func clearAll() async {
+    func clearAll() {
         saved.removeAll()
     }
 

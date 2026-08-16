@@ -61,7 +61,7 @@ final class SessionChatComposer {
         self.sentTimeFormatter = formatter
         Task {
             await self.loadCachedSelection()
-            await self.applyOrLoadDraft(preserve: nil)
+            self.applyOrLoadDraft(preserve: nil)
         }
     }
 
@@ -79,8 +79,7 @@ final class SessionChatComposer {
                 nil
             }
         persistDraftTask?.cancel()
-        let snapshot = currentDraft()
-        Task { await persistDraft(sessionID: previousSessionID, draft: snapshot) }
+        persistDraft(sessionID: previousSessionID, draft: currentDraft())
         self.sessionID = sessionID
         loadedCatalog = nil
         cachedSelection = nil
@@ -95,7 +94,7 @@ final class SessionChatComposer {
         notifyChange()
         Task {
             await self.loadCachedSelection()
-            await self.applyOrLoadDraft(preserve: preserve)
+            self.applyOrLoadDraft(preserve: preserve)
         }
         loadServerCommands()
         loadMentionableAgents()
@@ -698,7 +697,7 @@ final class SessionChatComposer {
         notifyChange()
     }
 
-    private func applyOrLoadDraft(preserve: ComposerDraft?) async {
+    private func applyOrLoadDraft(preserve: ComposerDraft?) {
         if OptimisticSessionCreate.isPlaceholder(sessionID) { return }
         if let preserve, !preserve.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             applyDraft(preserve)
@@ -709,7 +708,7 @@ final class SessionChatComposer {
         draftLoadGeneration += 1
         let generation = draftLoadGeneration
         guard let identity = currentIdentity() else { return }
-        let loaded = await composerDraftStore.load(
+        let loaded = composerDraftStore.load(
             connectionIdentity: identity,
             worktree: worktree,
             sessionID: sessionID
@@ -727,21 +726,21 @@ final class SessionChatComposer {
         persistDraftTask = Task {
             try? await Task.sleep(for: .milliseconds(Self.draftPersistDebounceMs))
             guard !Task.isCancelled else { return }
-            await persistDraft(sessionID: sessionID, draft: draft)
+            persistDraft(sessionID: sessionID, draft: draft)
         }
     }
 
-    private func persistDraft(sessionID: String, draft: ComposerDraft) async {
+    private func persistDraft(sessionID: String, draft: ComposerDraft) {
         if OptimisticSessionCreate.isPlaceholder(sessionID) { return }
         guard let identity = currentIdentity() else { return }
         if draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            await composerDraftStore.delete(
+            composerDraftStore.delete(
                 connectionIdentity: identity,
                 worktree: worktree,
                 sessionID: sessionID
             )
         } else {
-            await composerDraftStore.save(
+            composerDraftStore.save(
                 connectionIdentity: identity,
                 worktree: worktree,
                 sessionID: sessionID,
@@ -922,13 +921,13 @@ final class SessionChatComposer {
         refreshComposerSuggestions(for: composer.text, cursor: composer.cursor)
         notifyChange()
         persistDraftTask?.cancel()
-        Task { await persistDraft(sessionID: sessionID, draft: currentDraft()) }
+        persistDraft(sessionID: sessionID, draft: currentDraft())
     }
 
-    func flushDraft() async {
+    func flushDraft() {
         persistDraftTask?.cancel()
         persistDraftTask = nil
-        await persistDraft(sessionID: sessionID, draft: currentDraft())
+        persistDraft(sessionID: sessionID, draft: currentDraft())
     }
 
     private func errorMessage(_ error: Error) -> String {

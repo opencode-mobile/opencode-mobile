@@ -19,7 +19,7 @@ import Testing
             sessionModelSelectionStore: store,
             composerDraftStore: draftStore
         )
-        await draftStore.save(
+        draftStore.save(
             connectionIdentity: ModelSelectionConnectionIdentity(
                 serverBaseURL: "http://127.0.0.1:4096/",
                 username: "opencode"
@@ -33,7 +33,7 @@ import Testing
 
         #expect(await store.load(serverBaseURL: "http://127.0.0.1:4096/", worktree: "/repo", sessionID: "ses-1") == nil)
         #expect(
-            await draftStore.load(
+            draftStore.load(
                 connectionIdentity: ModelSelectionConnectionIdentity(
                     serverBaseURL: "http://127.0.0.1:4096/",
                     username: "opencode"
@@ -52,7 +52,7 @@ private final class InMemoryComposerDraftStore: ComposerDraftStore, @unchecked S
         connectionIdentity: ModelSelectionConnectionIdentity,
         worktree: String,
         sessionID: String
-    ) async -> ComposerDraft? {
+    ) -> ComposerDraft? {
         saved["\(connectionIdentity.serverBaseURL)|\(worktree)|\(sessionID)"]
     }
 
@@ -61,7 +61,7 @@ private final class InMemoryComposerDraftStore: ComposerDraftStore, @unchecked S
         worktree: String,
         sessionID: String,
         draft: ComposerDraft
-    ) async {
+    ) {
         saved["\(connectionIdentity.serverBaseURL)|\(worktree)|\(sessionID)"] = draft
     }
 
@@ -69,20 +69,20 @@ private final class InMemoryComposerDraftStore: ComposerDraftStore, @unchecked S
         connectionIdentity: ModelSelectionConnectionIdentity,
         worktree: String,
         sessionID: String
-    ) async {
+    ) {
         saved.removeValue(forKey: "\(connectionIdentity.serverBaseURL)|\(worktree)|\(sessionID)")
     }
 
     func deleteSessionEntries(
         connectionIdentity: ModelSelectionConnectionIdentity,
         sessionID: String
-    ) async {
+    ) {
         saved.keys
             .filter { $0.hasPrefix(connectionIdentity.serverBaseURL) && $0.hasSuffix("|\(sessionID)") }
             .forEach { saved.removeValue(forKey: $0) }
     }
 
-    func clearAll() async {
+    func clearAll() {
         saved.removeAll()
     }
 }

@@ -147,7 +147,7 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
                 )
             }
             if let composerDraftStore {
-                await composerDraftStore.deleteSessionEntries(
+                composerDraftStore.deleteSessionEntries(
                     connectionIdentity: identity,
                     sessionID: id
                 )
