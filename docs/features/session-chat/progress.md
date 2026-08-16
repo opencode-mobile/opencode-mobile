@@ -1,5 +1,56 @@
 # Session Chat Progress
 
+## OPE-170 Lock child session composer (2026-08-15)
+
+- Status: implemented on both platforms (unit-tested composer kind).
+- Plan: [ope-170-plan.md](./ope-170-plan.md)
+- Done:
+  - Session Composer `childLockout` state: locked model/effort chips, caption,
+    primary Back to main session.
+  - Child navigation seeds `parentID` / `parentId`; lockout wins over prompt.
+  - Permission and question still replace the lockout.
+- Remaining: device smoke (open a child session → no prompt; back returns to
+  parent; pending permission/question still appear).
+
+## OPE-169 design-system Assistant Message (2026-08-15)
+
+- Status: implemented on iOS and Android.
+- Plan: [ope-169-plan.md](./ope-169-plan.md)
+- Linear: [OPE-169](https://linear.app/opencode-mobile/issue/OPE-169/design-system-assistant-message)
+- Done:
+  - `OpenCodeAssistantMessage` in the Component Collection with tokens,
+    gallery, and previews.
+  - Session Chat text blocks and snapshot-evidence hosts use the component.
+  - Message-action gestures and ≥3k late-markdown paint deferral stay in
+    Session Chat wrappers.
+- Remaining: none.
+
+## OPE-167 top overlay pills (2026-08-15)
+
+- Status: implemented on iOS and Android (unit-tested visibility).
+- Plan: [ope-167-plan.md](./ope-167-plan.md)
+- Done:
+  - Top overlay: Syncing, then Todos, then Review (8pt, top-center + 10pt).
+  - Bottom overlay: Scroll to end only.
+  - Review shows on latest-turn file changes; not XOR with Scroll; not pin-gated.
+  - Hide Todos + Review while the Session Todos sheet is open; Syncing may stay.
+- Remaining: device smoke (pinned last message readable; scrolled shows Scroll
+  to end at bottom and Review at top; sheet hides Todos/Review).
+
+## OPE-145 Android scroll-to-end pill blink (2026-08-14)
+
+- Status: implemented on Android (unit-tested). iOS already hid on user scroll
+  and programmatic settle.
+- Plan: [ope-145-plan.md](./ope-145-plan.md)
+- Done:
+  - Pill hides on any non-programmatic `isScrollInProgress` (not NestedScroll
+    UserInput, which was missing drag events). Programmatic auto-follow still
+    uses the settle gate instead of that flag.
+  - Pill stays hidden while snap-to-end / armed unpinned follow is settling.
+  - 16dp hide slack so reveal-threshold jitter cannot blink the pill.
+- Remaining: device smoke (scroll away and stop → pill stays; fling to end →
+  no flash; streaming auto-follow → no flicker; Scroll XOR Review still holds).
+
 ## OPE-138 Dismiss keyboard on send (2026-08-10)
 
 - Status: implemented on both platforms in `OpenCodeSessionComposer`.

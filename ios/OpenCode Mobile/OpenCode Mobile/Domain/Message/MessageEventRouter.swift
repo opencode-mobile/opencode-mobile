@@ -82,4 +82,18 @@ nonisolated final class ObservationEpoch: @unchecked Sendable {
     }
 }
 
+/// One MessageSync reconnect catch-up per ConnectionEpoch (OPE-165).
+nonisolated final class ReconnectCatchUpGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var lastEpoch: UInt64?
+
+    func claim(_ epoch: UInt64) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if lastEpoch == epoch { return false }
+        lastEpoch = epoch
+        return true
+    }
+}
+
 nonisolated let messageEventStagingByteCapacity = 2_000_000

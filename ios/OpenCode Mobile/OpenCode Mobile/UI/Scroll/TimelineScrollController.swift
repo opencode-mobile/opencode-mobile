@@ -49,6 +49,10 @@ final class TimelineScrollController {
         viewportHeight: CGFloat,
         contentHeight: CGFloat
     ) {
+        // Off-screen / collapsed viewports (NavigationStack cover) report a
+        // bogus pin-to-end. Keep the last real geometry instead of re-arming.
+        guard viewportHeight > 1 else { return }
+
         self.distanceFromBottom = distanceFromBottom
         self.viewportHeight = viewportHeight
         self.contentHeight = contentHeight

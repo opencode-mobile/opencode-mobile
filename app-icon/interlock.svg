@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Store listing mark (App Store / Play Store), NOT the on-device launcher icon.
+
+  Canonical source for store high-res icons. Device home-screen icons continue
+  to come from app-icon/source.svg via `npm run app-icon:sync`.
+
+  Regenerate store rasters with `npm run app-icon:sync-store`.
+  See docs/design-system/app-icon.md.
+
+  Two equal hollow squares linked like chain rings (black upper-left,
+  light lower-right). Each ring is built from non-overlapping bar segments
+  with a gap at the crossing where the other ring passes over.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 100 100">
+  <rect width="100" height="100" fill="#3a3a3c"/>
+
+  <!--
+    Geometry (viewBox units):
+      outer 42, stroke 10, offset 16
+      black origin (21,21), gray origin (37,37)
+  -->
+
+  <!-- Black frame: gap in right bar where light top bar passes over -->
+  <path
+    fill="#000000"
+    d="
+      M21 21 H63 V31 H21 Z
+      M21 21 H31 V63 H21 Z
+      M21 53 H63 V63 H21 Z
+      M53 21 H63 V37 H53 Z
+      M53 47 H63 V63 H53 Z
+    "
+  />
+
+  <!-- Light frame: gap in left bar where black bottom bar passes over -->
+  <path
+    fill="#F1ECEC"
+    d="
+      M37 37 H79 V47 H37 Z
+      M69 37 H79 V79 H69 Z
+      M37 69 H79 V79 H37 Z
+      M37 37 H47 V53 H37 Z
+      M37 63 H47 V79 H37 Z
+    "
+  />
+</svg>

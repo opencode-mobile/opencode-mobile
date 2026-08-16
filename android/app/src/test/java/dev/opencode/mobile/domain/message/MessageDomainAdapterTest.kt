@@ -233,6 +233,55 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun toV2PromptRequest_mapsTextFilesAndAgents() {
+        val body =
+            adapter.toV2PromptRequest(
+                PromptSendOptions(
+                    text = "@explore please",
+                    attachments =
+                        listOf(
+                            Attachment(
+                                id = "attachment-1",
+                                filename = "notes.txt",
+                                mime = "text/plain",
+                                kind = AttachmentKind.Text,
+                                dataUrl = "data:text/plain;base64,SGk=",
+                                byteCount = 2,
+                            ),
+                        ),
+                    agentMentions =
+                        listOf(
+                            AgentMention(id = "m1", name = "explore", start = 0, end = 8),
+                        ),
+                    mode = "build",
+                ),
+            )
+
+        assertEquals("@explore please", body.prompt.text)
+        assertEquals("steer", body.delivery)
+        assertEquals("data:text/plain;base64,SGk=", body.prompt.files?.single()?.uri)
+        assertEquals("notes.txt", body.prompt.files?.single()?.name)
+        assertEquals("explore", body.prompt.agents?.single()?.name)
+        assertEquals("@explore", body.prompt.agents?.single()?.source?.text)
+    }
+
+    @Test
+    fun toV2SwitchModelRequest_mapsProviderModelAndVariant() {
+        val body =
+            adapter.toV2SwitchModelRequest(
+                PromptSendOptions(
+                    text = "Hello",
+                    model = PromptModelSelection(providerId = "anthropic", modelId = "claude-sonnet"),
+                    variant = "high",
+                ),
+            )
+
+        assertEquals("claude-sonnet", body?.model?.id)
+        assertEquals("anthropic", body?.model?.providerId)
+        assertEquals("high", body?.model?.variant)
+    }
+
+    @Test
     fun compactToolLabel_pending_returnsHourglass() {
         assertEquals(
             "\u231B webfetch",
@@ -385,6 +434,23 @@ class MessageDomainAdapterTest {
                 ?.content,
         )
         assertEquals("\u23F3 Searching...", adapter.compactToolLabel(tool))
+    }
+
+    @Test
+    fun toMessagePart_runningMapsTimeStart() {
+        val state =
+            buildJsonObject {
+                put("status", "running")
+                put(
+                    "time",
+                    buildJsonObject {
+                        put("start", 1_710_000_000_000)
+                    },
+                )
+            }
+        val dto = MessagePartDto(id = "prt-1", type = "tool", tool = "task", state = state)
+        val tool = adapter.toMessagePart(dto) as MessagePart.Tool
+        assertEquals(1_710_000_000_000, tool.timeStartEpochMs)
     }
 
     @Test
@@ -714,5 +780,120 @@ class MessageDomainAdapterTest {
         val message = adapter.toMessage(dto)
 
         assertEquals("agent prompt text".length, message.contextEstimate.userCharacters)
+    }
+
+    @Test
+    fun projectV2_mapsUserAssistantAndSkipsSwitches() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {"id":"msg_switch","type":"agent-switched","agent":"build","time":{"created":1}},
+                  {"id":"msg_user","type":"user","text":"Hello","time":{"created":2}},
+                  {
+                    "id":"msg_asst",
+                    "type":"assistant",
+                    "agent":"build",
+                    "model":{"id":"gpt-5","providerID":"openai"},
+                    "content":[
+                      {"type":"text","id":"txt_1","text":"Hi there"},
+                      {
+                        "type":"tool",
+                        "id":"tool_1",
+                        "name":"bash",
+                        "state":{
+                          "status":"completed",
+                          "input":{"command":"ls"},
+                          "content":[{"type":"text","text":"src"}],
+                          "structured":{}
+                        }
+                      }
+                    ],
+                    "cost":0.1,
+                    "tokens":{"input":10,"output":4,"reasoning":0,"cache":{"read":0,"write":0}},
+                    "time":{"created":3}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val messages = adapter.projectV2(dtos)
+
+        assertEquals(2, messages.size)
+        assertEquals(MessageRole.User, messages[0].role)
+        assertEquals("Hello", messages[0].text)
+        assertEquals("build", messages[0].mode)
+        assertEquals(MessageRole.Assistant, messages[1].role)
+        assertEquals("Hi there", messages[1].text)
+        assertEquals("gpt-5", messages[1].modelId)
+        assertEquals("openai", messages[1].modelProviderId)
+        val tool = messages[1].parts.filterIsInstance<MessagePart.Tool>().single()
+        assertEquals("bash", tool.toolName)
+        assertEquals(ToolStatus.Completed, tool.status)
+        assertEquals("src", tool.output)
+    }
+
+    @Test
+    fun projectV2_assistantInheritsCarriedAgentAndModel() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {"id":"msg_agent","type":"agent-switched","agent":"build","time":{"created":1}},
+                  {"id":"msg_model","type":"model-switched","model":{"id":"gpt-5","providerID":"openai"},"time":{"created":2}},
+                  {
+                    "id":"msg_asst",
+                    "type":"assistant",
+                    "content":[{"type":"text","id":"t1","text":"Hi"}],
+                    "time":{"created":3}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val message = adapter.projectV2(dtos).single()
+
+        assertEquals("build", message.mode)
+        assertEquals("gpt-5", message.modelId)
+        assertEquals("openai", message.modelProviderId)
+    }
+
+    @Test
+    fun projectV2_expandsShellAndCompaction() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {
+                    "id":"msg_shell",
+                    "type":"shell",
+                    "callID":"call_1",
+                    "command":"pwd",
+                    "output":"/repo",
+                    "time":{"created":1,"completed":2}
+                  },
+                  {
+                    "id":"msg_compact",
+                    "type":"compaction",
+                    "reason":"auto",
+                    "summary":"Earlier work summarized",
+                    "time":{"created":3}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val messages = adapter.projectV2(dtos)
+
+        assertEquals(3, messages.size)
+        assertEquals(MessageRole.User, messages[0].role)
+        assertEquals("pwd", messages[0].text)
+        assertEquals("msg_shell:assistant", messages[1].id)
+        val shellTool = messages[1].parts.filterIsInstance<MessagePart.Tool>().single()
+        assertEquals("bash", shellTool.toolName)
+        assertEquals("/repo", shellTool.output)
+        assertEquals("compaction", messages[2].mode)
+        assertEquals("Earlier work summarized", messages[2].text)
+        assertTrue(messages[2].parts.any { it is MessagePart.Compaction && it.auto })
     }
 }

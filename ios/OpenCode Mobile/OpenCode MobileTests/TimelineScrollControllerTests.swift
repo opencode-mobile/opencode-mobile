@@ -258,4 +258,26 @@ struct TimelineScrollControllerTests {
         #expect(performer.calls.isEmpty)
         #expect(!controller.isProgrammaticScrolling)
     }
+
+    @Test func collapsedViewportDoesNotRePinWhenUserWasUnpinned() {
+        let controller = TimelineScrollController(initialMessageCount: 8)
+        controller.updateGeometry(
+            distanceFromBottom: 400,
+            viewportHeight: 800,
+            contentHeight: 2_000
+        )
+        controller.beginUserScrolling()
+        controller.endUserScrolling()
+        #expect(!controller.isPinnedToEnd)
+
+        controller.updateGeometry(
+            distanceFromBottom: 0,
+            viewportHeight: 0,
+            contentHeight: 2_000
+        )
+
+        #expect(!controller.isPinnedToEnd)
+        controller.notifyContentGrew()
+        #expect(!controller.isPinnedToEnd)
+    }
 }

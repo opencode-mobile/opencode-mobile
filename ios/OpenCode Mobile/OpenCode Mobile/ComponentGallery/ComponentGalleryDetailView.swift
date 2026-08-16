@@ -82,8 +82,12 @@ struct ComponentGalleryDetailView: View {
             AttachmentGalleryView()
         case .outgoingMessage:
             OutgoingMessageGalleryView()
+        case .assistantMessage:
+            AssistantMessageGalleryView()
         case .toolCallCard:
             ToolCallCardGalleryView()
+        case .childSessionRow:
+            ChildSessionRowGalleryView()
         case .topBar:
             TopBarGalleryView()
         case .overflowMenu:

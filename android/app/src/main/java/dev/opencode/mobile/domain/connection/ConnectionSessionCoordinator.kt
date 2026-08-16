@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.connection
 
+import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
@@ -18,6 +19,7 @@ class ConnectionSessionCoordinator
         private val connectionProfileStore: ConnectionProfileStore,
         private val secureCredentialStore: SecureCredentialStore,
         private val sessionModelSelectionStore: SessionModelSelectionStore,
+        private val composerDraftStore: ComposerDraftStore,
         private val httpClient: OpencodeHttpClient,
         private val sseHttpClient: OpencodeSseHttpClient,
     ) {
@@ -29,20 +31,56 @@ class ConnectionSessionCoordinator
 
         fun currentProfile(): ConnectionProfile? = activeConnectionManager.currentProfile()
 
-        suspend fun saveProfile(profile: ConnectionProfile) {
-            activeConnectionManager.applyProfile(profile)
-            httpClient.rebuild()
-            sseHttpClient.rebuild()
+        suspend fun listProfiles(): List<ConnectionProfile> = connectionProfileStore.listProfiles()
+
+        suspend fun saveProfile(
+            profile: ConnectionProfile,
+            serverProtocol: ServerProtocol? = null,
+        ) {
+            val stamped = profile.copy(serverProtocol = serverProtocol ?: profile.serverProtocol)
+            val wasNew = stamped.id.isBlank()
+            connectionProfileStore.saveProfile(stamped)
+            val active = connectionProfileStore.activeProfile()
+            val savedIsActive = wasNew || (stamped.id.isNotBlank() && active?.id == stamped.id)
+            if (savedIsActive) {
+                rebindActive()
+                profileSavedEvents.emit(Unit)
+            }
+        }
+
+        suspend fun switchProfile(id: String) {
+            connectionProfileStore.applyProfile(id)
+            rebindActive()
             profileSavedEvents.emit(Unit)
+        }
+
+        suspend fun removeProfile(id: String) {
+            connectionProfileStore.removeProfile(id)
+            if (connectionProfileStore.activeProfile() == null) {
+                activeConnectionManager.disconnect()
+                httpClient.rebuild()
+                sseHttpClient.rebuild()
+                profileClearedEvents.tryEmit(Unit)
+            } else {
+                rebindActive()
+                profileSavedEvents.emit(Unit)
+            }
         }
 
         suspend fun clearConnectionData() {
             secureCredentialStore.clearAll()
             connectionProfileStore.clearAll()
             sessionModelSelectionStore.clearAll()
+            composerDraftStore.clearAll()
             activeConnectionManager.disconnect()
             httpClient.rebuild()
             sseHttpClient.rebuild()
             profileClearedEvents.tryEmit(Unit)
+        }
+
+        private suspend fun rebindActive() {
+            activeConnectionManager.reloadFromStore()
+            httpClient.rebuild()
+            sseHttpClient.rebuild()
         }
     }

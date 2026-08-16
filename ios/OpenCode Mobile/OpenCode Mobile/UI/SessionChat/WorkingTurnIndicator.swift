@@ -34,7 +34,7 @@ enum WorkingTurnIndicator {
             switch block {
             case let .text(_, text, _):
                 !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case .attachment, .toolCard, .toolGroup:
+            case .attachment, .toolCard, .toolGroup, .childSessionRow:
                 true
             }
         }

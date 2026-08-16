@@ -21,9 +21,20 @@ enum OpenCodeTopBarSubtitleLeading {
 
 enum OpenCodeTopBarLeading {
     case none
-    case back(accessibilityLabel: String = "Back", action: () -> Void)
+    case back(
+        accessibilityLabel: String = "Back",
+        consumesInteractivePop: Bool = false,
+        action: () -> Void
+    )
     case close(accessibilityLabel: String = "Close", action: () -> Void)
     case customIcon(OpenCodeIcon, accessibilityLabel: String, action: () -> Void)
+
+    var consumesInteractivePop: Bool {
+        if case let .back(_, consumesInteractivePop, _) = self {
+            return consumesInteractivePop
+        }
+        return false
+    }
 }
 
 enum OpenCodeTopBarAction {
@@ -39,6 +50,8 @@ struct OpenCodeTopBar: View {
     let leading: OpenCodeTopBarLeading
     let actions: [OpenCodeTopBarAction]
     let showDivider: Bool
+    let onTitleClick: (() -> Void)?
+    let titleMenuExpanded: Bool
 
     init(
         title: String? = nil,
@@ -47,7 +60,9 @@ struct OpenCodeTopBar: View {
         subtitleAccessory: OpenCodeTopBarSubtitleAccessory? = nil,
         leading: OpenCodeTopBarLeading = .none,
         actions: [OpenCodeTopBarAction] = [],
-        showDivider: Bool = false
+        showDivider: Bool = false,
+        onTitleClick: (() -> Void)? = nil,
+        titleMenuExpanded: Bool = false
     ) {
         precondition(actions.count <= 3, "OpenCodeTopBar supports up to 3 trailing actions.")
         precondition(
@@ -68,6 +83,8 @@ struct OpenCodeTopBar: View {
         self.leading = leading
         self.actions = actions
         self.showDivider = showDivider
+        self.onTitleClick = onTitleClick
+        self.titleMenuExpanded = titleMenuExpanded
     }
 
     var body: some View {
@@ -94,8 +111,10 @@ struct OpenCodeTopBar: View {
         .frame(maxWidth: .infinity, alignment: .top)
         .background(OpenCodeColors.backgroundBase)
         .background {
-            if case .back = leading {
-                OpenCodeInteractivePopGestureBridge()
+            if case let .back(_, consumesInteractivePop, action) = leading {
+                OpenCodeInteractivePopGestureBridge(
+                    onConsume: consumesInteractivePop ? action : nil
+                )
             }
         }
     }
@@ -117,7 +136,7 @@ struct OpenCodeTopBar: View {
         switch leading {
         case .none:
             EmptyView()
-        case let .back(accessibilityLabel, action):
+        case let .back(accessibilityLabel, _, action):
             topBarIconButton(
                 icon: .arrowBack,
                 accessibilityLabel: accessibilityLabel,
@@ -147,11 +166,11 @@ struct OpenCodeTopBar: View {
             Group {
                 if subtitle != nil || subtitleAccessory != nil {
                     VStack(alignment: .leading, spacing: topBarSubtitleSpacing) {
-                        titleLabel(title)
+                        titleRow(title)
                         subtitleLine
                     }
                 } else {
-                    titleLabel(title)
+                    titleRow(title)
                 }
             }
             .frame(height: topBarTitleBlockHeight, alignment: .center)
@@ -229,6 +248,29 @@ struct OpenCodeTopBar: View {
         }
         if parts.isEmpty { return title }
         return "\(title), " + parts.joined(separator: ", ")
+    }
+
+    @ViewBuilder
+    private func titleRow(_ title: String) -> some View {
+        if let onTitleClick {
+            Button(action: onTitleClick) {
+                HStack(spacing: 4) {
+                    Text(title)
+                        .font(OpenCodeTypography.title)
+                        .foregroundStyle(OpenCodeColors.textStrong)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    OpenCodeIconImage(icon: .keyboardArrowDown, size: 18)
+                        .foregroundStyle(OpenCodeColors.textBase)
+                        .fixedSize()
+                        .accessibilityHidden(true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+        } else {
+            titleLabel(title)
+        }
     }
 
     private func titleLabel(_ title: String) -> some View {

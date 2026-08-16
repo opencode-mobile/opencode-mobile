@@ -5,22 +5,32 @@ nonisolated final class EventsAPIClient: Sendable {
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = TimeInterval.infinity
         configuration.timeoutIntervalForResource = TimeInterval.infinity
-        configuration.waitsForConnectivity = true
+        configuration.waitsForConnectivity = false
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.urlCache = nil
         return URLSession(configuration: configuration)
     }()
 
     private let connectionProvider: @Sendable () -> ServerConnection?
+    private let protocolResolver: (@Sendable () async -> ServerProtocol)?
     private let urlSession: URLSession
 
-    init(connectionProvider: @escaping @Sendable () -> ServerConnection?) {
+    init(
+        connectionProvider: @escaping @Sendable () -> ServerConnection?,
+        protocolResolver: (@Sendable () async -> ServerProtocol)? = nil
+    ) {
         self.connectionProvider = connectionProvider
+        self.protocolResolver = protocolResolver
         self.urlSession = Self.defaultStreamingSession
     }
 
-    init(connectionProvider: @escaping @Sendable () -> ServerConnection?, urlSession: URLSession) {
+    init(
+        connectionProvider: @escaping @Sendable () -> ServerConnection?,
+        urlSession: URLSession,
+        protocolResolver: (@Sendable () async -> ServerProtocol)? = nil
+    ) {
         self.connectionProvider = connectionProvider
+        self.protocolResolver = protocolResolver
         self.urlSession = urlSession
     }
 
@@ -32,7 +42,11 @@ nonisolated final class EventsAPIClient: Sendable {
             throw EventsAPIError.noActiveConnection
         }
 
-        let normalizedPath = "global/event"
+        if let protocolResolver {
+            Task { _ = await protocolResolver() }
+        }
+        let resolvedProtocol = connection.serverProtocol ?? .v1
+        let normalizedPath = Self.subscribePath(for: resolvedProtocol)
         let url = connection.apiBaseURL.appendingPathComponent(normalizedPath)
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -74,6 +88,18 @@ nonisolated final class EventsAPIClient: Sendable {
         for payload in parser.finish() {
             await onDataLine(payload)
         }
+    }
+
+    var eventSubscribePath: String {
+        Self.subscribePath(for: connectionProvider()?.serverProtocol)
+    }
+
+    var eventProtocolWireValue: String {
+        (connectionProvider()?.serverProtocol ?? .v1).wireValue
+    }
+
+    private static func subscribePath(for serverProtocol: ServerProtocol?) -> String {
+        serverProtocol == .v2 ? "api/event" : "global/event"
     }
 }
 

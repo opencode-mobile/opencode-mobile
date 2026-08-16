@@ -8,9 +8,11 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case arrowDownward = "md_arrow_downward"
     case check = "md_check"
     case chevronRight = "md_chevron_right"
+    case keyboardArrowDown = "md_keyboard_arrow_down"
     case close = "md_close"
     case contentCopy = "md_content_copy"
     case collapseContent = "md_collapse_content"
+    case delete = "md_delete"
     case description = "md_description"
     case edit = "md_edit"
     case expandContent = "md_expand_content"
@@ -37,7 +39,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
 
 /// Material catalog icon rendered as a template asset.
 ///
-/// Size with `size:` or an outer `.frame`. Do **not** use `.font` — asset-catalog
+/// Size with size: or an outer .frame. Do not use .font — asset-catalog
 /// templates ignore font the way SF Symbols do not, which previously left
 /// glyphs optically oversized (edge-to-edge in tight chrome).
 struct OpenCodeIconImage: View {

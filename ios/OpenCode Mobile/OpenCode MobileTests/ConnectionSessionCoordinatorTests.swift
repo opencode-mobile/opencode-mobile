@@ -5,6 +5,7 @@ import Testing
 @Suite struct ConnectionSessionCoordinatorTests {
     @Test @MainActor func clearConnectionData_clearsModelSelectionCache() async {
         let store = InMemorySessionModelSelectionStore()
+        let draftStore = InMemoryComposerDraftStore()
         await store.save(
             serverBaseURL: "http://127.0.0.1:4096/",
             worktree: "/repo",
@@ -15,12 +16,103 @@ import Testing
             activeConnectionManager: ActiveConnectionManager(),
             connectionProfileStore: InMemoryConnectionProfileStore(),
             secureCredentialStore: InMemorySecureCredentialStore(),
-            sessionModelSelectionStore: store
+            sessionModelSelectionStore: store,
+            composerDraftStore: draftStore
+        )
+        draftStore.save(
+            connectionIdentity: ModelSelectionConnectionIdentity(
+                serverBaseURL: "http://127.0.0.1:4096/",
+                username: "opencode"
+            ),
+            worktree: "/repo",
+            sessionID: "ses-1",
+            draft: ComposerDraft(text: "draft")
         )
 
         await coordinator.clearConnectionData()
 
         #expect(await store.load(serverBaseURL: "http://127.0.0.1:4096/", worktree: "/repo", sessionID: "ses-1") == nil)
+        #expect(
+            draftStore.load(
+                connectionIdentity: ModelSelectionConnectionIdentity(
+                    serverBaseURL: "http://127.0.0.1:4096/",
+                    username: "opencode"
+                ),
+                worktree: "/repo",
+                sessionID: "ses-1"
+            ) == nil
+        )
+    }
+}
+
+private final class InMemoryComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
+    private var saved: [String: ComposerDraft] = [:]
+
+    func load(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionID: String
+    ) -> ComposerDraft? {
+        saved["\(connectionIdentity.serverBaseURL)|\(worktree)|\(sessionID)"]
+    }
+
+    func save(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionID: String,
+        draft: ComposerDraft
+    ) {
+        saved["\(connectionIdentity.serverBaseURL)|\(worktree)|\(sessionID)"] = draft
+    }
+
+    func delete(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionID: String
+    ) {
+        saved.removeValue(forKey: "\(connectionIdentity.serverBaseURL)|\(worktree)|\(sessionID)")
+    }
+
+    func deleteSessionEntries(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        sessionID: String
+    ) {
+        saved.keys
+            .filter { $0.hasPrefix(connectionIdentity.serverBaseURL) && $0.hasSuffix("|\(sessionID)") }
+            .forEach { saved.removeValue(forKey: $0) }
+    }
+
+    func clearAll() {
+        saved.removeAll()
+    }
+
+    @Test @MainActor func saveProfile_doesNotNotifyWhenEditingInactive() async throws {
+        let store = CatalogConnectionProfileStore()
+        let coordinator = ConnectionSessionCoordinator(
+            activeConnectionManager: ActiveConnectionManager(),
+            connectionProfileStore: store,
+            secureCredentialStore: InMemorySecureCredentialStore(),
+            sessionModelSelectionStore: InMemorySessionModelSelectionStore()
+        )
+        var savedCount = 0
+        coordinator.onProfileSaved { savedCount += 1 }
+
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://10.0.0.1:4096/", username: "opencode", password: "secret", name: "Home")
+        )
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://10.0.0.2:4096/", username: "opencode", password: "secret", name: "Work")
+        )
+        let home = await store.listProfiles().first { $0.name == "Home" }
+        #expect(home != nil)
+        savedCount = 0
+
+        var edited = home!
+        edited.name = "Studio"
+        try await coordinator.saveProfile(edited)
+        #expect(savedCount == 0)
+        #expect(await store.activeProfile()?.name == "Work")
+        #expect(await store.listProfiles().first { $0.id == home?.id }?.name == "Studio")
     }
 }
 
@@ -86,6 +178,38 @@ private final class InMemorySessionModelSelectionStore: SessionModelSelectionSto
 
     private func key(serverBaseURL: String, worktree: String, sessionID: String) -> String {
         "\(serverBaseURL)|\(worktree)|\(sessionID)"
+    }
+}
+
+private final class CatalogConnectionProfileStore: ConnectionProfileStore, @unchecked Sendable {
+    private var catalog = ConnectionProfileCatalog()
+
+    func activeProfile() async -> ConnectionProfile? { catalog.activeProfile() }
+
+    func listProfiles() async -> [ConnectionProfile] { catalog.profiles }
+
+    func saveProfile(_ profile: ConnectionProfile) async throws {
+        catalog = try catalog.save(profile)
+    }
+
+    func applyProfile(id: String) async {
+        catalog = catalog.apply(id: id)
+    }
+
+    func removeProfile(id: String) async {
+        catalog = catalog.remove(id: id)
+    }
+
+    func addedWorktrees(serverBaseURL: String) async -> [String] { [] }
+
+    func addWorktree(serverBaseURL: String, worktree: String) async {}
+
+    func removeWorktree(serverBaseURL: String, worktree: String) async {}
+
+    func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async {}
+
+    func clearAll() async {
+        catalog = ConnectionProfileCatalog()
     }
 }
 

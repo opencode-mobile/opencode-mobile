@@ -21,6 +21,7 @@ import kotlinx.coroutines.withContext
 class SessionChatReviewChanges(
     private val sessionRepository: SessionRepository,
     private val scope: CoroutineScope,
+    private val supportsSessionMessageDiff: () -> Boolean = { true },
 ) {
     var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
@@ -49,7 +50,7 @@ class SessionChatReviewChanges(
     ) {
         val messageId =
             messages.lastOrNull { it.role == MessageRole.User && !it.isPending && !it.isStreaming }?.id
-                .takeIf { hasResolvedSessionStatus && !isTurnActive && !isSending }
+                .takeIf { supportsSessionMessageDiff() && hasResolvedSessionStatus && !isTurnActive && !isSending }
         if (messageId == candidateMessageId) return
 
         requestJob?.cancel()

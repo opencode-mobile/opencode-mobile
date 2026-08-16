@@ -25,6 +25,8 @@ final class SessionChatViewModel {
     private var permissionTask: Task<Void, Never>?
     private var questionTask: Task<Void, Never>?
     private var todoTask: Task<Void, Never>?
+    /// Invalidates in-flight `withObservationTracking` for the collapse preference.
+    private var collapsePreferenceGeneration = 0
     private var permissionSessions: [Session] = []
     private var permissionRequests: [PermissionRequest] = []
     private var permissionSubmittingID: String?
@@ -52,6 +54,7 @@ final class SessionChatViewModel {
     private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver
     private let activeConnectionManager: ActiveConnectionManager
     private let connectionProfileStore: any ConnectionProfileStore
+    private let deviceNetworkPath: any DeviceNetworkPath
     private var projectLabel: String?
     private var projectLetter: Character?
     private var projectLetterAccent: LetterAccent?
@@ -73,9 +76,11 @@ final class SessionChatViewModel {
         sessionStatusLiveStore: any SessionStatusLiveStore,
         foregroundEventStream: any ForegroundEventStream,
         sessionModelSelectionStore: any SessionModelSelectionStore,
+        composerDraftStore: any ComposerDraftStore,
         activeConnectionManager: ActiveConnectionManager,
         connectionProfileStore: any ConnectionProfileStore,
-        newSessionModelSelectionResolver: NewSessionModelSelectionResolver
+        newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
+        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath()
     ) {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
@@ -83,6 +88,7 @@ final class SessionChatViewModel {
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.activeConnectionManager = activeConnectionManager
         self.connectionProfileStore = connectionProfileStore
+        self.deviceNetworkPath = deviceNetworkPath
         self.uiState = .initial(
             sessionID: sessionID,
             sessionTitle: sessionTitle,
@@ -108,18 +114,21 @@ final class SessionChatViewModel {
             agentRepository: agentRepository,
             sessionRepository: sessionRepository,
             sessionModelSelectionStore: sessionModelSelectionStore,
+            composerDraftStore: composerDraftStore,
             activeConnectionManager: activeConnectionManager
         )
         self.sessionInfo = SessionInfo(
             worktree: worktree,
             sessionRepository: sessionRepository,
             sessionStatusLiveStore: sessionStatusLiveStore,
-            foregroundEventStream: foregroundEventStream
+            foregroundEventStream: foregroundEventStream,
+            deviceNetworkPath: deviceNetworkPath
         )
         self.reviewChanges = SessionChatReviewChanges(
             sessionID: sessionID,
             worktree: worktree,
-            sessionRepository: sessionRepository
+            sessionRepository: sessionRepository,
+            supportsSessionMessageDiff: { activeConnectionManager.capabilities.supportsSessionMessageDiff }
         )
         self.commands = SessionChatCommands(
             sessionID: sessionID,
@@ -147,6 +156,7 @@ final class SessionChatViewModel {
     }
 
     func startObserving() {
+        startCollapsePreferenceObservation()
         if OptimisticSessionCreate.isPlaceholder(sessionID) {
             beginOptimisticCreate()
             return
@@ -639,7 +649,12 @@ final class SessionChatViewModel {
         OpenCodeLog.sessionChat.info("question reply request=\(request.id, privacy: .public) session=\(request.sessionID, privacy: .public)")
         publishUiState()
         do {
-            _ = try await sessionRepository.replyToQuestion(questionID: request.id, answers: answers, directory: worktree)
+            _ = try await sessionRepository.replyToQuestion(
+                questionID: request.id,
+                answers: answers,
+                directory: worktree,
+                sessionID: request.sessionID
+            )
         } catch {
             await handleQuestionMutationFailure(requestID: request.id, error: error, dismiss: false)
         }
@@ -654,7 +669,11 @@ final class SessionChatViewModel {
         OpenCodeLog.sessionChat.info("question dismiss request=\(request.id, privacy: .public) session=\(request.sessionID, privacy: .public)")
         publishUiState()
         do {
-            _ = try await sessionRepository.rejectQuestion(questionID: request.id, directory: worktree)
+            _ = try await sessionRepository.rejectQuestion(
+                questionID: request.id,
+                directory: worktree,
+                sessionID: request.sessionID
+            )
         } catch {
             await handleQuestionMutationFailure(requestID: request.id, error: error, dismiss: true)
         }
@@ -684,6 +703,32 @@ final class SessionChatViewModel {
             for await todos in sessionTodoLiveStore.observeTodos(sessionID: sessionID, directory: worktree) {
                 sessionTodos = todos
                 publishUiState()
+            }
+        }
+    }
+
+    private func startCollapsePreferenceObservation() {
+        collapsePreferenceGeneration += 1
+        timeline.updateCollapseConsecutiveToolCalls(
+            SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
+        )
+        observeCollapsePreference()
+    }
+
+    /// Re-projects an open timeline when the collapse preference flips while
+    /// Session Chat is on screen. The recursive `withObservationTracking` skips
+    /// work once the generation is bumped by `stopObserving`.
+    private func observeCollapsePreference() {
+        let generation = collapsePreferenceGeneration
+        withObservationTracking {
+            _ = SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self, self.collapsePreferenceGeneration == generation else { return }
+                self.timeline.updateCollapseConsecutiveToolCalls(
+                    SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
+                )
+                self.observeCollapsePreference()
             }
         }
     }
@@ -826,9 +871,10 @@ final class SessionChatViewModel {
     }
 
     private var isConnectionLive: Bool {
-        // Prefer the live event-stream state over SessionInfo's mirrored status so
-        // mutations are not blocked while connection observation is still catching up.
-        foregroundEventStream.connectionState == .connected
+        SessionConnectionStatus(
+            connectionState: foregroundEventStream.connectionState,
+            path: deviceNetworkPath.status
+        ) == .live
     }
 
     private func visibleQuestionRequest() -> QuestionRequest? {
@@ -867,8 +913,13 @@ final class SessionChatViewModel {
         return sessionOrder.flatMap { requestsBySession[$0] ?? [] }
     }
 
+    func flushComposerDraft() {
+        composer.flushDraft()
+    }
+
     func stopObserving() {
         OpenCodeLog.sessionChat.info("stop observing session=\(self.sessionID, privacy: .public)")
+        composer.flushDraft()
         optimisticCreateTask?.cancel()
         optimisticCreateTask = nil
         projectIdentityTask?.cancel()
@@ -878,6 +929,7 @@ final class SessionChatViewModel {
         permissionTask?.cancel()
         questionTask?.cancel()
         todoTask?.cancel()
+        collapsePreferenceGeneration += 1
         sessionTodoLiveStore.setLive(false, sessionID: sessionID, directory: worktree)
         sessionReadyStore.setFocusedSession(sessionID: nil, directory: nil)
         reviewChanges.stop()
@@ -992,6 +1044,7 @@ final class SessionChatViewModel {
         sessionInfo.bind(sessionID: id, sessionTitle: title)
         commands.start()
         sessionInfo.startObserving()
+        startCollapsePreferenceObservation()
         timeline.startObserving()
         startPermissionObservation()
         startQuestionObservation()
@@ -1081,7 +1134,7 @@ final class SessionChatViewModel {
                 ? SessionMessageSyncChrome.statusLabel
                 : nil,
             sessionTodos: sessionTodos,
-            sessionTodosVisible: SessionTodoList.isVisible(todos: sessionTodos, isLive: isLive),
+            sessionTodosVisible: SessionTodoList.isVisible(sessionTodos),
             sessionTodosFinished: SessionTodoList.isFinished(sessionTodos),
             sessionTodoActivePreview: SessionTodoList.activePreview(in: sessionTodos),
             sessionTodoCompletedCount: SessionTodoList.completedCount(in: sessionTodos),
@@ -1112,6 +1165,7 @@ final class SessionChatViewModel {
                 : nil,
             reviewChangesMessageID: reviewChangesState.messageID,
             reviewChangesSummary: reviewChangesState.summary,
+            supportsSessionMessageDiff: activeConnectionManager.capabilities.supportsSessionMessageDiff,
             rename: infoState.rename,
             slashSuggestionsVisible: composerState.slashSuggestionsVisible,
             slashSuggestions: composerState.slashSuggestions,

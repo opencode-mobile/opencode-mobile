@@ -213,6 +213,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
     let mime: String?
     let attachmentKind: String?
     let dataUrl: String?
+    let timeStartEpochMs: Int64?
 
     init(
         kind: String,
@@ -232,7 +233,8 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         filename: String? = nil,
         mime: String? = nil,
         attachmentKind: String? = nil,
-        dataUrl: String? = nil
+        dataUrl: String? = nil,
+        timeStartEpochMs: Int64? = nil
     ) {
         self.kind = kind
         self.id = id
@@ -252,6 +254,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         self.mime = mime
         self.attachmentKind = attachmentKind
         self.dataUrl = dataUrl
+        self.timeStartEpochMs = timeStartEpochMs
     }
 
     init(from decoder: Decoder) throws {
@@ -274,6 +277,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         mime = try container.decodeIfPresent(String.self, forKey: .mime)
         attachmentKind = try container.decodeIfPresent(String.self, forKey: .attachmentKind)
         dataUrl = try container.decodeIfPresent(String.self, forKey: .dataUrl)
+        timeStartEpochMs = try container.decodeIfPresent(Int64.self, forKey: .timeStartEpochMs)
     }
 }
 
@@ -485,7 +489,8 @@ private extension MessagePart {
                 callId: part.callID,
                 input: part.input,
                 output: part.output,
-                metadata: part.metadata
+                metadata: part.metadata,
+                timeStartEpochMs: part.timeStartEpochMs
             )
         case let .file(part):
             return CachedMessagePartPayload(
@@ -527,7 +532,8 @@ private extension CachedMessagePartPayload {
                     callID: callId,
                     input: input,
                     output: output,
-                    metadata: metadata
+                    metadata: metadata,
+                    timeStartEpochMs: timeStartEpochMs
                 )
             )
         case "file":

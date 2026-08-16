@@ -17,6 +17,8 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -27,6 +29,7 @@ internal object MessageListTimelineDefaults {
     val bottomAnchorHeight: Dp = 1.dp
     val autoFollowTolerance: Dp = 32.dp
     val revealThresholdMin: Dp = 120.dp
+    val revealHideSlack: Dp = 16.dp
     val messageSpacing: Dp = 8.dp
     val scrollToEndPillBottomPadding: Dp = 12.dp
 
@@ -49,6 +52,7 @@ internal class MessageListTimelineHandle(
     val autoFollowTolerancePx: Int,
     val bottomAnchorHeightPx: Int,
     val messageCount: Int,
+    val userScrollConnection: NestedScrollConnection,
 )
 
 @Composable
@@ -62,14 +66,19 @@ internal fun rememberMessageListTimeline(
     structureAffectingRevision: Long = layoutAffectingRevision,
     growBottomRevision: Long = 0L,
     listState: LazyListState = rememberLazyListState(),
+    userScroll: MessageListUserScroll? = null,
 ): MessageListTimelineHandle {
     val density = LocalDensity.current
     val revealThresholdMinPx =
         with(density) { MessageListTimelineDefaults.revealThresholdMin.roundToPx() }
+    val hideSlackPx =
+        with(density) { MessageListTimelineDefaults.revealHideSlack.roundToPx() }
     val autoFollowTolerancePx =
         with(density) { MessageListTimelineDefaults.autoFollowTolerance.roundToPx() }
     val bottomAnchorHeightPx =
         with(density) { MessageListTimelineDefaults.bottomAnchorHeight.roundToPx() }
+    val ownedUserScroll = rememberMessageListUserScroll(listState)
+    val resolvedUserScroll = userScroll ?: ownedUserScroll
     // Unarmed restore needs real chronological IDs; gallery / count-only callers skip.
     val resolvedMessageIds =
         messageIdsChronological.takeIf { it.size == messageCount }.orEmpty()
@@ -88,18 +97,27 @@ internal fun rememberMessageListTimeline(
             )
         }
     }
-    val showScrollToEnd =
-        rememberMessageListScrollToEndVisibility(
-            listState = listState,
-            messageCount = messageCount,
-            revealThresholdMinPx = revealThresholdMinPx,
-        )
     val autoFollowState =
         remember { MessageListAutoFollowState(initialMessageCount = messageCount) }
     val scrollController =
         rememberMessageListTimelineScrollController(
             listState = listState,
             autoFollowState = autoFollowState,
+        )
+    val isSettlingToEnd =
+        scrollController.isProgrammaticScrolling ||
+            (
+                autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = autoFollowEnabled) &&
+                    !isPinnedToEnd
+            )
+    val showScrollToEnd =
+        rememberMessageListScrollToEndVisibility(
+            listState = listState,
+            messageCount = messageCount,
+            revealThresholdMinPx = revealThresholdMinPx,
+            hideSlackPx = hideSlackPx,
+            isProgrammaticScrolling = scrollController.isProgrammaticScrolling,
+            isSettlingToEnd = isSettlingToEnd,
         )
     val onLastMessageContentSizeSettled =
         rememberMessageListLastMessageContentSizeSettled(
@@ -204,6 +222,7 @@ internal fun rememberMessageListTimeline(
         autoFollowTolerancePx = autoFollowTolerancePx,
         bottomAnchorHeightPx = bottomAnchorHeightPx,
         messageCount = messageCount,
+        userScrollConnection = resolvedUserScroll.connection,
     )
 }
 
@@ -230,7 +249,7 @@ internal fun <T> MessageListReversedTimelineColumn(
 
     LazyColumn(
         state = timeline.listState,
-        modifier = modifier,
+        modifier = modifier.nestedScroll(timeline.userScrollConnection),
         reverseLayout = true,
         contentPadding = contentPadding,
     ) {

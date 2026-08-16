@@ -9,6 +9,8 @@ import dev.opencode.mobile.data.remote.EventsApi
 import dev.opencode.mobile.data.remote.FilesystemApi
 import dev.opencode.mobile.data.remote.HealthApi
 import dev.opencode.mobile.data.remote.ProjectsApi
+import dev.opencode.mobile.domain.connection.ConnectivityDeviceNetworkPath
+import dev.opencode.mobile.domain.connection.DeviceNetworkPath
 import dev.opencode.mobile.domain.event.DefaultForegroundEventStream
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
@@ -68,6 +70,10 @@ abstract class EventStreamModule {
     @Binds
     @Singleton
     abstract fun bindForegroundEventStream(impl: DefaultForegroundEventStream): ForegroundEventStream
+
+    @Binds
+    @Singleton
+    abstract fun bindDeviceNetworkPath(impl: ConnectivityDeviceNetworkPath): DeviceNetworkPath
 
     companion object {
         @Provides

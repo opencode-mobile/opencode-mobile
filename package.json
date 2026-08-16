@@ -4,6 +4,7 @@
   "description": "Dev tooling for opencode-mobile (icon sync, etc.)",
   "scripts": {
     "app-icon:sync": "node scripts/sync-app-icon.mjs",
+    "app-icon:sync-store": "node scripts/sync-store-icon.mjs",
     "icons:sync": "node scripts/sync-icons.mjs",
     "themes:sync": "node scripts/sync-theme-presets.mjs",
     "themes:check": "node scripts/check-theme-presets.mjs",

@@ -2,8 +2,8 @@
 
 ## Intent
 
-Provide a compact floating entry point for the live **Session Todo List** in
-Session Chat. The pill shows completed/total progress and the active item
+Provide a compact floating entry point for an unfinished **Session Todo List**
+in Session Chat. The pill shows completed/total progress and the active item
 preview; tapping opens the view-only Session Todos sheet.
 
 This is a separate component from `OpenCodeActionPill` and
@@ -41,7 +41,7 @@ Visible summary:
 Tapping the enabled pill invokes the supplied action. Disabled presentation
 reduces emphasis and blocks interaction.
 
-The caller owns visibility, float-stack order, hide-while-sheet-open, brief
+The caller owns visibility, top-overlay order, hide-while-sheet-open, brief
 all-done hold, and permission priority over the sheet. The component only
 defines how the pill looks and behaves when shown.
 

@@ -8,14 +8,27 @@ nonisolated enum AgentsAPIError: Error {
 
 nonisolated struct AgentsAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
+    private let urlSession: URLSession
     private let decoder = JSONDecoder()
 
-    init(connectionProvider: @escaping @Sendable () -> ServerConnection?) {
+    init(
+        connectionProvider: @escaping @Sendable () -> ServerConnection?,
+        urlSession: URLSession = .shared
+    ) {
         self.connectionProvider = connectionProvider
+        self.urlSession = urlSession
     }
 
     func listAgents(directory: String? = nil) async throws -> [AgentDTO] {
         try await get(path: "agent", directory: directory)
+    }
+
+    func listAgentsV2(directory: String? = nil) async throws -> [V2AgentDTO] {
+        let envelope: APIListEnvelope<V2AgentDTO> = try await get(
+            path: "api/agent",
+            locationDirectory: directory
+        )
+        return envelope.data
     }
 
     private func requireConnection() throws -> ServerConnection {
@@ -25,8 +38,18 @@ nonisolated struct AgentsAPIClient: Sendable {
         return connection
     }
 
-    private func get<T: Decodable>(path: String, directory: String? = nil) async throws -> T {
-        let data = try await data(for: try requireConnection().authorizedRequest(path: path, directory: directory))
+    private func get<T: Decodable>(
+        path: String,
+        directory: String? = nil,
+        locationDirectory: String? = nil
+    ) async throws -> T {
+        let data = try await data(
+            for: try requireConnection().authorizedRequest(
+                path: path,
+                directory: directory,
+                locationDirectory: locationDirectory
+            )
+        )
         return try decoder.decode(T.self, from: data)
     }
 
@@ -35,7 +58,7 @@ nonisolated struct AgentsAPIClient: Sendable {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            (data, response) = try await urlSession.data(for: request)
         } catch {
             OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
             throw error

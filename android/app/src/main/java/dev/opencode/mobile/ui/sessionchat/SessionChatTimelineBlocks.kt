@@ -57,6 +57,17 @@ sealed class SessionChatTimelineBlock {
         val title: String,
         val subtitle: String? = null,
         val errorText: String? = null,
+        val members: List<ToolCard>,
+    ) : SessionChatTimelineBlock()
+
+    data class ChildSessionRow(
+        override val blockID: String,
+        val agentName: String,
+        val letter: String,
+        val isBackground: Boolean,
+        val secondLine: String? = null,
+        val timeStartEpochMs: Long? = null,
+        val childSessionId: String? = null,
     ) : SessionChatTimelineBlock()
 }
 
@@ -66,6 +77,7 @@ object SessionChatTimelineBlocks {
     fun build(
         role: MessageRole,
         parts: List<MessagePart>,
+        collapseConsecutiveToolCalls: Boolean = false,
     ): SessionChatTimelineBlocksResult {
         if (parts.isEmpty()) return SessionChatTimelineBlocksResult.Ok(emptyList())
 
@@ -107,12 +119,17 @@ object SessionChatTimelineBlocks {
                         continue
                     }
                     if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    if (isContextTool(part.toolName)) {
+                    if (isGroupableTool(part, collapseConsecutiveToolCalls)) {
                         val groupTools = mutableListOf<MessagePart.Tool>()
                         var lookAhead = index
                         while (lookAhead < parts.size) {
-                            val candidate = parts[lookAhead] as? MessagePart.Tool ?: break
-                            if (!isVisibleTool(candidate) || !isContextTool(candidate.toolName)) break
+                            val candidatePart = parts[lookAhead]
+                            if (isTransparentPart(candidatePart)) {
+                                lookAhead += 1
+                                continue
+                            }
+                            val candidate = candidatePart as? MessagePart.Tool ?: break
+                            if (!isGroupableTool(candidate, collapseConsecutiveToolCalls)) break
                             groupTools += candidate
                             lookAhead += 1
                         }
@@ -121,13 +138,13 @@ object SessionChatTimelineBlocks {
                             blocks += group
                             index = lookAhead
                         } else {
-                            val card = toToolCard(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                            blocks += card
+                            val block = toToolBlock(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                            blocks += block
                             index += 1
                         }
                     } else {
-                        val card = toToolCard(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                        blocks += card
+                        val block = toToolBlock(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                        blocks += block
                         index += 1
                     }
                 }
@@ -155,6 +172,7 @@ object SessionChatTimelineBlocks {
         parts: List<MessagePart>,
         messageId: String,
         fallbackText: String,
+        collapseConsecutiveToolCalls: Boolean = false,
     ): List<SessionChatTimelineBlock> {
         fun fallbackBlocks(): List<SessionChatTimelineBlock> =
             if (fallbackText.isNotBlank()) {
@@ -168,12 +186,73 @@ object SessionChatTimelineBlocks {
                 emptyList()
             }
 
-        return when (val result = build(role, parts)) {
+        return when (val result = build(role, parts, collapseConsecutiveToolCalls)) {
             is SessionChatTimelineBlocksResult.Ok ->
                 result.blocks.ifEmpty { fallbackBlocks() }
             SessionChatTimelineBlocksResult.MissingPartIds -> fallbackBlocks()
         }
     }
+
+    /**
+     * When collapse is on, consecutive assistant messages whose visible blocks
+     * are only groupable tools become one tool group. OpenCode emits each
+     * sequential tool step as its own assistant message; grouping only inside
+     * one message would leave a stack of Shell cards. Visible text, attachments,
+     * and `task` tools still break a run.
+     */
+    fun mergeConsecutiveToolOnlyAssistantBodies(
+        bodies: List<DisplayMessageBody>,
+        collapseConsecutiveToolCalls: Boolean,
+    ): List<DisplayMessageBody> {
+        if (!collapseConsecutiveToolCalls || bodies.size < 2) return bodies
+        val merged = mutableListOf<DisplayMessageBody>()
+        var index = 0
+        while (index < bodies.size) {
+            if (!isMergeableToolOnlyAssistant(bodies[index])) {
+                merged += bodies[index]
+                index += 1
+                continue
+            }
+            var end = index + 1
+            while (end < bodies.size && isMergeableToolOnlyAssistant(bodies[end])) {
+                end += 1
+            }
+            if (end == index + 1) {
+                merged += bodies[index]
+                index += 1
+                continue
+            }
+            val run = bodies.subList(index, end)
+            val parts = run.flatMap { it.message.parts }
+            val first = bodies[index]
+            val blocks =
+                buildOrFallback(
+                    role = MessageRole.Assistant,
+                    parts = parts,
+                    messageId = first.message.id,
+                    fallbackText = "",
+                    collapseConsecutiveToolCalls = true,
+                )
+            merged += DisplayMessageBody(message = first.message, blocks = blocks)
+            index = end
+        }
+        return merged
+    }
+
+    private fun isMergeableToolOnlyAssistant(body: DisplayMessageBody): Boolean {
+        if (body.message.role != MessageRole.Assistant || body.blocks.isEmpty()) return false
+        return body.blocks.all { isGroupableToolBlock(it) }
+    }
+
+    private fun isGroupableToolBlock(block: SessionChatTimelineBlock): Boolean =
+        when (block) {
+            is SessionChatTimelineBlock.ToolGroup -> true
+            is SessionChatTimelineBlock.ToolCard -> block.toolName.lowercase() != "task"
+            is SessionChatTimelineBlock.Text,
+            is SessionChatTimelineBlock.Attachment,
+            is SessionChatTimelineBlock.ChildSessionRow,
+            -> false
+        }
 
     /**
      * Rewrites user text blocks that are expanded slash-command / skill
@@ -203,10 +282,38 @@ object SessionChatTimelineBlocks {
         return true
     }
 
+    /**
+     * Parts that never become timeline blocks. Grouping looks through them so
+     * hidden todos, empty text, and compaction markers do not split a visible
+     * tool run (web filters to renderable parts before grouping).
+     */
+    private fun isTransparentPart(part: MessagePart): Boolean =
+        when (part) {
+            is MessagePart.Compaction -> true
+            is MessagePart.Text -> !part.isDisplayable || part.text.isBlank()
+            is MessagePart.Tool -> !isVisibleTool(part)
+            is MessagePart.File -> false
+        }
+
     private fun isContextTool(toolName: String): Boolean = toolName.lowercase() in contextToolNames
+
+    /**
+     * A visible tool can join a group. Subagent (`task`) spawns never group so
+     * their child-session tap stays available; when collapse is on every other
+     * visible tool groups, otherwise only context tools do.
+     */
+    private fun isGroupableTool(tool: MessagePart.Tool, collapse: Boolean): Boolean {
+        if (tool.toolName.lowercase() == "task") return false
+        if (collapse) return true
+        return isContextTool(tool.toolName)
+    }
 
     private fun toToolGroup(tools: List<MessagePart.Tool>): SessionChatTimelineBlock.ToolGroup? {
         val memberIds = tools.map { it.id ?: return null }
+        val members =
+            tools.map { tool ->
+                toToolCard(tool) as? SessionChatTimelineBlock.ToolCard ?: return null
+            }
         val status = worstStatus(tools.map { it.status })
         val errorText =
             tools
@@ -217,36 +324,53 @@ object SessionChatTimelineBlocks {
             blockID = PresentationBlockId.toolGroup(memberIds),
             count = tools.size,
             status = status,
-            title = contextGroupTitle(tools),
-            subtitle = null,
+            title = groupTitle(tools.size),
+            subtitle = groupSubtitle(tools),
             errorText = errorText,
+            members = members,
         )
     }
 
-    private fun contextGroupTitle(tools: List<MessagePart.Tool>): String {
-        val counts =
-            linkedMapOf(
-                "read" to 0,
-                "grep" to 0,
-                "glob" to 0,
-            )
+    /** Count headline for the Tool Call Card (`7 tools`). */
+    private fun groupTitle(count: Int): String = "$count tools"
+
+    /**
+     * Family one-liner in encounter order (`Edit · Write · 5 shells`).
+     * A single member of a family is just the verb; multiples get a count.
+     */
+    private fun groupSubtitle(tools: List<MessagePart.Tool>): String {
+        val order = mutableListOf<String>()
+        val counts = mutableMapOf<String, Int>()
         for (tool in tools) {
             val key = tool.toolName.lowercase()
+            if (key !in counts) order += key
             counts[key] = (counts[key] ?: 0) + 1
         }
-        return counts.entries
-            .filter { it.value > 0 }
-            .joinToString(" · ") { (name, count) ->
-                val label =
-                    when (name) {
-                        "read" -> if (count == 1) "read" else "reads"
-                        "grep" -> if (count == 1) "grep" else "greps"
-                        "glob" -> if (count == 1) "glob" else "globs"
-                        else -> name
-                    }
-                "$count $label"
-            }
+        return order.joinToString(" · ") { name ->
+            familyPhrase(name, counts.getValue(name))
+        }
     }
+
+    private fun familyPhrase(
+        name: String,
+        count: Int,
+    ): String =
+        when (name) {
+            "read" -> if (count == 1) "Read" else "$count reads"
+            "grep" -> if (count == 1) "Grep" else "$count greps"
+            "glob" -> if (count == 1) "Glob" else "$count globs"
+            "bash" -> if (count == 1) "Shell" else "$count shells"
+            "edit" -> if (count == 1) "Edit" else "$count edits"
+            "write" -> if (count == 1) "Write" else "$count writes"
+            "webfetch" -> if (count == 1) "Fetch" else "$count fetches"
+            "websearch" -> if (count == 1) "Search" else "$count searches"
+            "question" -> if (count == 1) "Question" else "$count questions"
+            "skill" -> if (count == 1) "Skill" else "$count skills"
+            "apply_patch" -> if (count == 1) "Patch" else "$count patches"
+            "linear_get_issue" -> if (count == 1) "Get issue" else "$count Get issues"
+            "linear_save_issue" -> if (count == 1) "Save issue" else "$count Save issues"
+            else -> if (count == 1) name else "$count $name"
+        }
 
     private fun worstStatus(statuses: List<ToolStatus>): ToolStatus {
         if (statuses.any { it == ToolStatus.Error }) return ToolStatus.Error
@@ -254,6 +378,35 @@ object SessionChatTimelineBlocks {
             return ToolStatus.Running
         }
         return ToolStatus.Completed
+    }
+
+    private fun toToolBlock(tool: MessagePart.Tool): SessionChatTimelineBlock? {
+        if (tool.toolName.lowercase() == "task" && tool.status != ToolStatus.Error) {
+            return toChildSessionRow(tool)
+        }
+        return toToolCard(tool)
+    }
+
+    private fun toChildSessionRow(tool: MessagePart.Tool): SessionChatTimelineBlock.ChildSessionRow? {
+        val partId = tool.id ?: return null
+        val agentName = taskAgentName(tool)
+        val secondLine =
+            tool.title?.takeIf { it.isNotEmpty() }
+                ?: inputString(tool.input, "description", "prompt")
+        return SessionChatTimelineBlock.ChildSessionRow(
+            blockID = PresentationBlockId.direct(partId),
+            agentName = agentName,
+            letter = SessionChatChildSessionElapsed.letter(from = agentName),
+            isBackground = isTruthyMetadata(tool.metadata, "background"),
+            secondLine = secondLine,
+            timeStartEpochMs =
+                if (tool.status == ToolStatus.Pending || tool.status == ToolStatus.Running) {
+                    tool.timeStartEpochMs
+                } else {
+                    null
+                },
+            childSessionId = metadataString(tool.metadata, "sessionId"),
+        )
     }
 
     private fun toToolCard(tool: MessagePart.Tool): SessionChatTimelineBlock.ToolCard? {
@@ -447,10 +600,7 @@ object SessionChatTimelineBlocks {
     private fun positiveCount(value: Int?): Int? = value?.takeIf { it > 0 }
 
     private fun taskChrome(tool: MessagePart.Tool): Chrome {
-        val title =
-            inputString(tool.input, "agent", "name")
-                ?: metadataString(tool.metadata, "agent")
-                ?: "Task"
+        val title = taskAgentName(tool)
         val description =
             inputString(tool.input, "description", "prompt")
                 ?: runningTitleOverride(tool)
@@ -466,6 +616,11 @@ object SessionChatTimelineBlocks {
             childSessionId = metadataString(tool.metadata, "sessionId"),
         )
     }
+
+    private fun taskAgentName(tool: MessagePart.Tool): String =
+        inputString(tool.input, "agent", "name")
+            ?: metadataString(tool.metadata, "agent")
+            ?: "Task"
 
     private fun contextChrome(
         tool: MessagePart.Tool,

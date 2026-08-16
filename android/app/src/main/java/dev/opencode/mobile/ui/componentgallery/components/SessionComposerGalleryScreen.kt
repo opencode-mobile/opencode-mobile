@@ -34,6 +34,7 @@ private enum class SessionComposerGalleryScenario(
     Mentions("Mentions"),
     Active("Active"),
     Attachments("Attachments"),
+    ChildLockout("Child"),
     Permission("Permission"),
     Queued("Queued"),
     Submitting("Submitting"),
@@ -115,6 +116,12 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                                 variant = OpenCodeAttachmentVariant.Text,
                             ),
                         ),
+                )
+            SessionComposerGalleryScenario.ChildLockout ->
+                OpenCodeSessionComposerState.ChildLockout(
+                    selectedModelLabel = "Claude Sonnet 4",
+                    selectedVariantLabel = "High",
+                    showVariant = true,
                 )
             SessionComposerGalleryScenario.Permission -> permissionState()
             SessionComposerGalleryScenario.Queued -> permissionState(queueCount = 3)
@@ -368,4 +375,5 @@ private val OpenCodeSessionComposerAction.label: String
             is OpenCodeSessionComposerAction.QuestionNext -> "Next"
             is OpenCodeSessionComposerAction.SubmitQuestion -> "Submit"
             is OpenCodeSessionComposerAction.DismissQuestion -> "Dismiss"
+            OpenCodeSessionComposerAction.BackToMainSession -> "Back to main session"
         }

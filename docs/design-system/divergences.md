@@ -96,16 +96,23 @@ implementation belong in the feature's `parity-gaps.md`.
 
 - Status: intentional
 - Area: component | motion | accessibility
-- Shared intent: a pushed screen using the `OpenCodeTopBar` `back` variant can
-  return exactly one level through both its visible Back button and the
-  platform-native Back input. Canceling an interactive input keeps the current
-  screen active, and the visible button remains the accessible, discoverable
-  alternative.
+- Shared intent: a page using the `OpenCodeTopBar` `back` variant can return
+  exactly one visible level through both its visible Back button and the
+  platform-native Back input. Overlay pages that use `back` chrome without a
+  navigation push consume that native Back input so they dismiss the overlay
+  rather than the screen underneath. Canceling an interactive input keeps the
+  current screen active, and the visible button remains the accessible,
+  discoverable alternative.
 - iOS behavior: the `back` variant enables the navigation controller's standard
   locale-aware leading-edge interactive pop gesture while preserving the custom
-  top bar and native transition progress, cancellation, and completion.
+  top bar and native transition progress, cancellation, and completion. Overlay
+  pages set `consumesInteractivePop` so the gesture invokes the Back action
+  instead of popping the destination underneath; a later pushed screen (Changes,
+  child session) still pops normally because its top view controller has no
+  overlay consumer.
 - Android behavior: the Navigation 3 host continues to provide system and
-  predictive Back; the top bar does not install a separate gesture.
+  predictive Back; overlay pages install `BackHandler`. The top bar does not
+  install a separate gesture.
 - Reason: iOS and Android use different native Back conventions. Matching the
   shared navigation result is more platform-appropriate than imposing one
   gesture implementation on both apps.

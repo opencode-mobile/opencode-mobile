@@ -11,6 +11,41 @@ private const val VIEWPORT_REVEAL_FRACTION = 0.2f
 
 private fun newestMessageIndex(messageCount: Int): Int = if (messageCount > 0) 1 else -1
 
+private fun revealThresholdPx(
+    viewportHeightPx: Int,
+    revealThresholdMinPx: Int,
+): Int =
+    maxOf(
+        revealThresholdMinPx,
+        (viewportHeightPx * VIEWPORT_REVEAL_FRACTION).toInt(),
+    )
+
+internal fun timelineEndGapPx(
+    messageCount: Int,
+    viewportEndOffset: Int,
+    afterContentPadding: Int,
+    visibleItems: List<TimelineVisibleItem>,
+): Int? {
+    if (messageCount == 0) return null
+
+    val bottomAnchor = visibleItems.firstOrNull { it.index == BOTTOM_ANCHOR_INDEX }
+    if (bottomAnchor != null) {
+        return bottomAnchor.offset +
+            bottomAnchor.size +
+            afterContentPadding -
+            viewportEndOffset
+    }
+
+    val newestMessage =
+        visibleItems.firstOrNull { it.index == newestMessageIndex(messageCount) }
+            ?: return null
+    return newestMessage.offset +
+        newestMessage.size +
+        afterContentPadding +
+        BOTTOM_ANCHOR_HEIGHT_PX -
+        viewportEndOffset
+}
+
 /**
  * Visible item snapshot used by scroll-to-end math. Kept free of Compose types so
  * unit tests can cover taller-than-viewport newest messages without a runtime.
@@ -32,32 +67,46 @@ internal fun shouldShowScrollToEnd(
     if (messageCount == 0) return false
     if (viewportHeightPx <= 0) return false
 
-    val revealThresholdPx =
-        maxOf(
-            revealThresholdMinPx,
-            (viewportHeightPx * VIEWPORT_REVEAL_FRACTION).toInt(),
-        )
+    val gap =
+        timelineEndGapPx(
+            messageCount = messageCount,
+            viewportEndOffset = viewportEndOffset,
+            afterContentPadding = afterContentPadding,
+            visibleItems = visibleItems,
+        ) ?: return true
+    return gap > revealThresholdPx(viewportHeightPx, revealThresholdMinPx)
+}
 
-    val bottomAnchor = visibleItems.firstOrNull { it.index == BOTTOM_ANCHOR_INDEX }
-    if (bottomAnchor != null) {
-        val trailingGap =
-            bottomAnchor.offset +
-                bottomAnchor.size +
-                afterContentPadding -
-                viewportEndOffset
-        return trailingGap > revealThresholdPx
-    }
+internal fun isUserTimelineScrolling(
+    isScrollInProgress: Boolean,
+    isProgrammaticScrolling: Boolean,
+): Boolean = isScrollInProgress && !isProgrammaticScrolling
 
-    val newestMessage =
-        visibleItems.firstOrNull { it.index == newestMessageIndex(messageCount) }
-            ?: return true
-    val distanceFromBottom =
-        newestMessage.offset +
-            newestMessage.size +
-            afterContentPadding +
-            BOTTOM_ANCHOR_HEIGHT_PX -
-            viewportEndOffset
-    return distanceFromBottom > revealThresholdPx
+internal fun shouldShowScrollToEndPill(
+    isUserScrolling: Boolean,
+    isSettlingToEnd: Boolean,
+    currentlyShown: Boolean,
+    messageCount: Int,
+    viewportHeightPx: Int,
+    viewportEndOffset: Int,
+    afterContentPadding: Int,
+    revealThresholdMinPx: Int,
+    hideSlackPx: Int,
+    visibleItems: List<TimelineVisibleItem>,
+): Boolean {
+    if (isUserScrolling || isSettlingToEnd) return false
+    if (messageCount == 0 || viewportHeightPx <= 0) return false
+
+    val gap =
+        timelineEndGapPx(
+            messageCount = messageCount,
+            viewportEndOffset = viewportEndOffset,
+            afterContentPadding = afterContentPadding,
+            visibleItems = visibleItems,
+        ) ?: return true
+    val revealPx = revealThresholdPx(viewportHeightPx, revealThresholdMinPx)
+    val hideThresholdPx = (revealPx - hideSlackPx).coerceAtLeast(0)
+    return if (currentlyShown) gap > hideThresholdPx else gap > revealPx
 }
 
 fun LazyListState.shouldShowScrollToEnd(
@@ -78,7 +127,25 @@ fun LazyListState.shouldShowScrollToEnd(
 fun LazyListState.shouldShowScrollToEndPill(
     messageCount: Int,
     revealThresholdMinPx: Int,
-): Boolean = !isScrollInProgress && shouldShowScrollToEnd(messageCount, revealThresholdMinPx)
+    hideSlackPx: Int,
+    isUserScrolling: Boolean,
+    isSettlingToEnd: Boolean,
+    currentlyShown: Boolean,
+): Boolean {
+    val layoutInfo = layoutInfo
+    return shouldShowScrollToEndPill(
+        isUserScrolling = isUserScrolling,
+        isSettlingToEnd = isSettlingToEnd,
+        currentlyShown = currentlyShown,
+        messageCount = messageCount,
+        viewportHeightPx = layoutInfo.viewportSize.height,
+        viewportEndOffset = layoutInfo.viewportEndOffset,
+        afterContentPadding = layoutInfo.afterContentPadding,
+        revealThresholdMinPx = revealThresholdMinPx,
+        hideSlackPx = hideSlackPx,
+        visibleItems = layoutInfo.visibleItemsInfo.map { it.toTimelineVisibleItem() },
+    )
+}
 
 fun LazyListState.isPinnedToTimelineEnd(
     messageCount: Int,

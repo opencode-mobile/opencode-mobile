@@ -62,6 +62,14 @@ struct HomeSessionForkResultState: Equatable {
     var forkedTitle = ""
 }
 
+struct HomeServersChrome: Equatable {
+    var title = "Sessions"
+    var isSwitcher = false
+    var active: ConnectionProfile?
+    var others: [ConnectionProfile] = []
+    var sheetVisible = false
+}
+
 enum ProjectListHomeState: Equatable {
     case disconnected
     case probing
@@ -113,11 +121,13 @@ final class ProjectListHomeViewModel {
     private let sessionStatusLiveStore: any SessionStatusLiveStore
     private let sessionReadyStore: any SessionReadyStore
     private let foregroundEventStream: any ForegroundEventStream
+    private let deviceNetworkPath: any DeviceNetworkPath
     private let sessionCache: any SessionCache
     private let eventAdapter = EventDomainAdapter()
     private let sessionAdapter = SessionDomainAdapter()
     private var connectionStateObservationTask: Task<Void, Never>?
-    private(set) var liveUpdatesConnectionState: EventStreamConnectionState = .idle
+    private(set) var liveUpdatesConnectionStatus: SessionConnectionStatus = .offline
+    private(set) var serversChrome = HomeServersChrome()
     private var serverBaseURL: String {
         activeConnectionManager.connection?.baseURL.absoluteString ?? ""
     }
@@ -144,7 +154,8 @@ final class ProjectListHomeViewModel {
         foregroundEventStream: any ForegroundEventStream,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver? = nil,
-        sessionCache: any SessionCache = NoOpSessionCache.shared
+        sessionCache: any SessionCache = NoOpSessionCache.shared,
+        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath()
     ) {
         self.projectRepository = projectRepository
         self.filesystemRepository = filesystemRepository
@@ -156,19 +167,25 @@ final class ProjectListHomeViewModel {
         self.sessionStatusLiveStore = sessionStatusLiveStore
         self.sessionReadyStore = sessionReadyStore
         self.foregroundEventStream = foregroundEventStream
+        self.deviceNetworkPath = deviceNetworkPath
         self.connectionSessionCoordinator = connectionSessionCoordinator
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.sessionCache = sessionCache
+        lastHomeHiddenAtEpochMs = HomeDisplayPreferences.shared.lastHomeHiddenAtEpochMs()
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
                 self?.sessionReadyStore.clearCache()
+                self?.messageRepository.clearMessageCache()
                 await self?.refresh()
             }
         }
         connectionSessionCoordinator.onProfileCleared { [weak self] in
             Task { @MainActor in
+                self?.sessionReadyStore.clearCache()
+                self?.messageRepository.clearMessageCache()
                 self?.stopLiveObservations()
                 self?.state = .disconnected
+                self?.serversChrome = HomeServersChrome()
             }
         }
         OptimisticSessionCreateCoordinator.shared.onCreateFailed(owner: self) { [weak self] message in
@@ -179,16 +196,63 @@ final class ProjectListHomeViewModel {
 
     private func startObservingConnectionState() {
         connectionStateObservationTask?.cancel()
-        liveUpdatesConnectionState = foregroundEventStream.connectionState
+        applyComposedConnectionStatus()
         connectionStateObservationTask = Task {
-            for await state in foregroundEventStream.connectionStateUpdates() {
-                liveUpdatesConnectionState = state
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { [weak self] in
+                    guard let stream = self?.foregroundEventStream else { return }
+                    for await _ in stream.connectionStateUpdates() {
+                        await self?.applyComposedConnectionStatus()
+                    }
+                }
+                group.addTask { [weak self] in
+                    guard let path = self?.deviceNetworkPath else { return }
+                    for await _ in path.updates() {
+                        await self?.applyComposedConnectionStatus()
+                    }
+                }
+                await group.next()
+                group.cancelAll()
             }
         }
     }
 
+    private func applyComposedConnectionStatus() {
+        liveUpdatesConnectionStatus = SessionConnectionStatus(
+            connectionState: foregroundEventStream.connectionState,
+            path: deviceNetworkPath.status
+        )
+    }
+
     func refresh() async {
+        await refreshServersChrome()
         await runHomeLoad()
+    }
+
+    func showServersSheet() {
+        serversChrome.sheetVisible = true
+    }
+
+    func dismissServersSheet() {
+        serversChrome.sheetVisible = false
+    }
+
+    func switchProfile(id: String) async {
+        await connectionSessionCoordinator.switchProfile(id: id)
+        dismissServersSheet()
+    }
+
+    func refreshServersChrome() async {
+        let profiles = await connectionProfileStore.listProfiles()
+        let active = await connectionProfileStore.activeProfile()
+            ?? activeConnectionManager.currentProfile()
+        serversChrome = HomeServersChrome(
+            title: active?.displayName ?? "Sessions",
+            isSwitcher: active != nil,
+            active: active,
+            others: profiles.filter { $0.id != active?.id },
+            sheetVisible: serversChrome.sheetVisible
+        )
     }
 
     /// Soft reload for pull-to-refresh: keeps Loaded/Empty UI, no full-screen spinner.
@@ -315,13 +379,14 @@ final class ProjectListHomeViewModel {
     }
 
     func createSession(in worktree: String) async {
-        guard foregroundEventStream.connectionState == .connected else {
+        guard liveUpdatesConnectionStatus == .live else {
             logCreateSession(outcome: ProductAnalytics.Outcome.blocked)
             setProjectSessionCreateError("Reconnect to create a session")
             return
         }
         setProjectSessionCreateError(nil)
         logCreateSession(outcome: "started")
+        revealNewestToken += 1
         pendingSessionOpen = SessionListItem(
             id: OptimisticSessionCreate.placeholderSessionID,
             title: "New Session",
@@ -339,9 +404,28 @@ final class ProjectListHomeViewModel {
     }
 
     private(set) var pendingSessionOpen: SessionListItem?
+    private(set) var revealNewestToken = 0
+    private var lastHomeHiddenAtEpochMs: Int64?
 
     func consumePendingSessionOpen() {
         pendingSessionOpen = nil
+    }
+
+    func markHomeHidden(nowEpochMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000)) {
+        guard lastHomeHiddenAtEpochMs == nil else { return }
+        lastHomeHiddenAtEpochMs = nowEpochMs
+        HomeDisplayPreferences.shared.setLastHomeHiddenAtEpochMs(nowEpochMs)
+    }
+
+    func onHomeRevealed(nowEpochMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000)) {
+        if SessionListScrollPin.shouldResetForStaleAbsence(
+            lastHiddenAtEpochMs: lastHomeHiddenAtEpochMs,
+            nowEpochMs: nowEpochMs
+        ) {
+            revealNewestToken += 1
+        }
+        lastHomeHiddenAtEpochMs = nil
+        HomeDisplayPreferences.shared.setLastHomeHiddenAtEpochMs(nil)
     }
 
     func requestRemoveProject(worktree: String) {
@@ -790,7 +874,6 @@ final class ProjectListHomeViewModel {
                 navigator: nil,
                 projectSessionCreateError: nil
             )
-            startLiveObservations(worktrees: worktrees)
             if !skipProbe {
                 do {
                     try await projectRepository.probeServer()
@@ -798,6 +881,7 @@ final class ProjectListHomeViewModel {
                     // Keep cached home; connection chrome reflects reachability.
                 }
             }
+            startLiveObservations(worktrees: worktrees)
             return
         }
 

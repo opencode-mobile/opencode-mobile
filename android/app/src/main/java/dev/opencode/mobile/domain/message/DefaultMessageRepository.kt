@@ -14,6 +14,7 @@ class DefaultMessageRepository
         private val messageSync: MessageSync,
         private val displayMessagePipeline: DisplayMessagePipeline,
         private val contentPreparer: MessageContentPreparer,
+        private val messageRemote: MessageRemote,
     ) : MessageRepository {
         override fun observeMessages(
             sessionId: String,
@@ -58,7 +59,7 @@ class DefaultMessageRepository
             val elapsedMs =
                 measureTimeMillis {
                     messages =
-                        runCatching { api.listMessages(sessionId, directory).map(adapter::toMessage) }
+                        runCatching { messageRemote.listMessages(sessionId, directory) }
                             .getOrElse { throw adapter.mapError(it) }
                 }
             logI(
@@ -94,7 +95,7 @@ class DefaultMessageRepository
                 "sendPromptAsync session=$sessionId directory=${directory ?: "-"} " +
                     "text=${options.text.isNotBlank()} files=${options.attachments.size}",
             )
-            runCatching { api.sendPromptAsync(sessionId, adapter.toSendRequest(options), directory) }
+            runCatching { messageRemote.sendPromptAsync(sessionId, options, directory) }
                 .getOrElse { throw adapter.mapError(it) }
         }
 

@@ -45,4 +45,16 @@
 
 ## Remaining work
 
-None for the foreground event-stream slice.
+- [x] [OPE-165](https://linear.app/opencode-mobile/issue/OPE-165/slow-reconnect-after-resume-from-inactivity)
+      Slow reconnect after resume from inactivity — see
+      [ope-165-plan.md](ope-165-plan.md). Implemented: idempotent iOS `start()`,
+      generation-guarded cancel handlers, no offline flash while SSE retries,
+      MessageSync catch-up on Connecting with one coalesced reload per
+      ConnectionEpoch (iOS + Android).
+- [x] [OPE-172](https://linear.app/opencode-mobile/issue/OPE-172/faster-protocol-probe-on-resume)
+      Faster protocol probe on resume — SSE opens on a protocol hint;
+      dual-health is bounded and off the first byte. See
+      [`../server-connection/ope-172-plan.md`](../server-connection/ope-172-plan.md).
+- [x] [OPE-173](https://linear.app/opencode-mobile/issue/OPE-173/radio-off-leaves-live-immediately)
+      Radio-off leaves **live** immediately — see [ope-173-plan.md](ope-173-plan.md).
+      `DeviceNetworkPath` overlays SSE; unavailable parks the read.

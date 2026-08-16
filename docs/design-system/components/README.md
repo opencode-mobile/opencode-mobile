@@ -101,7 +101,9 @@ applicable item is complete.
 - `connection-status-label.md`
 - `message-list.md`
 - `outgoing-message.md`
+- `assistant-message.md`
 - `tool-call-card.md`
+- `child-session-row.md`
 - `top-bar.md`
 - `overflow-menu.md`
 - `bottom-sheet.md`

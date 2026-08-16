@@ -9,42 +9,93 @@ enum ConnectionSetupState: Equatable {
     case saving
 }
 
+enum ConnectionSetupMode: Equatable {
+    case first
+    case add
+    case edit
+}
+
 @MainActor
 @Observable
 final class ConnectionSetupViewModel {
+    var name = ""
     var baseURL = ConnectionProfile.formDefaults.baseURL
     var username = ConnectionProfile.formDefaults.username
     var password = ConnectionProfile.formDefaults.password
     private(set) var state: ConnectionSetupState = .idle
+    private(set) var mode: ConnectionSetupMode = .first
+    private(set) var profileId = ""
 
     private let connectionProbeService: ConnectionProbing
     private let connectionSessionCoordinator: ConnectionSessionCoordinator
+    private var detectedProtocol: ServerProtocol?
+    private var savedBaseURL = ""
+    private var savedUsername = ""
+    private var savedPassword = ""
+    private var savedProtocol: ServerProtocol?
 
     init(
         connectionProbeService: ConnectionProbing,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
-        initialProfile: ConnectionProfile? = nil
+        initialProfile: ConnectionProfile? = nil,
+        mode: ConnectionSetupMode = .first
     ) {
         self.connectionProbeService = connectionProbeService
         self.connectionSessionCoordinator = connectionSessionCoordinator
-        configure(initialProfile: initialProfile)
+        configure(initialProfile: initialProfile, mode: mode)
     }
 
-    func configure(initialProfile: ConnectionProfile?) {
-        if let initialProfile {
+    func configure(initialProfile: ConnectionProfile?, mode: ConnectionSetupMode = .first) {
+        self.mode = mode
+        detectedProtocol = nil
+        state = .idle
+        if let initialProfile, mode == .edit {
+            name = initialProfile.name
             baseURL = initialProfile.baseURL
             username = initialProfile.username
             password = initialProfile.password
+            profileId = initialProfile.id
+            detectedProtocol = initialProfile.serverProtocol
+            savedBaseURL = initialProfile.baseURL
+            savedUsername = initialProfile.username
+            savedPassword = initialProfile.password
+            savedProtocol = initialProfile.serverProtocol
         } else {
+            name = ""
             baseURL = ConnectionProfile.formDefaults.baseURL
             username = ConnectionProfile.formDefaults.username
             password = ConnectionProfile.formDefaults.password
+            profileId = ""
+            savedBaseURL = ""
+            savedUsername = ""
+            savedPassword = ""
+            savedProtocol = nil
         }
-        state = .idle
+    }
+
+    var screenTitle: String {
+        switch mode {
+        case .first: "Connect to server"
+        case .add: "Add server"
+        case .edit: "Edit server"
+        }
+    }
+
+    var canRemove: Bool {
+        mode == .edit && !profileId.isEmpty
     }
 
     var canSave: Bool {
-        state == .testSucceeded
+        state == .testSucceeded || connectionUnchanged
+    }
+
+    private var connectionUnchanged: Bool {
+        mode == .edit &&
+            ConnectionProfileIdentity.normalizeBaseURL(baseURL) ==
+            ConnectionProfileIdentity.normalizeBaseURL(savedBaseURL) &&
+            ConnectionProfileIdentity.normalizeUsername(username) ==
+            ConnectionProfileIdentity.normalizeUsername(savedUsername) &&
+            password == savedPassword
     }
 
     var testResultMessage: String? {
@@ -73,24 +124,27 @@ final class ConnectionSetupViewModel {
         default:
             break
         }
+        detectedProtocol = connectionUnchanged ? savedProtocol : nil
     }
 
     func testConnection() async {
         state = .testing
         do {
-            try await connectionProbeService.probe(connection: draftConnection())
+            detectedProtocol = try await connectionProbeService.probe(connection: draftConnection())
             state = .testSucceeded
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
                 outcome: ProductAnalytics.Outcome.success
             )
         } catch let error as ServerProbeError {
+            detectedProtocol = nil
             state = .testFailed(error.probeUserMessage)
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
                 outcome: ProductAnalytics.Outcome.failure
             )
         } catch {
+            detectedProtocol = nil
             state = .testFailed(error.localizedDescription)
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
@@ -108,17 +162,28 @@ final class ConnectionSetupViewModel {
             return false
         }
         state = .saving
-        await connectionSessionCoordinator.saveProfile(draftProfile())
-        state = .testSucceeded
-        logConnectionAction(
-            ProductAnalytics.Action.connectionSave,
-            outcome: ProductAnalytics.Outcome.success
-        )
-        return true
+        do {
+            try await connectionSessionCoordinator.saveProfile(draftProfile(), serverProtocol: detectedProtocol)
+            state = .testSucceeded
+            logConnectionAction(
+                ProductAnalytics.Action.connectionSave,
+                outcome: ProductAnalytics.Outcome.success
+            )
+            return true
+        } catch is DuplicateConnectionProfileException {
+            state = .testFailed("A server with this host and username is already saved")
+            return false
+        } catch {
+            state = .testFailed(error.localizedDescription)
+            return false
+        }
     }
 
-    /// Only an enum outcome is reported: never the base URL, username, password,
-    /// or a server error message.
+    func removeConnection() async {
+        guard !profileId.isEmpty else { return }
+        await connectionSessionCoordinator.removeProfile(id: profileId)
+    }
+
     private func logConnectionAction(_ actionId: String, outcome: String) {
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.connectionSetup,
@@ -128,7 +193,14 @@ final class ConnectionSetupViewModel {
     }
 
     private func draftProfile() -> ConnectionProfile {
-        ConnectionProfile(baseURL: baseURL, username: username, password: password)
+        ConnectionProfile(
+            baseURL: baseURL,
+            username: username,
+            password: password,
+            serverProtocol: detectedProtocol ?? (connectionUnchanged ? savedProtocol : nil),
+            id: profileId,
+            name: name
+        )
     }
 
     private func draftConnection() -> ServerConnection {

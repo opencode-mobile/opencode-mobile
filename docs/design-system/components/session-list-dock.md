@@ -16,7 +16,7 @@ content.
 - Optional: `createError` string above the filters; `onRemoveProject(worktree)`
   for selected-project chip remove.
 - States: default. Disabled/loading are not applicable; callers gate actions.
-  Empty filter list still shows action row.
+  Empty `filterTabs` collapses the chip row and still shows the action row.
 
 ## Token Usage
 
@@ -30,11 +30,13 @@ content.
 
 ## Behavior
 
-Stateless. Horizontal chip row scrolls when filters overflow. When the selected
-filter changes, the row scrolls just enough to keep that chip fully visible
+Stateless. Horizontal chip row scrolls when filters overflow and is omitted
+when `filterTabs` is empty (no empty scroll strip). When the selected filter
+changes, the row scrolls just enough to keep that chip fully visible
 (including after the remove × widens a selected project chip). Add project is a
 compact leading control; New session is the full-width primary control beside
-it. Create error appears above filters when set.
+it. Create error appears above filters when set. Callers decide whether **All**
+is present; the dock does not insert it.
 
 When `onRemoveProject` is provided, the remove **×** appears only on the
 **selected** project chip (never on **All**, never on unselected chips). Tap
@@ -53,8 +55,8 @@ selects/filters; × is a deliberate second step after selection.
 ## Review Surfaces
 
 Both Component Galleries include a **Session List Dock** entry with live filter
-selection and an optional create-error toggle. Session List gallery also shows
-the dock in full home context.
+selection, a **1 project** sample (All absent), and an optional create-error
+toggle. Session List gallery also shows the dock in full home context.
 
 ## Parity And Divergence
 

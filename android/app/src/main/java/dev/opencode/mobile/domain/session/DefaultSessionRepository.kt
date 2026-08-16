@@ -2,15 +2,7 @@ package dev.opencode.mobile.domain.session
 
 import android.util.Log
 import dev.opencode.mobile.data.remote.SessionsApi
-import dev.opencode.mobile.data.remote.dto.CreateSessionRequestDto
-import dev.opencode.mobile.data.remote.dto.ForkSessionRequestDto
-import dev.opencode.mobile.data.remote.dto.InitSessionRequestDto
-import dev.opencode.mobile.data.remote.dto.PermissionResponseRequestDto
-import dev.opencode.mobile.data.remote.dto.QuestionReplyRequestDto
-import dev.opencode.mobile.data.remote.dto.RevertSessionRequestDto
-import dev.opencode.mobile.data.remote.dto.SummarizeSessionRequestDto
-import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
-import dev.opencode.mobile.data.remote.dto.UpdateSessionTimeDto
+import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -19,21 +11,29 @@ import javax.inject.Inject
 class DefaultSessionRepository
     @Inject
     constructor(
-        private val api: SessionsApi,
+        api: SessionsApi,
         private val adapter: SessionDomainAdapter,
         private val sessionModelSelectionStore: SessionModelSelectionStore? = null,
+        private val composerDraftStore: ComposerDraftStore? = null,
         private val activeConnectionManager: ActiveConnectionManager? = null,
     ) : SessionRepository {
+        private val remote: SessionRemote =
+            ProtocolSelectedSessionRemote(
+                v1 = V1SessionRemote(api, adapter),
+                v2 = V2SessionRemote(api, adapter),
+                activeConnectionManager = activeConnectionManager,
+            )
+
         override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> =
-            runCatching { api.listPendingPermissions(directory).map(adapter::toPermissionRequest) }
+            runCatching { remote.listPendingPermissions(directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun listPendingQuestions(directory: String?): List<QuestionRequest> =
-            runCatching { api.listPendingQuestions(directory).map(adapter::toQuestionRequest) }
+            runCatching { remote.listPendingQuestions(directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun listSessions(directory: String?): List<Session> =
-            runCatching { api.listSessions(directory).map(adapter::toSession) }
+            runCatching { remote.listSessions(directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun createSession(
@@ -41,22 +41,18 @@ class DefaultSessionRepository
             title: String?,
             directory: String?,
         ): Session =
-            runCatching {
-                adapter.toSession(
-                    api.createSession(CreateSessionRequestDto(parentId = parentId, title = title), directory),
-                )
-            }.getOrElse { throw adapter.mapError(it) }
+            runCatching { remote.createSession(parentId, title, directory) }
+                .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun getAllSessionStatuses(directory: String?): List<SessionStatus> =
-            runCatching {
-                api.getAllSessionStatuses(directory).map { (id, status) -> adapter.toSessionStatus(id, status) }
-            }.getOrElse { throw adapter.mapError(it) }
+            runCatching { remote.getAllSessionStatuses(directory) }
+                .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun getSession(
             id: String,
             directory: String?,
         ): Session =
-            runCatching { adapter.toSession(api.getSession(id, directory)) }
+            runCatching { remote.getSession(id, directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun updateSession(
@@ -64,41 +60,32 @@ class DefaultSessionRepository
             title: String?,
             directory: String?,
         ): Session =
-            runCatching {
-                adapter.toSession(api.updateSession(id, UpdateSessionRequestDto(title = title), directory))
-            }.getOrElse { throw adapter.mapError(it) }
+            runCatching { remote.updateSession(id, title, directory) }
+                .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun archiveSession(
             id: String,
             directory: String?,
         ): Session =
-            runCatching {
-                adapter.toSession(
-                    api.updateSession(
-                        id,
-                        UpdateSessionRequestDto(
-                            time = UpdateSessionTimeDto(archived = System.currentTimeMillis()),
-                        ),
-                        directory,
-                    ),
-                )
-            }.getOrElse { throw adapter.mapError(it) }
+            runCatching { remote.archiveSession(id, directory) }
+                .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun deleteSession(
             id: String,
             directory: String?,
         ): Boolean {
             val deleted =
-                runCatching { api.deleteSession(id, directory) }
+                runCatching { remote.deleteSession(id, directory) }
                     .getOrElse { throw adapter.mapError(it) }
             val profile = activeConnectionManager?.currentProfile()
             if (deleted && profile != null) {
+                val identity = ModelSelectionConnectionIdentity(profile.baseUrl, profile.username)
                 runCatching {
-                    sessionModelSelectionStore?.deleteSessionEntries(
-                        ModelSelectionConnectionIdentity(profile.baseUrl, profile.username),
-                        id,
-                    )
+                    sessionModelSelectionStore?.deleteSessionEntries(identity, id)
                 }.onFailure { Log.w("SessionRepository", "delete model selection failed", it) }
+                runCatching {
+                    composerDraftStore?.deleteSessionEntries(identity, id)
+                }.onFailure { Log.w("SessionRepository", "delete composer draft failed", it) }
             }
             return deleted
         }
@@ -107,14 +94,14 @@ class DefaultSessionRepository
             id: String,
             directory: String?,
         ): List<Session> =
-            runCatching { api.listChildSessions(id, directory).map(adapter::toSession) }
+            runCatching { remote.listChildSessions(id, directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun listSessionTodos(
             id: String,
             directory: String?,
         ): List<SessionTodo> =
-            runCatching { adapter.toTodos(api.listSessionTodos(id, directory)) }
+            runCatching { remote.listSessionTodos(id, directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun initializeSessionAgents(
@@ -124,42 +111,36 @@ class DefaultSessionRepository
             modelId: String,
             directory: String?,
         ): Boolean =
-            runCatching {
-                api.initializeSessionAgents(
-                    id,
-                    InitSessionRequestDto(messageId = messageId, providerId = providerId, modelId = modelId),
-                    directory,
-                )
-            }.getOrElse { throw adapter.mapError(it) }
+            runCatching { remote.initializeSessionAgents(id, messageId, providerId, modelId, directory) }
+                .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun forkSession(
             id: String,
             atMessageId: String?,
             directory: String?,
         ): Session =
-            runCatching {
-                adapter.toSession(api.forkSession(id, ForkSessionRequestDto(messageId = atMessageId), directory))
-            }.getOrElse { throw adapter.mapError(it) }
+            runCatching { remote.forkSession(id, atMessageId, directory) }
+                .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun abortSession(
             id: String,
             directory: String?,
         ): Boolean =
-            runCatching { api.abortSession(id, directory) }
+            runCatching { remote.abortSession(id, directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun shareSession(
             id: String,
             directory: String?,
         ): Session =
-            runCatching { adapter.toSession(api.shareSession(id, directory)) }
+            runCatching { remote.shareSession(id, directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun unshareSession(
             id: String,
             directory: String?,
         ): Session =
-            runCatching { adapter.toSession(api.unshareSession(id, directory)) }
+            runCatching { remote.unshareSession(id, directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun getSessionDiff(
@@ -167,11 +148,11 @@ class DefaultSessionRepository
             messageId: String?,
             directory: String?,
         ): List<FileDiff> =
-            runCatching { api.getSessionDiff(id, messageId, directory).map(adapter::toFileDiff) }
+            runCatching { remote.getSessionDiff(id, messageId, directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun getVcsInfo(directory: String?): VcsInfo =
-            runCatching { adapter.toVcsInfo(api.getVcsInfo(directory)) }
+            runCatching { remote.getVcsInfo(directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun getVcsDiff(
@@ -179,7 +160,7 @@ class DefaultSessionRepository
             directory: String?,
             context: Int,
         ): List<FileDiff> =
-            runCatching { api.getVcsDiff(mode.wireValue, directory, context).map(adapter::toFileDiff) }
+            runCatching { remote.getVcsDiff(mode, directory, context) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun summarizeSession(
@@ -188,9 +169,8 @@ class DefaultSessionRepository
             modelId: String,
             directory: String?,
         ): Boolean =
-            runCatching {
-                api.summarizeSession(id, SummarizeSessionRequestDto(providerId = providerId, modelId = modelId), directory)
-            }.getOrElse { throw adapter.mapError(it) }
+            runCatching { remote.summarizeSession(id, providerId, modelId, directory) }
+                .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun revertSession(
             id: String,
@@ -198,15 +178,14 @@ class DefaultSessionRepository
             partId: String?,
             directory: String?,
         ): Boolean =
-            runCatching {
-                api.revertSession(id, RevertSessionRequestDto(messageId = messageId, partId = partId), directory)
-            }.getOrElse { throw adapter.mapError(it) }
+            runCatching { remote.revertSession(id, messageId, partId, directory) }
+                .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun unrevertSession(
             id: String,
             directory: String?,
         ): Boolean =
-            runCatching { api.unrevertSession(id, directory) }
+            runCatching { remote.unrevertSession(id, directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun respondToPermission(
@@ -215,32 +194,34 @@ class DefaultSessionRepository
             decision: PermissionDecision,
             directory: String?,
         ): Boolean =
-            runCatching {
-                api.respondToPermission(
-                    sessionId,
-                    permissionId,
-                    PermissionResponseRequestDto(response = adapter.toPermissionResponse(decision)),
-                    directory,
-                )
-            }.getOrElse { throw adapter.mapError(it) }
+            runCatching { remote.respondToPermission(sessionId, permissionId, decision, directory) }
+                .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun replyToQuestion(
             requestId: String,
             answers: List<List<String>>,
             directory: String?,
+        ): Boolean = replyToQuestion(sessionId = "", requestId = requestId, answers = answers, directory = directory)
+
+        override suspend fun replyToQuestion(
+            sessionId: String,
+            requestId: String,
+            answers: List<List<String>>,
+            directory: String?,
         ): Boolean =
-            runCatching {
-                api.replyToQuestion(
-                    requestId,
-                    QuestionReplyRequestDto(answers = answers),
-                    directory,
-                )
-            }.getOrElse { throw adapter.mapError(it) }
+            runCatching { remote.replyToQuestion(sessionId, requestId, answers, directory) }
+                .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun rejectQuestion(
             requestId: String,
             directory: String?,
+        ): Boolean = rejectQuestion(sessionId = "", requestId = requestId, directory = directory)
+
+        override suspend fun rejectQuestion(
+            sessionId: String,
+            requestId: String,
+            directory: String?,
         ): Boolean =
-            runCatching { api.rejectQuestion(requestId, directory) }
+            runCatching { remote.rejectQuestion(sessionId, requestId, directory) }
                 .getOrElse { throw adapter.mapError(it) }
     }

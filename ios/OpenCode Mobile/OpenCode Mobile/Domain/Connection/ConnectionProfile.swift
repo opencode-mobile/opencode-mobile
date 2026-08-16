@@ -4,6 +4,14 @@ nonisolated struct ConnectionProfile: Equatable, Sendable {
     var baseURL: String
     var username: String
     var password: String
+    var serverProtocol: ServerProtocol?
+    var id: String = ""
+    var name: String = ""
+
+    var displayName: String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? ConnectionProfileIdentity.hostLabel(baseURL) : trimmed
+    }
 
     static let defaultBaseURL = "http://127.0.0.1:4096/"
     static let defaultUsername = "opencode"

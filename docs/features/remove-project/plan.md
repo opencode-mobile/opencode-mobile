@@ -2,6 +2,12 @@
 
 Linear: [OPE-108](https://linear.app/opencode-mobile/issue/OPE-108/remove-project-from-home)
 
+The dock **×** entry point below is superseded by
+[Session List Project Picker](../session-list-project-picker/plan.md)
+hold-to-remove ([OPE-160](https://linear.app/opencode-mobile/issue/OPE-160/session-list-project-picker)).
+Confirm dialog, snackbar, and local-curation semantics in this slice still
+apply.
+
 ## User Goal
 
 Remove an added project from the home Session List so home shows only the
@@ -13,8 +19,10 @@ projects the user still wants to see — the inverse of Add Project.
   **All**, not on unselected project chips). Select a project first to reveal ×.
 - Tap **×** → confirm dialog (*"Remove "X" from home? Its sessions stay on the
   server."*) → **Remove** (destructive-primary) / **Cancel**.
-- Removing a project drops its sessions from the time ladder and returns the
-  filter to **All** (if it was filtering the removed project).
+- Removing a project drops its sessions from the time ladder. Filter fallback
+  is now owned by
+  [OPE-156](https://linear.app/opencode-mobile/issue/OPE-156/skip-all-chip-and-new-session-picker-with-one-project):
+  remaining project when one is left, **All** when two or more remain.
 - Removing the last project lands on the existing empty state.
 - Pure client-side curation: drop the worktree from the persisted added-projects
   list for the active server URL. No server API. Re-adding the path restores the

@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.agent.MentionableAgent
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
+import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.MessageRole
@@ -118,6 +119,7 @@ data class SessionChatUiState(
     val questionErrorMessage: String? = null,
     val reviewChangesMessageId: String? = null,
     val reviewChangesSummary: ReviewChangesSummary? = null,
+    val supportsSessionMessageDiff: Boolean = true,
     val rename: SessionRenameUiState = SessionRenameUiState(),
     val slashSuggestionsVisible: Boolean = false,
     val slashSuggestions: List<SessionChatSlashSuggestion> = emptyList(),
@@ -160,6 +162,7 @@ data class SessionChatUiState(
         )
 
     fun reviewChangesNavigationTarget(worktree: String): ChangesNavigationTarget? {
+        if (!supportsSessionMessageDiff) return null
         val messageId = reviewChangesMessageId ?: return null
         if ((reviewChangesSummary?.fileCount ?: 0) <= 0) return null
         return ChangesNavigationTarget(
@@ -188,6 +191,7 @@ data class SessionChatUiState(
         assistantMessageId: String,
         initialFilePath: String?,
     ): ChangesNavigationTarget? {
+        if (!supportsSessionMessageDiff) return null
         val messageId = owningTurnMessageId(assistantMessageId) ?: return null
         return ChangesNavigationTarget(
             sessionId = sessionId,
@@ -212,12 +216,30 @@ data class SessionChatUiState(
     }
 }
 
+enum class SessionChatComposerKind {
+    Permission,
+    Question,
+    ChildLockout,
+    Prompt,
+    ;
+
+    companion object {
+        fun resolve(
+            isChildSession: Boolean,
+            hasPermission: Boolean,
+            hasQuestion: Boolean,
+        ): SessionChatComposerKind =
+            when {
+                hasPermission -> Permission
+                hasQuestion -> Question
+                isChildSession -> ChildLockout
+                else -> Prompt
+            }
+    }
+}
+
 object ReviewChangesPillVisibility {
-    fun shouldShow(
-        summary: ReviewChangesSummary?,
-        isPinnedToEnd: Boolean,
-        showScrollToEnd: Boolean,
-    ): Boolean = (summary?.fileCount ?: 0) > 0 && isPinnedToEnd && !showScrollToEnd
+    fun shouldShow(summary: ReviewChangesSummary?): Boolean = (summary?.fileCount ?: 0) > 0
 }
 
 data class ReviewChangesSummary(
@@ -400,15 +422,21 @@ enum class SessionConnectionStatus(
     Offline("offline"),
 }
 
-fun EventStreamConnectionState.toSessionConnectionStatus(): SessionConnectionStatus =
-    when (this) {
-        EventStreamConnectionState.Connected -> SessionConnectionStatus.Live
-        EventStreamConnectionState.Connecting,
-        EventStreamConnectionState.Reconnecting,
-        -> SessionConnectionStatus.Connecting
-        EventStreamConnectionState.Idle,
-        EventStreamConnectionState.Disconnected,
-        -> SessionConnectionStatus.Offline
+fun EventStreamConnectionState.toSessionConnectionStatus(
+    path: DeviceNetworkPathStatus = DeviceNetworkPathStatus.Ready,
+): SessionConnectionStatus =
+    if (path == DeviceNetworkPathStatus.Unavailable) {
+        SessionConnectionStatus.Offline
+    } else {
+        when (this) {
+            EventStreamConnectionState.Connected -> SessionConnectionStatus.Live
+            EventStreamConnectionState.Connecting,
+            EventStreamConnectionState.Reconnecting,
+            -> SessionConnectionStatus.Connecting
+            EventStreamConnectionState.Idle,
+            EventStreamConnectionState.Disconnected,
+            -> SessionConnectionStatus.Offline
+        }
     }
 
 enum class SessionChatTimelineState {

@@ -10,9 +10,12 @@ import dev.opencode.mobile.domain.command.ClientSlashMessageRef
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.connection.DeviceNetworkPath
+import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
 import dev.opencode.mobile.domain.event.EventDomainAdapter
-import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
+import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
@@ -20,16 +23,15 @@ import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
-import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
-import dev.opencode.mobile.domain.filesystem.FilesystemRepository
+import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
+import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.OptimisticSessionCreateCoordinator
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionError
-import dev.opencode.mobile.domain.session.OptimisticSessionCreate
-import dev.opencode.mobile.domain.session.OptimisticSessionCreateCoordinator
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
@@ -42,6 +44,9 @@ import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
+import dev.opencode.mobile.ui.components.SessionListScrollPin
+import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
+import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -76,6 +81,7 @@ class MainScreenViewModel
         private val newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         private val sessionCache: SessionCache,
         private val optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator,
+        private val deviceNetworkPath: DeviceNetworkPath = ReadyDeviceNetworkPath,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
@@ -85,13 +91,25 @@ class MainScreenViewModel
         val removalSnackbar: StateFlow<OpenCodeSnackbarMessage?> = _removalSnackbar.asStateFlow()
         private val _sessionActions = MutableStateFlow(HomeSessionActionsUiState())
         val sessionActions: StateFlow<HomeSessionActionsUiState> = _sessionActions.asStateFlow()
-        val liveUpdatesConnectionState: StateFlow<EventStreamConnectionState> =
-            foregroundEventStream.connectionState
-                .stateIn(
-                    scope = viewModelScope,
-                    started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
-                    initialValue = EventStreamConnectionState.Idle,
-                )
+        private val _revealNewestToken = MutableStateFlow(0)
+        val revealNewestToken: StateFlow<Int> = _revealNewestToken.asStateFlow()
+        private val _serversChrome = MutableStateFlow(HomeServersChrome())
+        val serversChrome: StateFlow<HomeServersChrome> = _serversChrome.asStateFlow()
+        private var lastHomeHiddenAtEpochMs: Long? = HomeDisplayPreferences.lastHomeHiddenAtEpochMs()
+        val liveUpdatesConnectionStatus: StateFlow<SessionConnectionStatus> =
+            combine(
+                foregroundEventStream.connectionState,
+                deviceNetworkPath.status,
+            ) { connectionState, path ->
+                connectionState.toSessionConnectionStatus(path)
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
+                initialValue =
+                    foregroundEventStream.connectionState.value.toSessionConnectionStatus(
+                        deviceNetworkPath.status.value,
+                    ),
+            )
 
         private val serverBaseUrl: String
             get() = activeConnectionManager.current()?.baseUrl.orEmpty()
@@ -108,12 +126,16 @@ class MainScreenViewModel
             viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
                     sessionReadyStore.clearCache()
+                    messageRepository.clearMessageCache()
                     refresh()
                 }
             }
             viewModelScope.launch {
                 connectionSessionCoordinator.profileCleared.collect {
+                    sessionReadyStore.clearCache()
+                    messageRepository.clearMessageCache()
                     _uiState.value = MainScreenUiState.Disconnected
+                    _serversChrome.value = HomeServersChrome()
                 }
             }
             viewModelScope.launch {
@@ -124,7 +146,39 @@ class MainScreenViewModel
         }
 
         fun refresh() {
-            viewModelScope.launch { runHomeLoad() }
+            viewModelScope.launch {
+                refreshServersChrome()
+                runHomeLoad()
+            }
+        }
+
+        fun showServersSheet() {
+            _serversChrome.update { it.copy(sheetVisible = true) }
+        }
+
+        fun dismissServersSheet() {
+            _serversChrome.update { it.copy(sheetVisible = false) }
+        }
+
+        fun switchProfile(id: String) {
+            viewModelScope.launch {
+                connectionSessionCoordinator.switchProfile(id)
+                dismissServersSheet()
+            }
+        }
+
+        private suspend fun refreshServersChrome() {
+            val profiles = connectionProfileStore.listProfiles()
+            val active = connectionProfileStore.activeProfile()
+                ?: activeConnectionManager.currentProfile()
+            _serversChrome.update { current ->
+                current.copy(
+                    title = active?.displayName ?: "Sessions",
+                    isSwitcher = active != null,
+                    active = active,
+                    others = profiles.filter { it.id != active?.id },
+                )
+            }
         }
 
         /** Soft reload for pull-to-refresh: keeps Loaded/Empty UI, no full-screen spinner. */
@@ -254,11 +308,12 @@ class MainScreenViewModel
 
         fun createSession(worktree: String) {
             logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_CREATE_SESSION)
-            if (foregroundEventStream.connectionState.value != EventStreamConnectionState.Connected) {
+            if (liveUpdatesConnectionStatus.value != SessionConnectionStatus.Live) {
                 setProjectSessionCreateError("Reconnect to create a session")
                 return
             }
             clearProjectSessionCreateError()
+            _revealNewestToken.update { it + 1 }
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) {
                     state.copy(
@@ -267,7 +322,10 @@ class MainScreenViewModel
                                 sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
                                 title = "New Session",
                                 worktree = worktree,
-                                optimisticNavigationInstanceId = java.util.UUID.randomUUID().toString(),
+                                optimisticNavigationInstanceId =
+                                    java.util.UUID
+                                        .randomUUID()
+                                        .toString(),
                             ),
                     )
                 } else {
@@ -280,6 +338,24 @@ class MainScreenViewModel
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) state.copy(pendingOpenSession = null) else state
             }
+        }
+
+        fun markHomeHidden(nowEpochMs: Long = System.currentTimeMillis()) {
+            if (lastHomeHiddenAtEpochMs != null) return
+            lastHomeHiddenAtEpochMs = nowEpochMs
+            HomeDisplayPreferences.setLastHomeHiddenAtEpochMs(nowEpochMs)
+        }
+
+        fun onHomeRevealed(nowEpochMs: Long = System.currentTimeMillis()) {
+            if (SessionListScrollPin.shouldResetForStaleAbsence(
+                    lastHiddenAtEpochMs = lastHomeHiddenAtEpochMs,
+                    nowEpochMs = nowEpochMs,
+                )
+            ) {
+                _revealNewestToken.update { it + 1 }
+            }
+            lastHomeHiddenAtEpochMs = null
+            HomeDisplayPreferences.setLastHomeHiddenAtEpochMs(null)
         }
 
         fun requestRemoveProject(worktree: String) {
@@ -791,13 +867,13 @@ class MainScreenViewModel
             if (!preserveContent && worktrees.isNotEmpty()) {
                 val sections = loadSectionsFromCache(worktrees)
                 _uiState.value = MainScreenUiState.Loaded(sections = sections)
-                startLiveObservations(worktrees)
                 if (!skipProbe) {
                     runCatching { projectRepository.probeServer() }
                         .onFailure {
                             // Keep cached home; connection chrome reflects reachability.
                         }
                 }
+                startLiveObservations(worktrees)
                 return
             }
 
@@ -1154,6 +1230,14 @@ fun suggestedHomeForkTitle(currentTitle: String): String {
     val trimmed = currentTitle.trim()
     return if (trimmed.isEmpty()) "Forked session" else "Fork of $trimmed"
 }
+
+data class HomeServersChrome(
+    val title: String = "Sessions",
+    val isSwitcher: Boolean = false,
+    val active: ConnectionProfile? = null,
+    val others: List<ConnectionProfile> = emptyList(),
+    val sheetVisible: Boolean = false,
+)
 
 sealed interface MainScreenUiState {
     data object Disconnected : MainScreenUiState

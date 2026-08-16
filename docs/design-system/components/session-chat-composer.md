@@ -9,10 +9,12 @@ request have identical width, shape, inset, background, and border behavior.
 
 ## Public API
 
-- Component state: `prompt`, `permission`, or `question`.
+- Component state: `prompt`, `permission`, `question`, or `childLockout`.
 - Prompt-entry states: empty, populated, pending attachments,
   attach-disabled, sending-disabled, stop available, and model/mode/variant
   selection.
+- Child-lockout states: default display of the model and thinking-effort
+  used for that child session. Pressed applies only to the back action.
 - Permission states: pending, submitting/disabled, queued, and response error.
 - Question states: pending, multi-question wizard step, multi-select, custom
   answer, submitting/disabled, and response error.
@@ -25,6 +27,11 @@ request have identical width, shape, inset, background, and border behavior.
   selected option labels, custom text and whether custom is selected, and
   enabled flags for back, next, and submit.
 - Optional question content: error message.
+- Required child-lockout content: model label, thinking-effort (variant)
+  label, whether to show the effort chip, lockout caption, and a back-to-main
+  action.
+- Optional child-lockout content: none. Mode is omitted. Chips are
+  display-only.
 
 The public native API accepts one semantic state value and one action callback.
 Prompt actions are text changed (text plus selection), select model, select mode,
@@ -34,6 +41,7 @@ the selected model lacks image and PDF input. Prompt text may include mention
 ranges that render with the `syntax-type` token (inline `@name` agent
 mentions). Pending attachment content uses presentation-safe
 `OpenCodeAttachmentChip` state.
+Child-lockout actions are back to main session. Chips do not open pickers.
 Permission actions are allow once and deny, and return the opaque request and
 session identifiers rendered with the decision. Question actions are toggle
 option, toggle custom, custom text changed, back, next, submit, and dismiss;
@@ -54,14 +62,27 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
 - Prompt text, permission copy, and question copy use the same additional 4
   logical-pixel horizontal and vertical inset. Permission and question actions
   occupy the same leading and trailing positions as the attach and send actions.
+- Child-lockout caption uses caption typography and `text-base`. Display-only
+  model and thinking-effort chips use the same fill-only capsule recipe as
+  Session List Dock CTAs / glass stand-in (`text-strong` at **0.14**, capsule,
+  button typography) — not interactive Choice Badges. The back action uses
+  the Session List Dock **New session** CTA: full-width capsule, height **52**,
+  `text-strong` fill at **0.14**, `text-strong` label. Do not use high-contrast
+  `OpenCodeButton` `fullWidthText`.
 - Typography: body for prompt entry; heading, body-secondary, code, caption, and
-  button roles for permission approval and question request. Question selection
-  hints use `text-base`. Question options reuse `OpenCodeListItem` card style.
+  button roles for permission approval, question request, and child lockout.
+  Question selection hints use `text-base`. Question options reuse
+  `OpenCodeListItem` card style.
 
 ## Behavior
 
 - Exactly one composer shell is mounted at the bottom of Session Chat.
-- Without a pending request, it renders prompt entry and its normal controls.
+- Without a pending request, a root session renders prompt entry and its
+  normal controls. A child session (`parentID` present) renders child
+  lockout instead: display-only model and thinking-effort chips, the caption
+  “Child sessions cannot be prompted.”, and a primary “Back to main session”
+  button. There is no text field, attach, commands, send, or stop.
+- A pending permission or question request still replaces child lockout.
 - Prompt send is available when trimmed text or at least one pending attachment
   exists. Pending attachments render as a vertical stack of full-width removable
   chips above the prompt input at 6–8 logical-pixel spacing. Attach is disabled
@@ -79,13 +100,16 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   Commands sheet; the composer only reports the tap as `openCommands`.
 - With a pending permission or question request, the shell replaces its inner
   content with that decision UI. Draft prompt text and selection state remain in
-  the Screen Model and return after the request resolves.
+  the Screen Model and return after the request resolves. After those requests
+  resolve on a child session, the shell returns to child lockout, not prompt
+  entry.
 - The shell keeps its normal neutral outline for prompt entry and question
   request. It uses the warning outline for a pending permission and the error
   outline after a failed permission response. Question response failures keep
   the neutral outline and surface the error in content copy.
 - The shell coordinates content replacement with its size change when switching
-  between prompt entry, permission approval, and question request. Android fades
+  between prompt entry, permission approval, question request, and child
+  lockout. Android fades
   outgoing content over 80 ms, resizes over 240 ms, and fades incoming content
   over 120 ms after an 80 ms delay. Loading/error updates that retain the same
   content key do not replay the full transition.
@@ -141,16 +165,17 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
 
 ## Review Surfaces
 
-Both platform component files include permission-state, question-state, and
-mention-styled prompt previews for light and dark theme review, plus an
-`iconCircleText` button preview. Both Component Galleries expose one live,
-edge-to-edge composer with interactive controls for empty prompt, populated
-prompt, mention-styled prompt, active work, pending attachments, pending
-permission, queued permission, permission submitting, permission error,
-single-question, multi-question, multi-select, custom answer, question
-submitting, and question error states, and log `openCommands` in the action
-log like the other prompt actions (opening the Commands sheet itself is
-feature-owned, not shown in the gallery). The Mentions scenario seeds an
+Both platform component files include permission-state, question-state,
+child-lockout, and mention-styled prompt previews for light and dark theme
+review, plus an `iconCircleText` button preview. Both Component Galleries
+expose one live, edge-to-edge composer with interactive controls for empty
+prompt, populated prompt, mention-styled prompt, active work, pending
+attachments, child lockout, pending permission, queued permission, permission
+submitting, permission error, single-question, multi-question, multi-select,
+custom answer, question submitting, and question error states, and log
+`openCommands` and `backToMainSession` in the action log like the other
+prompt actions (opening the Commands sheet itself is feature-owned, not shown
+in the gallery). The Mentions scenario seeds an
 inline `@name` range with `syntax-type` color. The pending attachments scenario
 shows at least two sample chips with empty draft text and send enabled. Question
 scenarios keep local selection drafts so option, custom, Back / Next, Submit,
@@ -161,7 +186,8 @@ resize motion can be reviewed in a realistic Session Chat placement.
 ## Completion Ledger
 
 - Public API and applicable states: complete (`prompt`, `permission`,
-  `question`), including the `openCommands` prompt action (OPE-58).
+  `question`, `childLockout`), including the `openCommands` prompt action
+  (OPE-58) and `backToMainSession` (OPE-170).
 - Token and typography mapping: complete. Shell materials use Floating Chrome
   (`floating-chrome.md`); question selection hints use `text-base`; question
   shell outline stays neutral. The Commands action reuses `iconCircle` geometry

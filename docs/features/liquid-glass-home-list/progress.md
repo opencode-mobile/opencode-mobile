@@ -24,6 +24,9 @@
   mode is on (no stacked top bar).
 - Throwaway `Prototype/` sources removed.
 - Filter visibility unit tests added; simulator build green.
+- [OPE-166](https://linear.app/opencode-mobile/issue/OPE-166/home-session-list-hides-newest-sessions):
+  Session List follows the true top when the user is at the top, creating a
+  session forces reveal, and a 10-minute home absence resets to the top.
 
 ## Android
 
@@ -31,6 +34,8 @@
 - Home `MainScreen` wires production `SessionList` when Session List mode is on.
 - Throwaway `prototype/` sources removed.
 - Filter visibility unit tests green; `compileDebugKotlin` green.
+- [OPE-166](https://linear.app/opencode-mobile/issue/OPE-166/home-session-list-hides-newest-sessions):
+  same follow-top, create-reveal, and 10-minute absence reset as iOS.
 
 ## Blockers
 
@@ -38,4 +43,6 @@
 
 ## Remaining Work
 
+- [ ] [OPE-166](https://linear.app/opencode-mobile/issue/OPE-166/home-session-list-hides-newest-sessions)
+  device smoke (create + back, resume with newer sessions, scrolled-away stay)
 - [ ] PR open + merge

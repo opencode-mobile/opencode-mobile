@@ -3,7 +3,7 @@ import Foundation
 @MainActor
 protocol SessionTodoLiveStore: AnyObject, Sendable {
     func observeTodos(sessionID: String, directory: String?) -> AsyncStream<[SessionTodo]>
-    /// Drive live lifecycle: GET (force if cached) when becoming live; clear when idle.
+    /// Force GET when becoming live. Idle keeps the cached list.
     func setLive(_ isLive: Bool, sessionID: String, directory: String?)
     func clearCache()
 }

@@ -11,6 +11,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object ConnectionSetupHome : NavKey
 
+@Serializable data object ServersHome : NavKey
+
 @Serializable data object TextMateLogbookHome : NavKey
 
 @Serializable data object DiagnosticLogsHome : NavKey
@@ -28,6 +30,7 @@ import kotlinx.serialization.Serializable
     val sessionTitle: String,
     val worktree: String,
     val optimisticNavigationInstanceId: String? = null,
+    val parentId: String? = null,
 ) : NavKey
 
 @Serializable data class SessionContext(
@@ -42,3 +45,31 @@ import kotlinx.serialization.Serializable
     val initialSource: ChangeSource = ChangeSource.LastTurn,
     val initialFilePath: String? = null,
 ) : NavKey
+
+@Serializable data class SessionToolGroup(
+    val sessionId: String,
+    val worktree: String,
+    val parentId: String? = null,
+    val blockID: String,
+    val title: String,
+    val subtitle: String? = null,
+    val messageId: String,
+    val owningTurnMessageId: String? = null,
+    val supportsSessionMessageDiff: Boolean,
+    val members: List<SessionToolGroupMember>,
+) : NavKey
+
+@Serializable data class SessionToolGroupMember(
+    val blockID: String,
+    val toolName: String,
+    val status: String,
+    val title: String,
+    val subtitle: String? = null,
+    val errorText: String? = null,
+    val additions: Int? = null,
+    val deletions: Int? = null,
+    val detailText: String? = null,
+    val childSessionId: String? = null,
+    val opensChangesReview: Boolean = false,
+    val changesInitialFilePath: String? = null,
+)

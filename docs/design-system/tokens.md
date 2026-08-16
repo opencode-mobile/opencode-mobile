@@ -596,6 +596,17 @@ Reusable outgoing prompt card for session conversations.
 | `outgoingMessage.paddingVertical` | 8 (logical px) |
 | `outgoingMessage.footerSpacing` | 6 (logical px) |
 
+### Assistant message
+
+Reusable leading-aligned assistant reply card for session conversations.
+
+| Token | Value |
+| --- | --- |
+| `assistantMessage.cornerRadius` | 8 (logical px; matches `listItem.cornerRadius`) |
+| `assistantMessage.paddingHorizontal` | 12 (logical px) |
+| `assistantMessage.paddingVertical` | 8 (logical px) |
+| `assistantMessage.borderWidth` | 1 (logical px) |
+
 ### Tool call card
 
 Collapsed, tool-agnostic assistant tool-call row. Status chrome reuses the
@@ -612,6 +623,24 @@ shared `success` / `warning` / `error` semantic tokens; +/− counts reuse
 | `toolCallCard.statusDotTopPadding` | 6 (logical px) |
 | `toolCallCard.contentSpacing` | 4 (logical px) |
 | `toolCallCard.metaRowSpacing` | 8 (logical px) |
+
+### Child session row
+
+Quiet person/thread row for a child session. Reuses shared surface, text, and
+icon semantic tokens. Do not use List Item `LetterAccent` colors.
+
+| Token | Value |
+| --- | --- |
+| `childSessionRow.cornerRadius` | 8 (logical px; matches `toolCallCard.cornerRadius`) |
+| `childSessionRow.paddingHorizontal` | 12 (logical px) |
+| `childSessionRow.paddingVertical` | 10 (logical px) |
+| `childSessionRow.avatarSize` | 32 (logical px) |
+| `childSessionRow.avatarGlyphSize` | 14 (logical px; bold rounded) |
+| `childSessionRow.contentSpacing` | 12 (logical px) |
+| `childSessionRow.titleRowSpacing` | 8 (logical px) |
+| `childSessionRow.textStackSpacing` | 2 (logical px) |
+| `childSessionRow.trailingSpacing` | 6 (logical px) |
+| `childSessionRow.chevronSize` | 16 (logical px) |
 
 ## Platform Mappings
 

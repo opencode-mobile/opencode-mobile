@@ -7,6 +7,9 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.theme.letterAccentForWorktree
+import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.PermissionLiveStore
@@ -22,6 +25,7 @@ import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.textmate.TextMateLogbook
 import dev.opencode.mobile.theme.ThemeManager
@@ -52,6 +56,22 @@ class SettingsViewModel
     ) : ViewModel() {
         private val _sessionCacheSizeLabel = MutableStateFlow("Empty")
         val sessionCacheSizeLabel: StateFlow<String> = _sessionCacheSizeLabel.asStateFlow()
+        private val _serversSummary = MutableStateFlow(ServersSummary())
+        val serversSummary: StateFlow<ServersSummary> = _serversSummary.asStateFlow()
+
+        fun refreshServersSummary() {
+            viewModelScope.launch {
+                val profiles = connectionSessionCoordinator.listProfiles()
+                val active = connectionSessionCoordinator.currentProfile()
+                _serversSummary.value =
+                    ServersSummary(
+                        count = profiles.size,
+                        activeName = active?.displayName,
+                        letter = letterCharacterForProject(active?.displayName ?: "Servers"),
+                        letterAccent = letterAccentForWorktree(active?.id ?: active?.displayName ?: "servers"),
+                    )
+            }
+        }
 
         fun refreshSessionCacheSize() {
             viewModelScope.launch {
@@ -84,6 +104,7 @@ class SettingsViewModel
                 MarkdownHighlightPreferences.clear()
                 AnalyticsConsentPreferences.clear()
                 AppOnboardingPreferences.clear()
+                SessionChatDisplayPreferences.clear()
                 messageContentPreparer.clearDocumentCache()
                 BlockDecorationCache.clear()
                 textMateLogbook.clear()
@@ -108,6 +129,10 @@ class SettingsViewModel
             HomeDisplayPreferences.updateRecentWindowHours(hours)
         }
 
+        fun setCollapseConsecutiveToolCalls(enabled: Boolean) {
+            SessionChatDisplayPreferences.updateCollapseConsecutiveToolCalls(enabled)
+        }
+
         fun setTextMateEnabled(enabled: Boolean) {
             MarkdownHighlightPreferences.updateTextMateEnabled(enabled)
             messageContentPreparer.clearDocumentCache()
@@ -118,3 +143,18 @@ class SettingsViewModel
             AnalyticsConsentPreferences.updateProductAnalyticsConsented(enabled)
         }
     }
+
+data class ServersSummary(
+    val count: Int = 0,
+    val activeName: String? = null,
+    val letter: Char = 'S',
+    val letterAccent: LetterAccent = LetterAccent.Blue,
+) {
+    val subtitle: String
+        get() =
+            when {
+                count == 0 -> "No servers saved"
+                activeName != null -> "$count saved · $activeName active"
+                else -> "$count saved"
+            }
+}

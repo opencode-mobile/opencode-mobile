@@ -14,16 +14,24 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
 
     private let api: EventsAPIClient
     private let adapter: EventDomainAdapter
+    private let deviceNetworkPath: any DeviceNetworkPath
     private var streamTask: Task<Void, Never>?
+    /// Invalidates in-flight cancel/error handlers after `stop()` or a newer `start()`.
+    private var streamGeneration: UInt64 = 0
     private var wasConnected = false
     private var currentStreamWasConnected = false
     private var emittedReconnectForCurrentStream = false
     private var subscriberContinuations: [UUID: AsyncStream<OpencodeEvent>.Continuation] = [:]
     private var connectionStateContinuations: [UUID: AsyncStream<EventStreamConnectionState>.Continuation] = [:]
 
-    init(api: EventsAPIClient, adapter: EventDomainAdapter) {
+    init(
+        api: EventsAPIClient,
+        adapter: EventDomainAdapter,
+        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath()
+    ) {
         self.api = api
         self.adapter = adapter
+        self.deviceNetworkPath = deviceNetworkPath
     }
 
     func events() -> AsyncStream<OpencodeEvent> {
@@ -59,21 +67,40 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
     }
 
     func start() {
-        stop()
+        lock.lock()
+        if streamTask != nil {
+            lock.unlock()
+            DiagnosticLog.debug(.sse, "foreground SSE start ignored; already running")
+            return
+        }
         DiagnosticLog.info(.sse, "foreground SSE stream starting")
+        streamGeneration += 1
+        let generation = streamGeneration
+        lock.unlock()
+
         _ = ConnectionEpoch.shared.bump()
         let api = api
         let adapter = adapter
+        let deviceNetworkPath = deviceNetworkPath
         // Byte read + line parse + event publish must not occupy MainActor.
+        lock.lock()
         streamTask = Task(priority: .userInitiated) { [weak self] in
-            await Self.runStreamLoop(api: api, adapter: adapter, owner: self)
+            await Self.runStreamLoop(
+                api: api,
+                adapter: adapter,
+                deviceNetworkPath: deviceNetworkPath,
+                owner: self,
+                generation: generation
+            )
         }
+        lock.unlock()
     }
 
     func stop() {
         lock.lock()
         let hadTask = streamTask != nil
         let state = _connectionState
+        streamGeneration += 1
         streamTask?.cancel()
         streamTask = nil
         wasConnected = false
@@ -95,8 +122,15 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
         }
     }
 
-    private func applyConnectionState(_ state: EventStreamConnectionState) {
+    private func applyConnectionState(
+        _ state: EventStreamConnectionState,
+        generation: UInt64? = nil
+    ) {
         lock.lock()
+        if let generation, generation != streamGeneration {
+            lock.unlock()
+            return
+        }
         let previous = _connectionState
         _connectionState = state
         let conts = Array(connectionStateContinuations.values)
@@ -158,7 +192,9 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
     private static func runStreamLoop(
         api: EventsAPIClient,
         adapter: EventDomainAdapter,
-        owner: DefaultForegroundEventStream?
+        deviceNetworkPath: any DeviceNetworkPath,
+        owner: DefaultForegroundEventStream?,
+        generation: UInt64
     ) async {
         final class RetryBox: @unchecked Sendable {
             var attempt = 0
@@ -166,32 +202,71 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
         let retry = RetryBox()
         while !Task.isCancelled {
             guard let owner else { return }
-            let wasConnected = owner.beginConnectAttempt()
-
-            do {
+            await deviceNetworkPath.waitUntilReady()
+            guard !Task.isCancelled else {
+                owner.clearStreamTaskIfCurrent(generation: generation)
+                owner.applyConnectionState(.idle, generation: generation)
+                return
+            }
+            let wasConnected = owner.beginConnectAttempt(generation: generation)
+            let readTask = Task {
                 try await api.streamGlobalEvents(
                     onHTTPResponse: { statusCode in
-                        DiagnosticLog.info(.sse, "GET /global/event opened status=\(statusCode)")
+                        DiagnosticLog.info(.sse, "GET \(Self.eventPath(for: api)) opened status=\(statusCode) protocol=\(api.eventProtocolWireValue)")
                         owner.markStreamConnected()
                         retry.attempt = 0
                     },
                     onDataLine: { dataLine in
-                        guard let event = adapter.parseEvent(dataLine: dataLine) else {
+                        let parsed = adapter.parseEvents(dataLine: dataLine)
+                        if parsed.isEmpty {
                             DiagnosticLog.warning(.sse, "SSE event parse failed")
                             return
                         }
-                        if owner.handleStreamEvent(event) {
-                            retry.attempt = 0
+                        for event in parsed {
+                            if owner.handleStreamEvent(event) {
+                                retry.attempt = 0
+                            }
                         }
                     }
                 )
-                owner.applyConnectionState(.disconnected)
+            }
+            let watchTask = Task {
+                for await status in deviceNetworkPath.updates() {
+                    if status == .unavailable {
+                        readTask.cancel()
+                        return
+                    }
+                }
+            }
+            do {
+                try await readTask.value
+                owner.applyConnectionState(
+                    wasConnected ? .reconnecting : .connecting,
+                    generation: generation
+                )
             } catch is CancellationError {
-                owner.applyConnectionState(.idle)
-                return
+                watchTask.cancel()
+                if Task.isCancelled {
+                    owner.clearStreamTaskIfCurrent(generation: generation)
+                    owner.applyConnectionState(.idle, generation: generation)
+                    return
+                }
+                owner.applyConnectionState(
+                    wasConnected ? .reconnecting : .connecting,
+                    generation: generation
+                )
+                continue
             } catch {
                 DiagnosticLog.warning(.sse, "foreground SSE stream failed error=\(String(describing: error))")
-                owner.applyConnectionState(wasConnected ? .reconnecting : .disconnected)
+                owner.applyConnectionState(
+                    wasConnected ? .reconnecting : .connecting,
+                    generation: generation
+                )
+            }
+            watchTask.cancel()
+
+            if deviceNetworkPath.status == .unavailable {
+                continue
             }
 
             retry.attempt += 1
@@ -199,15 +274,31 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
             DiagnosticLog.debug(.sse, "foreground SSE retry in \(backoffMs)ms")
             try? await Task.sleep(for: .milliseconds(backoffMs))
         }
+        owner?.clearStreamTaskIfCurrent(generation: generation)
     }
 
-    private func beginConnectAttempt() -> Bool {
+    private static func eventPath(for api: EventsAPIClient) -> String {
+        "/\(api.eventSubscribePath)"
+    }
+
+    private func beginConnectAttempt(generation: UInt64) -> Bool {
         lock.lock()
         currentStreamWasConnected = false
         emittedReconnectForCurrentStream = false
         let previouslyConnected = wasConnected
         lock.unlock()
-        applyConnectionState(previouslyConnected ? .reconnecting : .connecting)
+        applyConnectionState(
+            previouslyConnected ? .reconnecting : .connecting,
+            generation: generation
+        )
         return previouslyConnected
+    }
+
+    private func clearStreamTaskIfCurrent(generation: UInt64) {
+        lock.lock()
+        if generation == streamGeneration {
+            streamTask = nil
+        }
+        lock.unlock()
     }
 }

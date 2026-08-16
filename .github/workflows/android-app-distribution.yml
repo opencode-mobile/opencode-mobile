@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Optional branch, tag, or SHA to check out. Leave empty to distribute the selected workflow branch."
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -14,8 +20,8 @@ concurrency:
 
 jobs:
   distribute:
-    if: github.ref == 'refs/heads/main'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Linux, X64, android]
     environment: android-release
     defaults:
       run:
@@ -25,10 +31,33 @@ jobs:
       FIREBASE_TESTER_GROUP: android-internal
       FIREBASE_TOOLS_VERSION: 15.24.0
       EXPECTED_UPLOAD_CERT_SHA256: 9E:FB:99:19:6B:2D:F6:56:FD:FA:1D:88:3D:33:00:7E:0F:E0:DA:28:AB:FF:A6:F8:BC:C3:3D:42:0F:CA:E1:37
+      SOURCE_REF: ${{ github.event.inputs.source_ref }}
 
     steps:
-      - name: Checkout merged commit
+      - name: Validate source ref
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${SOURCE_REF:-}" ]]; then
+            exit 0
+          fi
+          if [[ ! "$SOURCE_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "source_ref must be a branch, tag, or SHA (letters, digits, '.', '_', '/', '-')." >&2
+            exit 1
+          fi
+
+      - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.source_ref || github.sha }}
+
+      - name: Record distributed commit
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "DISTRIBUTED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Set distribution version
         shell: bash
@@ -50,6 +79,26 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Ensure Android NDK for native symbols
+        shell: bash
+        run: |
+          set -euo pipefail
+          ndk_version="27.2.12479018"
+          if [[ -d "${ANDROID_HOME:-}/ndk/${ndk_version}" ]]; then
+            echo "NDK ${ndk_version} already installed."
+            exit 0
+          fi
+          sdkmanager_bin=""
+          if [[ -x "${ANDROID_HOME:-}/cmdline-tools/latest/bin/sdkmanager" ]]; then
+            sdkmanager_bin="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          elif command -v sdkmanager >/dev/null 2>&1; then
+            sdkmanager_bin="$(command -v sdkmanager)"
+          else
+            echo "sdkmanager not found; cannot install NDK ${ndk_version}." >&2
+            exit 1
+          fi
+          yes | "$sdkmanager_bin" "ndk;${ndk_version}"
 
       - name: Prepare protected credentials
         shell: bash
@@ -83,7 +132,7 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: android-app-distribution-${{ github.sha }}-${{ github.run_number }}
+          name: android-app-distribution-${{ env.DISTRIBUTED_SHA }}-${{ github.run_number }}
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
@@ -92,9 +141,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          distributed_sha="$(git rev-parse HEAD)"
           short_sha="$(git rev-parse --short=12 HEAD)"
           subject="$(git log -1 --pretty=%s)"
-          release_notes="Merge $short_sha: $subject"
+          distributed_ref="${SOURCE_REF:-${GITHUB_REF_NAME:-}}"
+          distributed_ref="${distributed_ref#refs/heads/}"
+          distributed_ref="${distributed_ref#refs/tags/}"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            release_notes="Dispatch $short_sha: $subject"
+          else
+            release_notes="Merge $short_sha: $subject"
+          fi
+          if [[ -n "$distributed_ref" && "$distributed_ref" != "main" ]]; then
+            release_notes="Not from main: $distributed_ref"$'\n'"$release_notes"
+          fi
           if ! distribution_output="$(
             npx --yes "firebase-tools@$FIREBASE_TOOLS_VERSION" \
               appdistribution:distribute \
@@ -120,7 +180,13 @@ jobs:
           {
             echo "## Android App Distribution"
             echo
-            echo "- Commit: \`$GITHUB_SHA\`"
+            if [[ -n "$distributed_ref" && "$distributed_ref" != "main" ]]; then
+              echo "- **Not from main:** \`$distributed_ref\`"
+            fi
+            echo "- Commit: \`$distributed_sha\`"
+            if [[ -n "${SOURCE_REF:-}" ]]; then
+              echo "- Source ref: \`$SOURCE_REF\`"
+            fi
             echo "- Version: \`$ANDROID_VERSION_NAME\` (\`$ANDROID_VERSION_CODE\`)"
             echo "- Tester group: \`$FIREBASE_TESTER_GROUP\`"
             echo "- [Firebase release]($firebase_console_uri)"

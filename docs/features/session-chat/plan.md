@@ -80,6 +80,10 @@ is a thin facade. Any change to the facade is an architectural decision — see
 
 ## Composer Behavior
 
+- A child session does not accept prompts. The same composer shell shows
+  display-only model and thinking-effort chips, “Child sessions cannot be
+  prompted.”, and “Back to main session”. Permission and question still
+  replace that lockout when pending.
 - The composer uses a three-row layout inspired by compact mobile chat UIs:
   prompt input, selector chips, then attachment and Send actions.
 - Selector chips show current values only, without visible labels. Tapping a chip
@@ -115,3 +119,5 @@ is a thin facade. Any change to the facade is an architectural decision — see
   foreground SSE state, and context usage.
 - Reuse **`OpenCodeBottomSheet`** for composer option pickers (model, mode,
   Variant).
+- Use **`OpenCodeOutgoingMessage`** for sent prompts and
+  **`OpenCodeAssistantMessage`** for assistant text blocks.

@@ -29,6 +29,7 @@ object KtorClientFactory {
          * iOS infinite request/resource timeouts for the SSE client only.
          */
         sse: Boolean = false,
+        probe: Boolean = false,
     ): HttpClient =
         HttpClient(OkHttp) {
             engine {
@@ -36,17 +37,20 @@ object KtorClientFactory {
                     // Keep connect fail-fast. Read/call stay open so Ktor HttpTimeout (and
                     // per-request overrides) can bound normal calls without OkHttp's 10s default
                     // cutting long ops like POST …/summarize mid-compaction.
-                    connectTimeout(10, TimeUnit.SECONDS)
+                    connectTimeout(if (probe) 3 else 10, TimeUnit.SECONDS)
                     readTimeout(0, TimeUnit.MILLISECONDS)
                     writeTimeout(if (sse) 0 else 60, TimeUnit.SECONDS)
                     callTimeout(0, TimeUnit.MILLISECONDS)
                 }
             }
             install(HttpTimeout) {
-                connectTimeoutMillis = 10_000
+                connectTimeoutMillis = if (probe) 3_000 else 10_000
                 if (sse) {
                     requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
                     socketTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+                } else if (probe) {
+                    requestTimeoutMillis = 5_000
+                    socketTimeoutMillis = 5_000
                 } else {
                     // Default REST ceiling; long endpoints override per request.
                     requestTimeoutMillis = 60_000

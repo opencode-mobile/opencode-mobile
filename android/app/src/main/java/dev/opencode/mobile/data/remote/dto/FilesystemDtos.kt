@@ -19,3 +19,9 @@ data class FileNodeDto(
     val type: String,
     val ignored: Boolean = false,
 )
+
+@Serializable
+data class V2FsEntryDto(
+    val path: String,
+    val type: String,
+)

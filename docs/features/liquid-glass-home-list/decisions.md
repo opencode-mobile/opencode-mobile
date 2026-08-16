@@ -24,3 +24,15 @@
   glass (not used as the primary transparency control for the glass material).
 - **Why:** Glass blur/refraction is system-owned; underlay only tints solidity.
 - **Date:** 2026-07-24
+
+## Follow the true top for newest sessions
+
+- **Decision:** While the user is at the top of home Session List, keep the
+  viewport on the true top when newer sessions are prepended. Creating a
+  session from home also reveals the newest rows. Scrolling away leaves the
+  current rows in place. If home has been hidden for 10 minutes, the next
+  appear resets to the true top.
+- **Why:** Keyed lazy lists preserve the previously first visible session, so
+  new rows appear above the viewport and the list still looks like it is at
+  the top. After a long absence the previous row is no longer a useful place.
+- **Date:** 2026-08-15

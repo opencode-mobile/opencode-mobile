@@ -22,13 +22,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
-import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.session.SessionSummary
+import dev.opencode.mobile.domain.time.RelativeTimeFormatting
+import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.letterAccentForWorktree
+import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
@@ -43,14 +48,19 @@ import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
+import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeListItemStatus
+import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
+import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
-import dev.opencode.mobile.domain.time.RelativeTimeFormatting
+import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 
 /** Long-press session actions on home: sheet, rename/fork dialogs, delete confirm. */
 data class HomeSessionActionsCallbacks(
@@ -78,20 +88,32 @@ fun MainScreen(
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnectionClick: (dev.opencode.mobile.domain.connection.ConnectionProfile?) -> Unit,
     onConnectClick: () -> Unit,
+    onAddServerClick: () -> Unit = onConnectClick,
+    onManageServersClick: () -> Unit = onSettingsClick,
     modifier: Modifier = Modifier,
     viewModel: MainScreenViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
-    val liveUpdatesConnectionState by viewModel.liveUpdatesConnectionState.collectAsStateWithLifecycle()
+    val liveUpdatesConnectionStatus by viewModel.liveUpdatesConnectionStatus.collectAsStateWithLifecycle()
     val removalSnackbar by viewModel.removalSnackbar.collectAsStateWithLifecycle()
     val sessionActions by viewModel.sessionActions.collectAsStateWithLifecycle()
+    val revealNewestToken by viewModel.revealNewestToken.collectAsStateWithLifecycle()
+    val serversChrome by viewModel.serversChrome.collectAsStateWithLifecycle()
+    LifecycleEventEffect(Lifecycle.Event.ON_START) {
+        viewModel.onHomeRevealed()
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        viewModel.markHomeHidden()
+    }
     MainScreen(
         uiState = state,
         isRefreshing = isRefreshing,
-        liveUpdatesConnectionState = liveUpdatesConnectionState,
+        liveUpdatesConnectionStatus = liveUpdatesConnectionStatus,
         removalSnackbar = removalSnackbar,
         sessionActions = sessionActions,
+        revealNewestToken = revealNewestToken,
+        serversChrome = serversChrome,
         sessionActionsCallbacks =
             HomeSessionActionsCallbacks(
                 onSessionLongPress = { session ->
@@ -135,6 +157,17 @@ fun MainScreen(
         onConfirmRemoveProject = viewModel::confirmRemoveProject,
         onDismissProjectRemoval = viewModel::dismissProjectRemoval,
         onConsumeProjectRemovalSnackbar = viewModel::consumeProjectRemovalSnackbar,
+        onTitleClick = viewModel::showServersSheet,
+        onDismissServersSheet = viewModel::dismissServersSheet,
+        onSwitchProfile = viewModel::switchProfile,
+        onAddServerClick = {
+            viewModel.dismissServersSheet()
+            onAddServerClick()
+        },
+        onManageServersClick = {
+            viewModel.dismissServersSheet()
+            onManageServersClick()
+        },
         modifier = modifier,
     )
 }
@@ -143,7 +176,7 @@ fun MainScreen(
 @Composable
 internal fun MainScreen(
     uiState: MainScreenUiState,
-    liveUpdatesConnectionState: EventStreamConnectionState,
+    liveUpdatesConnectionStatus: SessionConnectionStatus,
     removalSnackbar: OpenCodeSnackbarMessage?,
     onSettingsClick: () -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
@@ -167,6 +200,13 @@ internal fun MainScreen(
     isRefreshing: Boolean = false,
     sessionActions: HomeSessionActionsUiState = HomeSessionActionsUiState(),
     sessionActionsCallbacks: HomeSessionActionsCallbacks = HomeSessionActionsCallbacks(),
+    revealNewestToken: Int = 0,
+    serversChrome: HomeServersChrome = HomeServersChrome(),
+    onTitleClick: () -> Unit = {},
+    onDismissServersSheet: () -> Unit = {},
+    onSwitchProfile: (String) -> Unit = {},
+    onAddServerClick: () -> Unit = {},
+    onManageServersClick: () -> Unit = {},
 ) {
     val pendingOpenSession = (uiState as? MainScreenUiState.Loaded)?.pendingOpenSession
     LaunchedEffect(pendingOpenSession) {
@@ -224,11 +264,13 @@ internal fun MainScreen(
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBar(
-                title = "Sessions",
+                title = serversChrome.title,
+                onTitleClick = if (serversChrome.isSwitcher) onTitleClick else null,
+                titleMenuExpanded = serversChrome.sheetVisible,
                 subtitleAccessory =
                     if (showsLiveUpdatesStatus(uiState)) {
                         OpenCodeTopBarSubtitleAccessory.StatusDot(
-                            liveUpdatesConnectionState.toOpenCodeSessionConnectionStatus(),
+                            liveUpdatesConnectionStatus.toOpenCodeSessionConnectionStatus(),
                         )
                     } else {
                         null
@@ -315,8 +357,10 @@ internal fun MainScreen(
                             )
                             showNewSessionProjectPicker = true
                         },
+                        onCreateSession = onNewSession,
                         onRemoveProject = onRemoveProject,
                         onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
+                        revealNewestToken = revealNewestToken,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -327,6 +371,71 @@ internal fun MainScreen(
             message = removalSnackbar,
             onDismissed = onConsumeProjectRemovalSnackbar,
             modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+
+    OpenCodeBottomSheet(
+        visible = serversChrome.sheetVisible,
+        title = "Servers",
+        onDismissRequest = onDismissServersSheet,
+    ) {
+        val active = serversChrome.active
+        if (active != null) {
+            Text(
+                text = "USING NOW",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
+            )
+            OpenCodeListItem(
+                title = active.displayName,
+                subtitle = active.baseUrl.trimEnd('/'),
+                status = OpenCodeListItemStatus("Active", OpenCodeListItemStatusTone.Interactive),
+                style = OpenCodeListItemStyle.Card,
+                startDecorator =
+                    StartDecorator.Letter(
+                        letterCharacterForProject(active.displayName),
+                        letterAccentForWorktree(active.id.ifBlank { active.displayName }),
+                    ),
+                onClick = onDismissServersSheet,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+        }
+        if (serversChrome.others.isNotEmpty()) {
+            Text(
+                text = "SWITCH TO",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
+            )
+            serversChrome.others.forEach { profile ->
+                OpenCodeListItem(
+                    title = profile.displayName,
+                    subtitle = ConnectionProfileIdentity.hostLabel(profile.baseUrl),
+                    startDecorator =
+                        StartDecorator.Letter(
+                            letterCharacterForProject(profile.displayName),
+                            letterAccentForWorktree(profile.id.ifBlank { profile.displayName }),
+                        ),
+                    onClick = { onSwitchProfile(profile.id) },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+        }
+        OpenCodeListItem(
+            title = "Add server",
+            subtitle = "New Connection Profile",
+            startDecorator = StartDecorator.Icon(OpenCodeIcons.Add, "Add server"),
+            onClick = onAddServerClick,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        OpenCodeListItem(
+            title = "Manage in Settings",
+            onClick = onManageServersClick,
+            modifier =
+                Modifier
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 8.dp),
         )
     }
 
@@ -677,8 +786,10 @@ private fun HomeProjectsContent(
     onBrowseProjectsClick: () -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
     onRequestNewSessionProjectPicker: () -> Unit,
+    onCreateSession: (String) -> Unit,
     onRemoveProject: (String) -> Unit,
     onSessionLongPress: (SessionListSession) -> Unit,
+    revealNewestToken: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     PullToRefreshBox(
@@ -687,16 +798,25 @@ private fun HomeProjectsContent(
         modifier = modifier.fillMaxSize(),
     ) {
         val sessions = sections.toCrossProjectSessionListSessions()
-        val filterTabs = sections.toSessionListFilterTabs(sessionCount = sessions.size)
+        val chromeProjects = sections.toHomeChromeProjects()
+        val filterTabs =
+            SessionListHomeChrome.filterTabs(
+                projects = chromeProjects,
+                sessionCount = sessions.size,
+            )
         var selectedFilterId by rememberSaveable {
             mutableStateOf(SessionListFilterTab.ALL_ID)
         }
         val resolvedFilterId =
-            if (filterTabs.any { it.id == selectedFilterId }) {
-                selectedFilterId
-            } else {
-                SessionListFilterTab.ALL_ID
+            SessionListHomeChrome.resolvedFilterId(
+                selectedId = selectedFilterId,
+                tabs = filterTabs,
+            )
+        LaunchedEffect(resolvedFilterId) {
+            if (selectedFilterId != resolvedFilterId) {
+                selectedFilterId = resolvedFilterId
             }
+        }
         SessionList(
             sessions = sessions,
             filterTabs = filterTabs,
@@ -723,9 +843,18 @@ private fun HomeProjectsContent(
                 )
             },
             onAddProject = onBrowseProjectsClick,
-            onNewSession = onRequestNewSessionProjectPicker,
+            onNewSession = {
+                when (val action = SessionListHomeChrome.newSessionAction(chromeProjects)) {
+                    SessionListHomeChrome.NewSessionAction.None -> Unit
+                    SessionListHomeChrome.NewSessionAction.PresentPicker ->
+                        onRequestNewSessionProjectPicker()
+                    is SessionListHomeChrome.NewSessionAction.Create ->
+                        onCreateSession(action.worktree)
+                }
+            },
             onRemoveProject = onRemoveProject,
             onSessionLongPress = onSessionLongPress,
+            revealNewestToken = revealNewestToken,
             modifier = Modifier.fillMaxSize(),
             emptyContent =
                 if (sections.isEmpty()) {
@@ -757,21 +886,14 @@ private fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Ses
             )
         }
 
-private fun List<ProjectSectionUi>.toSessionListFilterTabs(sessionCount: Int): List<SessionListFilterTab> =
-    listOf(
-        SessionListFilterTab(
-            id = SessionListFilterTab.ALL_ID,
-            title = "All",
-            count = sessionCount,
-        ),
-    ) +
-        map { section ->
-            SessionListFilterTab(
-                id = section.worktree,
-                title = section.displayName,
-                count = section.allSessions.size,
-            )
-        }
+private fun List<ProjectSectionUi>.toHomeChromeProjects(): List<SessionListHomeChrome.Project> =
+    map { section ->
+        SessionListHomeChrome.Project(
+            worktree = section.worktree,
+            title = section.displayName,
+            sessionCount = section.allSessions.size,
+        )
+    }
 
 @Suppress("UNUSED_PARAMETER")
 private fun SessionSummary.toSessionListStatus(hasPendingPermission: Boolean = false): SessionListStatus =
@@ -786,15 +908,11 @@ private fun showsLiveUpdatesStatus(uiState: MainScreenUiState): Boolean =
         else -> true
     }
 
-private fun EventStreamConnectionState.toOpenCodeSessionConnectionStatus(): OpenCodeSessionConnectionStatus =
+private fun SessionConnectionStatus.toOpenCodeSessionConnectionStatus(): OpenCodeSessionConnectionStatus =
     when (this) {
-        EventStreamConnectionState.Connected -> OpenCodeSessionConnectionStatus.Live
-        EventStreamConnectionState.Connecting,
-        EventStreamConnectionState.Reconnecting,
-        -> OpenCodeSessionConnectionStatus.Connecting
-        EventStreamConnectionState.Idle,
-        EventStreamConnectionState.Disconnected,
-        -> OpenCodeSessionConnectionStatus.Offline
+        SessionConnectionStatus.Live -> OpenCodeSessionConnectionStatus.Live
+        SessionConnectionStatus.Connecting -> OpenCodeSessionConnectionStatus.Connecting
+        SessionConnectionStatus.Offline -> OpenCodeSessionConnectionStatus.Offline
     }
 
 @Preview(showBackground = true)
@@ -820,7 +938,7 @@ fun MainScreenPreview() {
                             ),
                         ),
                 ),
-            liveUpdatesConnectionState = EventStreamConnectionState.Connected,
+            liveUpdatesConnectionStatus = SessionConnectionStatus.Live,
             isRefreshing = false,
             removalSnackbar = null,
             onSettingsClick = {},

@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.session.PermissionDecision
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
@@ -30,7 +31,27 @@ class SessionTodoLiveStoreTest {
     private val testDispatcher = StandardTestDispatcher()
 
     @Test
-    fun setLive_fetchesTodos() =
+    fun observeTodos_fetchesWithoutLive() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeTodoSessionRepository(
+                    todos = listOf(SessionTodo(0, "A", SessionTodoStatus.Pending, "low")),
+                )
+            val store = createStore(repository, FakeForegroundEventStream())
+            val emissions = mutableListOf<List<SessionTodo>>()
+            val job =
+                launch {
+                    store.observeTodos("ses-1", "/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+            job.cancel()
+
+            assertEquals(1, repository.listTodosCallCount)
+            assertEquals("A", emissions.last().single().content)
+        }
+
+    @Test
+    fun setLive_forceFetchesTodos() =
         runTest(testDispatcher) {
             val repository =
                 FakeTodoSessionRepository(
@@ -44,12 +65,13 @@ class SessionTodoLiveStoreTest {
                 }
             advanceUntilIdle()
 
+            repository.todos = listOf(SessionTodo(0, "B", SessionTodoStatus.Pending, "low"))
             store.setLive(true, "ses-1", "/repo")
             advanceUntilIdle()
             job.cancel()
 
-            assertEquals(1, repository.listTodosCallCount)
-            assertEquals("A", emissions.last().single().content)
+            assertEquals(2, repository.listTodosCallCount)
+            assertEquals("B", emissions.last().single().content)
         }
 
     @Test
@@ -96,7 +118,7 @@ class SessionTodoLiveStoreTest {
         }
 
     @Test
-    fun setLiveFalse_clearsCacheAndForceGetsNextLive() =
+    fun setLiveFalse_keepsCacheAndForceGetsNextLive() =
         runTest(testDispatcher) {
             val repository =
                 FakeTodoSessionRepository(
@@ -112,23 +134,23 @@ class SessionTodoLiveStoreTest {
 
             store.setLive(true, "ses-1", "/repo")
             advanceUntilIdle()
-            assertEquals(1, repository.listTodosCallCount)
+            assertEquals(2, repository.listTodosCallCount)
 
             store.setLive(false, "ses-1", "/repo")
             advanceUntilIdle()
-            assertTrue(emissions.last().isEmpty())
+            assertEquals("A", emissions.last().single().content)
 
             repository.todos = listOf(SessionTodo(0, "B", SessionTodoStatus.Pending, "low"))
             store.setLive(true, "ses-1", "/repo")
             advanceUntilIdle()
             job.cancel()
 
-            assertEquals(2, repository.listTodosCallCount)
+            assertEquals(3, repository.listTodosCallCount)
             assertEquals("B", emissions.last().single().content)
         }
 
     @Test
-    fun todoUpdated_ignoredWhileIdle() =
+    fun todoUpdated_appliesWhileIdle() =
         runTest(testDispatcher) {
             val repository =
                 FakeTodoSessionRepository(
@@ -143,11 +165,9 @@ class SessionTodoLiveStoreTest {
                 }
             advanceUntilIdle()
 
-            store.setLive(true, "ses-1", "/repo")
-            advanceUntilIdle()
             store.setLive(false, "ses-1", "/repo")
             advanceUntilIdle()
-            assertTrue(emissions.last().isEmpty())
+            assertEquals("A", emissions.last().single().content)
 
             eventStream.emit(
                 OpencodeEvent(
@@ -160,7 +180,7 @@ class SessionTodoLiveStoreTest {
                                 buildJsonArray {
                                     add(
                                         buildJsonObject {
-                                            put("content", "Stale")
+                                            put("content", "From SSE")
                                             put("status", "pending")
                                             put("priority", "low")
                                         },
@@ -173,7 +193,7 @@ class SessionTodoLiveStoreTest {
             advanceUntilIdle()
             job.cancel()
 
-            assertTrue(emissions.last().isEmpty())
+            assertEquals("From SSE", emissions.last().single().content)
         }
 
     @Test
@@ -219,6 +239,103 @@ class SessionTodoLiveStoreTest {
             assertEquals(before, emissions.size)
         }
 
+    @Test
+    fun failedRestSeed_doesNotWipeEventTodos() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeTodoSessionRepository(
+                    listTodosError = SessionError.Http(404, "Todos REST is unavailable on v2"),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store = createStore(repository, eventStream)
+            val emissions = mutableListOf<List<SessionTodo>>()
+            val job =
+                launch {
+                    store.observeTodos("ses-1", "/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+            store.setLive(true, "ses-1", "/repo")
+            advanceUntilIdle()
+
+            eventStream.emit(
+                OpencodeEvent(
+                    type = "todo.updated",
+                    sessionId = "ses-1",
+                    rawProperties =
+                        buildJsonObject {
+                            put(
+                                "todos",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("content", "From event")
+                                            put("status", "pending")
+                                            put("priority", "low")
+                                        },
+                                    )
+                                },
+                            )
+                        },
+                ),
+            )
+            advanceUntilIdle()
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = null, rawProperties = null))
+            advanceUntilIdle()
+            job.cancel()
+
+            assertEquals("From event", emissions.last().single().content)
+            assertTrue(repository.listTodosCallCount >= 2)
+        }
+
+    @Test
+    fun reconnect_doesNotFetchAfterObservationEnds() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeTodoSessionRepository(
+                    todos = listOf(SessionTodo(0, "A", SessionTodoStatus.Pending, "low")),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store = createStore(repository, eventStream)
+            val job =
+                launch {
+                    store.observeTodos("ses-1", "/repo").collect { }
+                }
+            advanceUntilIdle()
+            val afterObserve = repository.listTodosCallCount
+            job.cancel()
+            advanceUntilIdle()
+
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = null, rawProperties = null))
+            advanceUntilIdle()
+
+            assertEquals(afterObserve, repository.listTodosCallCount)
+        }
+
+    @Test
+    fun reconnect_fetchesWhileObservingIdle() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeTodoSessionRepository(
+                    todos = listOf(SessionTodo(0, "A", SessionTodoStatus.Pending, "low")),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store = createStore(repository, eventStream)
+            val job =
+                launch {
+                    store.observeTodos("ses-1", "/repo").collect { }
+                }
+            advanceUntilIdle()
+            store.setLive(false, "ses-1", "/repo")
+            advanceUntilIdle()
+            val afterIdle = repository.listTodosCallCount
+
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = null, rawProperties = null))
+            advanceUntilIdle()
+            job.cancel()
+
+            assertTrue(repository.listTodosCallCount > afterIdle)
+        }
+
     private fun createStore(
         repository: SessionRepository,
         eventStream: FakeForegroundEventStream,
@@ -233,6 +350,7 @@ class SessionTodoLiveStoreTest {
 private class FakeTodoSessionRepository(
     var todos: List<SessionTodo> = emptyList(),
     var listTodosCallCount: Int = 0,
+    var listTodosError: Throwable? = null,
 ) : SessionRepository {
     override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> = emptyList()
 
@@ -279,6 +397,7 @@ private class FakeTodoSessionRepository(
         directory: String?,
     ): List<SessionTodo> {
         listTodosCallCount += 1
+        listTodosError?.let { throw it }
         return todos
     }
 
@@ -344,13 +463,13 @@ private class FakeTodoSessionRepository(
     ): Boolean = error("unused")
 
     override suspend fun replyToQuestion(
-        questionId: String,
+        requestId: String,
         answers: List<List<String>>,
         directory: String?,
     ): Boolean = error("unused")
 
     override suspend fun rejectQuestion(
-        questionId: String,
+        requestId: String,
         directory: String?,
     ): Boolean = error("unused")
 }

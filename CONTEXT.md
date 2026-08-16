@@ -89,21 +89,20 @@ The model maintains the list while working; the mobile client reads it and does
 not let the user check off or edit items in v1. The Session Todo List is the
 only user-facing surface for that data: `todowrite` tool parts stay hidden in
 the Session Chat timeline. The client loads the list with `GET` when the session
-becomes live, applies SSE `todo.updated` as a full-list replace, clears the
-local cache when the session goes idle, and force-refetches on the next live
-turn.
+is open, applies SSE `todo.updated` as a full-list replace while observing,
+keeps the local cache when the session goes idle, and force-refetches when the
+session becomes live again.
 
-On mobile, the compact Session Todos entry is a floating pill over Session Chat
-(above the composer). It sits above the existing Scroll-to-end / Changes float
-band; while the Session Todo List sheet is open, that whole float stack is
-hidden. A pending permission request takes priority over the Session Todo List
+On mobile, the compact Session Todos entry is a floating pill over the top of
+Session Chat, stacked with Syncing and Review Changes. Only Scroll to end stays
+above the composer. While the Session Todo List sheet is open, Todos and Review
+are hidden; Syncing may stay. A pending permission request takes priority over the Session Todo List
 sheet: the sheet is dismissed or not opened while the user must approve or deny;
-the pill may remain visible under the live visibility rule. The pill is visible
-only while the session is live — busy or blocked on a permission/question — and
-the list is non-empty and not fully finished. When every item is completed or
-cancelled while still live, the pill stays briefly visible then closes; when
-the session becomes idle, the client clears its local list cache so stale items
-do not reopen on the next visit.
+the pill may remain visible. The pill is visible whenever the list is
+non-empty and not fully finished, including after the session goes idle —
+matching TUI sidebar visibility. When every item is completed or cancelled
+while the pill is already shown, it stays briefly visible then closes.
+Opening a session whose list is already finished does not replay that hold.
 
 The pill preview line prefers the first `in_progress` Session Todo, else the
 first `pending`, else the last `completed`, else the first item. Progress on
@@ -326,11 +325,21 @@ labels or attachment bytes into message `text` for Session Chat display.
 
 ### tool group
 
-A Session Chat timeline block that summarizes consecutive context ToolParts
-(`read` / `glob` / `grep`) inside one message as a single Tool Call Card.
-A text block or a different tool family breaks the group.
+A Session Chat timeline block that summarizes consecutive visible ToolParts
+as a single Tool Call Card. Title is `N tools`; subtitle is a family one-liner
+in encounter order (`Edit · Write · 5 shells`). Status is the card’s status
+dot only. Tap opens a tool group screen of member Tool Call Cards (same taps
+as the timeline: Changes, shell sheet). Top-bar Back and the platform-native
+Back gesture pop that screen and keep the chat timeline where it was.
+**Collapse consecutive tool calls** is on by default. When it is off, only
+consecutive context ToolParts (`read` / `glob` / `grep`) group inside one
+message; when it is on, any consecutive visible tool families group except `task`
+spawns, which never group so their child-session tap stays available. Sequential tool steps stored as adjacent
+assistant messages also group when collapse is on. A visible text block, an
+attachment, or a `task` tool breaks the group. Hidden tools, empty text, and
+compaction markers do not.
 _Avoid_: expanding each grouped tool inline; treating a group as multiple
-timeline messages.
+timeline messages; painting a status-colored outline on the group card.
 
 ### file-change tool
 
@@ -348,7 +357,9 @@ A session spawned from a parent session to carry out delegated work.
 
 The parent timeline surfaces that work as a `task` ToolPart. Opening the card
 navigates into the child session when a session id is available. A child
-session has the same title and rename behavior as any other session.
+session has the same title and rename behavior as any other session. It cannot
+be prompted from mobile; the composer shows the model and thinking effort used
+and returns to the main session.
 _Avoid_: subagent (informal/desktop slang for the same child session; also avoid
 using subagent as the name for a **mentionable agent**).
 

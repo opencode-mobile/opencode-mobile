@@ -3,7 +3,12 @@ import Foundation
 
 extension Container {
     var activeConnectionManager: Factory<ActiveConnectionManager> {
-        self { ActiveConnectionManager() }.singleton
+        self {
+            ActiveConnectionManager(
+                connectionProbing: self.connectionProbing(),
+                profileStore: self.connectionProfileStore()
+            )
+        }.singleton
     }
 
     var connectionProfileStore: Factory<any ConnectionProfileStore> {
@@ -14,13 +19,18 @@ extension Container {
         self { UserDefaultsSessionModelSelectionStore() }.singleton
     }
 
+    var composerDraftStore: Factory<any ComposerDraftStore> {
+        self { UserDefaultsComposerDraftStore() }.singleton
+    }
+
     var connectionSessionCoordinator: Factory<ConnectionSessionCoordinator> {
         self { @MainActor in
             ConnectionSessionCoordinator(
                 activeConnectionManager: self.activeConnectionManager(),
                 connectionProfileStore: self.connectionProfileStore(),
                 secureCredentialStore: self.secureCredentialStore(),
-                sessionModelSelectionStore: self.sessionModelSelectionStore()
+                sessionModelSelectionStore: self.sessionModelSelectionStore(),
+                composerDraftStore: self.composerDraftStore()
             )
         }.singleton
     }
@@ -68,14 +78,19 @@ extension Container {
         self {
             DefaultProjectRepository(
                 api: self.projectsAPIClient(),
-                adapter: self.projectDomainAdapter()
+                adapter: self.projectDomainAdapter(),
+                activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
     }
 
     var filesystemRepository: Factory<any FilesystemRepository> {
         self {
-            DefaultFilesystemRepository(api: self.filesystemAPIClient())
+            DefaultFilesystemRepository(
+                api: self.filesystemAPIClient(),
+                adapter: FilesystemDomainAdapter(),
+                activeConnectionManager: self.activeConnectionManager()
+            )
         }.singleton
     }
 
@@ -85,6 +100,7 @@ extension Container {
                 api: self.sessionsAPIClient(),
                 adapter: self.sessionDomainAdapter(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),
+                composerDraftStore: self.composerDraftStore(),
                 activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
@@ -96,6 +112,16 @@ extension Container {
 
     var messageDomainAdapter: Factory<MessageDomainAdapter> {
         self { MessageDomainAdapter() }.singleton
+    }
+
+    var messageRemote: Factory<any MessageRemote> {
+        self {
+            ProtocolSelectedMessageRemote(
+                api: self.messagesAPIClient(),
+                adapter: self.messageDomainAdapter(),
+                activeConnectionManager: self.activeConnectionManager()
+            )
+        }.singleton
     }
 
     var messageStore: Factory<InMemoryMessageStore> {
@@ -126,6 +152,9 @@ extension Container {
             return DefaultSessionCache(
                 store: self.sessionCacheStore(),
                 connectionIdProvider: {
+                    if let id = manager.currentProfile()?.id, !id.isEmpty {
+                        return id
+                    }
                     guard let connection = manager.connection else { return nil }
                     return CacheUrlNormalizer.connectionId(
                         baseURL: connection.baseURL.absoluteString,
@@ -142,13 +171,13 @@ extension Container {
 
     var messageSync: Factory<MessageSync> {
         self {
-            let api = self.messagesAPIClient()
+            let router = self.messageRemote()
             let adapter = self.messageDomainAdapter()
             let manager = self.activeConnectionManager()
             return MessageSync(
                 listMessages: { sessionID, directory in
                     do {
-                        return try await api.listMessages(sessionID: sessionID, directory: directory).map(adapter.message)
+                        return try await router.listMessages(sessionID: sessionID, directory: directory)
                     } catch {
                         throw adapter.mapError(error)
                     }
@@ -195,7 +224,8 @@ extension Container {
                 adapter: self.messageDomainAdapter(),
                 messageSync: self.messageSync(),
                 displayMessagePipeline: self.displayMessagePipeline(),
-                contentPreparer: self.messageContentPreparer()
+                contentPreparer: self.messageContentPreparer(),
+                messageRemote: self.messageRemote()
             )
         }.singleton
     }
@@ -212,7 +242,8 @@ extension Container {
         self {
             DefaultModelRepository(
                 api: self.modelsAPIClient(),
-                adapter: self.modelDomainAdapter()
+                adapter: self.modelDomainAdapter(),
+                activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
     }
@@ -229,7 +260,8 @@ extension Container {
         self {
             DefaultCommandRepository(
                 api: self.commandsAPIClient(),
-                adapter: self.commandDomainAdapter()
+                adapter: self.commandDomainAdapter(),
+                activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
     }
@@ -246,24 +278,36 @@ extension Container {
         self {
             DefaultAgentRepository(
                 api: self.agentsAPIClient(),
-                adapter: self.agentDomainAdapter()
+                adapter: self.agentDomainAdapter(),
+                activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
     }
 
     var eventsAPIClient: Factory<EventsAPIClient> {
-        self { EventsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+        self {
+            let manager = self.activeConnectionManager()
+            return EventsAPIClient(
+                connectionProvider: self.connectionProvider(),
+                protocolResolver: { await manager.currentProtocolOrProbe() }
+            )
+        }.singleton
     }
 
     var eventDomainAdapter: Factory<EventDomainAdapter> {
         self { EventDomainAdapter() }.singleton
     }
 
+    var deviceNetworkPath: Factory<any DeviceNetworkPath> {
+        self { SystemDeviceNetworkPath() }.singleton
+    }
+
     var foregroundEventStream: Factory<DefaultForegroundEventStream> {
         self { @MainActor in
             DefaultForegroundEventStream(
                 api: self.eventsAPIClient(),
-                adapter: self.eventDomainAdapter()
+                adapter: self.eventDomainAdapter(),
+                deviceNetworkPath: self.deviceNetworkPath()
             )
         }.singleton
     }
@@ -374,7 +418,8 @@ extension Container {
                     store: self.sessionModelSelectionStore(),
                     modelRepository: self.modelRepository()
                 ),
-                sessionCache: self.sessionCache()
+                sessionCache: self.sessionCache(),
+                deviceNetworkPath: self.deviceNetworkPath()
             )
         }
     }
@@ -397,12 +442,14 @@ extension Container {
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
                 foregroundEventStream: self.foregroundEventStream(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),
+                composerDraftStore: self.composerDraftStore(),
                 activeConnectionManager: self.activeConnectionManager(),
                 connectionProfileStore: self.connectionProfileStore(),
                 newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
                     store: self.sessionModelSelectionStore(),
                     modelRepository: self.modelRepository()
-                )
+                ),
+                deviceNetworkPath: self.deviceNetworkPath()
             )
         }
     }
@@ -425,11 +472,15 @@ extension Container {
     }
 
     @MainActor
-    static func makeConnectionSetupViewModel(initialProfile: ConnectionProfile?) -> ConnectionSetupViewModel {
+    static func makeConnectionSetupViewModel(
+        initialProfile: ConnectionProfile?,
+        mode: ConnectionSetupMode = .first
+    ) -> ConnectionSetupViewModel {
         ConnectionSetupViewModel(
             connectionProbeService: shared.connectionProbing(),
             connectionSessionCoordinator: shared.connectionSessionCoordinator(),
-            initialProfile: initialProfile
+            initialProfile: initialProfile,
+            mode: mode
         )
     }
 
@@ -466,6 +517,7 @@ extension Container {
             MarkdownHighlightPreferences.shared.clear()
             AnalyticsConsentPreferences.shared.clear()
             AppOnboardingPreferences.shared.clear()
+            SessionChatDisplayPreferences.shared.clear()
             MessageContentPreparer.shared.clearDocumentCache()
             BlockDecorationCache.shared.clear()
             await TextMateLogbook.shared.clear()

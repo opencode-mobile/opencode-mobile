@@ -1,5 +1,65 @@
 # Session Chat Decisions
 
+## OPE-170 child sessions cannot be prompted
+
+- Date: 2026-08-15
+- Decision: A child session replaces prompt entry with Session Composer
+  `childLockout`: display-only model and thinking-effort chips, the caption
+  “Child sessions cannot be prompted.”, and a high-contrast
+  “Back to main session” button. Permission and question still replace that
+  state. Child navigation passes the parent session id so the lockout appears
+  immediately.
+- Reason: Web already blocks prompting in a child session. Mobile had the same
+  composer as a root session. Prototype variant A kept the composer shell and
+  made back the primary action.
+- Evidence: [ope-170-plan.md](./ope-170-plan.md)
+- Revisit when: mobile should send follow-up prompts into a child session.
+
+## OPE-169 promote assistant bubble; keep paint deferral local
+
+- Date: 2026-08-15
+- Decision: Promote the Session Chat assistant text bubble to
+  `OpenCodeAssistantMessage`. Session Chat keeps message-action gestures and
+  the ≥3k late-markdown paint deferral in a thin wrapper, passing
+  `renderedMarkdown` only when it is ready to paint.
+- Reason: Outgoing Message is already a collection primitive; the assistant
+  card is the matching incoming chrome and was duplicated by snapshot-evidence
+  hosts. Paint deferral is a Session Chat performance seam, not component
+  chrome.
+- Evidence: [ope-169-plan.md](./ope-169-plan.md)
+- Revisit when: another surface needs the same late-markdown deferral.
+
+## OPE-167 top overlay stack; Scroll to end stays at the bottom
+
+- Date: 2026-08-15
+- Decision: Session Todos, Review Changes, and Syncing overlay the **top** of
+  the Session Chat timeline (Syncing, then Todos, then Review; 8pt gap;
+  top-center + 10pt). Only Scroll to end stays above the composer. Review
+  Changes is no longer XOR with Scroll to end and is not gated on pin — it
+  shows whenever the latest completed turn changed at least one file. Hide
+  Todos and Review while the Session Todos sheet is open; Syncing may stay.
+  Timeline pin / fade inset stays composer + 16.
+- Reason: The bottom stack covered the last message. Prototype variant A
+  (`docs/prototypes/pills-on-top/`) keeps the same capsules and leaves only
+  the scroll action at the bottom.
+- Evidence: [ope-167-plan.md](./ope-167-plan.md)
+- Revisit when: a reserved strip or top-bar fold is preferred over the overlay.
+
+## OPE-145 Android scroll-to-end pill uses user-scroll and settle gates
+
+- Date: 2026-08-14
+- Decision: Android Scroll to end visibility hides during user drag/fling and
+  while the timeline is settling to end (programmatic snap or armed unpinned
+  follow). Distance uses the existing reveal threshold with 16dp hide slack.
+  Session Chat still mounts the pill without fade.
+- Reason: `isScrollInProgress` is true for auto-follow as well as user input, so
+  a fling that stops near the end flashed the pill on settle then hid it again
+  when follow snapped. Fade was rejected because OPE-106 `spacedBy` ghost gaps
+  return if invisible pills stay composed.
+- Evidence: [ope-145-plan.md](./ope-145-plan.md)
+- Revisit when: iOS needs the same hide slack, or a fade can be restored without
+  reintroducing float-stack gaps.
+
 ## OPE-113 immediate status + optimistic busy + Working row
 
 - Date: 2026-08-07

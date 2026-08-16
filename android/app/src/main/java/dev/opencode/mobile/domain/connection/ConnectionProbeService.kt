@@ -5,28 +5,52 @@ import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.network.KtorClientFactory
 import dev.opencode.mobile.network.ServerConnection
+import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
-import javax.inject.Inject
 
-class ConnectionProbeService
-    @Inject
-    constructor(
-        private val json: Json,
-        private val adapter: ProjectDomainAdapter,
-    ) {
-        suspend fun probe(connection: ServerConnection) {
-            val client = KtorClientFactory.create(connection, json)
-            try {
-                runCatching {
-                    adapter.requireHealthy(client.get("global/health").body<HealthDto>())
-                }.getOrElse { throw adapter.mapProbeError(it) }
-            } finally {
-                client.close()
-            }
+class ConnectionProbeService(
+    private val json: Json,
+    private val adapter: ProjectDomainAdapter,
+    private val clientFactory: (ServerConnection) -> HttpClient = { connection ->
+        KtorClientFactory.create(connection, json, probe = true)
+    },
+) : ConnectionProbing {
+    private val detector = ServerProtocolDetector(adapter)
+
+    /**
+     * Dual-probe health and return the detected [ServerProtocol].
+     *
+     * Throws [ServerProbeError] when neither health endpoint is usable.
+     */
+    override suspend fun probe(connection: ServerConnection): ServerProtocol {
+        val client = clientFactory(connection)
+        try {
+            return detector.detect(
+                fetchGlobalHealth = { client.fetchHealth("global/health") },
+                fetchApiHealth = { client.fetchHealth("api/health") },
+            )
+        } catch (error: Throwable) {
+            throw if (error is ServerProbeError) error else adapter.mapProbeError(error)
+        } finally {
+            client.close()
         }
     }
+
+    private suspend fun HttpClient.fetchHealth(path: String): HealthDto {
+        val response: HttpResponse = get(path)
+        if (!response.status.isSuccess()) {
+            throw ServerProbeError.Http(
+                statusCode = response.status.value,
+                message = response.status.description,
+            )
+        }
+        return response.body()
+    }
+}
 
 enum class ProbeStatus {
     Reachable,

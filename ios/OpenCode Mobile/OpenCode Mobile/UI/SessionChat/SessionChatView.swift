@@ -16,6 +16,7 @@ struct SessionChatView: View {
     @State private var showDeleteConfirmation = false
     @State private var messageActionsTarget: SessionChatMessageActionsTarget?
     @State private var toolDetailTarget: SessionChatToolDetailTarget?
+    @State private var toolGroupTarget: SessionChatToolGroupTarget?
     @State private var childSessionTarget: ChildSessionNavigationTarget?
     @State private var showAttachmentSources = false
     @State private var showFilesPicker = false
@@ -23,6 +24,7 @@ struct SessionChatView: View {
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var showSessionTodosSheet = false
     @State private var holdingFinishedTodos = false
+    @State private var sawUnfinishedTodos = false
     @State private var finishedHoldTask: Task<Void, Never>?
     /// Measured floating composer stack height (composer + optional suggestions).
     @State private var composerOverlayHeight: CGFloat = 0
@@ -164,7 +166,7 @@ struct SessionChatView: View {
                         sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,
                         sessionTodoActivePreview: viewModel.uiState.sessionTodoActivePreview?.content,
                         hideFloatStack: showSessionTodosSheet,
-                        // Composer + 16 end-pin gap; float stack uses this as-is
+                        // Composer + 16 end-pin gap; Scroll to end uses this as-is
                         // (no extra scrollToEndPillBottomPadding).
                         bottomOverlayInset: sessionChatTimelineBottomInset(composerOverlayHeight),
                         onRefresh: { await viewModel.refreshMessages() },
@@ -200,6 +202,10 @@ struct SessionChatView: View {
                             )
                             toolDetailTarget = target
                         },
+                        onToolGroupTap: { target in
+                            logChatAction(ProductAnalytics.Action.chatOpenToolGroup)
+                            toolGroupTarget = target
+                        },
                         onChildSessionTap: { sessionID, title in
                             logChatAction(ProductAnalytics.Action.chatOpenChildSession)
                             childSessionTarget = ChildSessionNavigationTarget(
@@ -226,7 +232,8 @@ struct SessionChatView: View {
                                 from: nil,
                                 for: nil
                             )
-                        }
+                        },
+                        supportsSessionMessageDiff: viewModel.uiState.supportsSessionMessageDiff
                     )
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -245,7 +252,11 @@ struct SessionChatView: View {
                 .padding(.bottom, max(composerOverlayHeight, 168))
 
                 VStack(spacing: 0) {
-                    if viewModel.uiState.permissionRequest == nil, viewModel.uiState.questionRequest == nil {
+                    if SessionChatComposerKind.resolve(
+                        isChildSession: session.parentID != nil,
+                        hasPermission: viewModel.uiState.permissionRequest != nil,
+                        hasQuestion: viewModel.uiState.questionRequest != nil
+                    ) == .prompt {
                         if viewModel.uiState.atSuggestionsVisible {
                             OpenCodeComposerSuggestionOverlay(
                                 items: viewModel.uiState.atSuggestions.map { suggestion in
@@ -389,13 +400,29 @@ struct SessionChatView: View {
                 initialFilePath: target.initialFilePath
             )
         }
+        .navigationDestination(item: $toolGroupTarget) { target in
+            SessionChatToolGroupView(
+                target: target,
+                worktree: session.worktree,
+                parentSessionID: session.id,
+                supportsSessionMessageDiff: viewModel.uiState.supportsSessionMessageDiff,
+                makeChangesTarget: { assistantMessageID, initialFilePath in
+                    viewModel.uiState.fileChangeNavigationTarget(
+                        worktree: session.worktree,
+                        assistantMessageID: assistantMessageID,
+                        initialFilePath: initialFilePath
+                    )
+                }
+            )
+        }
         .navigationDestination(item: $childSessionTarget) { target in
             SessionChatView(
                 session: SessionListItem(
                     id: target.sessionID,
                     title: target.sessionTitle,
                     worktree: target.worktree,
-                    optimisticNavigationInstanceID: target.optimisticNavigationInstanceID
+                    optimisticNavigationInstanceID: target.optimisticNavigationInstanceID,
+                    parentID: session.id
                 )
             )
         }
@@ -438,7 +465,10 @@ struct SessionChatView: View {
             if isEmpty {
                 finishedHoldTask?.cancel()
                 holdingFinishedTodos = false
+                sawUnfinishedTodos = false
                 showSessionTodosSheet = false
+            } else if !viewModel.uiState.sessionTodosFinished {
+                sawUnfinishedTodos = true
             }
         }
         .onChange(of: selectedPhotoItems) { _, items in
@@ -559,7 +589,17 @@ struct SessionChatView: View {
 
     private func updateFinishedTodosHold(finished: Bool) {
         finishedHoldTask?.cancel()
-        guard finished, !viewModel.uiState.sessionTodos.isEmpty else {
+        if !finished {
+            if !viewModel.uiState.sessionTodos.isEmpty {
+                sawUnfinishedTodos = true
+            }
+            holdingFinishedTodos = false
+            return
+        }
+        guard SessionTodoList.shouldHoldFinished(
+            sawUnfinished: sawUnfinishedTodos,
+            todos: viewModel.uiState.sessionTodos
+        ) else {
             holdingFinishedTodos = false
             return
         }
@@ -720,9 +760,14 @@ struct SessionChatView: View {
     private var composer: some View {
         let composer = viewModel.uiState.composer
         let isSending = viewModel.uiState.isSending
+        let kind = SessionChatComposerKind.resolve(
+            isChildSession: session.parentID != nil,
+            hasPermission: viewModel.uiState.permissionRequest != nil,
+            hasQuestion: viewModel.uiState.questionRequest != nil
+        )
         let state: OpenCodeSessionComposerState
 
-        if let request = viewModel.uiState.permissionRequest {
+        if kind == .permission, let request = viewModel.uiState.permissionRequest {
             state = .permission(
                 .init(
                     requestID: request.id,
@@ -735,7 +780,7 @@ struct SessionChatView: View {
                     errorMessage: viewModel.uiState.permissionErrorMessage
                 )
             )
-        } else if let request = viewModel.uiState.questionRequest {
+        } else if kind == .question, let request = viewModel.uiState.questionRequest {
             let draft = viewModel.uiState
             let questionCount = max(request.questions.count, 1)
             let index = min(max(draft.questionWizardIndex, 0), questionCount - 1)
@@ -769,6 +814,14 @@ struct SessionChatView: View {
                     submitEnabled: isValid && index == questionCount - 1 && !draft.questionSubmitting,
                     submitting: draft.questionSubmitting,
                     errorMessage: draft.questionErrorMessage
+                )
+            )
+        } else if kind == .childLockout {
+            state = .childLockout(
+                .init(
+                    selectedModelLabel: composer.selectedModelLabel,
+                    selectedVariantLabel: composer.selectedVariantLabel,
+                    showVariant: composer.canSelectVariant
                 )
             )
         } else {
@@ -861,6 +914,9 @@ struct SessionChatView: View {
                     Task { await viewModel.submitQuestion(requestID: requestID, sessionID: sessionID) }
                 case let .dismissQuestion(requestID, sessionID):
                     Task { await viewModel.dismissQuestion(requestID: requestID, sessionID: sessionID) }
+                case .backToMainSession:
+                    logChatAction(ProductAnalytics.Action.chatBack)
+                    leaveSession()
                 }
             }
         )
@@ -918,19 +974,6 @@ private func sessionChatTimelineBottomInset(_ composerOverlayHeight: CGFloat) ->
     // before GeometryReader measures still clears the floating composer.
     let height = composerOverlayHeight > 0 ? composerOverlayHeight : 168
     return height + OpenCodeBottomFade.overhang
-}
-
-private extension SessionConnectionStatus {
-    var openCodeStatus: OpenCodeSessionConnectionStatus {
-        switch self {
-        case .live:
-            .live
-        case .connecting:
-            .connecting
-        case .offline:
-            .offline
-        }
-    }
 }
 
 private extension SessionChatSnackbar {

@@ -44,6 +44,7 @@ import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
+import dev.opencode.mobile.ui.components.SessionListScrollPin
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -428,13 +429,41 @@ class MainScreenViewModelTest {
                     sessionRepository = sessionRepository,
                 )
             advanceUntilIdle()
+            assertEquals(0, viewModel.revealNewestToken.value)
             viewModel.createSession("/repo")
             advanceUntilIdle()
             assertEquals(emptyList<String>(), sessionRepository.createdDirectories)
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(1, viewModel.revealNewestToken.value)
             assertEquals(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, loaded.pendingOpenSession?.sessionId)
             assertEquals("/repo", loaded.pendingOpenSession?.worktree)
             assertNull(loaded.projectSessionCreateError)
+        }
+
+    @Test
+    fun homeReveal_afterStaleAbsenceIncrementsRevealToken() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                )
+            advanceUntilIdle()
+            viewModel.markHomeHidden(nowEpochMs = 0L)
+            viewModel.onHomeRevealed(nowEpochMs = SessionListScrollPin.STALE_AFTER_MS)
+            assertEquals(1, viewModel.revealNewestToken.value)
+        }
+
+    @Test
+    fun homeReveal_beforeStaleAbsenceKeepsScroll() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                )
+            advanceUntilIdle()
+            viewModel.markHomeHidden(nowEpochMs = 0L)
+            viewModel.onHomeRevealed(nowEpochMs = SessionListScrollPin.STALE_AFTER_MS - 1)
+            assertEquals(0, viewModel.revealNewestToken.value)
         }
 
     @Test
@@ -786,6 +815,7 @@ class MainScreenViewModelTest {
                 connectionProfileStore = connectionProfileStore,
                 secureCredentialStore = FakeSecureCredentialStore(),
                 sessionModelSelectionStore = selectionStore,
+                composerDraftStore = dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore(),
                 httpClient = OpencodeHttpClient(json, activeConnectionManager),
                 sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
             )

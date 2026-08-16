@@ -1,5 +1,33 @@
 # Session Chat Parity Gaps
 
+## Temporary — OPE-170 device smoke
+
+- Date: 2026-08-15
+- Expected shared intent: A child session shows lockout (model + effort, no
+  prompt) and Back returns to the parent; permission/question still replace it.
+- Current iOS state: implemented; device smoke not run in this change.
+- Current Android state: implemented; unit tests pass; device smoke not run.
+- Affected area: behavior
+- Reason: composer-kind unit tests cover priority; live child navigation needs
+  a device session with a `task` child.
+- Owner / next action: open a child session on both platforms before merge.
+- Status: temporary
+
+## Intentional — OPE-145 Android 16dp scroll-pill hide slack
+
+- Date: 2026-08-14
+- Expected shared intent: Hide Scroll to end during user scroll and while
+  settling to end; show only after the viewer stops past the reveal threshold.
+- Current iOS state: `ScrollToEndVisibility.shouldShow` hides on user scroll;
+  `TimelineScrollController` also hides during programmatic scroll. No hide slack.
+- Current Android state: same user-scroll and settle gates, plus 16dp hide slack
+  so reveal-threshold jitter cannot blink the pill.
+- Affected area: behavior
+- Reason: Android LazyList layout jitter around the reveal band was the reported
+  blink; iOS distance-from-bottom is stable enough without slack.
+- Owner / next action: add the same slack on iOS only if a blink appears there.
+- Status: intentional
+
 ## Temporary — OPE-113 device smoke
 
 - Date: 2026-08-07

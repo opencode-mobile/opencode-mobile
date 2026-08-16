@@ -1,9 +1,14 @@
 package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.data.remote.EventsApi
+import dev.opencode.mobile.domain.connection.DeviceNetworkPath
+import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
+import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.message.ConnectionEpoch
+import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -16,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,9 +32,14 @@ class DefaultForegroundEventStream
         private val eventsApi: EventsApi,
         private val eventDomainAdapter: EventDomainAdapter,
         private val diagnosticLogger: DiagnosticLogger,
+        private val activeConnectionManager: ActiveConnectionManager,
+        private val deviceNetworkPath: DeviceNetworkPath = ReadyDeviceNetworkPath,
     ) : ForegroundEventStream {
         private val scope = CoroutineScope(SupervisorJob())
         private var streamJob: Job? = null
+
+        /** Invalidates in-flight cancel/error handlers after stop() or a newer start(). */
+        private val streamGeneration = AtomicLong(0)
         private var wasConnected = false
         private var currentStreamWasConnected = false
         private var emittedReconnectForCurrentStream = false
@@ -40,79 +51,141 @@ class DefaultForegroundEventStream
         override val events: SharedFlow<OpencodeEvent> = _events.asSharedFlow()
 
         override fun start() {
-            if (streamJob?.isActive == true) return
+            if (streamJob?.isActive == true) {
+                diagnosticLogger.debug(DiagnosticLogArea.Sse, "foreground SSE start ignored; already running")
+                return
+            }
             diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream starting")
+            val generation = streamGeneration.incrementAndGet()
             ConnectionEpoch.shared.bump()
             streamJob =
                 scope.launch {
                     var retryAttempt = 0
-                    while (true) {
-                        currentStreamWasConnected = false
-                        emittedReconnectForCurrentStream = false
-                        setConnectionState(
-                            if (wasConnected) EventStreamConnectionState.Reconnecting else EventStreamConnectionState.Connecting,
-                        )
-                        try {
-                            eventsApi.streamGlobalEvents(
-                                onHTTPResponse = { statusCode ->
-                                    diagnosticLogger.info(
-                                        DiagnosticLogArea.Sse,
-                                        "GET /global/event opened status=$statusCode",
-                                    )
-                                    markStreamConnected()
-                                    retryAttempt = 0
+                    try {
+                        while (true) {
+                            if (generation != streamGeneration.get()) return@launch
+                            deviceNetworkPath.waitUntilReady()
+                            if (generation != streamGeneration.get()) return@launch
+                            currentStreamWasConnected = false
+                            emittedReconnectForCurrentStream = false
+                            val previouslyConnected = wasConnected
+                            setConnectionState(
+                                if (previouslyConnected) {
+                                    EventStreamConnectionState.Reconnecting
+                                } else {
+                                    EventStreamConnectionState.Connecting
                                 },
-                            ) { dataLine ->
-                                val event =
-                                    eventDomainAdapter.parseEvent(dataLine)
-                                        ?: run {
-                                            diagnosticLogger.warning(DiagnosticLogArea.Sse, "SSE event parse failed")
-                                            return@streamGlobalEvents
+                                generation,
+                            )
+                            val readJob =
+                                launch {
+                                    try {
+                                        val protocol = activeConnectionManager.protocolHint()
+                                        launch { activeConnectionManager.currentProtocolOrProbe() }
+                                        val path = if (protocol == ServerProtocol.V2) "/api/event" else "/global/event"
+                                        eventsApi.streamGlobalEvents(
+                                            protocol = protocol,
+                                            onHTTPResponse = { statusCode ->
+                                                diagnosticLogger.info(
+                                                    DiagnosticLogArea.Sse,
+                                                    "GET $path opened status=$statusCode protocol=${protocol.wireValue}",
+                                                )
+                                                markStreamConnected()
+                                                retryAttempt = 0
+                                            },
+                                        ) { dataLine ->
+                                            val parsed = eventDomainAdapter.parseEvents(dataLine)
+                                            if (parsed.isEmpty()) {
+                                                diagnosticLogger.warning(DiagnosticLogArea.Sse, "SSE event parse failed")
+                                                return@streamGlobalEvents
+                                            }
+                                            for (event in parsed) {
+                                                diagnosticLogger.debug(
+                                                    DiagnosticLogArea.Sse,
+                                                    "SSE event type=${event.type} session=${event.sessionId ?: "-"}",
+                                                )
+                                                when (event.type) {
+                                                    "server.connected" -> {
+                                                        markStreamConnected()
+                                                        retryAttempt = 0
+                                                        _events.emit(event)
+                                                    }
+                                                    "server.heartbeat" -> Unit
+                                                    else -> {
+                                                        markStreamConnected()
+                                                        _events.emit(event)
+                                                    }
+                                                }
+                                            }
                                         }
-                                diagnosticLogger.debug(
-                                    DiagnosticLogArea.Sse,
-                                    "SSE event type=${event.type} session=${event.sessionId ?: "-"}",
-                                )
-                                when (event.type) {
-                                    "server.connected" -> {
-                                        markStreamConnected()
-                                        retryAttempt = 0
-                                        _events.emit(event)
-                                    }
-                                    "server.heartbeat" -> Unit
-                                    else -> {
-                                        markStreamConnected()
-                                        // Emit on the read coroutine so order is preserved and
-                                        // we do not spawn one job per delta under burst.
-                                        _events.emit(event)
+                                        setConnectionState(
+                                            if (previouslyConnected || wasConnected) {
+                                                EventStreamConnectionState.Reconnecting
+                                            } else {
+                                                EventStreamConnectionState.Connecting
+                                            },
+                                            generation,
+                                        )
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (throwable: Throwable) {
+                                        diagnosticLogger.warning(
+                                            DiagnosticLogArea.Sse,
+                                            "foreground SSE stream failed",
+                                            throwable,
+                                        )
+                                        setConnectionState(
+                                            if (previouslyConnected || wasConnected) {
+                                                EventStreamConnectionState.Reconnecting
+                                            } else {
+                                                EventStreamConnectionState.Connecting
+                                            },
+                                            generation,
+                                        )
                                     }
                                 }
+                            val watchJob =
+                                launch {
+                                    deviceNetworkPath.status.collect { status ->
+                                        if (status == DeviceNetworkPathStatus.Unavailable) {
+                                            readJob.cancel()
+                                        }
+                                    }
+                                }
+                            try {
+                                readJob.join()
+                            } finally {
+                                watchJob.cancel()
                             }
-                            setConnectionState(EventStreamConnectionState.Disconnected)
-                        } catch (_: CancellationException) {
-                            setConnectionState(EventStreamConnectionState.Idle)
-                            return@launch
-                        } catch (throwable: Throwable) {
-                            diagnosticLogger.warning(
-                                DiagnosticLogArea.Sse,
-                                "foreground SSE stream failed",
-                                throwable,
-                            )
-                            setConnectionState(
-                                if (wasConnected) EventStreamConnectionState.Reconnecting else EventStreamConnectionState.Disconnected,
-                            )
-                        }
+                            if (deviceNetworkPath.status.value == DeviceNetworkPathStatus.Unavailable) {
+                                setConnectionState(
+                                    if (previouslyConnected || wasConnected) {
+                                        EventStreamConnectionState.Reconnecting
+                                    } else {
+                                        EventStreamConnectionState.Connecting
+                                    },
+                                    generation,
+                                )
+                                continue
+                            }
 
-                        retryAttempt += 1
-                        val backoffMs = (1_000L * retryAttempt).coerceAtMost(10_000L)
-                        diagnosticLogger.debug(DiagnosticLogArea.Sse, "foreground SSE retry in ${backoffMs}ms")
-                        delay(backoffMs)
+                            retryAttempt += 1
+                            val backoffMs = (1_000L * retryAttempt).coerceAtMost(10_000L)
+                            diagnosticLogger.debug(DiagnosticLogArea.Sse, "foreground SSE retry in ${backoffMs}ms")
+                            delay(backoffMs)
+                        }
+                    } catch (_: CancellationException) {
+                        if (generation == streamGeneration.get()) {
+                            streamJob = null
+                            setConnectionState(EventStreamConnectionState.Idle, generation)
+                        }
                     }
                 }
         }
 
         override fun stop() {
             diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream stopping")
+            streamGeneration.incrementAndGet()
             streamJob?.cancel()
             streamJob = null
             wasConnected = false
@@ -136,7 +209,11 @@ class DefaultForegroundEventStream
             wasConnected = true
         }
 
-        private fun setConnectionState(state: EventStreamConnectionState) {
+        private fun setConnectionState(
+            state: EventStreamConnectionState,
+            generation: Long? = null,
+        ) {
+            if (generation != null && generation != streamGeneration.get()) return
             if (_connectionState.value != state) {
                 diagnosticLogger.debug(
                     DiagnosticLogArea.Sse,

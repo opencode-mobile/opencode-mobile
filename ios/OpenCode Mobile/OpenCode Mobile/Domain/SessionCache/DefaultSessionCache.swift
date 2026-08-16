@@ -57,6 +57,15 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
     }
 
     func purgeWorktree(serverBaseURL: String, worktree: String) async {
+        if let connectionId = connectionIdProvider() {
+            await store.evict(
+                .worktree(
+                    connectionIdOrUrlPrefix: connectionId,
+                    worktree: worktree,
+                    matchByUrlPrefix: false
+                )
+            )
+        }
         await store.evict(
             .worktree(
                 connectionIdOrUrlPrefix: CacheUrlNormalizer.connectionIdPrefix(baseURL: serverBaseURL),

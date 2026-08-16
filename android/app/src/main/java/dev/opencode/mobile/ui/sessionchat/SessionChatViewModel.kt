@@ -1,15 +1,19 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import android.util.Log
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.connection.DeviceNetworkPath
+import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.smartProjectLabel
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
@@ -30,6 +34,7 @@ import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
+import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.session.PermissionDecision
 import dev.opencode.mobile.domain.session.PermissionRequest
@@ -41,6 +46,7 @@ import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.SessionTodoList
+import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
@@ -52,6 +58,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -75,9 +82,12 @@ class SessionChatViewModel
         eventDomainAdapter: EventDomainAdapter,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         sessionModelSelectionStore: SessionModelSelectionStore,
+        composerDraftStore: ComposerDraftStore,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         private val optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator,
         private val connectionProfileStore: ConnectionProfileStore,
+        private val activeConnectionManager: ActiveConnectionManager,
+        deviceNetworkPath: DeviceNetworkPath = ReadyDeviceNetworkPath,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -102,6 +112,7 @@ class SessionChatViewModel
                 sessionRepository = sessionRepository,
                 connectionSessionCoordinator = connectionSessionCoordinator,
                 sessionModelSelectionStore = sessionModelSelectionStore,
+                composerDraftStore = composerDraftStore,
                 scope = viewModelScope,
             )
         private val sessionInfo =
@@ -111,11 +122,15 @@ class SessionChatViewModel
                 foregroundEventStream = foregroundEventStream,
                 eventDomainAdapter = eventDomainAdapter,
                 scope = viewModelScope,
+                deviceNetworkPath = deviceNetworkPath,
             )
         private val reviewChanges =
             SessionChatReviewChanges(
                 sessionRepository = sessionRepository,
                 scope = viewModelScope,
+                supportsSessionMessageDiff = {
+                    activeConnectionManager.currentCapabilities().supportsSessionMessageDiff
+                },
             )
         private val commands =
             SessionChatCommands(
@@ -199,6 +214,13 @@ class SessionChatViewModel
                     )
                     publishUiState(timelineState, composerState, infoState, reviewChangesState, commandsState)
                 }
+            }
+            viewModelScope.launch {
+                snapshotFlow { SessionChatDisplayPreferences.collapseConsecutiveToolCalls }
+                    .distinctUntilChanged()
+                    .collect { enabled ->
+                        timeline.updateCollapseConsecutiveToolCalls(enabled)
+                    }
             }
         }
 
@@ -781,7 +803,7 @@ class SessionChatViewModel
             publishUiState()
             viewModelScope.launch(ioDispatcher) {
                 runCatching {
-                    sessionRepository.replyToQuestion(request.id, answers, boundWorktree)
+                    sessionRepository.replyToQuestion(request.sessionId, request.id, answers, boundWorktree)
                 }.onFailure { handleQuestionMutationFailure(request.id, it, dismiss = false) }
             }
         }
@@ -800,7 +822,7 @@ class SessionChatViewModel
             publishUiState()
             viewModelScope.launch(ioDispatcher) {
                 runCatching {
-                    sessionRepository.rejectQuestion(request.id, boundWorktree)
+                    sessionRepository.rejectQuestion(request.sessionId, request.id, boundWorktree)
                 }.onFailure { handleQuestionMutationFailure(request.id, it, dismiss = true) }
             }
         }
@@ -1190,7 +1212,7 @@ class SessionChatViewModel
                 workingIndicatorLabel = workingIndicatorLabel,
                 syncingIndicatorLabel = syncingIndicatorLabel,
                 sessionTodos = sessionTodos,
-                sessionTodosVisible = SessionTodoList.isVisible(sessionTodos, isLive),
+                sessionTodosVisible = SessionTodoList.isVisible(sessionTodos),
                 sessionTodosFinished = SessionTodoList.isFinished(sessionTodos),
                 sessionTodoActivePreview = SessionTodoList.activePreview(sessionTodos),
                 sessionTodoCompletedCount = SessionTodoList.completedCount(sessionTodos),
@@ -1225,6 +1247,7 @@ class SessionChatViewModel
                     },
                 reviewChangesMessageId = reviewChangesState.messageId,
                 reviewChangesSummary = reviewChangesState.summary,
+                supportsSessionMessageDiff = activeConnectionManager.currentCapabilities().supportsSessionMessageDiff,
                 rename = infoState.rename,
                 slashSuggestionsVisible = composerState.slashSuggestionsVisible,
                 slashSuggestions = composerState.slashSuggestions,
@@ -1291,6 +1314,7 @@ class SessionChatViewModel
         }
 
         override fun onCleared() {
+            composer.flushDraft()
             clearSessionReadyFocus()
             super.onCleared()
         }

@@ -556,6 +556,67 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_resumeCatchUp_startsOnConnectingAndCoalescesServerConnected() =
+        runTest(testDispatcher) {
+            // OPE-165 snapshot: cached messages stay, one list fetch before live,
+            // TransportResumed + server.connected share one catch-up.
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val epoch = ConnectionEpoch()
+            val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
+            val sync =
+                MessageSync(
+                    listMessages = { sessionId, directory -> repository.listMessages(sessionId, directory) },
+                    engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
+                    eventStream = eventStream,
+                    liveStoreScope = scope,
+                    pollIntervalMs = 60_000L,
+                    connectionEpoch = epoch,
+                    recoveryDelay = { delay(1) },
+                )
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            assertEquals("Hello", emissions.last().single().text)
+            val callsAfterInitial = repository.listMessagesCallCount
+
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(1)
+            eventStream.setConnectionState(EventStreamConnectionState.Idle)
+            advanceTimeBy(1)
+            assertTrue(sync.syncHealth("ses-1", "/repo") is MessageSyncHealth.Stale)
+            assertEquals("Hello", emissions.last().single().text)
+
+            repository.messages =
+                listOf(
+                    Message(
+                        id = "msg-2",
+                        role = MessageRole.Assistant,
+                        text = "Caught up while connecting",
+                    ),
+                )
+            epoch.bump()
+            eventStream.setConnectionState(EventStreamConnectionState.Connecting)
+            advanceTimeBy(50)
+            assertEquals("Caught up while connecting", emissions.last().single().text)
+            assertEquals(callsAfterInitial + 1, repository.listMessagesCallCount)
+
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            eventStream.emit(OpencodeEvent(type = "server.connected"))
+            advanceTimeBy(LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS + 50)
+
+            assertEquals(callsAfterInitial + 1, repository.listMessagesCallCount)
+            assertEquals("Caught up while connecting", emissions.last().single().text)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
     fun observeMessages_backgroundResumeToLiveWithoutReconnect_refreshesWhenNotStreaming() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()

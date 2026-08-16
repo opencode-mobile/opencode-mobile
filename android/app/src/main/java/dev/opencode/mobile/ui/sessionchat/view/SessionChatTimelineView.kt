@@ -7,7 +7,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,14 +33,9 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -54,11 +48,10 @@ import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
+import dev.opencode.mobile.ui.components.OpenCodeAssistantMessage
 import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageContent
-import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
-import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPill
 import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeSessionTodosPill
@@ -71,6 +64,7 @@ import dev.opencode.mobile.ui.scroll.MessageListTimelineApplyHold
 import dev.opencode.mobile.ui.scroll.messageListAnimateLastMessageSize
 import dev.opencode.mobile.ui.scroll.messageListTimelineItemSpacing
 import dev.opencode.mobile.ui.scroll.rememberMessageListTimeline
+import dev.opencode.mobile.ui.scroll.rememberMessageListUserScroll
 import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
 import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
@@ -105,8 +99,10 @@ internal data class SessionChatTimelineViewProps(
     val onSessionTodosClick: () -> Unit = {},
     val onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     val onToolDetailTap: (SessionChatToolDetailTarget) -> Unit = {},
+    val onToolGroupTap: (SessionChatToolGroupTarget) -> Unit = {},
     val onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit = { _, _ -> },
     val onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit = { _, _ -> },
+    val supportsSessionMessageDiff: Boolean = true,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -175,8 +171,10 @@ internal fun SessionChatTimelineView(
                 onSessionTodosClick = props.onSessionTodosClick,
                 onMessageActionsTap = props.onMessageActionsTap,
                 onToolDetailTap = props.onToolDetailTap,
+                onToolGroupTap = props.onToolGroupTap,
                 onChildSessionTap = props.onChildSessionTap,
                 onChangesReviewTap = props.onChangesReviewTap,
+                supportsSessionMessageDiff = props.supportsSessionMessageDiff,
                 modifier = modifier,
             )
         }
@@ -203,36 +201,18 @@ private fun SessionChatTimelineReadyView(
     onSessionTodosClick: () -> Unit,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+    onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
+    supportsSessionMessageDiff: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
     // Only user drag/fling holds applies — not programmatic auto-follow
     // (listState.isScrollInProgress is true for both; iOS holds on isDragging /
     // isDecelerating / isUserScrolling only).
-    var isUserScrollInProgress by remember { mutableStateOf(false) }
-    val userScrollConnection =
-        remember {
-            object : NestedScrollConnection {
-                override fun onPreScroll(
-                    available: Offset,
-                    source: NestedScrollSource,
-                ): Offset {
-                    if (source == NestedScrollSource.UserInput) {
-                        isUserScrollInProgress = true
-                    }
-                    return Offset.Zero
-                }
-            }
-        }
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.isScrollInProgress }.collect { inProgress ->
-            if (!inProgress) {
-                isUserScrollInProgress = false
-            }
-        }
-    }
+    val userScroll = rememberMessageListUserScroll(listState)
+    val isUserScrollInProgress = userScroll.inProgress
 
     // Host-side latest-wins hold under user drag/fling (iOS pendingApply parity).
     // Required frames flush immediately; other kinds keep the committed snapshot.
@@ -274,6 +254,7 @@ private fun SessionChatTimelineReadyView(
             autoFollowEnabled = true,
             messageIdsChronological = messageIds,
             listState = listState,
+            userScroll = userScroll,
         )
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -287,9 +268,7 @@ private fun SessionChatTimelineReadyView(
                 items = committedMessages,
                 bottomAnchorKey = SESSION_CHAT_BOTTOM_ANCHOR_KEY,
                 modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .nestedScroll(userScrollConnection),
+                    Modifier.fillMaxSize(),
                 contentPadding =
                     PaddingValues(
                         start = 16.dp,
@@ -320,8 +299,10 @@ private fun SessionChatTimelineReadyView(
                     message = message,
                     onMessageActionsTap = onMessageActionsTap,
                     onToolDetailTap = onToolDetailTap,
+                    onToolGroupTap = onToolGroupTap,
                     onChildSessionTap = onChildSessionTap,
                     onChangesReviewTap = onChangesReviewTap,
+                    supportsSessionMessageDiff = supportsSessionMessageDiff,
                     // Streaming height growth is GrowBottom + unanimated layout; do not
                     // animateContentSize on production Session Chat (gallery may still demo it).
                     animateSizeChanges = false,
@@ -331,79 +312,68 @@ private fun SessionChatTimelineReadyView(
             }
         }
 
-        if (syncingIndicatorLabel != null) {
-            OpenCodeSyncingPill(
-                label = syncingIndicatorLabel,
+        val showScrollToEnd = !hideFloatStack && timeline.showScrollToEnd
+        val showReviewChanges =
+            !hideFloatStack && ReviewChangesPillVisibility.shouldShow(reviewChangesSummary)
+        val showSessionTodosPill = !hideFloatStack && sessionTodosVisible && sessionTodoTotalCount > 0
+        val showTopOverlayStack =
+            syncingIndicatorLabel != null || showSessionTodosPill || showReviewChanges
+        if (showTopOverlayStack) {
+            Column(
                 modifier =
                     Modifier
                         .align(Alignment.TopCenter)
                         .padding(top = 10.dp),
-            )
-        }
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (syncingIndicatorLabel != null) {
+                    OpenCodeSyncingPill(label = syncingIndicatorLabel)
+                }
 
-        if (!hideFloatStack) {
-            // Primary (nearest composer): Scroll XOR Review. Secondary above: Todos.
-            // Compose only visible pills so spacedBy never reserves gaps for ghosts
-            // (empty AnimatedVisibility + spacedBy lifted Scroll ~8dp with no Todos).
-            val showScrollToEnd = timeline.showScrollToEnd
-            val showReviewChanges =
-                ReviewChangesPillVisibility.shouldShow(
-                    summary = reviewChangesSummary,
-                    isPinnedToEnd = timeline.isPinnedToEnd,
-                    showScrollToEnd = showScrollToEnd,
-                )
-            val showSessionTodosPill = sessionTodosVisible && sessionTodoTotalCount > 0
-            val showFloatStack = showSessionTodosPill || showScrollToEnd || showReviewChanges
-            if (showFloatStack) {
-                // bottomOverlayInset is already composer + 16 end-pin gap.
-                Column(
-                    modifier =
-                        Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = bottomOverlayInset),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (showSessionTodosPill) {
-                        OpenCodeSessionTodosPill(
-                            completedCount = sessionTodoCompletedCount,
-                            totalCount = sessionTodoTotalCount,
-                            activePreview = sessionTodoActivePreview,
-                            onClick = onSessionTodosClick,
+                if (showSessionTodosPill) {
+                    OpenCodeSessionTodosPill(
+                        completedCount = sessionTodoCompletedCount,
+                        totalCount = sessionTodoTotalCount,
+                        activePreview = sessionTodoActivePreview,
+                        onClick = onSessionTodosClick,
+                    )
+                }
+
+                if (showReviewChanges) {
+                    reviewChangesSummary?.let { summary ->
+                        OpenCodeReviewChangesPill(
+                            variant = OpenCodeReviewChangesPillVariant.LatestTurn,
+                            changedFileCount = summary.fileCount,
+                            additions = summary.additions,
+                            deletions = summary.deletions,
+                            onClick = onReviewChangesClick,
                         )
-                    }
-
-                    if (showScrollToEnd) {
-                        OpenCodeActionPill(
-                            variant = OpenCodeActionPillVariant.ScrollToEnd,
-                            onClick = {
-                                ProductAnalytics.logUserAction(
-                                    screenId = ProductAnalytics.Screen.SESSION_CHAT,
-                                    actionId = ProductAnalytics.Action.CHAT_SCROLL_TO_END,
-                                )
-                                timeline.scrollController.animateToEnd(
-                                    messageCount = timeline.messageCount,
-                                    tolerancePx = timeline.autoFollowTolerancePx,
-                                    bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
-                                    autoFollowEnabled = true,
-                                )
-                            },
-                        )
-                    }
-
-                    if (showReviewChanges) {
-                        reviewChangesSummary?.let { summary ->
-                            OpenCodeReviewChangesPill(
-                                variant = OpenCodeReviewChangesPillVariant.LatestTurn,
-                                changedFileCount = summary.fileCount,
-                                additions = summary.additions,
-                                deletions = summary.deletions,
-                                onClick = onReviewChangesClick,
-                            )
-                        }
                     }
                 }
             }
+        }
+
+        if (showScrollToEnd) {
+            OpenCodeActionPill(
+                variant = OpenCodeActionPillVariant.ScrollToEnd,
+                onClick = {
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.SESSION_CHAT,
+                        actionId = ProductAnalytics.Action.CHAT_SCROLL_TO_END,
+                    )
+                    timeline.scrollController.animateToEnd(
+                        messageCount = timeline.messageCount,
+                        tolerancePx = timeline.autoFollowTolerancePx,
+                        bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
+                        autoFollowEnabled = true,
+                    )
+                },
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = bottomOverlayInset),
+            )
         }
     }
 }
@@ -413,8 +383,10 @@ private fun SessionChatMessageRow(
     message: SessionChatMessageItem,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+    onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
+    supportsSessionMessageDiff: Boolean,
     animateSizeChanges: Boolean,
     onContentSizeAnimationFinished: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -467,8 +439,10 @@ private fun SessionChatMessageRow(
                     message = message,
                     onOpenMessageActions = { openMessageActions(showsRevertMessage = false) },
                     onToolDetailTap = onToolDetailTap,
+                    onToolGroupTap = onToolGroupTap,
                     onChildSessionTap = onChildSessionTap,
                     onChangesReviewTap = onChangesReviewTap,
+                    supportsSessionMessageDiff = supportsSessionMessageDiff,
                 )
 
             MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
@@ -493,7 +467,9 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
                 )
             is SessionChatTimelineBlock.Attachment ->
                 OpenCodeOutgoingMessageContent.Attachment(AttachmentPresentationMapper.from(block.attachment))
-            is SessionChatTimelineBlock.ToolCard, is SessionChatTimelineBlock.ToolGroup -> null
+            is SessionChatTimelineBlock.ToolCard, is SessionChatTimelineBlock.ToolGroup,
+            is SessionChatTimelineBlock.ChildSessionRow,
+            -> null
         }
     }
 }
@@ -524,8 +500,10 @@ private fun AssistantMessageContent(
     message: SessionChatMessageItem,
     onOpenMessageActions: () -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+    onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
+    supportsSessionMessageDiff: Boolean,
 ) {
     val blocks =
         message.blocks.ifEmpty {
@@ -578,7 +556,7 @@ private fun AssistantMessageContent(
                                             onChildSessionTap(block.childSessionId, block.title)
                                         }
                                     }
-                                    block.opensChangesReview -> {
+                                    block.opensChangesReview && supportsSessionMessageDiff -> {
                                         {
                                             onChangesReviewTap(message.id, block.changesInitialFilePath)
                                         }
@@ -602,6 +580,30 @@ private fun AssistantMessageContent(
                             title = block.title,
                             subtitle = block.subtitle,
                             errorText = block.errorText,
+                            onClick = {
+                                onToolGroupTap(
+                                    SessionChatToolGroupTarget(
+                                        blockID = block.blockID,
+                                        title = block.title,
+                                        subtitle = block.subtitle,
+                                        members = block.members,
+                                        messageId = message.id,
+                                    ),
+                                )
+                            },
+                        )
+                    is SessionChatTimelineBlock.ChildSessionRow ->
+                        SessionChatChildSessionRow(
+                            agentName = block.agentName,
+                            isBackground = block.isBackground,
+                            secondLine = block.secondLine,
+                            timeStartEpochMs = block.timeStartEpochMs,
+                            onClick =
+                                block.childSessionId?.let { childSessionId ->
+                                    {
+                                        onChildSessionTap(childSessionId, block.agentName)
+                                    }
+                                },
                         )
                 }
             }
@@ -616,12 +618,6 @@ private fun AssistantMessageBubble(
     isStreaming: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val bubbleModifier =
-        modifier
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-
     val shouldDeferMarkdown =
         SessionChatMarkdownPaint.shouldDefer(
             textLength = text.length,
@@ -653,23 +649,12 @@ private fun AssistantMessageBubble(
         paintMarkdown = true
     }
 
-    when {
-        paintMarkdown && renderedMarkdown != null ->
-            OpenCodeRenderedMarkdown(
-                document = renderedMarkdown,
-                variant = OpenCodeRenderedMarkdownVariant.AssistantMessage,
-                isStreaming = isStreaming,
-                modifier = bubbleModifier,
-            )
-
-        else ->
-            Text(
-                text = text.ifBlank { "…" },
-                modifier = bubbleModifier,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-    }
+    OpenCodeAssistantMessage(
+        text = text,
+        renderedMarkdown = renderedMarkdown.takeIf { paintMarkdown },
+        isStreaming = isStreaming,
+        modifier = modifier,
+    )
 }
 
 /**

@@ -14,3 +14,16 @@
 - Next action: document in manual-test; optional future hint copy in Android
   setup screen only.
 - Status: intentional.
+
+## Probe connect timeout
+
+- Expected shared intent: dual-health detect uses a short connect budget and a
+  5s request budget.
+- Current iOS state: probe `URLSession` sets 5s request and 5s resource
+  timeouts. There is no connect-only timeout.
+- Current Android state: probe client uses 3s connect and 5s request/socket.
+- Affected area: behavior, error handling.
+- Reason: `URLSession` has no connect-only timeout separate from request /
+  resource.
+- Next action: revisit if a measured Tailscale connect budget is added.
+- Status: intentional.

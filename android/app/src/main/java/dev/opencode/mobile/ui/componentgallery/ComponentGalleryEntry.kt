@@ -21,7 +21,9 @@ enum class ComponentGalleryEntryId {
     Icons,
     Attachment,
     OutgoingMessage,
+    AssistantMessage,
     ToolCallCard,
+    ChildSessionRow,
     TopBar,
     OverflowMenu,
     BottomSheet,
@@ -200,6 +202,12 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.AssistantMessage,
+            title = "Assistant Message",
+            description = "Leading reply card for assistant text in Session Chat.",
+            category = ComponentGalleryCategory.Chat,
+        ),
+        ComponentGalleryEntry(
             id = ComponentGalleryEntryId.RenderedMarkdown,
             title = "Rendered Markdown",
             description = "Safe markdown, code, and fenced diff rendering for message text.",
@@ -209,6 +217,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.ToolCallCard,
             title = "Tool Call Card",
             description = "Collapsed tool-agnostic assistant tool row with status variants.",
+            category = ComponentGalleryCategory.Chat,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.ChildSessionRow,
+            title = "Child Session Row",
+            description = "Quiet person/thread row for a child session in Session Chat.",
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(

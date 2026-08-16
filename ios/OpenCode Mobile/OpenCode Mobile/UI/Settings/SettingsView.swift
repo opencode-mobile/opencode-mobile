@@ -20,7 +20,9 @@ private struct SectionHeader: View {
 }
 
 struct SettingsView: View {
-    let onConnectionSetup: () -> Void
+    var onAddServer: () -> Void = {}
+    var onEditProfile: (ConnectionProfile) -> Void = { _ in }
+    var serversRefreshToken: Int = 0
     @Environment(\.dismiss) private var dismiss
     @State private var showComponentGallery = false
     @State private var showTextMateLogbook = false
@@ -37,6 +39,11 @@ struct SettingsView: View {
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var markdownHighlightPreferences = MarkdownHighlightPreferences.shared
     @State private var analyticsConsentPreferences = AnalyticsConsentPreferences.shared
+    @State private var sessionChatDisplayPreferences = SessionChatDisplayPreferences.shared
+    @State private var showServers = false
+    @State private var serversSubtitleState = "No servers saved"
+    @State private var serversLetter: Character = "S"
+    @State private var serversLetterAccent: LetterAccent = .blue
 
     var body: some View {
         VStack(spacing: 0) {
@@ -57,16 +64,20 @@ struct SettingsView: View {
                     SectionHeader(title: "Server")
 
                     OpenCodeListItem(
-                        title: "Server Connection",
-                        subtitle: "Configure server URL and credentials",
+                        title: "Servers",
+                        subtitle: serversSubtitleState,
                         style: .card,
-                        startDecorator: .icon(.cloud, accessibilityLabel: "Server Connection"),
+                        startDecorator: .letter(serversLetter, serversLetterAccent),
                         action: {
                             ProductAnalytics.logUserAction(
                                 screenId: ProductAnalytics.Screen.settings,
                                 actionId: ProductAnalytics.Action.settingsOpenConnection
                             )
-                            onConnectionSetup()
+                            showServers = true
+                        },
+                        trailing: {
+                            OpenCodeIconImage(icon: .chevronRight, size: 18)
+                                .foregroundStyle(OpenCodeColors.textBase)
                         }
                     )
                     .padding(.horizontal, 16)
@@ -129,6 +140,30 @@ struct SettingsView: View {
                                 trigger: ProductAnalytics.Trigger.present
                             )
                             showRecentWindowPicker = true
+                        }
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
+                        title: "Collapse Consecutive Tool Calls",
+                        subtitle: "Group back-to-back tools into one summary card",
+                        style: .card,
+                        startDecorator: .icon(.collapseContent, accessibilityLabel: "Collapse Consecutive Tool Calls"),
+                        trailing: {
+                            Toggle(
+                                "Collapse Consecutive Tool Calls",
+                                isOn: Binding(
+                                    get: { sessionChatDisplayPreferences.collapseConsecutiveToolCalls },
+                                    set: { newValue in
+                                        logSettingsAction(
+                                            ProductAnalytics.Action.settingsToggleCollapseConsecutiveToolCalls
+                                        )
+                                        sessionChatDisplayPreferences.setCollapseConsecutiveToolCalls(newValue)
+                                    }
+                                )
+                            )
+                            .labelsHidden()
+                            .tint(OpenCodeColors.interactive)
                         }
                     )
                     .padding(.horizontal, 16)
@@ -432,6 +467,34 @@ struct SettingsView: View {
                 showClearConfirmation = false
             }
         )
+        .navigationDestination(isPresented: $showServers) {
+            ServersView(
+                onAddServer: onAddServer,
+                onEditProfile: onEditProfile,
+                refreshToken: serversRefreshToken
+            )
+        }
+        .task { await refreshServersSubtitle() }
+        .onChange(of: showServers) { _, visible in
+            if !visible {
+                Task { await refreshServersSubtitle() }
+            }
+        }
+    }
+
+    private func refreshServersSubtitle() async {
+        let profiles = await Container.shared.connectionSessionCoordinator().listProfiles()
+        let active = Container.shared.connectionSessionCoordinator().currentProfile()
+        let name = active?.displayName ?? "Servers"
+        serversLetter = letterCharacter(for: name)
+        serversLetterAccent = letterAccent(for: active?.id ?? name)
+        if profiles.isEmpty {
+            serversSubtitleState = "No servers saved"
+        } else if let activeName = active?.displayName {
+            serversSubtitleState = "\(profiles.count) saved · \(activeName) active"
+        } else {
+            serversSubtitleState = "\(profiles.count) saved"
+        }
     }
 
     private func logSettingsAction(_ actionId: String) {
@@ -496,14 +559,14 @@ struct SettingsView: View {
 
 #Preview {
     NavigationStack {
-        SettingsView(onConnectionSetup: {})
+        SettingsView()
     }
     .openCodeTheme()
 }
 
 #Preview("Dark") {
     NavigationStack {
-        SettingsView(onConnectionSetup: {})
+        SettingsView()
     }
     .openCodeTheme()
     .preferredColorScheme(.dark)

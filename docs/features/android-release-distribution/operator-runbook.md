@@ -55,14 +55,24 @@ gh workflow run "Android Release" --ref main -f version_name=0.1.0
 or `0.1.0-internal.1`. The workflow derives `versionCode` from the monotonically
 increasing GitHub run number.
 
-Each successful run uploads two seven-day artifacts:
+Each successful run uploads three artifacts:
 
-- `android-aab-<version-name>-<run-number>` — signed AAB for Play;
-- `android-apk-<version-name>-<run-number>` — signed APK for Test Lab.
+- `android-aab-<version-name>-<run-number>` — signed AAB for Play (7 days);
+- `android-apk-<version-name>-<run-number>` — signed APK for Test Lab (7 days);
+- `android-mapping-<version-name>-<run-number>` — R8 `mapping.txt` (90 days).
 
-The workflow verifies the AAB with `jarsigner` and the APK with `apksigner`
-before upload. A missing secret, malformed version, signing failure, or signature
-verification failure stops the run.
+The workflow verifies the AAB with `jarsigner`, the APK with `apksigner`, and
+confirms the AAB embeds R8 mapping metadata before Play upload. A missing
+secret, malformed version, signing failure, signature verification failure, or
+missing R8 mapping stops the run. Native debug-symbol metadata is reported when
+present; pre-stripped AndroidX `.so` files may omit it without failing the run.
+
+Release builds enable R8 minify and request native debug symbols
+(`ndk.debugSymbolLevel = SYMBOL_TABLE`). Mapping rides in the AAB for Play and
+is uploaded to Crashlytics by the Firebase Crashlytics Gradle plugin. Resource
+shrinking stays off until minify is proven on a Play-internal build. Current
+release `.so` files come from AndroidX already stripped, so Play may still show
+the native-debug-symbols advisory until unstripped native code is present.
 
 ## Upload certificate
 
@@ -105,16 +115,43 @@ track using `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`. This is the only Play-bound
 workflow and therefore remains the sole owner of the monotonically increasing
 `versionCode` sequence.
 
-Before the first rollout, open Play Console and add the owner's Google account
-to the internal-testing tester list. After a successful Android Release run:
+### Tester self-invite (Google Group)
 
-1. Open the internal-test opt-in URL while signed in as that tester.
-2. Join the test and install **OpenCode Mobile — Unofficial** from Google Play
-   on a physical Android device.
-3. Confirm Play Console shows the new version on the internal track.
+Internal testing uses a Google Group so testers can self-join without editing
+Play Console per person (cap remains 100):
+
+| Resource | Value |
+| --- | --- |
+| Google Group | [OpenCode Mobile Testers](https://groups.google.com/g/opencode-mobile-testers) |
+| Group email | `opencode-mobile-testers@googlegroups.com` |
+| Who can see | Anyone on the web |
+| Who can join | Anyone on the web can join |
+| Play email list | `OpenCode Mobile Testers` (contains the group email) |
+| Play opt-in URL | https://play.google.com/apps/internaltest/4701255816217600017 |
+
+Share both links with testers:
+
+1. Join the Google Group while signed into the Google account they will use on
+   the Android device.
+2. Open the Play opt-in URL with that same account, Join the test, then install
+   **OpenCode Mobile — Unofficial** from Google Play.
+3. After a new Android Release, confirm Play Console shows the new version on
+   the internal track.
+
+Group membership sync into Play can take minutes to a few hours. Joining the
+test via the opt-in link is usually immediate once Play recognizes the account.
 
 The app may remain otherwise incomplete in Play Console during internal
 testing. Do not promote the release to closed, open, or production tracks.
+
+### Store listing upload kit
+
+Play Console graphics for the draft listing live in
+[`play-listing/`](../../../play-listing/) (icon + feature graphic) and
+[`test-screenshots/`](../../../test-screenshots/) (`android_1_*.jpg` phone
+shots). The high-res listing icon is the interlocking store mark from
+`app-icon/interlock.svg` — regenerate with `npm run app-icon:sync-store`.
+On-device launcher icons stay on `app-icon/source.svg`.
 
 The first physical acceptance used `ivanfenenko@gmail.com` and confirmed that
 `0.1.0-internal.4` / `versionCode` 4 installed and opened successfully on a
@@ -155,20 +192,33 @@ Its
 passed `MediumPhone.arm-36-en-portrait` and
 `MediumPhone.arm-35-en-portrait`.
 
-## Automatic Firebase App Distribution
+## Firebase App Distribution
 
-`Android App Distribution` triggers on every push to protected `main`. It builds
-one upload-key-signed APK from the exact merged commit, verifies the upload
-certificate, and distributes the APK to the private Firebase group alias
+`Android App Distribution` distributes on every push to protected `main`. It
+also accepts a manual `workflow_dispatch` from `main`, `feature/*`, or
+`fix/*`. Leave `source_ref` empty to distribute the selected workflow branch;
+set it to a branch, tag, or SHA to check out that commit instead. The
+`android-release` environment allows those same branch patterns. Play
+publishing stays main-only.
+
+It builds one upload-key-signed APK from the selected commit, verifies the
+upload certificate, and distributes the APK to the private Firebase group alias
 `android-internal`. It does not publish a Play testing-track release, run Test
 Lab, or expose credentials to pull requests.
 
+```bash
+gh workflow run "Android App Distribution" --ref main
+gh workflow run "Android App Distribution" --ref feature/ope-146-server-api-v2
+```
+
 The workflow uses Firebase CLI `15.24.0` with Application Default Credentials
-from `FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON`. It records the merge
-subject and short commit SHA as release notes, then places only the stable
-Firebase console and tester-experience links in the workflow summary. The
-signed APK artifact is retained for seven days. Firebase App Distribution
-releases remain available for 150 days.
+from `FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON`. It records the commit
+subject and short SHA as release notes (`Merge` on a `main` push, `Dispatch`
+on a manual run). When the distributed ref is not `main`, those notes start
+with `Not from main: <ref>` so testers see a branch build before the commit
+line. The workflow summary then places only the stable Firebase console and
+tester-experience links. The signed APK artifact is retained for seven days. Firebase App Distribution releases remain available
+for 150 days.
 
 App Distribution version codes use `1000000000 + github.run_number`, a
 monotonic range reserved for this workflow. The APK uses the upload-key
@@ -191,10 +241,10 @@ app to be published rather than an unreviewed draft. The direct APK path keeps
 the app private and avoids completing Play store-policy declarations or
 submitting it for review solely to support merge distribution.
 
-If automatic distribution fails, inspect the workflow's build, signature,
-authentication, and Firebase upload steps. A failed run does not revert the
-merge. Rotate only the dedicated App Distribution key if that credential is
-exposed, and replace its protected GitHub secret.
+If a distribution run fails, inspect the workflow's build, signature,
+authentication, and Firebase upload steps. A failed merge-triggered run does
+not revert the merge. Rotate only the dedicated App Distribution key if that
+credential is exposed, and replace its protected GitHub secret.
 
 ## Verify release observability
 
@@ -237,6 +287,12 @@ the app, enable Crashlytics debug logging through ADB, and check for a
 successful report upload before changing code. Do not paste raw dashboard
 exports, tester identifiers, app content, or credentials into the repository or
 Linear.
+
+After an OPE-141 release, also confirm in Play Console that the uploaded AAB no
+longer warns about missing deobfuscation/mapping, and that the Crashlytics
+verification stack is symbolicated (class and method names readable). A remaining
+native-debug-symbols advisory is expected while only pre-stripped AndroidX
+`.so` files are present.
 
 OPE-72 protected-main acceptance used Android Release
 [run 30009973764](https://github.com/opencode-mobile/opencode-mobile/actions/runs/30009973764),

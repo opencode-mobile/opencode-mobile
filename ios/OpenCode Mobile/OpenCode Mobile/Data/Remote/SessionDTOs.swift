@@ -98,18 +98,18 @@ struct PermissionToolDTO: Codable, Sendable {
     let callID: String
 }
 
-struct QuestionReplyRequestDTO: Codable, Sendable {
+nonisolated struct QuestionReplyRequestDTO: Codable, Sendable {
     let answers: [[String]]
 }
 
-struct QuestionRequestDTO: Codable, Sendable {
+nonisolated struct QuestionRequestDTO: Codable, Sendable {
     let id: String
     let sessionID: String
     let questions: [QuestionInfoDTO]
     let tool: QuestionToolDTO?
 }
 
-struct QuestionInfoDTO: Codable, Sendable {
+nonisolated struct QuestionInfoDTO: Codable, Sendable {
     let question: String
     let header: String
     let options: [QuestionOptionDTO]
@@ -117,12 +117,12 @@ struct QuestionInfoDTO: Codable, Sendable {
     let custom: Bool?
 }
 
-struct QuestionOptionDTO: Codable, Sendable {
+nonisolated struct QuestionOptionDTO: Codable, Sendable {
     let label: String
     let description: String?
 }
 
-struct QuestionToolDTO: Codable, Sendable {
+nonisolated struct QuestionToolDTO: Codable, Sendable {
     let messageID: String
     let callID: String
 }
@@ -133,7 +133,7 @@ struct TodoDTO: Codable, Sendable {
     let priority: String
 }
 
-struct FileDiffDTO: Decodable, Sendable {
+nonisolated struct FileDiffDTO: Decodable, Sendable {
     let file: String
     let patch: String?
     let before: String?

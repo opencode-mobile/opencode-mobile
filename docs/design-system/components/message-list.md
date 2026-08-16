@@ -7,8 +7,9 @@ screens that need a bottom-anchored, variable-height message column with
 auto-follow, scroll-to-end affordance, and optional pull-to-refresh.
 
 The Message List is infrastructure, not a single visual cell. Feature screens
-supply row content (for example `OpenCodeOutgoingMessage`, assistant markdown,
-and tool rows) through a generic item slot. Session Chat owns message
+supply row content (for example `OpenCodeOutgoingMessage`,
+`OpenCodeAssistantMessage`, and tool rows) through a generic item slot.
+Session Chat owns message
 presentation; the host owns scroll geometry, pin state, and overlay placement.
 
 ## Public API
@@ -68,8 +69,8 @@ bottom disarms follow until they return or tap scroll to end.
 **Scroll to end** uses `MessageListScrollToEndOverlay`, which wraps
 `OpenCodeActionPill` (`scrollToEnd`). The pill hides while the user is actively
 scrolling and reappears after scrolling settles when the reveal threshold is
-still met. Callers may also hide the pill while overlays such as Review Changes
-are visible.
+still met. Session Chat keeps this pill at the bottom and places Review Changes
+in the top overlay instead of hiding one for the other.
 
 **Pull-to-refresh** is available when the host receives a refresh handler;
 otherwise the control is omitted. On iOS, `MessageListTimelineHost.onRefresh`

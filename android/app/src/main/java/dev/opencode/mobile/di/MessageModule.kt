@@ -5,7 +5,6 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import dev.opencode.mobile.data.remote.MessagesApi
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.message.DefaultMessageRepository
@@ -13,8 +12,10 @@ import dev.opencode.mobile.domain.message.DisplayMessagePipeline
 import dev.opencode.mobile.domain.message.InMemoryMessageStore
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageDomainAdapter
+import dev.opencode.mobile.domain.message.MessageRemote
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageSync
+import dev.opencode.mobile.domain.message.ProtocolSelectedMessageRemote
 import dev.opencode.mobile.domain.message.SessionMessageEngine
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import javax.inject.Singleton
@@ -25,6 +26,10 @@ abstract class MessageModule {
     @Binds
     @Singleton
     abstract fun bindMessageRepository(impl: DefaultMessageRepository): MessageRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindMessageRemote(impl: ProtocolSelectedMessageRemote): MessageRemote
 
     companion object {
         @Provides
@@ -45,7 +50,7 @@ abstract class MessageModule {
         @Provides
         @Singleton
         fun provideMessageSync(
-            api: MessagesApi,
+            messageRemote: MessageRemote,
             adapter: MessageDomainAdapter,
             engine: SessionMessageEngine,
             eventStream: ForegroundEventStream,
@@ -55,7 +60,7 @@ abstract class MessageModule {
         ): MessageSync =
             MessageSync(
                 listMessages = { sessionId, directory ->
-                    runCatching { api.listMessages(sessionId, directory).map(adapter::toMessage) }
+                    runCatching { messageRemote.listMessages(sessionId, directory) }
                         .getOrElse { throw adapter.mapError(it) }
                 },
                 engine = engine,

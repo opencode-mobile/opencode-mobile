@@ -7,6 +7,8 @@ import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
@@ -544,6 +546,44 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun v2DoesNotLoadLastTurnReviewChangesSummary() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessionDiffs =
+                        listOf(
+                            FileDiff(
+                                path = "one.kt",
+                                patch = null,
+                                additions = 1,
+                                deletions = 2,
+                                status = FileDiffStatus.Modified,
+                            ),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(id = "user-1", role = MessageRole.User, text = "Change it", sentAtEpochMs = 1),
+                                    Message(id = "assistant-1", role = MessageRole.Assistant, text = "Done", sentAtEpochMs = 2),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                    serverProtocol = ServerProtocol.V2,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.reviewChangesSummary)
+            assertEquals(false, viewModel.uiState.value.supportsSessionMessageDiff)
+            assertEquals(null, sessionRepository.diffRequest)
+        }
+
+    @Test
     fun newerLatestTurnCancelsStaleReviewChangesSummary() =
         runTest(testDispatcher) {
             val staleDiff = FileDiff("stale.kt", null, 99, 99, FileDiffStatus.Modified)
@@ -820,6 +860,88 @@ class SessionChatViewModelTest {
             assertEquals("Second", viewModel.uiState.value.sessionTitle)
             assertEquals("", viewModel.uiState.value.composer.text)
             assertEquals(SessionChatTimelineState.Loading, viewModel.uiState.value.timeline)
+        }
+
+    @Test
+    fun composerDraft_restoresTextAndMentionsForSameSessionOnly() =
+        runTest(testDispatcher) {
+            val draftStore = dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore()
+            val first = createViewModel(FakeMessageRepository(), composerDraftStore = draftStore)
+            first.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            first.updateComposerText("@", cursor = 1)
+            first.selectAtSuggestion("explore")
+            advanceTimeBy(300)
+            advanceUntilIdle()
+
+            val other = createViewModel(FakeMessageRepository(), composerDraftStore = draftStore)
+            other.bind("ses-2", "Other", "/repo")
+            advanceUntilIdle()
+            assertEquals("", other.uiState.value.composer.text)
+
+            val restored = createViewModel(FakeMessageRepository(), composerDraftStore = draftStore)
+            restored.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals("@explore ", restored.uiState.value.composer.text)
+            assertEquals(
+                listOf("explore"),
+                restored.uiState.value.composer.agentMentions
+                    .map { it.name },
+            )
+        }
+
+    @Test
+    fun composerDraft_successfulSendClearsStoredDraft() =
+        runTest(testDispatcher) {
+            val draftStore = dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore()
+            val first = createViewModel(FakeMessageRepository(), composerDraftStore = draftStore)
+            first.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            first.updateComposerText("send me")
+            first.sendPrompt()
+            advanceUntilIdle()
+            assertEquals("", first.uiState.value.composer.text)
+
+            val restored = createViewModel(FakeMessageRepository(), composerDraftStore = draftStore)
+            restored.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals("", restored.uiState.value.composer.text)
+        }
+
+    @Test
+    fun composerDraft_promoteOptimisticCreatePersistsUnderRealSessionId() =
+        runTest(testDispatcher) {
+            val draftStore = dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore()
+            val sessionRepository =
+                FakeSessionRepository(
+                    createSessionResult = Session(id = "ses-new", title = "Created", directory = "/repo"),
+                )
+            val first =
+                createViewModel(
+                    FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    composerDraftStore = draftStore,
+                )
+            first.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            first.updateComposerText("typed during create")
+            advanceUntilIdle()
+            assertEquals("typed during create", first.uiState.value.composer.text)
+            assertEquals("ses-new", first.uiState.value.sessionId)
+
+            val restored = createViewModel(FakeMessageRepository(), composerDraftStore = draftStore)
+            restored.bind("ses-new", "Created", "/repo")
+            advanceUntilIdle()
+            assertEquals("typed during create", restored.uiState.value.composer.text)
+            assertNull(
+                draftStore.load(
+                    dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity(
+                        "http://127.0.0.1:4096/",
+                        "opencode",
+                    ),
+                    "/repo",
+                    OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                ),
+            )
         }
 
     @Test
@@ -2135,6 +2257,18 @@ class SessionChatViewModelTest {
             assertEquals(SessionConnectionStatus.Connecting, EventStreamConnectionState.Reconnecting.toSessionConnectionStatus())
             assertEquals(SessionConnectionStatus.Offline, EventStreamConnectionState.Idle.toSessionConnectionStatus())
             assertEquals(SessionConnectionStatus.Offline, EventStreamConnectionState.Disconnected.toSessionConnectionStatus())
+            assertEquals(
+                SessionConnectionStatus.Offline,
+                EventStreamConnectionState.Connected.toSessionConnectionStatus(
+                    DeviceNetworkPathStatus.Unavailable,
+                ),
+            )
+            assertEquals(
+                SessionConnectionStatus.Offline,
+                EventStreamConnectionState.Connecting.toSessionConnectionStatus(
+                    DeviceNetworkPathStatus.Unavailable,
+                ),
+            )
         }
 
     @Test
@@ -2877,12 +3011,15 @@ class SessionChatViewModelTest {
         commandRepository: FakeCommandRepository = FakeCommandRepository(),
         agentRepository: FakeAgentRepository = FakeAgentRepository(),
         sessionModelSelectionStore: FakeSessionModelSelectionStore = FakeSessionModelSelectionStore(),
+        composerDraftStore: dev.opencode.mobile.domain.composer.ComposerDraftStore =
+            dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore(),
         sessionRepository: FakeSessionRepository = FakeSessionRepository(),
         permissionLiveStore: PermissionLiveStore = FakePermissionLiveStore(emptyList()),
         questionLiveStore: QuestionLiveStore = FakeQuestionLiveStore(emptyList()),
         sessionReadyStore: SessionReadyStore = EmptySessionReadyStore,
         optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator = OptimisticSessionCreateCoordinator(),
         connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
+        serverProtocol: ServerProtocol = ServerProtocol.V1,
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -2893,7 +3030,7 @@ class SessionChatViewModelTest {
             val profile =
                 connectionProfileStore.activeProfile()
                     ?: ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", password = "")
-            activeConnectionManager.applyProfile(profile)
+            activeConnectionManager.applyProfile(profile, serverProtocol = serverProtocol)
         }
         val connectionSessionCoordinator =
             ConnectionSessionCoordinator(
@@ -2901,6 +3038,7 @@ class SessionChatViewModelTest {
                 connectionProfileStore = connectionProfileStore,
                 secureCredentialStore = FakeSecureCredentialStore(),
                 sessionModelSelectionStore = sessionModelSelectionStore,
+                composerDraftStore = composerDraftStore,
                 httpClient = OpencodeHttpClient(json, activeConnectionManager),
                 sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
             )
@@ -2918,6 +3056,7 @@ class SessionChatViewModelTest {
             eventDomainAdapter = EventDomainAdapter(json),
             connectionSessionCoordinator = connectionSessionCoordinator,
             sessionModelSelectionStore = sessionModelSelectionStore,
+            composerDraftStore = composerDraftStore,
             newSessionModelSelectionResolver =
                 dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver(
                     store = sessionModelSelectionStore,
@@ -2925,6 +3064,7 @@ class SessionChatViewModelTest {
                 ),
             optimisticSessionCreateCoordinator = optimisticSessionCreateCoordinator,
             connectionProfileStore = connectionProfileStore,
+            activeConnectionManager = activeConnectionManager,
         ).apply {
             ioDispatcher = testDispatcher
             // Mutations (send/rename/fork/new) require Live; default fakes start Connected.

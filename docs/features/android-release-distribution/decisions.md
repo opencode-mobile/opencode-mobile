@@ -165,12 +165,25 @@ breadcrumbs without turning OPE-72 into product analytics.
 
 ## Play distribution starts with one internal tester
 
-**Status:** Accepted
+**Status:** Superseded
 **Decision:** Use the Play internal testing track, initially limited to the
 owner's verified tester account. Internal App Sharing is only a manual escape
 hatch. Public, open, closed, and production tracks are follow-ups.
 **Why:** This proves Play-delivered installation and updates with the smallest
 possible audience.
+
+## Play internal testers self-invite via Google Group
+
+**Status:** Accepted
+**Decision:** Keep Play Internal testing (not Open/Closed). Enroll testers
+through the Google Group `opencode-mobile-testers@googlegroups.com` (**Who can
+see** = Anyone on the web; **Who can join** = Anyone on the web can join) added
+as the Play email list `OpenCode Mobile Testers`. Share the group URL plus the
+Play opt-in URL. Do not promote to open testing solely for self-invite.
+**Why:** Testers can self-join without per-person Play Console edits while
+staying inside the Internal track's 100-tester private boundary. Visibility must
+be public enough for non-members to open the group page and see Join; otherwise
+Google Groups shows “content unavailable.”
 
 ## Test Lab starts with a bounded Robo crawl
 
@@ -231,3 +244,52 @@ separate from the canonical Play release workflow's version sequence.
 **Revisit when:** The Play app is intentionally reviewed and published, Firebase
 supports delivery with the normal Play app-signing certificate, or the project
 replaces App Distribution with a Play testing-track release on every merge.
+
+## Manual App Distribution from a non-main ref
+
+**Status:** Accepted
+
+**Decision:** Keep automatic Firebase App Distribution on every push to
+protected `main`. Add `workflow_dispatch` with an optional `source_ref` input
+so an operator can distribute a selected workflow branch, or override the
+checkout to a branch, tag, or SHA. The job runs on `workflow_dispatch` or on
+`main`. The `android-release` environment allows `main`, `feature/*`, and
+`fix/*`. Play publishing (`Android Release`) stays main-only via its own job
+filter.
+
+**Why:** Tester builds of an integration branch should not wait on a merge to
+`main`. Dispatching from that branch uses its workflow file; environment
+patterns keep signing secrets off arbitrary refs while covering this repo's
+ticket branches. `source_ref` remains available when the workflow file on
+`main` should check out other code. Non-main distributions put
+`Not from main: <ref>` on the first line of Firebase release notes so testers
+do not mistake a branch build for a merged `main` build.
+
+**Revisit when:** App Distribution should accept any ref, or Play publishing
+should share this branch policy.
+
+## Release AABs carry Play + Crashlytics symbolication inputs
+
+**Status:** Accepted for OPE-141 implementation
+
+**Decision:** Enable R8 minify on release builds, keep `isShrinkResources`
+false until minify is proven on Play internal, pin NDK `27.2.12479018`, and set
+`ndk.debugSymbolLevel = SYMBOL_TABLE` so release AABs embed the R8 mapping and,
+when available, native debug symbols. Rely on AAB metadata for Play Console
+symbolication and on the Crashlytics Gradle plugin's default mapping upload for
+Firebase. Retain `mapping.txt` as a ninety-day workflow artifact for forensics.
+Do not add Crashlytics NDK in this ticket.
+
+Current release native libraries come only from AndroidX and ship already
+stripped, so AGP may omit the AAB `debugsymbols` metadata even with
+`debugSymbolLevel` set. That Play native-symbol warning can remain until the app
+ships unstripped native code or a dependency provides symbols. The R8/mapping
+path is the actionable fix for Kotlin/Java stacks.
+
+**Why:** Play Console warnings are about missing symbolication assets, not
+unsigned or broken builds. Embedding mapping in the AAB avoids a manual Play
+upload step, while Crashlytics still needs the mapping for its own dashboard.
+Deferring resource shrinking and Crashlytics NDK keeps the first R8 cut focused
+on stack readability without expanding native crash scope beyond what the
+shipped `.so` files can support.
+

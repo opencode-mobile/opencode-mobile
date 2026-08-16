@@ -9,13 +9,16 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -76,6 +79,7 @@ fun SessionList(
     emptyContent: (@Composable () -> Unit)? = null,
     onRemoveProject: ((String) -> Unit)? = null,
     onSessionLongPress: ((SessionListSession) -> Unit)? = null,
+    revealNewestToken: Int = 0,
 ) {
     val recentWindowHours = HomeDisplayPreferences.recentWindowHours
     val visibleSessions =
@@ -96,6 +100,53 @@ fun SessionList(
     val background = openCodeColor("background-base")
     val borderWeaker = openCodeColor("border-weaker-base")
     val density = LocalDensity.current
+
+    val listState = rememberLazyListState()
+    var followingTop by remember { mutableStateOf(true) }
+    val newestSessionId = visibleSessions.firstOrNull()?.id
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.collect { inProgress ->
+            if (inProgress) {
+                followingTop =
+                    SessionListScrollPin.followingTop(
+                        currentlyFollowing = followingTop,
+                        isUserScrolling = true,
+                        isAtTop =
+                            SessionListScrollPin.isAtTop(
+                                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                                firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
+                            ),
+                    )
+            }
+        }
+    }
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            SessionListScrollPin.isAtTop(
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
+            )
+        }.collect { atTop ->
+            if (atTop) followingTop = true
+        }
+    }
+    LaunchedEffect(newestSessionId) {
+        if (SessionListScrollPin.shouldScrollToTrueTop(
+                followingTop = followingTop,
+                newestIdentityChanged = true,
+                forceRevealNewest = false,
+            )
+        ) {
+            listState.scrollToItem(0)
+        }
+    }
+    LaunchedEffect(revealNewestToken) {
+        if (revealNewestToken > 0) {
+            followingTop = true
+            listState.scrollToItem(0)
+        }
+    }
 
     var dockBlockHeight by remember { mutableStateOf(0.dp) }
     val listBottomFadeHeight =
@@ -124,6 +175,7 @@ fun SessionList(
         } else {
             LazyColumn(
                 modifier = Modifier.matchParentSize(),
+                state = listState,
                 contentPadding = PaddingValues(bottom = listBottomFadeHeight),
             ) {
                 ladderSections.forEach { section ->

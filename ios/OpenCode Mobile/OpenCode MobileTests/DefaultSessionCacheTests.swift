@@ -124,6 +124,32 @@ import Testing
         #expect(size == 0)
     }
 
+    @Test func purgeWorktreeRemovesRowsKeyedByProfileId() async {
+        let cache = DefaultSessionCache(
+            store: InMemorySessionCacheStore(),
+            connectionIdProvider: { "profile-abc" }
+        )
+        await cache.rememberSessions(
+            worktree: "/repo",
+            sessions: [
+                Session(
+                    id: "s1",
+                    title: "One",
+                    slug: nil,
+                    projectID: nil,
+                    directory: nil,
+                    parentID: nil,
+                    updatedAtEpochMs: nil
+                ),
+            ]
+        )
+        await cache.purgeWorktree(serverBaseURL: "http://localhost:4096", worktree: "/repo")
+        let seeded = await cache.seedSessions(worktree: "/repo")
+        #expect(seeded == nil)
+        let size = await cache.estimatedSizeBytes()
+        #expect(size == 0)
+    }
+
     @Test func codecRoundTripsCurrentMessageParts() throws {
         let messages = [
             Message(

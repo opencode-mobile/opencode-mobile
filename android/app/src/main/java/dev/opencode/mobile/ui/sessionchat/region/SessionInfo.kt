@@ -1,6 +1,8 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
+import dev.opencode.mobile.domain.connection.DeviceNetworkPath
+import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
@@ -24,6 +26,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
@@ -36,6 +39,7 @@ class SessionInfo(
     private val foregroundEventStream: ForegroundEventStream,
     private val eventDomainAdapter: EventDomainAdapter,
     private val scope: CoroutineScope,
+    private val deviceNetworkPath: DeviceNetworkPath = ReadyDeviceNetworkPath,
 ) {
     private val _state = MutableStateFlow(SessionInfoRegionState())
     val state: StateFlow<SessionInfoRegionState> = _state.asStateFlow()
@@ -332,15 +336,20 @@ class SessionInfo(
                         }
                     }
                     launch {
-                        foregroundEventStream.connectionState.collect { connectionState ->
+                        combine(
+                            foregroundEventStream.connectionState,
+                            deviceNetworkPath.status,
+                        ) { connectionState, path ->
+                            connectionState to path
+                        }.collect { (connectionState, path) ->
                             if (!isCurrentBinding(sessionId, worktree)) return@collect
-                            logD("live connection session=$sessionId state=$connectionState")
+                            logD("live connection session=$sessionId state=$connectionState path=$path")
                             DiagnosticLog.debug(
                                 DiagnosticLogArea.Session,
-                                "live connection session=$sessionId state=$connectionState",
+                                "live connection session=$sessionId state=$connectionState path=$path",
                             )
                             _state.update {
-                                it.copy(connectionStatus = connectionState.toSessionConnectionStatus())
+                                it.copy(connectionStatus = connectionState.toSessionConnectionStatus(path))
                             }
                         }
                     }
@@ -412,6 +421,7 @@ class SessionInfo(
             (error?.get("message") as? JsonPrimitive)?.contentOrNull,
             (properties?.get("message") as? JsonPrimitive)?.contentOrNull,
             (error?.get("name") as? JsonPrimitive)?.contentOrNull,
+            (error?.get("type") as? JsonPrimitive)?.contentOrNull,
         ).firstOrNull { !it.isNullOrBlank() } ?: "Session work failed"
     }
 

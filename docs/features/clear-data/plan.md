@@ -33,6 +33,7 @@ None (all operations are local).
 - `ConnectionProfileStore` -- new `clearAll()` method.
 - `SessionModelSelectionStore` -- new `clearAll()` method (included in Clear All
   Data orchestration).
+- `ComposerDraftStore` -- `clearAll()` next to model selection.
 - `ActiveConnectionManager` -- new `disconnect()` method.
 - `ConnectionSessionCoordinator` -- orchestrates the clearing sequence.
 - `SessionLiveStore`, `SessionStatusLiveStore`, `PermissionLiveStore`, and

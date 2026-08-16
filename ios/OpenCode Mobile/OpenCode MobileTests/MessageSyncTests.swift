@@ -570,6 +570,71 @@ struct MessageSyncTests {
         #expect(refreshed)
     }
 
+    @Test func resumeCatchUp_startsOnConnectingAndCoalescesServerConnected() async {
+        // OPE-165 snapshot: cached messages stay, one list fetch before live,
+        // TransportResumed + server.connected share one catch-up.
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let epoch = ConnectionEpoch()
+        var listCallTimestamps: [Date] = []
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                listCallTimestamps.append(Date())
+                return try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            pollIntervalMs: 60_000,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            connectionEpoch: epoch
+        )
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+        let callsAfterInitial = repo.listMessagesCallCount
+
+        eventStream.setConnectionState(.connected)
+        eventStream.setConnectionState(.idle)
+        let stale = await waitUntil {
+            if case .stale(.transportUnavailable) = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+                return true
+            }
+            return false
+        }
+        #expect(stale)
+        #expect(collector.latest()?.first?.text == "Hello")
+
+        repo.messages = [
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "Caught up while connecting",
+                parts: [],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        _ = epoch.bump()
+        eventStream.setConnectionState(.connecting)
+        let refreshedBeforeLive = await waitUntil {
+            collector.latest()?.first?.text == "Caught up while connecting"
+        }
+        #expect(refreshedBeforeLive)
+        #expect(repo.listMessagesCallCount == callsAfterInitial + 1)
+
+        eventStream.setConnectionState(.connected)
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil, rawProperties: nil))
+        try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.messageDebounceMs + 250))
+        task.cancel()
+
+        #expect(repo.listMessagesCallCount == callsAfterInitial + 1)
+        #expect(collector.latest()?.first?.text == "Caught up while connecting")
+        #expect(!listCallTimestamps.isEmpty)
+    }
+
     @Test func staleEpoch_eventDoesNotMutateStore() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()

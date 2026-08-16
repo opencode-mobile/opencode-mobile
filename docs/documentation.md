@@ -29,7 +29,7 @@ I update it?".
 │   │   ├── typography.md          #   semantic type roles + platform mappings
 │   │   ├── icons.md               #   Material icon catalog + sync workflow
 │   │   ├── opencode-web-theme.md  #   web theme evidence
-│   │   ├── app-icon.md            #   app launcher icon planning
+│   │   ├── app-icon.md            #   launcher + store listing icons
 │   │   ├── divergences.md         #   intentional platform differences (persistent)
 │   │   └── components/            #   Component Collection contract + docs
 │   │       ├── README.md          #     component contract, template, gallery, DoD
@@ -51,6 +51,8 @@ I update it?".
         ├── feature/{SKILL.md, reference.md, agents/}
         ├── linear-project-tracking/{SKILL.md, reference.md}
         ├── pull-app-logs/{SKILL.md, ANDROID.md, IOS.md, TROUBLESHOOTING.md}
+        ├── publish-prototype/SKILL.md
+        ├── publish-ui-snapshots/{SKILL.md, reference.md, scripts/}
         ├── run-github-actions/{SKILL.md, FAILURE-PATTERNS.md}
         └── synced-native-feature/SKILL.md
 ```
@@ -58,7 +60,7 @@ I update it?".
 Scale today: **271 markdown files under `docs/`** (committed HTML companions are
 retired), **41 feature directories**, **6 ADRs**, **35 files under
 `docs/design-system/components/`** (README + 34 component docs), **3 agent
-how-to docs**, **7 skills**.
+how-to docs**, **8 skills**.
 
 ---
 
@@ -89,9 +91,10 @@ Optional feature artifacts that appear in practice:
 - `operator-runbook.md` — non-secret release/ops ownership contract (e.g. `android-release-distribution/operator-runbook.md`).
 - `ruleset.md`, `phase-*.md`, `pipeline-*.md` — CI or engineering-phase specifics where the feature needs them.
 
-Design prototypes are retired; a prototype verdict, when produced, is folded
-into the feature's `plan.md` and `decisions.md` instead of a committed
-`prototype/` directory.
+HTML plan companions stay retired. Throwaway UX prototypes that lock a
+decision may live under `docs/prototypes/` as evidence, cited from the
+feature's `plan.md` and `decisions.md`. Fold the verdict into those Markdown
+artifacts; do not treat the HTML as the source of truth.
 
 ### 2.2 Design system
 

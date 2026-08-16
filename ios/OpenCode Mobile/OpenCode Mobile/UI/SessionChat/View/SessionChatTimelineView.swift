@@ -22,9 +22,11 @@ struct SessionChatTimelineViewProps {
     let onSessionTodosTap: () -> Void
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let onUserScrollDismissKeyboard: () -> Void
+    let supportsSessionMessageDiff: Bool
 
     init(
         timeline: SessionChatTimelineState,
@@ -46,9 +48,11 @@ struct SessionChatTimelineViewProps {
         onSessionTodosTap: @escaping () -> Void = {},
         onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
         onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in },
+        onToolGroupTap: @escaping (SessionChatToolGroupTarget) -> Void = { _ in },
         onChildSessionTap: @escaping (String, String) -> Void = { _, _ in },
         onChangesReviewTap: @escaping (String, String?) -> Void = { _, _ in },
-        onUserScrollDismissKeyboard: @escaping () -> Void = {}
+        onUserScrollDismissKeyboard: @escaping () -> Void = {},
+        supportsSessionMessageDiff: Bool = true
     ) {
         self.timeline = timeline
         self.messages = messages
@@ -69,9 +73,11 @@ struct SessionChatTimelineViewProps {
         self.onSessionTodosTap = onSessionTodosTap
         self.onMessageActionsTap = onMessageActionsTap
         self.onToolDetailTap = onToolDetailTap
+        self.onToolGroupTap = onToolGroupTap
         self.onChildSessionTap = onChildSessionTap
         self.onChangesReviewTap = onChangesReviewTap
         self.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
+        self.supportsSessionMessageDiff = supportsSessionMessageDiff
     }
 }
 
@@ -120,7 +126,7 @@ private struct SessionChatTimelineReadyView: View {
     let props: SessionChatTimelineViewProps
 
     @State private var scrollController = TimelineScrollController()
-    /// Last positive pill values. Kept so a sudden totalCount=0 (abort/idle clear)
+    /// Last positive pill values. Kept so a sudden totalCount=0
     /// cannot rebuild the pill with an invalid contract if exit animation is added.
     @State private var sessionTodosPillCompletedCount = 0
     @State private var sessionTodosPillTotalCount = 1
@@ -131,11 +137,15 @@ private struct SessionChatTimelineReadyView: View {
     }
 
     private var showReviewChanges: Bool {
-        ReviewChangesPillVisibility.shouldShow(
-            summary: props.reviewChangesSummary,
-            isPinnedToEnd: scrollController.isPinnedToEnd,
-            showScrollToEnd: showScrollToEnd
-        )
+        !props.hideFloatStack && ReviewChangesPillVisibility.shouldShow(summary: props.reviewChangesSummary)
+    }
+
+    private var showSessionTodosPill: Bool {
+        !props.hideFloatStack && props.sessionTodosVisible && props.sessionTodoTotalCount > 0
+    }
+
+    private var showTopOverlayStack: Bool {
+        props.syncingIndicatorLabel != nil || showSessionTodosPill || showReviewChanges
     }
 
     private var displayMessages: [SessionChatRow] {
@@ -174,8 +184,10 @@ private struct SessionChatTimelineReadyView: View {
                     message: message,
                     onMessageActionsTap: props.onMessageActionsTap,
                     onToolDetailTap: props.onToolDetailTap,
+                    onToolGroupTap: props.onToolGroupTap,
                     onChildSessionTap: props.onChildSessionTap,
-                    onChangesReviewTap: props.onChangesReviewTap
+                    onChangesReviewTap: props.onChangesReviewTap,
+                    supportsSessionMessageDiff: props.supportsSessionMessageDiff
                 )
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -184,6 +196,12 @@ private struct SessionChatTimelineReadyView: View {
             .overlay {
                 if props.isRefreshing {
                     ProgressView()
+                }
+            }
+            .overlay(alignment: .top) {
+                if showTopOverlayStack {
+                    topOverlayContent
+                        .padding(.top, 10)
                 }
             }
             .onChange(of: props.timelineFrame.frameRevision) { _, rev in
@@ -195,47 +213,29 @@ private struct SessionChatTimelineReadyView: View {
                 }
             }
 
-            if let label = props.syncingIndicatorLabel {
-                VStack {
-                    OpenCodeSyncingPill(label: label)
-                        .padding(.top, 10)
-                    Spacer(minLength: 0)
+            if !props.hideFloatStack, showScrollToEnd {
+                OpenCodeActionPill(variant: .scrollToEnd) {
+                    logScroll("pill-click count=\(props.messages.count)")
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.sessionChat,
+                        actionId: ProductAnalytics.Action.chatScrollToEnd
+                    )
+                    scrollController.scrollToEndAnimated()
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .allowsHitTesting(false)
-            }
-
-            if !props.hideFloatStack {
-                // Primary (nearest composer): Scroll XOR Review. Secondary above: Todos.
-                // Only present children so spacing never reserves room for hidden pills.
-                let showSessionTodosPill = props.sessionTodosVisible && props.sessionTodoTotalCount > 0
-                let showFloatStack = showSessionTodosPill || showScrollToEnd || showReviewChanges
-                Group {
-                    if showFloatStack {
-                        floatStackContent(
-                            showSessionTodosPill: showSessionTodosPill,
-                            showScrollToEnd: showScrollToEnd,
-                            showReviewChanges: showReviewChanges
-                        )
-                        // bottomOverlayInset is already composer + 16 end-pin gap.
-                        .padding(.bottom, props.bottomOverlayInset)
-                    }
-                }
-                .onChange(of: props.sessionTodoTotalCount) { _, total in
-                    refreshSessionTodosPillSnapshot(totalCount: total)
-                }
-                .onChange(of: props.sessionTodoCompletedCount) { _, _ in
-                    refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
-                }
-                .onChange(of: props.sessionTodoActivePreview) { _, _ in
-                    refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
-                }
-                .onAppear {
-                    refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
-                }
+                .padding(.bottom, props.bottomOverlayInset)
             }
         }
+        .onChange(of: props.sessionTodoTotalCount) { _, total in
+            refreshSessionTodosPillSnapshot(totalCount: total)
+        }
+        .onChange(of: props.sessionTodoCompletedCount) { _, _ in
+            refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
+        }
+        .onChange(of: props.sessionTodoActivePreview) { _, _ in
+            refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
+        }
         .onAppear {
+            refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
             scrollController.autoFollowEnabled = true
             logScroll("appear count=\(props.messages.count) pinned=\(scrollController.isPinnedToEnd)")
         }
@@ -249,12 +249,13 @@ private struct SessionChatTimelineReadyView: View {
     }
 
     @ViewBuilder
-    private func floatStackContent(
-        showSessionTodosPill: Bool,
-        showScrollToEnd: Bool,
-        showReviewChanges: Bool
-    ) -> some View {
+    private var topOverlayContent: some View {
         let pills = VStack(spacing: 8) {
+            if let label = props.syncingIndicatorLabel {
+                OpenCodeSyncingPill(label: label)
+                    .allowsHitTesting(false)
+            }
+
             if showSessionTodosPill {
                 OpenCodeSessionTodosPill(
                     completedCount: sessionTodosPillCompletedCount,
@@ -262,17 +263,6 @@ private struct SessionChatTimelineReadyView: View {
                     activePreview: sessionTodosPillActivePreview,
                     action: props.onSessionTodosTap
                 )
-            }
-
-            if showScrollToEnd {
-                OpenCodeActionPill(variant: .scrollToEnd) {
-                    logScroll("pill-click count=\(props.messages.count)")
-                    ProductAnalytics.logUserAction(
-                        screenId: ProductAnalytics.Screen.sessionChat,
-                        actionId: ProductAnalytics.Action.chatScrollToEnd
-                    )
-                    scrollController.scrollToEndAnimated()
-                }
             }
 
             if showReviewChanges, let summary = props.reviewChangesSummary {
@@ -307,8 +297,10 @@ private struct SessionChatTimelineHostRow: View {
     let message: SessionChatRow
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
+    let supportsSessionMessageDiff: Bool
 
     var body: some View {
         if message.id == SessionChatStatusChrome.workingRowID {
@@ -320,8 +312,10 @@ private struct SessionChatTimelineHostRow: View {
                         message: message,
                         onMessageActionsTap: onMessageActionsTap,
                         onToolDetailTap: onToolDetailTap,
+                        onToolGroupTap: onToolGroupTap,
                         onChildSessionTap: onChildSessionTap,
-                        onChangesReviewTap: onChangesReviewTap
+                        onChangesReviewTap: onChangesReviewTap,
+                        supportsSessionMessageDiff: supportsSessionMessageDiff
                     )
                     Spacer(minLength: 0)
                 } else {
@@ -330,8 +324,10 @@ private struct SessionChatTimelineHostRow: View {
                         message: message,
                         onMessageActionsTap: onMessageActionsTap,
                         onToolDetailTap: onToolDetailTap,
+                        onToolGroupTap: onToolGroupTap,
                         onChildSessionTap: onChildSessionTap,
-                        onChangesReviewTap: onChangesReviewTap
+                        onChangesReviewTap: onChangesReviewTap,
+                        supportsSessionMessageDiff: supportsSessionMessageDiff
                     )
                 }
             }
@@ -381,8 +377,10 @@ private struct SessionChatMessageRow: View {
     let message: SessionChatRow
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
+    let supportsSessionMessageDiff: Bool
 
     private func openMessageActions(showsRevertMessage: Bool) {
         onMessageActionsTap(
@@ -414,8 +412,10 @@ private struct SessionChatMessageRow: View {
                     message: message,
                     onOpenMessageActions: { openMessageActions(showsRevertMessage: false) },
                     onToolDetailTap: onToolDetailTap,
+                    onToolGroupTap: onToolGroupTap,
                     onChildSessionTap: onChildSessionTap,
-                    onChangesReviewTap: onChangesReviewTap
+                    onChangesReviewTap: onChangesReviewTap,
+                    supportsSessionMessageDiff: supportsSessionMessageDiff
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
             case .command, .tool, .unknown:
@@ -436,7 +436,7 @@ private extension SessionChatRow {
                 .text(id: blockID, text: text)
             case .attachment(_, let file):
                 .attachment(file.attachmentPresentation)
-            case .toolCard, .toolGroup:
+            case .toolCard, .toolGroup, .childSessionRow:
                 nil
             }
         }
@@ -470,8 +470,10 @@ private struct AssistantMessageContent: View {
     let message: SessionChatRow
     let onOpenMessageActions: () -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
+    let supportsSessionMessageDiff: Bool
 
     private var blocks: [SessionChatTimelineBlock] {
         if message.blocks.isEmpty {
@@ -530,12 +532,33 @@ private struct AssistantMessageContent: View {
                         errorText: card.errorText,
                         action: toolCardAction(for: card)
                     )
-                case .toolGroup(_, let group):
+                case .toolGroup(let blockID, let group):
                     OpenCodeToolCallCard(
                         status: group.status.toolCallCardStatus,
                         title: group.title,
                         subtitle: group.subtitle,
-                        errorText: group.errorText
+                        errorText: group.errorText,
+                        action: {
+                            onToolGroupTap(
+                                SessionChatToolGroupTarget(
+                                    blockID: blockID,
+                                    title: group.title,
+                                    subtitle: group.subtitle,
+                                    members: group.members,
+                                    messageID: message.id
+                                )
+                            )
+                        }
+                    )
+                case .childSessionRow(_, let row):
+                    SessionChatChildSessionRow(
+                        agentName: row.agentName,
+                        isBackground: row.isBackground,
+                        secondLine: row.secondLine,
+                        timeStartEpochMs: row.timeStartEpochMs,
+                        action: row.childSessionId.map { id in
+                            { onChildSessionTap(id, row.agentName) }
+                        }
                     )
                 }
             }
@@ -546,7 +569,7 @@ private struct AssistantMessageContent: View {
         if let childSessionId = card.childSessionId {
             return { onChildSessionTap(childSessionId, card.title) }
         }
-        if card.opensChangesReview {
+        if card.opensChangesReview, supportsSessionMessageDiff {
             return { onChangesReviewTap(message.id, card.changesInitialFilePath) }
         }
         if let detail = card.detailText {
@@ -592,26 +615,10 @@ private struct AssistantMessageBubble: View {
     }
 
     var body: some View {
-        Group {
-            if paintMarkdown, let renderedMarkdown {
-                OpenCodeRenderedMarkdown(
-                    document: renderedMarkdown,
-                    variant: .assistantMessage,
-                    isStreaming: isStreaming
-                )
-            } else {
-                Text(text.isEmpty ? "…" : text)
-                    .font(OpenCodeTypography.body)
-                    .lineSpacing(4)
-                    .foregroundStyle(OpenCodeColors.textStrong)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
+        OpenCodeAssistantMessage(
+            text: text,
+            renderedMarkdown: paintMarkdown ? renderedMarkdown : nil,
+            isStreaming: isStreaming
         )
         .task(id: paintTaskID) {
             guard renderedMarkdown != nil, !paintMarkdown else { return }

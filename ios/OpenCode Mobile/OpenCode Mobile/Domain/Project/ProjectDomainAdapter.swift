@@ -2,15 +2,16 @@ import Foundation
 
 struct ProjectDomainAdapter: Sendable {
     func project(from dto: ProjectDTO) -> Project {
-        Project(
+        let worktree = dto.resolvedWorktree
+        return Project(
             id: dto.id,
-            worktree: dto.worktree,
-            displayName: Self.displayName(from: dto.worktree)
+            worktree: worktree,
+            displayName: Self.displayName(from: worktree)
         )
     }
 
     func requireHealthy(_ dto: HealthDTO) throws {
-        if !dto.healthy {
+        if dto.healthy != true {
             throw ServerProbeError.unhealthy(version: dto.version)
         }
     }

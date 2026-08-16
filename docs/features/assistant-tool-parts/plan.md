@@ -19,7 +19,10 @@ Android.
   only; no card expand API.
 - File change tools (`edit`/`write`/`apply_patch`): filename or `N files` +
   +N/−N; tap opens owning-turn Changes (File Viewer deep-link or list).
-- `task` tool card with navigate to child session when available.
+- `task` tool card with navigate to child session when available. Pending,
+  running, and completed `task` parts use the design-system Child Session Row
+  (OPE-158 Quiet row, promoted in OPE-162). Error `task` parts keep the
+  OPE-52 Tool Call Card.
 
 ## Out of scope
 
@@ -35,8 +38,10 @@ Android.
 
 ## Domain objects
 
-- `Message` / `MessagePart.Tool` (enriched).
-- Session Chat Screen Model timeline rows that can interleave text and tool cards.
+- `Message` / `MessagePart.Tool` (enriched), including optional
+  `timeStartEpochMs` from tool `time.start` for the OPE-158 quiet row.
+- Session Chat Screen Model timeline rows that can interleave text, tool
+  cards, tool groups, and child session rows.
 
 ## Expected platform logs
 
@@ -48,8 +53,8 @@ Android.
 ## Screen Model
 
 - Session Chat timeline: one item per **message**, with ordered **timeline
-  blocks** (text block | tool card block | tool group block). Generic cards
-  first (OPE-49); specialized chrome in OPE-50+.
+  blocks** (text block | tool card block | tool group block | child session
+  row). Generic cards first (OPE-49); specialized chrome in OPE-50+.
 - OPE-49: Screen Model maps assistant parts → blocks; merges adjacent
   TextParts; applies hide rules (`todowrite`; in-flight `question`); omits
   messages with no visible blocks; rebuilds blocks on live part updates.
@@ -58,8 +63,10 @@ Android.
   completed network results use Bottom Sheet on tap; no Tool Call Card expand.
 - Actions: OPE-50 sheet taps where noted; OPE-51 file-change → owning-turn
   File Viewer (single-file path deep-link) or Changed Files list (multi-file
-  patch / missing path in snapshot); OPE-52 `task` → child session when
-  `metadata.sessionId` is present. OPE-49 generic cards remain display-only.
+  patch / missing path in snapshot);   OPE-52 `task` → child session when
+  `metadata.sessionId` is present; OPE-158 / OPE-162 pending, running, and
+  completed `task` parts use the Child Session Row (same tap). Error `task`
+  parts keep the Tool Call Card. OPE-49 generic cards remain display-only.
 - Chat display uses blocks; `Message.text` is TextPart-only.
 
 ## Native navigation entry points
@@ -86,11 +93,17 @@ Android.
 
 ## Design system
 
-- **New:** Tool Call Card (status, title, subtitle, optional +/− / error).
+- **Existing:** Tool Call Card (status, title, subtitle, optional +/− / error).
+- **New:** Child Session Row (letter avatar, title, optional caption /
+  subtitle / elapsed, chevron when tappable).
 - Reuse existing Changes navigation for file-change taps (owning-turn File
   Viewer or Changed Files list).
-- Feature-local mapping from tool ID → card chrome only where the shared card
-  variants are insufficient.
+- Feature-local mapping from tool ID → card or row chrome only where the
+  shared variants are insufficient. The elapsed tick stays in Session Chat;
+  the component takes a formatted string.
+- **Feature-local:** Quiet row for pending/running `task` (OPE-158). Not a
+  Tool Call Card variant; it is child-session presence, not generic tool
+  status.
 
 ## Research
 

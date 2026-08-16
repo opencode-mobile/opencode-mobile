@@ -2,7 +2,7 @@ import Foundation
 
 struct Session: Sendable, Equatable {
     let id: String
-    let title: String
+    var title: String
     let slug: String?
     let projectID: String?
     let directory: String?
@@ -91,9 +91,14 @@ enum SessionTodoList {
         return todos.first
     }
 
-    /// Visible while live, non-empty, and not fully finished.
-    static func isVisible(todos: [SessionTodo], isLive: Bool) -> Bool {
-        isLive && !todos.isEmpty && !isFinished(todos)
+    /// Visible while non-empty and not fully finished, including after idle.
+    static func isVisible(_ todos: [SessionTodo]) -> Bool {
+        !todos.isEmpty && !isFinished(todos)
+    }
+
+    /// Hold the all-done pill only after this presentation already showed an unfinished list.
+    static func shouldHoldFinished(sawUnfinished: Bool, todos: [SessionTodo]) -> Bool {
+        sawUnfinished && isFinished(todos)
     }
 }
 
@@ -126,6 +131,13 @@ struct VcsInfo: Sendable, Equatable {
 enum VcsDiffMode: String, Sendable {
     case workingTree = "git"
     case mainBranch = "branch"
+
+    var v2WireValue: String {
+        switch self {
+        case .workingTree: "working"
+        case .mainBranch: "branch"
+        }
+    }
 }
 
 enum PermissionDecision: Sendable {

@@ -12,7 +12,7 @@ struct MentionableAgent: Equatable, Sendable, Identifiable {
     }
 }
 
-struct AgentMention: Equatable, Sendable, Identifiable {
+struct AgentMention: Equatable, Sendable, Identifiable, Codable {
     let id: String
     let name: String
     let start: Int

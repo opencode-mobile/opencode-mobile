@@ -32,20 +32,22 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.SessionToolGroup
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
+import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomFade
 import dev.opencode.mobile.ui.components.OpenCodeBottomFadeOverhang
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
+import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionItem
+import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionOverlay
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
-import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionItem
-import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionOverlay
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
@@ -68,9 +70,10 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
+import dev.opencode.mobile.ui.sessionchat.view.toRoute
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -84,14 +87,17 @@ fun SessionChatScreen(
     worktree: String,
     modifier: Modifier = Modifier,
     optimisticNavigationInstanceId: String? = null,
+    parentId: String? = null,
     onNavigateBack: () -> Unit = {},
     onSessionContextClick: () -> Unit = {},
     onReviewChangesClick: (ChangesNavigationTarget) -> Unit = {},
     onChildSessionClick: (ChildSessionNavigationTarget) -> Unit = {},
+    onToolGroupClick: (SessionToolGroup) -> Unit = {},
     onSessionReplaceRequested: (ChildSessionNavigationTarget) -> Unit = {},
-    viewModel: SessionChatViewModel = hiltViewModel(
-        key = sessionChatViewModelKey(sessionId, worktree, optimisticNavigationInstanceId),
-    ),
+    viewModel: SessionChatViewModel =
+        hiltViewModel(
+            key = sessionChatViewModelKey(sessionId, worktree, optimisticNavigationInstanceId),
+        ),
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -118,6 +124,7 @@ fun SessionChatScreen(
     var toolDetailTarget by remember { mutableStateOf<SessionChatToolDetailTarget?>(null) }
     var showSessionTodosSheet by rememberSaveable { mutableStateOf(false) }
     var holdingFinishedTodos by remember { mutableStateOf(false) }
+    var sawUnfinishedTodos by remember { mutableStateOf(false) }
     var composerOverlayHeightPx by remember { mutableStateOf(0) }
     val density = LocalDensity.current
     val composerOverlayHeight = with(density) { composerOverlayHeightPx.toDp() }
@@ -141,18 +148,24 @@ fun SessionChatScreen(
 
     LaunchedEffect(uiState.sessionTodosFinished, uiState.sessionTodos.isEmpty()) {
         if (uiState.sessionTodos.isEmpty()) {
+            sawUnfinishedTodos = false
             holdingFinishedTodos = false
             showSessionTodosSheet = false
             return@LaunchedEffect
         }
-        if (uiState.sessionTodosFinished) {
-            holdingFinishedTodos = true
-            delay(1_500)
+        if (!uiState.sessionTodosFinished) {
+            sawUnfinishedTodos = true
             holdingFinishedTodos = false
-            showSessionTodosSheet = false
-        } else {
-            holdingFinishedTodos = false
+            return@LaunchedEffect
         }
+        if (!SessionTodoList.shouldHoldFinished(sawUnfinishedTodos, uiState.sessionTodos)) {
+            holdingFinishedTodos = false
+            return@LaunchedEffect
+        }
+        holdingFinishedTodos = true
+        delay(1_500)
+        holdingFinishedTodos = false
+        showSessionTodosSheet = false
     }
 
     fun ingestAttachments(uris: List<android.net.Uri>) {
@@ -396,7 +409,7 @@ fun SessionChatScreen(
                             sessionTodoTotalCount = uiState.sessionTodoTotalCount,
                             sessionTodoActivePreview = uiState.sessionTodoActivePreview?.content,
                             hideFloatStack = showSessionTodosSheet,
-                            // Composer + 16 end-pin gap; float stack uses this as-is
+                            // Composer + 16 end-pin gap; Scroll to end uses this as-is
                             // (no extra scrollToEndPillBottomPadding).
                             bottomOverlayInset = timelineBottomInset,
                             onRefresh = viewModel::refreshMessages,
@@ -418,6 +431,18 @@ fun SessionChatScreen(
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
                                 toolDetailTarget = it
                             },
+                            onToolGroupTap = { target ->
+                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_GROUP)
+                                onToolGroupClick(
+                                    target.toRoute(
+                                        sessionId = sessionId,
+                                        worktree = worktree,
+                                        parentId = parentId,
+                                        owningTurnMessageId = uiState.owningTurnMessageId(target.messageId),
+                                        supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
+                                    ),
+                                )
+                            },
                             onChildSessionTap = { childSessionId, childTitle ->
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
                                 onChildSessionClick(
@@ -437,6 +462,7 @@ fun SessionChatScreen(
                                         initialFilePath = initialFilePath,
                                     )?.let(onReviewChangesClick)
                             },
+                            supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
                         ),
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -469,7 +495,12 @@ fun SessionChatScreen(
                                 }
                             },
                 ) {
-                    if (uiState.permissionRequest == null && uiState.questionRequest == null) {
+                    if (SessionChatComposerKind.resolve(
+                            isChildSession = parentId != null,
+                            hasPermission = uiState.permissionRequest != null,
+                            hasQuestion = uiState.questionRequest != null,
+                        ) == SessionChatComposerKind.Prompt
+                    ) {
                         when {
                             uiState.atSuggestionsVisible ->
                                 OpenCodeComposerSuggestionOverlay(
@@ -513,79 +544,98 @@ fun SessionChatScreen(
                         }
                     }
 
-                    val composerState =
-                        uiState.permissionRequest?.let { request ->
-                            OpenCodeSessionComposerState.Permission(
-                                requestId = request.id,
-                                sessionId = request.sessionId,
-                                permission = request.permission,
-                                patterns = request.patterns,
-                                queueCount = uiState.permissionQueueCount,
-                                submitting = uiState.permissionSubmitting,
-                                actionsEnabled = uiState.connectionStatus == SessionConnectionStatus.Live,
-                                errorMessage = uiState.permissionErrorMessage,
-                            )
-                        } ?: uiState.questionRequest?.let { request ->
-                            val question = request.questions.getOrNull(uiState.questionWizardIndex)
-                            val questionCount = request.questions.size.coerceAtLeast(1)
-                            val index = uiState.questionWizardIndex.coerceIn(0, questionCount - 1)
-                            val answered =
-                                if (uiState.questionCustomSelected) {
-                                    uiState.questionCustomText.isNotBlank()
-                                } else {
-                                    uiState.questionSelectedLabels.isNotEmpty()
-                                }
-                            val submitting = uiState.questionSubmitting
-                            OpenCodeSessionComposerState.Question(
-                                requestId = request.id,
-                                sessionId = request.sessionId,
-                                questionIndex = index,
-                                questionCount = questionCount,
-                                header = question?.header.orEmpty(),
-                                question = question?.question.orEmpty(),
-                                options =
-                                    question?.options.orEmpty().map { option ->
-                                        OpenCodeSessionComposerState.QuestionOption(
-                                            label = option.label,
-                                            description = option.description,
-                                        )
-                                    },
-                                multiple = question?.multiple == true,
-                                customAllowed = question?.custom != false,
-                                selectedLabels = uiState.questionSelectedLabels,
-                                customText = uiState.questionCustomText,
-                                customSelected = uiState.questionCustomSelected,
-                                backEnabled = index > 0 && !submitting,
-                                nextEnabled = answered && index < questionCount - 1 && !submitting,
-                                submitEnabled = answered && index == questionCount - 1 && !submitting,
-                                submitting = submitting,
-                                errorMessage = uiState.questionErrorMessage,
-                            )
-                        } ?: OpenCodeSessionComposerState.Prompt(
-                            text = uiState.composer.text,
-                            mentionRanges = uiState.composer.agentMentions.map { it.start until it.end },
-                            selectionStart = uiState.composer.cursor,
-                            selectionEnd = uiState.composer.cursor,
-                            selectionRevision = uiState.composer.selectionRevision,
-                            attachments =
-                                uiState.composer.attachments.map(AttachmentPresentationMapper::from),
-                            selectedModelLabel = uiState.composer.selectedModelLabel,
-                            selectedModeLabel = uiState.composer.selectedMode,
-                            selectedVariantLabel = uiState.composer.selectedVariantLabel,
-                            showVariant = uiState.composer.canSelectVariant,
-                            sendEnabled =
-                                uiState.composer.canSend &&
-                                    uiState.composer.selectedModel != null &&
-                                    uiState.composer.isModelSelectionReady &&
-                                    !uiState.isSending &&
-                                    uiState.timeline != SessionChatTimelineState.Creating &&
-                                    uiState.connectionStatus == SessionConnectionStatus.Live,
-                            attachEnabled = uiState.composer.canAttach && uiState.composer.isModelSelectionReady,
-                            showStop = uiState.sessionStatusLabel != null,
-                            stopEnabled =
-                                !uiState.isAborting &&
-                                    uiState.connectionStatus == SessionConnectionStatus.Live,
+                    val composerKind =
+                        SessionChatComposerKind.resolve(
+                            isChildSession = parentId != null,
+                            hasPermission = uiState.permissionRequest != null,
+                            hasQuestion = uiState.questionRequest != null,
                         )
+                    val composerState =
+                        when (composerKind) {
+                            SessionChatComposerKind.Permission -> {
+                                val request = uiState.permissionRequest
+                                OpenCodeSessionComposerState.Permission(
+                                    requestId = request?.id.orEmpty(),
+                                    sessionId = request?.sessionId.orEmpty(),
+                                    permission = request?.permission.orEmpty(),
+                                    patterns = request?.patterns.orEmpty(),
+                                    queueCount = uiState.permissionQueueCount,
+                                    submitting = uiState.permissionSubmitting,
+                                    actionsEnabled = uiState.connectionStatus == SessionConnectionStatus.Live,
+                                    errorMessage = uiState.permissionErrorMessage,
+                                )
+                            }
+                            SessionChatComposerKind.Question -> {
+                                val request = uiState.questionRequest
+                                val question = request?.questions?.getOrNull(uiState.questionWizardIndex)
+                                val questionCount = request?.questions?.size?.coerceAtLeast(1) ?: 1
+                                val index = uiState.questionWizardIndex.coerceIn(0, questionCount - 1)
+                                val answered =
+                                    if (uiState.questionCustomSelected) {
+                                        uiState.questionCustomText.isNotBlank()
+                                    } else {
+                                        uiState.questionSelectedLabels.isNotEmpty()
+                                    }
+                                val submitting = uiState.questionSubmitting
+                                OpenCodeSessionComposerState.Question(
+                                    requestId = request?.id.orEmpty(),
+                                    sessionId = request?.sessionId.orEmpty(),
+                                    questionIndex = index,
+                                    questionCount = questionCount,
+                                    header = question?.header.orEmpty(),
+                                    question = question?.question.orEmpty(),
+                                    options =
+                                        question?.options.orEmpty().map { option ->
+                                            OpenCodeSessionComposerState.QuestionOption(
+                                                label = option.label,
+                                                description = option.description,
+                                            )
+                                        },
+                                    multiple = question?.multiple == true,
+                                    customAllowed = question?.custom != false,
+                                    selectedLabels = uiState.questionSelectedLabels,
+                                    customText = uiState.questionCustomText,
+                                    customSelected = uiState.questionCustomSelected,
+                                    backEnabled = index > 0 && !submitting,
+                                    nextEnabled = answered && index < questionCount - 1 && !submitting,
+                                    submitEnabled = answered && index == questionCount - 1 && !submitting,
+                                    submitting = submitting,
+                                    errorMessage = uiState.questionErrorMessage,
+                                )
+                            }
+                            SessionChatComposerKind.ChildLockout ->
+                                OpenCodeSessionComposerState.ChildLockout(
+                                    selectedModelLabel = uiState.composer.selectedModelLabel,
+                                    selectedVariantLabel = uiState.composer.selectedVariantLabel,
+                                    showVariant = uiState.composer.canSelectVariant,
+                                )
+                            SessionChatComposerKind.Prompt ->
+                                OpenCodeSessionComposerState.Prompt(
+                                    text = uiState.composer.text,
+                                    mentionRanges = uiState.composer.agentMentions.map { it.start until it.end },
+                                    selectionStart = uiState.composer.cursor,
+                                    selectionEnd = uiState.composer.cursor,
+                                    selectionRevision = uiState.composer.selectionRevision,
+                                    attachments =
+                                        uiState.composer.attachments.map(AttachmentPresentationMapper::from),
+                                    selectedModelLabel = uiState.composer.selectedModelLabel,
+                                    selectedModeLabel = uiState.composer.selectedMode,
+                                    selectedVariantLabel = uiState.composer.selectedVariantLabel,
+                                    showVariant = uiState.composer.canSelectVariant,
+                                    sendEnabled =
+                                        uiState.composer.canSend &&
+                                            uiState.composer.selectedModel != null &&
+                                            uiState.composer.isModelSelectionReady &&
+                                            !uiState.isSending &&
+                                            uiState.timeline != SessionChatTimelineState.Creating &&
+                                            uiState.connectionStatus == SessionConnectionStatus.Live,
+                                    attachEnabled = uiState.composer.canAttach && uiState.composer.isModelSelectionReady,
+                                    showStop = uiState.sessionStatusLabel != null,
+                                    stopEnabled =
+                                        !uiState.isAborting &&
+                                            uiState.connectionStatus == SessionConnectionStatus.Live,
+                                )
+                        }
                     OpenCodeSessionComposer(
                         state = composerState,
                         onAction = { action ->
@@ -647,6 +697,10 @@ fun SessionChatScreen(
                                     viewModel.submitQuestion(action.requestId, action.sessionId)
                                 is OpenCodeSessionComposerAction.DismissQuestion ->
                                     viewModel.dismissQuestion(action.requestId, action.sessionId)
+                                OpenCodeSessionComposerAction.BackToMainSession -> {
+                                    logChatAction(ProductAnalytics.Action.CHAT_BACK)
+                                    onNavigateBack()
+                                }
                             }
                         },
                     )
@@ -888,8 +942,7 @@ internal fun sessionChatViewModelKey(
     sessionId: String,
     worktree: String,
     optimisticNavigationInstanceId: String?,
-): String =
-    optimisticNavigationInstanceId?.let { "$sessionId-$worktree-$it" } ?: "$sessionId-$worktree"
+): String = optimisticNavigationInstanceId?.let { "$sessionId-$worktree-$it" } ?: "$sessionId-$worktree"
 
 @Preview(showBackground = true)
 @Composable

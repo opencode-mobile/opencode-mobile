@@ -197,6 +197,7 @@ struct SessionChatUiState: Equatable {
     var questionErrorMessage: String?
     var reviewChangesMessageID: String?
     var reviewChangesSummary: ReviewChangesSummary?
+    var supportsSessionMessageDiff: Bool = true
     var rename = SessionRenameUiState()
     var slashSuggestionsVisible = false
     var slashSuggestions: [SessionChatSlashSuggestion] = []
@@ -235,7 +236,9 @@ struct SessionChatUiState: Equatable {
     }
 
     func reviewChangesNavigationTarget(worktree: String) -> ChangesNavigationTarget? {
-        guard reviewChangesSummary?.fileCount ?? 0 > 0, let messageID = reviewChangesMessageID else { return nil }
+        guard supportsSessionMessageDiff,
+              reviewChangesSummary?.fileCount ?? 0 > 0,
+              let messageID = reviewChangesMessageID else { return nil }
         return ChangesNavigationTarget(
             sessionID: sessionID,
             worktree: worktree,
@@ -262,7 +265,8 @@ struct SessionChatUiState: Equatable {
         assistantMessageID: String,
         initialFilePath: String?
     ) -> ChangesNavigationTarget? {
-        guard let messageID = owningTurnMessageID(assistantMessageID: assistantMessageID) else { return nil }
+        guard supportsSessionMessageDiff,
+              let messageID = owningTurnMessageID(assistantMessageID: assistantMessageID) else { return nil }
         return ChangesNavigationTarget(
             sessionID: sessionID,
             worktree: worktree,
@@ -295,9 +299,23 @@ struct SessionChatUiState: Equatable {
     }
 }
 
+enum SessionChatComposerKind: Equatable {
+    case permission
+    case question
+    case childLockout
+    case prompt
+
+    static func resolve(isChildSession: Bool, hasPermission: Bool, hasQuestion: Bool) -> SessionChatComposerKind {
+        if hasPermission { return .permission }
+        if hasQuestion { return .question }
+        if isChildSession { return .childLockout }
+        return .prompt
+    }
+}
+
 enum ReviewChangesPillVisibility {
-    static func shouldShow(summary: ReviewChangesSummary?, isPinnedToEnd: Bool, showScrollToEnd: Bool) -> Bool {
-        (summary?.fileCount ?? 0) > 0 && isPinnedToEnd && !showScrollToEnd
+    static func shouldShow(summary: ReviewChangesSummary?) -> Bool {
+        (summary?.fileCount ?? 0) > 0
     }
 }
 
@@ -503,7 +521,14 @@ enum SessionConnectionStatus: String, Equatable, Sendable {
     case connecting
     case offline
 
-    init(connectionState: EventStreamConnectionState) {
+    init(
+        connectionState: EventStreamConnectionState,
+        path: DeviceNetworkPathStatus = .ready
+    ) {
+        if path == .unavailable {
+            self = .offline
+            return
+        }
         switch connectionState {
         case .connected:
             self = .live
@@ -511,6 +536,17 @@ enum SessionConnectionStatus: String, Equatable, Sendable {
             self = .connecting
         case .idle, .disconnected:
             self = .offline
+        }
+    }
+
+    var openCodeStatus: OpenCodeSessionConnectionStatus {
+        switch self {
+        case .live:
+            .live
+        case .connecting:
+            .connecting
+        case .offline:
+            .offline
         }
     }
 }

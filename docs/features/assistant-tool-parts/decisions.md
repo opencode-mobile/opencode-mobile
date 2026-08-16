@@ -22,6 +22,8 @@
   formatter-built compact tool labels so Session Chat looks unchanged.
 - Domain ToolPart omits `raw`, tool timing, and attachments for OPE-48; DTOs
   may still parse them. Android tool-state DTO gains `metadata` parity with iOS.
+  OPE-158 later lifts `time.start` onto ToolPart as `timeStartEpochMs` for the
+  quiet row.
 - Compact label formatter stays domain-side (beside the message adapter) so
   both platforms keep the same `Message.text` projection until cards land.
 - Completed edit/write/patch may already carry filediff-style metadata in
@@ -182,3 +184,47 @@ Superseded by **OPE-51 file-change tool cards (grilling)** below.
 - Timeline `ToolCard` optional `childSessionId`: non-null → push child Session
   Chat (same worktree); null → display-only. No preflight for stale children.
 - No task grouping. Parallel with OPE-51.
+
+## Running child session chat row (Quiet row)
+
+[OPE-158](https://linear.app/opencode-mobile/issue/OPE-158/running-child-session-chat-row).
+Locked from the running-child-session thread prototype, variant **A — Quiet
+row**. A pending/running `task` in the parent timeline is a person/thread row,
+not a Tool Call Card.
+
+OPE-158 shipped this as feature-local Session Chat chrome. [OPE-162](https://linear.app/opencode-mobile/issue/OPE-162/design-system-child-session-row)
+promotes that chrome to the design-system Child Session Row and uses it for
+completed `task` parts as well. Error `task` parts still keep the OPE-52
+Tool Call Card.
+
+- Layout: circular letter avatar, agent name, optional `background` caption,
+  live second line, optional elapsed, trailing chevron when tappable.
+- No spinning progress, status ring, shimmer, or pulsing dots. “Still working”
+  is the updating second line and elapsed time.
+- Avatar is a letter from the agent name on a raised circle. Do not add a
+  per-agent color palette (OPE-52 still forbids agent color as status chrome).
+- Second line: running `ToolPart.title` when present, otherwise the task
+  description / prompt. Do not subscribe to the child session’s tool stream
+  just to populate this row.
+- Elapsed: `m:ss` from existing tool `time.start` when that timestamp is
+  already on the payload; omit when missing. Do not invent a start time or a
+  new server API. When `time.start` is present, the quiet-row **view** ticks
+  locally (`now − start`) about once a second so elapsed advances without
+  rebuilding the Session Chat Screen Model. Do not run a ViewModel or
+  timeline-builder timer. On resume, recompute from `time.start`.
+- Tap / `childSessionId` navigation stays as OPE-52.
+- Design-system Child Session Row (OPE-162). Do not extend the Tool Call Card
+  for this row; that component stays collapsed tool-agnostic status chrome.
+  Session Chat keeps only the local elapsed tick and passes a formatted
+  string.
+- Prototype: `docs/prototypes/running-child-session-thread/` (`?variant=A`).
+
+## OPE-162 design-system Child Session Row
+
+- Promote the Quiet row into the Component Collection. Completed `task` parts
+  use the same row so they read as child sessions, not generic tool cards.
+- Error `task` parts keep the Tool Call Card so the error slot stays visible.
+- Elapsed stays feature-owned: the component does not tick. Pending/running
+  pass `m:ss` from `time.start`; completed omits elapsed.
+- Avatar is a letter from the title on `surface-raised`. No List Item
+  `LetterAccent` palette.

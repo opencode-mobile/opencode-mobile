@@ -3,9 +3,11 @@ import SwiftUI
 struct ConnectionSetupView: View {
     @Bindable var viewModel: ConnectionSetupViewModel
     let onDismiss: () -> Void
+    @State private var nameFocused = false
     @State private var urlFocused = false
     @State private var usernameFocused = false
     @State private var passwordFocused = false
+    @State private var showRemoveConfirm = false
     /// Field-edit Analytics fires once per field so keystrokes are not events and
     /// no field value can leak into a parameter.
     @State private var loggedBaseURLEdit = false
@@ -15,7 +17,7 @@ struct ConnectionSetupView: View {
     var body: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: "Connect to server",
+                title: viewModel.screenTitle,
                 leading: .back(action: {
                     ProductAnalytics.logUserAction(
                         screenId: ProductAnalytics.Screen.connectionSetup,
@@ -23,11 +25,20 @@ struct ConnectionSetupView: View {
                     )
                     onDismiss()
                 }),
+                actions: removeAction,
                 showDivider: true
             )
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    OpenCodeTextInput(
+                        text: $viewModel.name,
+                        hint: "Name",
+                        kind: .text,
+                        submitAction: .next,
+                        isFocused: $nameFocused,
+                        onSubmit: { urlFocused = true }
+                    )
                     OpenCodeServerAddressInput(
                         value: $viewModel.baseURL,
                         hint: "Host",
@@ -50,6 +61,15 @@ struct ConnectionSetupView: View {
                         isFocused: $passwordFocused,
                         onSubmit: { passwordFocused = false }
                     )
+                    statusMessage
+                    Button(testActionTitle) {
+                        Task { await viewModel.testConnection() }
+                    }
+                    .buttonStyle(.plain)
+                    .font(OpenCodeTypography.button)
+                    .foregroundStyle(OpenCodeColors.textInteractiveBase)
+                    .disabled(viewModel.isTesting || viewModel.isSaving)
+                    .opacity(viewModel.isTesting || viewModel.isSaving ? 0.4 : 1)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
@@ -58,22 +78,13 @@ struct ConnectionSetupView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .scrollDismissesKeyboard(.interactively)
 
-            VStack(alignment: .leading, spacing: 12) {
-                statusMessage
-
-                OpenCodeButton(variant: .fullWidthText(title: "Test connection")) {
-                    Task { await viewModel.testConnection() }
-                }
-                .disabled(viewModel.isTesting || viewModel.isSaving)
-
-                OpenCodeButton(
-                    variant: .fullWidthText(title: "Save"),
-                    enabled: viewModel.canSave && !viewModel.isSaving
-                ) {
-                    Task {
-                        if await viewModel.saveConnection() {
-                            onDismiss()
-                        }
+            OpenCodeButton(
+                variant: .fullWidthText(title: "Save"),
+                enabled: viewModel.canSave && !viewModel.isSaving
+            ) {
+                Task {
+                    if await viewModel.saveConnection() {
+                        onDismiss()
                     }
                 }
             }
@@ -101,6 +112,37 @@ struct ConnectionSetupView: View {
             logFieldEditOnce(&loggedPasswordEdit, ProductAnalytics.Action.connectionEditPassword)
             viewModel.onFieldChanged()
         }
+        .openCodeDialog(
+            isPresented: $showRemoveConfirm,
+            title: "Remove “\(viewModel.name.isEmpty ? "server" : viewModel.name)”?",
+            subtitle:
+            "This device forgets the Connection Profile. Sessions stay on that server. If it’s the active server, you’ll pick another — or land on Connect if none remain.",
+            primaryOption: OpenCodeDialogOption(title: "Remove", destructive: true) {
+                Task {
+                    await viewModel.removeConnection()
+                    onDismiss()
+                }
+            },
+            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+                showRemoveConfirm = false
+            }
+        )
+    }
+
+    private var removeAction: [OpenCodeTopBarAction] {
+        guard viewModel.canRemove else { return [] }
+        return [
+            .icon(
+                .delete,
+                accessibilityLabel: "Remove server",
+                enabled: !viewModel.isTesting && !viewModel.isSaving,
+                action: { showRemoveConfirm = true }
+            ),
+        ]
+    }
+
+    private var testActionTitle: String {
+        viewModel.state == .testSucceeded ? "Test again" : "Test connection"
     }
 
     private func logFieldEditOnce(_ alreadyLogged: inout Bool, _ actionId: String) {
@@ -113,7 +155,7 @@ struct ConnectionSetupView: View {
     }
 
     private var statusMessage: some View {
-        let message = viewModel.testResultMessage
+        let message = viewModel.testResultMessage ?? idleHint
         return Text(message ?? " ")
             .font(OpenCodeTypography.bodySecondary)
             .foregroundStyle(
@@ -123,6 +165,11 @@ struct ConnectionSetupView: View {
             )
             .opacity(message == nil ? 0 : 1)
             .accessibilityHidden(message == nil)
+    }
+
+    private var idleHint: String? {
+        guard viewModel.mode == .edit, viewModel.testResultMessage == nil else { return nil }
+        return "Rename can Save now. Host or password changes need Test."
     }
 }
 
@@ -165,14 +212,17 @@ private struct ConnectionSetupPreview: View {
             initialProfile: ConnectionProfile(
                 baseURL: "http://192.168.0.99:4096/",
                 username: "opencode",
-                password: ""
-            )
+                password: "",
+                id: "preview-profile",
+                name: "Mac Mini V1"
+            ),
+            mode: .edit
         )
     }
 }
 
 private struct PreviewConnectionProbeService: ConnectionProbing {
-    func probe(connection: ServerConnection) async throws {}
+    func probe(connection: ServerConnection) async throws -> ServerProtocol { .v1 }
 }
 
 private struct PreviewConnectionProfileStore: ConnectionProfileStore {

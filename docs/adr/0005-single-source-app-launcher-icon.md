@@ -57,4 +57,8 @@ exclusively. Legacy fallback regeneration is a separate concern.
   Android project template) is left unreferenced and unmaintained; it is not
   part of the adaptive icon and is not regenerated.
 - Hand-edits to generated Android vector XML or iOS PNGs will be overwritten on
-  the next sync; the source SVG is the only hand-edited artifact.
+  the next sync; `app-icon/source.svg` is the only hand-edited **launcher**
+  artifact.
+- Store listing art is a separate source (`app-icon/interlock.svg` via
+  `npm run app-icon:sync-store`) and must not replace the launcher pipeline.
+  See `docs/design-system/app-icon.md`.

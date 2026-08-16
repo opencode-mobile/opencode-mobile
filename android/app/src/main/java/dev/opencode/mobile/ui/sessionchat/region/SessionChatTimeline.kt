@@ -42,6 +42,9 @@ class SessionChatTimeline(
     @Volatile
     var serverCommands: List<ServerCommand> = emptyList()
 
+    @Volatile
+    var collapseConsecutiveToolCalls: Boolean = false
+
     fun updateServerCommands(commands: List<ServerCommand>) {
         if (commands == serverCommands) return
         val wasEmpty = serverCommands.isEmpty()
@@ -55,6 +58,23 @@ class SessionChatTimeline(
                 sourceWorktree = worktree,
                 fromQuietRefresh = true,
                 source = "commands-ready",
+                messagesFromCache = _state.value.messagesFromCache,
+            )
+        }
+    }
+
+    fun updateCollapseConsecutiveToolCalls(enabled: Boolean) {
+        if (enabled == collapseConsecutiveToolCalls) return
+        collapseConsecutiveToolCalls = enabled
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (lastLoadedDisplayMessages.isNotEmpty()) {
+            applyLoadedDisplayMessages(
+                displayMessages = lastLoadedDisplayMessages,
+                sourceSessionId = sessionId,
+                sourceWorktree = worktree,
+                fromQuietRefresh = true,
+                source = "collapse-pref",
                 messagesFromCache = _state.value.messagesFromCache,
             )
         }
@@ -514,9 +534,12 @@ class SessionChatTimeline(
         val projected =
             withContext(ioDispatcher) {
                 val bodies =
-                    sortedDisplayMessages(displayMessages).mapNotNull { display ->
-                        displayMessageBody(display, previousById[display.id])
-                    }
+                    SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+                        sortedDisplayMessages(displayMessages).mapNotNull { display ->
+                            displayMessageBody(display, previousById[display.id])
+                        },
+                        collapseConsecutiveToolCalls,
+                    )
                 TimelineProjector.project(
                     frame =
                         DisplayFrame(
@@ -655,6 +678,7 @@ class SessionChatTimeline(
                         parts = message.parts,
                         messageId = message.id,
                         fallbackText = message.text,
+                        collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
                     ),
                 commands = serverCommands,
             )

@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.changes
 
+import dev.opencode.mobile.domain.connection.ServerCapabilities
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
@@ -197,6 +199,74 @@ class ChangesViewModelTest {
             )
         }
 
+    @Test fun v2HidesLastTurnAndKeepsWorkingTree() =
+        runTest(dispatcher) {
+            val repository =
+                FakeRepository(
+                    vcsInfoResults = ArrayDeque(listOf(Result.success(VcsInfo("feature", "main")))),
+                    vcsDiffResults = ArrayDeque(listOf(Result.success(listOf(file("git.kt"))))),
+                )
+            val viewModel =
+                ChangesViewModel(repository, ServerCapabilities.forProtocol(ServerProtocol.V2))
+            viewModel.bind("s", "/w", "m", ChangeSource.LastTurn)
+            advanceUntilIdle()
+
+            assertEquals(listOf(ChangeSource.WorkingTree), viewModel.uiState.value.availableSources)
+            assertEquals(ChangeSource.WorkingTree, viewModel.uiState.value.selectedSource)
+            assertEquals(emptyList<Request>(), repository.requests)
+            assertEquals(listOf(VcsRequest(VcsDiffMode.WorkingTree, "/w", 12)), repository.vcsRequests)
+        }
+
+    @Test fun v2DoesNotExposeLastTurnBeforeProbe() =
+        runTest(dispatcher) {
+            val repository = FakeRepository()
+            val viewModel =
+                ChangesViewModel(repository, ServerCapabilities.forProtocol(ServerProtocol.V2))
+            viewModel.bind("s", "/w", "m", ChangeSource.LastTurn)
+
+            assertEquals(listOf(ChangeSource.WorkingTree), viewModel.uiState.value.availableSources)
+            assertEquals(ChangeSource.WorkingTree, viewModel.uiState.value.selectedSource)
+            viewModel.selectSource(ChangeSource.LastTurn)
+            assertEquals(ChangeSource.WorkingTree, viewModel.uiState.value.selectedSource)
+            assertEquals(emptyList<Request>(), repository.requests)
+        }
+
+    @Test fun bindUsesLiveCapabilitiesAfterProtocolDetection() =
+        runTest(dispatcher) {
+            var detected = ServerProtocol.V1
+            val repository =
+                FakeRepository(
+                    vcsInfoResults = ArrayDeque(listOf(Result.success(VcsInfo("feature", "main")))),
+                    vcsDiffResults = ArrayDeque(listOf(Result.success(listOf(file("git.kt"))))),
+                )
+            val viewModel =
+                ChangesViewModel(repository) { ServerCapabilities.forProtocol(detected) }
+            detected = ServerProtocol.V2
+            viewModel.bind("s", "/w", "m", ChangeSource.LastTurn)
+            advanceUntilIdle()
+
+            assertEquals(listOf(ChangeSource.WorkingTree), viewModel.uiState.value.availableSources)
+            assertEquals(ChangeSource.WorkingTree, viewModel.uiState.value.selectedSource)
+            assertEquals(emptyList<Request>(), repository.requests)
+            assertEquals(listOf(VcsRequest(VcsDiffMode.WorkingTree, "/w", 12)), repository.vcsRequests)
+        }
+
+    @Test fun v2WithoutGitShowsEmptyChanges() =
+        runTest(dispatcher) {
+            val repository =
+                FakeRepository(
+                    vcsInfoResults = ArrayDeque(listOf(Result.success(VcsInfo(null, null)))),
+                )
+            val viewModel =
+                ChangesViewModel(repository, ServerCapabilities.forProtocol(ServerProtocol.V2))
+            viewModel.bind("s", "/w", "m", ChangeSource.LastTurn)
+            advanceUntilIdle()
+
+            assertEquals(emptyList<ChangeSource>(), viewModel.uiState.value.availableSources)
+            assertEquals(ChangesPhase.NoChanges, viewModel.uiState.value.phase)
+            assertEquals(emptyList<Request>(), repository.requests)
+        }
+
     @Test fun viewerStartsCollapsedNavigatesHunksAndHandlesUnavailablePreview() {
         val twoHunks =
             FileDiff(
@@ -245,6 +315,27 @@ class ChangesViewModelTest {
             )
         assertEquals(ChangeSource.WorkingTree, state.changesNavigationTarget("/repo").initialSource)
         assertEquals(ChangeSource.LastTurn, state.reviewChangesNavigationTarget("/repo")?.initialSource)
+    }
+
+    @Test fun v2HidesLastTurnNavigationTargets() {
+        val state =
+            SessionChatUiState(
+                "s",
+                "Session",
+                SessionChatTimelineState.Ready,
+                messages = listOf(row("user", MessageRole.User), row("assistant", MessageRole.Assistant)),
+                reviewChangesMessageId = "user",
+                reviewChangesSummary = ReviewChangesSummary(1, 1, 0),
+                supportsSessionMessageDiff = false,
+            )
+        assertNull(state.reviewChangesNavigationTarget("/repo"))
+        assertNull(
+            state.fileChangeNavigationTarget(
+                worktree = "/repo",
+                assistantMessageId = "assistant",
+                initialFilePath = "src/Main.kt",
+            ),
+        )
     }
 
     @Test fun fileChangeNavigationUsesOwningTurnAndOptionalPath() {

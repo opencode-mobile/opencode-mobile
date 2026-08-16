@@ -1,14 +1,48 @@
-# App Launcher Icon
+# App Icons
 
-The app launcher (home-screen) icon is shared across iOS and Android from one
-canonical source SVG. This is separate from the in-app Material Icons catalog
-(see [`icons.md`](./icons.md)); the launcher icon is not part of
+OpenCode Mobile keeps **two** icon sources with different jobs:
+
+| Role | Source | Sync |
+| --- | --- | --- |
+| On-device launcher (home screen) | [`app-icon/source.svg`](../../app-icon/source.svg) | `npm run app-icon:sync` |
+| Store listing (Play / App Store marketing) | [`app-icon/interlock.svg`](../../app-icon/interlock.svg) | `npm run app-icon:sync-store` |
+
+Do not point the launcher generator at `interlock.svg`, and do not replace
+`source.svg` with the store mark. Device chrome stays on the current nested
+square; store listings use the interlocking frames.
+
+This is separate from the in-app Material Icons catalog (see
+[`icons.md`](./icons.md)); neither launcher nor store mark is part of
 `icons/manifest.yaml`.
 
-## Source of truth
+## Store listing mark (`interlock.svg`)
 
-`app-icon/source.svg` is the only hand-edited artifact. It carries two marker
-comments the generator reads:
+Hand-edited square SVG (viewBox `0 0 100 100`). Sync emits:
+
+| Output | Size | Use |
+| --- | --- | --- |
+| `android/app/src/main/ic_launcher-playstore.png` | 512×512 | Android project Play high-res icon |
+| `play-listing/icon-512.png` | 512×512 | Play Console upload kit ([`play-listing/`](../../play-listing/)) |
+| `app-icon/store-1024.png` | 1024×1024 | App Store / marketing upload when a separate listing asset is needed |
+
+Phone screenshots live under [`test-screenshots/`](../../test-screenshots/)
+(`android_1_*.jpg` / `ios_1_*.jpg`). The feature graphic stays in `play-listing/`.
+Only the icon is regenerated from `interlock.svg`.
+
+### Platform notes
+
+- **Play Store** accepts a high-res icon separate from the adaptive launcher, so
+  device and listing can differ. That is the intended split.
+- **App Store** product-page icon normally comes from the app binary’s
+  `AppIcon` (the launcher set). Keep the interlocking mark available as
+  `store-1024.png` for Console uploads / promotional art; changing only the
+  listing without changing the on-device icon may not be possible through the
+  binary App Icon alone.
+
+## Launcher icon (`source.svg`)
+
+`app-icon/source.svg` is the only hand-edited **launcher** artifact. It carries
+two marker comments the generator reads:
 
 - `<!-- @opencode/background -->` — a single `<rect>` whose `fill` is the
   launcher background color (applied as the Android adaptive-icon background
@@ -31,7 +65,7 @@ step, so the generator derives the equivalent uniform transform for a square
 and make it look squished — never rasterize the source viewBox into a square
 PNG without recomputing the transform.
 
-## Generator
+## Launcher generator
 
 `npm run app-icon:sync` runs [`scripts/sync-app-icon.mjs`](../../scripts/sync-app-icon.mjs),
 which:
@@ -48,7 +82,7 @@ which:
 The generator uses `rsvg-convert` (librsvg) for SVG→PNG. Install with
 `brew install librsvg` (macOS) or `apt install librsvg2-bin` (Linux).
 
-## Outputs
+## Launcher outputs
 
 | Platform | Path |
 | --- | --- |
@@ -60,7 +94,7 @@ Modern Android (API 26+) uses the adaptive-icon XML exclusively; the webp
 fallbacks only matter for older API levels and can be regenerated separately
 if legacy support is required.
 
-## iOS appearance variants
+## iOS appearance variants (launcher)
 
 iOS 14+ supports per-appearance app icons. We provide:
 
@@ -70,12 +104,22 @@ iOS 14+ supports per-appearance app icons. We provide:
   user's chosen tint. This is derived from the same glyph paths, so it stays
   in sync with the main icon when the source SVG changes.
 
-## Editing the icon
+## Editing
+
+### Launcher (device)
 
 1. Edit `app-icon/source.svg` (keep the `@opencode/background` and
    `@opencode/glyph` markers).
 2. Run `npm run app-icon:sync`.
-3. Commit `app-icon/source.svg` and all generated outputs.
+3. Commit `app-icon/source.svg` and all generated launcher outputs.
 
 Do not hand-edit generated iOS PNGs or the Android vector XML; rerun the
 generator instead.
+
+### Store listing
+
+1. Edit `app-icon/interlock.svg`.
+2. Run `npm run app-icon:sync-store`.
+3. Commit `app-icon/interlock.svg`, `app-icon/store-1024.png`,
+   `play-listing/icon-512.png`, and
+   `android/app/src/main/ic_launcher-playstore.png`.

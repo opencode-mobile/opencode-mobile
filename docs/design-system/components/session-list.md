@@ -18,8 +18,9 @@ settings) is owned by the home shell, not this component.
   - `SessionListFilterTab`: `id`, `title`, `count`. Use id `all` for the
     cross-project tab; other ids match `SessionListSession.worktree`.
 - Required content: `sessions` (may be empty; order before filter is not
-  significant — the list filters then groups) and ordered `filterTabs`
-  (at least **All** when filters are shown).
+  significant — the list filters then groups) and ordered `filterTabs`.
+  **All** is required only when two or more projects are added; omit it for
+  zero or one project. Zero projects may pass an empty tab list.
 - Required filter state: `selectedFilterId` plus `onFilterSelected(id)`.
 - Optional content:
   - `createError` string shown at the top of the dock when session create fails.
@@ -89,7 +90,8 @@ sessions whose `worktree` equals the selected filter id are shown.
 ## Review Surfaces
 
 Both Component Galleries include a realistic mixed Idle/Running/Ready sample with
-filters and dock actions. Light and dark use the shared gallery theme control.
+filters and dock actions, plus a **1 project** control that hides All and shows
+only that project chip. Light and dark use the shared gallery theme control.
 Edge-to-edge fade is judged full-bleed in the gallery detail. Top bar chrome is
 reviewed via Top Bar gallery / home shell, not this entry.
 
