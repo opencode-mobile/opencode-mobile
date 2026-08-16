@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.connection
 
+import dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore
 import dev.opencode.mobile.domain.connection.ConnectionProbeService
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
@@ -58,6 +59,7 @@ class ConnectionSetupViewModelTest {
                             connectionProfileStore = store,
                             secureCredentialStore = NoOpSecureCredentialStore(),
                             sessionModelSelectionStore = NoOpSessionModelSelectionStore(),
+                            composerDraftStore = InMemoryComposerDraftStore(),
                             httpClient = OpencodeHttpClient(json, activeConnectionManager),
                             sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
                         ),

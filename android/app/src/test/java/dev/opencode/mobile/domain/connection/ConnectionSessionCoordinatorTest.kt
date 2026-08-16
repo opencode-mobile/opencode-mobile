@@ -86,6 +86,7 @@ class ConnectionSessionCoordinatorTest {
                     connectionProfileStore = connectionProfileStore,
                     secureCredentialStore = FakeSecureCredentialStore(),
                     sessionModelSelectionStore = FakeSessionModelSelectionStore(),
+                    composerDraftStore = InMemoryComposerDraftStore(),
                     httpClient = OpencodeHttpClient(json, activeConnectionManager),
                     sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
                 )
