@@ -918,6 +918,62 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.composer.attachments == [newlySelected])
     }
 
+    @Test func composerDraft_restoresTextAndMentionsForSameSessionOnly() async {
+        let draftStore = InMemoryComposerDraftStore()
+        let first = makeViewModel(messageRepository: FakeMessageRepository(), composerDraftStore: draftStore)
+        await first.loadMessages()
+        first.updateComposerText("@", cursor: 1)
+        first.selectAtSuggestion(agentName: "explore")
+        first.flushComposerDraft()
+        first.stopObserving()
+
+        let other = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            composerDraftStore: draftStore,
+            sessionID: "ses-2"
+        )
+        await other.loadMessages()
+        #expect(other.uiState.composer.text == "")
+        other.stopObserving()
+
+        let restored = makeViewModel(messageRepository: FakeMessageRepository(), composerDraftStore: draftStore)
+        await restored.loadMessages()
+        await waitUntil { restored.uiState.composer.text == "@explore " }
+        #expect(restored.uiState.composer.text == "@explore ")
+        #expect(restored.uiState.composer.agentMentions.map(\.name) == ["explore"])
+        restored.stopObserving()
+    }
+
+    @Test func composerDraft_stopObservingFlushesPendingDebounce() async {
+        let draftStore = InMemoryComposerDraftStore()
+        let first = makeViewModel(messageRepository: FakeMessageRepository(), composerDraftStore: draftStore)
+        await first.loadMessages()
+        first.updateComposerText("pending leave")
+        first.stopObserving()
+
+        let restored = makeViewModel(messageRepository: FakeMessageRepository(), composerDraftStore: draftStore)
+        await restored.loadMessages()
+        await waitUntil { restored.uiState.composer.text == "pending leave" }
+        #expect(restored.uiState.composer.text == "pending leave")
+        restored.stopObserving()
+    }
+
+    @Test func composerDraft_successfulSendClearsStoredDraft() async {
+        let draftStore = InMemoryComposerDraftStore()
+        let first = makeViewModel(messageRepository: FakeMessageRepository(), composerDraftStore: draftStore)
+        await first.loadMessages()
+        first.updateComposerText("send me")
+        await first.sendPrompt()
+        first.flushComposerDraft()
+        #expect(first.uiState.composer.text == "")
+        first.stopObserving()
+
+        let restored = makeViewModel(messageRepository: FakeMessageRepository(), composerDraftStore: draftStore)
+        await restored.loadMessages()
+        #expect(restored.uiState.composer.text == "")
+        restored.stopObserving()
+    }
+
     @Test func sendPrompt_successPreservesAttachmentReselectedDuringFlight() async {
         let repository = FakeMessageRepository(failListMessagesAfterSend: true, holdSend: true)
         let viewModel = makeViewModel(messageRepository: repository)
@@ -2006,6 +2062,7 @@ struct SessionChatViewModelTests {
         messageRepository: (any MessageRepository)? = nil,
         eventStream: FakeForegroundEventStream? = nil,
         sessionModelSelectionStore: (any SessionModelSelectionStore)? = nil,
+        composerDraftStore: (any ComposerDraftStore)? = nil,
         modelRepository: FakeModelRepository = FakeModelRepository(),
         commandRepository: FakeCommandRepository = FakeCommandRepository(),
         agentRepository: FakeAgentRepository = FakeAgentRepository(),
@@ -2036,6 +2093,7 @@ struct SessionChatViewModelTests {
                 fake
             }
         let selectionStore = sessionModelSelectionStore ?? InMemorySessionModelSelectionStore()
+        let draftStore = composerDraftStore ?? InMemoryComposerDraftStore()
         let activeConnectionManager = ActiveConnectionManager()
         activeConnectionManager.apply(
             ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
@@ -2056,6 +2114,7 @@ struct SessionChatViewModelTests {
             sessionStatusLiveStore: sessionStatusLiveStore,
             foregroundEventStream: eventStream,
             sessionModelSelectionStore: selectionStore,
+            composerDraftStore: draftStore,
             activeConnectionManager: activeConnectionManager,
             connectionProfileStore: EmptyConnectionProfileStore(),
             newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
@@ -2533,6 +2592,56 @@ private final class InMemorySessionModelSelectionStore: SessionModelSelectionSto
         let trimmed = serverBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = trimmed.hasSuffix("/") ? trimmed : trimmed + "/"
         return [normalized, worktree, sessionID].joined(separator: "|")
+    }
+}
+
+private final class InMemoryComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
+    private var saved: [String: ComposerDraft] = [:]
+
+    func load(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionID: String
+    ) -> ComposerDraft? {
+        saved[key(connectionIdentity, worktree, sessionID)]
+    }
+
+    func save(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionID: String,
+        draft: ComposerDraft
+    ) {
+        saved[key(connectionIdentity, worktree, sessionID)] = draft
+    }
+
+    func delete(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionID: String
+    ) {
+        saved.removeValue(forKey: key(connectionIdentity, worktree, sessionID))
+    }
+
+    func deleteSessionEntries(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        sessionID: String
+    ) {
+        saved.keys
+            .filter { $0.hasPrefix(connectionIdentity.serverBaseURL) && $0.hasSuffix("|\(sessionID)") }
+            .forEach { saved.removeValue(forKey: $0) }
+    }
+
+    func clearAll() {
+        saved.removeAll()
+    }
+
+    private func key(
+        _ identity: ModelSelectionConnectionIdentity,
+        _ worktree: String,
+        _ sessionID: String
+    ) -> String {
+        "\(identity.serverBaseURL)|\(worktree)|\(sessionID)"
     }
 }
 

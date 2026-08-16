@@ -19,13 +19,18 @@ extension Container {
         self { UserDefaultsSessionModelSelectionStore() }.singleton
     }
 
+    var composerDraftStore: Factory<any ComposerDraftStore> {
+        self { UserDefaultsComposerDraftStore() }.singleton
+    }
+
     var connectionSessionCoordinator: Factory<ConnectionSessionCoordinator> {
         self { @MainActor in
             ConnectionSessionCoordinator(
                 activeConnectionManager: self.activeConnectionManager(),
                 connectionProfileStore: self.connectionProfileStore(),
                 secureCredentialStore: self.secureCredentialStore(),
-                sessionModelSelectionStore: self.sessionModelSelectionStore()
+                sessionModelSelectionStore: self.sessionModelSelectionStore(),
+                composerDraftStore: self.composerDraftStore()
             )
         }.singleton
     }
@@ -95,6 +100,7 @@ extension Container {
                 api: self.sessionsAPIClient(),
                 adapter: self.sessionDomainAdapter(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),
+                composerDraftStore: self.composerDraftStore(),
                 activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
@@ -436,6 +442,7 @@ extension Container {
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
                 foregroundEventStream: self.foregroundEventStream(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),
+                composerDraftStore: self.composerDraftStore(),
                 activeConnectionManager: self.activeConnectionManager(),
                 connectionProfileStore: self.connectionProfileStore(),
                 newSessionModelSelectionResolver: NewSessionModelSelectionResolver(

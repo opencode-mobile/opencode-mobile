@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.connection
 
+import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
@@ -18,6 +19,7 @@ class ConnectionSessionCoordinator
         private val connectionProfileStore: ConnectionProfileStore,
         private val secureCredentialStore: SecureCredentialStore,
         private val sessionModelSelectionStore: SessionModelSelectionStore,
+        private val composerDraftStore: ComposerDraftStore,
         private val httpClient: OpencodeHttpClient,
         private val sseHttpClient: OpencodeSseHttpClient,
     ) {
@@ -69,6 +71,7 @@ class ConnectionSessionCoordinator
             secureCredentialStore.clearAll()
             connectionProfileStore.clearAll()
             sessionModelSelectionStore.clearAll()
+            composerDraftStore.clearAll()
             activeConnectionManager.disconnect()
             httpClient.rebuild()
             sseHttpClient.rebuild()

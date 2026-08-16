@@ -9,7 +9,7 @@ interface SessionTodoLiveStore {
         directory: String?,
     ): Flow<List<SessionTodo>>
 
-    /** Drive live lifecycle: GET (force if cached) when becoming live; clear when idle. */
+    /** Force GET when becoming live. Idle keeps the cached list. */
     fun setLive(
         isLive: Boolean,
         sessionId: String,

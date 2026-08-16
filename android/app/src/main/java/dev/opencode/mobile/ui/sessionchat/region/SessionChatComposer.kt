@@ -9,6 +9,8 @@ import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.command.CommandRunOptions
 import dev.opencode.mobile.domain.command.ComposerSubmitIntent
 import dev.opencode.mobile.domain.command.ComposerSubmitRouting
+import dev.opencode.mobile.domain.composer.ComposerDraft
+import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
@@ -23,6 +25,7 @@ import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
 import dev.opencode.mobile.ui.sessionchat.LatestModelHint
@@ -39,6 +42,8 @@ import dev.opencode.mobile.ui.sessionchat.toAtSuggestion
 import dev.opencode.mobile.ui.sessionchat.toSlashSuggestion
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -59,6 +64,7 @@ class SessionChatComposer(
     private val sessionRepository: SessionRepository,
     private val connectionSessionCoordinator: ConnectionSessionCoordinator,
     private val sessionModelSelectionStore: SessionModelSelectionStore,
+    private val composerDraftStore: ComposerDraftStore,
     private val scope: CoroutineScope,
 ) {
     var ioDispatcher: CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
@@ -76,6 +82,8 @@ class SessionChatComposer(
     private var latestHistoryHints: ModelSelectionHistoryHints? = null
     private var lastSelectionTimestamp = 0L
     private var draftRevision = 0
+    private var draftLoadGeneration = 0
+    private var persistDraftJob: Job? = null
     private var nextAttachmentRevision = 1
     private val attachmentRevisions = mutableMapOf<String, Int>()
 
@@ -83,12 +91,32 @@ class SessionChatComposer(
         sessionId: String,
         worktree: String,
     ) {
-        if (boundSessionId == sessionId &&
-            boundWorktree == worktree &&
-            _state.value.composer.modelOptions
-                .isNotEmpty()
-        ) {
+        val sameIdentity = boundSessionId == sessionId && boundWorktree == worktree
+        if (sameIdentity) {
+            if (_state.value.composer.modelOptions
+                    .isEmpty()
+            ) {
+                loadCachedSelection()
+                loadServerCommands()
+                loadMentionableAgents()
+            }
             return
+        }
+        val previousSessionId = boundSessionId
+        val previousWorktree = boundWorktree
+        val preserve =
+            if (previousSessionId != null &&
+                OptimisticSessionCreate.isPlaceholder(previousSessionId) &&
+                !OptimisticSessionCreate.isPlaceholder(sessionId)
+            ) {
+                currentDraft()
+            } else {
+                null
+            }
+        if (previousSessionId != null && previousWorktree != null) {
+            persistDraftJob?.cancel()
+            val snapshot = currentDraft()
+            scope.launch { persistDraft(previousSessionId, previousWorktree, snapshot) }
         }
         boundSessionId = sessionId
         boundWorktree = worktree
@@ -106,6 +134,7 @@ class SessionChatComposer(
         loadCachedSelection()
         loadServerCommands()
         loadMentionableAgents()
+        applyOrLoadDraft(preserve)
     }
 
     fun loadServerCommands(force: Boolean = false) {
@@ -403,6 +432,7 @@ class SessionChatComposer(
                     mentions = reconciled.mentions,
                 )
         }
+        schedulePersistDraft()
     }
 
     fun dismissSuggestions() {
@@ -448,6 +478,7 @@ class SessionChatComposer(
                 slashSuggestions = emptyList(),
             )
         }
+        schedulePersistDraft()
     }
 
     fun addAttachments(attachments: List<Attachment>) {
@@ -538,6 +569,7 @@ class SessionChatComposer(
                 selectionRevision = it.selectionRevision + 1,
             )
         }
+        schedulePersistDraft()
     }
 
     fun sendPrompt(
@@ -715,6 +747,18 @@ class SessionChatComposer(
                     mentions = clearedMentions,
                 )
         }
+        persistDraftJob?.cancel()
+        scope.launch { persistDraft(boundSessionId, boundWorktree, currentDraft()) }
+    }
+
+    fun flushDraft() {
+        persistDraftJob?.cancel()
+        persistDraftJob = null
+        val sessionId = boundSessionId
+        val worktree = boundWorktree
+        if (sessionId == null || worktree == null) return
+        val snapshot = currentDraft()
+        kotlinx.coroutines.runBlocking { persistDraft(sessionId, worktree, snapshot) }
     }
 
     fun clearSending() {
@@ -746,6 +790,97 @@ class SessionChatComposer(
                     }
                 }
         }
+    }
+
+    private fun currentDraft(): ComposerDraft {
+        val composer = _state.value.composer
+        return ComposerDraft(text = composer.text, agentMentions = composer.agentMentions)
+    }
+
+    private fun applyDraft(draft: ComposerDraft) {
+        _state.update { state ->
+            state
+                .copy(
+                    composer =
+                        state.composer.copy(
+                            text = draft.text,
+                            agentMentions = draft.agentMentions,
+                            cursor = draft.text.length,
+                            selectionRevision = state.composer.selectionRevision + 1,
+                        ),
+                ).withComposerSuggestions(
+                    text = draft.text,
+                    cursor = draft.text.length,
+                    mentions = draft.agentMentions,
+                )
+        }
+    }
+
+    private fun applyOrLoadDraft(preserve: ComposerDraft?) {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
+        if (preserve != null && preserve.text.isNotBlank()) {
+            applyDraft(preserve)
+            draftRevision += 1
+            schedulePersistDraft()
+            return
+        }
+        val generation = ++draftLoadGeneration
+        val identity = currentIdentity() ?: return
+        scope.launch {
+            val loaded =
+                runCatching {
+                    withContext(ioDispatcher) {
+                        composerDraftStore.load(identity, worktree, sessionId)
+                    }
+                }.onFailure {
+                    logW("loadComposerDraft failed error=${it.message ?: it::class.simpleName}")
+                }.getOrNull()
+            if (generation != draftLoadGeneration) return@launch
+            if (draftRevision != 0) return@launch
+            if (loaded != null && loaded.text.isNotBlank()) {
+                applyDraft(loaded)
+            }
+        }
+    }
+
+    private fun schedulePersistDraft() {
+        val sessionId = boundSessionId
+        val worktree = boundWorktree
+        if (sessionId == null || worktree == null) return
+        persistDraftJob?.cancel()
+        persistDraftJob =
+            scope.launch {
+                delay(DRAFT_PERSIST_DEBOUNCE_MS)
+                persistDraft(sessionId, worktree, currentDraft())
+            }
+    }
+
+    private suspend fun persistDraft(
+        sessionId: String?,
+        worktree: String?,
+        draft: ComposerDraft,
+    ) {
+        if (sessionId == null || worktree == null) return
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
+        val identity = currentIdentity() ?: return
+        runCatching {
+            withContext(ioDispatcher) {
+                if (draft.text.isBlank()) {
+                    composerDraftStore.delete(identity, worktree, sessionId)
+                } else {
+                    composerDraftStore.save(identity, worktree, sessionId, draft)
+                }
+            }
+        }.onFailure {
+            logW("saveComposerDraft failed error=${it.message ?: it::class.simpleName}")
+        }
+    }
+
+    private fun currentIdentity(): ModelSelectionConnectionIdentity? {
+        val profile = connectionSessionCoordinator.currentProfile() ?: return null
+        return ModelSelectionConnectionIdentity(profile.baseUrl, profile.username)
     }
 
     private fun loadCachedSelection() {
@@ -970,6 +1105,7 @@ class SessionChatComposer(
 
     companion object {
         private const val TAG = "SessionChatComposer"
+        private const val DRAFT_PERSIST_DEBOUNCE_MS = 300L
         val AvailableModes = listOf("Build", "Plan")
         const val ModelFilterThreshold = 10
         private val SentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)

@@ -357,6 +357,7 @@ internal fun MainScreen(
                             )
                             showNewSessionProjectPicker = true
                         },
+                        onCreateSession = onNewSession,
                         onRemoveProject = onRemoveProject,
                         onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
                         revealNewestToken = revealNewestToken,
@@ -785,6 +786,7 @@ private fun HomeProjectsContent(
     onBrowseProjectsClick: () -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
     onRequestNewSessionProjectPicker: () -> Unit,
+    onCreateSession: (String) -> Unit,
     onRemoveProject: (String) -> Unit,
     onSessionLongPress: (SessionListSession) -> Unit,
     revealNewestToken: Int = 0,
@@ -796,16 +798,25 @@ private fun HomeProjectsContent(
         modifier = modifier.fillMaxSize(),
     ) {
         val sessions = sections.toCrossProjectSessionListSessions()
-        val filterTabs = sections.toSessionListFilterTabs(sessionCount = sessions.size)
+        val chromeProjects = sections.toHomeChromeProjects()
+        val filterTabs =
+            SessionListHomeChrome.filterTabs(
+                projects = chromeProjects,
+                sessionCount = sessions.size,
+            )
         var selectedFilterId by rememberSaveable {
             mutableStateOf(SessionListFilterTab.ALL_ID)
         }
         val resolvedFilterId =
-            if (filterTabs.any { it.id == selectedFilterId }) {
-                selectedFilterId
-            } else {
-                SessionListFilterTab.ALL_ID
+            SessionListHomeChrome.resolvedFilterId(
+                selectedId = selectedFilterId,
+                tabs = filterTabs,
+            )
+        LaunchedEffect(resolvedFilterId) {
+            if (selectedFilterId != resolvedFilterId) {
+                selectedFilterId = resolvedFilterId
             }
+        }
         SessionList(
             sessions = sessions,
             filterTabs = filterTabs,
@@ -832,7 +843,15 @@ private fun HomeProjectsContent(
                 )
             },
             onAddProject = onBrowseProjectsClick,
-            onNewSession = onRequestNewSessionProjectPicker,
+            onNewSession = {
+                when (val action = SessionListHomeChrome.newSessionAction(chromeProjects)) {
+                    SessionListHomeChrome.NewSessionAction.None -> Unit
+                    SessionListHomeChrome.NewSessionAction.PresentPicker ->
+                        onRequestNewSessionProjectPicker()
+                    is SessionListHomeChrome.NewSessionAction.Create ->
+                        onCreateSession(action.worktree)
+                }
+            },
             onRemoveProject = onRemoveProject,
             onSessionLongPress = onSessionLongPress,
             revealNewestToken = revealNewestToken,
@@ -867,21 +886,14 @@ private fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Ses
             )
         }
 
-private fun List<ProjectSectionUi>.toSessionListFilterTabs(sessionCount: Int): List<SessionListFilterTab> =
-    listOf(
-        SessionListFilterTab(
-            id = SessionListFilterTab.ALL_ID,
-            title = "All",
-            count = sessionCount,
-        ),
-    ) +
-        map { section ->
-            SessionListFilterTab(
-                id = section.worktree,
-                title = section.displayName,
-                count = section.allSessions.size,
-            )
-        }
+private fun List<ProjectSectionUi>.toHomeChromeProjects(): List<SessionListHomeChrome.Project> =
+    map { section ->
+        SessionListHomeChrome.Project(
+            worktree = section.worktree,
+            title = section.displayName,
+            sessionCount = section.allSessions.size,
+        )
+    }
 
 @Suppress("UNUSED_PARAMETER")
 private fun SessionSummary.toSessionListStatus(hasPendingPermission: Boolean = false): SessionListStatus =

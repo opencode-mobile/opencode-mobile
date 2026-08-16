@@ -76,6 +76,7 @@ final class SessionChatViewModel {
         sessionStatusLiveStore: any SessionStatusLiveStore,
         foregroundEventStream: any ForegroundEventStream,
         sessionModelSelectionStore: any SessionModelSelectionStore,
+        composerDraftStore: any ComposerDraftStore,
         activeConnectionManager: ActiveConnectionManager,
         connectionProfileStore: any ConnectionProfileStore,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
@@ -113,6 +114,7 @@ final class SessionChatViewModel {
             agentRepository: agentRepository,
             sessionRepository: sessionRepository,
             sessionModelSelectionStore: sessionModelSelectionStore,
+            composerDraftStore: composerDraftStore,
             activeConnectionManager: activeConnectionManager
         )
         self.sessionInfo = SessionInfo(
@@ -911,8 +913,13 @@ final class SessionChatViewModel {
         return sessionOrder.flatMap { requestsBySession[$0] ?? [] }
     }
 
+    func flushComposerDraft() {
+        composer.flushDraft()
+    }
+
     func stopObserving() {
         OpenCodeLog.sessionChat.info("stop observing session=\(self.sessionID, privacy: .public)")
+        composer.flushDraft()
         optimisticCreateTask?.cancel()
         optimisticCreateTask = nil
         projectIdentityTask?.cancel()
@@ -1127,7 +1134,7 @@ final class SessionChatViewModel {
                 ? SessionMessageSyncChrome.statusLabel
                 : nil,
             sessionTodos: sessionTodos,
-            sessionTodosVisible: SessionTodoList.isVisible(todos: sessionTodos, isLive: isLive),
+            sessionTodosVisible: SessionTodoList.isVisible(sessionTodos),
             sessionTodosFinished: SessionTodoList.isFinished(sessionTodos),
             sessionTodoActivePreview: SessionTodoList.activePreview(in: sessionTodos),
             sessionTodoCompletedCount: SessionTodoList.completedCount(in: sessionTodos),
