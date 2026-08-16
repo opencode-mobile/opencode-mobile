@@ -12,6 +12,13 @@ enum class ServerProtocol(
 ) {
     V1("v1"),
     V2("v2"),
+    ;
+
+    val shortLabel: String get() = wireValue
+
+    val apiCaption: String get() = "API $wireValue"
+
+    val reachableMessage: String get() = "Server reachable · API $wireValue"
 }
 
 /**

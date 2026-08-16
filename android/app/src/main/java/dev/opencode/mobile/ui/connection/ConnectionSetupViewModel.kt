@@ -197,11 +197,12 @@ class ConnectionSetupViewModel
             viewModelScope.launch {
                 _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Testing, testResultMessage = null)
                 try {
-                    detectedProtocol = connectionProbeService.probe(draftConnection())
+                    val protocol = connectionProbeService.probe(draftConnection())
+                    detectedProtocol = protocol
                     _uiState.value =
                         _uiState.value.copy(
                             state = ConnectionSetupState.TestSucceeded,
-                            testResultMessage = "Server reachable",
+                            testResultMessage = protocol.reachableMessage,
                         )
                 } catch (error: ServerProbeError) {
                     detectedProtocol = null

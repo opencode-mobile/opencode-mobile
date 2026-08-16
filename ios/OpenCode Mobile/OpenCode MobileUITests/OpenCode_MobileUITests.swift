@@ -199,7 +199,10 @@ final class OpenCode_MobileUITests: XCTestCase {
         replaceText(in: app.secureTextFields["Password"], with: configuration.password, app: app)
 
         app.buttons["Test connection"].tap()
-        XCTAssertTrue(app.staticTexts["Server reachable"].waitForExistence(timeout: 15))
+        let reachable = app.staticTexts.matching(
+            NSPredicate(format: "label BEGINSWITH 'Server reachable'")
+        ).firstMatch
+        XCTAssertTrue(reachable.waitForExistence(timeout: 15))
 
         app.buttons["Save"].tap()
         XCTAssertTrue(app.buttons["New session"].waitForExistence(timeout: 15))

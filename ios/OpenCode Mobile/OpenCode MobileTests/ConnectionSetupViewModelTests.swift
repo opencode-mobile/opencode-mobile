@@ -27,9 +27,22 @@ struct ConnectionSetupViewModelTests {
         )
         await viewModel.testConnection()
         #expect(viewModel.canSave == true)
+        #expect(viewModel.testResultMessage == "Server reachable · API v1")
         viewModel.baseURL = "http://127.0.0.1:5000/"
         viewModel.onFieldChanged()
         #expect(viewModel.canSave == false)
+    }
+
+    @Test func testConnection_successMessageIncludesProtocol() async {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v2)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            )
+        )
+        await viewModel.testConnection()
+        #expect(viewModel.testResultMessage == "Server reachable · API v2")
     }
 
     @Test func revertedEdit_keepsSavedProtocol() async {

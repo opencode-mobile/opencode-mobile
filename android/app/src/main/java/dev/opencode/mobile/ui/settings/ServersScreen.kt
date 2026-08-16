@@ -24,12 +24,12 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeListItem
-import dev.opencode.mobile.ui.components.OpenCodeListItemStatus
-import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.StartDecorator
+import dev.opencode.mobile.ui.connection.listCaption
+import dev.opencode.mobile.ui.connection.listStatus
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
@@ -73,15 +73,12 @@ fun ServersScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 )
                 uiState.profiles.forEach { profile ->
+                    val isActive = profile.id == uiState.activeId
                     OpenCodeListItem(
                         title = profile.displayName,
                         subtitle = ConnectionProfileIdentity.hostLabel(profile.baseUrl),
-                        status =
-                            if (profile.id == uiState.activeId) {
-                                OpenCodeListItemStatus("Active", OpenCodeListItemStatusTone.Interactive)
-                            } else {
-                                null
-                            },
+                        caption = profile.listCaption(isActive = isActive),
+                        status = profile.listStatus(isActive = isActive),
                         style = OpenCodeListItemStyle.Card,
                         startDecorator =
                             StartDecorator.Letter(
