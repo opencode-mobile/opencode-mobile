@@ -6,16 +6,16 @@ import org.junit.Test
 
 class SessionListHomeChromeTest {
     @Test
-    fun filterTabs_zeroProjectsOmitsAllAndChipRow() {
+    fun filterTabs_zeroProjectsOmitsAllAndScopeControl() {
         val tabs = SessionListHomeChrome.filterTabs(projects = emptyList(), sessionCount = 0)
         assertEquals(emptyList<SessionListFilterTab>(), tabs)
     }
 
     @Test
-    fun filterTabs_oneProjectShowsOnlyThatChip() {
+    fun filterTabs_oneProjectShowsOnlyThatProject() {
         val tabs = SessionListHomeChrome.filterTabs(projects = listOf(mobile), sessionCount = 2)
         assertEquals(
-            listOf(SessionListFilterTab(id = "/repo", title = "opencode-mobile", count = 2)),
+            listOf(SessionListFilterTab.project(worktree = "/repo", title = "opencode-mobile", count = 2)),
             tabs,
         )
     }
@@ -29,9 +29,9 @@ class SessionListHomeChromeTest {
             )
         assertEquals(
             listOf(
-                SessionListFilterTab(id = SessionListFilterTab.ALL_ID, title = "All", count = 3),
-                SessionListFilterTab(id = "/repo", title = "opencode-mobile", count = 2),
-                SessionListFilterTab(id = "/play", title = "playground", count = 1),
+                SessionListFilterTab.all(projectCount = 2, sessionCount = 3),
+                SessionListFilterTab.project(worktree = "/repo", title = "opencode-mobile", count = 2),
+                SessionListFilterTab.project(worktree = "/play", title = "playground", count = 1),
             ),
             tabs,
         )

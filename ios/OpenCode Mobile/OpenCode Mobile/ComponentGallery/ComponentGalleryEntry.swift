@@ -222,7 +222,7 @@ let componentGalleryEntries = [
     ComponentGalleryEntry(
         id: .sessionListDock,
         title: "Session List Dock",
-        description: "Floating filter chips and Add project / New session actions.",
+        description: "Scope control and Add project / New session actions.",
         category: .session
     ),
     ComponentGalleryEntry(

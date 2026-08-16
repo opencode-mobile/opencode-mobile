@@ -33,6 +33,8 @@ import dev.opencode.mobile.domain.home.HomeSessionLadderKind
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.letterAccentForWorktree
+import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.theme.openCodeColor
 
 private val SessionListFallbackBottomSpacer = 168.dp
@@ -59,9 +61,55 @@ data class SessionListFilterTab(
     val id: String,
     val title: String,
     val count: Int,
+    val subtitle: String = "",
+    val letter: Char? = null,
+    val letterAccent: LetterAccent? = null,
 ) {
+    val isAll: Boolean get() = id == ALL_ID
+
     companion object {
         const val ALL_ID = "all"
+        const val ALL_TITLE = "All projects"
+
+        fun all(
+            projectCount: Int,
+            sessionCount: Int,
+        ): SessionListFilterTab =
+            SessionListFilterTab(
+                id = ALL_ID,
+                title = ALL_TITLE,
+                count = sessionCount,
+                subtitle = if (projectCount == 1) "1 project" else "$projectCount projects",
+            )
+
+        fun project(
+            worktree: String,
+            title: String,
+            count: Int,
+        ): SessionListFilterTab =
+            SessionListFilterTab(
+                id = worktree,
+                title = title,
+                count = count,
+                subtitle = worktree,
+                letter = letterCharacterForProject(title),
+                letterAccent = letterAccentForWorktree(worktree),
+            )
+    }
+}
+
+object SessionListProjectPickerMatching {
+    fun tabs(
+        tabs: List<SessionListFilterTab>,
+        query: String,
+    ): List<SessionListFilterTab> {
+        val needle = query.trim().lowercase()
+        if (needle.isEmpty()) return tabs
+        return tabs.filter { tab ->
+            tab.title.lowercase().contains(needle) ||
+                tab.id.lowercase().contains(needle) ||
+                tab.subtitle.lowercase().contains(needle)
+        }
     }
 }
 
@@ -70,14 +118,13 @@ fun SessionList(
     sessions: List<SessionListSession>,
     filterTabs: List<SessionListFilterTab>,
     selectedFilterId: String,
-    onFilterSelected: (String) -> Unit,
+    onOpenProjectPicker: () -> Unit,
     onSessionSelected: (SessionListSession) -> Unit,
     onAddProject: () -> Unit,
     onNewSession: () -> Unit,
     modifier: Modifier = Modifier,
     createError: String? = null,
     emptyContent: (@Composable () -> Unit)? = null,
-    onRemoveProject: ((String) -> Unit)? = null,
     onSessionLongPress: ((SessionListSession) -> Unit)? = null,
     revealNewestToken: Int = 0,
 ) {
@@ -232,10 +279,9 @@ fun SessionList(
             filterTabs = filterTabs,
             selectedFilterId = selectedFilterId,
             createError = createError,
-            onFilterSelected = onFilterSelected,
+            onOpenProjectPicker = onOpenProjectPicker,
             onAddProject = onAddProject,
             onNewSession = onNewSession,
-            onRemoveProject = onRemoveProject,
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -316,7 +362,7 @@ private fun SessionListStatus.toListItemStatus(): OpenCodeListItemStatus =
             OpenCodeListItemStatus(text = "Ready", tone = OpenCodeListItemStatusTone.Success)
     }
 
-private fun compactHomePath(path: String): String {
+internal fun compactHomePath(path: String): String {
     val home = System.getProperty("user.home").orEmpty()
     if (home.isNotEmpty()) {
         if (path == home) return "~"
@@ -373,16 +419,20 @@ private fun SessionListPreview() {
                 ),
             filterTabs =
                 listOf(
-                    SessionListFilterTab(id = SessionListFilterTab.ALL_ID, title = "All", count = 2),
-                    SessionListFilterTab(
-                        id = "/Users/demo/opencode-mobile",
+                    SessionListFilterTab.all(projectCount = 2, sessionCount = 2),
+                    SessionListFilterTab.project(
+                        worktree = "/Users/demo/opencode-mobile",
                         title = "opencode-mobile",
                         count = 1,
                     ),
-                    SessionListFilterTab(id = "/Users/demo/playground", title = "playground", count = 1),
+                    SessionListFilterTab.project(
+                        worktree = "/Users/demo/playground",
+                        title = "playground",
+                        count = 1,
+                    ),
                 ),
             selectedFilterId = SessionListFilterTab.ALL_ID,
-            onFilterSelected = {},
+            onOpenProjectPicker = {},
             onSessionSelected = {},
             onAddProject = {},
             onNewSession = {},

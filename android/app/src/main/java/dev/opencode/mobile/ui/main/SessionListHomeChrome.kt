@@ -25,8 +25,8 @@ object SessionListHomeChrome {
     ): List<SessionListFilterTab> {
         val projectTabs =
             projects.map { project ->
-                SessionListFilterTab(
-                    id = project.worktree,
+                SessionListFilterTab.project(
+                    worktree = project.worktree,
                     title = project.title,
                     count = project.sessionCount,
                 )
@@ -35,10 +35,9 @@ object SessionListHomeChrome {
             return projectTabs
         }
         return listOf(
-            SessionListFilterTab(
-                id = SessionListFilterTab.ALL_ID,
-                title = "All",
-                count = sessionCount,
+            SessionListFilterTab.all(
+                projectCount = projects.size,
+                sessionCount = sessionCount,
             ),
         ) + projectTabs
     }

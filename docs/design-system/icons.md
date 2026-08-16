@@ -52,9 +52,11 @@ Some catalog icons have a stable product meaning beyond gallery samples:
 
 | Icon | Usage |
 | --- | --- |
-| `widgets` | Home top-bar action that opens the developer-only Component Gallery (`accessibilityLabel`: Developer components) |
+| `widgets` | All-projects mark on the Session List scope control and Filter by project sheet |
 | `add` | Generic add / plus affordances |
 | `create_new_folder` | **Add project** (Session List Dock and home add-project actions) |
+| `keyboard_arrow_down` | Session List Dock scope-control chevron; title switcher chevron after home server name |
+| `search` | Filter by project sheet search field |
 | `folder_check` | **Current directory** row in Add project sheet |
 | `subdirectory_arrow_right` | Subdirectory rows in Add project sheet |
 | `arrow_upward` | **Go up** row in Add project sheet |

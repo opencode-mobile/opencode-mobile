@@ -43,6 +43,7 @@ object ProductAnalytics {
         const val CONNECTION_SETUP = "connection_setup"
         const val HOME_ADD_PROJECT = "home_add_project"
         const val HOME_NEW_SESSION_PROJECT_PICKER = "home_new_session_project_picker"
+        const val HOME_FILTER_PROJECT_PICKER = "home_filter_project_picker"
         const val HOME_SESSION_ACTIONS = "home_session_actions"
         const val HOME_RENAME_SESSION = "home_rename_session"
         const val HOME_FORK_SESSION = "home_fork_session"
@@ -91,6 +92,7 @@ object ProductAnalytics {
         const val HOME_LONG_PRESS_SESSION = "home_long_press_session"
         const val HOME_CREATE_SESSION = "home_create_session"
         const val HOME_OPEN_NEW_SESSION_PROJECT_PICKER = "home_open_new_session_project_picker"
+        const val HOME_OPEN_PROJECT_PICKER = "home_open_project_picker"
         const val HOME_ADD_PROJECT = "home_add_project"
         const val HOME_REMOVE_PROJECT = "home_remove_project"
         const val HOME_SELECT_SESSION_FILTER = "home_select_session_filter"
@@ -114,6 +116,7 @@ object ProductAnalytics {
         const val ADD_PROJECT_SELECT_CURRENT = "add_project_select_current"
         const val ADD_PROJECT_RETRY_NAVIGATOR = "add_project_retry_navigator"
         const val NEW_SESSION_PICKER_DISMISS = "new_session_picker_dismiss"
+        const val PROJECT_PICKER_DISMISS = "project_picker_dismiss"
         const val NEW_SESSION_PICKER_SELECT_PROJECT = "new_session_picker_select_project"
 
         // Home session actions

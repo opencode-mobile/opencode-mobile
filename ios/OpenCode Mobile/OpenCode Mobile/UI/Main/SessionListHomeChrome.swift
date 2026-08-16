@@ -15,8 +15,8 @@ enum SessionListHomeChrome {
 
     static func filterTabs(projects: [Project], sessionCount: Int) -> [SessionListFilterTab] {
         let projectTabs = projects.map { project in
-            SessionListFilterTab(
-                id: project.worktree,
+            SessionListFilterTab.project(
+                worktree: project.worktree,
                 title: project.title,
                 count: project.sessionCount
             )
@@ -25,11 +25,7 @@ enum SessionListHomeChrome {
             return projectTabs
         }
         return [
-            SessionListFilterTab(
-                id: SessionListFilterTab.allId,
-                title: "All",
-                count: sessionCount
-            ),
+            SessionListFilterTab.all(projectCount: projects.count, sessionCount: sessionCount),
         ] + projectTabs
     }
 
