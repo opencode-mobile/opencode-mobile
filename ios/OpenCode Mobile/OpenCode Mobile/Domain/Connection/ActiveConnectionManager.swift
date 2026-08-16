@@ -275,8 +275,8 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         let savedIsActive = wasNew || (!stamped.id.isEmpty && active?.id == stamped.id)
         if savedIsActive {
             await rebindActive()
+            notifySaved()
         }
-        notifySaved()
     }
 
     func switchProfile(id: String) async {

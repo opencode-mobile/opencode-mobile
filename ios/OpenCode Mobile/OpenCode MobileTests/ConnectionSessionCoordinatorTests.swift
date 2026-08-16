@@ -22,6 +22,35 @@ import Testing
 
         #expect(await store.load(serverBaseURL: "http://127.0.0.1:4096/", worktree: "/repo", sessionID: "ses-1") == nil)
     }
+
+    @Test @MainActor func saveProfile_doesNotNotifyWhenEditingInactive() async throws {
+        let store = CatalogConnectionProfileStore()
+        let coordinator = ConnectionSessionCoordinator(
+            activeConnectionManager: ActiveConnectionManager(),
+            connectionProfileStore: store,
+            secureCredentialStore: InMemorySecureCredentialStore(),
+            sessionModelSelectionStore: InMemorySessionModelSelectionStore()
+        )
+        var savedCount = 0
+        coordinator.onProfileSaved { savedCount += 1 }
+
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://10.0.0.1:4096/", username: "opencode", password: "secret", name: "Home")
+        )
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://10.0.0.2:4096/", username: "opencode", password: "secret", name: "Work")
+        )
+        let home = await store.listProfiles().first { $0.name == "Home" }
+        #expect(home != nil)
+        savedCount = 0
+
+        var edited = home!
+        edited.name = "Studio"
+        try await coordinator.saveProfile(edited)
+        #expect(savedCount == 0)
+        #expect(await store.activeProfile()?.name == "Work")
+        #expect(await store.listProfiles().first { $0.id == home?.id }?.name == "Studio")
+    }
 }
 
 private final class InMemorySessionModelSelectionStore: SessionModelSelectionStore, @unchecked Sendable {
@@ -86,6 +115,38 @@ private final class InMemorySessionModelSelectionStore: SessionModelSelectionSto
 
     private func key(serverBaseURL: String, worktree: String, sessionID: String) -> String {
         "\(serverBaseURL)|\(worktree)|\(sessionID)"
+    }
+}
+
+private final class CatalogConnectionProfileStore: ConnectionProfileStore, @unchecked Sendable {
+    private var catalog = ConnectionProfileCatalog()
+
+    func activeProfile() async -> ConnectionProfile? { catalog.activeProfile() }
+
+    func listProfiles() async -> [ConnectionProfile] { catalog.profiles }
+
+    func saveProfile(_ profile: ConnectionProfile) async throws {
+        catalog = try catalog.save(profile)
+    }
+
+    func applyProfile(id: String) async {
+        catalog = catalog.apply(id: id)
+    }
+
+    func removeProfile(id: String) async {
+        catalog = catalog.remove(id: id)
+    }
+
+    func addedWorktrees(serverBaseURL: String) async -> [String] { [] }
+
+    func addWorktree(serverBaseURL: String, worktree: String) async {}
+
+    func removeWorktree(serverBaseURL: String, worktree: String) async {}
+
+    func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async {}
+
+    func clearAll() async {
+        catalog = ConnectionProfileCatalog()
     }
 }
 

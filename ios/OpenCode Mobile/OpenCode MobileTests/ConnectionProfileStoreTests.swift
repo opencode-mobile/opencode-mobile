@@ -2,10 +2,11 @@ import Foundation
 import Testing
 @testable import OpenCode_Mobile
 
+@MainActor
 struct ConnectionProfileStoreTests {
     private let server = "http://127.0.0.1:4096/"
 
-    @Test func saveAndLoadActiveProfile() async {
+    @Test func saveAndLoadActiveProfile() async throws {
         let defaults = isolatedDefaults()
         let secure = InMemorySecureCredentialStore()
         let store = UserDefaultsConnectionProfileStore(defaults: defaults, secureCredentialStore: secure)
@@ -19,7 +20,7 @@ struct ConnectionProfileStoreTests {
         #expect(loaded?.serverProtocol == nil)
     }
 
-    @Test func saveAndLoadPersistsProtocolHint() async {
+    @Test func saveAndLoadPersistsProtocolHint() async throws {
         let defaults = isolatedDefaults()
         let store = UserDefaultsConnectionProfileStore(defaults: defaults, secureCredentialStore: InMemorySecureCredentialStore())
         try await store.saveProfile(

@@ -22,6 +22,7 @@ private struct SectionHeader: View {
 struct SettingsView: View {
     var onAddServer: () -> Void = {}
     var onEditProfile: (ConnectionProfile) -> Void = { _ in }
+    var serversRefreshToken: Int = 0
     @Environment(\.dismiss) private var dismiss
     @State private var showComponentGallery = false
     @State private var showTextMateLogbook = false
@@ -469,7 +470,8 @@ struct SettingsView: View {
         .navigationDestination(isPresented: $showServers) {
             ServersView(
                 onAddServer: onAddServer,
-                onEditProfile: onEditProfile
+                onEditProfile: onEditProfile,
+                refreshToken: serversRefreshToken
             )
         }
         .task { await refreshServersSubtitle() }

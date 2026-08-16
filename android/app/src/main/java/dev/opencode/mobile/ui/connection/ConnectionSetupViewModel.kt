@@ -83,6 +83,7 @@ class ConnectionSetupViewModel
         private var savedBaseUrl = ""
         private var savedUsername = ""
         private var savedPassword = ""
+        private var savedProtocol: ServerProtocol? = null
 
         fun configure(
             initialProfile: ConnectionProfile?,
@@ -95,11 +96,13 @@ class ConnectionSetupViewModel
                 savedBaseUrl = ""
                 savedUsername = ""
                 savedPassword = ""
+                savedProtocol = null
                 _uiState.value = ConnectionSetupUiState(mode = mode)
             } else {
                 savedBaseUrl = initialProfile.baseUrl
                 savedUsername = initialProfile.username
                 savedPassword = initialProfile.password
+                savedProtocol = initialProfile.serverProtocol
                 _uiState.value =
                     ConnectionSetupUiState(
                         name = initialProfile.name,
@@ -165,8 +168,17 @@ class ConnectionSetupViewModel
                     ConnectionSetupState.TestSucceeded, ConnectionSetupState.TestFailed -> ConnectionSetupState.Idle
                     else -> current.state
                 }
+            val unchanged =
+                isEditingExistingProfile &&
+                    ConnectionProfileIdentity.sameConnectionIdentity(
+                        baseUrl,
+                        username,
+                        savedBaseUrl,
+                        savedUsername,
+                    ) &&
+                    password == savedPassword
             if (resetState == ConnectionSetupState.Idle) {
-                detectedProtocol = null
+                detectedProtocol = if (unchanged) savedProtocol else null
             }
             _uiState.value =
                 current.copy(
@@ -176,15 +188,7 @@ class ConnectionSetupViewModel
                     password = password,
                     state = resetState,
                     testResultMessage = null,
-                    connectionUnchanged =
-                        isEditingExistingProfile &&
-                            ConnectionProfileIdentity.sameConnectionIdentity(
-                                baseUrl,
-                                username,
-                                savedBaseUrl,
-                                savedUsername,
-                            ) &&
-                            password == savedPassword,
+                    connectionUnchanged = unchanged,
                 )
         }
 
@@ -253,7 +257,9 @@ class ConnectionSetupViewModel
                 baseUrl = _uiState.value.baseUrl,
                 username = _uiState.value.username,
                 password = _uiState.value.password,
-                serverProtocol = detectedProtocol,
+                serverProtocol =
+                    detectedProtocol
+                        ?: savedProtocol.takeIf { _uiState.value.connectionUnchanged },
                 id = _uiState.value.profileId,
                 name = _uiState.value.name,
             )

@@ -32,6 +32,7 @@ final class ConnectionSetupViewModel {
     private var savedBaseURL = ""
     private var savedUsername = ""
     private var savedPassword = ""
+    private var savedProtocol: ServerProtocol?
 
     init(
         connectionProbeService: ConnectionProbing,
@@ -58,6 +59,7 @@ final class ConnectionSetupViewModel {
             savedBaseURL = initialProfile.baseURL
             savedUsername = initialProfile.username
             savedPassword = initialProfile.password
+            savedProtocol = initialProfile.serverProtocol
         } else {
             name = ""
             baseURL = ConnectionProfile.formDefaults.baseURL
@@ -67,6 +69,7 @@ final class ConnectionSetupViewModel {
             savedBaseURL = ""
             savedUsername = ""
             savedPassword = ""
+            savedProtocol = nil
         }
     }
 
@@ -117,11 +120,11 @@ final class ConnectionSetupViewModel {
     func onFieldChanged() {
         switch state {
         case .testSucceeded, .testFailed:
-            detectedProtocol = nil
             state = .idle
         default:
             break
         }
+        detectedProtocol = connectionUnchanged ? savedProtocol : nil
     }
 
     func testConnection() async {
@@ -194,7 +197,7 @@ final class ConnectionSetupViewModel {
             baseURL: baseURL,
             username: username,
             password: password,
-            serverProtocol: detectedProtocol,
+            serverProtocol: detectedProtocol ?? (connectionUnchanged ? savedProtocol : nil),
             id: profileId,
             name: name
         )

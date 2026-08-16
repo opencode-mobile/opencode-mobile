@@ -40,6 +40,7 @@ struct ServersView: View {
     @State private var viewModel = ServersViewModel()
     var onAddServer: () -> Void
     var onEditProfile: (ConnectionProfile) -> Void
+    var refreshToken: Int = 0
 
     var body: some View {
         let countLabel = viewModel.profiles.count == 1
@@ -98,6 +99,9 @@ struct ServersView: View {
         .toolbar(.hidden, for: .navigationBar)
         .task { await viewModel.refresh() }
         .onAppear { Task { await viewModel.refresh() } }
+        .onChange(of: refreshToken) { _, _ in
+            Task { await viewModel.refresh() }
+        }
         .openCodeDialog(
             isPresented: Binding(
                 get: { viewModel.pendingRemoval != nil },

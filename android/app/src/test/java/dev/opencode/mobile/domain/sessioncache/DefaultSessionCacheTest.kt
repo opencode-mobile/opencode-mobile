@@ -134,6 +134,22 @@ class DefaultSessionCacheTest {
         }
 
     @Test
+    fun purgeWorktreeRemovesRowsKeyedByProfileId() =
+        runTest {
+            val cache =
+                DefaultSessionCache(
+                    store = InMemorySessionCacheStore(),
+                    connectionIdProvider = { "profile-abc" },
+                    scope = backgroundScope,
+                    json = json,
+                )
+            cache.rememberSessions("/repo", listOf(Session(id = "s1", title = "One")))
+            cache.purgeWorktree("http://localhost:4096", "/repo")
+            assertNull(cache.seedSessions("/repo"))
+            assertEquals(0L, cache.estimatedSizeBytes())
+        }
+
+    @Test
     fun codecRoundTripsCurrentMessageParts() {
         val messages =
             listOf(

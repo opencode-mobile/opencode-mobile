@@ -22,9 +22,9 @@ struct ConnectionProfileCatalogTests {
     }
 
     @Test func saveExistingProfile_doesNotSwitchActive() throws {
-        let first = try ConnectionProfileCatalog().save(profile(id: "home", baseURL: "http://10.0.0.1:4096/", name: "Home"))
-        let two = try first.save(profile(id: "work", baseURL: "http://10.0.0.2:4096/", name: "Work"))
-        let edited = try two.save(profile(id: "home", baseURL: "http://10.0.0.1:4096/", name: "Studio"))
+        let first = try ConnectionProfileCatalog().save(profile(baseURL: "http://10.0.0.1:4096/", name: "Home", id: "home"))
+        let two = try first.save(profile(baseURL: "http://10.0.0.2:4096/", name: "Work", id: "work"))
+        let edited = try two.save(profile(baseURL: "http://10.0.0.1:4096/", name: "Studio", id: "home"))
         #expect(edited.activeId == "work")
         #expect(edited.profiles.first { $0.id == "home" }?.name == "Studio")
     }
@@ -50,9 +50,9 @@ struct ConnectionProfileCatalogTests {
 
     @Test func removeActive_selectsNextThenPrevious() throws {
         let catalog = try ConnectionProfileCatalog()
-            .save(profile(id: "a", baseURL: "http://10.0.0.1:4096/", name: "A"))
-            .save(profile(id: "b", baseURL: "http://10.0.0.2:4096/", name: "B"))
-            .save(profile(id: "c", baseURL: "http://10.0.0.3:4096/", name: "C"))
+            .save(profile(baseURL: "http://10.0.0.1:4096/", name: "A", id: "a"))
+            .save(profile(baseURL: "http://10.0.0.2:4096/", name: "B", id: "b"))
+            .save(profile(baseURL: "http://10.0.0.3:4096/", name: "C", id: "c"))
             .apply(id: "b")
         let afterB = catalog.remove(id: "b")
         #expect(afterB.activeId == "c")
@@ -65,11 +65,11 @@ struct ConnectionProfileCatalogTests {
 
     @Test func removeNonActive_leavesActiveUnchanged() throws {
         let catalog = try ConnectionProfileCatalog()
-            .save(profile(id: "a", baseURL: "http://10.0.0.1:4096/", name: "A"))
-            .save(profile(id: "b", baseURL: "http://10.0.0.2:4096/", name: "B"))
+            .save(profile(baseURL: "http://10.0.0.1:4096/", name: "A", id: "a"))
+            .save(profile(baseURL: "http://10.0.0.2:4096/", name: "B", id: "b"))
         let removed = catalog.remove(id: "a")
         #expect(removed.activeId == "b")
-        #expect(removed.profiles.map(\.id) == ["b"])
+        #expect(removed.profiles.map { $0.id } == ["b"])
     }
 
     private func profile(

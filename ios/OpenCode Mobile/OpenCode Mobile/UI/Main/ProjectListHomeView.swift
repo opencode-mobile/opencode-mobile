@@ -7,6 +7,7 @@ struct ProjectListHomeView: View {
     @State private var navigationPath = NavigationPath()
     @State private var connectionSetupPresentation: ConnectionSetupPresentation?
     @State private var connectionSetupViewModel: ConnectionSetupViewModel?
+    @State private var serversRefreshToken = 0
     @State private var showNewSessionProjectPicker = false
     @State private var selectedSessionFilterId = SessionListFilterTab.allId
     @Environment(\.scenePhase) private var scenePhase
@@ -66,7 +67,8 @@ struct ProjectListHomeView: View {
                             initialProfile: profile,
                             mode: .edit
                         )
-                    }
+                    },
+                    serversRefreshToken: serversRefreshToken
                 )
             }
             .navigationDestination(for: SessionListItem.self) { session in
@@ -267,6 +269,7 @@ struct ProjectListHomeView: View {
                     onDismiss: {
                         connectionSetupPresentation = nil
                         connectionSetupViewModel = nil
+                        serversRefreshToken += 1
                         Task { await viewModel.refreshServersChrome() }
                     }
                 )
