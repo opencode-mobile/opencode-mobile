@@ -37,16 +37,17 @@ struct OpenCodeSessionListDock: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                ScrollViewReader { proxy in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        filterChipsRow
-                    }
-                    .onChange(of: selectedFilterId) { _, id in
-                        // Yield so selection chrome (e.g. remove ×) can widen the chip first.
-                        Task { @MainActor in
-                            await Task.yield()
-                            withAnimation(.smooth(duration: 0.22)) {
-                                proxy.scrollTo(id)
+                if !filterTabs.isEmpty {
+                    ScrollViewReader { proxy in
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            filterChipsRow
+                        }
+                        .onChange(of: selectedFilterId) { _, id in
+                            Task { @MainActor in
+                                await Task.yield()
+                                withAnimation(.smooth(duration: 0.22)) {
+                                    proxy.scrollTo(id)
+                                }
                             }
                         }
                     }

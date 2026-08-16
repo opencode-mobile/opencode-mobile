@@ -492,11 +492,15 @@ struct ProjectListHomeView: View {
         createError: String?
     ) -> some View {
         let sessions = sections.crossProjectSessionListSessions()
-        let filterTabs = sections.sessionListFilterTabs(sessionCount: sessions.count)
-        let selectedFilterId =
-            filterTabs.contains(where: { $0.id == selectedSessionFilterId })
-                ? selectedSessionFilterId
-                : SessionListFilterTab.allId
+        let chromeProjects = sections.homeChromeProjects()
+        let filterTabs = SessionListHomeChrome.filterTabs(
+            projects: chromeProjects,
+            sessionCount: sessions.count
+        )
+        let selectedFilterId = SessionListHomeChrome.resolvedFilterId(
+            selectedId: selectedSessionFilterId,
+            tabs: filterTabs
+        )
         SessionList(
             sessions: sessions,
             filterTabs: filterTabs,
@@ -531,16 +535,23 @@ struct ProjectListHomeView: View {
             },
             onAddProject: { Task { await viewModel.showAddProjectSheet() } },
             onNewSession: {
-                ProductAnalytics.logUserAction(
-                    screenId: ProductAnalytics.Screen.home,
-                    actionId: ProductAnalytics.Action.homeOpenNewSessionProjectPicker
-                )
-                ProductAnalytics.logScreenView(
-                    screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
-                    presentation: ProductAnalytics.Presentation.sheet,
-                    trigger: ProductAnalytics.Trigger.present
-                )
-                showNewSessionProjectPicker = true
+                switch SessionListHomeChrome.newSessionAction(projects: chromeProjects) {
+                case .none:
+                    break
+                case .presentPicker:
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.home,
+                        actionId: ProductAnalytics.Action.homeOpenNewSessionProjectPicker
+                    )
+                    ProductAnalytics.logScreenView(
+                        screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
+                        presentation: ProductAnalytics.Presentation.sheet,
+                        trigger: ProductAnalytics.Trigger.present
+                    )
+                    showNewSessionProjectPicker = true
+                case let .create(worktree):
+                    Task { await viewModel.createSession(in: worktree) }
+                }
             },
             onRefresh: { await viewModel.pullToRefresh() },
             onRemoveProject: { worktree in viewModel.requestRemoveProject(worktree: worktree) },
@@ -548,6 +559,11 @@ struct ProjectListHomeView: View {
             showsEmptyContent: sections.isEmpty,
             emptyContent: { NoProjectsEmptyState() }
         )
+        .onChange(of: selectedFilterId, initial: true) { _, resolved in
+            if selectedSessionFilterId != resolved {
+                selectedSessionFilterId = resolved
+            }
+        }
     }
 }
 
@@ -622,24 +638,14 @@ private extension Array where Element == ProjectSectionItem {
         .map(\.1)
     }
 
-    func sessionListFilterTabs(sessionCount: Int) -> [SessionListFilterTab] {
-        var tabs = [
-            SessionListFilterTab(
-                id: SessionListFilterTab.allId,
-                title: "All",
-                count: sessionCount
-            ),
-        ]
-        tabs.append(
-            contentsOf: map { section in
-                SessionListFilterTab(
-                    id: section.worktree,
-                    title: section.displayName,
-                    count: section.allSessions.count
-                )
-            }
-        )
-        return tabs
+    func homeChromeProjects() -> [SessionListHomeChrome.Project] {
+        map { section in
+            SessionListHomeChrome.Project(
+                worktree: section.worktree,
+                title: section.displayName,
+                sessionCount: section.allSessions.count
+            )
+        }
     }
 }
 
