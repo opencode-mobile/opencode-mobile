@@ -287,6 +287,55 @@ class SessionTodoLiveStoreTest {
             assertTrue(repository.listTodosCallCount >= 2)
         }
 
+    @Test
+    fun reconnect_doesNotFetchAfterObservationEnds() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeTodoSessionRepository(
+                    todos = listOf(SessionTodo(0, "A", SessionTodoStatus.Pending, "low")),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store = createStore(repository, eventStream)
+            val job =
+                launch {
+                    store.observeTodos("ses-1", "/repo").collect { }
+                }
+            advanceUntilIdle()
+            val afterObserve = repository.listTodosCallCount
+            job.cancel()
+            advanceUntilIdle()
+
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = null, rawProperties = null))
+            advanceUntilIdle()
+
+            assertEquals(afterObserve, repository.listTodosCallCount)
+        }
+
+    @Test
+    fun reconnect_fetchesWhileObservingIdle() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeTodoSessionRepository(
+                    todos = listOf(SessionTodo(0, "A", SessionTodoStatus.Pending, "low")),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store = createStore(repository, eventStream)
+            val job =
+                launch {
+                    store.observeTodos("ses-1", "/repo").collect { }
+                }
+            advanceUntilIdle()
+            store.setLive(false, "ses-1", "/repo")
+            advanceUntilIdle()
+            val afterIdle = repository.listTodosCallCount
+
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = null, rawProperties = null))
+            advanceUntilIdle()
+            job.cancel()
+
+            assertTrue(repository.listTodosCallCount > afterIdle)
+        }
+
     private fun createStore(
         repository: SessionRepository,
         eventStream: FakeForegroundEventStream,

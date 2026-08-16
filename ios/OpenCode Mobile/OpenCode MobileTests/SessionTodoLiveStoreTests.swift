@@ -90,6 +90,27 @@ struct SessionTodoLiveStoreTests {
 
         #expect(todos.first?.content == "From SSE")
     }
+
+    @Test func reconnect_doesNotFetchAfterObservationEnds() async throws {
+        let repository = TodoLiveStoreFakeSessionRepository(
+            todos: [SessionTodo(position: 0, content: "A", status: .pending, priority: "low")]
+        )
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionTodoLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream
+        )
+        let collector = TodoCollector(store: store)
+        _ = try await collector.awaitEmission { !$0.isEmpty }
+        let afterObserve = repository.listTodosCallCount
+        collector.cancel()
+        try await Task.sleep(for: .milliseconds(40))
+
+        eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: nil, rawProperties: nil))
+        try await Task.sleep(for: .milliseconds(40))
+
+        #expect(repository.listTodosCallCount == afterObserve)
+    }
 }
 
 @MainActor

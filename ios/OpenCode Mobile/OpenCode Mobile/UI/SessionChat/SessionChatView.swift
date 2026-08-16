@@ -24,6 +24,7 @@ struct SessionChatView: View {
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var showSessionTodosSheet = false
     @State private var holdingFinishedTodos = false
+    @State private var sawUnfinishedTodos = false
     @State private var finishedHoldTask: Task<Void, Never>?
     /// Measured floating composer stack height (composer + optional suggestions).
     @State private var composerOverlayHeight: CGFloat = 0
@@ -464,7 +465,10 @@ struct SessionChatView: View {
             if isEmpty {
                 finishedHoldTask?.cancel()
                 holdingFinishedTodos = false
+                sawUnfinishedTodos = false
                 showSessionTodosSheet = false
+            } else if !viewModel.uiState.sessionTodosFinished {
+                sawUnfinishedTodos = true
             }
         }
         .onChange(of: selectedPhotoItems) { _, items in
@@ -585,7 +589,17 @@ struct SessionChatView: View {
 
     private func updateFinishedTodosHold(finished: Bool) {
         finishedHoldTask?.cancel()
-        guard finished, !viewModel.uiState.sessionTodos.isEmpty else {
+        if !finished {
+            if !viewModel.uiState.sessionTodos.isEmpty {
+                sawUnfinishedTodos = true
+            }
+            holdingFinishedTodos = false
+            return
+        }
+        guard SessionTodoList.shouldHoldFinished(
+            sawUnfinished: sawUnfinishedTodos,
+            todos: viewModel.uiState.sessionTodos
+        ) else {
             holdingFinishedTodos = false
             return
         }

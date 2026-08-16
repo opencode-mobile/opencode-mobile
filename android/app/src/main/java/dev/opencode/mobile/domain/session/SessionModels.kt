@@ -88,6 +88,12 @@ object SessionTodoList {
 
     /** Visible while non-empty and not fully finished, including after idle. */
     fun isVisible(todos: List<SessionTodo>): Boolean = todos.isNotEmpty() && !isFinished(todos)
+
+    /** Hold the all-done pill only after this presentation already showed an unfinished list. */
+    fun shouldHoldFinished(
+        sawUnfinished: Boolean,
+        todos: List<SessionTodo>,
+    ): Boolean = sawUnfinished && isFinished(todos)
 }
 
 enum class FileDiffStatus {

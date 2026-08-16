@@ -69,5 +69,8 @@ final class SessionTodoMappingTests: XCTestCase {
         XCTAssertFalse(SessionTodoList.isVisible(finished))
         XCTAssertTrue(SessionTodoList.isVisible(todos))
         XCTAssertNil(SessionTodoList.activePreview(in: []))
+        XCTAssertFalse(SessionTodoList.shouldHoldFinished(sawUnfinished: false, todos: finished))
+        XCTAssertTrue(SessionTodoList.shouldHoldFinished(sawUnfinished: true, todos: finished))
+        XCTAssertFalse(SessionTodoList.shouldHoldFinished(sawUnfinished: true, todos: todos))
     }
 }

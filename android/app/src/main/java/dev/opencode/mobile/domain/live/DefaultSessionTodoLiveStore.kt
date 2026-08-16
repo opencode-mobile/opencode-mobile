@@ -9,6 +9,7 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
@@ -34,6 +35,7 @@ class DefaultSessionTodoLiveStore
             var todos: List<SessionTodo> = emptyList(),
             var hasCache: Boolean = false,
             var isLive: Boolean = false,
+            var observerCount: Int = 0,
             val updates: MutableSharedFlow<List<SessionTodo>> =
                 MutableSharedFlow(
                     replay = 1,
@@ -50,14 +52,24 @@ class DefaultSessionTodoLiveStore
         ): Flow<List<SessionTodo>> {
             val key = SessionKey(sessionId, directory.orEmpty())
             val state = sessions.getOrPut(key) { SessionState() }
-            ensureEventLoop(key, state)
-            if (!state.hasCache) {
-                liveStoreScope.coroutineScope.launch {
-                    fetch(key, state, force = false)
-                }
-            }
             return state.updates
-                .onStart { emit(state.todos) }
+                .onStart {
+                    state.observerCount += 1
+                    ensureEventLoop(key, state)
+                    emit(state.todos)
+                    if (!state.hasCache) {
+                        liveStoreScope.coroutineScope.launch {
+                            fetch(key, state, force = false)
+                        }
+                    }
+                }
+                .onCompletion {
+                    state.observerCount = (state.observerCount - 1).coerceAtLeast(0)
+                    if (state.observerCount == 0) {
+                        state.eventJob?.cancel()
+                        state.eventJob = null
+                    }
+                }
                 .distinctUntilChanged()
         }
 
@@ -70,7 +82,6 @@ class DefaultSessionTodoLiveStore
             val state = sessions.getOrPut(key) { SessionState() }
             val wasLive = state.isLive
             state.isLive = isLive
-            ensureEventLoop(key, state)
             if (wasLive == isLive || !isLive) return
             liveStoreScope.coroutineScope.launch {
                 fetch(key, state, force = state.hasCache)
@@ -90,6 +101,7 @@ class DefaultSessionTodoLiveStore
             state.eventJob =
                 liveStoreScope.coroutineScope.launch {
                     eventStream.events.collect { event ->
+                        if (state.observerCount <= 0) return@collect
                         when {
                             event.type == "todo.updated" && event.sessionId == key.sessionId -> {
                                 adapter.toTodosFromEventProperties(event.rawProperties)?.let { todos ->

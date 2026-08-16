@@ -95,6 +95,11 @@ enum SessionTodoList {
     static func isVisible(_ todos: [SessionTodo]) -> Bool {
         !todos.isEmpty && !isFinished(todos)
     }
+
+    /// Hold the all-done pill only after this presentation already showed an unfinished list.
+    static func shouldHoldFinished(sawUnfinished: Bool, todos: [SessionTodo]) -> Bool {
+        sawUnfinished && isFinished(todos)
+    }
 }
 
 enum FileDiffStatus: String, Sendable, Equatable {

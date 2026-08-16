@@ -100,8 +100,9 @@ are hidden; Syncing may stay. A pending permission request takes priority over t
 sheet: the sheet is dismissed or not opened while the user must approve or deny;
 the pill may remain visible. The pill is visible whenever the list is
 non-empty and not fully finished, including after the session goes idle —
-matching TUI sidebar visibility. When every item is completed or cancelled, the
-pill stays briefly visible then closes.
+matching TUI sidebar visibility. When every item is completed or cancelled
+while the pill is already shown, it stays briefly visible then closes.
+Opening a session whose list is already finished does not replay that hold.
 
 The pill preview line prefers the first `in_progress` Session Todo, else the
 first `pending`, else the last `completed`, else the first item. Progress on

@@ -62,6 +62,10 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
                             continue
                         }
                         if event.type == "stream.reconnected" || event.type == "server.connected" {
+                            let isObserved = await MainActor.run {
+                                store?.handles[key]?.continuations.isEmpty == false
+                            }
+                            guard isObserved else { continue }
                             await store?.fetch(key: key, force: true)
                         }
                     }

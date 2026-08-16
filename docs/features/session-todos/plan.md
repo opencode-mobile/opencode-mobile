@@ -35,7 +35,7 @@ Canonical naming and UX live in `CONTEXT.md` (**Session Todo List** /
 | Names | Session Todo List / Session Todos — not Tasks, Plan, or Checklist |
 | Surface | Floating pill + view-only bottom sheet (prototype C) |
 | Visibility | Non-empty and not fully finished, including after idle (TUI-like) |
-| All-done | Brief stay, then close |
+| All-done | Brief stay after an in-session finish, then close; no replay on reopen |
 | Active preview | `in_progress` → first `pending` → last `completed` → first |
 | Progress | `N` = completed only; `M` = total; cancelled finishes list without bumping `N` |
 | Priority | Not shown or sorted in v1 |

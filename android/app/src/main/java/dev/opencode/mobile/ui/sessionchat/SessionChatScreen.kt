@@ -35,6 +35,7 @@ import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.SessionToolGroup
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
+import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomFade
@@ -123,6 +124,7 @@ fun SessionChatScreen(
     var toolDetailTarget by remember { mutableStateOf<SessionChatToolDetailTarget?>(null) }
     var showSessionTodosSheet by rememberSaveable { mutableStateOf(false) }
     var holdingFinishedTodos by remember { mutableStateOf(false) }
+    var sawUnfinishedTodos by remember { mutableStateOf(false) }
     var composerOverlayHeightPx by remember { mutableStateOf(0) }
     val density = LocalDensity.current
     val composerOverlayHeight = with(density) { composerOverlayHeightPx.toDp() }
@@ -146,18 +148,24 @@ fun SessionChatScreen(
 
     LaunchedEffect(uiState.sessionTodosFinished, uiState.sessionTodos.isEmpty()) {
         if (uiState.sessionTodos.isEmpty()) {
+            sawUnfinishedTodos = false
             holdingFinishedTodos = false
             showSessionTodosSheet = false
             return@LaunchedEffect
         }
-        if (uiState.sessionTodosFinished) {
-            holdingFinishedTodos = true
-            delay(1_500)
+        if (!uiState.sessionTodosFinished) {
+            sawUnfinishedTodos = true
             holdingFinishedTodos = false
-            showSessionTodosSheet = false
-        } else {
-            holdingFinishedTodos = false
+            return@LaunchedEffect
         }
+        if (!SessionTodoList.shouldHoldFinished(sawUnfinishedTodos, uiState.sessionTodos)) {
+            holdingFinishedTodos = false
+            return@LaunchedEffect
+        }
+        holdingFinishedTodos = true
+        delay(1_500)
+        holdingFinishedTodos = false
+        showSessionTodosSheet = false
     }
 
     fun ingestAttachments(uris: List<android.net.Uri>) {
