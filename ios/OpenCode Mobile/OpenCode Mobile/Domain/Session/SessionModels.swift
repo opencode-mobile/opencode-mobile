@@ -91,9 +91,14 @@ enum SessionTodoList {
         return todos.first
     }
 
-    /// Visible while live, non-empty, and not fully finished.
-    static func isVisible(todos: [SessionTodo], isLive: Bool) -> Bool {
-        isLive && !todos.isEmpty && !isFinished(todos)
+    /// Visible while non-empty and not fully finished, including after idle.
+    static func isVisible(_ todos: [SessionTodo]) -> Bool {
+        !todos.isEmpty && !isFinished(todos)
+    }
+
+    /// Hold the all-done pill only after this presentation already showed an unfinished list.
+    static func shouldHoldFinished(sawUnfinished: Bool, todos: [SessionTodo]) -> Bool {
+        sawUnfinished && isFinished(todos)
     }
 }
 

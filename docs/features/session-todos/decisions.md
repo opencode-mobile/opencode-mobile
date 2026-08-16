@@ -12,10 +12,12 @@
 
 ## Sync lifecycle
 
-- Decision: GET on live (force if cached), SSE `todo.updated` full replace,
-  clear local cache on idle, force-GET next live.
-- Why: Matches upstream app behavior and avoids stale lists after idle.
-- Ticket: OPE-95.
+- Decision: GET when the session is open, SSE `todo.updated` full replace while
+  observing, keep the local cache on idle, force-GET when live again.
+- Why: TUI keeps unfinished todos after the turn; live-only hide made the top
+  pill disappear as soon as the agent stopped. Supersedes the OPE-95 idle-clear
+  rule.
+- Ticket: OPE-168.
 
 ## Naming and presentation rules
 
@@ -50,7 +52,7 @@
 
 - Decision: Session Chat float stack is at most two pills:
   - **Primary** (nearest composer): Scroll to end **XOR** Review changes.
-  - **Secondary** (above primary): Session Todos when live / finished hold.
+  - **Secondary** (above primary): Session Todos when unfinished / finished hold.
   Compose **only visible** pills. Shared bottom inset once
   (`bottomOverlayInset` = composer stack + 16 end-pin gap — same as timeline
   pin / bottom-fade overhang; do not also add `scrollToEndPillBottomPadding`);

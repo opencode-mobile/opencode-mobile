@@ -1209,7 +1209,7 @@ class SessionChatViewModel
                 workingIndicatorLabel = workingIndicatorLabel,
                 syncingIndicatorLabel = syncingIndicatorLabel,
                 sessionTodos = sessionTodos,
-                sessionTodosVisible = SessionTodoList.isVisible(sessionTodos, isLive),
+                sessionTodosVisible = SessionTodoList.isVisible(sessionTodos),
                 sessionTodosFinished = SessionTodoList.isFinished(sessionTodos),
                 sessionTodoActivePreview = SessionTodoList.activePreview(sessionTodos),
                 sessionTodoCompletedCount = SessionTodoList.completedCount(sessionTodos),
