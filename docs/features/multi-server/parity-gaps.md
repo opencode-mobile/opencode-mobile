@@ -2,6 +2,7 @@
 
 ## No gaps recorded
 
-- Planning only. No iOS/Android implementation difference yet. The locked UX
-  is shared; native sheet and top-bar wiring may still diverge and should be
-  recorded here if they stay visible to the user.
+- Both platforms now implement the locked title switcher, Servers sheet,
+  setup Name, and Settings → Servers management. Native sheet and top-bar
+  wiring may still diverge visually and should be recorded here if they stay
+  visible to the user.

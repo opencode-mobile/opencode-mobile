@@ -54,3 +54,40 @@
   Profile for v1](../server-connection/decisions.md). v1 shipped one profile;
   this feature makes multiple saved profiles in-scope as a follow-up.
 - See: [OPE-5](https://linear.app/opencode-mobile/issue/OPE-5/server-connection).
+
+## Migrate the singleton profile in place
+
+- Date: 2026-08-15
+- Decision: On first read, if `active_profile_base_url` is set and no multi-profile catalog exists, create one profile with a new opaque id, persist `host[:port]` as the name, copy worktrees onto `worktrees.{id}`, re-key the password from the URL to the id, and make that profile active.
+- Reason: Existing installs already have one profile; the slice adds id + name without a reset.
+
+## Name is optional; identity is id; URL+username is unique
+
+- Date: 2026-08-15
+- Decision: Name may be blank; display falls back to `host[:port]` or `"Server"`. Duplicate names are allowed. Saving a second profile with the same normalized URL and username is rejected (edit of that row is allowed). Same URL with a different username is allowed.
+- Reason: The home title needs a label, but identity is the opaque id. `(url, username)` is today’s credential/cache pair.
+
+## Successor after removing the active profile
+
+- Date: 2026-08-15
+- Decision: Removing a non-active profile leaves active unchanged. Removing the active one activates `remaining[min(removedIndex, last)]`. Removing the last profile clears active and lands on Connection onboarding.
+- Reason: No last-used timestamp is persisted; insertion order is the only order.
+
+## Key credentials, worktrees, and session cache by profile id
+
+- Date: 2026-08-15
+- Decision: New writes use the opaque profile id. Dual-read the old URL keys only for the migrated profile.
+- Reason: URL-only keys cannot scope two profiles or survive a URL edit.
+
+## Edit server chrome: trash, one Save, Test as a link
+
+- Date: 2026-08-16
+- Decision: On connection setup, **Save** is the only full-width footer action. **Test** is a text link under the fields (`Test connection` / `Test again`). **Remove** is a top-bar trash icon in edit mode only, then the existing confirm dialog.
+- Reason: Three stacked full-width buttons made edit feel crowded. Locked from `docs/prototypes/edit-server-test-placement/` variant A (B chrome + Test off the host row).
+- Prototype: `docs/prototypes/edit-server-test-placement/index.html`.
+
+## Add-save activates; edit-save does not switch
+
+- Date: 2026-08-15
+- Decision: Saving a new profile (first, sheet Add, or Settings Add) applies it as active. Editing a non-active profile updates it in place and does not switch.
+- Reason: The locked prototype adds and switches to the new server; editing another row is management, not a switch.

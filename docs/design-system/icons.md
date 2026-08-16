@@ -60,6 +60,7 @@ Some catalog icons have a stable product meaning beyond gallery samples:
 | `arrow_upward` | **Go up** row in Add project sheet |
 | `edit` | Edit/rename affordances in gallery and samples; not the gallery entry on home |
 | `archive` | Session Chat overflow **Archive** action |
+| `delete` | Edit server top-bar **Remove** |
 | `arrow_downward` | **Scroll to end** action pill on session chat |
 | `radio_button_checked` | Selected question-request option / custom answer |
 | `radio_button_unchecked` | Unselected question-request option / custom answer |

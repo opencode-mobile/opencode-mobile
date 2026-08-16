@@ -29,8 +29,11 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
+import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.letterAccentForWorktree
+import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
@@ -45,7 +48,12 @@ import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
+import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeListItemStatus
+import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
+import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
+import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListSession
@@ -80,6 +88,8 @@ fun MainScreen(
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnectionClick: (dev.opencode.mobile.domain.connection.ConnectionProfile?) -> Unit,
     onConnectClick: () -> Unit,
+    onAddServerClick: () -> Unit = onConnectClick,
+    onManageServersClick: () -> Unit = onSettingsClick,
     modifier: Modifier = Modifier,
     viewModel: MainScreenViewModel = hiltViewModel(),
 ) {
@@ -89,6 +99,7 @@ fun MainScreen(
     val removalSnackbar by viewModel.removalSnackbar.collectAsStateWithLifecycle()
     val sessionActions by viewModel.sessionActions.collectAsStateWithLifecycle()
     val revealNewestToken by viewModel.revealNewestToken.collectAsStateWithLifecycle()
+    val serversChrome by viewModel.serversChrome.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
         viewModel.onHomeRevealed()
     }
@@ -102,6 +113,7 @@ fun MainScreen(
         removalSnackbar = removalSnackbar,
         sessionActions = sessionActions,
         revealNewestToken = revealNewestToken,
+        serversChrome = serversChrome,
         sessionActionsCallbacks =
             HomeSessionActionsCallbacks(
                 onSessionLongPress = { session ->
@@ -145,6 +157,17 @@ fun MainScreen(
         onConfirmRemoveProject = viewModel::confirmRemoveProject,
         onDismissProjectRemoval = viewModel::dismissProjectRemoval,
         onConsumeProjectRemovalSnackbar = viewModel::consumeProjectRemovalSnackbar,
+        onTitleClick = viewModel::showServersSheet,
+        onDismissServersSheet = viewModel::dismissServersSheet,
+        onSwitchProfile = viewModel::switchProfile,
+        onAddServerClick = {
+            viewModel.dismissServersSheet()
+            onAddServerClick()
+        },
+        onManageServersClick = {
+            viewModel.dismissServersSheet()
+            onManageServersClick()
+        },
         modifier = modifier,
     )
 }
@@ -178,6 +201,12 @@ internal fun MainScreen(
     sessionActions: HomeSessionActionsUiState = HomeSessionActionsUiState(),
     sessionActionsCallbacks: HomeSessionActionsCallbacks = HomeSessionActionsCallbacks(),
     revealNewestToken: Int = 0,
+    serversChrome: HomeServersChrome = HomeServersChrome(),
+    onTitleClick: () -> Unit = {},
+    onDismissServersSheet: () -> Unit = {},
+    onSwitchProfile: (String) -> Unit = {},
+    onAddServerClick: () -> Unit = {},
+    onManageServersClick: () -> Unit = {},
 ) {
     val pendingOpenSession = (uiState as? MainScreenUiState.Loaded)?.pendingOpenSession
     LaunchedEffect(pendingOpenSession) {
@@ -235,7 +264,9 @@ internal fun MainScreen(
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBar(
-                title = "Sessions",
+                title = serversChrome.title,
+                onTitleClick = if (serversChrome.isSwitcher) onTitleClick else null,
+                titleMenuExpanded = serversChrome.sheetVisible,
                 subtitleAccessory =
                     if (showsLiveUpdatesStatus(uiState)) {
                         OpenCodeTopBarSubtitleAccessory.StatusDot(
@@ -340,6 +371,71 @@ internal fun MainScreen(
             message = removalSnackbar,
             onDismissed = onConsumeProjectRemovalSnackbar,
             modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+
+    OpenCodeBottomSheet(
+        visible = serversChrome.sheetVisible,
+        title = "Servers",
+        onDismissRequest = onDismissServersSheet,
+    ) {
+        val active = serversChrome.active
+        if (active != null) {
+            Text(
+                text = "USING NOW",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
+            )
+            OpenCodeListItem(
+                title = active.displayName,
+                subtitle = active.baseUrl.trimEnd('/'),
+                status = OpenCodeListItemStatus("Active", OpenCodeListItemStatusTone.Interactive),
+                style = OpenCodeListItemStyle.Card,
+                startDecorator =
+                    StartDecorator.Letter(
+                        letterCharacterForProject(active.displayName),
+                        letterAccentForWorktree(active.id.ifBlank { active.displayName }),
+                    ),
+                onClick = onDismissServersSheet,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+        }
+        if (serversChrome.others.isNotEmpty()) {
+            Text(
+                text = "SWITCH TO",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
+            )
+            serversChrome.others.forEach { profile ->
+                OpenCodeListItem(
+                    title = profile.displayName,
+                    subtitle = ConnectionProfileIdentity.hostLabel(profile.baseUrl),
+                    startDecorator =
+                        StartDecorator.Letter(
+                            letterCharacterForProject(profile.displayName),
+                            letterAccentForWorktree(profile.id.ifBlank { profile.displayName }),
+                        ),
+                    onClick = { onSwitchProfile(profile.id) },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+        }
+        OpenCodeListItem(
+            title = "Add server",
+            subtitle = "New Connection Profile",
+            startDecorator = StartDecorator.Icon(OpenCodeIcons.Add, "Add server"),
+            onClick = onAddServerClick,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        OpenCodeListItem(
+            title = "Manage in Settings",
+            onClick = onManageServersClick,
+            modifier =
+                Modifier
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 8.dp),
         )
     }
 

@@ -14,6 +14,8 @@ import dev.opencode.mobile.domain.connection.DeviceNetworkPath
 import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
+import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
@@ -21,17 +23,15 @@ import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
-import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
-import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
+import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.OptimisticSessionCreateCoordinator
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionError
-import dev.opencode.mobile.domain.session.OptimisticSessionCreate
-import dev.opencode.mobile.domain.session.OptimisticSessionCreateCoordinator
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
@@ -93,6 +93,8 @@ class MainScreenViewModel
         val sessionActions: StateFlow<HomeSessionActionsUiState> = _sessionActions.asStateFlow()
         private val _revealNewestToken = MutableStateFlow(0)
         val revealNewestToken: StateFlow<Int> = _revealNewestToken.asStateFlow()
+        private val _serversChrome = MutableStateFlow(HomeServersChrome())
+        val serversChrome: StateFlow<HomeServersChrome> = _serversChrome.asStateFlow()
         private var lastHomeHiddenAtEpochMs: Long? = HomeDisplayPreferences.lastHomeHiddenAtEpochMs()
         val liveUpdatesConnectionStatus: StateFlow<SessionConnectionStatus> =
             combine(
@@ -124,12 +126,16 @@ class MainScreenViewModel
             viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
                     sessionReadyStore.clearCache()
+                    messageRepository.clearMessageCache()
                     refresh()
                 }
             }
             viewModelScope.launch {
                 connectionSessionCoordinator.profileCleared.collect {
+                    sessionReadyStore.clearCache()
+                    messageRepository.clearMessageCache()
                     _uiState.value = MainScreenUiState.Disconnected
+                    _serversChrome.value = HomeServersChrome()
                 }
             }
             viewModelScope.launch {
@@ -140,7 +146,39 @@ class MainScreenViewModel
         }
 
         fun refresh() {
-            viewModelScope.launch { runHomeLoad() }
+            viewModelScope.launch {
+                refreshServersChrome()
+                runHomeLoad()
+            }
+        }
+
+        fun showServersSheet() {
+            _serversChrome.update { it.copy(sheetVisible = true) }
+        }
+
+        fun dismissServersSheet() {
+            _serversChrome.update { it.copy(sheetVisible = false) }
+        }
+
+        fun switchProfile(id: String) {
+            viewModelScope.launch {
+                connectionSessionCoordinator.switchProfile(id)
+                dismissServersSheet()
+            }
+        }
+
+        private suspend fun refreshServersChrome() {
+            val profiles = connectionProfileStore.listProfiles()
+            val active = connectionProfileStore.activeProfile()
+                ?: activeConnectionManager.currentProfile()
+            _serversChrome.update { current ->
+                current.copy(
+                    title = active?.displayName ?: "Sessions",
+                    isSwitcher = active != null,
+                    active = active,
+                    others = profiles.filter { it.id != active?.id },
+                )
+            }
         }
 
         /** Soft reload for pull-to-refresh: keeps Loaded/Empty UI, no full-screen spinner. */
@@ -284,7 +322,10 @@ class MainScreenViewModel
                                 sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
                                 title = "New Session",
                                 worktree = worktree,
-                                optimisticNavigationInstanceId = java.util.UUID.randomUUID().toString(),
+                                optimisticNavigationInstanceId =
+                                    java.util.UUID
+                                        .randomUUID()
+                                        .toString(),
                             ),
                     )
                 } else {
@@ -1189,6 +1230,14 @@ fun suggestedHomeForkTitle(currentTitle: String): String {
     val trimmed = currentTitle.trim()
     return if (trimmed.isEmpty()) "Forked session" else "Fork of $trimmed"
 }
+
+data class HomeServersChrome(
+    val title: String = "Sessions",
+    val isSwitcher: Boolean = false,
+    val active: ConnectionProfile? = null,
+    val others: List<ConnectionProfile> = emptyList(),
+    val sheetVisible: Boolean = false,
+)
 
 sealed interface MainScreenUiState {
     data object Disconnected : MainScreenUiState

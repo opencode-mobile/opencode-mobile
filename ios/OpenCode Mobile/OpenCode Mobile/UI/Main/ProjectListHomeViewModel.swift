@@ -62,6 +62,14 @@ struct HomeSessionForkResultState: Equatable {
     var forkedTitle = ""
 }
 
+struct HomeServersChrome: Equatable {
+    var title = "Sessions"
+    var isSwitcher = false
+    var active: ConnectionProfile?
+    var others: [ConnectionProfile] = []
+    var sheetVisible = false
+}
+
 enum ProjectListHomeState: Equatable {
     case disconnected
     case probing
@@ -119,6 +127,7 @@ final class ProjectListHomeViewModel {
     private let sessionAdapter = SessionDomainAdapter()
     private var connectionStateObservationTask: Task<Void, Never>?
     private(set) var liveUpdatesConnectionStatus: SessionConnectionStatus = .offline
+    private(set) var serversChrome = HomeServersChrome()
     private var serverBaseURL: String {
         activeConnectionManager.connection?.baseURL.absoluteString ?? ""
     }
@@ -166,13 +175,17 @@ final class ProjectListHomeViewModel {
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
                 self?.sessionReadyStore.clearCache()
+                self?.messageRepository.clearMessageCache()
                 await self?.refresh()
             }
         }
         connectionSessionCoordinator.onProfileCleared { [weak self] in
             Task { @MainActor in
+                self?.sessionReadyStore.clearCache()
+                self?.messageRepository.clearMessageCache()
                 self?.stopLiveObservations()
                 self?.state = .disconnected
+                self?.serversChrome = HomeServersChrome()
             }
         }
         OptimisticSessionCreateCoordinator.shared.onCreateFailed(owner: self) { [weak self] message in
@@ -212,7 +225,34 @@ final class ProjectListHomeViewModel {
     }
 
     func refresh() async {
+        await refreshServersChrome()
         await runHomeLoad()
+    }
+
+    func showServersSheet() {
+        serversChrome.sheetVisible = true
+    }
+
+    func dismissServersSheet() {
+        serversChrome.sheetVisible = false
+    }
+
+    func switchProfile(id: String) async {
+        await connectionSessionCoordinator.switchProfile(id: id)
+        dismissServersSheet()
+    }
+
+    func refreshServersChrome() async {
+        let profiles = await connectionProfileStore.listProfiles()
+        let active = await connectionProfileStore.activeProfile()
+            ?? activeConnectionManager.currentProfile()
+        serversChrome = HomeServersChrome(
+            title: active?.displayName ?? "Sessions",
+            isSwitcher: active != nil,
+            active: active,
+            others: profiles.filter { $0.id != active?.id },
+            sheetVisible: serversChrome.sheetVisible
+        )
     }
 
     /// Soft reload for pull-to-refresh: keeps Loaded/Empty UI, no full-screen spinner.

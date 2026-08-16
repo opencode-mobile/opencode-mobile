@@ -17,6 +17,9 @@ icons:
     notes: SF Symbol checkmark
   - name: chevron_right
     style: filled
+  - name: keyboard_arrow_down
+    style: filled
+    notes: Title switcher chevron after home server name
   - name: close
     style: filled
     notes: SF Symbol xmark
@@ -27,6 +30,9 @@ icons:
     source: material_symbols
     style: filled
     notes: Outgoing message expanded state
+  - name: delete
+    style: filled
+    notes: SF Symbol trash; Edit server top-bar remove
   - name: description
     style: filled
     notes: SF Symbol doc.text

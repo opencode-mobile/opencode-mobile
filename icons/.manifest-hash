@@ -4,9 +4,11 @@ material_icons/filled/arrow_upward:md_arrow_upward
 material_icons/filled/arrow_downward:md_arrow_downward
 material_icons/filled/check:md_check
 material_icons/filled/chevron_right:md_chevron_right
+material_icons/filled/keyboard_arrow_down:md_keyboard_arrow_down
 material_icons/filled/close:md_close
 material_icons/filled/content_copy:md_content_copy
 material_symbols/filled/collapse_content:md_collapse_content
+material_icons/filled/delete:md_delete
 material_icons/filled/description:md_description
 material_icons/filled/edit:md_edit
 material_symbols/filled/expand_content:md_expand_content

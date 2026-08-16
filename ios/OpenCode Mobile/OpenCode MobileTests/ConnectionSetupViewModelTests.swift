@@ -31,6 +31,41 @@ struct ConnectionSetupViewModelTests {
         viewModel.onFieldChanged()
         #expect(viewModel.canSave == false)
     }
+
+    @Test func revertedEdit_keepsSavedProtocol() async {
+        let store = RecordingConnectionProfileStore()
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: store
+            )
+        )
+        viewModel.configure(
+            initialProfile: ConnectionProfile(
+                baseURL: "http://10.0.0.1:4096/",
+                username: "opencode",
+                password: "secret",
+                serverProtocol: .v2,
+                id: "home",
+                name: "Home"
+            ),
+            mode: .edit
+        )
+        #expect(viewModel.canSave == true)
+
+        viewModel.baseURL = "http://10.0.0.9:4096/"
+        viewModel.onFieldChanged()
+        #expect(viewModel.canSave == false)
+
+        viewModel.baseURL = "http://10.0.0.1:4096/"
+        viewModel.onFieldChanged()
+        #expect(viewModel.canSave == true)
+
+        let saved = await viewModel.saveConnection()
+        #expect(saved == true)
+        #expect(store.saved.last?.serverProtocol == .v2)
+    }
 }
 
 private struct FakeConnectionProbeService: ConnectionProbing {
@@ -39,6 +74,18 @@ private struct FakeConnectionProbeService: ConnectionProbing {
     func probe(connection: ServerConnection) async throws -> ServerProtocol {
         try result.get()
     }
+}
+
+private final class RecordingConnectionProfileStore: ConnectionProfileStore, @unchecked Sendable {
+    var saved: [ConnectionProfile] = []
+
+    func activeProfile() async -> ConnectionProfile? { saved.last }
+    func saveProfile(_ profile: ConnectionProfile) async throws { saved.append(profile) }
+    func addedWorktrees(serverBaseURL: String) async -> [String] { [] }
+    func addWorktree(serverBaseURL: String, worktree: String) async {}
+    func removeWorktree(serverBaseURL: String, worktree: String) async {}
+    func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async {}
+    func clearAll() async { saved.removeAll() }
 }
 
 private struct FakeSetupConnectionProfileStore: ConnectionProfileStore {

@@ -2,7 +2,6 @@ package dev.opencode.mobile.domain.connection
 
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
-import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -32,17 +31,40 @@ class ConnectionSessionCoordinator
 
         fun currentProfile(): ConnectionProfile? = activeConnectionManager.currentProfile()
 
+        suspend fun listProfiles(): List<ConnectionProfile> = connectionProfileStore.listProfiles()
+
         suspend fun saveProfile(
             profile: ConnectionProfile,
             serverProtocol: ServerProtocol? = null,
         ) {
-            activeConnectionManager.applyProfile(
-                profile.copy(serverProtocol = serverProtocol ?: profile.serverProtocol),
-                serverProtocol ?: profile.serverProtocol,
-            )
-            httpClient.rebuild()
-            sseHttpClient.rebuild()
+            val stamped = profile.copy(serverProtocol = serverProtocol ?: profile.serverProtocol)
+            val wasNew = stamped.id.isBlank()
+            connectionProfileStore.saveProfile(stamped)
+            val active = connectionProfileStore.activeProfile()
+            val savedIsActive = wasNew || (stamped.id.isNotBlank() && active?.id == stamped.id)
+            if (savedIsActive) {
+                rebindActive()
+                profileSavedEvents.emit(Unit)
+            }
+        }
+
+        suspend fun switchProfile(id: String) {
+            connectionProfileStore.applyProfile(id)
+            rebindActive()
             profileSavedEvents.emit(Unit)
+        }
+
+        suspend fun removeProfile(id: String) {
+            connectionProfileStore.removeProfile(id)
+            if (connectionProfileStore.activeProfile() == null) {
+                activeConnectionManager.disconnect()
+                httpClient.rebuild()
+                sseHttpClient.rebuild()
+                profileClearedEvents.tryEmit(Unit)
+            } else {
+                rebindActive()
+                profileSavedEvents.emit(Unit)
+            }
         }
 
         suspend fun clearConnectionData() {
@@ -54,5 +76,11 @@ class ConnectionSessionCoordinator
             httpClient.rebuild()
             sseHttpClient.rebuild()
             profileClearedEvents.tryEmit(Unit)
+        }
+
+        private suspend fun rebindActive() {
+            activeConnectionManager.reloadFromStore()
+            httpClient.rebuild()
+            sseHttpClient.rebuild()
         }
     }

@@ -7,6 +7,7 @@ struct ProjectListHomeView: View {
     @State private var navigationPath = NavigationPath()
     @State private var connectionSetupPresentation: ConnectionSetupPresentation?
     @State private var connectionSetupViewModel: ConnectionSetupViewModel?
+    @State private var serversRefreshToken = 0
     @State private var showNewSessionProjectPicker = false
     @State private var selectedSessionFilterId = SessionListFilterTab.allId
     @Environment(\.scenePhase) private var scenePhase
@@ -24,7 +25,7 @@ struct ProjectListHomeView: View {
         NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
                 OpenCodeTopBar(
-                    title: "Sessions",
+                    title: viewModel.serversChrome.title,
                     subtitleAccessory: showsLiveUpdatesStatus
                         ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
                         : nil,
@@ -36,7 +37,9 @@ struct ProjectListHomeView: View {
                             )
                             showSettings = true
                         }),
-                    ]
+                    ],
+                    onTitleClick: viewModel.serversChrome.isSwitcher ? { viewModel.showServersSheet() } : nil,
+                    titleMenuExpanded: viewModel.serversChrome.sheetVisible
                 )
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -53,7 +56,20 @@ struct ProjectListHomeView: View {
                 )
             }
             .navigationDestination(isPresented: $showSettings) {
-                SettingsView(onConnectionSetup: presentConnectionSetup)
+                SettingsView(
+                    onAddServer: { presentConnectionSetup(mode: .add) },
+                    onEditProfile: { profile in
+                        connectionSetupViewModel = Container.makeConnectionSetupViewModel(
+                            initialProfile: profile,
+                            mode: .edit
+                        )
+                        connectionSetupPresentation = ConnectionSetupPresentation(
+                            initialProfile: profile,
+                            mode: .edit
+                        )
+                    },
+                    serversRefreshToken: serversRefreshToken
+                )
             }
             .navigationDestination(for: SessionListItem.self) { session in
                 SessionChatView(session: session)
@@ -162,6 +178,59 @@ struct ProjectListHomeView: View {
                 }
             }
             .openCodeBottomSheet(
+                isPresented: serversSheetBinding,
+                title: "Servers"
+            ) {
+                VStack(alignment: .leading, spacing: 0) {
+                    if let active = viewModel.serversChrome.active {
+                        serversSheetSection("USING NOW")
+                        OpenCodeListItem(
+                            title: active.displayName,
+                            subtitle: active.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
+                            status: OpenCodeListItemStatus(text: "Active", tone: .interactive),
+                            style: .card,
+                            startDecorator: .letter(
+                                letterCharacter(for: active.displayName),
+                                letterAccent(for: active.id.isEmpty ? active.displayName : active.id)
+                            ),
+                            action: { viewModel.dismissServersSheet() }
+                        )
+                    }
+                    if !viewModel.serversChrome.others.isEmpty {
+                        serversSheetSection("SWITCH TO")
+                        ForEach(viewModel.serversChrome.others, id: \.id) { profile in
+                            OpenCodeListItem(
+                                title: profile.displayName,
+                                subtitle: ConnectionProfileIdentity.hostLabel(profile.baseURL),
+                                startDecorator: .letter(
+                                    letterCharacter(for: profile.displayName),
+                                    letterAccent(for: profile.id.isEmpty ? profile.displayName : profile.id)
+                                ),
+                                action: { Task { await viewModel.switchProfile(id: profile.id) } }
+                            )
+                        }
+                    }
+                    OpenCodeListItem(
+                        title: "Add server",
+                        subtitle: "New Connection Profile",
+                        startDecorator: .icon(.add, accessibilityLabel: "Add server"),
+                        action: {
+                            viewModel.dismissServersSheet()
+                            presentConnectionSetup(mode: .add)
+                        }
+                    )
+                    OpenCodeListItem(
+                        title: "Manage in Settings",
+                        action: {
+                            viewModel.dismissServersSheet()
+                            showSettings = true
+                        }
+                    )
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+            }
+            .openCodeBottomSheet(
                 isPresented: sessionActionsSheetBinding,
                 title: "Session actions"
             ) {
@@ -193,10 +262,15 @@ struct ProjectListHomeView: View {
             }
             .fullScreenCover(item: $connectionSetupPresentation) { presentation in
                 ConnectionSetupView(
-                    viewModel: connectionSetupViewModel ?? Container.makeConnectionSetupViewModel(initialProfile: presentation.initialProfile),
+                    viewModel: connectionSetupViewModel ?? Container.makeConnectionSetupViewModel(
+                        initialProfile: presentation.initialProfile,
+                        mode: presentation.mode
+                    ),
                     onDismiss: {
                         connectionSetupPresentation = nil
                         connectionSetupViewModel = nil
+                        serversRefreshToken += 1
+                        Task { await viewModel.refreshServersChrome() }
                     }
                 )
                 .openCodeTheme()
@@ -294,6 +368,15 @@ struct ProjectListHomeView: View {
                 )
             )
         }
+    }
+
+    private var serversSheetBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.serversChrome.sheetVisible },
+            set: { visible in
+                if !visible { viewModel.dismissServersSheet() }
+            }
+        )
     }
 
     private var sessionActionsSheetBinding: Binding<Bool> {
@@ -403,16 +486,33 @@ struct ProjectListHomeView: View {
         )
     }
 
-    private func presentConnectionSetup() {
-        if let profile = Container.shared.activeConnectionManager().currentProfile() {
-            connectionSetupViewModel = Container.makeConnectionSetupViewModel(initialProfile: profile)
-            connectionSetupPresentation = ConnectionSetupPresentation(initialProfile: profile)
-            return
-        }
-        Task {
-            let profile = await Container.shared.connectionProfileStore().activeProfile()
-            connectionSetupViewModel = Container.makeConnectionSetupViewModel(initialProfile: profile)
-            connectionSetupPresentation = ConnectionSetupPresentation(initialProfile: profile)
+    @ViewBuilder
+    private func serversSheetSection(_ title: String) -> some View {
+        Text(title)
+            .font(OpenCodeTypography.caption)
+            .foregroundStyle(OpenCodeColors.textWeak)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+            .padding(.horizontal, 4)
+    }
+
+    private func presentConnectionSetup(mode: ConnectionSetupMode = .first) {
+        switch mode {
+        case .first, .add:
+            connectionSetupViewModel = Container.makeConnectionSetupViewModel(initialProfile: nil, mode: mode)
+            connectionSetupPresentation = ConnectionSetupPresentation(initialProfile: nil, mode: mode)
+        case .edit:
+            if let profile = Container.shared.activeConnectionManager().currentProfile() {
+                connectionSetupViewModel = Container.makeConnectionSetupViewModel(initialProfile: profile, mode: .edit)
+                connectionSetupPresentation = ConnectionSetupPresentation(initialProfile: profile, mode: .edit)
+                return
+            }
+            Task {
+                let profile = await Container.shared.connectionProfileStore().activeProfile()
+                connectionSetupViewModel = Container.makeConnectionSetupViewModel(initialProfile: profile, mode: .edit)
+                connectionSetupPresentation = ConnectionSetupPresentation(initialProfile: profile, mode: .edit)
+            }
         }
     }
 
@@ -473,7 +573,7 @@ struct ProjectListHomeView: View {
                     screenId: ProductAnalytics.Screen.homeProbeFailed,
                     actionId: ProductAnalytics.Action.homeEditConnection
                 )
-                presentConnectionSetup()
+                presentConnectionSetup(mode: .edit)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

@@ -16,18 +16,23 @@ class ActiveConnectionManager(
     private val connectionProfileStore: ConnectionProfileStore,
     private val connectionProbing: ConnectionProbing? = null,
 ) {
-
     private val mutex = Mutex()
     private var connection: ServerConnection? = null
+    private var profile: ConnectionProfile? = null
     private var inFlightProbe: CompletableDeferred<Result<ServerProtocol>>? = null
     private var probeFailed = false
 
     suspend fun ensureLoaded() {
         mutex.withLock {
             if (connection == null) {
-                connection = connectionProfileStore.activeProfile()?.let(ServerConnection::fromProfile)
-                probeFailed = false
+                bindLocked(connectionProfileStore.activeProfile())
             }
+        }
+    }
+
+    suspend fun reloadFromStore() {
+        mutex.withLock {
+            bindLocked(connectionProfileStore.activeProfile())
         }
     }
 
@@ -37,21 +42,17 @@ class ActiveConnectionManager(
 
     fun protocolHint(): ServerProtocol = currentProtocol() ?: ServerProtocol.V1
 
-    fun currentCapabilities(): ServerCapabilities =
-        connection?.capabilities ?: ServerCapabilities.forProtocol(ServerProtocol.V1)
+    fun currentCapabilities(): ServerCapabilities = connection?.capabilities ?: ServerCapabilities.forProtocol(ServerProtocol.V1)
 
     fun currentProfile(): ConnectionProfile? =
-        current()?.let { connection ->
-            ConnectionProfile(
-                baseUrl = connection.baseUrl,
-                username = connection.username,
-                password = connection.password.orEmpty(),
-                serverProtocol = connection.serverProtocol,
-            )
-        }
+        profile?.copy(
+            password = connection?.password.orEmpty(),
+            serverProtocol = connection?.serverProtocol ?: profile?.serverProtocol,
+        )
 
     fun disconnect() {
         connection = null
+        profile = null
         probeFailed = false
         completeInFlight(Result.success(ServerProtocol.V1))
     }
@@ -73,8 +74,7 @@ class ActiveConnectionManager(
      * a thrown probe returns [ServerProtocol.V1] without throwing.
      * A failed probe is remembered until the connection changes or [probeActive].
      */
-    suspend fun currentProtocolOrProbe(): ServerProtocol =
-        sharedProbe(force = false).getOrDefault(ServerProtocol.V1)
+    suspend fun currentProtocolOrProbe(): ServerProtocol = sharedProbe(force = false).getOrDefault(ServerProtocol.V1)
 
     /** Home / Test Connection: join the in-flight detect and throw on failure. */
     suspend fun probeActive(): ServerProtocol = sharedProbe(force = true).getOrThrow()
@@ -149,9 +149,14 @@ class ActiveConnectionManager(
         mutex.withLock {
             val stamped = profile.copy(serverProtocol = serverProtocol ?: profile.serverProtocol)
             connectionProfileStore.saveProfile(stamped)
-            connection = ServerConnection.fromProfile(stamped)
-            probeFailed = false
-            completeInFlight(Result.success(stamped.serverProtocol ?: ServerProtocol.V1))
+            bindLocked(connectionProfileStore.activeProfile() ?: stamped)
         }
+    }
+
+    private fun bindLocked(loaded: ConnectionProfile?) {
+        profile = loaded
+        connection = loaded?.let(ServerConnection::fromProfile)
+        probeFailed = false
+        completeInFlight(Result.success(loaded?.serverProtocol ?: ServerProtocol.V1))
     }
 }

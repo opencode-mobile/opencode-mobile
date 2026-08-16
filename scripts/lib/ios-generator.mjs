@@ -64,7 +64,7 @@ ${cases}
 
 /// Material catalog icon rendered as a template asset.
 ///
-/// Size with `size:` or an outer `.frame`. Do **not** use `.font` — asset-catalog
+/// Size with size: or an outer .frame. Do not use .font — asset-catalog
 /// templates ignore font the way SF Symbols do not, which previously left
 /// glyphs optically oversized (edge-to-edge in tight chrome).
 struct OpenCodeIconImage: View {

@@ -81,6 +81,18 @@ class DefaultSessionCache(
         serverBaseUrl: String,
         worktree: String,
     ) {
+        val connectionId = connectionIdProvider()
+        if (connectionId != null) {
+            runCatching {
+                store.evict(
+                    SessionCacheEvictSelector.Worktree(
+                        connectionIdOrUrlPrefix = connectionId,
+                        worktree = worktree,
+                        matchByUrlPrefix = false,
+                    ),
+                )
+            }.onFailure { logSessionCacheIo("purge worktree by profile", it) }
+        }
         runCatching {
             store.evict(
                 SessionCacheEvictSelector.Worktree(

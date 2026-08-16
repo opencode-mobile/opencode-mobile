@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
@@ -116,6 +119,8 @@ fun OpenCodeTopBar(
     leading: OpenCodeTopBarLeading = OpenCodeTopBarLeading.None,
     actions: List<OpenCodeTopBarAction> = emptyList(),
     showDivider: Boolean = false,
+    onTitleClick: (() -> Unit)? = null,
+    titleMenuExpanded: Boolean = false,
 ) {
     require(actions.size <= 3) { "OpenCodeTopBar supports up to 3 trailing actions." }
     require(actions.count { it is OpenCodeTopBarAction.Label } <= 1) {
@@ -151,6 +156,8 @@ fun OpenCodeTopBar(
                     subtitle = resolvedSubtitle,
                     subtitleLeading = resolvedLeading,
                     subtitleAccessory = subtitleAccessory,
+                    onTitleClick = onTitleClick,
+                    titleMenuExpanded = titleMenuExpanded,
                     modifier =
                         Modifier
                             .weight(1f)
@@ -175,6 +182,8 @@ private fun TopBarTitleBlock(
     subtitle: String?,
     subtitleLeading: OpenCodeTopBarSubtitleLeading?,
     subtitleAccessory: OpenCodeTopBarSubtitleAccessory?,
+    onTitleClick: (() -> Unit)?,
+    titleMenuExpanded: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -192,12 +201,10 @@ private fun TopBarTitleBlock(
                 modifier = Modifier.align(Alignment.CenterStart),
                 verticalArrangement = Arrangement.spacedBy(TopBarSubtitleSpacing),
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = openCodeColor("text-strong"),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                TopBarTitleRow(
+                    title = title,
+                    onTitleClick = onTitleClick,
+                    titleMenuExpanded = titleMenuExpanded,
                 )
                 TopBarSubtitleLine(
                     subtitle = subtitle,
@@ -206,15 +213,52 @@ private fun TopBarTitleBlock(
                 )
             }
         } else {
-            Text(
-                text = title,
+            TopBarTitleRow(
+                title = title,
+                onTitleClick = onTitleClick,
+                titleMenuExpanded = titleMenuExpanded,
                 modifier = Modifier.align(Alignment.CenterStart),
-                style = MaterialTheme.typography.titleLarge,
-                color = openCodeColor("text-strong"),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
+    }
+}
+
+@Composable
+private fun TopBarTitleRow(
+    title: String,
+    onTitleClick: (() -> Unit)?,
+    titleMenuExpanded: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val titleText = @Composable {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            color = openCodeColor("text-strong"),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+    if (onTitleClick == null) {
+        Box(modifier = modifier) { titleText() }
+        return
+    }
+    Row(
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(role = Role.Button, onClick = onTitleClick)
+                .padding(end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(modifier = Modifier.weight(1f, fill = false)) { titleText() }
+        Icon(
+            imageVector = OpenCodeIcons.KeyboardArrowDown,
+            contentDescription = null,
+            tint = openCodeColor("text-base"),
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 

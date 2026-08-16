@@ -7,7 +7,9 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.data.local.ServerConnectionDefaults
 import dev.opencode.mobile.domain.connection.ConnectionProbeService
 import dev.opencode.mobile.domain.connection.ConnectionProfile
+import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.connection.DuplicateConnectionProfileException
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.userMessage
 import dev.opencode.mobile.domain.project.ServerProbeError
@@ -26,15 +28,35 @@ enum class ConnectionSetupState {
     Saving,
 }
 
+enum class ConnectionSetupMode {
+    First,
+    Add,
+    Edit,
+}
+
 data class ConnectionSetupUiState(
+    val name: String = "",
     val baseUrl: String = ServerConnectionDefaults.DEFAULT_BASE_URL,
     val username: String = ServerConnectionDefaults.USERNAME,
     val password: String = "",
     val state: ConnectionSetupState = ConnectionSetupState.Idle,
     val testResultMessage: String? = null,
+    val mode: ConnectionSetupMode = ConnectionSetupMode.First,
+    val profileId: String = "",
+    val connectionUnchanged: Boolean = false,
 ) {
+    val screenTitle: String
+        get() =
+            when (mode) {
+                ConnectionSetupMode.First -> "Connect to server"
+                ConnectionSetupMode.Add -> "Add server"
+                ConnectionSetupMode.Edit -> "Edit server"
+            }
+
+    val canRemove: Boolean
+        get() = mode == ConnectionSetupMode.Edit && profileId.isNotBlank()
     val canSave: Boolean
-        get() = state == ConnectionSetupState.TestSucceeded
+        get() = state == ConnectionSetupState.TestSucceeded || connectionUnchanged
 
     val isTesting: Boolean
         get() = state == ConnectionSetupState.Testing
@@ -58,25 +80,49 @@ class ConnectionSetupViewModel
         private val reportedFieldEdits = mutableSetOf<String>()
         private var isEditingExistingProfile = false
         private var detectedProtocol: ServerProtocol? = null
+        private var savedBaseUrl = ""
+        private var savedUsername = ""
+        private var savedPassword = ""
+        private var savedProtocol: ServerProtocol? = null
 
-        fun configure(initialProfile: ConnectionProfile?) {
+        fun configure(
+            initialProfile: ConnectionProfile?,
+            mode: ConnectionSetupMode = if (initialProfile == null) ConnectionSetupMode.First else ConnectionSetupMode.Edit,
+        ) {
             reportedFieldEdits.clear()
-            isEditingExistingProfile = initialProfile != null
-            detectedProtocol = null
-            _uiState.value =
-                if (initialProfile == null) {
-                    ConnectionSetupUiState()
-                } else {
+            isEditingExistingProfile = initialProfile != null && mode == ConnectionSetupMode.Edit
+            detectedProtocol = initialProfile?.serverProtocol
+            if (initialProfile == null || mode != ConnectionSetupMode.Edit) {
+                savedBaseUrl = ""
+                savedUsername = ""
+                savedPassword = ""
+                savedProtocol = null
+                _uiState.value = ConnectionSetupUiState(mode = mode)
+            } else {
+                savedBaseUrl = initialProfile.baseUrl
+                savedUsername = initialProfile.username
+                savedPassword = initialProfile.password
+                savedProtocol = initialProfile.serverProtocol
+                _uiState.value =
                     ConnectionSetupUiState(
+                        name = initialProfile.name,
                         baseUrl = initialProfile.baseUrl,
                         username = initialProfile.username,
                         password = initialProfile.password,
+                        mode = ConnectionSetupMode.Edit,
+                        profileId = initialProfile.id,
+                        connectionUnchanged = true,
                     )
-                }
+            }
         }
 
         fun configureFromCurrentProfile() {
-            configure(connectionSessionCoordinator.currentProfile())
+            configure(connectionSessionCoordinator.currentProfile(), ConnectionSetupMode.Edit)
+        }
+
+        fun onNameChanged(value: String) {
+            val current = _uiState.value
+            _uiState.value = current.copy(name = value)
         }
 
         fun onBaseUrlChanged(value: String) {
@@ -111,6 +157,7 @@ class ConnectionSetupViewModel
         }
 
         private fun updateFields(
+            name: String = _uiState.value.name,
             baseUrl: String = _uiState.value.baseUrl,
             username: String = _uiState.value.username,
             password: String = _uiState.value.password,
@@ -121,16 +168,27 @@ class ConnectionSetupViewModel
                     ConnectionSetupState.TestSucceeded, ConnectionSetupState.TestFailed -> ConnectionSetupState.Idle
                     else -> current.state
                 }
+            val unchanged =
+                isEditingExistingProfile &&
+                    ConnectionProfileIdentity.sameConnectionIdentity(
+                        baseUrl,
+                        username,
+                        savedBaseUrl,
+                        savedUsername,
+                    ) &&
+                    password == savedPassword
             if (resetState == ConnectionSetupState.Idle) {
-                detectedProtocol = null
+                detectedProtocol = if (unchanged) savedProtocol else null
             }
             _uiState.value =
                 current.copy(
+                    name = name,
                     baseUrl = baseUrl,
                     username = username,
                     password = password,
                     state = resetState,
                     testResultMessage = null,
+                    connectionUnchanged = unchanged,
                 )
         }
 
@@ -171,9 +229,26 @@ class ConnectionSetupViewModel
             )
             viewModelScope.launch {
                 _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Saving)
-                connectionSessionCoordinator.saveProfile(draftProfile(), detectedProtocol)
-                _uiState.value = _uiState.value.copy(state = ConnectionSetupState.TestSucceeded)
-                onSaved()
+                try {
+                    connectionSessionCoordinator.saveProfile(draftProfile(), detectedProtocol)
+                    _uiState.value = _uiState.value.copy(state = ConnectionSetupState.TestSucceeded)
+                    onSaved()
+                } catch (error: DuplicateConnectionProfileException) {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            state = ConnectionSetupState.TestFailed,
+                            testResultMessage = "A server with this host and username is already saved",
+                        )
+                }
+            }
+        }
+
+        fun removeConnection(onRemoved: () -> Unit) {
+            val id = _uiState.value.profileId
+            if (id.isBlank()) return
+            viewModelScope.launch {
+                connectionSessionCoordinator.removeProfile(id)
+                onRemoved()
             }
         }
 
@@ -182,6 +257,11 @@ class ConnectionSetupViewModel
                 baseUrl = _uiState.value.baseUrl,
                 username = _uiState.value.username,
                 password = _uiState.value.password,
+                serverProtocol =
+                    detectedProtocol
+                        ?: savedProtocol.takeIf { _uiState.value.connectionUnchanged },
+                id = _uiState.value.profileId,
+                name = _uiState.value.name,
             )
 
         private fun draftConnection(): ServerConnection = ServerConnection.fromProfile(draftProfile())

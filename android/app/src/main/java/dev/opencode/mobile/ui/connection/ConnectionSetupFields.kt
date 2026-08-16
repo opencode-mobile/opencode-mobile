@@ -16,6 +16,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTextInputSubmitAction
 @Composable
 fun ConnectionSetupFields(
     uiState: ConnectionSetupUiState,
+    onNameChanged: (String) -> Unit,
     onBaseUrlChanged: (String) -> Unit,
     onUsernameChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
@@ -27,6 +28,13 @@ fun ConnectionSetupFields(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp),
     ) {
+        OpenCodeTextInput(
+            value = uiState.name,
+            onValueChange = onNameChanged,
+            hint = "Name",
+            submitAction = OpenCodeTextInputSubmitAction.Next,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
         OpenCodeServerAddressInput(
             value = uiState.baseUrl,
             onValueChange = onBaseUrlChanged,

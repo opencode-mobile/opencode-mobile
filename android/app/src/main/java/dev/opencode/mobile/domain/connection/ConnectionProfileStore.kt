@@ -3,7 +3,13 @@ package dev.opencode.mobile.domain.connection
 interface ConnectionProfileStore {
     suspend fun activeProfile(): ConnectionProfile?
 
+    suspend fun listProfiles(): List<ConnectionProfile> = listOfNotNull(activeProfile())
+
     suspend fun saveProfile(profile: ConnectionProfile)
+
+    suspend fun applyProfile(id: String) = Unit
+
+    suspend fun removeProfile(id: String) = Unit
 
     suspend fun addedWorktrees(serverBaseUrl: String): List<String>
 
