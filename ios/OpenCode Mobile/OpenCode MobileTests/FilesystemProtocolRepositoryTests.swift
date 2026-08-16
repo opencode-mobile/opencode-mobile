@@ -45,7 +45,8 @@ struct FilesystemProtocolRepositoryTests {
             {
               "location":{"directory":"/repo","project":{"id":"p","directory":"/repo","canonical":"/repo"}},
               "data":[
-                {"path":"src","type":"directory"},
+                {"path":"src/","type":"directory"},
+                {"path":"docs","type":"directory"},
                 {"path":"README.md","type":"file"}
               ]
             }
@@ -55,13 +56,33 @@ struct FilesystemProtocolRepositoryTests {
 
         let nodes = try await repository.listDirectory(path: "/repo")
 
-        #expect(nodes.map(\.name) == ["src"])
-        #expect(nodes.first?.absolutePath == "/repo/src")
-        #expect(nodes.first?.isDirectory == true)
+        #expect(nodes.map(\.name) == ["docs", "src"])
+        #expect(nodes.map(\.absolutePath) == ["/repo/docs", "/repo/src"])
+        #expect(nodes.map(\.isDirectory) == [true, true])
         let url = try #require(FilesystemRoutingURLProtocol.requests.first?.url)
         #expect(url.path.hasSuffix("/api/fs/list"))
         #expect(queryValue(url, "location[directory]") == "/repo")
         #expect(queryValue(url, "path") == ".")
+    }
+
+    @Test func v2ListDirectoryKeepsRootChildrenNamed() async throws {
+        FilesystemRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            {
+              "location":{"directory":"/","project":{"id":"global","directory":"/","canonical":"/"}},
+              "data":[
+                {"path":"home/","type":"directory"},
+                {"path":"etc/","type":"directory"}
+              ]
+            }
+            """#)
+        ])
+        let repository = makeFilesystemRepository(serverProtocol: .v2)
+
+        let nodes = try await repository.listDirectory(path: "/")
+
+        #expect(nodes.map(\.name) == ["etc", "home"])
+        #expect(nodes.map(\.absolutePath) == ["/etc", "/home"])
     }
 
     private func makeFilesystemRepository(serverProtocol: ServerProtocol) -> DefaultFilesystemRepository {

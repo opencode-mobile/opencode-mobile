@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -40,22 +41,50 @@ class EventDomainAdapter(
             "question.v2.rejected" -> listOf(event("question.rejected", properties))
             "session.next.prompt.admitted",
             "session.next.prompted",
+            "session.inbox.enqueued",
+            "session.inbox.delivered",
             -> listOf(userMessageUpdated(properties))
-            "session.next.step.started" -> stepStarted(properties)
-            "session.next.step.ended" -> listOf(event("session.idle", properties))
-            "session.next.step.failed" ->
+            "session.next.step.started",
+            "session.step.started",
+            -> stepStarted(properties)
+            "session.execution.started",
+            "session.compaction.started",
+            "session.shell.started",
+            -> listOf(statusEvent(properties, "busy"))
+            "session.next.step.ended",
+            "session.execution.succeeded",
+            "session.execution.interrupted",
+            "session.compaction.ended",
+            "session.compaction.failed",
+            "session.shell.ended",
+            -> listOf(event("session.idle", properties))
+            "session.next.step.failed",
+            "session.execution.failed",
+            ->
                 listOf(
                     event("session.error", properties),
                     event("session.idle", properties),
                 )
-            "session.next.retried" -> listOf(statusEvent(properties, "retry"))
-            "session.next.text.started" -> textStarted(properties)
-            "session.next.text.delta" -> listOf(textDelta(properties))
-            "session.next.text.ended" -> listOf(textPartUpdated(properties))
+            "session.next.retried",
+            "session.retry.scheduled",
+            -> listOf(statusEvent(properties, "retry"))
+            "session.next.text.started",
+            "session.text.started",
+            -> textStarted(properties)
+            "session.next.text.delta",
+            "session.text.delta",
+            -> listOf(textDelta(properties))
+            "session.next.text.ended",
+            "session.text.ended",
+            -> listOf(textPartUpdated(properties))
             "session.next.moved",
             "session.next.agent.switched",
             "session.next.model.switched",
+            "session.moved",
+            "session.agent.selected",
+            "session.model.selected",
             -> listOf(event("session.updated", properties))
+            "session.renamed" -> listOf(renamedToUpdated(properties))
             else -> listOf(event(type, properties))
         }
 
@@ -69,9 +98,23 @@ class EventDomainAdapter(
             rawProperties = properties,
         )
 
+    private fun renamedToUpdated(properties: JsonObject): OpencodeEvent {
+        val sessionId = sessionIdFromProperties(properties)
+        val info =
+            buildJsonObject {
+                sessionId?.let { put("id", it) }
+                sessionId?.let { put("sessionID", it) }
+                properties.string("title")?.let { put("title", it) }
+            }
+        return event("session.updated", buildJsonObject { put("info", info) })
+    }
+
     private fun userMessageUpdated(properties: JsonObject): OpencodeEvent {
         val sessionId = sessionIdFromProperties(properties)
-        val messageId = properties.string("messageID") ?: properties.string("id")
+        val messageId =
+            properties.string("messageID")
+                ?: properties.string("id")
+                ?: properties.string("inboxID")
         val info =
             buildJsonObject {
                 messageId?.let { put("id", it) }
@@ -117,7 +160,7 @@ class EventDomainAdapter(
             buildJsonObject {
                 sessionId?.let { put("sessionID", it) }
                 properties.string("assistantMessageID")?.let { put("messageID", it) }
-                properties.string("textID")?.let { put("partID", it) }
+                properties.textPartId()?.let { put("partID", it) }
                 put("field", "text")
                 properties.string("delta")?.let { put("delta", it) }
             }
@@ -131,7 +174,7 @@ class EventDomainAdapter(
         val sessionId = sessionIdFromProperties(properties)
         val part =
             buildJsonObject {
-                properties.string("textID")?.let { put("id", it) }
+                properties.textPartId()?.let { put("id", it) }
                 sessionId?.let { put("sessionID", it) }
                 properties.string("assistantMessageID")?.let { put("messageID", it) }
                 put("type", "text")
@@ -162,6 +205,13 @@ class EventDomainAdapter(
             ?: properties["info"]?.jsonObject?.string("sessionId")
             ?: properties["part"]?.jsonObject?.string("sessionID")
             ?: properties["part"]?.jsonObject?.string("sessionId")
+    }
+
+    private fun JsonObject.textPartId(): String? {
+        string("textID")?.let { return it }
+        val ordinal = this["ordinal"]?.jsonPrimitive ?: return null
+        val value = ordinal.intOrNull?.toString() ?: ordinal.contentOrNull ?: return null
+        return "text-$value"
     }
 
     private fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull

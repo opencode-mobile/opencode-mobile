@@ -26,6 +26,8 @@ struct V2SessionRemote: SessionRemote, Sendable {
         if let title, !title.isEmpty {
             try await api.renameSessionV2(id: created.id, title: title)
             created.title = title
+        } else if created.title.isEmpty {
+            created.title = "New Session"
         }
         return created
     }

@@ -19,6 +19,8 @@ final class SessionChatCommands {
     private var forkedTarget: ChildSessionNavigationTarget?
     private var lastMessages: [SessionChatRow] = []
     private var lastHasSelectedComposerModel = false
+    private var lastDomainMessages: [Message] = []
+    private var completedCompactionIDsAtStart: Set<String> = []
     private var actionTask: Task<Void, Never>?
     private var forkTask: Task<Void, Never>?
     private var revertTask: Task<Void, Never>?
@@ -45,6 +47,8 @@ final class SessionChatCommands {
         self.sessionID = sessionID
         currentRevertMessageID = nil
         forkedTarget = nil
+        lastDomainMessages = []
+        completedCompactionIDsAtStart = []
         state = SessionChatCommandsRegionState()
         notifyChange()
         refreshRevert()
@@ -76,6 +80,16 @@ final class SessionChatCommands {
             hasSelectedComposerModel: hasSelectedComposerModel
         )
         state.visibleActions = ClientSlashActionCatalog.visibleActions(input)
+    }
+
+    func observeLoadedMessages(_ messages: [Message]) {
+        lastDomainMessages = messages
+        guard state.isCompacting else { return }
+        let ids = SessionCompactionPresence.completedCompactionIDs(in: messages)
+        if ids.contains(where: { !completedCompactionIDsAtStart.contains($0) }) {
+            OpenCodeLog.sessionChat.info("compact completed via timeline")
+            state.isCompacting = false
+        }
     }
 
     func openCommands() {
@@ -251,6 +265,7 @@ final class SessionChatCommands {
         dismissCommands()
         let sessionID = sessionID
         actionTask?.cancel()
+        completedCompactionIDsAtStart = SessionCompactionPresence.completedCompactionIDs(in: lastDomainMessages)
         state.isCompacting = true
         state.actionErrorMessage = nil
         state.actionSuccessMessage = nil

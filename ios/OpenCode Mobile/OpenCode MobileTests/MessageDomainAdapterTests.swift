@@ -139,12 +139,12 @@ struct MessageDomainAdapterTests {
                 agentMentions: [AgentMention(id: "m1", name: "explore", start: 0, end: 8)]
             )
         )
-        #expect(body.prompt.text == "@explore please")
+        #expect(body.text == "@explore please")
         #expect(body.delivery == "steer")
-        #expect(body.prompt.files?.first?.uri == "data:text/plain;base64,SGk=")
-        #expect(body.prompt.files?.first?.name == "notes.txt")
-        #expect(body.prompt.agents?.first?.name == "explore")
-        #expect(body.prompt.agents?.first?.source?.text == "@explore")
+        #expect(body.files?.first?.uri == "data:text/plain;base64,SGk=")
+        #expect(body.files?.first?.name == "notes.txt")
+        #expect(body.agents?.first?.name == "explore")
+        #expect(body.agents?.first?.mention?.text == "@explore")
     }
 
     @Test func v2SwitchModelRequest_mapsProviderModelAndVariant() {
@@ -720,7 +720,86 @@ struct MessageDomainAdapterTests {
         #expect(shellTool.output == "/repo")
         #expect(messages[2].mode == "compaction")
         #expect(messages[2].text == "Earlier work summarized")
-        #expect(messages[2].parts.contains { if case let .compaction(part) = $0 { part.auto } else { false } })
+        guard case let .compaction(part) = messages[2].parts.first else {
+            Issue.record("expected compaction part")
+            return
+        }
+        #expect(part.auto)
+        #expect(part.completed == false)
+    }
+
+    @Test func projectV2CompactionStatusCompletedMarksPartComplete() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_compact",
+                    "type":"compaction",
+                    "reason":"manual",
+                    "status":"completed",
+                    "summary":"Done",
+                    "time":{"created":3}
+                  }
+                ]
+                """.utf8
+            )
+        )
+        let messages = adapter.messages(fromV2: dtos)
+        #expect(messages.count == 1)
+        guard case let .compaction(part) = messages.first?.parts.first else {
+            Issue.record("expected compaction part")
+            return
+        }
+        #expect(part.completed)
+        #expect(part.auto == false)
+    }
+
+    @Test func projectV2SubagentMapsMetadataSessionIdAndOmitsToolNameTitle() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_asst",
+                    "type":"assistant",
+                    "content":[
+                      {
+                        "type":"tool",
+                        "id":"call_1",
+                        "name":"subagent",
+                        "state":{
+                          "status":"completed",
+                          "input":{"agent":"explore","description":"Find git projects"},
+                          "metadata":{"sessionID":"ses_child","status":"completed"}
+                        },
+                        "time":{"created":10}
+                      }
+                    ],
+                    "time":{"created":3}
+                  }
+                ]
+                """.utf8
+            )
+        )
+
+        let messages = adapter.messages(fromV2: dtos)
+        let message = try #require(messages.first)
+        #expect(messages.count == 1)
+        guard case let .tool(tool) = message.parts.first(where: {
+            if case .tool = $0 { true } else { false }
+        }) else {
+            Issue.record("expected tool part")
+            return
+        }
+        #expect(tool.toolName == "subagent")
+        #expect(tool.status == .completed)
+        #expect(tool.title == nil)
+        #expect(tool.input?["agent"]?.stringValue == "explore")
+        #expect(tool.metadata?["sessionID"]?.stringValue == "ses_child")
+        #expect(tool.timeStartEpochMs == 10)
     }
 
     private func decodeMessage(_ json: String) throws -> MessageDTO {

@@ -21,10 +21,13 @@ nonisolated struct SessionDomainAdapter: Sendable {
     func session(from dto: V2SessionDTO) -> Session {
         Session(
             id: dto.id,
-            title: dto.title,
+            title: Self.displayTitle(dto.title),
             slug: nil,
             projectID: dto.projectID,
-            directory: dto.location?.directory,
+            directory: {
+                guard let directory = dto.location?.directory, !directory.isEmpty else { return nil }
+                return directory
+            }(),
             parentID: dto.parentID,
             cost: dto.cost,
             tokens: tokenUsage(from: dto.tokens),
@@ -235,6 +238,10 @@ private extension SessionDomainAdapter {
 }
 
 private extension SessionDomainAdapter {
+    nonisolated static func displayTitle(_ title: String) -> String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "New Session" : title
+    }
+
     nonisolated static func updatedAtLabel(epochMs: Int64) -> String {
         let date = Date(timeIntervalSince1970: TimeInterval(epochMs) / 1000)
         let formatter = DateFormatter()

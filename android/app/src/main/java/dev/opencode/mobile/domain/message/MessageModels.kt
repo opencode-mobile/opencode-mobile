@@ -99,6 +99,7 @@ sealed class MessagePart {
     data class Compaction(
         val id: String? = null,
         val auto: Boolean = false,
+        val completed: Boolean = false,
     ) : MessagePart()
 }
 

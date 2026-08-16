@@ -15,6 +15,7 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
     let time: V2MessageTimeDTO?
     let reason: String?
     let summary: String?
+    let status: String?
     let command: String?
     let output: String?
     let callID: String?
@@ -23,7 +24,7 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, type, text, files, agents, agent, model, content, cost, tokens, error, time
-        case reason, summary, command, output, callID, name, description
+        case reason, summary, status, command, output, callID, name, description
     }
 
     init(from decoder: Decoder) throws {
@@ -42,6 +43,7 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
         time = try container.decodeIfPresent(V2MessageTimeDTO.self, forKey: .time)
         reason = try container.decodeIfPresent(String.self, forKey: .reason)
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
+        status = try container.decodeIfPresent(String.self, forKey: .status)
         command = try container.decodeIfPresent(String.self, forKey: .command)
         output = try container.decodeIfPresent(String.self, forKey: .output)
         callID = try container.decodeIfPresent(String.self, forKey: .callID)
@@ -97,6 +99,7 @@ nonisolated struct V2AssistantContentDTO: Decodable, Sendable {
     let text: String?
     let name: String?
     let state: V2ToolStateDTO?
+    let time: V2MessageTimeDTO?
 }
 
 nonisolated struct V2ToolStateDTO: Decodable, Sendable {
@@ -105,9 +108,10 @@ nonisolated struct V2ToolStateDTO: Decodable, Sendable {
     let content: [V2ToolContentDTO]
     let error: V2UnknownErrorDTO?
     let structured: [String: AnyCodable]?
+    let metadata: [String: AnyCodable]?
 
     private enum CodingKeys: String, CodingKey {
-        case status, input, content, error, structured
+        case status, input, content, error, structured, metadata
     }
 
     init(from decoder: Decoder) throws {
@@ -117,6 +121,7 @@ nonisolated struct V2ToolStateDTO: Decodable, Sendable {
         content = try container.decodeIfPresent([V2ToolContentDTO].self, forKey: .content) ?? []
         error = try container.decodeIfPresent(V2UnknownErrorDTO.self, forKey: .error)
         structured = try container.decodeIfPresent([String: AnyCodable].self, forKey: .structured)
+        metadata = try container.decodeIfPresent([String: AnyCodable].self, forKey: .metadata)
     }
 }
 

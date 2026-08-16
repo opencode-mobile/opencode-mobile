@@ -51,8 +51,13 @@ class MessagesApi private constructor(
                     .get()
                     .get("api/session/$sessionId/message") {
                         applyDirectory(directory)
-                        parameter("order", "asc")
-                        cursor?.let { parameter("cursor", it) }
+                        // Cursor tokens already encode order. Sending `order` with
+                        // `cursor` returns InvalidCursorError 400 on live v2.
+                        if (cursor == null) {
+                            parameter("order", "asc")
+                        } else {
+                            parameter("cursor", cursor)
+                        }
                     }.body<ApiListEnvelope<V2SessionMessageDto>>()
             messages += envelope.data
             cursor = envelope.cursor?.next?.takeIf { it.isNotBlank() }

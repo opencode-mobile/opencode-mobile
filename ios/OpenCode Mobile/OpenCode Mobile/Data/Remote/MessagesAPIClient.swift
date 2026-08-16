@@ -59,9 +59,13 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         var cursor: String?
         var pages = 0
         repeat {
-            var query: [String: String] = ["order": "asc"]
+            // Cursor tokens already encode order. Sending `order` with `cursor`
+            // returns InvalidCursorError 400 on live v2.
+            var query: [String: String] = [:]
             if let cursor {
                 query["cursor"] = cursor
+            } else {
+                query["order"] = "asc"
             }
             let envelope: APIListEnvelope<V2SessionMessageDTO> = try await get(
                 path: "api/session/\(sessionID)/message",

@@ -137,6 +137,73 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvent_projectsLiveExecutionStartedIntoBusyStatus() {
+        val event =
+            adapter.parseEvent(
+                """{"id":"evt_3","type":"session.execution.started","data":{"sessionID":"ses-1"}}""",
+            )
+
+        assertEquals("session.status", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        assertEquals("busy", event?.rawProperties?.get("status")?.jsonObject?.get("type")?.jsonPrimitive?.content)
+        assertTrue(event!!.triggersStatusRefresh)
+    }
+
+    @Test
+    fun parseEvent_projectsLiveExecutionSucceededIntoIdle() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.execution.succeeded","data":{"sessionID":"ses-1"}}""",
+            )
+
+        assertEquals("session.idle", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        assertTrue(event!!.triggersStatusRefresh)
+    }
+
+    @Test
+    fun parseEvent_doesNotTreatLiveStepEndedAsIdle() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
+            )
+
+        assertEquals("session.step.ended", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        assertTrue(!event!!.triggersStatusRefresh)
+    }
+
+    @Test
+    fun parseEvent_projectsLiveTextDeltaUsingOrdinalPartId() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.text.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","ordinal":0,"delta":"Hi"}}""",
+            )
+
+        assertEquals("message.part.delta", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        assertEquals("msg-2", event?.rawProperties?.get("messageID")?.jsonPrimitive?.content)
+        assertEquals("text-0", event?.rawProperties?.get("partID")?.jsonPrimitive?.content)
+        assertEquals("Hi", event?.rawProperties?.get("delta")?.jsonPrimitive?.content)
+        assertTrue(event!!.triggersMessageRefresh)
+    }
+
+    @Test
+    fun parseEvent_projectsLiveRenamedIntoSessionUpdated() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.renamed","data":{"sessionID":"ses-1","title":"Testing conversation"}}""",
+            )
+
+        assertEquals("session.updated", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        assertEquals(
+            "Testing conversation",
+            event?.rawProperties?.get("info")?.jsonObject?.get("title")?.jsonPrimitive?.content,
+        )
+    }
+
+    @Test
     fun parseEvent_remapsPermissionV2Asked() {
         val event =
             adapter.parseEvent(

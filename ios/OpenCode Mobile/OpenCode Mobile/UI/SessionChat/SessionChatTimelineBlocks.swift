@@ -291,7 +291,7 @@ nonisolated enum SessionChatTimelineBlocks {
         case .toolGroup:
             true
         case .toolCard(_, let card):
-            card.toolName.lowercased() != "task"
+            !Self.isChildSessionTool(card.toolName)
         case .text, .attachment, .childSessionRow:
             false
         }
@@ -347,11 +347,12 @@ nonisolated enum SessionChatTimelineBlocks {
         contextToolNames.contains(toolName.lowercased())
     }
 
-    /// A visible tool can join a group. Subagent (`task`) spawns never group so
-    /// their child-session tap stays available; when collapse is on every other
-    /// visible tool groups, otherwise only context tools do.
+    /// A visible tool can join a group. Child-session tools (`task` / v2
+    /// `subagent`) never group so their child-session tap stays available; when
+    /// collapse is on every other visible tool groups, otherwise only context
+    /// tools do.
     private static func isGroupableTool(_ tool: ToolPart, collapse: Bool) -> Bool {
-        if tool.toolName.lowercased() == "task" { return false }
+        if isChildSessionTool(tool.toolName) { return false }
         if collapse { return true }
         return isContextTool(tool.toolName)
     }
@@ -433,7 +434,7 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func toToolBlock(_ tool: ToolPart) -> SessionChatTimelineBlock? {
-        if tool.toolName.lowercased() == "task", tool.status != .error {
+        if isChildSessionTool(tool.toolName), tool.status != .error {
             return toChildSessionRow(tool)
         }
         return toToolCard(tool)
@@ -443,7 +444,9 @@ nonisolated enum SessionChatTimelineBlocks {
         guard let partId = tool.id else { return nil }
         let agentName = taskAgentName(tool)
         let secondLine =
-            nonEmpty(tool.title)
+            nonEmpty(tool.title).flatMap { title in
+                title.lowercased() == tool.toolName.lowercased() ? nil : title
+            }
             ?? inputString(tool.input, keys: "description", "prompt")
         return .childSessionRow(
             blockID: PresentationBlockId.direct(partId),
@@ -455,7 +458,7 @@ nonisolated enum SessionChatTimelineBlocks {
                 timeStartEpochMs: (tool.status == .pending || tool.status == .running)
                     ? tool.timeStartEpochMs
                     : nil,
-                childSessionId: metadataString(tool.metadata, keys: "sessionId")
+                childSessionId: childSessionId(tool)
             )
         )
     }
@@ -557,7 +560,7 @@ nonisolated enum SessionChatTimelineBlocks {
                 subtitle: inputString(tool.input, keys: "name", "skill")
                     ?? runningTitleOverride(tool)
             )
-        case "task":
+        case "task", "subagent":
             return taskChrome(tool)
         case "edit":
             return fileChangeChrome(tool: tool, displayTitle: "Edit")
@@ -688,7 +691,7 @@ nonisolated enum SessionChatTimelineBlocks {
         return Chrome(
             title: title,
             subtitle: subtitle,
-            childSessionId: metadataString(tool.metadata, keys: "sessionId")
+            childSessionId: childSessionId(tool)
         )
     }
 
@@ -696,6 +699,15 @@ nonisolated enum SessionChatTimelineBlocks {
         inputString(tool.input, keys: "agent", "name")
             ?? metadataString(tool.metadata, keys: "agent")
             ?? "Task"
+    }
+
+    private static func isChildSessionTool(_ toolName: String) -> Bool {
+        let name = toolName.lowercased()
+        return name == "task" || name == "subagent"
+    }
+
+    private static func childSessionId(_ tool: ToolPart) -> String? {
+        metadataString(tool.metadata, keys: "sessionId", "sessionID")
     }
 
     private static func contextChrome(tool: ToolPart, displayTitle: String, subtitle: String?) -> Chrome {

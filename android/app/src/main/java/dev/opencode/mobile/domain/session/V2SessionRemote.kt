@@ -26,6 +26,8 @@ internal class V2SessionRemote(
         if (!title.isNullOrBlank()) {
             api.renameSessionV2(created.id, title)
             created = created.copy(title = title)
+        } else if (created.title.isEmpty()) {
+            created = created.copy(title = "New Session")
         }
         return created
     }

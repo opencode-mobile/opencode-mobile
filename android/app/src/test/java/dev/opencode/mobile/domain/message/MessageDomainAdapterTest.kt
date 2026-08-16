@@ -257,12 +257,12 @@ class MessageDomainAdapterTest {
                 ),
             )
 
-        assertEquals("@explore please", body.prompt.text)
+        assertEquals("@explore please", body.text)
         assertEquals("steer", body.delivery)
-        assertEquals("data:text/plain;base64,SGk=", body.prompt.files?.single()?.uri)
-        assertEquals("notes.txt", body.prompt.files?.single()?.name)
-        assertEquals("explore", body.prompt.agents?.single()?.name)
-        assertEquals("@explore", body.prompt.agents?.single()?.source?.text)
+        assertEquals("data:text/plain;base64,SGk=", body.files?.single()?.uri)
+        assertEquals("notes.txt", body.files?.single()?.name)
+        assertEquals("explore", body.agents?.single()?.name)
+        assertEquals("@explore", body.agents?.single()?.mention?.text)
     }
 
     @Test
@@ -894,6 +894,76 @@ class MessageDomainAdapterTest {
         assertEquals("/repo", shellTool.output)
         assertEquals("compaction", messages[2].mode)
         assertEquals("Earlier work summarized", messages[2].text)
-        assertTrue(messages[2].parts.any { it is MessagePart.Compaction && it.auto })
+        val compaction = messages[2].parts.filterIsInstance<MessagePart.Compaction>().single()
+        assertTrue(compaction.auto)
+        assertFalse(compaction.completed)
+    }
+
+    @Test
+    fun projectV2_compactionStatusCompleted_marksPartComplete() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {
+                    "id":"msg_compact",
+                    "type":"compaction",
+                    "reason":"manual",
+                    "status":"completed",
+                    "summary":"Done",
+                    "time":{"created":3}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val message = adapter.projectV2(dtos).single()
+        val compaction = message.parts.filterIsInstance<MessagePart.Compaction>().single()
+        assertTrue(compaction.completed)
+        assertFalse(compaction.auto)
+    }
+
+    @Test
+    fun projectV2_subagentMapsMetadataSessionIdAndOmitsToolNameTitle() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {
+                    "id":"msg_asst",
+                    "type":"assistant",
+                    "content":[
+                      {
+                        "type":"tool",
+                        "id":"call_1",
+                        "name":"subagent",
+                        "state":{
+                          "status":"completed",
+                          "input":{"agent":"explore","description":"Find git projects"},
+                          "metadata":{"sessionID":"ses_child","status":"completed"}
+                        },
+                        "time":{"created":10}
+                      }
+                    ],
+                    "time":{"created":3}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val tool =
+            adapter
+                .projectV2(dtos)
+                .single()
+                .parts
+                .filterIsInstance<MessagePart.Tool>()
+                .single()
+
+        assertEquals("subagent", tool.toolName)
+        assertEquals(ToolStatus.Completed, tool.status)
+        assertNull(tool.title)
+        assertEquals("explore", tool.input?.get("agent")?.jsonPrimitive?.content)
+        assertEquals("ses_child", tool.metadata?.get("sessionID")?.jsonPrimitive?.content)
+        assertEquals(10L, tool.timeStartEpochMs)
     }
 }

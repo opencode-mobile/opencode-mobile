@@ -2,6 +2,19 @@ import Foundation
 
 nonisolated struct APIDataEnvelope<T: Decodable & Sendable>: Decodable, Sendable {
     let data: T
+
+    private enum CodingKeys: String, CodingKey {
+        case data
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if container.contains(.data) {
+            data = try container.decode(T.self, forKey: .data)
+        } else {
+            data = try T(from: decoder)
+        }
+    }
 }
 
 nonisolated struct APIListEnvelope<T: Decodable & Sendable>: Decodable, Sendable {

@@ -21,6 +21,7 @@ data class V2SessionMessageDto(
     val time: V2MessageTimeDto? = null,
     val reason: String? = null,
     val summary: String? = null,
+    val status: String? = null,
     val command: String? = null,
     val output: String? = null,
     @SerialName("callID") val callId: String? = null,
@@ -76,6 +77,7 @@ data class V2AssistantContentDto(
     val text: String? = null,
     val name: String? = null,
     val state: V2ToolStateDto? = null,
+    val time: V2MessageTimeDto? = null,
 )
 
 @Serializable
@@ -85,6 +87,7 @@ data class V2ToolStateDto(
     val content: List<V2ToolContentDto> = emptyList(),
     val error: V2UnknownErrorDto? = null,
     val structured: JsonObject? = null,
+    val metadata: JsonObject? = null,
 )
 
 @Serializable

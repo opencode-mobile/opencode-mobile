@@ -88,7 +88,8 @@ class FilesystemProtocolRepositoryTest {
                         {
                           "location":{"directory":"/repo","project":{"id":"p","directory":"/repo","canonical":"/repo"}},
                           "data":[
-                            {"path":"src","type":"directory"},
+                            {"path":"src/","type":"directory"},
+                            {"path":"docs","type":"directory"},
                             {"path":"README.md","type":"file"}
                           ]
                         }
@@ -104,12 +105,42 @@ class FilesystemProtocolRepositoryTest {
 
             val nodes = repository.listDirectory("/repo")
 
-            assertEquals(listOf("src"), nodes.map { it.name })
-            assertEquals("/repo/src", nodes.single().absolutePath)
-            assertTrue(nodes.single().isDirectory)
+            assertEquals(listOf("docs", "src"), nodes.map { it.name })
+            assertEquals(listOf("/repo/docs", "/repo/src"), nodes.map { it.absolutePath })
+            assertTrue(nodes.all { it.isDirectory })
             assertTrue(requests.single().url.encodedPath.contains("/api/fs/list"))
             assertEquals("/repo", requests.single().url.parameters["location[directory]"])
             assertEquals(".", requests.single().url.parameters["path"])
+        }
+
+    @Test
+    fun v2ListDirectory_keepsRootChildrenNamed() =
+        runTest {
+            val client =
+                testClient {
+                    respondJson(
+                        """
+                        {
+                          "location":{"directory":"/","project":{"id":"global","directory":"/","canonical":"/"}},
+                          "data":[
+                            {"path":"home/","type":"directory"},
+                            {"path":"etc/","type":"directory"}
+                          ]
+                        }
+                        """.trimIndent(),
+                    )
+                }
+            val repository =
+                DefaultFilesystemRepository(
+                    FilesystemApi(client),
+                    FilesystemDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val nodes = repository.listDirectory("/")
+
+            assertEquals(listOf("etc", "home"), nodes.map { it.name })
+            assertEquals(listOf("/etc", "/home"), nodes.map { it.absolutePath })
         }
 
     private suspend fun manager(protocol: ServerProtocol): ActiveConnectionManager {

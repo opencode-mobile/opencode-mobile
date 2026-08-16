@@ -67,7 +67,12 @@ struct MessageProtocolRepositoryTests {
 
         #expect(messages.map(\.id) == ["msg_a", "msg_b"])
         #expect(MessageProtocolURLProtocol.requests.count == 2)
-        #expect(queryValue(try #require(MessageProtocolURLProtocol.requests[1].url), "cursor") == "page-2")
+        let firstURL = try #require(MessageProtocolURLProtocol.requests[0].url)
+        let secondURL = try #require(MessageProtocolURLProtocol.requests[1].url)
+        #expect(queryValue(firstURL, "order") == "asc")
+        #expect(queryValue(firstURL, "cursor") == nil)
+        #expect(queryValue(secondURL, "cursor") == "page-2")
+        #expect(queryValue(secondURL, "order") == nil)
     }
 
     @Test func unknownProtocolProbesBeforeRoutingToV2() async throws {

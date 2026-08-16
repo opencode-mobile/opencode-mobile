@@ -8,6 +8,17 @@ nonisolated struct V2LocationDTO: Codable, Sendable {
         self.directory = directory
         self.workspaceID = workspaceID
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case directory
+        case workspaceID
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        directory = try container.decodeIfPresent(String.self, forKey: .directory) ?? ""
+        workspaceID = try container.decodeIfPresent(String.self, forKey: .workspaceID)
+    }
 }
 
 nonisolated struct V2SessionDTO: Decodable, Sendable {
@@ -20,6 +31,31 @@ nonisolated struct V2SessionDTO: Decodable, Sendable {
     let time: SessionTimeDTO?
     let location: V2LocationDTO?
     let revert: SessionRevertDTO?
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case projectID
+        case parentID
+        case cost
+        case tokens
+        case time
+        case location
+        case revert
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        projectID = try container.decodeIfPresent(String.self, forKey: .projectID)
+        parentID = try container.decodeIfPresent(String.self, forKey: .parentID)
+        cost = try container.decodeIfPresent(Double.self, forKey: .cost)
+        tokens = try container.decodeIfPresent(MessageTokensDTO.self, forKey: .tokens)
+        time = try container.decodeIfPresent(SessionTimeDTO.self, forKey: .time)
+        location = try container.decodeIfPresent(V2LocationDTO.self, forKey: .location)
+        revert = try container.decodeIfPresent(SessionRevertDTO.self, forKey: .revert)
+    }
 }
 
 nonisolated struct V2CreateSessionRequestDTO: Encodable, Sendable {

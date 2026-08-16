@@ -1,7 +1,6 @@
 package dev.opencode.mobile.data.remote
 
 import dev.opencode.mobile.data.remote.dto.ApiActiveSessionsEnvelope
-import dev.opencode.mobile.data.remote.dto.ApiDataEnvelope
 import dev.opencode.mobile.data.remote.dto.ApiListEnvelope
 import dev.opencode.mobile.data.remote.dto.ApiLocatedEnvelope
 import dev.opencode.mobile.data.remote.dto.ApiSessionActiveDto
@@ -29,6 +28,7 @@ import dev.opencode.mobile.data.remote.dto.V2RevertStageRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
+import dev.opencode.mobile.data.remote.dto.decodeDataEnvelope
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
 import dev.opencode.mobile.network.applyLocationDirectory
@@ -47,6 +47,7 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import javax.inject.Inject
 
@@ -395,8 +396,7 @@ class SessionsApi private constructor(
                         location = directory?.let { V2LocationDto(directory = it) },
                     ),
                 )
-            }.body<ApiDataEnvelope<V2SessionDto>>()
-            .data
+            }.decodeV2Session()
 
     suspend fun getActiveSessionsV2(): Map<String, ApiSessionActiveDto> =
         httpClient
@@ -409,8 +409,7 @@ class SessionsApi private constructor(
         httpClient
             .get()
             .get("api/session/$id")
-            .body<ApiDataEnvelope<V2SessionDto>>()
-            .data
+            .decodeV2Session()
 
     suspend fun renameSessionV2(
         id: String,
@@ -444,8 +443,7 @@ class SessionsApi private constructor(
             .get()
             .post("api/session/$id/fork") {
                 setJsonBody(json, V2ForkSessionRequestDto(messageId = messageId))
-            }.body<ApiDataEnvelope<V2SessionDto>>()
-            .data
+            }.decodeV2Session()
 
     suspend fun compactSessionV2(id: String): Boolean =
         httpClient
@@ -496,6 +494,8 @@ class SessionsApi private constructor(
                 parameter("context", context)
             }.body<ApiLocatedEnvelope<List<FileDiffDto>>>()
             .data
+
+    private suspend fun HttpResponse.decodeV2Session(): V2SessionDto = json.decodeDataEnvelope(body<JsonElement>())
 
     private suspend fun HttpResponse.ensureSuccess(): Boolean {
         if (!status.isSuccess()) {

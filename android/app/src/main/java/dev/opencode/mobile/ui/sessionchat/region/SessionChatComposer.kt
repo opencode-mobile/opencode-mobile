@@ -38,6 +38,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
+import dev.opencode.mobile.ui.sessionchat.knownChildSessionIds
 import dev.opencode.mobile.ui.sessionchat.toAtSuggestion
 import dev.opencode.mobile.ui.sessionchat.toSlashSuggestion
 import kotlinx.coroutines.CoroutineDispatcher
@@ -769,26 +770,41 @@ class SessionChatComposer(
         _state.update { it.copy(errorMessage = null, abortErrorMessage = null) }
     }
 
-    fun abort() {
-        val sessionId = boundSessionId ?: return
-        val worktree = boundWorktree ?: return
+    fun abort(onFinished: (success: Boolean) -> Unit = {}) {
+        val sessionId = boundSessionId
+        if (sessionId == null) {
+            logW("abort skipped unbound")
+            onFinished(false)
+            return
+        }
+        val worktree = boundWorktree
+        val extraIds = latestTimelineState?.knownChildSessionIds().orEmpty() - sessionId
+        logI("abort start session=$sessionId children=${extraIds.joinToString(",")}")
         scope.launch {
             _state.update { it.copy(isAborting = true, abortErrorMessage = null) }
-            runCatching { sessionRepository.abortSession(sessionId, directory = worktree) }
-                .onFailure { throwable ->
-                    if (isCurrentBinding(sessionId, worktree)) {
-                        _state.update {
-                            it.copy(
-                                isAborting = false,
-                                abortErrorMessage = errorMessage(throwable),
-                            )
-                        }
-                    }
-                }.onSuccess {
-                    if (isCurrentBinding(sessionId, worktree)) {
-                        _state.update { it.copy(isAborting = false, abortErrorMessage = null) }
+            runCatching {
+                sessionRepository.abortSession(sessionId, directory = worktree)
+                extraIds.forEach { childId ->
+                    sessionRepository.abortSession(childId, directory = worktree)
+                }
+            }.onFailure { throwable ->
+                logW("abort failed session=$sessionId message=${throwable.message}")
+                if (boundSessionId == sessionId && boundWorktree == worktree) {
+                    _state.update {
+                        it.copy(
+                            isAborting = false,
+                            abortErrorMessage = errorMessage(throwable),
+                        )
                     }
                 }
+                onFinished(false)
+            }.onSuccess {
+                logI("abort success session=$sessionId")
+                if (boundSessionId == sessionId && boundWorktree == worktree) {
+                    _state.update { it.copy(isAborting = false, abortErrorMessage = null) }
+                }
+                onFinished(true)
+            }
         }
     }
 

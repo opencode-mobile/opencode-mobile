@@ -43,7 +43,8 @@
 - [x] P2: `MessageProtocolRouter` for repository + MessageSync seed
 - [x] P2: Unit tests (`MessageProtocolRepositoryTests`, projector cases)
 - [x] P3: `GET /api/event` subscribe when cached protocol is v2
-- [x] P3: V2 `{id,type,data}` envelope parse + `session.next.*` projector
+- [x] P3: V2 `{id,type,data}` envelope parse + live `session.execution.*` /
+  `session.text.*` projector (`session.next.*` still accepted)
 - [x] P3: `prompt_async` → `POST /api/session/{id}/prompt` (+ agent/model switch)
 - [x] P3: Unit tests (event projector, prompt routing, v1 SSE/prompt regression)
 - [x] P4: Permission list/reply dual remotes (`action`/`resources`/`reply`)
@@ -70,6 +71,14 @@
 - [x] OPE-155: `MessageProtocolRouter` lifted to v1/v2 message remotes
 - [x] OPE-155: Command, Filesystem, Model, Agent, Project use shared
   protocol-or-probe (remotes deferred)
+- [x] OPE-175: Sparse / unwrapped `POST /api/session` create decode
+- [x] Live v2: untitled list/get titles map to `New Session`
+- [x] Live v2: message list cursor pages omit `order`
+- [x] Live v2: `subagent` tool uses the Child Session Row
+- [x] Live v2: Stop interrupts timeline child sessions and clears Working
+- [x] Live v2: completed compaction snapshots do not keep Compacting…
+- [x] Live v2: SSE `session.execution.*` / `session.text.*` project into Working
+  and message patches
 
 ## Android implementation
 
@@ -91,7 +100,8 @@
 - [x] P2: `MessageProtocolRouter` for repository + MessageSync seed
 - [x] P2: Unit tests (`MessageProtocolRepositoryTest`, projector cases)
 - [x] P3: `GET /api/event` subscribe when cached protocol is v2
-- [x] P3: V2 `{id,type,data}` envelope parse + `session.next.*` projector
+- [x] P3: V2 `{id,type,data}` envelope parse + live `session.execution.*` /
+  `session.text.*` projector (`session.next.*` still accepted)
 - [x] P3: `prompt_async` → `POST /api/session/{id}/prompt` (+ agent/model switch)
 - [x] P3: Unit tests (event projector, prompt routing, v1 SSE/prompt regression)
 - [x] P4: Permission list/reply dual remotes (`action`/`resources`/`reply`)
@@ -118,6 +128,14 @@
 - [x] OPE-155: `MessageProtocolRouter` lifted to v1/v2 message remotes
 - [x] OPE-155: Command, Filesystem, Model, Agent, Project use shared
   protocol-or-probe (remotes deferred)
+- [x] OPE-175: Sparse / unwrapped `POST /api/session` create decode
+- [x] Live v2: untitled list/get titles map to `New Session`
+- [x] Live v2: message list cursor pages omit `order`
+- [x] Live v2: `subagent` tool uses the Child Session Row
+- [x] Live v2: Stop interrupts timeline child sessions and clears Working
+- [x] Live v2: completed compaction snapshots do not keep Compacting…
+- [x] Live v2: SSE `session.execution.*` / `session.text.*` project into Working
+  and message patches
 
 ## Blockers
 

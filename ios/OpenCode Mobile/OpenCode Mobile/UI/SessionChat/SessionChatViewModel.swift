@@ -551,6 +551,10 @@ final class SessionChatViewModel {
         )
         guard isConnectionLive else { return }
         await composer.abortSession(timelineIsReady: timeline.state.timeline == .ready)
+        if composer.state.abortErrorMessage == nil {
+            sessionInfo.clearOptimisticBusy()
+            await sessionInfo.refreshStatus()
+        }
     }
 
     func allowPermissionOnce(requestID: String, sessionID: String) async {
@@ -1056,6 +1060,11 @@ final class SessionChatViewModel {
         let timelineState = timeline.state
         let composerState = composer.state
         let infoState = sessionInfo.state
+        commands.updateVisibility(
+            messages: timelineState.messages,
+            hasSelectedComposerModel: composerState.composer.selectedModel != nil
+        )
+        commands.observeLoadedMessages(timeline.loadedMessages())
         let commandsState = commands.state
         let isCompacting = effectiveCompacting(
             localCompacting: commandsState.isCompacting,
@@ -1079,10 +1088,6 @@ final class SessionChatViewModel {
             hasResolvedSessionStatus: infoState.hasResolvedSessionStatus,
             isTurnActive: infoState.sessionStatusLabel != nil || isCompacting,
             isSending: composerState.isSending
-        )
-        commands.updateVisibility(
-            messages: timelineState.messages,
-            hasSelectedComposerModel: composerState.composer.selectedModel != nil
         )
         let reviewChangesState = reviewChanges.state
         let visibleQuestion = visibleQuestionRequest()

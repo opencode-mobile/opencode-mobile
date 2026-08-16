@@ -49,6 +49,43 @@ struct SessionProtocolRepositoryTests {
         #expect(queryValue(url, "directory") == "/repo")
     }
 
+    @Test func v2ListSessionsAcceptsUntitledSessions() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            {
+              "data": [
+                {
+                  "id": "ses_untitled",
+                  "projectID": "global",
+                  "cost": 0,
+                  "tokens": {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}},
+                  "time": {"created": 1, "updated": 1},
+                  "location": {"directory": "/home/ivan"},
+                  "subpath": "home/ivan"
+                },
+                {
+                  "id": "ses_titled",
+                  "title": "What is OpenCode 2?",
+                  "projectID": "global",
+                  "cost": 0,
+                  "tokens": {"input": 1, "output": 2, "reasoning": 0, "cache": {"read": 0, "write": 0}},
+                  "time": {"created": 2, "updated": 3},
+                  "location": {"directory": "/home/ivan"}
+                }
+              ],
+              "cursor": {"previous": null, "next": null}
+            }
+            """#)
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let sessions = try await repository.listSessions(directory: "/home/ivan")
+
+        #expect(sessions.map(\.id) == ["ses_untitled", "ses_titled"])
+        #expect(sessions.map(\.title) == ["New Session", "What is OpenCode 2?"])
+        #expect(sessions.first?.directory == "/home/ivan")
+    }
+
     @Test func v2ActiveStatusesMapRunningToBusy() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
             .json(#"{"data":{"ses_busy":{"type":"running"}},"watermarks":{}}"#)
@@ -115,6 +152,32 @@ struct SessionProtocolRepositoryTests {
         let location = try #require(jsonObject(createBody)?["location"] as? [String: Any])
         #expect(location["directory"] as? String == "/repo")
         #expect(ProtocolRoutingURLProtocol.requests[1].url?.path.hasSuffix("/api/session/ses_new/rename") == true)
+    }
+
+    @Test func v2CreateSessionAcceptsUntitledCreateResponse() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(sessionEnvelope(id: "ses_new", title: nil))
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let created = try await repository.createSession(parentID: nil, title: nil, directory: "/repo")
+
+        #expect(created.id == "ses_new")
+        #expect(created.title == "New Session")
+        #expect(created.directory == "/repo")
+        #expect(ProtocolRoutingURLProtocol.requests.count == 1)
+    }
+
+    @Test func v2CreateSessionAcceptsUnwrappedCreateResponse() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(sessionEnvelope(id: "ses_bare", title: nil, wrapInData: false))
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let created = try await repository.createSession(parentID: nil, title: nil, directory: "/repo")
+
+        #expect(created.id == "ses_bare")
+        #expect(created.title == "New Session")
     }
 
     @Test func v2DeleteSessionUsesApiPath() async throws {
@@ -536,17 +599,20 @@ struct SessionProtocolRepositoryTests {
 
     private func sessionEnvelope(
         id: String,
-        title: String,
+        title: String?,
         parentID: String? = nil,
-        archived: Int64? = nil
+        archived: Int64? = nil,
+        wrapInData: Bool = true
     ) -> String {
+        let titleField = title.map { "\"title\":\"\($0)\"," } ?? ""
         let parentField = parentID.map { ",\"parentID\":\"\($0)\"" } ?? ""
         let archivedField = archived.map { ",\"archived\":\($0)" } ?? ""
-        return "{\"data\":{"
-            + "\"id\":\"\(id)\",\"title\":\"\(title)\",\"projectID\":\"p\",\"cost\":0,"
+        let session = "{"
+            + "\"id\":\"\(id)\",\(titleField)\"projectID\":\"p\",\"cost\":0,"
             + "\"tokens\":{\"input\":0,\"output\":0,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}},"
             + "\"time\":{\"created\":1,\"updated\":2\(archivedField)},"
-            + "\"location\":{\"directory\":\"/repo\"}\(parentField)}}"
+            + "\"location\":{\"directory\":\"/repo\"}\(parentField)}"
+        return wrapInData ? "{\"data\":\(session)}" : session
     }
 }
 

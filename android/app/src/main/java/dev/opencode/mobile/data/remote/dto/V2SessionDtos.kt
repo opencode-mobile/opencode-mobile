@@ -6,14 +6,14 @@ import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class V2LocationDto(
-    val directory: String,
+    val directory: String = "",
     @SerialName("workspaceID") val workspaceId: String? = null,
 )
 
 @Serializable
 data class V2SessionDto(
     val id: String,
-    val title: String,
+    val title: String = "",
     @SerialName("projectID") val projectId: String? = null,
     @SerialName("parentID") val parentId: String? = null,
     val cost: Double? = null,

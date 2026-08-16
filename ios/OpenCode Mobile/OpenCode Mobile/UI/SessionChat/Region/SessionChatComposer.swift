@@ -671,11 +671,22 @@ final class SessionChatComposer {
         state.isAborting = true
         state.abortErrorMessage = nil
         notifyChange()
+        let extraIDs = latestTimelineState?.knownChildSessionIDs.subtracting([sessionID]) ?? []
+        OpenCodeLog.sessionChat.info(
+            "abort start session=\(self.sessionID, privacy: .public) children=\(extraIDs.sorted().joined(separator: ","), privacy: .public)"
+        )
         do {
             _ = try await sessionRepository.abortSession(id: sessionID, directory: worktree)
+            for childID in extraIDs {
+                _ = try await sessionRepository.abortSession(id: childID, directory: worktree)
+            }
             state.isAborting = false
             state.abortErrorMessage = nil
+            OpenCodeLog.sessionChat.info("abort success session=\(self.sessionID, privacy: .public)")
         } catch {
+            OpenCodeLog.sessionChat.error(
+                "abort failed session=\(self.sessionID, privacy: .public) message=\(error.localizedDescription, privacy: .public)"
+            )
             state.isAborting = false
             if timelineIsReady {
                 state.abortErrorMessage = errorMessage(error)

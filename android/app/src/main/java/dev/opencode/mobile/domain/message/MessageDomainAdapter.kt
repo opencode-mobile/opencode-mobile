@@ -15,7 +15,6 @@ import dev.opencode.mobile.data.remote.dto.V2FileAttachmentDto
 import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
 import dev.opencode.mobile.data.remote.dto.V2PromptAgentDto
 import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
-import dev.opencode.mobile.data.remote.dto.V2PromptInputDto
 import dev.opencode.mobile.data.remote.dto.V2PromptRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PromptSourceDto
 import dev.opencode.mobile.data.remote.dto.V2SessionMessageDto
@@ -206,7 +205,7 @@ class MessageDomainAdapter {
                 .map { part ->
                     V2PromptAgentDto(
                         name = part.name,
-                        source =
+                        mention =
                             V2PromptSourceDto(
                                 start = part.start,
                                 end = part.end,
@@ -215,12 +214,9 @@ class MessageDomainAdapter {
                     )
                 }.takeIf { it.isNotEmpty() }
         return V2PromptRequestDto(
-            prompt =
-                V2PromptInputDto(
-                    text = options.text,
-                    files = files,
-                    agents = agents,
-                ),
+            text = options.text,
+            files = files,
+            agents = agents,
             delivery = "steer",
         )
     }
@@ -434,7 +430,14 @@ class MessageDomainAdapter {
 
     private fun projectV2Compaction(dto: V2SessionMessageDto): Message {
         val summary = dto.summary.orEmpty()
-        val parts = mutableListOf<MessagePart>(MessagePart.Compaction(id = dto.id, auto = dto.reason == "auto"))
+        val parts =
+            mutableListOf<MessagePart>(
+                MessagePart.Compaction(
+                    id = dto.id,
+                    auto = dto.reason == "auto",
+                    completed = dto.status.equals("completed", ignoreCase = true),
+                ),
+            )
         if (summary.isNotBlank()) {
             parts += MessagePart.Text(text = summary, id = "${dto.id}:text:0")
         }
@@ -493,13 +496,13 @@ class MessageDomainAdapter {
                 MessagePart.Tool(
                     toolName = name,
                     status = status,
-                    title = name,
                     error = state?.error?.message?.takeIf { it.isNotEmpty() },
                     callId = content.id,
                     input = jsonObjectFromInput(state?.input),
                     output = toolOutput(state),
-                    metadata = state?.structured,
+                    metadata = state?.metadata ?: state?.structured,
                     id = content.id,
+                    timeStartEpochMs = content.time?.created,
                 )
             }
             else -> null

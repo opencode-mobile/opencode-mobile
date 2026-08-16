@@ -73,29 +73,33 @@ MessageSync and timeline rendering per protocol.
 ## V2 live events project into OpencodeEvent (2026-08-12)
 
 **Choice:** Parse `/api/event` native `{id,type,data}` envelopes in
-`EventDomainAdapter` and project `session.next.*` (plus `permission.v2.*` /
-`question.v2.*`) into today’s `OpencodeEvent` types before MessageSync and
-LiveStores see them. Text streaming uses synthetic `message.part.delta`;
-`session.next.step.ended` becomes `session.idle` so reconnect-style full
-reload remains the authority catch-up.
+`EventDomainAdapter` and project live v2 event names (and the older
+`session.next.*` aliases, plus `permission.v2.*` / `question.v2.*`) into
+today’s `OpencodeEvent` types before MessageSync and LiveStores see them.
+Text streaming uses synthetic `message.part.delta`; turn completion
+(`session.execution.succeeded|failed|interrupted`, or legacy
+`session.next.step.ended`) becomes `session.idle` so reconnect-style full
+reload remains the authority catch-up. Live `session.step.ended` is not
+idle — a turn can include multiple steps.
 
-**Why:** MessageSync already applies `message.*` / `session.idle`. Desktop’s
-session.next reducer is incomplete and uses unpublished type names; published
-OpenAPI `session.next.*` is the contract.
+**Why:** MessageSync already applies `message.*` / `session.idle`. Live v2
+(`0.0.0-beta-17498`) OpenAPI `V2Event` uses `session.execution.*` /
+`session.text.*` / `session.compaction.*`, not `session.next.*`. Home
+Working/Idle only reacts to projected `session.status` and `session.idle`.
 
-**Alternative rejected:** Fork MessageSync per protocol, or copy desktop’s
-non-published `session.text.delta` / `session.execution.*` labels.
+**Alternative rejected:** Fork MessageSync per protocol.
 
 ## V2 prompt send keeps PromptSendOptions (2026-08-12)
 
 **Choice:** Composer still builds `PromptSendOptions`. On v2 the router
 optionally `POST .../agent` and `POST .../model`, then
-`POST /api/session/{id}/prompt` with nested `{text,files,agents}` and
-`delivery: steer`.
+`POST /api/session/{id}/prompt` with top-level `{text,files,agents,delivery}`
+and `delivery: steer`. Agent mention ranges go on `agents[].mention`.
 
-**Why:** Per-prompt agent/model are not on the v2 prompt body. Mentions and
-attachments map onto `prompt.agents` / `prompt.files` (`uri` ← data URL).
-v1 `prompt_async` + `parts[]` stays unchanged.
+**Why:** Live v2 (`0.0.0-beta-17498`) and published OpenAPI require `text` at
+the payload root (`Missing key at ["text"]` if nested under `prompt`).
+Per-prompt agent/model stay on dedicated session routes. Attachments map onto
+`files` (`uri` ← data URL). v1 `prompt_async` + `parts[]` stays unchanged.
 
 ## V2 session interactions map onto existing domain types (2026-08-12)
 
@@ -188,6 +192,80 @@ ViewModels.
 **Alternative rejected:** Leave last-turn visible and let the v1 path 404 —
 would show a failed Changes load instead of a working-tree-only review.
 
+## V2 session create decodes sparse Session.Info (2026-08-16)
+
+**Choice:** Treat `title` and `location.directory` as optional when decoding
+v2 `Session.Info`. Accept either `{ data: session }` or a bare session object.
+If create, list, or get returns no title, use `New Session`.
+
+**Why:** `POST /api/session` can return HTTP 200 without `title` (create payload
+has no title field). Required-string decode then failed optimistic create after
+a successful request. Live v2 (`0.0.0-beta-17498`) create and some list rows
+omit `title` and include extra `subpath` / `agent` / `model`. Opening those
+rows bound Session Chat with an empty header. Published OpenAPI marks `title`
+optional.
+
+**Alternative rejected:** Require the documented `{ data, title, location }`
+shape — rejects working v2 servers that omit create-only fields.
+
+## V2 message list omits order when following a cursor (2026-08-16)
+
+**Choice:** First `GET /api/session/{id}/message` page sends `order=asc`.
+Follow-up pages send only `cursor`. Do not combine them.
+
+**Why:** Live v2 (`0.0.0-beta-17498`) returns `InvalidCursorError` 400
+("Cursor cannot be combined with order") when both query params are present.
+The cursor token already encodes order. That 400 aborted MessageSync reload
+and left Session Chat on Syncing forever after a successful prompt.
+
+**Alternative rejected:** Drop `order` entirely and reverse client-side —
+first page would arrive newest-first and the timeline would flash inverted
+until the full list was in memory.
+
+## V2 subagent tool uses the child-session row (2026-08-16)
+
+**Choice:** Treat v2 assistant content `name: "subagent"` as the same product
+as v1 `task`. Map `state.metadata` (including `sessionID`) onto ToolPart
+metadata. Do not copy the tool name into `title`. Pending/running/completed
+parts use the Child Session Row; errors stay on the Tool Call Card.
+
+**Why:** Live v2 (`0.0.0-beta-17498`) emits a generic tool named `subagent`
+with `input.agent` / `input.description` and `state.metadata.sessionID`. The
+timeline only promoted `task` and read `structured` + `sessionId`, so Android
+and iOS showed "Called subagent" instead of the child-session row.
+
+**Alternative rejected:** Rename v2 `subagent` to `task` in the adapter —
+hides the wire name and still misses metadata/`sessionID` mapping.
+
+## V2 abort interrupts timeline child sessions (2026-08-16)
+
+**Choice:** Session Chat Stop posts interrupt for the bound session and every
+child session id already on the timeline (`task` / `subagent` rows). After a
+successful abort, clear optimistic Working and refresh GET `/api/session/active`.
+
+**Why:** Live v2 runs a subagent on the child session. Interrupting only the
+parent can 204 while the child keeps working, so Stop looks dead and Working
+stays up. Timeline ids avoid `listChildSessions` (unused in ViewModel tests).
+Idle-child 204 is harmless.
+
+**Alternative rejected:** Interrupt only the focused session — parent Stop
+cannot stop a running subagent.
+
+## V2 completed compaction is not Compacting… (2026-08-16)
+
+**Choice:** Parse v2 compaction `status`. `completed` snapshots are not an
+in-flight turn. Clear local Commands compacting when a new completed
+compaction id appears on the timeline.
+
+**Why:** Live v2 (`0.0.0-beta-17498`) records `type: compaction` with
+`status: completed` and a summary after Commands → compact. `POST
+/api/session/{id}/compact` uses an infinite timeout, so Compacting… could
+stay up after the server (and web) were already idle.
+
+**Alternative rejected:** Keep treating any compaction marker in a busy turn
+as in-flight — matches v1 mid-compact parts, but v2 history rows are
+finished checkpoints.
+
 ## V2 todos seed from events only (2026-08-12)
 
 **Choice:** `listSessionTodos` does not call a REST todo route on v2 and
@@ -205,7 +283,9 @@ snapshot.
 **Choice:** Map `GET /path` to `GET /api/location` and `GET /file` to
 `GET /api/fs/list`. `ServerPaths.home` is the location `directory` (no dedicated
 home path on v2). Directory entries join relative `path` onto the listing
-directory.
+directory. V2 directory `path` values include a trailing separator (`src/`);
+strip it before deriving the visible name and absolute path so Add Project does
+not treat every folder as nameless and hide it.
 
 **Why:** Add Project only needs a browse root plus child directories. Users can
 still navigate up from the resolved location. Avoid inventing a home path the

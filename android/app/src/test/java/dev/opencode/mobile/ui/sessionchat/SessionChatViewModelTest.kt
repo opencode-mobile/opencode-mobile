@@ -2860,6 +2860,59 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun abort_interruptsBoundSessionAndRunningSubagentChild() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(sessionStatusType = "busy")
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(
+                                        id = "msg-1",
+                                        role = MessageRole.Assistant,
+                                        text = "",
+                                        parts =
+                                            listOf(
+                                                MessagePart.Tool(
+                                                    toolName = "subagent",
+                                                    status = ToolStatus.Running,
+                                                    id = "prt-1",
+                                                    input =
+                                                        buildJsonObject {
+                                                            put("agent", "explore")
+                                                            put("description", "Find git projects")
+                                                        },
+                                                    metadata =
+                                                        buildJsonObject {
+                                                            put("sessionID", "ses-child")
+                                                        },
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertTrue(
+                viewModel.uiState.value.messages.any { message ->
+                    message.blocks.any { block ->
+                        block is SessionChatTimelineBlock.ChildSessionRow &&
+                            block.childSessionId == "ses-child"
+                    }
+                },
+            )
+
+            viewModel.abort()
+            advanceUntilIdle()
+
+            assertEquals(setOf("ses-1", "ses-child"), sessionRepository.abortSessionIds.toSet())
+        }
+
+    @Test
     fun runClientSlashAction_redo_unrevertsAndClearsComposerRestore() =
         runTest(testDispatcher) {
             val sessionRepository =
@@ -3003,6 +3056,44 @@ class SessionChatViewModelTest {
 
             assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
             assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+        }
+
+    @Test
+    fun remoteCompaction_busyWithCompletedSnapshot_doesNotShowCompacting() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(
+                                        id = "u1",
+                                        role = MessageRole.User,
+                                        text = "hello",
+                                        mode = "build",
+                                        sentAtEpochMs = 1,
+                                    ),
+                                    Message(
+                                        id = "c1",
+                                        role = MessageRole.Assistant,
+                                        text = "summary",
+                                        parts =
+                                            listOf(
+                                                MessagePart.Compaction(id = "c1", auto = false, completed = true),
+                                            ),
+                                        mode = "compaction",
+                                        sentAtEpochMs = 2,
+                                    ),
+                                ),
+                        ),
+                    sessionRepository = FakeSessionRepository(sessionStatusType = "busy"),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("Working", viewModel.uiState.value.sessionStatusLabel)
+            assertNull(viewModel.uiState.value.workingIndicatorLabel)
         }
 
     private fun createViewModel(
@@ -3575,6 +3666,8 @@ private class FakeSessionRepository(
         private set
     var abortCallCount: Int = 0
         private set
+    var abortSessionIds: List<String> = emptyList()
+        private set
 
     override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> {
         pendingPermissionLoads += 1
@@ -3681,6 +3774,7 @@ private class FakeSessionRepository(
         directory: String?,
     ): Boolean {
         abortCallCount += 1
+        abortSessionIds = abortSessionIds + id
         return true
     }
 

@@ -1,7 +1,7 @@
 package dev.opencode.mobile.domain.session
 
-import dev.opencode.mobile.data.remote.dto.FileDiffDto
 import dev.opencode.mobile.data.remote.dto.ApiSessionActiveDto
+import dev.opencode.mobile.data.remote.dto.FileDiffDto
 import dev.opencode.mobile.data.remote.dto.MessageTokensDto
 import dev.opencode.mobile.data.remote.dto.PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.QuestionInfoDto
@@ -48,10 +48,10 @@ class SessionDomainAdapter {
     fun toSession(dto: V2SessionDto): Session =
         Session(
             id = dto.id,
-            title = dto.title,
+            title = dto.title.trim().ifBlank { "New Session" },
             slug = null,
             projectId = dto.projectId,
-            directory = dto.location?.directory,
+            directory = dto.location?.directory?.takeIf { it.isNotEmpty() },
             parentId = dto.parentId,
             cost = dto.cost,
             tokens = toTokenUsage(dto.tokens),
@@ -114,8 +114,7 @@ class SessionDomainAdapter {
             priority = dto.priority,
         )
 
-    fun toTodos(dtos: List<TodoDto>): List<SessionTodo> =
-        dtos.mapIndexed { index, dto -> toTodo(dto, index) }
+    fun toTodos(dtos: List<TodoDto>): List<SessionTodo> = dtos.mapIndexed { index, dto -> toTodo(dto, index) }
 
     fun toTodosFromEventProperties(properties: JsonObject?): List<SessionTodo>? {
         val todosElement = properties?.get("todos") ?: return null

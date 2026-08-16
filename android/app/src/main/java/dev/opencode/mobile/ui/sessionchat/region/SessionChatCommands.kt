@@ -4,6 +4,7 @@ import android.util.Log
 import dev.opencode.mobile.domain.command.ClientSlashActionCatalog
 import dev.opencode.mobile.domain.command.ClientSlashMessageRef
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
@@ -12,6 +13,7 @@ import dev.opencode.mobile.ui.sessionchat.ChildSessionNavigationTarget
 import dev.opencode.mobile.ui.sessionchat.SessionChatCommandsRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionCompactChrome
+import dev.opencode.mobile.ui.sessionchat.SessionCompactionPresence
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +44,8 @@ class SessionChatCommands(
     private var forkedTarget: ChildSessionNavigationTarget? = null
     private var lastMessages: List<SessionChatMessageItem> = emptyList()
     private var lastHasSelectedComposerModel: Boolean = false
+    private var lastDomainMessages: List<Message> = emptyList()
+    private var completedCompactionIdsAtStart: Set<String> = emptySet()
 
     fun bind(
         sessionId: String,
@@ -54,6 +58,8 @@ class SessionChatCommands(
         forkedTarget = null
         lastMessages = emptyList()
         lastHasSelectedComposerModel = false
+        lastDomainMessages = emptyList()
+        completedCompactionIdsAtStart = emptySet()
         _state.value = SessionChatCommandsRegionState()
         refreshRevert()
     }
@@ -76,6 +82,16 @@ class SessionChatCommands(
             }
         val input = ClientSlashActionCatalog.visibilityInput(refs, currentRevertMessageId, hasSelectedComposerModel)
         _state.update { it.copy(visibleActions = ClientSlashActionCatalog.visibleActions(input)) }
+    }
+
+    fun observeLoadedMessages(messages: List<Message>) {
+        lastDomainMessages = messages
+        if (!_state.value.isCompacting) return
+        val ids = SessionCompactionPresence.completedCompactionIds(messages)
+        if (ids.any { it !in completedCompactionIdsAtStart }) {
+            logI("compact completed via timeline")
+            _state.update { it.copy(isCompacting = false) }
+        }
     }
 
     fun openCommands() {
@@ -242,6 +258,7 @@ class SessionChatCommands(
         dismissCommands()
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
+        completedCompactionIdsAtStart = SessionCompactionPresence.completedCompactionIds(lastDomainMessages)
         _state.update {
             it.copy(
                 isCompacting = true,

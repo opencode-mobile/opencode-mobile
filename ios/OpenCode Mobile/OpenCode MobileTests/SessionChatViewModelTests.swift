@@ -1942,6 +1942,55 @@ struct SessionChatViewModelTests {
         #expect(sessionRepository.revertRequest?.messageID == "msg-1")
     }
 
+    @Test func abortSession_interruptsBoundSessionAndRunningSubagentChild() async {
+        let sessionRepository = FakeChatSessionRepository(sessionStatusType: "busy")
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .assistant,
+                        text: "",
+                        parts: [
+                            .tool(
+                                ToolPart(
+                                    id: "prt-1",
+                                    toolName: "subagent",
+                                    status: .running,
+                                    input: [
+                                        "agent": .string("explore"),
+                                        "description": .string("Find git projects"),
+                                    ],
+                                    metadata: ["sessionID": .string("ses-child")]
+                                )
+                            ),
+                        ],
+                        model: nil,
+                        mode: nil,
+                        sentAtEpochMs: nil
+                    ),
+                ]
+            ),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        await waitUntil {
+            viewModel.uiState.messages.contains { row in
+                row.blocks.contains { block in
+                    if case .childSessionRow(_, let child) = block {
+                        return child.childSessionId == "ses-child"
+                    }
+                    return false
+                }
+            }
+        }
+
+        await viewModel.abortSession()
+
+        #expect(Set(sessionRepository.abortSessionIDs) == ["ses-1", "ses-child"])
+    }
+
     @Test func runClientSlashAction_redo_unrevertsAndClearsComposerRestore() async {
         let sessionRepository = FakeChatSessionRepository(
             getSessionResult: Session(
@@ -2056,6 +2105,36 @@ struct SessionChatViewModelTests {
         await viewModel.loadMessages()
         await waitUntil { viewModel.uiState.sessionStatusLabel == SessionCompactChrome.statusLabel }
         #expect(viewModel.uiState.workingIndicatorLabel == SessionCompactChrome.statusLabel)
+    }
+
+    @Test func remoteCompaction_busyWithCompletedSnapshot_doesNotShowCompacting() async {
+        let sessionRepository = FakeChatSessionRepository(sessionStatusType: "busy")
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: [
+                Message(
+                    id: "u1",
+                    role: .user,
+                    text: "hello",
+                    model: nil,
+                    mode: "build",
+                    sentAtEpochMs: 1
+                ),
+                Message(
+                    id: "c1",
+                    role: .assistant,
+                    text: "summary",
+                    parts: [.compaction(CompactionPart(id: "c1", auto: false, completed: true))],
+                    model: "m",
+                    mode: "compaction",
+                    sentAtEpochMs: 2
+                )
+            ]),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        await waitUntil { viewModel.uiState.sessionStatusLabel == "Working" }
+        #expect(viewModel.uiState.workingIndicatorLabel == nil)
     }
 
     private func makeViewModel(
@@ -2718,6 +2797,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     var forkSessionResult: Session?
     private(set) var forkSessionRequest: ForkRequest?
     private(set) var abortCallCount = 0
+    private(set) var abortSessionIDs: [String] = []
     private(set) var revertRequest: RevertRequest?
     private(set) var unrevertRequest: String?
     private(set) var summarizeRequest: SummarizeRequest?
@@ -2885,6 +2965,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     }
     func abortSession(id: String, directory: String?) async throws -> Bool {
         abortCallCount += 1
+        abortSessionIDs.append(id)
         return true
     }
     func shareSession(id: String) async throws -> Session { fatalError() }

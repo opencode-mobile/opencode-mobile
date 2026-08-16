@@ -178,10 +178,12 @@ nonisolated struct ToolPart: Equatable, Sendable {
 nonisolated struct CompactionPart: Equatable, Sendable {
     let id: String?
     let auto: Bool
+    let completed: Bool
 
-    init(id: String? = nil, auto: Bool = false) {
+    init(id: String? = nil, auto: Bool = false, completed: Bool = false) {
         self.id = id
         self.auto = auto
+        self.completed = completed
     }
 }
 

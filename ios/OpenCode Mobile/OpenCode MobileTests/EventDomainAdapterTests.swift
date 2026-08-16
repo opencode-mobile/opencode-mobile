@@ -119,6 +119,60 @@ struct EventDomainAdapterTests {
         #expect(event?.sessionID == "ses-1")
     }
 
+    @Test func parseEvent_projectsLiveExecutionStartedIntoBusyStatus() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"id":"evt_3","type":"session.execution.started","data":{"sessionID":"ses-1"}}"#
+        )
+        #expect(event?.type == "session.status")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.rawProperties?["status"]?.dictionaryValue?["type"]?.stringValue == "busy")
+        #expect(event?.triggersStatusRefresh == true)
+    }
+
+    @Test func parseEvent_projectsLiveExecutionSucceededIntoIdle() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.execution.succeeded","data":{"sessionID":"ses-1"}}"#
+        )
+        #expect(event?.type == "session.idle")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.triggersStatusRefresh == true)
+    }
+
+    @Test func parseEvent_doesNotTreatLiveStepEndedAsIdle() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
+        )
+        #expect(event?.type == "session.step.ended")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.triggersStatusRefresh == false)
+    }
+
+    @Test func parseEvent_projectsLiveTextDeltaUsingOrdinalPartID() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.text.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","ordinal":0,"delta":"Hi"}}"#
+        )
+        #expect(event?.type == "message.part.delta")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.rawProperties?["messageID"]?.stringValue == "msg-2")
+        #expect(event?.rawProperties?["partID"]?.stringValue == "text-0")
+        #expect(event?.rawProperties?["delta"]?.stringValue == "Hi")
+        #expect(event?.triggersMessageRefresh == true)
+    }
+
+    @Test func parseEvent_projectsLiveRenamedIntoSessionUpdated() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.renamed","data":{"sessionID":"ses-1","title":"Testing conversation"}}"#
+        )
+        #expect(event?.type == "session.updated")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.rawProperties?["info"]?.dictionaryValue?["title"]?.stringValue == "Testing conversation")
+    }
+
     @Test func parseEvent_remapsPermissionV2Asked() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(

@@ -85,6 +85,52 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
+    fun v2ListSessions_mapsMissingTitleToNewSession() =
+        runTest {
+            val client =
+                testClient {
+                    respondJson(
+                        """
+                        {
+                          "data":[
+                            {
+                              "id":"ses_untitled",
+                              "projectID":"global",
+                              "cost":0,
+                              "tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},
+                              "time":{"created":1,"updated":1},
+                              "location":{"directory":"/home/ivan"}
+                            },
+                            {
+                              "id":"ses_titled",
+                              "title":"What is OpenCode 2?",
+                              "projectID":"global",
+                              "cost":0,
+                              "tokens":{"input":1,"output":2,"reasoning":0,"cache":{"read":0,"write":0}},
+                              "time":{"created":2,"updated":3},
+                              "location":{"directory":"/home/ivan"}
+                            }
+                          ],
+                          "cursor":{"previous":null,"next":null}
+                        }
+                        """.trimIndent(),
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val sessions = repository.listSessions("/home/ivan")
+
+            assertEquals(listOf("ses_untitled", "ses_titled"), sessions.map { it.id })
+            assertEquals(listOf("New Session", "What is OpenCode 2?"), sessions.map { it.title })
+            assertEquals("/home/ivan", sessions.first().directory)
+        }
+
+    @Test
     fun v2ActiveStatuses_mapRunningToBusy() =
         runTest {
             val client =
@@ -225,6 +271,54 @@ class SessionProtocolRepositoryTest {
             assertTrue(requests[0].url.encodedPath.endsWith("/api/session"))
             assertTrue(requests[0].requestBodyText().contains("\"directory\":\"/repo\""))
             assertTrue(requests[1].url.encodedPath.endsWith("/api/session/ses_new/rename"))
+        }
+
+    @Test
+    fun v2CreateSession_acceptsUntitledCreateResponse() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """{"data":{"id":"ses_new","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"}}}""",
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val created = repository.createSession(parentId = null, title = null, directory = "/repo")
+
+            assertEquals("ses_new", created.id)
+            assertEquals("New Session", created.title)
+            assertEquals("/repo", created.directory)
+            assertEquals(1, requests.size)
+        }
+
+    @Test
+    fun v2CreateSession_acceptsUnwrappedCreateResponse() =
+        runTest {
+            val client =
+                testClient {
+                    respondJson(
+                        """{"id":"ses_bare","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"}}""",
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val created = repository.createSession(parentId = null, title = null, directory = "/repo")
+
+            assertEquals("ses_bare", created.id)
+            assertEquals("New Session", created.title)
         }
 
     @Test

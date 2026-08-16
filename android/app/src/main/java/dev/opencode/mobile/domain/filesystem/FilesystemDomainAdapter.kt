@@ -46,15 +46,26 @@ class FilesystemDomainAdapter {
         path: String,
         listingDirectory: String,
     ): String {
-        if (path.startsWith("/")) return path
-        val base = listingDirectory.trimEnd('/')
-        val relative = path.trimStart('/')
-        if (relative.isEmpty() || relative == ".") return listingDirectory
+        val normalized = stripTrailingSlashes(path)
+        if (normalized.startsWith("/")) return normalized
+        val relative = normalized.trimStart('/')
+        val base = stripTrailingSlashes(listingDirectory)
+        if (relative.isEmpty() || relative == ".") return base
+        if (base == "/") return "/$relative"
         return "$base/$relative"
     }
 
     private fun nameFromPath(
         absolutePath: String,
         fallback: String,
-    ): String = absolutePath.substringAfterLast('/').ifEmpty { fallback.substringAfterLast('/') }
+    ): String =
+        stripTrailingSlashes(absolutePath).substringAfterLast('/').ifEmpty {
+            stripTrailingSlashes(fallback).substringAfterLast('/')
+        }
+
+    private fun stripTrailingSlashes(path: String): String {
+        if (path == "/") return path
+        val stripped = path.trimEnd('/')
+        return stripped.ifEmpty { "/" }
+    }
 }

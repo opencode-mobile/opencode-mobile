@@ -865,7 +865,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         case .tool(let tool):
             "tool:\(tool.toolName):\(tool.status.rawValue):\(tool.title ?? ""):\(tool.error ?? "")"
         case .compaction(let part):
-            "compaction:\(part.id ?? ""):\(part.auto)"
+            "compaction:\(part.id ?? ""):\(part.auto):\(part.completed)"
         }
     }
 

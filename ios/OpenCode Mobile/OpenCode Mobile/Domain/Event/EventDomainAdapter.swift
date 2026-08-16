@@ -34,27 +34,38 @@ nonisolated struct EventDomainAdapter: Sendable {
             [event(type: "question.replied", properties: properties)]
         case "question.v2.rejected":
             [event(type: "question.rejected", properties: properties)]
-        case "session.next.prompt.admitted", "session.next.prompted":
+        case "session.next.prompt.admitted", "session.next.prompted",
+             "session.inbox.enqueued", "session.inbox.delivered":
             [userMessageUpdated(properties)]
-        case "session.next.step.started":
+        case "session.next.step.started", "session.step.started":
             stepStarted(properties)
-        case "session.next.step.ended":
+        case "session.execution.started", "session.compaction.started", "session.shell.started":
+            [statusEvent(properties, statusType: "busy")]
+        case "session.next.step.ended",
+             "session.execution.succeeded",
+             "session.execution.interrupted",
+             "session.compaction.ended",
+             "session.compaction.failed",
+             "session.shell.ended":
             [event(type: "session.idle", properties: properties)]
-        case "session.next.step.failed":
+        case "session.next.step.failed", "session.execution.failed":
             [
                 event(type: "session.error", properties: properties),
                 event(type: "session.idle", properties: properties),
             ]
-        case "session.next.retried":
+        case "session.next.retried", "session.retry.scheduled":
             [statusEvent(properties, statusType: "retry")]
-        case "session.next.text.started":
+        case "session.next.text.started", "session.text.started":
             textStarted(properties)
-        case "session.next.text.delta":
+        case "session.next.text.delta", "session.text.delta":
             [textDelta(properties)]
-        case "session.next.text.ended":
+        case "session.next.text.ended", "session.text.ended":
             [textPartUpdated(properties)]
-        case "session.next.moved", "session.next.agent.switched", "session.next.model.switched":
+        case "session.next.moved", "session.next.agent.switched", "session.next.model.switched",
+             "session.moved", "session.agent.selected", "session.model.selected":
             [event(type: "session.updated", properties: properties)]
+        case "session.renamed":
+            [renamedToUpdated(properties)]
         default:
             [event(type: type, properties: properties)]
         }
@@ -68,10 +79,26 @@ nonisolated struct EventDomainAdapter: Sendable {
         )
     }
 
+    private func renamedToUpdated(_ properties: [String: Any]) -> OpencodeEvent {
+        let sessionID = sessionID(from: properties)
+        var info: [String: Any] = [:]
+        if let sessionID {
+            info["id"] = sessionID
+            info["sessionID"] = sessionID
+        }
+        if let title = string(in: properties, key: "title") {
+            info["title"] = title
+        }
+        return event(type: "session.updated", properties: ["info": info])
+    }
+
     private func userMessageUpdated(_ properties: [String: Any]) -> OpencodeEvent {
         let sessionID = sessionID(from: properties)
         var info: [String: Any] = ["role": "user"]
-        if let messageID = string(in: properties, key: "messageID") ?? string(in: properties, key: "id") {
+        if let messageID = string(in: properties, key: "messageID")
+            ?? string(in: properties, key: "id")
+            ?? string(in: properties, key: "inboxID")
+        {
             info["id"] = messageID
         }
         if let sessionID {
@@ -118,7 +145,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let messageID = string(in: properties, key: "assistantMessageID") {
             projected["messageID"] = messageID
         }
-        if let partID = string(in: properties, key: "textID") {
+        if let partID = textPartID(in: properties) {
             projected["partID"] = partID
         }
         if let delta = string(in: properties, key: "delta") {
@@ -129,7 +156,7 @@ nonisolated struct EventDomainAdapter: Sendable {
 
     private func textPartUpdated(_ properties: [String: Any], text: String? = nil) -> OpencodeEvent {
         var part: [String: Any] = ["type": "text", "text": text ?? string(in: properties, key: "text") ?? ""]
-        if let partID = string(in: properties, key: "textID") {
+        if let partID = textPartID(in: properties) {
             part["id"] = partID
         }
         if let sessionID = sessionID(from: properties) {
@@ -168,8 +195,27 @@ nonisolated struct EventDomainAdapter: Sendable {
         return nil
     }
 
+    private func textPartID(in properties: [String: Any]) -> String? {
+        if let textID = string(in: properties, key: "textID") {
+            return textID
+        }
+        if let ordinal = string(in: properties, key: "ordinal") {
+            return "text-\(ordinal)"
+        }
+        return nil
+    }
+
     private func string(in object: [String: Any], key: String) -> String? {
-        object[key] as? String
+        switch object[key] {
+        case let value as String:
+            value
+        case let value as NSNumber:
+            value.stringValue
+        case let value as Int:
+            String(value)
+        default:
+            nil
+        }
     }
 
     func statusLabel(from status: SessionStatus) -> String? {

@@ -175,15 +175,13 @@ nonisolated struct MessageDomainAdapter: Sendable {
         let agents = ComposerMentionRouting.agentParts(text: options.text, mentions: options.agentMentions).map { part in
             V2PromptAgentDTO(
                 name: part.name,
-                source: V2PromptSourceDTO(start: part.start, end: part.end, text: part.sourceValue)
+                mention: V2PromptSourceDTO(start: part.start, end: part.end, text: part.sourceValue)
             )
         }
         return V2PromptRequestDTO(
-            prompt: V2PromptInputDTO(
-                text: options.text,
-                files: files.isEmpty ? nil : files,
-                agents: agents.isEmpty ? nil : agents
-            )
+            text: options.text,
+            files: files.isEmpty ? nil : files,
+            agents: agents.isEmpty ? nil : agents
         )
     }
 
@@ -362,7 +360,15 @@ nonisolated struct MessageDomainAdapter: Sendable {
 
     private func projectV2Compaction(_ dto: V2SessionMessageDTO) -> Message {
         let summary = dto.summary ?? ""
-        var parts: [MessagePart] = [.compaction(CompactionPart(id: dto.id, auto: dto.reason == "auto"))]
+        var parts: [MessagePart] = [
+            .compaction(
+                CompactionPart(
+                    id: dto.id,
+                    auto: dto.reason == "auto",
+                    completed: dto.status?.caseInsensitiveCompare("completed") == .orderedSame
+                )
+            )
+        ]
         if !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             parts.append(.text(TextPart(id: "\(dto.id):text:0", text: summary, isStreaming: false)))
         }
@@ -421,12 +427,12 @@ nonisolated struct MessageDomainAdapter: Sendable {
                     id: content.id,
                     toolName: name,
                     status: toolStatus(from: state?.status),
-                    title: name,
                     error: state?.error?.message.flatMap { $0.isEmpty ? nil : $0 },
                     callID: content.id,
                     input: dictionaryFromInput(state?.input),
                     output: toolOutput(state),
-                    metadata: state?.structured
+                    metadata: state?.metadata ?? state?.structured,
+                    timeStartEpochMs: content.time?.created
                 )
             )
         default:

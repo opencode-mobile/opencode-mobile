@@ -29,11 +29,12 @@ struct FilesystemDomainAdapter: Sendable {
     }
 
     private static func absolutePath(_ path: String, listingDirectory: String) -> String {
-        if path.hasPrefix("/") { return path }
-        let relative = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        if relative.isEmpty || relative == "." { return listingDirectory }
-        if listingDirectory == "/" { return "/\(relative)" }
-        let base = listingDirectory.hasSuffix("/") ? String(listingDirectory.dropLast()) : listingDirectory
+        let normalized = stripTrailingSlashes(path)
+        if normalized.hasPrefix("/") { return normalized }
+        let relative = normalized.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let base = stripTrailingSlashes(listingDirectory)
+        if relative.isEmpty || relative == "." { return base }
+        if base == "/" { return "/\(relative)" }
         return "\(base)/\(relative)"
     }
 
@@ -43,5 +44,14 @@ struct FilesystemDomainAdapter: Sendable {
             return URL(fileURLWithPath: fallback).lastPathComponent
         }
         return name
+    }
+
+    private static func stripTrailingSlashes(_ path: String) -> String {
+        if path == "/" { return path }
+        var stripped = path
+        while stripped.count > 1, stripped.hasSuffix("/") {
+            stripped.removeLast()
+        }
+        return stripped.isEmpty ? "/" : stripped
     }
 }
