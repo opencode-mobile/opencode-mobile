@@ -103,9 +103,11 @@ accessibility label or description using the platform convention.
   the intrinsic size is known, and updates stop once a presentation has locked
   to the scrollable detent. Longer lists switch to a fixed 50% height detent
   with an internal `ScrollView` and do not fall back to compact when body
-  content shrinks. Scrollable sheets disable interactive
-  swipe-to-dismiss so list scrolling does not close the sheet; use the close
-  button instead. Short compact sheets keep the default swipe-to-dismiss behavior.
+  content shrinks. Overlay tap, close, and accessibility dismiss stay
+  available. Scrollable sheets use `.presentationContentInteraction(.scrolls)`
+  so dragging the list scrolls first; a pull past the top still dismisses.
+  Sheet chrome fills under the home indicator so the presenting screen does
+  not show through below the sheet.
 - Android: presented with a full-window Compose popup so the underlying activity
   remains fixed with `adjustNothing`. Form mode applies `imePadding()` to the
   sheet boundary—not its measured content—so the sheet follows IME animation
