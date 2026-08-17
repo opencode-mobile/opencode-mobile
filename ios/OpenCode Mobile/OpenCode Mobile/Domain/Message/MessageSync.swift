@@ -14,6 +14,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private let eventStagingByteCapacity: Int
     private let connectionProfileIDProvider: @Sendable () -> String
     private let recoveryDelay: @Sendable (Int) async -> Void
+    private let nowMs: @Sendable () -> Int64
     private let connectionEpoch: ConnectionEpoch
     private let sessionCache: any SessionCache
     private let lock = NSLock()
@@ -29,6 +30,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private var observationGeneration = 0
     private var terminalSessionKeys: Set<MessageSessionKey> = []
     private var startedGenerationByKey: [MessageSessionKey: Int] = [:]
+    private var lastMessageEventAtMs: [String: Int64] = [:]
 
     init(
         listMessages: @escaping MessageListFetcher,
@@ -41,6 +43,9 @@ nonisolated final class MessageSync: @unchecked Sendable {
         recoveryDelay: @escaping @Sendable (Int) async -> Void = { ms in
             try? await Task.sleep(for: .milliseconds(ms))
         },
+        nowMs: @escaping @Sendable () -> Int64 = {
+            Int64(Date().timeIntervalSince1970 * 1000)
+        },
         connectionEpoch: ConnectionEpoch = .shared,
         sessionCache: any SessionCache = NoOpSessionCache.shared
     ) {
@@ -52,6 +57,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         self.eventStagingByteCapacity = eventStagingByteCapacity
         self.connectionProfileIDProvider = connectionProfileIDProvider
         self.recoveryDelay = recoveryDelay
+        self.nowMs = nowMs
         self.connectionEpoch = connectionEpoch
         self.sessionCache = sessionCache
     }
@@ -68,6 +74,9 @@ nonisolated final class MessageSync: @unchecked Sendable {
         recoveryDelay: @escaping @Sendable (Int) async -> Void = { ms in
             try? await Task.sleep(for: .milliseconds(ms))
         },
+        nowMs: @escaping @Sendable () -> Int64 = {
+            Int64(Date().timeIntervalSince1970 * 1000)
+        },
         connectionEpoch: ConnectionEpoch = .shared,
         sessionCache: any SessionCache = NoOpSessionCache.shared
     ) {
@@ -80,6 +89,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             eventStagingByteCapacity: eventStagingByteCapacity,
             connectionProfileIDProvider: connectionProfileIDProvider,
             recoveryDelay: recoveryDelay,
+            nowMs: nowMs,
             connectionEpoch: connectionEpoch,
             sessionCache: sessionCache
         )
@@ -216,12 +226,28 @@ nonisolated final class MessageSync: @unchecked Sendable {
         lock.unlock()
     }
 
+    private func noteMessageActivity(for storeSlot: String) {
+        let timestamp = nowMs()
+        lock.lock()
+        lastMessageEventAtMs[storeSlot] = timestamp
+        lock.unlock()
+    }
+
+    private func isStreamingStalled(storeSlot: String) -> Bool {
+        lock.lock()
+        let last = lastMessageEventAtMs[storeSlot]
+        lock.unlock()
+        guard let last else { return true }
+        return nowMs() - last >= Int64(pollIntervalMs)
+    }
+
     private func runMessageLoop(
         key: MessageSessionKey,
         yield: @escaping (MessageListUpdate) -> Void
     ) async {
         let startedGeneration = nextObservationGeneration()
         registerObservation(key: key, generation: startedGeneration)
+        noteMessageActivity(for: key.storeSlot)
         let observationEpoch = ObservationEpoch(connectionEpoch.current())
         // Register before the initial REST request. Bounded staging closes the
         // part-shell/delta loss window without an unbounded observation buffer.
@@ -704,6 +730,14 @@ nonisolated final class MessageSync: @unchecked Sendable {
         guard event.sessionID == key.sessionID else { return }
 
         switch event.type {
+        case "message.updated", "message.part.updated", "message.part.delta",
+             "message.removed", "message.part.removed", "session.idle":
+            noteMessageActivity(for: key.storeSlot)
+        default:
+            break
+        }
+
+        switch event.type {
         case "message.updated":
             handleMessageUpdated(event: event, key: key, publishMessages: publishMessages)
         case "message.part.updated":
@@ -874,11 +908,19 @@ nonisolated final class MessageSync: @unchecked Sendable {
             guard connectionEpoch.current() == observationEpoch.current else { continue }
             // Polling REST mid-stream publishes a behind snapshot and looks like the
             // assistant message clearing then reprinting from the start.
-            if store.hasStreamingText(sessionID: key.storeSlot) { continue }
+            let streaming = store.hasStreamingText(sessionID: key.storeSlot)
+            if streaming && !isStreamingStalled(storeSlot: key.storeSlot) { continue }
             let expectedRevision = store.revision(sessionID: key.storeSlot)
             let directory = key.directory.isEmpty ? nil : key.directory
             do {
                 let messages = try await listMessages(key.sessionID, directory)
+                if streaming {
+                    let local = store.messages(sessionID: key.storeSlot)
+                    guard MessageSnapshotAuthority.isAheadOrEqual(remote: messages, local: local) else {
+                        continue
+                    }
+                    DiagnosticLog.info(.chat, "streaming stall catch-up session=\(key.sessionID)")
+                }
                 let fp = messageFingerprint(messages)
                 if fp != fingerprint(for: key.storeSlot) {
                     guard store.replaceAllIfRevision(
@@ -887,6 +929,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                         expectedRevision: expectedRevision
                     ) else { continue }
                     let merged = store.messages(sessionID: key.storeSlot)
+                    noteMessageActivity(for: key.storeSlot)
                     publishMessages(merged)
                     continue
                 }

@@ -1151,6 +1151,77 @@ struct MessageSyncTests {
         #expect(finalized)
     }
 
+    @Test func silentStreamingStall_appliesAheadRestSnapshot() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 25)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest() != nil }
+        #expect(loaded)
+
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
+        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Partial", sessionID: "ses-1"))
+        let streaming = await waitUntil {
+            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Partial"
+        }
+        #expect(streaming)
+
+        repo.messages = [
+            Message(id: "msg-1", role: .user, text: "Hello", parts: [
+                .text(TextPart(text: "Hello", isStreaming: false)),
+            ], model: nil, mode: nil, sentAtEpochMs: nil),
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "Finished while silent",
+                parts: [.text(TextPart(text: "Finished while silent", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        let caughtUp = await waitUntil {
+            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Finished while silent"
+        }
+        task.cancel()
+        #expect(caughtUp)
+    }
+
+    @Test func silentStreamingStall_keepsLocalWhenRestIsBehind() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 25)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest() != nil }
+        #expect(loaded)
+
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
+        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Longer local stream", sessionID: "ses-1"))
+        let streaming = await waitUntil {
+            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Longer local stream"
+        }
+        #expect(streaming)
+
+        repo.messages = [
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "Short",
+                parts: [.text(TextPart(text: "Short", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        try? await Task.sleep(for: .milliseconds(80))
+        task.cancel()
+        #expect(collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Longer local stream")
+    }
+
     @Test func pollResponseIsDiscardedWhenStreamingStartsInFlight() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()

@@ -499,6 +499,80 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_silentStreamingStall_appliesAheadRestSnapshot() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 40L)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Partial"))
+            advanceTimeBy(1)
+            assertEquals("Partial", emissions.last().first { it.id == "msg-2" }.text)
+
+            repository.messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "Hello"),
+                    Message(
+                        id = "msg-2",
+                        role = MessageRole.Assistant,
+                        text = "Finished while silent",
+                        parts = listOf(MessagePart.Text(text = "Finished while silent", isStreaming = false)),
+                    ),
+                )
+            advanceTimeBy(80)
+            assertEquals(
+                "Finished while silent",
+                emissions.last().first { it.id == "msg-2" }.text,
+            )
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_silentStreamingStall_keepsLocalWhenRestIsBehind() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 40L)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Longer local stream"))
+            advanceTimeBy(1)
+            assertEquals("Longer local stream", emissions.last().first { it.id == "msg-2" }.text)
+
+            repository.messages =
+                listOf(
+                    Message(
+                        id = "msg-2",
+                        role = MessageRole.Assistant,
+                        text = "Short",
+                        parts = listOf(MessagePart.Text(text = "Short", isStreaming = false)),
+                    ),
+                )
+            advanceTimeBy(80)
+            assertEquals("Longer local stream", emissions.last().first { it.id == "msg-2" }.text)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
     fun observeMessages_transportDropEntersStaleWhileRetainingFrame() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
@@ -1655,6 +1729,7 @@ class MessageSyncTest {
             eventStagingCapacity = eventStagingCapacity,
             connectionProfileIdProvider = { connectionProfileId },
             recoveryDelay = { delay(1) },
+            nowMs = { testDispatcher.scheduler.currentTime },
         )
     }
 
