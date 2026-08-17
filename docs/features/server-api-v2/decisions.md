@@ -403,6 +403,54 @@ the optimistic bubble on that reload made the sent message vanish, then
 reappear when SSE or a later list included it. Quiet live refreshes already
 merged pending rows; required post-send applies did not.
 
+## V2 prompted applies user text on the live path (2026-08-17)
+
+**Choice:** Project `session.next.prompted` (and admitted/inbox twins that
+carry `prompt`) into `message.updated` plus user `message.part.updated` for
+`prompt.text` and `prompt.files`. Keep info-only inserts unpublished.
+
+**Why:** CLI and web prepend the user row from `event.data.prompt` as soon as
+`session.next.prompted` arrives. Mobile previously kept only `{id, role}`,
+and `shouldPublishLive` suppresses info-only slots, so the bubble and Working
+under it waited on a later part or REST poll.
+
+## V2 prompted type versions and late user order (2026-08-17)
+
+**Choice:** Strip a trailing `.<digits>` from live event type names, unwrap
+`sync.syncEvent`, and insert a late user row before a live assistant that is
+not already preceded by a user.
+
+**Why:** Durable `/api/event` frames can arrive as `session.next.prompted.1`
+(or a sync wrapper). Assistant `session.text.*` is live-only, so Stop and the
+response can paint first. Appending the user after that assistant showed the
+reply above the prompt.
+
+## V2 prompted keeps prompt across live envelope shapes (2026-08-17)
+
+**Choice:** Resolve live event fields from `payload.properties`, flattened
+top-level keys, and `payload.syncEvent` (not only `properties.syncEvent`).
+Keep a `prompt` object on the current payload instead of unwrapping a nested
+`data` sibling. Accept `prompt` as an object or JSON string.
+
+**Why:** CLI send still arrived as info-only `message.updated` on the running
+apps: GlobalBus durable frames put `syncEvent` next to `type`, and some
+native frames flatten PromptFields beside `type`. Unwrapping nested `data`
+dropped `prompt`, so `shouldPublishLive` waited for idle REST.
+
+## V2 inbox.enqueued uses item.payload (2026-08-17)
+
+**Choice:** Project `session.inbox.enqueued` / `session.inbox.delivered` user
+text from `data.item.payload` (and `inboxID`) the same way
+`session.next.prompted` uses `prompt` / `messageID`. Rebuild a live frame when
+a changed message is missing from the last published snapshot. Keep the iOS
+message poll running across a ConnectionEpoch bump (`continue`, not `return`).
+
+**Why:** Live v2 `/api/event` admits the user row as
+`{inboxID,sessionID,item:{type:"user",payload:{text,files}}}`. Reading only
+`prompt` produced an info-only slot that `shouldPublishLive` suppressed, so
+iOS stayed on the pre-turn timeline. Android hid the same gap with REST poll;
+iOS poll exited on the idle-reconnect epoch race and never caught up.
+
 ## V2 model default and list paging (2026-08-17)
 
 **Choice:** `GET /api/model/default` fills `serverDefault` when the model is in
@@ -422,4 +470,31 @@ send prompt `skills[]`.
 dock. Durable catch-up routes are experimental; MessageSync already REST-reloads
 messages on reconnect. Reasoning stays at v1 timeline parity. Skills need
 composer UI. Home still has no documented `session.created` event.
+
+## V2 question dock uses forms when question routes 404 (2026-08-17)
+
+**Choice:** On v2, `GET /api/question/request` 404 falls back to
+`GET /api/form/request`. `form.created|replied|cancelled` project to
+`question.asked|replied|rejected`. Reply and dismiss for `frm_*` ids use
+`POST /api/session/{id}/form/{id}/reply` with `{ answer: { q0: "…" } }` and
+`POST .../form/{id}/cancel`. Keep `/api/question/*` when that list succeeds.
+
+**Why:** Live v2 (`0.0.0-beta-17498`) serves the question tool as forms. A
+captured reply body pinned `{ answer: { [fieldKey]: string } }`. The question
+dock already collects selected labels; field keys default to `q0`, `q1`, …
+
+## V2 live tool events omit `time.start` (2026-08-17)
+
+**Choice:** Project envelope `created` onto `state.time.start` for
+`session.tool.*` / `session.next.tool.*`. Normalize seconds / ms / µs. Keep the
+first resolved start in the message store. Stamp local now only when a
+pending/running tool still has no usable epoch.
+
+**Why:** Live v2 tool payloads have no `time` field. `resolveProperties` prefers
+`data` (session/message ids) and drops envelope `created`. Later `part.updated`
+without time was wiping any start, so the Child Session Row stayed at `0:00`.
+
+**Supersedes:** “do not call `/api/form/*`” in
+[V2 leftovers](#v2-leftovers-stay-documented-not-dual-pathed-2026-08-16) for
+the question dock only.
 

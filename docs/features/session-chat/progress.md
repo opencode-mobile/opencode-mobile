@@ -1,5 +1,12 @@
 # Session Chat Progress
 
+## User-row metadata (2026-08-17)
+
+- Status: implemented on both platforms (projector tests).
+- iOS no longer returns the previous user row when `metadataLabel` arrives
+  after a sparse live insert; optimistic captions copy onto matching inbox
+  rows; envelope `created` fills `info.time.created`.
+
 ## OPE-170 Lock child session composer (2026-08-15)
 
 - Status: implemented on both platforms (unit-tested composer kind).

@@ -82,7 +82,7 @@ class TimelineProjectorTest {
                     id = "optimistic-1",
                     role = MessageRole.User,
                     text = "Hello",
-                    metadataLabel = "",
+                    metadataLabel = "build · deepseek-v4-flash-free · high · 10:21 AM",
                     isPending = true,
                     blocks =
                         listOf(
@@ -204,8 +204,86 @@ class TimelineProjectorTest {
 
         assertEquals(listOf("msg-user-0", "msg-user-1"), reconciled.rows.map { it.id })
         assertFalse(reconciled.rows.any { it.id == "optimistic-1" })
+        assertEquals(
+            "build · deepseek-v4-flash-free · high · 10:21 AM",
+            reconciled.rows.single { it.id == "msg-user-1" }.metadataLabel,
+        )
         assertEquals(setOf("msg-user-1"), reconciled.insertedRowIDs)
         assertEquals(setOf("optimistic-1"), reconciled.removedRowIDs)
+    }
+
+    @Test
+    fun project_metadataArrivingOnSameUserRow_updatesLabelAndLayout() {
+        val sparse =
+            Message(
+                id = "msg-user",
+                role = MessageRole.User,
+                text = "Hello",
+                parts = listOf(MessagePart.Text("Hello", id = "u1")),
+            )
+        val first =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages =
+                            listOf(
+                                DisplayMessageBody(
+                                    message = sparse,
+                                    blocks =
+                                        listOf(
+                                            SessionChatTimelineBlock.Text(
+                                                blockID = PresentationBlockId.direct("u1"),
+                                                text = "Hello",
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+            )
+        assertEquals("", first.rows.single().metadataLabel)
+
+        val enriched =
+            Message(
+                id = "msg-user",
+                role = MessageRole.User,
+                text = "Hello",
+                parts = listOf(MessagePart.Text("Hello", id = "u1")),
+                model = "deepseek-v4-flash-free",
+                variant = "high",
+                mode = "build",
+                sentAtEpochMs = 1_710_000_000_000L,
+            )
+        val second =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 2L,
+                        sourceRevision = 0L,
+                        messages =
+                            listOf(
+                                DisplayMessageBody(
+                                    message = enriched,
+                                    blocks =
+                                        listOf(
+                                            SessionChatTimelineBlock.Text(
+                                                blockID = PresentationBlockId.direct("u1"),
+                                                text = "Hello",
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+                previous = first,
+            )
+        val expected = TimelineProjector.metadataLabel(enriched)
+        assertTrue(expected.isNotEmpty())
+        assertEquals(expected, second.rows.single().metadataLabel)
+        assertEquals(setOf("msg-user"), second.changedRowIDs)
+        assertEquals(setOf("msg-user"), second.layoutChangedRowIDs)
     }
 
     @Test

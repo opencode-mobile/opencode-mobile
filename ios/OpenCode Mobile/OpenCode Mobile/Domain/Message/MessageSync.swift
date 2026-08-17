@@ -425,11 +425,16 @@ nonisolated final class MessageSync: @unchecked Sendable {
             case .success(let messages):
                 let becameHealthy = staging.completeAuthorityWindow(reloadSucceeded: true)
                 setHealth(staging.currentHealth, for: key)
-                publishMessages(messages)
+                let published = connectionEpoch.current() == observationEpoch.current
+                if published {
+                    publishMessages(messages)
+                }
                 if becameHealthy {
-                    OpenCodeLog.messageContent.info(
-                        "eventStagingRecovery session=\(key.sessionID, privacy: .public) highWater=\(staging.highWater)"
-                    )
+                    if published {
+                        OpenCodeLog.messageContent.info(
+                            "eventStagingRecovery session=\(key.sessionID, privacy: .public) highWater=\(staging.highWater)"
+                        )
+                    }
                     return
                 }
             case .failure:
@@ -823,7 +828,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             try? await Task.sleep(for: .milliseconds(pollIntervalMs))
             guard !Task.isCancelled else { return }
             if staging.needsAuthoritativeRecovery { continue }
-            guard connectionEpoch.current() == observationEpoch.current else { return }
+            guard connectionEpoch.current() == observationEpoch.current else { continue }
             // Polling REST mid-stream publishes a behind snapshot and looks like the
             // assistant message clearing then reprinting from the start.
             if store.hasStreamingText(sessionID: key.storeSlot) { continue }

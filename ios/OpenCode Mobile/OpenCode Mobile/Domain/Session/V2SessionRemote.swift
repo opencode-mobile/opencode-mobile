@@ -14,7 +14,14 @@ struct V2SessionRemote: SessionRemote, Sendable {
     }
 
     func listPendingQuestions(directory: String?) async throws -> [QuestionRequest] {
-        try await api.listPendingQuestionsV2(directory: directory).map { adapter.questionRequest(from: $0) }
+        do {
+            return try await api.listPendingQuestionsV2(directory: directory).map { adapter.questionRequest(from: $0) }
+        } catch {
+            if case .http(statusCode: 404, _) = adapter.mapError(error) {
+                return try await api.listPendingFormsV2(directory: directory).map { adapter.questionRequest(from: $0) }
+            }
+            throw error
+        }
     }
 
     func listSessions(directory: String?) async throws -> [Session] {
@@ -133,7 +140,14 @@ struct V2SessionRemote: SessionRemote, Sendable {
         directory _: String?,
         sessionID: String?
     ) async throws -> Bool {
-        try await api.replyToQuestionV2(
+        if questionID.hasPrefix("frm_") {
+            return try await api.replyToFormV2(
+                sessionID: sessionID ?? "",
+                formID: questionID,
+                body: V2FormReplyRequestDTO(answer: adapter.formAnswer(from: answers))
+            )
+        }
+        return try await api.replyToQuestionV2(
             sessionID: sessionID ?? "",
             questionID: questionID,
             body: QuestionReplyRequestDTO(answers: answers)
@@ -145,6 +159,9 @@ struct V2SessionRemote: SessionRemote, Sendable {
     }
 
     func rejectQuestion(questionID: String, directory _: String?, sessionID: String?) async throws -> Bool {
-        try await api.rejectQuestionV2(sessionID: sessionID ?? "", questionID: questionID)
+        if questionID.hasPrefix("frm_") {
+            return try await api.cancelFormV2(sessionID: sessionID ?? "", formID: questionID)
+        }
+        return try await api.rejectQuestionV2(sessionID: sessionID ?? "", questionID: questionID)
     }
 }

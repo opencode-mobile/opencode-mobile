@@ -163,6 +163,7 @@ data class QuestionInfo(
     val options: List<QuestionOption>,
     val multiple: Boolean = false,
     val custom: Boolean = true,
+    val fieldKey: String? = null,
 )
 
 data class QuestionRequest(

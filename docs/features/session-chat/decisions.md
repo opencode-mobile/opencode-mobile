@@ -1,5 +1,19 @@
 # Session Chat Decisions
 
+## User-row metadata survives live-then-REST (2026-08-17)
+
+- Date: 2026-08-17
+- Decision: iOS timeline return-previous must compare `metadataLabel` (and
+  model ids / context tokens) like Android `structurallyEqual`. Empty vs
+  non-empty metadata is layout-affecting. When an optimistic user row
+  reconciles to a live inbox row that still has no mode/model/time, copy the
+  pending caption onto that server row. Live `session.inbox.enqueued` also
+  projects envelope `created` onto user `info.time.created`.
+- Reason: v2 inbox paints a sparse `{id, role}` user message first. iOS then
+  reused that row after REST filled `build · model · variant · time`, so the
+  caption never appeared. Android already rebuilt when the label changed.
+- Revisit when: live inbox events carry agent/model themselves.
+
 ## OPE-170 child sessions cannot be prompted
 
 - Date: 2026-08-15

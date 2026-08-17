@@ -21,6 +21,8 @@ import dev.opencode.mobile.data.remote.dto.V2CompactSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CreateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2ForkBoundaryDto
 import dev.opencode.mobile.data.remote.dto.V2ForkSessionRequestDto
+import dev.opencode.mobile.data.remote.dto.V2FormInfoDto
+import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2LocationDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
@@ -346,6 +348,14 @@ class SessionsApi private constructor(
             }.body<ApiListEnvelope<QuestionRequestDto>>()
             .data
 
+    suspend fun listPendingFormsV2(directory: String? = null): List<V2FormInfoDto> =
+        httpClient
+            .get()
+            .get("api/form/request") {
+                applyLocationDirectory(directory)
+            }.body<ApiListEnvelope<V2FormInfoDto>>()
+            .data
+
     suspend fun replyToQuestionV2(
         sessionId: String,
         requestId: String,
@@ -364,6 +374,26 @@ class SessionsApi private constructor(
         httpClient
             .get()
             .post("api/session/$sessionId/question/$requestId/reject")
+            .ensureSuccess()
+
+    suspend fun replyToFormV2(
+        sessionId: String,
+        formId: String,
+        body: V2FormReplyRequestDto,
+    ): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$sessionId/form/$formId/reply") {
+                setJsonBody(json, body)
+            }.ensureSuccess()
+
+    suspend fun cancelFormV2(
+        sessionId: String,
+        formId: String,
+    ): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$sessionId/form/$formId/cancel")
             .ensureSuccess()
 
     // --- V2 home / session CRUD ---

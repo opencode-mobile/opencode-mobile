@@ -75,7 +75,7 @@ struct SessionChatTimelineProjectorTests {
             id: "optimistic-1",
             role: .user,
             text: "Hello",
-            metadataLabel: "",
+            metadataLabel: "build · deepseek-v4-flash-free · high · 10:21 AM",
             isPending: true,
             blocks: [
                 .text(
@@ -119,8 +119,45 @@ struct SessionChatTimelineProjectorTests {
         )
         #expect(reconciled.rows.map(\.id) == ["server-1"])
         #expect(reconciled.rows.allSatisfy { !$0.isPending })
+        #expect(reconciled.rows[0].metadataLabel == "build · deepseek-v4-flash-free · high · 10:21 AM")
         #expect(reconciled.removedRowIDs.contains("optimistic-1"))
         #expect(reconciled.insertedRowIDs.contains("server-1"))
+    }
+
+    @Test func metadataArrivingOnSameUserRow_updatesLabelAndLayout() {
+        let sparse = Message(
+            id: "msg-user",
+            role: .user,
+            text: "Hello",
+            parts: [text("u1", "Hello")],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        let first = SessionChatTimelineProjector.project(
+            frame: displayFrame(messages: [DisplayMessage(message: sparse)])
+        )
+        #expect(first.rows[0].metadataLabel.isEmpty)
+
+        let enriched = Message(
+            id: "msg-user",
+            role: .user,
+            text: "Hello",
+            parts: [text("u1", "Hello")],
+            model: "deepseek-v4-flash-free",
+            variant: "high",
+            mode: "build",
+            sentAtEpochMs: 1_710_000_000_000
+        )
+        let second = SessionChatTimelineProjector.project(
+            frame: displayFrame(revision: 2, messages: [DisplayMessage(message: enriched)]),
+            previous: first
+        )
+        let expected = SessionChatTimelineProjector.metadataLabel(for: enriched)
+        #expect(!expected.isEmpty)
+        #expect(second.rows[0].metadataLabel == expected)
+        #expect(second.changedRowIDs.contains("msg-user"))
+        #expect(second.layoutChangedRowIDs.contains("msg-user"))
     }
 
     @Test func unchangedContent_retainsLayoutRevisionAndEmptyChangeSets() {

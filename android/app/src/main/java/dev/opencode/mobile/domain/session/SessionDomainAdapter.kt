@@ -9,6 +9,8 @@ import dev.opencode.mobile.data.remote.dto.QuestionRequestDto
 import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.SessionRevertDto
 import dev.opencode.mobile.data.remote.dto.TodoDto
+import dev.opencode.mobile.data.remote.dto.V2FormFieldDto
+import dev.opencode.mobile.data.remote.dto.V2FormInfoDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
@@ -205,6 +207,50 @@ class SessionDomainAdapter {
                 },
             multiple = dto.multiple == true,
             custom = dto.custom != false,
+        )
+
+    fun toQuestionRequest(form: V2FormInfoDto): QuestionRequest =
+        QuestionRequest(
+            id = form.id,
+            sessionId = form.sessionId,
+            questions = form.fields.map { field -> toQuestionInfo(field, form.title) },
+            toolMessageId = form.metadata?.tool?.messageId,
+            toolCallId = form.metadata?.tool?.callId ?: form.metadata?.tool?.id,
+        )
+
+    fun formAnswer(
+        questions: List<QuestionInfo>,
+        answers: List<List<String>>,
+    ): Map<String, String> =
+        questions
+            .mapIndexed { index, question ->
+                val key = question.fieldKey ?: "q$index"
+                key to (answers.getOrNull(index)?.firstOrNull() ?: "")
+            }.toMap()
+            .ifEmpty { formAnswer(answers) }
+
+    fun formAnswer(answers: List<List<String>>): Map<String, String> =
+        answers.mapIndexed { index, values ->
+            "q$index" to (values.firstOrNull() ?: "")
+        }.toMap()
+
+    private fun toQuestionInfo(
+        field: V2FormFieldDto,
+        formTitle: String?,
+    ): QuestionInfo =
+        QuestionInfo(
+            question = field.description ?: field.title ?: field.key,
+            header = field.title ?: formTitle ?: field.key,
+            options =
+                field.options.map { option ->
+                    QuestionOption(
+                        label = option.label ?: option.value ?: "",
+                        description = option.description ?: "",
+                    )
+                },
+            multiple = field.multiple == true,
+            custom = field.custom != false,
+            fieldKey = field.key,
         )
 
     fun mapError(throwable: Throwable): SessionError =

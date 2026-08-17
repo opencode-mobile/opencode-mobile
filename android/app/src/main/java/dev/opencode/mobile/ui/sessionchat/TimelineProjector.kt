@@ -269,6 +269,7 @@ object TimelineProjector {
                     it is SessionChatTimelineBlock.Text && it.renderedMarkdown != null
                 },
             isStreaming = row.isStreaming,
+            hasMetadata = row.metadataLabel.isNotEmpty(),
             attachmentSignatures = row.attachments.map { "${it.id}\u0000${it.signature}" },
             blockLayoutFingerprints = row.blocks.map(::blockLayoutFingerprint),
         )
@@ -296,6 +297,7 @@ object TimelineProjector {
         val blockCount: Int,
         val hasMarkdown: Boolean,
         val isStreaming: Boolean,
+        val hasMetadata: Boolean,
         val attachmentSignatures: List<String>,
         val blockLayoutFingerprints: List<String>,
     )
@@ -314,7 +316,26 @@ object TimelineProjector {
                         matchesOptimistic(server, pending)
                 }
             }
-        return serverRows + pendingToKeep
+        val dropped = pendingRows.filter { pending -> pendingToKeep.none { it.id == pending.id } }
+        return applyPendingMetadata(serverRows, dropped) + pendingToKeep
+    }
+
+    private fun applyPendingMetadata(
+        serverRows: List<TimelineRow>,
+        dropped: List<TimelineRow>,
+    ): List<TimelineRow> {
+        if (dropped.isEmpty()) return serverRows
+        return serverRows.map { row ->
+            if (row.role != MessageRole.User || row.metadataLabel.isNotEmpty()) return@map row
+            val pending =
+                dropped.firstOrNull { candidate ->
+                    matchesOptimistic(row, candidate) && candidate.metadataLabel.isNotEmpty()
+                } ?: return@map row
+            row.copy(
+                metadataLabel = pending.metadataLabel,
+                layoutRevision = row.layoutRevision + 1,
+            )
+        }
     }
 
     private fun matchesOptimistic(

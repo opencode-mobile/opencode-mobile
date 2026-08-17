@@ -50,6 +50,55 @@ class SessionMessageEngineTest {
     }
 
     @Test
+    fun userInsert_landsBeforeStreamingAssistant() {
+        engine.replaceAll(
+            "ses-1",
+            listOf(
+                Message(id = "msg-old-user", role = MessageRole.User, text = "Earlier"),
+                Message(
+                    id = "msg-old-asst",
+                    role = MessageRole.Assistant,
+                    text = "Done",
+                    parts = listOf(MessagePart.Text(text = "Done", id = "prt-old")),
+                ),
+                Message(
+                    id = "msg-live",
+                    role = MessageRole.Assistant,
+                    text = "Working",
+                    parts = listOf(MessagePart.Text(text = "Working", isStreaming = true, id = "prt-live")),
+                ),
+            ),
+        )
+        engine.apply(
+            "ses-1",
+            MessagePatch.InfoUpdated(
+                buildJsonObject {
+                    put("id", "msg-new-user")
+                    put("role", "user")
+                    put("sessionID", "ses-1")
+                },
+            ),
+        )
+        engine.apply(
+            "ses-1",
+            MessagePatch.PartUpdated(
+                buildJsonObject {
+                    put("id", "msg-new-user:text:0")
+                    put("messageID", "msg-new-user")
+                    put("sessionID", "ses-1")
+                    put("type", "text")
+                    put("text", "Hello from CLI")
+                },
+                delta = null,
+            ),
+        )
+        assertEquals(
+            listOf("msg-old-user", "msg-old-asst", "msg-new-user", "msg-live"),
+            engine.messages("ses-1").map { it.id },
+        )
+    }
+
+    @Test
     fun partDelta_chunkFlattenEqualsSequentialAppend() {
         seedStreamingAssistant()
         val chunks = listOf(" a", "b", "c", "🚀", "d")
@@ -121,6 +170,43 @@ class SessionMessageEngineTest {
     }
 
     @Test
+    fun frameAfterChange_rebuildsWhenChangedMessageMissingFromPrevious() {
+        engine.replaceAll(
+            "ses-1",
+            listOf(Message(id = "msg-a", role = MessageRole.User, text = "A")),
+        )
+        val previous = engine.messages("ses-1")
+        engine.apply(
+            "ses-1",
+            MessagePatch.InfoUpdated(
+                buildJsonObject {
+                    put("id", "msg-b")
+                    put("role", "assistant")
+                    put("sessionID", "ses-1")
+                },
+            ),
+        )
+        engine.apply(
+            "ses-1",
+            MessagePatch.PartUpdated(
+                buildJsonObject {
+                    put("id", "prt-b")
+                    put("messageID", "msg-b")
+                    put("sessionID", "ses-1")
+                    put("type", "text")
+                    put("text", "")
+                },
+                delta = null,
+            ),
+        )
+        val result = engine.apply("ses-1", MessagePatch.PartDelta("msg-b", "prt-b", "Live"))
+        val changeSet = (result as MessageStoreApplyResult.Changed).changeSet
+        val next = engine.frameAfterChange("ses-1", changeSet, previous)
+        assertEquals(listOf("msg-a", "msg-b"), next.map { it.id })
+        assertEquals("Live", next.last().text)
+    }
+
+    @Test
     fun finishStreaming_clearsStreamingFlag() {
         seedStreamingAssistant()
         engine.apply("ses-1", MessagePatch.PartDelta("msg-1", "prt-1", " world"))
@@ -140,6 +226,68 @@ class SessionMessageEngineTest {
         val r2 = engine.revision("ses-1")
         assertTrue(r1 > r0)
         assertTrue(r2 > r1)
+    }
+
+    @Test
+    fun runningToolWithoutTime_stampsStartAndPreservesAcrossUpdateAndReplaceAll() {
+        engine.replaceAll(
+            "ses-1",
+            listOf(
+                Message(
+                    id = "msg-1",
+                    role = MessageRole.Assistant,
+                    text = "",
+                    parts = listOf(MessagePart.Tool(toolName = "task", status = ToolStatus.Running, id = "prt-task")),
+                ),
+            ),
+        )
+        val seeded = engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Tool>().single()
+        assertTrue(seeded.timeStartEpochMs != null)
+        val stamped = seeded.timeStartEpochMs
+
+        engine.apply(
+            "ses-1",
+            MessagePatch.PartUpdated(
+                buildJsonObject {
+                    put("id", "prt-task")
+                    put("messageID", "msg-1")
+                    put("sessionID", "ses-1")
+                    put("type", "tool")
+                    put("tool", "task")
+                    put(
+                        "state",
+                        buildJsonObject {
+                            put("status", "running")
+                        },
+                    )
+                },
+                delta = null,
+            ),
+        )
+        val updated = engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Tool>().single()
+        assertEquals(stamped, updated.timeStartEpochMs)
+
+        engine.replaceAll(
+            "ses-1",
+            listOf(
+                Message(
+                    id = "msg-1",
+                    role = MessageRole.Assistant,
+                    text = "",
+                    parts =
+                        listOf(
+                            MessagePart.Tool(
+                                toolName = "task",
+                                status = ToolStatus.Running,
+                                id = "prt-task",
+                                timeStartEpochMs = 10L,
+                            ),
+                        ),
+                ),
+            ),
+        )
+        val reloaded = engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Tool>().single()
+        assertEquals(stamped, reloaded.timeStartEpochMs)
     }
 
     private fun seedStreamingAssistant() {

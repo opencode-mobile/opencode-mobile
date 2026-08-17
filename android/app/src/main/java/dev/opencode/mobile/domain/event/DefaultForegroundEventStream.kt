@@ -35,8 +35,26 @@ class DefaultForegroundEventStream
         private val activeConnectionManager: ActiveConnectionManager,
         private val deviceNetworkPath: DeviceNetworkPath = ReadyDeviceNetworkPath,
     ) : ForegroundEventStream {
+        internal constructor(
+            eventsApi: EventsApi,
+            eventDomainAdapter: EventDomainAdapter,
+            diagnosticLogger: DiagnosticLogger,
+            activeConnectionManager: ActiveConnectionManager,
+            deviceNetworkPath: DeviceNetworkPath = ReadyDeviceNetworkPath,
+            idleTimeoutMs: Long,
+        ) : this(
+            eventsApi,
+            eventDomainAdapter,
+            diagnosticLogger,
+            activeConnectionManager,
+            deviceNetworkPath,
+        ) {
+            this.idleTimeoutMs = idleTimeoutMs
+        }
+
         private val scope = CoroutineScope(SupervisorJob())
         private var streamJob: Job? = null
+        private var idleTimeoutMs: Long = DEFAULT_IDLE_TIMEOUT_MS
 
         /** Invalidates in-flight cancel/error handlers after stop() or a newer start(). */
         private val streamGeneration = AtomicLong(0)
@@ -77,6 +95,7 @@ class DefaultForegroundEventStream
                                 },
                                 generation,
                             )
+                            val lastActivityMs = AtomicLong(System.currentTimeMillis())
                             val readJob =
                                 launch {
                                     try {
@@ -86,6 +105,7 @@ class DefaultForegroundEventStream
                                         eventsApi.streamGlobalEvents(
                                             protocol = protocol,
                                             onHTTPResponse = { statusCode ->
+                                                lastActivityMs.set(System.currentTimeMillis())
                                                 diagnosticLogger.info(
                                                     DiagnosticLogArea.Sse,
                                                     "GET $path opened status=$statusCode protocol=${protocol.wireValue}",
@@ -94,6 +114,7 @@ class DefaultForegroundEventStream
                                                 retryAttempt = 0
                                             },
                                         ) { dataLine ->
+                                            lastActivityMs.set(System.currentTimeMillis())
                                             val parsed = eventDomainAdapter.parseEvents(dataLine)
                                             if (parsed.isEmpty()) {
                                                 diagnosticLogger.warning(DiagnosticLogArea.Sse, "SSE event parse failed")
@@ -152,9 +173,26 @@ class DefaultForegroundEventStream
                                         }
                                     }
                                 }
+                            val idleJob =
+                                launch {
+                                    while (true) {
+                                        val remainingMs =
+                                            idleTimeoutMs - (System.currentTimeMillis() - lastActivityMs.get())
+                                        if (remainingMs <= 0L) {
+                                            diagnosticLogger.warning(
+                                                DiagnosticLogArea.Sse,
+                                                "foreground SSE idle timeout; reconnecting",
+                                            )
+                                            readJob.cancel()
+                                            return@launch
+                                        }
+                                        delay(remainingMs.coerceAtMost(idleTimeoutMs))
+                                    }
+                                }
                             try {
                                 readJob.join()
                             } finally {
+                                idleJob.cancel()
                                 watchJob.cancel()
                             }
                             if (deviceNetworkPath.status.value == DeviceNetworkPathStatus.Unavailable) {
@@ -221,5 +259,9 @@ class DefaultForegroundEventStream
                 )
             }
             _connectionState.value = state
+        }
+
+        private companion object {
+            const val DEFAULT_IDLE_TIMEOUT_MS = 45_000L
         }
     }

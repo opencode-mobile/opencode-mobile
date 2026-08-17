@@ -55,6 +55,14 @@ nonisolated struct SessionsAPIClient: Sendable {
         return envelope.data
     }
 
+    func listPendingFormsV2(directory: String? = nil) async throws -> [V2FormInfoDTO] {
+        let envelope: APIListEnvelope<V2FormInfoDTO> = try await get(
+            path: "api/form/request",
+            locationDirectory: directory
+        )
+        return envelope.data
+    }
+
     func createSession(parentID: String?, title: String?, directory: String? = nil) async throws -> SessionDTO {
         try await post(path: "session", body: CreateSessionRequestDTO(parentID: parentID, title: title), directory: directory)
     }
@@ -217,6 +225,14 @@ nonisolated struct SessionsAPIClient: Sendable {
 
     func rejectQuestionV2(sessionID: String, questionID: String) async throws -> Bool {
         try await postWithoutBody(path: "api/session/\(sessionID)/question/\(questionID)/reject")
+    }
+
+    func replyToFormV2(sessionID: String, formID: String, body: V2FormReplyRequestDTO) async throws -> Bool {
+        try await postEmpty(path: "api/session/\(sessionID)/form/\(formID)/reply", body: body)
+    }
+
+    func cancelFormV2(sessionID: String, formID: String) async throws -> Bool {
+        try await postWithoutBody(path: "api/session/\(sessionID)/form/\(formID)/cancel")
     }
 
     // MARK: - V2 home / session CRUD

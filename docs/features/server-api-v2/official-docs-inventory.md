@@ -191,7 +191,7 @@ From [V1 Server](https://opencode.ai/docs/server/) vs v2 HttpApi index:
 | Archive | `PATCH` `time.archived` | **Not documented** as a dedicated route (`Session.Info.time.archived` exists on reads) |
 | Fork | `{ messageID? }` | `{ boundary: { type: before\|through, messageID? } }` |
 | Permissions | `POST /session/{sid}/permissions/{pid}` `{ response, remember? }` | `POST .../permission/{requestID}/reply` `{ reply: once\|always\|reject, message? }` |
-| Questions | `/question` | **Both still published:** `GET /api/question/request` plus session `.../question/{id}/reply\|reject`, **and** forms (`/api/form`, `/api/session/{id}/form`). Mobile stays on question routes ([decisions](decisions.md#v2-leftovers-stay-documented-not-dual-pathed-2026-08-16)). |
+| Questions | `/question` | **Both still published:** `GET /api/question/request` plus session `.../question/{id}/reply\|reject`, **and** forms (`/api/form`, `/api/session/{id}/form`). Mobile keeps question routes and falls back to forms on 404 ([decisions](decisions.md#v2-question-dock-uses-forms-when-question-routes-404-2026-08-17)). |
 | Messages | `{ info, parts }[]` | Projected `Session.Message.Info` tagged union (no separate `parts` array) |
 | Diffs | `GET /session/{id}/diff` | **No session-message diff route.** Working-tree: `GET /api/vcs/diff`. Revert staging returns `FileDiff.Info[]` |
 | Todos | `GET /session/{id}/todo` | **No todo HTTP route** on the v2 index |

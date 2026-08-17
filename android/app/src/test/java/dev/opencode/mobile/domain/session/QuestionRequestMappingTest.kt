@@ -4,6 +4,10 @@ import dev.opencode.mobile.data.remote.dto.QuestionInfoDto
 import dev.opencode.mobile.data.remote.dto.QuestionOptionDto
 import dev.opencode.mobile.data.remote.dto.QuestionRequestDto
 import dev.opencode.mobile.data.remote.dto.QuestionToolDto
+import dev.opencode.mobile.data.remote.dto.V2FormFieldDto
+import dev.opencode.mobile.data.remote.dto.V2FormFieldOptionDto
+import dev.opencode.mobile.data.remote.dto.V2FormInfoDto
+import dev.opencode.mobile.data.remote.dto.V2FormMetadataDto
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -73,5 +77,49 @@ class QuestionRequestMappingTest {
             )
         assertEquals("call_1", request.toolCallId)
         assertEquals("msg_1", request.toolMessageId)
+    }
+
+    @Test
+    fun `maps published form request onto question dock`() {
+        val request =
+            adapter.toQuestionRequest(
+                V2FormInfoDto(
+                    id = "frm_1",
+                    sessionId = "ses_1",
+                    title = "Questions",
+                    metadata =
+                        V2FormMetadataDto(
+                            kind = "question",
+                            tool = QuestionToolDto(messageId = "msg_1", id = "call_1"),
+                        ),
+                    fields =
+                        listOf(
+                            V2FormFieldDto(
+                                key = "q0",
+                                title = "SSE2 goal",
+                                description = "What would you like to do with SSE2?",
+                                options =
+                                    listOf(
+                                        V2FormFieldOptionDto(
+                                            value = "Check CPU support",
+                                            label = "Check CPU support",
+                                            description = "Verify SSE2",
+                                        ),
+                                    ),
+                                custom = true,
+                            ),
+                        ),
+                ),
+            )
+
+        assertEquals("frm_1", request.id)
+        assertEquals("ses_1", request.sessionId)
+        assertEquals("msg_1", request.toolMessageId)
+        assertEquals("call_1", request.toolCallId)
+        assertEquals("What would you like to do with SSE2?", request.questions.single().question)
+        assertEquals("SSE2 goal", request.questions.single().header)
+        assertEquals("q0", request.questions.single().fieldKey)
+        assertEquals("Check CPU support", request.questions.single().options.single().label)
+        assertEquals(mapOf("q0" to "Wait for instructions"), adapter.formAnswer(listOf(listOf("Wait for instructions"))))
     }
 }

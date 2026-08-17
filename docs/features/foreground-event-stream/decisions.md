@@ -77,6 +77,18 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
 `server.heartbeat` updates connection state only. `server.connected` schedules
 a synchronization reload; synthetic `stream.reconnected` reloads immediately.
 
+## Idle reconnect
+
+- Date: 2026-08-17
+- Decision: cancel and retry the foreground SSE read after **45s** with no
+  bytes (including heartbeats). Both platforms log
+  `foreground SSE idle timeout; reconnecting`.
+- Reason: a hung `/api/event` subscriber can stay open without EOF. Live v2
+  went silent on Android after another client subscribed; no stream-failed
+  line was logged. A socket read timeout is too aggressive (heartbeats can be
+  sparse); an activity watchdog is not.
+- Revisit when: heartbeat interval is published and a tighter bound is safe.
+
 ## Logging
 
 Foreground event stream implementations log connection lifecycle, retry timing,

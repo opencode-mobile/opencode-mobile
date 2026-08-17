@@ -8,15 +8,21 @@ struct SessionChatChildSessionElapsedTests {
     }
 
     @Test func format_usesMinutesAndZeroPaddedSeconds() {
-        let start: Int64 = 1_000_000
+        let start: Int64 = 1_710_000_000_000
         #expect(SessionChatChildSessionElapsed.format(startEpochMs: start, nowEpochMs: start) == "0:00")
         #expect(SessionChatChildSessionElapsed.format(startEpochMs: start, nowEpochMs: start + 5_000) == "0:05")
         #expect(SessionChatChildSessionElapsed.format(startEpochMs: start, nowEpochMs: start + 70_000) == "1:10")
         #expect(SessionChatChildSessionElapsed.format(startEpochMs: start, nowEpochMs: start + 3_600_000) == "60:00")
     }
 
+    @Test func format_omitsRelativeOrInvalidStart() {
+        #expect(SessionChatChildSessionElapsed.format(startEpochMs: 10, nowEpochMs: 1_710_000_000_000) == nil)
+        #expect(SessionChatChildSessionElapsed.format(startEpochMs: 5_000, nowEpochMs: 1_000) == nil)
+    }
+
     @Test func format_clampsNegativeElapsedToZero() {
-        #expect(SessionChatChildSessionElapsed.format(startEpochMs: 5_000, nowEpochMs: 1_000) == "0:00")
+        let start: Int64 = 1_710_000_000_000
+        #expect(SessionChatChildSessionElapsed.format(startEpochMs: start, nowEpochMs: start - 500) == "0:00")
     }
 
     @Test func letter_usesFirstCharacterUppercased() {

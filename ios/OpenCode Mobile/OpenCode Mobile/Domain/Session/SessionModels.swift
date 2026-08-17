@@ -169,6 +169,23 @@ struct QuestionInfo: Sendable, Equatable {
     let options: [QuestionOption]
     let multiple: Bool
     let custom: Bool
+    let fieldKey: String?
+
+    init(
+        question: String,
+        header: String,
+        options: [QuestionOption],
+        multiple: Bool,
+        custom: Bool,
+        fieldKey: String? = nil
+    ) {
+        self.question = question
+        self.header = header
+        self.options = options
+        self.multiple = multiple
+        self.custom = custom
+        self.fieldKey = fieldKey
+    }
 }
 
 struct QuestionRequest: Sendable, Equatable, Identifiable {

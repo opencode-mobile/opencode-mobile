@@ -7,14 +7,18 @@ struct SessionChatChildSessionRow: View {
     let timeStartEpochMs: Int64?
     let action: (() -> Void)?
 
+    @State private var nowEpochMs = ToolStartTime.nowEpochMs()
+
     var body: some View {
-        if timeStartEpochMs != nil {
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                row(nowEpochMs: Int64(context.date.timeIntervalSince1970 * 1000))
+        row(nowEpochMs: timeStartEpochMs == nil ? 0 : nowEpochMs)
+            .task(id: timeStartEpochMs) {
+                guard timeStartEpochMs != nil else { return }
+                nowEpochMs = ToolStartTime.nowEpochMs()
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(1))
+                    nowEpochMs = ToolStartTime.nowEpochMs()
+                }
             }
-        } else {
-            row(nowEpochMs: 0)
-        }
     }
 
     private func row(nowEpochMs: Int64) -> OpenCodeChildSessionRow {

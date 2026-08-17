@@ -122,6 +122,7 @@ nonisolated enum SessionChatTimelineProjector {
         metadataLabel: @Sendable (Message) -> String
     ) -> TimelineRow {
         let message = body.message
+        let label = metadataLabel(message)
         // Prefer sole text-block copy so slash-command collapse is what chat shows
         // and copies, not the server-expanded template still on Message.text.
         let displayText: String = {
@@ -140,6 +141,10 @@ nonisolated enum SessionChatTimelineProjector {
            previous.isStreaming == body.isStreaming,
            previous.role == message.role,
            previous.blocks == body.blocks,
+           previous.metadataLabel == label,
+           previous.modelProviderID == message.modelProviderID,
+           previous.modelID == message.modelID,
+           previous.contextInputTokens == message.contextInputTokens,
            previous.renderedMarkdown?.sourceHash == bridgeMarkdown?.sourceHash,
            previous.renderedMarkdown?.renderTreeVersion == bridgeMarkdown?.renderTreeVersion,
            previous.renderedMarkdown?.blocks.count == bridgeMarkdown?.blocks.count,
@@ -155,6 +160,7 @@ nonisolated enum SessionChatTimelineProjector {
                         id: message.id,
                         role: message.role,
                         text: displayText,
+                        metadataLabel: label,
                         isStreaming: body.isStreaming,
                         renderedMarkdown: bridgeMarkdown,
                         blocks: body.blocks,
@@ -172,7 +178,7 @@ nonisolated enum SessionChatTimelineProjector {
             id: message.id,
             role: message.role,
             text: displayText,
-            metadataLabel: metadataLabel(message),
+            metadataLabel: label,
             isPending: false,
             isStreaming: body.isStreaming,
             renderedMarkdown: bridgeMarkdown,
@@ -226,7 +232,24 @@ nonisolated enum SessionChatTimelineProjector {
             serverCounts[signature, default: 0] -= 1
             return false
         }
-        return serverRows + pendingToKeep
+        let keptIDs = Set(pendingToKeep.map(\.id))
+        let dropped = pendingRows.filter { !keptIDs.contains($0.id) }
+        return applyPendingMetadata(serverRows, dropped: dropped) + pendingToKeep
+    }
+
+    private static func applyPendingMetadata(
+        _ serverRows: [TimelineRow],
+        dropped: [TimelineRow]
+    ) -> [TimelineRow] {
+        guard !dropped.isEmpty else { return serverRows }
+        return serverRows.map { row in
+            guard row.role == .user, row.metadataLabel.isEmpty else { return row }
+            let signature = optimisticSignature(row)
+            guard let pending = dropped.first(where: {
+                optimisticSignature($0) == signature && !$0.metadataLabel.isEmpty
+            }) else { return row }
+            return row.withMetadataLabel(pending.metadataLabel)
+        }
     }
 
     static func signatureCounts(_ rows: [TimelineRow]) -> [String: Int] {
@@ -295,7 +318,7 @@ nonisolated enum SessionChatTimelineProjector {
                 "r:\(id):\(row.agentName):\(row.secondLine ?? ""):\(row.childSessionId ?? "")"
             }
         }.joined(separator: "|")
-        return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(blockKey)"
+        return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(blockKey)"
     }
 
     /// Layout bump caused only by markdown presence/sourceHash while streaming flag and
@@ -339,6 +362,7 @@ nonisolated enum SessionChatTimelineProjector {
         id: String,
         role: MessageRole,
         text: String,
+        metadataLabel: String,
         isStreaming: Bool,
         renderedMarkdown: NativeMarkdownDocument?,
         blocks: [SessionChatTimelineBlock],
@@ -349,7 +373,7 @@ nonisolated enum SessionChatTimelineProjector {
             id: id,
             role: role,
             text: text,
-            metadataLabel: "",
+            metadataLabel: metadataLabel,
             isPending: false,
             isStreaming: isStreaming,
             renderedMarkdown: renderedMarkdown,

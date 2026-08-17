@@ -1,14 +1,15 @@
 package dev.opencode.mobile.domain.event
 
-import dev.opencode.mobile.data.remote.dto.EventEnvelopeDto
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -19,21 +20,26 @@ class EventDomainAdapter(
     fun parseEvent(dataLine: String): OpencodeEvent? = parseEvents(dataLine).firstOrNull()
 
     fun parseEvents(dataLine: String): List<OpencodeEvent> {
-        val envelope = runCatching { json.decodeFromString<EventEnvelopeDto>(dataLine) }.getOrNull() ?: return emptyList()
-        val payload = envelope.payload
-        val dataProperties = propertiesFromData(envelope.data)
+        val raw = runCatching { json.parseToJsonElement(dataLine) }.getOrNull() as? JsonObject ?: return emptyList()
+        val payload = raw["payload"] as? JsonObject
+        val dataProperties = propertiesFromData(raw["data"])
         val type =
-            payload?.type
-                ?: envelope.type
-                ?: envelope.event
-                ?: dataProperties?.string("type")
+            stringIn(payload, "type")
+                ?: stringIn(raw, "type")
+                ?: stringIn(raw, "event")
+                ?: stringIn(dataProperties, "type")
                 ?: return emptyList()
-        val properties =
-            payload?.properties
-                ?: envelope.properties
-                ?: nestedEventProperties(dataProperties)
-                ?: JsonObject(emptyMap())
-        return project(type, properties)
+        val properties = withEnvelopeCreated(resolveProperties(payload, raw, dataProperties), raw)
+        if (canonicalEventType(type) == "sync") {
+            val syncEvent =
+                (payload?.get("syncEvent") as? JsonObject)
+                    ?: properties["syncEvent"] as? JsonObject
+                    ?: return emptyList()
+            val innerType = stringIn(syncEvent, "type") ?: return emptyList()
+            val data = propertiesFromData(syncEvent["data"]) ?: JsonObject(emptyMap())
+            return project(canonicalEventType(innerType), data)
+        }
+        return project(canonicalEventType(type), properties)
     }
 
     private fun propertiesFromData(data: JsonElement?): JsonObject? =
@@ -46,12 +52,52 @@ class EventDomainAdapter(
             else -> null
         }
 
+    private fun resolveProperties(
+        payload: JsonObject?,
+        raw: JsonObject,
+        dataProperties: JsonObject?,
+    ): JsonObject {
+        val candidates =
+            listOfNotNull(
+                payload?.get("properties") as? JsonObject,
+                raw["properties"] as? JsonObject,
+                nestedEventProperties(dataProperties),
+                flattenedEventFields(payload),
+                flattenedEventFields(raw),
+            )
+        return candidates.firstOrNull { it.containsKey("prompt") }
+            ?: candidates.firstOrNull { it.containsKey("sessionID") || it.containsKey("messageID") }
+            ?: candidates.firstOrNull()
+            ?: JsonObject(emptyMap())
+    }
+
+    private fun withEnvelopeCreated(
+        properties: JsonObject,
+        raw: JsonObject,
+    ): JsonObject {
+        if (properties.containsKey("created")) return properties
+        val created = raw["created"] ?: return properties
+        return JsonObject(properties + ("created" to created))
+    }
+
+    private fun flattenedEventFields(source: JsonObject?): JsonObject? {
+        if (source == null) return null
+        val fields =
+            source.filterKeys { key ->
+                key !in WRAPPER_KEYS
+            }
+        return fields.takeIf { it.isNotEmpty() }?.let { JsonObject(it) }
+    }
+
     private fun nestedEventProperties(data: JsonObject?): JsonObject? {
         if (data == null) return null
+        if (data.containsKey("prompt")) return data
         data["properties"]?.jsonObject?.let { return it }
         data["data"]?.let { nested -> propertiesFromData(nested) }?.let { return it }
         return data
     }
+
+    private fun canonicalEventType(type: String): String = type.replace(Regex("""\.\d+$"""), "")
 
     private fun project(
         type: String,
@@ -60,14 +106,20 @@ class EventDomainAdapter(
         when (type) {
             "permission.v2.asked" -> listOf(event("permission.asked", properties))
             "permission.v2.replied" -> listOf(event("permission.replied", properties))
-            "question.v2.asked" -> listOf(event("question.asked", properties))
-            "question.v2.replied" -> listOf(event("question.replied", properties))
-            "question.v2.rejected" -> listOf(event("question.rejected", properties))
+            "question.v2.asked",
+            "form.created",
+            -> listOf(event("question.asked", properties))
+            "question.v2.replied",
+            "form.replied",
+            -> listOf(event("question.replied", properties))
+            "question.v2.rejected",
+            "form.cancelled",
+            -> listOf(event("question.rejected", properties))
             "session.next.prompt.admitted",
             "session.next.prompted",
             "session.inbox.enqueued",
             "session.inbox.delivered",
-            -> listOf(userMessageUpdated(properties))
+            -> userPromptEvents(properties)
             "session.next.step.started",
             "session.step.started",
             -> stepStarted(properties)
@@ -93,10 +145,15 @@ class EventDomainAdapter(
             "session.retry.scheduled",
             -> listOf(statusEvent(properties, "retry"))
             "session.next.tool.input.started",
+            "session.tool.input.started",
             "session.next.tool.called",
+            "session.tool.called",
             "session.next.tool.progress",
+            "session.tool.progress",
             "session.next.tool.success",
+            "session.tool.success",
             "session.next.tool.failed",
+            "session.tool.failed",
             -> listOf(toolPartUpdated(type, properties))
             "session.next.shell.started" ->
                 listOf(
@@ -164,20 +221,97 @@ class EventDomainAdapter(
         return event("session.updated", buildJsonObject { put("info", info) })
     }
 
+    private fun userPromptEvents(properties: JsonObject): List<OpencodeEvent> =
+        listOf(userMessageUpdated(properties)) + userPromptParts(properties)
+
     private fun userMessageUpdated(properties: JsonObject): OpencodeEvent {
         val sessionId = sessionIdFromProperties(properties)
-        val messageId =
-            properties.string("messageID")
-                ?: properties.string("id")
-                ?: properties.string("inboxID")
+        val messageId = userMessageId(properties)
         val info =
             buildJsonObject {
                 messageId?.let { put("id", it) }
                 sessionId?.let { put("sessionID", it) }
                 put("role", "user")
+                properties.long("created")?.let { created ->
+                    put("time", buildJsonObject { put("created", created) })
+                }
+                (properties.string("agent") ?: properties.string("mode"))?.let { agent ->
+                    put("agent", agent)
+                    put("mode", agent)
+                }
             }
         return event("message.updated", buildJsonObject { put("info", info) })
     }
+
+    private fun userPromptParts(properties: JsonObject): List<OpencodeEvent> {
+        val prompt = promptObject(properties)
+        val sessionId = sessionIdFromProperties(properties)
+        val messageId = userMessageId(properties)
+        val parts = mutableListOf<OpencodeEvent>()
+        val text = prompt?.string("text") ?: properties.string("text")
+        text?.takeIf { it.isNotBlank() }?.let { parts += userTextPartUpdated(sessionId, messageId, it) }
+        if (prompt == null) return parts
+        val files = prompt["files"] as? JsonArray ?: return parts
+        files.forEachIndexed { index, element ->
+            val file = element as? JsonObject ?: return@forEachIndexed
+            parts += userFilePartUpdated(sessionId, messageId, index, file)
+        }
+        return parts
+    }
+
+    private fun userTextPartUpdated(
+        sessionId: String?,
+        messageId: String?,
+        text: String,
+    ): OpencodeEvent {
+        val part =
+            buildJsonObject {
+                messageId?.let { put("id", "$it:text:0") }
+                sessionId?.let { put("sessionID", it) }
+                messageId?.let { put("messageID", it) }
+                put("type", "text")
+                put("text", text)
+            }
+        return event("message.part.updated", buildJsonObject { put("part", part) })
+    }
+
+    private fun userFilePartUpdated(
+        sessionId: String?,
+        messageId: String?,
+        index: Int,
+        file: JsonObject,
+    ): OpencodeEvent {
+        val part =
+            buildJsonObject {
+                messageId?.let { put("id", "$it:file:$index") }
+                sessionId?.let { put("sessionID", it) }
+                messageId?.let { put("messageID", it) }
+                put("type", "file")
+                file.string("uri")?.let { put("url", it) }
+                file.string("mime")?.let { put("mime", it) }
+                file.string("name")?.let { put("filename", it) }
+            }
+        return event("message.part.updated", buildJsonObject { put("part", part) })
+    }
+
+    private fun promptObject(properties: JsonObject): JsonObject? =
+        decodePromptValue(properties["prompt"])
+            ?: (properties["item"] as? JsonObject)?.let { decodePromptValue(it["payload"]) }
+
+    private fun decodePromptValue(value: JsonElement?): JsonObject? =
+        when (value) {
+            is JsonObject -> value
+            is JsonPrimitive ->
+                value.contentOrNull?.let { raw ->
+                    runCatching { json.parseToJsonElement(raw) }.getOrNull() as? JsonObject
+                }
+            else -> null
+        }
+
+    private fun userMessageId(properties: JsonObject): String? =
+        properties.string("messageID")
+            ?: properties.string("id")
+            ?: properties.string("inboxID")
 
     private fun stepStarted(properties: JsonObject): List<OpencodeEvent> =
         listOf(
@@ -202,14 +336,15 @@ class EventDomainAdapter(
         properties: JsonObject,
     ): OpencodeEvent {
         val status =
-            when (type) {
-                "session.next.tool.input.started" -> "pending"
-                "session.next.tool.success" -> "completed"
-                "session.next.tool.failed" -> "error"
+            when {
+                type.endsWith("tool.input.started") -> "pending"
+                type.endsWith("tool.success") -> "completed"
+                type.endsWith("tool.failed") -> "error"
                 else -> "running"
             }
         val name = properties.string("tool") ?: properties.string("name") ?: "tool"
         val callId = properties.string("callID")
+        val partId = properties.string("id") ?: callId
         val error =
             properties["error"]
                 ?.jsonObject
@@ -231,7 +366,7 @@ class EventDomainAdapter(
         return toolLikePartUpdated(
             properties = properties,
             messageId = properties.string("assistantMessageID"),
-            partId = callId,
+            partId = partId,
             toolName = name,
             status = status,
             callId = callId,
@@ -311,6 +446,9 @@ class EventDomainAdapter(
                 output?.let { put("output", it) }
                 error?.let { put("error", it) }
                 metadata?.let { put("metadata", it) }
+                properties.long("created")?.let { created ->
+                    put("time", buildJsonObject { put("start", created) })
+                }
             }
         val part =
             buildJsonObject {
@@ -391,6 +529,8 @@ class EventDomainAdapter(
             ?: properties["info"]?.jsonObject?.string("sessionId")
             ?: properties["part"]?.jsonObject?.string("sessionID")
             ?: properties["part"]?.jsonObject?.string("sessionId")
+            ?: properties["form"]?.jsonObject?.string("sessionID")
+            ?: properties["form"]?.jsonObject?.string("sessionId")
     }
 
     private fun JsonObject.textPartId(): String? {
@@ -401,6 +541,16 @@ class EventDomainAdapter(
     }
 
     private fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
+
+    private fun JsonObject.long(key: String): Long? {
+        val primitive = this[key] as? JsonPrimitive ?: return null
+        return primitive.longOrNull ?: primitive.contentOrNull?.toLongOrNull()
+    }
+
+    private fun stringIn(
+        obj: JsonObject?,
+        key: String,
+    ): String? = obj?.string(key)
 
     fun statusLabel(sessionStatus: SessionStatus): String? = statusLabelFromRawKeys(sessionStatus.raw)
 
@@ -444,6 +594,24 @@ class EventDomainAdapter(
             "retry" -> "Retrying"
             else -> null
         }
+
+    companion object {
+        private val WRAPPER_KEYS =
+            setOf(
+                "payload",
+                "type",
+                "event",
+                "id",
+                "durable",
+                "location",
+                "metadata",
+                "properties",
+                "data",
+                "directory",
+                "project",
+                "workspace",
+            )
+    }
 }
 
 data class SessionTitleUpdate(

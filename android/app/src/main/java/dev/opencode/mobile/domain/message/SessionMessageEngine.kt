@@ -72,6 +72,9 @@ class SessionMessageEngine
                 return store.messages(sessionId)
             }
             val indexById = previous.withIndex().associate { it.value.id to it.index }
+            if (changeSet.changedMessageIds.any { it !in indexById }) {
+                return store.messages(sessionId)
+            }
             val next = previous.toMutableList()
             for (id in changeSet.changedMessageIds) {
                 val updated = store.message(sessionId, id) ?: continue

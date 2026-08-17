@@ -12,6 +12,6 @@ session).
 | Last-turn session diff | Capability-gated off on v2 on both platforms |
 | Todos REST seed | 404 on v2 so an empty list does not wipe event-seeded todos |
 | Reasoning live/history | Left at v1 parity (not rendered) |
-| Forms vs questions | Both platforms keep `/api/question/*`; forms stay unused |
+| Forms vs questions | Both platforms keep `/api/question/*` when it works and fall back to `/api/form/*` on 404 |
 | Prompt skills | No composer skill mentions on either platform |
 | Permission `always` | Mobile never sends persistent remember |

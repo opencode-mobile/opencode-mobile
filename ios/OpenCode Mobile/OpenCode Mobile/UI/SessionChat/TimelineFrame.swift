@@ -49,6 +49,28 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
         self.layoutRevision = layoutRevision
     }
 
+    func withMetadataLabel(_ metadataLabel: String) -> TimelineRow {
+        let layoutRevision =
+            self.metadataLabel.isEmpty == metadataLabel.isEmpty
+                ? self.layoutRevision
+                : self.layoutRevision &+ 1
+        return TimelineRow(
+            id: id,
+            role: role,
+            text: text,
+            metadataLabel: metadataLabel,
+            isPending: isPending,
+            isStreaming: isStreaming,
+            renderedMarkdown: renderedMarkdown,
+            blocks: blocks,
+            modelProviderID: modelProviderID,
+            modelID: modelID,
+            contextInputTokens: contextInputTokens,
+            contentRevision: contentRevision,
+            layoutRevision: layoutRevision
+        )
+    }
+
     static func == (lhs: TimelineRow, rhs: TimelineRow) -> Bool {
         guard lhs.id == rhs.id,
               lhs.role == rhs.role,

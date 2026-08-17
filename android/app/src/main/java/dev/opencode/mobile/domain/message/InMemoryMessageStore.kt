@@ -4,7 +4,9 @@ import dev.opencode.mobile.data.remote.dto.MessageInfoDto
 import dev.opencode.mobile.data.remote.dto.MessagePartDto
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -47,6 +49,7 @@ class InMemoryMessageStore
             messages: List<Message>,
         ) {
             ensureCaches(sessionId)
+            val previousStarts = toolStartTimesLocked(sessionId)
             infoCaches[sessionId]!!.clear()
             partsCaches[sessionId]!!.clear()
             partOrders[sessionId]!!.clear()
@@ -55,7 +58,7 @@ class InMemoryMessageStore
             absorbedReplayChars[sessionId]!!.clear()
             messageOrders[sessionId] = messages.map { it.id }.toMutableList()
             baseMessages[sessionId] = messages
-            seedPartIdentities(sessionId, messages)
+            seedPartIdentities(sessionId, messages, previousStarts)
             bumpRevision(sessionId)
         }
 
@@ -209,7 +212,7 @@ class InMemoryMessageStore
             partsCaches[sessionId]!!.getOrPut(messageId) { mutableMapOf() }
             partOrders[sessionId]!!.getOrPut(messageId) { mutableListOf() }
             if (inserted) {
-                order.add(messageId)
+                insertMessage(sessionId, order, messageId, info.role)
             }
             return SessionChangeSet(
                 sessionRevision = 0,
@@ -217,6 +220,56 @@ class InMemoryMessageStore
                 changedMessageIds = if (inserted) emptySet() else setOf(messageId),
                 structuralChange = inserted,
             )
+        }
+
+        private fun insertMessage(
+            sessionId: String,
+            order: MutableList<String>,
+            messageId: String,
+            role: String,
+        ) {
+            if (role.equals("user", ignoreCase = true)) {
+                val index = order.indexOfFirst { isTrailingLiveAssistant(sessionId, it) }
+                val precededByUser = index > 0 && isUser(sessionId, order[index - 1])
+                if (index >= 0 && !precededByUser) {
+                    order.add(index, messageId)
+                    return
+                }
+            }
+            order.add(messageId)
+        }
+
+        private fun isUser(
+            sessionId: String,
+            messageId: String,
+        ): Boolean {
+            val infoRole = infoCaches[sessionId]?.get(messageId)?.get("role")?.jsonPrimitive?.contentOrNull
+            if (infoRole.equals("user", ignoreCase = true)) return true
+            return baseMessages[sessionId]?.firstOrNull { it.id == messageId }?.role == MessageRole.User
+        }
+
+        private fun isTrailingLiveAssistant(
+            sessionId: String,
+            messageId: String,
+        ): Boolean {
+            val base = baseMessages[sessionId]?.firstOrNull { it.id == messageId }
+            val infoRole = infoCaches[sessionId]?.get(messageId)?.let { info ->
+                info["role"]?.jsonPrimitive?.contentOrNull
+            }
+            val isAssistant =
+                infoRole.equals("assistant", ignoreCase = true) ||
+                    base?.role == MessageRole.Assistant
+            if (!isAssistant) return false
+            val liveParts = partsCaches[sessionId]?.get(messageId)?.values.orEmpty()
+            val parts = liveParts.ifEmpty { base?.parts.orEmpty() }
+            if (parts.any { part ->
+                    part is MessagePart.Text &&
+                        (part.isStreaming || hasChunks(sessionId, messageId, part.id))
+                }
+            ) {
+                return true
+            }
+            return parts.isEmpty() || parts.all { it is MessagePart.Text && it.text.isBlank() }
         }
 
         private fun applyPartUpdated(
@@ -460,7 +513,24 @@ class InMemoryMessageStore
                 }
                 return textPart
             }
-            return adapter.toMessagePart(partDto)
+            return resolveToolStart(adapter.toMessagePart(partDto), existingPart)
+        }
+
+        private fun resolveToolStart(
+            part: MessagePart?,
+            existing: MessagePart?,
+        ): MessagePart? {
+            val tool = part as? MessagePart.Tool ?: return part
+            val existingStart = (existing as? MessagePart.Tool)?.timeStartEpochMs
+            val resolved =
+                ToolStartTime.resolve(
+                    incoming = tool.timeStartEpochMs,
+                    existing = existingStart,
+                    status = tool.status,
+                    nowEpochMs = System.currentTimeMillis(),
+                )
+            if (resolved == tool.timeStartEpochMs) return part
+            return tool.copy(timeStartEpochMs = resolved)
         }
 
         private fun orderedParts(
@@ -494,18 +564,31 @@ class InMemoryMessageStore
             return if (flattened == text.text) text else text.copy(text = flattened)
         }
 
+        private fun toolStartTimesLocked(sessionId: String): Map<String, Long> {
+            val starts = mutableMapOf<String, Long>()
+            partsCaches[sessionId]?.values?.forEach { parts ->
+                parts.forEach { (partId, part) ->
+                    val start = (part as? MessagePart.Tool)?.timeStartEpochMs
+                    if (start != null) starts[partId] = start
+                }
+            }
+            return starts
+        }
+
         private fun seedPartIdentities(
             sessionId: String,
             messages: List<Message>,
+            previousStarts: Map<String, Long>,
         ) {
             val sessionParts = partsCaches[sessionId]!!
             val sessionOrders = partOrders[sessionId]!!
+            val now = System.currentTimeMillis()
             for (message in messages) {
                 val identifiedParts = mutableMapOf<String, MessagePart>()
                 val identifiedOrder = mutableListOf<String>()
                 for (part in message.parts) {
                     val partId = part.stablePartId() ?: continue
-                    identifiedParts[partId] = part
+                    identifiedParts[partId] = resolveSeededTool(part, partId, previousStarts, now)
                     identifiedOrder.add(partId)
                 }
                 if (identifiedParts.isNotEmpty()) {
@@ -513,6 +596,24 @@ class InMemoryMessageStore
                     sessionOrders[message.id] = identifiedOrder
                 }
             }
+        }
+
+        private fun resolveSeededTool(
+            part: MessagePart,
+            partId: String,
+            previousStarts: Map<String, Long>,
+            nowEpochMs: Long,
+        ): MessagePart {
+            val tool = part as? MessagePart.Tool ?: return part
+            val resolved =
+                ToolStartTime.resolve(
+                    incoming = tool.timeStartEpochMs,
+                    existing = previousStarts[partId],
+                    status = tool.status,
+                    nowEpochMs = nowEpochMs,
+                )
+            if (resolved == tool.timeStartEpochMs) return part
+            return tool.copy(timeStartEpochMs = resolved)
         }
 
         private fun MessagePart.stablePartId(): String? =

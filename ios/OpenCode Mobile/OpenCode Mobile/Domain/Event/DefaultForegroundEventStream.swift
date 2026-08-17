@@ -24,14 +24,18 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
     private var subscriberContinuations: [UUID: AsyncStream<OpencodeEvent>.Continuation] = [:]
     private var connectionStateContinuations: [UUID: AsyncStream<EventStreamConnectionState>.Continuation] = [:]
 
+    private let idleTimeout: Duration
+
     init(
         api: EventsAPIClient,
         adapter: EventDomainAdapter,
-        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath()
+        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath(),
+        idleTimeout: Duration = .seconds(45)
     ) {
         self.api = api
         self.adapter = adapter
         self.deviceNetworkPath = deviceNetworkPath
+        self.idleTimeout = idleTimeout
     }
 
     func events() -> AsyncStream<OpencodeEvent> {
@@ -82,6 +86,7 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
         let api = api
         let adapter = adapter
         let deviceNetworkPath = deviceNetworkPath
+        let idleTimeout = idleTimeout
         // Byte read + line parse + event publish must not occupy MainActor.
         lock.lock()
         streamTask = Task(priority: .userInitiated) { [weak self] in
@@ -90,7 +95,8 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
                 adapter: adapter,
                 deviceNetworkPath: deviceNetworkPath,
                 owner: self,
-                generation: generation
+                generation: generation,
+                idleTimeout: idleTimeout
             )
         }
         lock.unlock()
@@ -194,7 +200,8 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
         adapter: EventDomainAdapter,
         deviceNetworkPath: any DeviceNetworkPath,
         owner: DefaultForegroundEventStream?,
-        generation: UInt64
+        generation: UInt64,
+        idleTimeout: Duration
     ) async {
         final class RetryBox: @unchecked Sendable {
             var attempt = 0
@@ -209,14 +216,17 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
                 return
             }
             let wasConnected = owner.beginConnectAttempt(generation: generation)
+            let activity = ActivityBox()
             let readTask = Task {
                 try await api.streamGlobalEvents(
                     onHTTPResponse: { statusCode in
+                        activity.touch()
                         DiagnosticLog.info(.sse, "GET \(Self.eventPath(for: api)) opened status=\(statusCode) protocol=\(api.eventProtocolWireValue)")
                         owner.markStreamConnected()
                         retry.attempt = 0
                     },
                     onDataLine: { dataLine in
+                        activity.touch()
                         let parsed = adapter.parseEvents(dataLine: dataLine)
                         if parsed.isEmpty {
                             DiagnosticLog.warning(.sse, "SSE event parse failed")
@@ -238,6 +248,17 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
                     }
                 }
             }
+            let idleTask = Task {
+                while !Task.isCancelled {
+                    let remaining = idleTimeout - activity.elapsed()
+                    if remaining <= .zero {
+                        DiagnosticLog.warning(.sse, "foreground SSE idle timeout; reconnecting")
+                        readTask.cancel()
+                        return
+                    }
+                    try? await Task.sleep(for: remaining)
+                }
+            }
             do {
                 try await readTask.value
                 owner.applyConnectionState(
@@ -245,6 +266,7 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
                     generation: generation
                 )
             } catch is CancellationError {
+                idleTask.cancel()
                 watchTask.cancel()
                 if Task.isCancelled {
                     owner.clearStreamTaskIfCurrent(generation: generation)
@@ -263,6 +285,7 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
                     generation: generation
                 )
             }
+            idleTask.cancel()
             watchTask.cancel()
 
             if deviceNetworkPath.status == .unavailable {
@@ -292,6 +315,24 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
             generation: generation
         )
         return previouslyConnected
+    }
+
+    private final class ActivityBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var last = ContinuousClock.now
+
+        func touch() {
+            lock.lock()
+            last = .now
+            lock.unlock()
+        }
+
+        func elapsed() -> Duration {
+            lock.lock()
+            let last = last
+            lock.unlock()
+            return ContinuousClock.now - last
+        }
     }
 
     private func clearStreamTaskIfCurrent(generation: UInt64) {

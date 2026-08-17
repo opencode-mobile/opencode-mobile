@@ -13,7 +13,8 @@
     "markdown:highlighter:golden": "node scripts/generate-markdown-highlighter-fixtures.mjs",
     "api:fetch": "node scripts/fetch-openapi.mjs",
     "api:generate": "node scripts/generate-api-clients.mjs",
-    "api:sync": "npm run api:fetch && npm run api:generate"
+    "api:sync": "npm run api:fetch && npm run api:generate",
+    "sse:capture": "node scripts/capture-sse.mjs"
   },
   "devDependencies": {
     "@material-design-icons/svg": "^0.14.15",

@@ -206,12 +206,18 @@ Tool Call Card.
 - Second line: running `ToolPart.title` when present, otherwise the task
   description / prompt. Do not subscribe to the child session’s tool stream
   just to populate this row.
-- Elapsed: `m:ss` from existing tool `time.start` when that timestamp is
-  already on the payload; omit when missing. Do not invent a start time or a
-  new server API. When `time.start` is present, the quiet-row **view** ticks
-  locally (`now − start`) about once a second so elapsed advances without
-  rebuilding the Session Chat Screen Model. Do not run a ViewModel or
-  timeline-builder timer. On resume, recompute from `time.start`.
+- Elapsed: `m:ss` from a wall-clock start on the tool. Prefer `state.time.start`
+  when it is already a real epoch. V2 live tool events omit that field; use the
+  SSE envelope `created` next. Relative values such as `content.time.created: 10`
+  are not epochs and must not become `0:00`. If both are missing, stamp local
+  now once in the message store for a pending/running tool — never in the row
+  builder, or rebuilds reset the clock. Keep the first resolved start across
+  later `part.updated` and REST `replaceAll`. Reject a start more than ~2s in
+  the future (device clock behind the server) and stamp local now instead.
+  When a usable start is present, the quiet-row **view** ticks locally
+  (`now − start`) about once a second so elapsed advances without rebuilding
+  the Session Chat Screen Model. Do not run a ViewModel or timeline-builder
+  timer. On resume, recompute from the stored start.
 - Tap / `childSessionId` navigation stays as OPE-52.
 - Design-system Child Session Row (OPE-162). Do not extend the Tool Call Card
   for this row; that component stays collapsed tool-agnostic status chrome.

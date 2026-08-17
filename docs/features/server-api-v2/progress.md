@@ -87,6 +87,8 @@
 - [x] Live v2: message/session lists page until the cursor ends (500-page cap)
 - [x] Live v2: history files from `data`/`source.uri`; shell `output` object
 - [x] Live v2: permission/question tool `id` when `callID` is absent
+- [x] Live v2: question dock falls back to `/api/form/*` when
+  `/api/question/request` 404s; `form.*` projects to `question.*`
 - [x] Live v2: keep the optimistic user bubble until an authoritative user
   message matches (post-send reload no longer drops it while the inbox is
   still catching up)
@@ -94,6 +96,19 @@
   `GET /api/session/active` via `session.active.snapshot`
 - [x] Live v2: project `session.next.tool.*` / `.shell.*` / `.compaction.*`
 - [x] Live v2: SSE `{id,event,data}` with JSON-string `data`
+- [x] Live v2: `session.next.prompted` publishes user text/files instead of an
+  unpublished info-only slot
+- [x] Live v2: versioned `session.next.prompted.1` / sync unwrap, and late
+  user rows insert before a live assistant
+- [x] Live v2: prompted prompt text survives GlobalBus payload, flattened
+  fields, `payload.syncEvent`, nested `data`, and JSON-string `prompt`
+- [x] Live v2: `session.inbox.enqueued` `item.payload` publishes user text;
+  live splice rebuilds when the changed message is missing from the last frame;
+  iOS poll survives idle-reconnect epoch bumps
+- [x] Live v2: tool envelope `created` (or a one-time local stamp) drives
+  Child Session Row elapsed; later updates and REST replace keep the first start
+- [x] Live v2: user-row `build · model · variant · time` survives sparse inbox
+  insert then REST (iOS projector no longer keeps the empty caption)
 - [x] Hide Archive on v2 via `supportsSessionArchive`
 - [x] Child list uses `parentID`; share/init 404 without v1 fallback
 
@@ -160,6 +175,8 @@
 - [x] Live v2: message/session lists page until the cursor ends (500-page cap)
 - [x] Live v2: history files from `data`/`source.uri`; shell `output` object
 - [x] Live v2: permission/question tool `id` when `callID` is absent
+- [x] Live v2: question dock falls back to `/api/form/*` when
+  `/api/question/request` 404s; `form.*` projects to `question.*`
 - [x] Live v2: keep the optimistic user bubble until an authoritative user
   message matches (post-send reload no longer drops it while the inbox is
   still catching up)
@@ -167,6 +184,19 @@
   `GET /api/session/active` via `session.active.snapshot`
 - [x] Live v2: project `session.next.tool.*` / `.shell.*` / `.compaction.*`
 - [x] Live v2: SSE `{id,event,data}` with JSON-string `data`
+- [x] Live v2: `session.next.prompted` publishes user text/files instead of an
+  unpublished info-only slot
+- [x] Live v2: versioned `session.next.prompted.1` / sync unwrap, and late
+  user rows insert before a live assistant
+- [x] Live v2: prompted prompt text survives GlobalBus payload, flattened
+  fields, `payload.syncEvent`, nested `data`, and JSON-string `prompt`
+- [x] Live v2: `session.inbox.enqueued` `item.payload` publishes user text;
+  live splice rebuilds when the changed message is missing from the last frame;
+  iOS poll survives idle-reconnect epoch bumps
+- [x] Live v2: tool envelope `created` (or a one-time local stamp) drives
+  Child Session Row elapsed; later updates and REST replace keep the first start
+- [x] Live v2: user-row `build · model · variant · time` survives sparse inbox
+  insert then REST (iOS projector no longer keeps the empty caption)
 - [x] Hide Archive on v2 via `supportsSessionArchive`
 - [x] Child list uses `parentID`; share/init 404 without v1 fallback
 
@@ -179,9 +209,9 @@
 - Upstream: no clear v2 twin for `GET /session/{id}/diff` (P6 degrade).
 - Upstream: published v2 has no session archive route. Archive is
   capability-gated off on v2 (`supportsSessionArchive`).
-- Upstream: published questions are migrating to forms (`/api/form/*`);
-  mobile still uses session-scoped `/api/question/*` until the form reply
-  body is pinned.
+- Upstream: published questions are migrating to forms (`/api/form/*`).
+  Mobile keeps `/api/question/*` when present and falls back to
+  `/api/form/request` plus `frm_*` reply/cancel when that list 404s.
 - Upstream: `/api/event` is volatile. Durable session logs are experimental
   (`GET /api/experimental/session/{id}/log`) and unused.
 
@@ -194,8 +224,8 @@
   without calling unprefixed paths.
 - OPE-155: extract remotes for Command, Filesystem, Model, Agent, and Project
   when those files are next edited.
-- Map published `/api/form/*` onto the question dock, or keep dual-path, once
-  live form reply `{ answer }` is confirmed.
+- Form field types beyond string single-select (numbers, multi-value) still
+  need a richer answer mapping than `{ qN: selectedLabel }`.
 - Durable reconnect catch-up (`GET /api/experimental/session/{id}/log`) once
   the route is stable. MessageSync already REST-reloads messages on reconnect.
 - Render assistant `reasoning` in history/live (v1 also hides it).

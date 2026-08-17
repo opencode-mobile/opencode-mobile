@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.session
 
 import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.data.remote.dto.QuestionReplyRequestDto
+import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 
 internal class V2SessionRemote(
@@ -12,7 +13,16 @@ internal class V2SessionRemote(
         api.listPendingPermissionsV2(directory).map(adapter::toPermissionRequest)
 
     override suspend fun listPendingQuestions(directory: String?): List<QuestionRequest> =
-        api.listPendingQuestionsV2(directory).map(adapter::toQuestionRequest)
+        try {
+            api.listPendingQuestionsV2(directory).map(adapter::toQuestionRequest)
+        } catch (error: Throwable) {
+            val mapped = adapter.mapError(error)
+            if (mapped is SessionError.Http && mapped.statusCode == 404) {
+                api.listPendingFormsV2(directory).map(adapter::toQuestionRequest)
+            } else {
+                throw error
+            }
+        }
 
     override suspend fun listSessions(directory: String?): List<Session> = api.listSessionsV2(directory).map(adapter::toSession)
 
@@ -153,7 +163,16 @@ internal class V2SessionRemote(
         requestId: String,
         answers: List<List<String>>,
         directory: String?,
-    ): Boolean = api.replyToQuestionV2(sessionId, requestId, QuestionReplyRequestDto(answers = answers))
+    ): Boolean =
+        if (requestId.startsWith("frm_")) {
+            api.replyToFormV2(
+                sessionId,
+                requestId,
+                V2FormReplyRequestDto(answer = adapter.formAnswer(answers)),
+            )
+        } else {
+            api.replyToQuestionV2(sessionId, requestId, QuestionReplyRequestDto(answers = answers))
+        }
 
     override suspend fun rejectQuestion(
         requestId: String,
@@ -164,5 +183,10 @@ internal class V2SessionRemote(
         sessionId: String,
         requestId: String,
         directory: String?,
-    ): Boolean = api.rejectQuestionV2(sessionId, requestId)
+    ): Boolean =
+        if (requestId.startsWith("frm_")) {
+            api.cancelFormV2(sessionId, requestId)
+        } else {
+            api.rejectQuestionV2(sessionId, requestId)
+        }
 }

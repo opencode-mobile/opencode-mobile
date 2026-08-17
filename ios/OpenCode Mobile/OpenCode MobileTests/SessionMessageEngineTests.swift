@@ -246,6 +246,68 @@ import Testing
         #expect(!engine.shouldPublishLive(changeSet))
     }
 
+    @Test func userInsert_landsBeforeStreamingAssistant() {
+        let engine = makeEngine()
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "msg-old-user",
+                    role: .user,
+                    text: "Earlier",
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+                Message(
+                    id: "msg-old-asst",
+                    role: .assistant,
+                    text: "Done",
+                    parts: [.text(TextPart(id: "prt-old", text: "Done", isStreaming: false))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+                Message(
+                    id: "msg-live",
+                    role: .assistant,
+                    text: "Working",
+                    parts: [.text(TextPart(id: "prt-live", text: "Working", isStreaming: true))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+        )
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .infoUpdated([
+                "id": .string("msg-new-user"),
+                "role": .string("user"),
+                "sessionID": .string("ses-1"),
+            ])
+        )
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .partUpdated(
+                part: [
+                    "id": .string("msg-new-user:text:0"),
+                    "messageID": .string("msg-new-user"),
+                    "sessionID": .string("ses-1"),
+                    "type": .string("text"),
+                    "text": .string("Hello from CLI"),
+                ],
+                delta: nil
+            )
+        )
+        #expect(engine.messages(sessionID: "ses-1").map(\.id) == [
+            "msg-old-user",
+            "msg-old-asst",
+            "msg-new-user",
+            "msg-live",
+        ])
+    }
+
     @Test func frameAfterChange_splicesChangedMessageOnly() {
         let engine = makeEngine()
         engine.replaceAll(
@@ -290,6 +352,60 @@ import Testing
         #expect(frame[0].id == previous[0].id)
     }
 
+    @Test func frameAfterChange_rebuildsWhenChangedMessageMissingFromPrevious() {
+        let engine = makeEngine()
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "msg-a",
+                    role: .user,
+                    text: "A",
+                    parts: [.text(TextPart(id: "prt-a", text: "A", isStreaming: false))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+        )
+        let previous = engine.messages(sessionID: "ses-1")
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .infoUpdated([
+                "id": .string("msg-b"),
+                "role": .string("assistant"),
+                "sessionID": .string("ses-1"),
+            ])
+        )
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .partUpdated(
+                part: [
+                    "id": .string("prt-b"),
+                    "messageID": .string("msg-b"),
+                    "sessionID": .string("ses-1"),
+                    "type": .string("text"),
+                    "text": .string(""),
+                ],
+                delta: nil
+            )
+        )
+        guard case .changed(let changeSet) = engine.apply(
+            sessionID: "ses-1",
+            patch: .partDelta(messageID: "msg-b", partID: "prt-b", delta: "Live")
+        ) else {
+            Issue.record("expected Changed")
+            return
+        }
+        let frame = engine.frameAfterChange(
+            sessionID: "ses-1",
+            changeSet: changeSet,
+            previous: previous
+        )
+        #expect(frame.map(\.id) == ["msg-a", "msg-b"])
+        #expect(frame.last?.text == "Live")
+    }
+
     @Test func frameAfterChange_fullRebuildOnRemoval() {
         let engine = makeEngine()
         engine.replaceAll(
@@ -329,6 +445,72 @@ import Testing
             previous: previous
         )
         #expect(frame.map(\.id) == ["msg-b"])
+    }
+
+    @Test func runningToolWithoutTime_stampsStartAndPreservesAcrossUpdateAndReplaceAll() {
+        let engine = makeEngine()
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "msg-1",
+                    role: .assistant,
+                    text: "",
+                    parts: [.tool(ToolPart(id: "prt-task", toolName: "task", status: .running))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+        )
+        guard case .tool(let seeded) = engine.messages(sessionID: "ses-1").first?.parts.first else {
+            Issue.record("expected running tool")
+            return
+        }
+        #expect(seeded.timeStartEpochMs != nil)
+        let stamped = seeded.timeStartEpochMs
+
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .partUpdated(
+                part: [
+                    "id": .string("prt-task"),
+                    "messageID": .string("msg-1"),
+                    "sessionID": .string("ses-1"),
+                    "type": .string("tool"),
+                    "tool": .string("task"),
+                    "state": .dictionary(["status": .string("running")]),
+                ],
+                delta: nil
+            )
+        )
+        guard case .tool(let updated) = engine.messages(sessionID: "ses-1").first?.parts.first else {
+            Issue.record("expected updated tool")
+            return
+        }
+        #expect(updated.timeStartEpochMs == stamped)
+
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "msg-1",
+                    role: .assistant,
+                    text: "",
+                    parts: [
+                        .tool(ToolPart(id: "prt-task", toolName: "task", status: .running, timeStartEpochMs: 10)),
+                    ],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+        )
+        guard case .tool(let reloaded) = engine.messages(sessionID: "ses-1").first?.parts.first else {
+            Issue.record("expected reloaded tool")
+            return
+        }
+        #expect(reloaded.timeStartEpochMs == stamped)
     }
 
     private func makeEngine() -> SessionMessageEngine {

@@ -902,6 +902,93 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_v2PromptedPublishesUserText() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            val adapter = EventDomainAdapter(Json { ignoreUnknownKeys = true })
+            adapter
+                .parseEvents(
+                    """{"type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-2","prompt":{"text":"Hello from CLI"},"delivery":"steer"}}""",
+                ).forEach(eventStream::emit)
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val last = emissions.last()
+            assertEquals(listOf("msg-1", "msg-2"), last.map { it.id })
+            assertEquals("Hello from CLI", last.first { it.id == "msg-2" }.text)
+        }
+
+    @Test
+    fun observeMessages_v2InboxEnqueuedPublishesUserText() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            val adapter = EventDomainAdapter(Json { ignoreUnknownKeys = true })
+            adapter
+                .parseEvents(
+                    """{"type":"session.inbox.enqueued","data":{"inboxID":"msg-2","sessionID":"ses-1","item":{"type":"user","payload":{"text":"Hello from inbox","files":[]},"delivery":"steer"}}}""",
+                ).forEach(eventStream::emit)
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val last = emissions.last()
+            assertEquals(listOf("msg-1", "msg-2"), last.map { it.id })
+            assertEquals("Hello from inbox", last.first { it.id == "msg-2" }.text)
+        }
+
+    @Test
+    fun observeMessages_v2PromptedGlobalBusPublishesUserText() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            val adapter = EventDomainAdapter(Json { ignoreUnknownKeys = true })
+            adapter
+                .parseEvents(
+                    """{"directory":"/repo","payload":{"type":"session.next.prompted","properties":{"sessionID":"ses-1","messageID":"msg-2","prompt":{"text":"Hello from CLI"},"delivery":"steer"}}}""",
+                ).forEach(eventStream::emit)
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val last = emissions.last()
+            assertEquals(listOf("msg-1", "msg-2"), last.map { it.id })
+            assertEquals("Hello from CLI", last.first { it.id == "msg-2" }.text)
+        }
+
+    @Test
     fun observeMessages_messagePartUpdatedWithText_appendsPart() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()

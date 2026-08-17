@@ -122,6 +122,91 @@ nonisolated struct QuestionOptionDTO: Codable, Sendable {
     let description: String?
 }
 
+nonisolated struct V2FormInfoDTO: Codable, Sendable {
+    let id: String
+    let sessionID: String
+    let title: String?
+    let metadata: V2FormMetadataDTO?
+    let fields: [V2FormFieldDTO]
+
+    init(
+        id: String,
+        sessionID: String,
+        title: String? = nil,
+        metadata: V2FormMetadataDTO? = nil,
+        fields: [V2FormFieldDTO] = []
+    ) {
+        self.id = id
+        self.sessionID = sessionID
+        self.title = title
+        self.metadata = metadata
+        self.fields = fields
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        sessionID = try container.decode(String.self, forKey: .sessionID)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        metadata = try container.decodeIfPresent(V2FormMetadataDTO.self, forKey: .metadata)
+        fields = try container.decodeIfPresent([V2FormFieldDTO].self, forKey: .fields) ?? []
+    }
+}
+
+nonisolated struct V2FormMetadataDTO: Codable, Sendable {
+    let kind: String?
+    let tool: QuestionToolDTO?
+}
+
+nonisolated struct V2FormFieldDTO: Codable, Sendable {
+    let key: String
+    let title: String?
+    let description: String?
+    let type: String?
+    let options: [V2FormFieldOptionDTO]
+    let custom: Bool?
+    let multiple: Bool?
+
+    init(
+        key: String,
+        title: String? = nil,
+        description: String? = nil,
+        type: String? = nil,
+        options: [V2FormFieldOptionDTO] = [],
+        custom: Bool? = nil,
+        multiple: Bool? = nil
+    ) {
+        self.key = key
+        self.title = title
+        self.description = description
+        self.type = type
+        self.options = options
+        self.custom = custom
+        self.multiple = multiple
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        key = try container.decode(String.self, forKey: .key)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        type = try container.decodeIfPresent(String.self, forKey: .type)
+        options = try container.decodeIfPresent([V2FormFieldOptionDTO].self, forKey: .options) ?? []
+        custom = try container.decodeIfPresent(Bool.self, forKey: .custom)
+        multiple = try container.decodeIfPresent(Bool.self, forKey: .multiple)
+    }
+}
+
+nonisolated struct V2FormFieldOptionDTO: Codable, Sendable {
+    let value: String?
+    let label: String?
+    let description: String?
+}
+
+nonisolated struct V2FormReplyRequestDTO: Codable, Sendable {
+    let answer: [String: String]
+}
+
 nonisolated struct QuestionToolDTO: Codable, Sendable {
     let messageID: String
     let callID: String?

@@ -12,7 +12,7 @@ class SessionChatChildSessionElapsedTest {
 
     @Test
     fun format_usesMinutesAndZeroPaddedSeconds() {
-        val start = 1_000_000L
+        val start = 1_710_000_000_000L
         assertEquals("0:00", SessionChatChildSessionElapsed.format(start, start))
         assertEquals("0:05", SessionChatChildSessionElapsed.format(start, start + 5_000))
         assertEquals("1:10", SessionChatChildSessionElapsed.format(start, start + 70_000))
@@ -20,8 +20,15 @@ class SessionChatChildSessionElapsedTest {
     }
 
     @Test
+    fun format_omitsRelativeOrInvalidStart() {
+        assertNull(SessionChatChildSessionElapsed.format(10L, 1_710_000_000_000L))
+        assertNull(SessionChatChildSessionElapsed.format(5_000L, 1_000L))
+    }
+
+    @Test
     fun format_clampsNegativeElapsedToZero() {
-        assertEquals("0:00", SessionChatChildSessionElapsed.format(5_000, 1_000))
+        val start = 1_710_000_000_000L
+        assertEquals("0:00", SessionChatChildSessionElapsed.format(start, start - 500))
     }
 
     @Test

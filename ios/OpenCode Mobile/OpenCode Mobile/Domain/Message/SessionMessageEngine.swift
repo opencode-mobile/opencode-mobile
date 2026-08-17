@@ -83,6 +83,9 @@ nonisolated final class SessionMessageEngine: @unchecked Sendable {
         for (index, message) in previous!.enumerated() {
             indexByID[message.id] = index
         }
+        if changeSet.changedMessageIDs.contains(where: { indexByID[$0] == nil }) {
+            return store.messages(sessionID: sessionID)
+        }
         var next = previous!
         for id in changeSet.changedMessageIDs {
             guard let updated = store.message(sessionID: sessionID, messageID: id) else { continue }
