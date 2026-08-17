@@ -440,6 +440,38 @@ struct MessageDomainAdapterTests {
         #expect(file.dataURL == "data:image/jpeg;base64,AA==")
     }
 
+    @Test func messagePart_fileWithoutURL_keepsImagePlaceholder() throws {
+        let dto = try decoder.decode(
+            MessagePartDTO.self,
+            from: #"{"id":"prt-file","type":"file","mime":"image/jpeg","filename":"Photo 1.jpeg"}"#.data(using: .utf8)!
+        )
+
+        guard case .file(let file) = adapter.messagePart(from: dto) else {
+            Issue.record("Expected file part")
+            return
+        }
+        #expect(file.id == "prt-file")
+        #expect(file.filename == "Photo 1.jpeg")
+        #expect(file.mime == "image/jpeg")
+        #expect(file.kind == .image)
+        #expect(file.dataURL.isEmpty)
+    }
+
+    @Test func messagePart_fileWithoutURLOrMime_infersImageFromFilename() throws {
+        let dto = try decoder.decode(
+            MessagePartDTO.self,
+            from: #"{"id":"prt-file","type":"file","filename":"Photo 1.jpeg"}"#.data(using: .utf8)!
+        )
+
+        guard case .file(let file) = adapter.messagePart(from: dto) else {
+            Issue.record("Expected file part")
+            return
+        }
+        #expect(file.mime == "image/jpeg")
+        #expect(file.kind == .image)
+        #expect(file.dataURL.isEmpty)
+    }
+
     @Test func messagePart_fileURLThatIsNotData_returnsNil() throws {
         let dto = try decoder.decode(
             MessagePartDTO.self,
@@ -870,6 +902,36 @@ struct MessageDomainAdapterTests {
         #expect(file.filename == "notes.txt")
         #expect(file.mime == "text/plain")
         #expect(file.dataURL == "data:text/plain;base64,SGk=")
+    }
+
+    @Test func projectV2UserFileWithoutURI_keepsImagePlaceholder() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"What",
+                    "files":[{
+                      "name":"Photo 1.jpeg",
+                      "mime":"image/jpeg"
+                    }]
+                  }
+                ]
+                """.utf8
+            )
+        )
+        let messages = adapter.messages(fromV2: dtos)
+        guard case let .file(file) = messages.first?.parts.last else {
+            Issue.record("expected file part")
+            return
+        }
+        #expect(file.filename == "Photo 1.jpeg")
+        #expect(file.mime == "image/jpeg")
+        #expect(file.kind == .image)
+        #expect(file.dataURL.isEmpty)
     }
 
     @Test func projectV2ShellOutputObjectDoesNotFailDecode() throws {

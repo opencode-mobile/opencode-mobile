@@ -54,4 +54,18 @@ object AttachmentDataUrl {
         val mime = header.substringBefore(';').trim().lowercase()
         return mime.takeIf { it.isNotEmpty() && kind(it) != null }
     }
+
+    fun mimeFromFilename(filename: String): String? {
+        val extension = filename.substringAfterLast('.', missingDelimiterValue = "").lowercase()
+        if (extension.isEmpty() || extension == filename.lowercase()) return null
+        return when (extension) {
+            "png" -> "image/png"
+            "jpg", "jpeg" -> "image/jpeg"
+            "gif" -> "image/gif"
+            "webp" -> "image/webp"
+            "pdf" -> "application/pdf"
+            "txt" -> "text/plain"
+            else -> null
+        }
+    }
 }

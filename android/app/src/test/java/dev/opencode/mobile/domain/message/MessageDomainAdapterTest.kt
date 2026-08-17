@@ -584,6 +584,41 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun toMessagePart_fileWithoutUrl_keepsImagePlaceholder() {
+        val dto =
+            MessagePartDto(
+                id = "prt-file",
+                type = "file",
+                mime = "image/jpeg",
+                filename = "Photo 1.jpeg",
+            )
+
+        val file = adapter.toMessagePart(dto) as MessagePart.File
+
+        assertEquals("prt-file", file.id)
+        assertEquals("Photo 1.jpeg", file.filename)
+        assertEquals("image/jpeg", file.mime)
+        assertEquals(AttachmentKind.Image, file.kind)
+        assertEquals("", file.dataUrl)
+    }
+
+    @Test
+    fun toMessagePart_fileWithoutUrlOrMime_infersImageFromFilename() {
+        val dto =
+            MessagePartDto(
+                id = "prt-file",
+                type = "file",
+                filename = "Photo 1.jpeg",
+            )
+
+        val file = adapter.toMessagePart(dto) as MessagePart.File
+
+        assertEquals("image/jpeg", file.mime)
+        assertEquals(AttachmentKind.Image, file.kind)
+        assertEquals("", file.dataUrl)
+    }
+
+    @Test
     fun toMessagePart_dataUrlMimeHeaderMismatch_returnsNull() {
         val dto =
             MessagePartDto(
@@ -1039,6 +1074,38 @@ class MessageDomainAdapterTest {
         assertEquals("notes.txt", file.filename)
         assertEquals("text/plain", file.mime)
         assertEquals("data:text/plain;base64,SGk=", file.dataUrl)
+    }
+
+    @Test
+    fun projectV2_userFileWithoutUri_keepsImagePlaceholder() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"What",
+                    "files":[{
+                      "name":"Photo 1.jpeg",
+                      "mime":"image/jpeg"
+                    }]
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val file =
+            adapter
+                .projectV2(dtos)
+                .single()
+                .parts
+                .filterIsInstance<MessagePart.File>()
+                .single()
+        assertEquals("Photo 1.jpeg", file.filename)
+        assertEquals("image/jpeg", file.mime)
+        assertEquals(AttachmentKind.Image, file.kind)
+        assertEquals("", file.dataUrl)
     }
 
     @Test

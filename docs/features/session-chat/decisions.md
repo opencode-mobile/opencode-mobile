@@ -12,6 +12,8 @@
   data URLs never matched the server file id, so the optimistic bubble
   duplicated at the bottom. Live inbox also omits large file `uri`s, so
   a text-only server user must still consume the pending text+file row.
+  A live file part with mime/filename and no `url` stays as a FilePart so
+  the IMAGE file card appears before REST fills the thumbnail.
 - Revisit when: REST message lists guarantee oldest-first without a UI sort.
 
 ## User-row metadata survives live-then-REST (2026-08-17)

@@ -289,7 +289,10 @@ class EventDomainAdapter(
                 messageId?.let { put("messageID", it) }
                 put("type", "file")
                 file.string("uri")?.let { put("url", it) }
-                val mime = file.string("mime") ?: file.string("uri")?.let(AttachmentDataUrl::mimeFromDataUrl)
+                val mime =
+                    file.string("mime")
+                        ?: file.string("uri")?.let(AttachmentDataUrl::mimeFromDataUrl)
+                        ?: file.string("name")?.let(AttachmentDataUrl::mimeFromFilename)
                 mime?.let { put("mime", it) }
                 file.string("name")?.let { put("filename", it) }
             }

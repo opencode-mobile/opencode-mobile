@@ -26,7 +26,8 @@
 - Complete: Photos and Files entry points support multiple scoped selections;
   accepted content becomes removable pending chips and text/file prompt parts.
 - FileParts from history and live updates render on outgoing messages, including
-  attachment-only prompts.
+  attachment-only prompts. Live parts that omit a large `url` still render as
+  an IMAGE file card until REST fills the thumbnail.
 - Failed HTTP sends restore the submitted draft and attachments without
   overwriting newer edits; accepted sends remain cleared when a later session
   error is surfaced.
@@ -40,7 +41,8 @@
   scoped selections without broad storage permissions; accepted content becomes
   removable pending chips and text/file prompt parts.
 - FileParts from history and live updates render on outgoing messages, including
-  attachment-only prompts.
+  attachment-only prompts. Live parts that omit a large `url` still render as
+  an IMAGE file card until REST fills the thumbnail.
 - Failed HTTP sends restore the submitted draft and attachments without
   overwriting newer edits; accepted sends remain cleared when a later session
   error is surfaced.

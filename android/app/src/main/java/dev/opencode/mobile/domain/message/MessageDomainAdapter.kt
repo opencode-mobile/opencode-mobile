@@ -524,10 +524,19 @@ class MessageDomainAdapter {
         file: V2FileAttachmentDto,
         fallbackId: String,
     ): MessagePart.File? {
-        val dataUrl = v2FileDataUrl(file) ?: return null
-        val mime = (file.mime ?: AttachmentDataUrl.mimeFromDataUrl(dataUrl))?.lowercase() ?: return null
-        if (!AttachmentDataUrl.validates(dataUrl, mime)) return null
+        val dataUrl = v2FileDataUrl(file).orEmpty()
+        val mime =
+            (
+                file.mime
+                    ?: dataUrl.takeIf { it.isNotEmpty() }?.let(AttachmentDataUrl::mimeFromDataUrl)
+                    ?: file.name?.let(AttachmentDataUrl::mimeFromFilename)
+            )?.lowercase() ?: return null
         val kind = AttachmentDataUrl.kind(mime) ?: return null
+        if (dataUrl.isNotEmpty() &&
+            (!dataUrl.startsWith("data:", ignoreCase = true) || !AttachmentDataUrl.validates(dataUrl, mime))
+        ) {
+            return null
+        }
         return MessagePart.File(
             id = fallbackId,
             filename = file.name?.takeIf { it.isNotBlank() } ?: "Attachment",
@@ -697,12 +706,21 @@ class MessageDomainAdapter {
     private fun Int?.orZero(): Int = this ?: 0
 
     private fun toFilePart(dto: MessagePartDto): MessagePart.File? {
-        val dataUrl = dto.url ?: return null
-        val mime = dto.mime?.lowercase() ?: AttachmentDataUrl.mimeFromDataUrl(dataUrl) ?: return null
-        if (!AttachmentDataUrl.validates(dataUrl, mime)) return null
+        val dataUrl = dto.url?.takeIf { it.isNotBlank() }.orEmpty()
+        val mime =
+            (
+                dto.mime
+                    ?: dataUrl.takeIf { it.isNotEmpty() }?.let(AttachmentDataUrl::mimeFromDataUrl)
+                    ?: dto.filename?.let(AttachmentDataUrl::mimeFromFilename)
+            )?.lowercase() ?: return null
         val kind = AttachmentDataUrl.kind(mime) ?: return null
+        if (dataUrl.isNotEmpty() &&
+            (!dataUrl.startsWith("data:", ignoreCase = true) || !AttachmentDataUrl.validates(dataUrl, mime))
+        ) {
+            return null
+        }
         return MessagePart.File(
-            id = dto.id ?: dataUrl,
+            id = dto.id ?: dataUrl.takeIf { it.isNotEmpty() } ?: dto.filename ?: "file",
             filename = dto.filename?.takeIf { it.isNotBlank() } ?: "Attachment",
             mime = mime,
             kind = kind,

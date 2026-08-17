@@ -1,5 +1,11 @@
 # Session Chat Progress
 
+## Live image placeholder (2026-08-17)
+
+- Status: implemented on both platforms (message/event adapter tests).
+- Live FileParts without `url` still become attachment rows using the
+  existing IMAGE file card; REST later fills the data URL and thumbnail.
+
 ## Display order for late v2 user rows (2026-08-17)
 
 - Status: implemented on both platforms (projector and load-path tests).

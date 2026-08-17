@@ -60,21 +60,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 )
             )
         case "file":
-            guard let url = dto.url,
-                  let mime = (dto.mime ?? AttachmentDataURL.mime(fromDataURL: url))?.lowercased(),
-                  url.lowercased().hasPrefix("data:"),
-                  AttachmentDataURL.validates(url, mime: mime),
-                  let kind = AttachmentDataURL.kind(for: mime)
-            else { return nil }
-            return .file(
-                FilePart(
-                    id: dto.id ?? url,
-                    filename: dto.filename?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "Attachment",
-                    mime: mime,
-                    kind: kind,
-                    dataURL: url
-                )
-            )
+            return filePart(from: dto)
         case "tool":
             guard let toolName = dto.tool else { return nil }
             return .tool(toolPart(id: dto.id, toolName: toolName, callID: dto.callID, state: dto.state))
@@ -442,21 +428,49 @@ nonisolated struct MessageDomainAdapter: Sendable {
         }
     }
 
+    private func filePart(from dto: MessagePartDTO) -> MessagePart? {
+        let url = dto.url?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return resolvedFilePart(
+            id: dto.id ?? (url.isEmpty ? nil : url) ?? dto.filename ?? "file",
+            filename: dto.filename,
+            mime: dto.mime,
+            dataURL: url
+        )
+    }
+
     private func v2FilePart(_ file: V2FileAttachmentDTO, fallbackID: String) -> MessagePart? {
-        guard let url = v2FileDataURL(file) else { return nil }
-        let mime = (file.mime ?? AttachmentDataURL.mime(fromDataURL: url))?.lowercased()
-        guard let mime,
-              url.lowercased().hasPrefix("data:"),
-              AttachmentDataURL.validates(url, mime: mime),
-              let kind = AttachmentDataURL.kind(for: mime)
-        else { return nil }
+        resolvedFilePart(
+            id: fallbackID,
+            filename: file.name,
+            mime: file.mime,
+            dataURL: v2FileDataURL(file) ?? ""
+        )
+    }
+
+    private func resolvedFilePart(
+        id: String,
+        filename: String?,
+        mime: String?,
+        dataURL: String
+    ) -> MessagePart? {
+        let resolvedMime = (
+            mime
+                ?? AttachmentDataURL.mime(fromDataURL: dataURL)
+                ?? filename.flatMap(AttachmentDataURL.mime(fromFilename:))
+        )?.lowercased()
+        guard let resolvedMime, let kind = AttachmentDataURL.kind(for: resolvedMime) else { return nil }
+        if !dataURL.isEmpty {
+            guard dataURL.lowercased().hasPrefix("data:"),
+                  AttachmentDataURL.validates(dataURL, mime: resolvedMime)
+            else { return nil }
+        }
         return .file(
             FilePart(
-                id: fallbackID,
-                filename: file.name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "Attachment",
-                mime: mime,
+                id: id,
+                filename: filename?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "Attachment",
+                mime: resolvedMime,
                 kind: kind,
-                dataURL: url
+                dataURL: dataURL
             )
         )
     }
