@@ -19,6 +19,8 @@ Linear: [OPE-160](https://linear.app/opencode-mobile/issue/OPE-160/session-list-
 
 - complete — chips default; Settings → Appearance **Project Picker** enables
   the picker list (no search). Gallery has a local Picker preview switch.
+  Overlay tap dismisses the sheet (interactive dismiss kept enabled for the
+  50% form presentation).
 
 ## Android
 

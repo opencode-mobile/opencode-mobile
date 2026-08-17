@@ -201,6 +201,11 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
                 bottomSafeAreaInset = inset
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background {
+            OpenCodeColors.surfaceBase
+                .ignoresSafeArea(edges: .bottom)
+        }
         .onChange(of: contentHeight) { _, _ in
             updatePresentationMode()
         }
@@ -236,9 +241,11 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
         // medium (~50%) sheet, which looks like a tall empty Commands band.
         .presentationDetents(presentationDetents)
         .presentationContentInteraction(resolvedMode == .scrollable ? .scrolls : .automatic)
-        .interactiveDismissDisabled(resolvedMode == .scrollable)
         .presentationCornerRadius(24)
-        .presentationBackground(OpenCodeColors.surfaceBase)
+        .presentationBackground {
+            OpenCodeColors.surfaceBase
+                .ignoresSafeArea()
+        }
         .presentationDragIndicator(resolvedMode == .scrollable ? .hidden : .visible)
     }
 
@@ -490,7 +497,11 @@ private struct OpenCodeBottomSheetContainer<PinnedContent: View, SheetContent: V
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .top)
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: mode == .compact ? nil : .infinity,
+            alignment: .top
+        )
         .padding(.bottom, bottomPadding)
         .background(OpenCodeColors.surfaceBase)
         .fixedSize(horizontal: false, vertical: mode == .compact)
