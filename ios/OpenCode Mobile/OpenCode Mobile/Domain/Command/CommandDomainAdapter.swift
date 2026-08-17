@@ -49,7 +49,7 @@ struct CommandDomainAdapter: Sendable {
                 V2PromptModelRefDTO(id: $0.modelID, providerID: $0.providerID, variant: options.variant)
             },
             files: options.attachments.isEmpty ? nil : options.attachments.map { attachment in
-                V2PromptFileDTO(uri: attachment.dataURL, name: attachment.filename)
+                V2PromptFileDTO(uri: attachment.dataURL, name: attachment.filename, mime: attachment.mime)
             }
         )
     }

@@ -206,6 +206,7 @@ class MessageDomainAdapter {
                     V2PromptFileDto(
                         uri = attachment.dataUrl,
                         name = attachment.filename,
+                        mime = attachment.mime,
                     )
                 }.takeIf { it.isNotEmpty() }
         val agents =
@@ -697,7 +698,7 @@ class MessageDomainAdapter {
 
     private fun toFilePart(dto: MessagePartDto): MessagePart.File? {
         val dataUrl = dto.url ?: return null
-        val mime = dto.mime?.lowercase() ?: return null
+        val mime = dto.mime?.lowercase() ?: AttachmentDataUrl.mimeFromDataUrl(dataUrl) ?: return null
         if (!AttachmentDataUrl.validates(dataUrl, mime)) return null
         val kind = AttachmentDataUrl.kind(mime) ?: return null
         return MessagePart.File(

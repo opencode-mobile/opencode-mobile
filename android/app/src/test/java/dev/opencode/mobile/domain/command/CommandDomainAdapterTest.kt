@@ -91,6 +91,7 @@ class CommandDomainAdapterTest {
         assertEquals("openai", request.model?.providerId)
         assertEquals("high", request.model?.variant)
         assertEquals("data:image/png;base64,abc", request.files?.single()?.uri)
+        assertEquals("image/png", request.files?.single()?.mime)
         assertEquals("steer", request.delivery)
     }
 }

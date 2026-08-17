@@ -273,7 +273,9 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let uri = string(in: file, key: "uri") {
             part["url"] = uri
         }
-        if let mime = string(in: file, key: "mime") {
+        if let mime = string(in: file, key: "mime")
+            ?? string(in: file, key: "uri").flatMap(AttachmentDataURL.mime(fromDataURL:))
+        {
             part["mime"] = mime
         }
         if let name = string(in: file, key: "name") {

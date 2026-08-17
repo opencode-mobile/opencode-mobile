@@ -143,6 +143,7 @@ struct MessageDomainAdapterTests {
         #expect(body.delivery == "steer")
         #expect(body.files?.first?.uri == "data:text/plain;base64,SGk=")
         #expect(body.files?.first?.name == "notes.txt")
+        #expect(body.files?.first?.mime == "text/plain")
         #expect(body.agents?.first?.name == "explore")
         #expect(body.agents?.first?.mention?.text == "@explore")
     }
@@ -421,6 +422,22 @@ struct MessageDomainAdapterTests {
         #expect(file.mime == "application/pdf")
         #expect(file.kind == .pdf)
         #expect(file.dataURL == "data:application/pdf;base64,JVBERi0=")
+    }
+
+    @Test func messagePart_fileDataURLWithoutMime_infersMime() throws {
+        let dto = try decoder.decode(
+            MessagePartDTO.self,
+            from: #"{"id":"prt-file","type":"file","filename":"Photo 1.jpeg","url":"data:image/jpeg;base64,AA=="}"#.data(using: .utf8)!
+        )
+
+        guard case .file(let file) = adapter.messagePart(from: dto) else {
+            Issue.record("Expected file part")
+            return
+        }
+        #expect(file.filename == "Photo 1.jpeg")
+        #expect(file.mime == "image/jpeg")
+        #expect(file.kind == .image)
+        #expect(file.dataURL == "data:image/jpeg;base64,AA==")
     }
 
     @Test func messagePart_fileURLThatIsNotData_returnsNil() throws {

@@ -261,6 +261,7 @@ class MessageDomainAdapterTest {
         assertEquals("steer", body.delivery)
         assertEquals("data:text/plain;base64,SGk=", body.files?.single()?.uri)
         assertEquals("notes.txt", body.files?.single()?.name)
+        assertEquals("text/plain", body.files?.single()?.mime)
         assertEquals("explore", body.agents?.single()?.name)
         assertEquals("@explore", body.agents?.single()?.mention?.text)
     }
@@ -555,6 +556,24 @@ class MessageDomainAdapterTest {
         assertEquals("photo.png", file.filename)
         assertEquals(AttachmentKind.Image, file.kind)
         assertEquals("data:image/png;base64,AA==", file.dataUrl)
+    }
+
+    @Test
+    fun toMessagePart_dataUrlFileWithoutMime_infersMime() {
+        val dto =
+            MessagePartDto(
+                id = "prt-file",
+                type = "file",
+                filename = "Photo 1.jpeg",
+                url = "data:image/jpeg;base64,AA==",
+            )
+
+        val file = adapter.toMessagePart(dto) as MessagePart.File
+
+        assertEquals("Photo 1.jpeg", file.filename)
+        assertEquals("image/jpeg", file.mime)
+        assertEquals(AttachmentKind.Image, file.kind)
+        assertEquals("data:image/jpeg;base64,AA==", file.dataUrl)
     }
 
     @Test

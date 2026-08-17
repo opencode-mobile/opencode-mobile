@@ -61,7 +61,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             )
         case "file":
             guard let url = dto.url,
-                  let mime = dto.mime?.lowercased(),
+                  let mime = (dto.mime ?? AttachmentDataURL.mime(fromDataURL: url))?.lowercased(),
                   url.lowercased().hasPrefix("data:"),
                   AttachmentDataURL.validates(url, mime: mime),
                   let kind = AttachmentDataURL.kind(for: mime)
@@ -171,7 +171,9 @@ nonisolated struct MessageDomainAdapter: Sendable {
     }
 
     func v2PromptRequest(options: PromptSendOptions) -> V2PromptRequestDTO {
-        let files = options.attachments.map { V2PromptFileDTO(uri: $0.dataURL, name: $0.filename) }
+        let files = options.attachments.map {
+            V2PromptFileDTO(uri: $0.dataURL, name: $0.filename, mime: $0.mime)
+        }
         let agents = ComposerMentionRouting.agentParts(text: options.text, mentions: options.agentMentions).map { part in
             V2PromptAgentDTO(
                 name: part.name,
