@@ -1,25 +1,17 @@
 # Server API v2 — Parity Gaps
 
-## Temporary: v2 session archive path (both platforms)
+No open platform parity gaps. Archive is capability-gated off on both apps.
+Child listing uses `parentID` on both remotes. Session-scoped v2 fork and
+message routes omit `?directory=` on both platforms (location lives on the
+session).
 
-- **Expected shared intent:** Home archive removes a session from the active
-  list on both v1 and v2 servers.
-- **Current iOS / Android:** Both call `POST /api/session/{id}/archive` then
-  reload the session. The path matches desktop migration notes but is not in
-  the published v2 OpenAPI session index.
-- **Affected area:** behavior / error handling on archive against real v2.
-- **Owner / next action:** Confirm against the target OpenCode build; if still
-  missing, capability-gate archive on v2 in P6 or add the upstream twin.
+## Intentional non-gaps
 
-## Temporary: iOS child/fork directory scoping on v2
-
-- **Expected shared intent:** Child listing and fork honor the active worktree
-  the same way on both platforms.
-- **Current iOS:** `listChildSessions` / `forkSession` repository methods do not
-  take a `directory` argument, so v2 child filter lists without
-  `?directory=` and fork omits location query.
-- **Current Android:** Passes `directory` through to list/filter and fork
-  remotes.
-- **Affected area:** behavior under multi-worktree v2 servers.
-- **Owner / next action:** Align iOS repository signatures when a v2 multi-root
-  case needs it (not blocking single-project home).
+| Topic | Note |
+| --- | --- |
+| Last-turn session diff | Capability-gated off on v2 on both platforms |
+| Todos REST seed | 404 on v2 so an empty list does not wipe event-seeded todos |
+| Reasoning live/history | Left at v1 parity (not rendered) |
+| Forms vs questions | Both platforms keep `/api/question/*` when it works and fall back to `/api/form/*` on 404 |
+| Prompt skills | No composer skill mentions on either platform |
+| Permission `always` | Mobile never sends persistent remember |

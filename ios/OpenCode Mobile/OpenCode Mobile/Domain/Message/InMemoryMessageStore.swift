@@ -28,6 +28,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
 
     private func replaceAllLocked(sessionID: String, messages: [Message]) {
         ensureCaches(sessionID: sessionID)
+        let previousStarts = toolStartTimesLocked(sessionID: sessionID)
         infoCache[sessionID] = [:]
         partsCache[sessionID] = [:]
         partOrder[sessionID] = [:]
@@ -36,7 +37,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         absorbedReplayChars[sessionID] = [:]
         messageOrder[sessionID] = messages.map(\.id)
         baseMessages[sessionID] = messages
-        seedPartIdentities(sessionID: sessionID, messages: messages)
+        seedPartIdentities(sessionID: sessionID, messages: messages, previousStarts: previousStarts)
         bumpRevision(sessionID: sessionID)
     }
 
@@ -228,7 +229,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             partOrder[sessionID]?[messageID] = []
         }
         if inserted {
-            messageOrder[sessionID]?.append(messageID)
+            insertMessage(sessionID: sessionID, messageID: messageID, role: info.role)
         }
         return SessionChangeSet(
             sessionRevision: 0,
@@ -236,6 +237,50 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             changedMessageIDs: inserted ? [] : [messageID],
             structuralChange: inserted
         )
+    }
+
+    private func insertMessage(sessionID: String, messageID: String, role: String) {
+        guard var order = messageOrder[sessionID] else { return }
+        if role.lowercased() == "user",
+           let index = order.firstIndex(where: { isTrailingLiveAssistant(sessionID: sessionID, messageID: $0) })
+        {
+            let precededByUser = index > 0 && isUser(sessionID: sessionID, messageID: order[index - 1])
+            if !precededByUser {
+                order.insert(messageID, at: index)
+                messageOrder[sessionID] = order
+                return
+            }
+        }
+        order.append(messageID)
+        messageOrder[sessionID] = order
+    }
+
+    private func isUser(sessionID: String, messageID: String) -> Bool {
+        if infoCache[sessionID]?[messageID]?.dictionaryValue?["role"]?.stringValue?.lowercased() == "user" {
+            return true
+        }
+        return baseMessages[sessionID]?.first(where: { $0.id == messageID })?.role == .user
+    }
+
+    private func isTrailingLiveAssistant(sessionID: String, messageID: String) -> Bool {
+        let base = baseMessages[sessionID]?.first(where: { $0.id == messageID })
+        let infoRole = infoCache[sessionID]?[messageID]?.dictionaryValue?["role"]?.stringValue
+        let isAssistant = infoRole?.lowercased() == "assistant" || base?.role == .assistant
+        guard isAssistant else { return false }
+        let liveParts = partsCache[sessionID]?[messageID]?.values.map { $0 } ?? []
+        let parts = liveParts.isEmpty ? (base?.parts ?? []) : liveParts
+        if parts.contains(where: { part in
+            if case .text(let text) = part {
+                return text.isStreaming || hasChunks(sessionID: sessionID, messageID: messageID, partID: text.id)
+            }
+            return false
+        }) {
+            return true
+        }
+        return parts.isEmpty || parts.allSatisfy { part in
+            if case .text(let text) = part { return text.text.isEmpty }
+            return false
+        }
     }
 
     private func applyPartUpdated(
@@ -517,7 +562,23 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             }
             return .text(textPart)
         }
-        return adapter.messagePart(from: partDTO)
+        return resolveToolStart(adapter.messagePart(from: partDTO), existing: existingPart)
+    }
+
+    private func resolveToolStart(_ part: MessagePart?, existing: MessagePart?) -> MessagePart? {
+        guard case .tool(let tool) = part else { return part }
+        let existingStart: Int64? = {
+            if case .tool(let existingTool) = existing { return existingTool.timeStartEpochMs }
+            return nil
+        }()
+        let resolved = ToolStartTime.resolve(
+            incoming: tool.timeStartEpochMs,
+            existing: existingStart,
+            status: tool.status,
+            nowEpochMs: ToolStartTime.nowEpochMs()
+        )
+        guard resolved != tool.timeStartEpochMs else { return part }
+        return .tool(tool.withTimeStart(resolved))
     }
 
     private func orderedParts(
@@ -576,13 +637,35 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         dict.mapValues { anySendableToJSON($0) }
     }
 
-    private func seedPartIdentities(sessionID: String, messages: [Message]) {
+    private func toolStartTimesLocked(sessionID: String) -> [String: Int64] {
+        var starts: [String: Int64] = [:]
+        for (_, parts) in partsCache[sessionID] ?? [:] {
+            for (partID, part) in parts {
+                if case .tool(let tool) = part, let start = tool.timeStartEpochMs {
+                    starts[partID] = start
+                }
+            }
+        }
+        return starts
+    }
+
+    private func seedPartIdentities(
+        sessionID: String,
+        messages: [Message],
+        previousStarts: [String: Int64]
+    ) {
+        let now = ToolStartTime.nowEpochMs()
         for message in messages {
             var identifiedParts: [String: MessagePart] = [:]
             var identifiedOrder: [String] = []
             for part in message.parts {
                 guard let partID = stablePartID(part) else { continue }
-                identifiedParts[partID] = part
+                identifiedParts[partID] = resolveSeededTool(
+                    part,
+                    partID: partID,
+                    previousStarts: previousStarts,
+                    nowEpochMs: now
+                )
                 identifiedOrder.append(partID)
             }
             if !identifiedParts.isEmpty {
@@ -590,6 +673,23 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                 partOrder[sessionID]?[message.id] = identifiedOrder
             }
         }
+    }
+
+    private func resolveSeededTool(
+        _ part: MessagePart,
+        partID: String,
+        previousStarts: [String: Int64],
+        nowEpochMs: Int64
+    ) -> MessagePart {
+        guard case .tool(let tool) = part else { return part }
+        let resolved = ToolStartTime.resolve(
+            incoming: tool.timeStartEpochMs,
+            existing: previousStarts[partID],
+            status: tool.status,
+            nowEpochMs: nowEpochMs
+        )
+        guard resolved != tool.timeStartEpochMs else { return part }
+        return .tool(tool.withTimeStart(resolved))
     }
 
     private func stablePartID(_ part: MessagePart) -> String? {

@@ -104,6 +104,7 @@ final class ProjectListHomeViewModel {
     private(set) var sessionActionsSheetVisible = false
     /// Stays false until a message fetch confirms the session is forkable.
     private(set) var sessionActionsCanFork = false
+    private(set) var sessionActionsCanArchive = true
     private(set) var sessionRenameDialog = HomeSessionTitleDialogState()
     private(set) var sessionForkDialog = HomeSessionTitleDialogState()
     private(set) var sessionForkResult = HomeSessionForkResultState()
@@ -174,7 +175,10 @@ final class ProjectListHomeViewModel {
         lastHomeHiddenAtEpochMs = HomeDisplayPreferences.shared.lastHomeHiddenAtEpochMs()
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
+                self?.stopLiveObservations()
                 self?.sessionReadyStore.clearCache()
+                self?.sessionLiveStore.clearCache()
+                self?.sessionStatusLiveStore.clearCache()
                 self?.messageRepository.clearMessageCache()
                 await self?.refresh()
             }
@@ -182,6 +186,8 @@ final class ProjectListHomeViewModel {
         connectionSessionCoordinator.onProfileCleared { [weak self] in
             Task { @MainActor in
                 self?.sessionReadyStore.clearCache()
+                self?.sessionLiveStore.clearCache()
+                self?.sessionStatusLiveStore.clearCache()
                 self?.messageRepository.clearMessageCache()
                 self?.stopLiveObservations()
                 self?.state = .disconnected
@@ -489,6 +495,7 @@ final class ProjectListHomeViewModel {
         sessionActionsTarget = target
         sessionActionsSheetVisible = true
         sessionActionsCanFork = false
+        sessionActionsCanArchive = activeConnectionManager.capabilities.supportsSessionArchive
         forkGateTask?.cancel()
         forkGateTask = Task { await resolveForkVisibility(target) }
     }
@@ -714,7 +721,7 @@ final class ProjectListHomeViewModel {
     }
 
     func archiveSessionAction() async {
-        guard let target = sessionActionsTarget, !sessionActionInFlight else { return }
+        guard let target = sessionActionsTarget, sessionActionsCanArchive, !sessionActionInFlight else { return }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.homeSessionActions,
             actionId: ProductAnalytics.Action.sessionActionsArchive
@@ -832,6 +839,7 @@ final class ProjectListHomeViewModel {
         sessionActionsTarget = nil
         sessionActionsSheetVisible = false
         sessionActionsCanFork = false
+        sessionActionsCanArchive = true
     }
 
     private func sessionMutationErrorMessage(_ error: Error) -> String {

@@ -1,8 +1,8 @@
 package dev.opencode.mobile.domain.session
 
 import dev.opencode.mobile.data.remote.SessionsApi
-import dev.opencode.mobile.data.remote.dto.InitSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.QuestionReplyRequestDto
+import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 
 internal class V2SessionRemote(
@@ -13,7 +13,16 @@ internal class V2SessionRemote(
         api.listPendingPermissionsV2(directory).map(adapter::toPermissionRequest)
 
     override suspend fun listPendingQuestions(directory: String?): List<QuestionRequest> =
-        api.listPendingQuestionsV2(directory).map(adapter::toQuestionRequest)
+        try {
+            api.listPendingQuestionsV2(directory).map(adapter::toQuestionRequest)
+        } catch (error: Throwable) {
+            val mapped = adapter.mapError(error)
+            if (mapped is SessionError.Http && mapped.statusCode == 404) {
+                api.listPendingFormsV2(directory).map(adapter::toQuestionRequest)
+            } else {
+                throw error
+            }
+        }
 
     override suspend fun listSessions(directory: String?): List<Session> = api.listSessionsV2(directory).map(adapter::toSession)
 
@@ -22,9 +31,8 @@ internal class V2SessionRemote(
         title: String?,
         directory: String?,
     ): Session {
-        var created = adapter.toSession(api.createSessionV2(directory))
-        if (!title.isNullOrBlank()) {
-            api.renameSessionV2(created.id, title)
+        var created = adapter.toSession(api.createSessionV2(directory, title))
+        if (!title.isNullOrBlank() && created.title != title) {
             created = created.copy(title = title)
         }
         return created
@@ -53,16 +61,7 @@ internal class V2SessionRemote(
     override suspend fun archiveSession(
         id: String,
         directory: String?,
-    ): Session {
-        api.archiveSessionV2(id)
-        return adapter.toSession(api.getSessionV2(id)).let { session ->
-            if (session.archivedAtEpochMs != null) {
-                session
-            } else {
-                session.copy(archivedAtEpochMs = System.currentTimeMillis())
-            }
-        }
-    }
+    ): Session = throw SessionError.Http(404, "session archive is not available")
 
     override suspend fun deleteSession(
         id: String,
@@ -72,7 +71,7 @@ internal class V2SessionRemote(
     override suspend fun listChildSessions(
         id: String,
         directory: String?,
-    ): List<Session> = api.listSessionsV2(directory).filter { it.parentId == id }.map(adapter::toSession)
+    ): List<Session> = api.listSessionsV2(directory, parentId = id).map(adapter::toSession)
 
     override suspend fun listSessionTodos(
         id: String,
@@ -85,12 +84,7 @@ internal class V2SessionRemote(
         providerId: String,
         modelId: String,
         directory: String?,
-    ): Boolean =
-        api.initializeSessionAgents(
-            id,
-            InitSessionRequestDto(messageId = messageId, providerId = providerId, modelId = modelId),
-            directory,
-        )
+    ): Boolean = throw SessionError.Http(404, "session init is not available")
 
     override suspend fun forkSession(
         id: String,
@@ -106,12 +100,12 @@ internal class V2SessionRemote(
     override suspend fun shareSession(
         id: String,
         directory: String?,
-    ): Session = adapter.toSession(api.shareSession(id, directory))
+    ): Session = throw SessionError.Http(404, "session share is not available")
 
     override suspend fun unshareSession(
         id: String,
         directory: String?,
-    ): Session = adapter.toSession(api.unshareSession(id, directory))
+    ): Session = throw SessionError.Http(404, "session share is not available")
 
     override suspend fun getSessionDiff(
         id: String,
@@ -169,7 +163,16 @@ internal class V2SessionRemote(
         requestId: String,
         answers: List<List<String>>,
         directory: String?,
-    ): Boolean = api.replyToQuestionV2(sessionId, requestId, QuestionReplyRequestDto(answers = answers))
+    ): Boolean =
+        if (requestId.startsWith("frm_")) {
+            api.replyToFormV2(
+                sessionId,
+                requestId,
+                V2FormReplyRequestDto(answer = adapter.formAnswer(answers)),
+            )
+        } else {
+            api.replyToQuestionV2(sessionId, requestId, QuestionReplyRequestDto(answers = answers))
+        }
 
     override suspend fun rejectQuestion(
         requestId: String,
@@ -180,5 +183,10 @@ internal class V2SessionRemote(
         sessionId: String,
         requestId: String,
         directory: String?,
-    ): Boolean = api.rejectQuestionV2(sessionId, requestId)
+    ): Boolean =
+        if (requestId.startsWith("frm_")) {
+            api.cancelFormV2(sessionId, requestId)
+        } else {
+            api.rejectQuestionV2(sessionId, requestId)
+        }
 }

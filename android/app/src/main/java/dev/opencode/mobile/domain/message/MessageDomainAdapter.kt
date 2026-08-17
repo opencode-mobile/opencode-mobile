@@ -15,7 +15,6 @@ import dev.opencode.mobile.data.remote.dto.V2FileAttachmentDto
 import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
 import dev.opencode.mobile.data.remote.dto.V2PromptAgentDto
 import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
-import dev.opencode.mobile.data.remote.dto.V2PromptInputDto
 import dev.opencode.mobile.data.remote.dto.V2PromptRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PromptSourceDto
 import dev.opencode.mobile.data.remote.dto.V2SessionMessageDto
@@ -28,6 +27,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -98,7 +98,12 @@ class MessageDomainAdapter {
                 toToolPart(toolName = toolName, callId = dto.callId, state = stateDto, id = dto.id)
             }
             "file" -> toFilePart(dto)
-            "compaction" -> MessagePart.Compaction(id = dto.id, auto = dto.auto == true)
+            "compaction" ->
+                MessagePart.Compaction(
+                    id = dto.id,
+                    auto = dto.auto == true,
+                    completed = dto.completed == true,
+                )
             else -> null
         }
     }
@@ -198,7 +203,10 @@ class MessageDomainAdapter {
         val files =
             options.attachments
                 .map { attachment ->
-                    V2PromptFileDto(uri = attachment.dataUrl, name = attachment.filename)
+                    V2PromptFileDto(
+                        uri = attachment.dataUrl,
+                        name = attachment.filename,
+                    )
                 }.takeIf { it.isNotEmpty() }
         val agents =
             ComposerMentionRouting
@@ -206,7 +214,7 @@ class MessageDomainAdapter {
                 .map { part ->
                     V2PromptAgentDto(
                         name = part.name,
-                        source =
+                        mention =
                             V2PromptSourceDto(
                                 start = part.start,
                                 end = part.end,
@@ -215,12 +223,9 @@ class MessageDomainAdapter {
                     )
                 }.takeIf { it.isNotEmpty() }
         return V2PromptRequestDto(
-            prompt =
-                V2PromptInputDto(
-                    text = options.text,
-                    files = files,
-                    agents = agents,
-                ),
+            text = options.text,
+            files = files,
+            agents = agents,
             delivery = "steer",
         )
     }
@@ -259,7 +264,9 @@ class MessageDomainAdapter {
         var model: V2ModelRefDto? = null
         dtos.forEach { dto ->
             when (dto.type) {
-                "agent-switched" -> agent = dto.agent.orEmpty()
+                "agent-switched",
+                "location-switched",
+                -> agent = dto.agent ?: agent
                 "model-switched" -> model = dto.model
                 "user" -> {
                     messages += projectV2User(dto, agent, model)
@@ -311,8 +318,8 @@ class MessageDomainAdapter {
                 MessageContextEstimate(
                     userCharacters =
                         text.length +
-                            dto.files.sumOf { it.source?.text?.length ?: 0 } +
-                            dto.agents.sumOf { it.source?.text?.length ?: 0 },
+                            dto.files.sumOf { it.mention?.text?.length ?: it.source?.text?.length ?: 0 } +
+                            dto.agents.sumOf { it.mention?.text?.length ?: it.source?.text?.length ?: 0 },
                 ),
         )
     }
@@ -399,7 +406,7 @@ class MessageDomainAdapter {
                             status = if (completed) ToolStatus.Completed else ToolStatus.Running,
                             title = "Shell",
                             callId = dto.callId,
-                            output = dto.output,
+                            output = v2ShellOutput(dto.output),
                             id = "${dto.id}:tool",
                         ),
                     ),
@@ -434,7 +441,14 @@ class MessageDomainAdapter {
 
     private fun projectV2Compaction(dto: V2SessionMessageDto): Message {
         val summary = dto.summary.orEmpty()
-        val parts = mutableListOf<MessagePart>(MessagePart.Compaction(id = dto.id, auto = dto.reason == "auto"))
+        val parts =
+            mutableListOf<MessagePart>(
+                MessagePart.Compaction(
+                    id = dto.id,
+                    auto = dto.reason == "auto",
+                    completed = dto.status.equals("completed", ignoreCase = true),
+                ),
+            )
         if (summary.isNotBlank()) {
             parts += MessagePart.Text(text = summary, id = "${dto.id}:text:0")
         }
@@ -493,13 +507,13 @@ class MessageDomainAdapter {
                 MessagePart.Tool(
                     toolName = name,
                     status = status,
-                    title = name,
                     error = state?.error?.message?.takeIf { it.isNotEmpty() },
                     callId = content.id,
                     input = jsonObjectFromInput(state?.input),
                     output = toolOutput(state),
-                    metadata = state?.structured,
+                    metadata = state?.metadata ?: state?.structured,
                     id = content.id,
+                    timeStartEpochMs = content.time?.created,
                 )
             }
             else -> null
@@ -509,8 +523,8 @@ class MessageDomainAdapter {
         file: V2FileAttachmentDto,
         fallbackId: String,
     ): MessagePart.File? {
-        val dataUrl = file.uri ?: return null
-        val mime = file.mime?.lowercase() ?: return null
+        val dataUrl = v2FileDataUrl(file) ?: return null
+        val mime = (file.mime ?: AttachmentDataUrl.mimeFromDataUrl(dataUrl))?.lowercase() ?: return null
         if (!AttachmentDataUrl.validates(dataUrl, mime)) return null
         val kind = AttachmentDataUrl.kind(mime) ?: return null
         return MessagePart.File(
@@ -521,6 +535,24 @@ class MessageDomainAdapter {
             dataUrl = dataUrl,
         )
     }
+
+    private fun v2FileDataUrl(file: V2FileAttachmentDto): String? {
+        file.uri?.takeIf { it.isNotBlank() }?.let { return it }
+        file.source?.uri?.takeIf { it.isNotBlank() }?.let { return it }
+        val mime = file.mime ?: return null
+        val base64 = jsonString(file.data) ?: return null
+        return AttachmentDataUrl.fromBase64(base64, mime)
+    }
+
+    private fun v2ShellOutput(output: JsonElement?): String? =
+        when (output) {
+            is JsonPrimitive -> output.contentOrNull
+            is JsonObject -> jsonString(output["output"])
+            else -> null
+        }
+
+    private fun jsonString(element: JsonElement?): String? =
+        (element as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 
     private fun jsonObjectFromInput(input: JsonElement?): JsonObject? =
         when (input) {

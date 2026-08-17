@@ -1,12 +1,14 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.message.ToolStartTime
+
 object SessionChatChildSessionElapsed {
     fun format(
         startEpochMs: Long?,
         nowEpochMs: Long,
     ): String? {
-        if (startEpochMs == null) return null
-        val elapsedMs = (nowEpochMs - startEpochMs).coerceAtLeast(0)
+        val start = ToolStartTime.normalizeEpochMs(startEpochMs) ?: return null
+        val elapsedMs = (nowEpochMs - start).coerceAtLeast(0)
         val totalSeconds = elapsedMs / 1000
         val minutes = totalSeconds / 60
         val seconds = totalSeconds % 60

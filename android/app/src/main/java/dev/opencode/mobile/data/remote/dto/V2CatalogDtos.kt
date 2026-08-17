@@ -30,6 +30,7 @@ data class V2ProviderInfoDto(
 @Serializable
 data class V2ModelInfoDto(
     val id: String,
+    @SerialName("modelID") val modelId: String? = null,
     @SerialName("providerID") val providerId: String,
     val name: String? = null,
     val enabled: Boolean? = null,

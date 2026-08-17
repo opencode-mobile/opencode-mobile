@@ -173,15 +173,32 @@ nonisolated struct ToolPart: Equatable, Sendable {
         self.metadata = metadata
         self.timeStartEpochMs = timeStartEpochMs
     }
+
+    func withTimeStart(_ timeStartEpochMs: Int64?) -> ToolPart {
+        ToolPart(
+            id: id,
+            toolName: toolName,
+            status: status,
+            title: title,
+            error: error,
+            callID: callID,
+            input: input,
+            output: output,
+            metadata: metadata,
+            timeStartEpochMs: timeStartEpochMs
+        )
+    }
 }
 
 nonisolated struct CompactionPart: Equatable, Sendable {
     let id: String?
     let auto: Bool
+    let completed: Bool
 
-    init(id: String? = nil, auto: Bool = false) {
+    init(id: String? = nil, auto: Bool = false, completed: Bool = false) {
         self.id = id
         self.auto = auto
+        self.completed = completed
     }
 }
 

@@ -107,4 +107,28 @@ struct SessionCompactionPresenceTests {
         ]
         #expect(SessionCompactionPresence.isActive(messages: messages, isSessionBusy: false) == false)
     }
+
+    @Test func isActive_falseWhenBusyWithCompletedCompactionSnapshot() {
+        let messages = [
+            Message(
+                id: "u1",
+                role: .user,
+                text: "hello",
+                model: nil,
+                mode: "build",
+                sentAtEpochMs: 1
+            ),
+            Message(
+                id: "c1",
+                role: .assistant,
+                text: "summary",
+                parts: [.compaction(CompactionPart(id: "c1", auto: false, completed: true))],
+                model: "m",
+                mode: "compaction",
+                sentAtEpochMs: 2
+            )
+        ]
+        #expect(SessionCompactionPresence.isActive(messages: messages, isSessionBusy: true) == false)
+        #expect(SessionCompactionPresence.completedCompactionIDs(in: messages) == ["c1"])
+    }
 }

@@ -1,7 +1,6 @@
 package dev.opencode.mobile.data.remote
 
 import dev.opencode.mobile.data.remote.dto.ApiActiveSessionsEnvelope
-import dev.opencode.mobile.data.remote.dto.ApiDataEnvelope
 import dev.opencode.mobile.data.remote.dto.ApiListEnvelope
 import dev.opencode.mobile.data.remote.dto.ApiLocatedEnvelope
 import dev.opencode.mobile.data.remote.dto.ApiSessionActiveDto
@@ -20,7 +19,10 @@ import dev.opencode.mobile.data.remote.dto.TodoDto
 import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CompactSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CreateSessionRequestDto
+import dev.opencode.mobile.data.remote.dto.V2ForkBoundaryDto
 import dev.opencode.mobile.data.remote.dto.V2ForkSessionRequestDto
+import dev.opencode.mobile.data.remote.dto.V2FormInfoDto
+import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2LocationDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
@@ -29,6 +31,7 @@ import dev.opencode.mobile.data.remote.dto.V2RevertStageRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
+import dev.opencode.mobile.data.remote.dto.decodeDataEnvelope
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
 import dev.opencode.mobile.network.applyLocationDirectory
@@ -47,6 +50,7 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import javax.inject.Inject
 
@@ -341,7 +345,15 @@ class SessionsApi private constructor(
             .get()
             .get("api/question/request") {
                 applyLocationDirectory(directory)
-            }.body<ApiListEnvelope<QuestionRequestDto>>()
+            }.bodyOnSuccess<ApiListEnvelope<QuestionRequestDto>>()
+            .data
+
+    suspend fun listPendingFormsV2(directory: String? = null): List<V2FormInfoDto> =
+        httpClient
+            .get()
+            .get("api/form/request") {
+                applyLocationDirectory(directory)
+            }.bodyOnSuccess<ApiListEnvelope<V2FormInfoDto>>()
             .data
 
     suspend fun replyToQuestionV2(
@@ -364,9 +376,32 @@ class SessionsApi private constructor(
             .post("api/session/$sessionId/question/$requestId/reject")
             .ensureSuccess()
 
+    suspend fun replyToFormV2(
+        sessionId: String,
+        formId: String,
+        body: V2FormReplyRequestDto,
+    ): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$sessionId/form/$formId/reply") {
+                setJsonBody(json, body)
+            }.ensureSuccess()
+
+    suspend fun cancelFormV2(
+        sessionId: String,
+        formId: String,
+    ): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$sessionId/form/$formId/cancel")
+            .ensureSuccess()
+
     // --- V2 home / session CRUD ---
 
-    suspend fun listSessionsV2(directory: String? = null): List<V2SessionDto> {
+    suspend fun listSessionsV2(
+        directory: String? = null,
+        parentId: String? = null,
+    ): List<V2SessionDto> {
         val sessions = mutableListOf<V2SessionDto>()
         var cursor: String? = null
         var pages = 0
@@ -376,27 +411,33 @@ class SessionsApi private constructor(
                     .get()
                     .get("api/session") {
                         applyDirectory(directory)
+                        parentId?.let { parameter("parentID", it) }
                         cursor?.let { parameter("cursor", it) }
                     }.body<ApiListEnvelope<V2SessionDto>>()
             sessions += envelope.data
-            cursor = envelope.cursor?.next?.takeIf { it.isNotBlank() }
+            val next = envelope.cursor?.next?.takeIf { it.isNotBlank() }
+            if (next == cursor) break
+            cursor = next
             pages++
         } while (cursor != null && pages < MAX_V2_SESSION_LIST_PAGES)
         return sessions
     }
 
-    suspend fun createSessionV2(directory: String? = null): V2SessionDto =
+    suspend fun createSessionV2(
+        directory: String? = null,
+        title: String? = null,
+    ): V2SessionDto =
         httpClient
             .get()
             .post("api/session") {
                 setJsonBody(
                     json,
                     V2CreateSessionRequestDto(
+                        title = title?.takeIf { it.isNotBlank() },
                         location = directory?.let { V2LocationDto(directory = it) },
                     ),
                 )
-            }.body<ApiDataEnvelope<V2SessionDto>>()
-            .data
+            }.decodeV2Session()
 
     suspend fun getActiveSessionsV2(): Map<String, ApiSessionActiveDto> =
         httpClient
@@ -409,8 +450,7 @@ class SessionsApi private constructor(
         httpClient
             .get()
             .get("api/session/$id")
-            .body<ApiDataEnvelope<V2SessionDto>>()
-            .data
+            .decodeV2Session()
 
     suspend fun renameSessionV2(
         id: String,
@@ -443,9 +483,17 @@ class SessionsApi private constructor(
         httpClient
             .get()
             .post("api/session/$id/fork") {
-                setJsonBody(json, V2ForkSessionRequestDto(messageId = messageId))
-            }.body<ApiDataEnvelope<V2SessionDto>>()
-            .data
+                setJsonBody(
+                    json,
+                    V2ForkSessionRequestDto(
+                        boundary =
+                            V2ForkBoundaryDto(
+                                type = if (messageId.isNullOrBlank()) "through" else "before",
+                                messageId = messageId?.takeIf { it.isNotBlank() },
+                            ),
+                    ),
+                )
+            }.decodeV2Session()
 
     suspend fun compactSessionV2(id: String): Boolean =
         httpClient
@@ -466,7 +514,7 @@ class SessionsApi private constructor(
         httpClient
             .get()
             .post("api/session/$id/revert/stage") {
-                setJsonBody(json, V2RevertStageRequestDto(messageId = messageId, partId = partId, files = true))
+                setJsonBody(json, V2RevertStageRequestDto(messageId = messageId, files = true))
             }.ensureSuccess()
 
     suspend fun clearRevertV2(id: String): Boolean =
@@ -497,6 +545,20 @@ class SessionsApi private constructor(
             }.body<ApiLocatedEnvelope<List<FileDiffDto>>>()
             .data
 
+    private suspend fun HttpResponse.decodeV2Session(): V2SessionDto = json.decodeDataEnvelope(body<JsonElement>())
+
+    /**
+     * Live v2 404s can omit Content-Type. Decoding first then throws
+     * [io.ktor.client.call.NoTransformationFoundException] instead of HTTP 404,
+     * which skips the question→form fallback.
+     */
+    private suspend inline fun <reified T> HttpResponse.bodyOnSuccess(): T {
+        if (!status.isSuccess()) {
+            throw ResponseException(this, "HTTP ${status.value}: ${status.description}")
+        }
+        return body()
+    }
+
     private suspend fun HttpResponse.ensureSuccess(): Boolean {
         if (!status.isSuccess()) {
             throw ResponseException(this, "HTTP ${status.value}: ${status.description}")
@@ -510,6 +572,6 @@ class SessionsApi private constructor(
     }
 
     private companion object {
-        const val MAX_V2_SESSION_LIST_PAGES = 20
+        const val MAX_V2_SESSION_LIST_PAGES = 500
     }
 }

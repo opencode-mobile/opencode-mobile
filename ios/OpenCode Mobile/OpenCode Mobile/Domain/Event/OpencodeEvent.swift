@@ -68,6 +68,7 @@ nonisolated struct OpencodeEvent: Sendable, Equatable {
     private static let statusRefreshTypes: Set<String> = [
         "session.status",
         "session.idle",
+        "session.active.snapshot",
     ]
 }
 
@@ -104,5 +105,15 @@ nonisolated enum AnySendable: Sendable, Equatable {
     var stringValue: String? {
         if case let .string(s) = self { s }
         else { nil }
+    }
+
+    var int64Value: Int64? {
+        switch self {
+        case let .int(value): Int64(value)
+        case let .int64(value): value
+        case let .double(value): Int64(value)
+        case let .string(value): Int64(value)
+        default: nil
+        }
     }
 }

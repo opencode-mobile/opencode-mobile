@@ -55,6 +55,14 @@ nonisolated struct SessionsAPIClient: Sendable {
         return envelope.data
     }
 
+    func listPendingFormsV2(directory: String? = nil) async throws -> [V2FormInfoDTO] {
+        let envelope: APIListEnvelope<V2FormInfoDTO> = try await get(
+            path: "api/form/request",
+            locationDirectory: directory
+        )
+        return envelope.data
+    }
+
     func createSession(parentID: String?, title: String?, directory: String? = nil) async throws -> SessionDTO {
         try await post(path: "session", body: CreateSessionRequestDTO(parentID: parentID, title: title), directory: directory)
     }
@@ -219,14 +227,25 @@ nonisolated struct SessionsAPIClient: Sendable {
         try await postWithoutBody(path: "api/session/\(sessionID)/question/\(questionID)/reject")
     }
 
+    func replyToFormV2(sessionID: String, formID: String, body: V2FormReplyRequestDTO) async throws -> Bool {
+        try await postEmpty(path: "api/session/\(sessionID)/form/\(formID)/reply", body: body)
+    }
+
+    func cancelFormV2(sessionID: String, formID: String) async throws -> Bool {
+        try await postWithoutBody(path: "api/session/\(sessionID)/form/\(formID)/cancel")
+    }
+
     // MARK: - V2 home / session CRUD
 
-    func listSessionsV2(directory: String? = nil) async throws -> [V2SessionDTO] {
+    func listSessionsV2(directory: String? = nil, parentID: String? = nil) async throws -> [V2SessionDTO] {
         var sessions: [V2SessionDTO] = []
         var cursor: String?
         var pages = 0
         repeat {
             var query: [String: String] = [:]
+            if let parentID {
+                query["parentID"] = parentID
+            }
             if let cursor {
                 query["cursor"] = cursor
             }
@@ -236,16 +255,21 @@ nonisolated struct SessionsAPIClient: Sendable {
                 query: query
             )
             sessions.append(contentsOf: envelope.data)
-            cursor = envelope.cursor?.next.flatMap { $0.isEmpty ? nil : $0 }
+            let next = envelope.cursor?.next.flatMap { $0.isEmpty ? nil : $0 }
+            if next == cursor { break }
+            cursor = next
             pages += 1
         } while cursor != nil && pages < Self.maxV2SessionListPages
         return sessions
     }
 
-    func createSessionV2(directory: String? = nil) async throws -> V2SessionDTO {
+    func createSessionV2(directory: String? = nil, title: String? = nil) async throws -> V2SessionDTO {
         let envelope: APIDataEnvelope<V2SessionDTO> = try await post(
             path: "api/session",
-            body: V2CreateSessionRequestDTO(location: directory.map { V2LocationDTO(directory: $0) })
+            body: V2CreateSessionRequestDTO(
+                title: title.flatMap { $0.isEmpty ? nil : $0 },
+                location: directory.map { V2LocationDTO(directory: $0) }
+            )
         )
         return envelope.data
     }
@@ -275,7 +299,12 @@ nonisolated struct SessionsAPIClient: Sendable {
     func forkSessionV2(id: String, messageID: String?) async throws -> V2SessionDTO {
         let envelope: APIDataEnvelope<V2SessionDTO> = try await post(
             path: "api/session/\(id)/fork",
-            body: V2ForkSessionRequestDTO(messageID: messageID)
+            body: V2ForkSessionRequestDTO(
+                boundary: V2ForkBoundaryDTO(
+                    type: (messageID?.isEmpty == false) ? "before" : "through",
+                    messageID: messageID.flatMap { $0.isEmpty ? nil : $0 }
+                )
+            )
         )
         return envelope.data
     }
@@ -295,7 +324,7 @@ nonisolated struct SessionsAPIClient: Sendable {
     func stageRevertV2(id: String, messageID: String, partID: String?) async throws -> Bool {
         try await postEmpty(
             path: "api/session/\(id)/revert/stage",
-            body: V2RevertStageRequestDTO(messageID: messageID, partID: partID)
+            body: V2RevertStageRequestDTO(messageID: messageID)
         )
     }
 
@@ -321,7 +350,7 @@ nonisolated struct SessionsAPIClient: Sendable {
     }
 
     private struct EmptyBody: Codable {}
-    private static let maxV2SessionListPages = 20
+    private static let maxV2SessionListPages = 500
 
     private func get<T: Decodable>(
         path: String,

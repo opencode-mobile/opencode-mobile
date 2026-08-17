@@ -78,6 +78,37 @@ struct CommandDomainAdapterTests {
         #expect(request.parts[0].filename == "a.png")
     }
 
+    @Test func toV2RunRequest_mapsModelFilesAndDelivery() {
+        let request = adapter.toV2RunRequest(
+            CommandRunOptions(
+                command: "init",
+                arguments: "please",
+                attachments: [
+                    Attachment(
+                        id: "att-1",
+                        filename: "a.png",
+                        mime: "image/png",
+                        kind: .image,
+                        dataURL: "data:image/png;base64,abc"
+                    ),
+                ],
+                model: PromptModelSelection(providerID: "openai", modelID: "gpt-4"),
+                variant: "high",
+                mode: "build"
+            )
+        )
+
+        #expect(request.command == "init")
+        #expect(request.arguments == "please")
+        #expect(request.agent == "build")
+        #expect(request.model?.id == "gpt-4")
+        #expect(request.model?.providerID == "openai")
+        #expect(request.model?.variant == "high")
+        #expect(request.files?.count == 1)
+        #expect(request.files?.first?.uri == "data:image/png;base64,abc")
+        #expect(request.delivery == "steer")
+    }
+
     @Test func toServerCommands_blankDescriptionBecomesNil() {
         let commands = adapter.toServerCommands([
             CommandDTO(

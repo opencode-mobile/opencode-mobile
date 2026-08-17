@@ -187,6 +187,51 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_missingSessionStopsOverflowRecovery() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            val callsAfterInitial = repository.listMessagesCallCount
+
+            repository.shouldFailMissingSession = true
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = "ses-1"))
+            advanceTimeBy(20_000)
+
+            assertTrue(repository.listMessagesCallCount <= callsAfterInitial + 2)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_clearCacheStopsReconnectRecovery() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            val callsAfterInitial = repository.listMessagesCallCount
+
+            repository.shouldFailLoad = true
+            sync.clearCache()
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = "ses-1"))
+            advanceTimeBy(20_000)
+
+            assertEquals(callsAfterInitial, repository.listMessagesCallCount)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
     fun observeMessages_eventDuringRecoveryKeepsRecoveringUntilQuietAuthority() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
@@ -899,6 +944,93 @@ class MessageSyncTest {
 
             assertEquals(1, emissions.size)
             assertEquals(listOf("msg-1"), emissions.last().map { it.id })
+        }
+
+    @Test
+    fun observeMessages_v2PromptedPublishesUserText() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            val adapter = EventDomainAdapter(Json { ignoreUnknownKeys = true })
+            adapter
+                .parseEvents(
+                    """{"type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-2","prompt":{"text":"Hello from CLI"},"delivery":"steer"}}""",
+                ).forEach(eventStream::emit)
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val last = emissions.last()
+            assertEquals(listOf("msg-1", "msg-2"), last.map { it.id })
+            assertEquals("Hello from CLI", last.first { it.id == "msg-2" }.text)
+        }
+
+    @Test
+    fun observeMessages_v2InboxEnqueuedPublishesUserText() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            val adapter = EventDomainAdapter(Json { ignoreUnknownKeys = true })
+            adapter
+                .parseEvents(
+                    """{"type":"session.inbox.enqueued","data":{"inboxID":"msg-2","sessionID":"ses-1","item":{"type":"user","payload":{"text":"Hello from inbox","files":[]},"delivery":"steer"}}}""",
+                ).forEach(eventStream::emit)
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val last = emissions.last()
+            assertEquals(listOf("msg-1", "msg-2"), last.map { it.id })
+            assertEquals("Hello from inbox", last.first { it.id == "msg-2" }.text)
+        }
+
+    @Test
+    fun observeMessages_v2PromptedGlobalBusPublishesUserText() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            val adapter = EventDomainAdapter(Json { ignoreUnknownKeys = true })
+            adapter
+                .parseEvents(
+                    """{"directory":"/repo","payload":{"type":"session.next.prompted","properties":{"sessionID":"ses-1","messageID":"msg-2","prompt":{"text":"Hello from CLI"},"delivery":"steer"}}}""",
+                ).forEach(eventStream::emit)
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val last = emissions.last()
+            assertEquals(listOf("msg-1", "msg-2"), last.map { it.id })
+            assertEquals("Hello from CLI", last.first { it.id == "msg-2" }.text)
         }
 
     @Test
@@ -1716,6 +1848,41 @@ class SessionStatusLiveStoreTest {
         }
 
     @Test
+    fun observeStatuses_emptyActiveSnapshotDoesNotClearSseBusy() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(statuses = emptyList())
+            val eventStream = FakeForegroundEventStream()
+            val store = createStatusStore(repository, eventStream)
+            val emissions = mutableListOf<Map<String, SessionStatus>>()
+            val collectJob =
+                launch {
+                    store.observeStatuses("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+
+            eventStream.emit(
+                OpencodeEvent(
+                    type = "session.status",
+                    sessionId = "ses-1",
+                    rawProperties =
+                        buildJsonObject {
+                            put("sessionID", "ses-1")
+                            putJsonObject("status") { put("type", "busy") }
+                        },
+                ),
+            )
+            advanceUntilIdle()
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+
+            eventStream.emit(OpencodeEvent(type = "session.active.snapshot", sessionId = "ses-1"))
+            advanceTimeBy(350)
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+        }
+
+    @Test
     fun observeStatuses_removesSessionOnIdleEvent() =
         runTest(testDispatcher) {
             val repository =
@@ -1868,6 +2035,7 @@ private class FakeMessageRepository(
     var messages: List<Message> = listOf(Message(id = "msg-1", role = MessageRole.User, text = "Hello")),
     var messagesBySession: MutableMap<String, List<Message>> = mutableMapOf(),
     var shouldFailLoad: Boolean = false,
+    var shouldFailMissingSession: Boolean = false,
     private val holdLoadUntil: CompletableDeferred<Unit>? = null,
 ) : MessageRepository {
     var listMessagesCallCount = 0
@@ -1917,6 +2085,7 @@ private class FakeMessageRepository(
             it.await()
         }
         listMessagesCallCount += 1
+        if (shouldFailMissingSession) error("NotFoundError Session not found: $sessionId")
         if (shouldFailLoad) error("load failed")
         return messagesBySession[sessionId] ?: messages
     }

@@ -1333,10 +1333,37 @@ class SessionChatViewModelTest {
             assertEquals(null, repository.sentOptions?.variant)
             assertEquals("build", repository.sentOptions?.mode)
             assertEquals(
-                "Hello",
+                listOf("Hello", "New prompt"),
                 viewModel.uiState.value.messages
-                    .single()
-                    .text,
+                    .map { it.text },
+            )
+            assertTrue(
+                viewModel.uiState.value.messages
+                    .any { it.text == "New prompt" && it.isPending },
+            )
+        }
+
+    @Test
+    fun sendPrompt_postSendReloadMatchingUser_dropsOptimistic() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository(echoSentPrompt = true)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("New prompt")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.uiState.value.isSending)
+            assertEquals(
+                listOf("Hello", "New prompt"),
+                viewModel.uiState.value.messages
+                    .map { it.text },
+            )
+            assertFalse(
+                viewModel.uiState.value.messages
+                    .any { it.isPending },
             )
         }
 
@@ -2063,6 +2090,30 @@ class SessionChatViewModelTest {
 
             assertEquals(
                 listOf("Earlier", "Later"),
+                viewModel.uiState.value.messages
+                    .map { it.text },
+            )
+        }
+
+    @Test
+    fun loadMessages_keepsStoreUserBeforeAssistantWhenUserTimestampIsLater() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(id = "msg-photo", role = MessageRole.User, text = "What is it", sentAtEpochMs = 3_000L),
+                                Message(id = "msg-asst", role = MessageRole.Assistant, text = "A photo", sentAtEpochMs = 1_000L),
+                                Message(id = "msg-hey", role = MessageRole.User, text = "hey", sentAtEpochMs = 2_000L),
+                            ),
+                    ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("What is it", "A photo", "hey"),
                 viewModel.uiState.value.messages
                     .map { it.text },
             )
@@ -2860,6 +2911,112 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun abort_interruptsBoundSessionAndRunningSubagentChild() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(sessionStatusType = "busy")
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(
+                                        id = "msg-1",
+                                        role = MessageRole.Assistant,
+                                        text = "",
+                                        parts =
+                                            listOf(
+                                                MessagePart.Tool(
+                                                    toolName = "subagent",
+                                                    status = ToolStatus.Running,
+                                                    id = "prt-1",
+                                                    input =
+                                                        buildJsonObject {
+                                                            put("agent", "explore")
+                                                            put("description", "Find git projects")
+                                                        },
+                                                    metadata =
+                                                        buildJsonObject {
+                                                            put("sessionID", "ses-child")
+                                                        },
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertTrue(
+                viewModel.uiState.value.messages.any { message ->
+                    message.blocks.any { block ->
+                        block is SessionChatTimelineBlock.ChildSessionRow &&
+                            block.childSessionId == "ses-child"
+                    }
+                },
+            )
+
+            viewModel.abort()
+            advanceUntilIdle()
+
+            assertEquals(setOf("ses-1", "ses-child"), sessionRepository.abortSessionIds.toSet())
+        }
+
+    @Test
+    fun abort_parentSuccessChildFailure_clearsWorking() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessionStatusType = "busy",
+                    abortErrorsById =
+                        mapOf("ses-child" to SessionError.Http(statusCode = 500, message = "child abort failed")),
+                )
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(
+                                        id = "msg-1",
+                                        role = MessageRole.Assistant,
+                                        text = "",
+                                        parts =
+                                            listOf(
+                                                MessagePart.Tool(
+                                                    toolName = "subagent",
+                                                    status = ToolStatus.Running,
+                                                    id = "prt-1",
+                                                    input =
+                                                        buildJsonObject {
+                                                            put("agent", "explore")
+                                                            put("description", "Find git projects")
+                                                        },
+                                                    metadata =
+                                                        buildJsonObject {
+                                                            put("sessionID", "ses-child")
+                                                        },
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals("Working", viewModel.uiState.value.sessionStatusLabel)
+
+            viewModel.abort()
+            advanceUntilIdle()
+
+            assertEquals(setOf("ses-1", "ses-child"), sessionRepository.abortSessionIds.toSet())
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+            assertNull(viewModel.uiState.value.snackbar)
+        }
+
+    @Test
     fun runClientSlashAction_redo_unrevertsAndClearsComposerRestore() =
         runTest(testDispatcher) {
             val sessionRepository =
@@ -3003,6 +3160,44 @@ class SessionChatViewModelTest {
 
             assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
             assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+        }
+
+    @Test
+    fun remoteCompaction_busyWithCompletedSnapshot_doesNotShowCompacting() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(
+                                        id = "u1",
+                                        role = MessageRole.User,
+                                        text = "hello",
+                                        mode = "build",
+                                        sentAtEpochMs = 1,
+                                    ),
+                                    Message(
+                                        id = "c1",
+                                        role = MessageRole.Assistant,
+                                        text = "summary",
+                                        parts =
+                                            listOf(
+                                                MessagePart.Compaction(id = "c1", auto = false, completed = true),
+                                            ),
+                                        mode = "compaction",
+                                        sentAtEpochMs = 2,
+                                    ),
+                                ),
+                        ),
+                    sessionRepository = FakeSessionRepository(sessionStatusType = "busy"),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("Working", viewModel.uiState.value.sessionStatusLabel)
+            assertNull(viewModel.uiState.value.workingIndicatorLabel)
         }
 
     private fun createViewModel(
@@ -3315,6 +3510,7 @@ private class FakeMessageRepository(
     var shouldFailLoad: Boolean = false,
     private val shouldFailSend: Boolean = false,
     var failListMessagesAfterSend: Boolean = false,
+    private val echoSentPrompt: Boolean = false,
     private val holdSendUntil: CompletableDeferred<Unit>? = null,
     private val contentPreparer: MessageContentPreparer =
         MessageContentPreparer(OpenCodeTextMateHighlightingEngine(OpenCodeSyntaxHighlighter.default)).apply {
@@ -3423,6 +3619,14 @@ private class FakeMessageRepository(
         sentOptions = options
         holdSendUntil?.await()
         if (shouldFailSend) error("send failed")
+        if (echoSentPrompt && options.text.isNotEmpty()) {
+            messages = messages +
+                Message(
+                    id = "msg-sent",
+                    role = MessageRole.User,
+                    text = options.text,
+                )
+        }
     }
 }
 
@@ -3478,7 +3682,8 @@ private class FakeSessionRepository(
     private val sessionDiffsByMessageId: Map<String, List<FileDiff>> = emptyMap(),
     private val sessionDiffDelayMsByMessageId: Map<String, Long> = emptyMap(),
     private val sessionDiffError: SessionError? = null,
-    private val sessionStatusType: String = "idle",
+    private var sessionStatusType: String = "idle",
+    private val abortErrorsById: Map<String, Throwable> = emptyMap(),
     private val sessionStatusError: SessionError? = null,
     private val updateSessionError: SessionError? = null,
     private val archiveError: Throwable? = null,
@@ -3574,6 +3779,8 @@ private class FakeSessionRepository(
     var summarizeRequest: SummarizeRequest? = null
         private set
     var abortCallCount: Int = 0
+        private set
+    var abortSessionIds: List<String> = emptyList()
         private set
 
     override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> {
@@ -3681,6 +3888,9 @@ private class FakeSessionRepository(
         directory: String?,
     ): Boolean {
         abortCallCount += 1
+        abortSessionIds = abortSessionIds + id
+        abortErrorsById[id]?.let { throw it }
+        sessionStatusType = "idle"
         return true
     }
 

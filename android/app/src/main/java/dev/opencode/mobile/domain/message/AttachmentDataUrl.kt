@@ -25,6 +25,15 @@ object AttachmentDataUrl {
     }
 
     @OptIn(ExperimentalEncodingApi::class)
+    fun fromBase64(
+        base64: String,
+        mime: String,
+    ): String? {
+        val bytes = runCatching { Base64.Default.decode(base64) }.getOrNull() ?: return null
+        return make(bytes, mime)
+    }
+
+    @OptIn(ExperimentalEncodingApi::class)
     fun decode(
         value: String,
         expectedMime: String,
@@ -38,4 +47,11 @@ object AttachmentDataUrl {
         value: String,
         mime: String,
     ): Boolean = kind(mime) != null && decode(value, mime) != null
+
+    fun mimeFromDataUrl(value: String): String? {
+        if (!value.startsWith("data:", ignoreCase = true)) return null
+        val header = value.substringAfter("data:").substringBefore(',', missingDelimiterValue = "")
+        val mime = header.substringBefore(';').trim().lowercase()
+        return mime.takeIf { it.isNotEmpty() && kind(it) != null }
+    }
 }

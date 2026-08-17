@@ -78,7 +78,7 @@ class MessageProtocolRepositoryTest {
             assertEquals(listOf("msg_user", "msg_asst"), messages.map { it.id })
             assertEquals("Hello", messages[0].text)
             assertEquals("Hi", messages[1].text)
-            assertEquals("/repo", requests.single().url.parameters["directory"])
+            assertEquals(null, requests.single().url.parameters["directory"])
             assertEquals("asc", requests.single().url.parameters["order"])
             assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_2/message"))
         }
@@ -144,10 +144,12 @@ class MessageProtocolRepositoryTest {
             assertTrue(requests[1].url.encodedPath.endsWith("/api/session/ses_2/model"))
             assertTrue(requests[2].url.encodedPath.endsWith("/api/session/ses_2/prompt"))
             val promptBody = (requests[2].body as io.ktor.http.content.TextContent).text
-            assertTrue(promptBody.contains("Hello"))
+            assertTrue(promptBody.contains("\"text\":\"Hello\""))
             assertTrue(promptBody.contains("data:text/plain;base64,SGk="))
             assertTrue(promptBody.contains("steer"))
+            assertTrue(!promptBody.contains("\"mime\""))
             assertTrue(!promptBody.contains("\"parts\""))
+            assertTrue(!promptBody.contains("\"prompt\""))
         }
 
     @Test
@@ -174,7 +176,10 @@ class MessageProtocolRepositoryTest {
 
             assertEquals(listOf("msg_a", "msg_b"), messages.map { it.id })
             assertEquals(2, requests.size)
+            assertEquals("asc", requests[0].url.parameters["order"])
+            assertEquals(null, requests[0].url.parameters["cursor"])
             assertEquals("page-2", requests[1].url.parameters["cursor"])
+            assertEquals(null, requests[1].url.parameters["order"])
         }
 
     @Test

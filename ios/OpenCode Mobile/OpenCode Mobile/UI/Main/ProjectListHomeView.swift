@@ -240,7 +240,12 @@ struct ProjectListHomeView: View {
                                     letterCharacter(for: profile.displayName),
                                     letterAccent(for: profile.id.isEmpty ? profile.displayName : profile.id)
                                 ),
-                                action: { Task { await viewModel.switchProfile(id: profile.id) } }
+                                action: {
+                                    Task {
+                                        await viewModel.switchProfile(id: profile.id)
+                                        navigationPath = NavigationPath()
+                                    }
+                                }
                             )
                         }
                     }
@@ -280,12 +285,14 @@ struct ProjectListHomeView: View {
                         action: { viewModel.openSessionFork() }
                     )
                 }
-                OpenCodeBottomSheetEntry(
-                    title: "Archive",
-                    enabled: !viewModel.sessionActionInFlight,
-                    startDecorator: .icon(.archive),
-                    action: { Task { await viewModel.archiveSessionAction() } }
-                )
+                if viewModel.sessionActionsCanArchive {
+                    OpenCodeBottomSheetEntry(
+                        title: "Archive",
+                        enabled: !viewModel.sessionActionInFlight,
+                        startDecorator: .icon(.archive),
+                        action: { Task { await viewModel.archiveSessionAction() } }
+                    )
+                }
                 OpenCodeBottomSheetEntry(
                     title: "Delete",
                     enabled: !viewModel.sessionActionInFlight,

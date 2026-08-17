@@ -85,6 +85,52 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
+    fun v2ListSessions_mapsMissingTitleToNewSession() =
+        runTest {
+            val client =
+                testClient {
+                    respondJson(
+                        """
+                        {
+                          "data":[
+                            {
+                              "id":"ses_untitled",
+                              "projectID":"global",
+                              "cost":0,
+                              "tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},
+                              "time":{"created":1,"updated":1},
+                              "location":{"directory":"/home/ivan"}
+                            },
+                            {
+                              "id":"ses_titled",
+                              "title":"What is OpenCode 2?",
+                              "projectID":"global",
+                              "cost":0,
+                              "tokens":{"input":1,"output":2,"reasoning":0,"cache":{"read":0,"write":0}},
+                              "time":{"created":2,"updated":3},
+                              "location":{"directory":"/home/ivan"}
+                            }
+                          ],
+                          "cursor":{"previous":null,"next":null}
+                        }
+                        """.trimIndent(),
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val sessions = repository.listSessions("/home/ivan")
+
+            assertEquals(listOf("ses_untitled", "ses_titled"), sessions.map { it.id })
+            assertEquals(listOf("New Session", "What is OpenCode 2?"), sessions.map { it.title })
+            assertEquals("/home/ivan", sessions.first().directory)
+        }
+
+    @Test
     fun v2ActiveStatuses_mapRunningToBusy() =
         runTest {
             val client =
@@ -138,7 +184,7 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
-    fun v2Fork_postsMessageIdEnvelope() =
+    fun v2Fork_postsBoundaryEnvelope() =
         runTest {
             var captured: HttpRequestData? = null
             val client =
@@ -161,6 +207,8 @@ class SessionProtocolRepositoryTest {
             assertEquals("ses_1", forked.parentId)
             assertEquals(HttpMethod.Post, captured?.method)
             assertTrue(captured!!.url.encodedPath.endsWith("/api/session/ses_1/fork"))
+            assertTrue(captured.requestBodyText().contains("\"boundary\""))
+            assertTrue(captured.requestBodyText().contains("\"type\":\"before\""))
             assertTrue(captured.requestBodyText().contains("\"messageID\":\"msg_1\""))
         }
 
@@ -191,24 +239,14 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
-    fun v2CreateSession_postsLocationThenOptionalRename() =
+    fun v2CreateSession_postsTitleAndLocation() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()
-            val responses =
-                ArrayDeque(
-                    listOf(
-                        """{"data":{"id":"ses_new","title":"New session","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"}}}""",
-                        "",
-                    ),
-                )
-            val statuses = ArrayDeque(listOf(HttpStatusCode.OK, HttpStatusCode.NoContent))
             val client =
                 testClient { request ->
                     requests += request
-                    respond(
-                        content = responses.removeFirst(),
-                        status = statuses.removeFirst(),
-                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    respondJson(
+                        """{"data":{"id":"ses_new","title":"Named","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"}}}""",
                     )
                 }
             val repository =
@@ -222,9 +260,58 @@ class SessionProtocolRepositoryTest {
 
             assertEquals("ses_new", created.id)
             assertEquals("Named", created.title)
+            assertEquals(1, requests.size)
             assertTrue(requests[0].url.encodedPath.endsWith("/api/session"))
             assertTrue(requests[0].requestBodyText().contains("\"directory\":\"/repo\""))
-            assertTrue(requests[1].url.encodedPath.endsWith("/api/session/ses_new/rename"))
+            assertTrue(requests[0].requestBodyText().contains("\"title\":\"Named\""))
+        }
+
+    @Test
+    fun v2CreateSession_acceptsUntitledCreateResponse() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """{"data":{"id":"ses_new","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"}}}""",
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val created = repository.createSession(parentId = null, title = null, directory = "/repo")
+
+            assertEquals("ses_new", created.id)
+            assertEquals("New Session", created.title)
+            assertEquals("/repo", created.directory)
+            assertEquals(1, requests.size)
+        }
+
+    @Test
+    fun v2CreateSession_acceptsUnwrappedCreateResponse() =
+        runTest {
+            val client =
+                testClient {
+                    respondJson(
+                        """{"id":"ses_bare","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"}}""",
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val created = repository.createSession(parentId = null, title = null, directory = "/repo")
+
+            assertEquals("ses_bare", created.id)
+            assertEquals("New Session", created.title)
         }
 
     @Test
@@ -299,7 +386,7 @@ class SessionProtocolRepositoryTest {
                           "action":"edit",
                           "resources":["src/a.kt"],
                           "save":["src/*"],
-                          "source":{"type":"tool","messageID":"msg_1","callID":"call_1"}
+                          "source":{"type":"tool","messageID":"msg_1","id":"call_1"}
                         }]}
                         """.trimIndent(),
                     )
@@ -317,6 +404,7 @@ class SessionProtocolRepositoryTest {
             assertEquals("edit", permissions.single().permission)
             assertEquals(listOf("src/a.kt"), permissions.single().patterns)
             assertEquals("msg_1", permissions.single().toolMessageId)
+            assertEquals("call_1", permissions.single().toolCallId)
             assertTrue(requests.single().url.encodedPath.contains("/api/permission/request"))
             assertEquals("/repo", requests.single().url.parameters["location[directory]"])
         }
@@ -342,6 +430,60 @@ class SessionProtocolRepositoryTest {
             assertTrue(ok)
             assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/permission/per_1/reply"))
             assertTrue(requests.single().requestBodyText().contains("\"reply\":\"once\""))
+        }
+
+    @Test
+    fun v2ListPendingQuestions_fallsBackToFormsWhenQuestionRoute404HasNoContentType() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    when {
+                        request.url.encodedPath.contains("/api/question/request") ->
+                            respond(
+                                content = "",
+                                status = HttpStatusCode.NotFound,
+                                headers = headersOf(),
+                            )
+                        request.url.encodedPath.contains("/api/form/request") ->
+                            respondJson(
+                                """
+                                {
+                                  "data":[{
+                                    "id":"frm_1",
+                                    "sessionID":"ses_1",
+                                    "title":"Task type",
+                                    "fields":[{
+                                      "key":"q0",
+                                      "title":"Task type",
+                                      "description":"What would you like to work on?",
+                                      "options":[{"value":"Code changes","label":"Code changes"}],
+                                      "custom":true
+                                    }]
+                                  }]
+                                }
+                                """.trimIndent(),
+                            )
+                        else -> respond("", HttpStatusCode.NotFound)
+                    }
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val questions = repository.listPendingQuestions("/repo")
+
+            assertEquals("frm_1", questions.single().id)
+            assertEquals("ses_1", questions.single().sessionId)
+            assertEquals("What would you like to work on?", questions.single().questions.single().question)
+            assertEquals("Code changes", questions.single().questions.single().options.single().label)
+            assertEquals(2, requests.size)
+            assertTrue(requests[0].url.encodedPath.contains("/api/question/request"))
+            assertTrue(requests[1].url.encodedPath.contains("/api/form/request"))
         }
 
     @Test
@@ -436,7 +578,7 @@ class SessionProtocolRepositoryTest {
             assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/revert/stage"))
             val body = requests.single().requestBodyText()
             assertTrue(body.contains("\"messageID\":\"msg_9\""))
-            assertTrue(body.contains("\"partID\":\"part_2\""))
+            assertTrue(!body.contains("\"partID\""))
             assertTrue(body.contains("\"files\":true"))
         }
 
@@ -461,6 +603,75 @@ class SessionProtocolRepositoryTest {
             assertTrue(ok)
             assertEquals(HttpMethod.Post, requests.single().method)
             assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/revert/clear"))
+        }
+
+    @Test
+    fun v2ArchiveSession_returnsHttp404WithoutCallingArchive() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson("{}")
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val error =
+                runCatching { repository.archiveSession("ses_1", "/repo") }.exceptionOrNull() as SessionError.Http
+
+            assertEquals(404, error.statusCode)
+            assertTrue(requests.isEmpty())
+        }
+
+    @Test
+    fun v2ListChildSessions_passesParentId() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """{"data":[{"id":"ses_child","title":"Child","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"},"parentID":"ses_1"}],"cursor":{"next":null}}""",
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val children = repository.listChildSessions("ses_1", "/repo")
+
+            assertEquals("ses_child", children.single().id)
+            assertEquals("ses_1", requests.single().url.parameters["parentID"])
+        }
+
+    @Test
+    fun v2ShareSession_returnsHttp404WithoutCallingLegacyPath() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson("{}")
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val error = runCatching { repository.shareSession("ses_1", "/repo") }.exceptionOrNull() as SessionError.Http
+
+            assertEquals(404, error.statusCode)
+            assertTrue(requests.isEmpty())
         }
 
     @Test

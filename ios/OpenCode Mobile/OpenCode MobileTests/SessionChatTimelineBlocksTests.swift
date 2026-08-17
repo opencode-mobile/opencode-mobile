@@ -443,6 +443,34 @@ struct SessionChatTimelineBlocksTests {
         #expect(row.timeStartEpochMs == nil)
     }
 
+    @Test func build_v2SubagentUsesChildSessionRow() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "call_1",
+                        toolName: "subagent",
+                        status: .completed,
+                        title: "subagent",
+                        input: [
+                            "agent": .string("explore"),
+                            "description": .string("Find git projects in directories"),
+                        ],
+                        metadata: ["sessionID": .string("ses-child-2")]
+                    )
+                ),
+            ]
+        )
+        guard case .childSessionRow(_, let row) = blocks.first else {
+            Issue.record("Expected child session row")
+            return
+        }
+        #expect(row.agentName == "explore")
+        #expect(row.letter == "E")
+        #expect(row.secondLine == "Find git projects in directories")
+        #expect(row.childSessionId == "ses-child-2")
+    }
+
     @Test func build_taskFallsBackTitleAndOmitsNavWithoutSessionId() {
         let blocks = okBlocks(
             parts: [

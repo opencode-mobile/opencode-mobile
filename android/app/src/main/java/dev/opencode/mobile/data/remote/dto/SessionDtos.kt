@@ -137,7 +137,46 @@ data class QuestionOptionDto(
 @Serializable
 data class QuestionToolDto(
     @SerialName("messageID") val messageId: String,
-    @SerialName("callID") val callId: String,
+    @SerialName("callID") val callId: String? = null,
+    val id: String? = null,
+)
+
+@Serializable
+data class V2FormInfoDto(
+    val id: String,
+    @SerialName("sessionID") val sessionId: String,
+    val title: String? = null,
+    val metadata: V2FormMetadataDto? = null,
+    val fields: List<V2FormFieldDto> = emptyList(),
+)
+
+@Serializable
+data class V2FormMetadataDto(
+    val kind: String? = null,
+    val tool: QuestionToolDto? = null,
+)
+
+@Serializable
+data class V2FormFieldDto(
+    val key: String,
+    val title: String? = null,
+    val description: String? = null,
+    val type: String? = null,
+    val options: List<V2FormFieldOptionDto> = emptyList(),
+    val custom: Boolean? = null,
+    val multiple: Boolean? = null,
+)
+
+@Serializable
+data class V2FormFieldOptionDto(
+    val value: String? = null,
+    val label: String? = null,
+    val description: String? = null,
+)
+
+@Serializable
+data class V2FormReplyRequestDto(
+    val answer: Map<String, String>,
 )
 
 @Serializable

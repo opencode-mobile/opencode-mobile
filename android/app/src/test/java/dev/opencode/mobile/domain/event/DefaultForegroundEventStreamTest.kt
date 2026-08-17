@@ -17,6 +17,8 @@ import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import io.ktor.utils.io.ByteChannel
+import io.ktor.utils.io.writeStringUtf8
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -154,6 +156,57 @@ class DefaultForegroundEventStreamTest {
                 path.set(DeviceNetworkPathStatus.Ready)
                 withTimeout(1_000) { opened.await() }
                 assertTrue(requests.single().url.encodedPath.contains("/global/event"))
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun idleTimeout_reconnectsWhenStreamGoesSilent() =
+        runBlocking {
+            val opens = AtomicInteger(0)
+            val secondOpen = CompletableDeferred<Unit>()
+            val client =
+                HttpClient(
+                    MockEngine {
+                        val n = opens.incrementAndGet()
+                        if (n == 1) {
+                            val channel = ByteChannel(autoFlush = true)
+                            channel.writeStringUtf8("data: {\"type\":\"server.connected\",\"data\":{}}\n\n")
+                            respond(
+                                content = channel,
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                            )
+                        } else {
+                            secondOpen.complete(Unit)
+                            respond(
+                                content = "data: {\"type\":\"server.heartbeat\",\"data\":{}}\n\n",
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                            )
+                        }
+                    },
+                )
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    idleTimeoutMs = 150,
+                )
+            try {
+                stream.start()
+                withTimeout(2_000) { secondOpen.await() }
+                assertTrue(opens.get() >= 2)
             } finally {
                 stream.stop()
                 client.close()

@@ -247,7 +247,7 @@ object SessionChatTimelineBlocks {
     private fun isGroupableToolBlock(block: SessionChatTimelineBlock): Boolean =
         when (block) {
             is SessionChatTimelineBlock.ToolGroup -> true
-            is SessionChatTimelineBlock.ToolCard -> block.toolName.lowercase() != "task"
+            is SessionChatTimelineBlock.ToolCard -> !isChildSessionTool(block.toolName)
             is SessionChatTimelineBlock.Text,
             is SessionChatTimelineBlock.Attachment,
             is SessionChatTimelineBlock.ChildSessionRow,
@@ -298,12 +298,13 @@ object SessionChatTimelineBlocks {
     private fun isContextTool(toolName: String): Boolean = toolName.lowercase() in contextToolNames
 
     /**
-     * A visible tool can join a group. Subagent (`task`) spawns never group so
-     * their child-session tap stays available; when collapse is on every other
-     * visible tool groups, otherwise only context tools do.
+     * A visible tool can join a group. Child-session tools (`task` / v2
+     * `subagent`) never group so their child-session tap stays available; when
+     * collapse is on every other visible tool groups, otherwise only context
+     * tools do.
      */
     private fun isGroupableTool(tool: MessagePart.Tool, collapse: Boolean): Boolean {
-        if (tool.toolName.lowercase() == "task") return false
+        if (isChildSessionTool(tool.toolName)) return false
         if (collapse) return true
         return isContextTool(tool.toolName)
     }
@@ -381,7 +382,7 @@ object SessionChatTimelineBlocks {
     }
 
     private fun toToolBlock(tool: MessagePart.Tool): SessionChatTimelineBlock? {
-        if (tool.toolName.lowercase() == "task" && tool.status != ToolStatus.Error) {
+        if (isChildSessionTool(tool.toolName) && tool.status != ToolStatus.Error) {
             return toChildSessionRow(tool)
         }
         return toToolCard(tool)
@@ -391,7 +392,8 @@ object SessionChatTimelineBlocks {
         val partId = tool.id ?: return null
         val agentName = taskAgentName(tool)
         val secondLine =
-            tool.title?.takeIf { it.isNotEmpty() }
+            tool.title
+                ?.takeIf { it.isNotEmpty() && !it.equals(tool.toolName, ignoreCase = true) }
                 ?: inputString(tool.input, "description", "prompt")
         return SessionChatTimelineBlock.ChildSessionRow(
             blockID = PresentationBlockId.direct(partId),
@@ -405,7 +407,7 @@ object SessionChatTimelineBlocks {
                 } else {
                     null
                 },
-            childSessionId = metadataString(tool.metadata, "sessionId"),
+            childSessionId = childSessionId(tool),
         )
     }
 
@@ -489,7 +491,7 @@ object SessionChatTimelineBlocks {
                         inputString(tool.input, "name", "skill")
                             ?: runningTitleOverride(tool),
                 )
-            "task" -> taskChrome(tool)
+            "task", "subagent" -> taskChrome(tool)
             "edit" -> fileChangeChrome(tool, displayTitle = "Edit")
             "write" -> fileChangeChrome(tool, displayTitle = "Write")
             "apply_patch" -> fileChangeChrome(tool, displayTitle = "Patch")
@@ -613,7 +615,7 @@ object SessionChatTimelineBlocks {
         return Chrome(
             title = title,
             subtitle = subtitle,
-            childSessionId = metadataString(tool.metadata, "sessionId"),
+            childSessionId = childSessionId(tool),
         )
     }
 
@@ -621,6 +623,14 @@ object SessionChatTimelineBlocks {
         inputString(tool.input, "agent", "name")
             ?: metadataString(tool.metadata, "agent")
             ?: "Task"
+
+    private fun isChildSessionTool(toolName: String): Boolean {
+        val name = toolName.lowercase()
+        return name == "task" || name == "subagent"
+    }
+
+    private fun childSessionId(tool: MessagePart.Tool): String? =
+        metadataString(tool.metadata, "sessionId", "sessionID")
 
     private fun contextChrome(
         tool: MessagePart.Tool,

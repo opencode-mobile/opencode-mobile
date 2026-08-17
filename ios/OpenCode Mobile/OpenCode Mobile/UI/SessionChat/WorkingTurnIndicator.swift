@@ -11,11 +11,11 @@ enum WorkingTurnIndicator {
     ) -> String? {
         if isCompacting { return SessionCompactChrome.statusLabel }
         guard let statusLabel else { return nil }
-        if hasVisibleAssistantContentAfterLastUser(messages) { return nil }
+        if hasInProgressAssistantContentAfterLastUser(messages) { return nil }
         return statusLabel
     }
 
-    private static func hasVisibleAssistantContentAfterLastUser(_ messages: [SessionChatRow]) -> Bool {
+    private static func hasInProgressAssistantContentAfterLastUser(_ messages: [SessionChatRow]) -> Bool {
         let lastUserIndex = messages.lastIndex(where: { $0.role == .user })
         let candidates: ArraySlice<SessionChatRow>
         if let lastUserIndex {
@@ -23,10 +23,11 @@ enum WorkingTurnIndicator {
         } else {
             candidates = messages[...]
         }
-        return candidates.contains { $0.role == .assistant && hasVisibleContent($0) }
+        return candidates.contains { $0.role == .assistant && hasInProgressContent($0) }
     }
 
-    private static func hasVisibleContent(_ message: SessionChatRow) -> Bool {
+    private static func hasInProgressContent(_ message: SessionChatRow) -> Bool {
+        if message.isStreaming { return true }
         if !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return true
         }
@@ -34,9 +35,19 @@ enum WorkingTurnIndicator {
             switch block {
             case let .text(_, text, _):
                 !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case .attachment, .toolCard, .toolGroup, .childSessionRow:
+            case .attachment, .childSessionRow:
                 true
+            case let .toolCard(_, card):
+                card.status.isInProgress
+            case let .toolGroup(_, group):
+                group.status.isInProgress || group.members.contains { $0.status.isInProgress }
             }
         }
+    }
+}
+
+private extension ToolStatus {
+    var isInProgress: Bool {
+        self == .pending || self == .running
     }
 }

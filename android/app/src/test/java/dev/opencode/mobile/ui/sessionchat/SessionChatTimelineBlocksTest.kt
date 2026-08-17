@@ -658,6 +658,76 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
+    fun build_v2SubagentUsesChildSessionRow() {
+        val row =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "subagent",
+                            status = ToolStatus.Completed,
+                            id = "call_1",
+                            title = "subagent",
+                            input =
+                                json(
+                                    "agent" to "explore",
+                                    "description" to "Find git projects in directories",
+                                ),
+                            metadata = json("sessionID" to "ses-child-2"),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ChildSessionRow
+
+        assertEquals("explore", row.agentName)
+        assertEquals("E", row.letter)
+        assertEquals("Find git projects in directories", row.secondLine)
+        assertEquals("ses-child-2", row.childSessionId)
+    }
+
+    @Test
+    fun knownChildSessionIds_includesChildRowAndRunningToolCard() {
+        val state =
+            SessionChatTimelineRegionState(
+                messages =
+                    listOf(
+                        SessionChatMessageItem(
+                            id = "msg-1",
+                            role = MessageRole.Assistant,
+                            text = "",
+                            metadataLabel = "",
+                            blocks =
+                                listOf(
+                                    SessionChatTimelineBlock.ChildSessionRow(
+                                        blockID = "row-1",
+                                        agentName = "explore",
+                                        letter = "E",
+                                        isBackground = false,
+                                        childSessionId = "ses-child",
+                                    ),
+                                    SessionChatTimelineBlock.ToolCard(
+                                        blockID = "tool-1",
+                                        toolName = "subagent",
+                                        status = ToolStatus.Running,
+                                        title = "explore",
+                                        childSessionId = "ses-running",
+                                    ),
+                                    SessionChatTimelineBlock.ToolCard(
+                                        blockID = "tool-2",
+                                        toolName = "subagent",
+                                        status = ToolStatus.Completed,
+                                        title = "explore",
+                                        childSessionId = "ses-done",
+                                    ),
+                                ),
+                        ),
+                    ),
+            )
+
+        assertEquals(setOf("ses-child", "ses-running"), state.knownChildSessionIds())
+    }
+
+    @Test
     fun build_taskFallsBackTitleAndOmitsNavWithoutSessionId() {
         val row =
             buildBlocks(

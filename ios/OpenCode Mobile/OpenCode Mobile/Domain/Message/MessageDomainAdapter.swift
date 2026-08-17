@@ -79,7 +79,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             guard let toolName = dto.tool else { return nil }
             return .tool(toolPart(id: dto.id, toolName: toolName, callID: dto.callID, state: dto.state))
         case "compaction":
-            return .compaction(CompactionPart(id: dto.id, auto: dto.auto == true))
+            return .compaction(CompactionPart(id: dto.id, auto: dto.auto == true, completed: dto.completed == true))
         default:
             return nil
         }
@@ -175,15 +175,13 @@ nonisolated struct MessageDomainAdapter: Sendable {
         let agents = ComposerMentionRouting.agentParts(text: options.text, mentions: options.agentMentions).map { part in
             V2PromptAgentDTO(
                 name: part.name,
-                source: V2PromptSourceDTO(start: part.start, end: part.end, text: part.sourceValue)
+                mention: V2PromptSourceDTO(start: part.start, end: part.end, text: part.sourceValue)
             )
         }
         return V2PromptRequestDTO(
-            prompt: V2PromptInputDTO(
-                text: options.text,
-                files: files.isEmpty ? nil : files,
-                agents: agents.isEmpty ? nil : agents
-            )
+            text: options.text,
+            files: files.isEmpty ? nil : files,
+            agents: agents.isEmpty ? nil : agents
         )
     }
 
@@ -224,8 +222,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
         var model: V2ModelRefDTO?
         for dto in dtos {
             switch dto.type {
-            case "agent-switched":
-                agent = dto.agent ?? ""
+            case "agent-switched", "location-switched":
+                agent = dto.agent ?? agent
             case "model-switched":
                 model = dto.model
             case "user":
@@ -275,8 +273,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             sentAtEpochMs: dto.time?.created,
             contextEstimate: MessageContextEstimate(
                 userCharacters: text.count
-                    + dto.files.reduce(0) { $0 + ($1.source?.text?.count ?? 0) }
-                    + dto.agents.reduce(0) { $0 + ($1.source?.text?.count ?? 0) }
+                    + dto.files.reduce(0) { $0 + ($1.mention?.text?.count ?? $1.source?.text?.count ?? 0) }
+                    + dto.agents.reduce(0) { $0 + ($1.mention?.text?.count ?? $1.source?.text?.count ?? 0) }
             )
         )
     }
@@ -362,7 +360,15 @@ nonisolated struct MessageDomainAdapter: Sendable {
 
     private func projectV2Compaction(_ dto: V2SessionMessageDTO) -> Message {
         let summary = dto.summary ?? ""
-        var parts: [MessagePart] = [.compaction(CompactionPart(id: dto.id, auto: dto.reason == "auto"))]
+        var parts: [MessagePart] = [
+            .compaction(
+                CompactionPart(
+                    id: dto.id,
+                    auto: dto.reason == "auto",
+                    completed: dto.status?.caseInsensitiveCompare("completed") == .orderedSame
+                )
+            )
+        ]
         if !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             parts.append(.text(TextPart(id: "\(dto.id):text:0", text: summary, isStreaming: false)))
         }
@@ -421,12 +427,12 @@ nonisolated struct MessageDomainAdapter: Sendable {
                     id: content.id,
                     toolName: name,
                     status: toolStatus(from: state?.status),
-                    title: name,
                     error: state?.error?.message.flatMap { $0.isEmpty ? nil : $0 },
                     callID: content.id,
                     input: dictionaryFromInput(state?.input),
                     output: toolOutput(state),
-                    metadata: state?.structured
+                    metadata: state?.metadata ?? state?.structured,
+                    timeStartEpochMs: content.time?.created
                 )
             )
         default:
@@ -435,8 +441,9 @@ nonisolated struct MessageDomainAdapter: Sendable {
     }
 
     private func v2FilePart(_ file: V2FileAttachmentDTO, fallbackID: String) -> MessagePart? {
-        guard let url = file.uri,
-              let mime = file.mime?.lowercased(),
+        guard let url = v2FileDataURL(file) else { return nil }
+        let mime = (file.mime ?? AttachmentDataURL.mime(fromDataURL: url))?.lowercased()
+        guard let mime,
               url.lowercased().hasPrefix("data:"),
               AttachmentDataURL.validates(url, mime: mime),
               let kind = AttachmentDataURL.kind(for: mime)
@@ -450,6 +457,15 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 dataURL: url
             )
         )
+    }
+
+    private func v2FileDataURL(_ file: V2FileAttachmentDTO) -> String? {
+        if let uri = file.uri?.nilIfEmpty { return uri }
+        if let uri = file.source?.uri?.nilIfEmpty { return uri }
+        guard let mime = file.mime, let data = file.data, let decoded = Data(base64Encoded: data) else {
+            return nil
+        }
+        return AttachmentDataURL.make(data: decoded, mime: mime)
     }
 
     private func dictionaryFromInput(_ input: AnyCodable?) -> [String: AnyCodable]? {

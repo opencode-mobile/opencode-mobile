@@ -100,6 +100,125 @@ struct EventDomainAdapterTests {
         #expect(event?.rawProperties?["info"]?.dictionaryValue?["id"]?.stringValue == "msg-1")
     }
 
+    @Test func parseEvents_projectsPromptedIntoUserMessageAndTextPart() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"Hello from CLI"},"delivery":"steer"}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
+        #expect(events[0].rawProperties?["info"]?.dictionaryValue?["role"]?.stringValue == "user")
+        let part = events[1].rawProperties?["part"]?.dictionaryValue
+        #expect(part?["type"]?.stringValue == "text")
+        #expect(part?["text"]?.stringValue == "Hello from CLI")
+        #expect(part?["messageID"]?.stringValue == "msg-1")
+        #expect(part?["id"]?.stringValue == "msg-1:text:0")
+    }
+
+    @Test func parseEvents_projectsVersionedPromptedType() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.next.prompted.1","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"Hello from CLI"},"delivery":"steer"}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["text"]?.stringValue == "Hello from CLI")
+    }
+
+    @Test func parseEvents_projectsPromptedFilesIntoFileParts() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"See this","files":[{"uri":"data:image/png;base64,AA==","mime":"image/png","name":"a.png"}]},"delivery":"steer"}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated", "message.part.updated"])
+        let file = events[2].rawProperties?["part"]?.dictionaryValue
+        #expect(file?["type"]?.stringValue == "file")
+        #expect(file?["url"]?.stringValue == "data:image/png;base64,AA==")
+        #expect(file?["mime"]?.stringValue == "image/png")
+        #expect(file?["filename"]?.stringValue == "a.png")
+    }
+
+    @Test func parseEvents_projectsGlobalBusPromptedPayload() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"directory":"/repo","payload":{"id":"evt_1","type":"session.next.prompted","properties":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"Hello from CLI"},"delivery":"steer"}}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["text"]?.stringValue == "Hello from CLI")
+        #expect(events[0].sessionID == "ses-1")
+    }
+
+    @Test func parseEvents_projectsFlattenedPromptedFields() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.next.prompted","sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"Hello from CLI"},"delivery":"steer"}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["text"]?.stringValue == "Hello from CLI")
+    }
+
+    @Test func parseEvents_projectsSyncSiblingPrompted() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"payload":{"type":"sync","syncEvent":{"type":"session.next.prompted.1","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"Hello from CLI"}}}}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["text"]?.stringValue == "Hello from CLI")
+    }
+
+    @Test func parseEvents_keepsPromptWhenNestedDataAlsoPresent() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"Hello from CLI"},"data":{"ignored":true}}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["text"]?.stringValue == "Hello from CLI")
+    }
+
+    @Test func parseEvents_projectsPromptedJsonStringPrompt() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":"{\"text\":\"Hello from CLI\"}"}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["text"]?.stringValue == "Hello from CLI")
+    }
+
+    @Test func parseEvents_projectsLiveToolEnvelopeCreatedIntoStateTimeStart() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.tool.input.started","created":1710000000000,"data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","name":"task"}}"#
+        )
+        #expect(event?.type == "message.part.updated")
+        let state = event?.rawProperties?["part"]?.dictionaryValue?["state"]?.dictionaryValue
+        #expect(event?.rawProperties?["part"]?.dictionaryValue?["id"]?.stringValue == "prt-1")
+        #expect(event?.rawProperties?["part"]?.dictionaryValue?["tool"]?.stringValue == "task")
+        #expect(state?["status"]?.stringValue == "pending")
+        #expect(state?["time"]?.dictionaryValue?["start"]?.int64Value == 1_710_000_000_000)
+    }
+
+    @Test func parseEvents_projectsInboxEnqueuedItemPayloadIntoUserText() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.inbox.enqueued","data":{"inboxID":"msg-2","sessionID":"ses-1","item":{"type":"user","payload":{"text":"Hello from inbox","files":[]},"delivery":"steer"}}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
+        #expect(events[0].sessionID == "ses-1")
+        #expect(events[0].rawProperties?["info"]?.dictionaryValue?["id"]?.stringValue == "msg-2")
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["text"]?.stringValue == "Hello from inbox")
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["messageID"]?.stringValue == "msg-2")
+    }
+
+    @Test func parseEvents_projectsInboxEnqueuedCreatedIntoUserInfoTime() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.inbox.enqueued","created":1710000000000,"data":{"inboxID":"msg-2","sessionID":"ses-1","item":{"type":"user","payload":{"text":"Hello from inbox","files":[]},"delivery":"steer"}}}"#
+        )
+        #expect(events[0].type == "message.updated")
+        #expect(
+            events[0].rawProperties?["info"]?.dictionaryValue?["time"]?.dictionaryValue?["created"]?.int64Value
+                == 1_710_000_000_000
+        )
+    }
+
     @Test func parseEvents_projectsStepFailedIntoSessionErrorWithV2Message() {
         let adapter = EventDomainAdapter()
         let events = adapter.parseEvents(
@@ -110,13 +229,80 @@ struct EventDomainAdapterTests {
         #expect(events[0].sessionErrorMessage == "model overloaded")
     }
 
-    @Test func parseEvent_projectsStepEndedIntoSessionIdle() {
+    @Test func parseEvent_projectsLiveExecutionStartedIntoBusyStatus() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(
-            dataLine: #"{"type":"session.next.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
+            dataLine: #"{"id":"evt_3","type":"session.execution.started","data":{"sessionID":"ses-1"}}"#
+        )
+        #expect(event?.type == "session.status")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.rawProperties?["status"]?.dictionaryValue?["type"]?.stringValue == "busy")
+        #expect(event?.triggersStatusRefresh == true)
+    }
+
+    @Test func parseEvent_projectsLiveExecutionSucceededIntoIdle() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.execution.succeeded","data":{"sessionID":"ses-1"}}"#
         )
         #expect(event?.type == "session.idle")
         #expect(event?.sessionID == "ses-1")
+        #expect(event?.triggersStatusRefresh == true)
+    }
+
+    @Test func parseEvent_doesNotTreatLiveStepEndedAsIdle() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
+        )
+        #expect(event?.type == "session.step.ended")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.triggersStatusRefresh == false)
+    }
+
+    @Test func parseEvents_projectsStepEndedIntoAssistantMessageAndActiveSnapshot() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.next.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "session.active.snapshot"])
+        #expect(events[0].sessionID == "ses-1")
+        #expect(events[0].rawProperties?["info"]?.dictionaryValue?["role"]?.stringValue == "assistant")
+        #expect(events[1].triggersStatusRefresh == true)
+    }
+
+    @Test func parseEvent_readsOfficialSSEEnvelopeWithEventAndJSONStringData() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"id":"evt_9","event":"session.next.tool.called","data":"{\"sessionID\":\"ses-1\",\"assistantMessageID\":\"msg-2\",\"callID\":\"call-1\",\"tool\":\"bash\",\"input\":{}}"}"#
+        )
+        #expect(event?.type == "message.part.updated")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.rawProperties?["part"]?.dictionaryValue?["tool"]?.stringValue == "bash")
+        #expect(event?.rawProperties?["part"]?.dictionaryValue?["state"]?.dictionaryValue?["status"]?.stringValue == "running")
+    }
+
+    @Test func parseEvent_projectsLiveTextDeltaUsingOrdinalPartID() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.text.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","ordinal":0,"delta":"Hi"}}"#
+        )
+        #expect(event?.type == "message.part.delta")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.rawProperties?["messageID"]?.stringValue == "msg-2")
+        #expect(event?.rawProperties?["partID"]?.stringValue == "text-0")
+        #expect(event?.rawProperties?["delta"]?.stringValue == "Hi")
+        #expect(event?.triggersMessageRefresh == true)
+    }
+
+    @Test func parseEvent_projectsLiveRenamedIntoSessionUpdated() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.renamed","data":{"sessionID":"ses-1","title":"Testing conversation"}}"#
+        )
+        #expect(event?.type == "session.updated")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.rawProperties?["info"]?.dictionaryValue?["title"]?.stringValue == "Testing conversation")
     }
 
     @Test func parseEvent_remapsPermissionV2Asked() {
@@ -125,6 +311,24 @@ struct EventDomainAdapterTests {
             dataLine: #"{"type":"permission.v2.asked","data":{"sessionID":"ses-1"}}"#
         )
         #expect(event?.type == "permission.asked")
+        #expect(event?.sessionID == "ses-1")
+    }
+
+    @Test func parseEvent_projectsFormCreatedIntoQuestionAsked() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"form.created","data":{"form":{"id":"frm_1","sessionID":"ses-1","title":"Questions"}}}"#
+        )
+        #expect(event?.type == "question.asked")
+        #expect(event?.sessionID == "ses-1")
+    }
+
+    @Test func parseEvent_projectsFormRepliedIntoQuestionReplied() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"form.replied","data":{"id":"frm_1","sessionID":"ses-1","answer":{"q0":"Wait"}}}"#
+        )
+        #expect(event?.type == "question.replied")
         #expect(event?.sessionID == "ses-1")
     }
 

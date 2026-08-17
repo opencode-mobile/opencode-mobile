@@ -31,11 +31,10 @@ class DefaultCommandRepository
             directory: String?,
         ) {
             try {
-                val body = adapter.toRunRequest(options)
                 if (activeConnectionManager?.currentProtocolOrProbe() == ServerProtocol.V2) {
-                    api.runCommandV2(sessionId, body, directory)
+                    api.runCommandV2(sessionId, adapter.toV2RunRequest(options))
                 } else {
-                    api.runCommand(sessionId, body, directory)
+                    api.runCommand(sessionId, adapter.toRunRequest(options), directory)
                 }
             } catch (throwable: Throwable) {
                 throw adapter.mapError(throwable)

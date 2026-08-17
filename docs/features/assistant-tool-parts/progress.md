@@ -77,6 +77,9 @@
 - File-change tool cards ([OPE-51](https://linear.app/opencode-mobile/issue/OPE-51/file-change-tool-cards)).
 - Running child session chat row Quiet row implemented on iOS and Android
   ([OPE-158](https://linear.app/opencode-mobile/issue/OPE-158/running-child-session-chat-row)).
+  Pending/running elapsed resolves envelope `created` or a one-time local stamp
+  when live v2 omits `time.start`; iOS ticks with a task timer instead of
+  `TimelineView`.
 - Design-system Child Session Row implemented on iOS and Android; completed
   `task` parts use it, error stays on the Tool Call Card
   ([OPE-162](https://linear.app/opencode-mobile/issue/OPE-162/design-system-child-session-row)).

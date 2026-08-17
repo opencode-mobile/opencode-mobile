@@ -21,11 +21,14 @@ nonisolated struct SessionDomainAdapter: Sendable {
     func session(from dto: V2SessionDTO) -> Session {
         Session(
             id: dto.id,
-            title: dto.title,
+            title: Self.displayTitle(dto.title),
             slug: nil,
             projectID: dto.projectID,
-            directory: dto.location?.directory,
-            parentID: dto.parentID,
+            directory: {
+                guard let directory = dto.location?.directory, !directory.isEmpty else { return nil }
+                return directory
+            }(),
+            parentID: dto.parentID ?? dto.fork?.sessionID,
             cost: dto.cost,
             tokens: tokenUsage(from: dto.tokens),
             createdAtEpochMs: dto.time?.created,
@@ -168,7 +171,7 @@ nonisolated struct SessionDomainAdapter: Sendable {
         QuestionRequest(
             id: dto.id,
             sessionID: dto.sessionID,
-            questions: dto.questions.map(questionInfo),
+            questions: dto.questions.map { questionInfo(from: $0) },
             toolMessageID: dto.tool?.messageID,
             toolCallID: dto.tool?.callID
         )
@@ -181,6 +184,35 @@ nonisolated struct SessionDomainAdapter: Sendable {
             options: dto.options.map { QuestionOption(label: $0.label, description: $0.description ?? "") },
             multiple: dto.multiple ?? false,
             custom: dto.custom != false
+        )
+    }
+
+    func questionRequest(from form: V2FormInfoDTO) -> QuestionRequest {
+        QuestionRequest(
+            id: form.id,
+            sessionID: form.sessionID,
+            questions: form.fields.map { questionInfo(from: $0, formTitle: form.title) },
+            toolMessageID: form.metadata?.tool?.messageID,
+            toolCallID: form.metadata?.tool?.callID
+        )
+    }
+
+    func formAnswer(from answers: [[String]]) -> [String: String] {
+        Dictionary(uniqueKeysWithValues: answers.enumerated().map { index, values in
+            ("q\(index)", values.first ?? "")
+        })
+    }
+
+    private func questionInfo(from field: V2FormFieldDTO, formTitle: String?) -> QuestionInfo {
+        QuestionInfo(
+            question: field.description ?? field.title ?? field.key,
+            header: field.title ?? formTitle ?? field.key,
+            options: field.options.map { option in
+                QuestionOption(label: option.label ?? option.value ?? "", description: option.description ?? "")
+            },
+            multiple: field.multiple ?? false,
+            custom: field.custom != false,
+            fieldKey: field.key
         )
     }
 
@@ -235,6 +267,10 @@ private extension SessionDomainAdapter {
 }
 
 private extension SessionDomainAdapter {
+    nonisolated static func displayTitle(_ title: String) -> String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "New Session" : title
+    }
+
     nonisolated static func updatedAtLabel(epochMs: Int64) -> String {
         let date = Date(timeIntervalSince1970: TimeInterval(epochMs) / 1000)
         let formatter = DateFormatter()

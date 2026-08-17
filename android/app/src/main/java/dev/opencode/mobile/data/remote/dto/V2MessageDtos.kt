@@ -21,8 +21,9 @@ data class V2SessionMessageDto(
     val time: V2MessageTimeDto? = null,
     val reason: String? = null,
     val summary: String? = null,
+    val status: String? = null,
     val command: String? = null,
-    val output: String? = null,
+    val output: JsonElement? = null,
     @SerialName("callID") val callId: String? = null,
     val name: String? = null,
     val description: String? = null,
@@ -53,13 +54,25 @@ data class V2FileAttachmentDto(
     val mime: String? = null,
     val name: String? = null,
     val description: String? = null,
-    val source: V2PromptSourceDto? = null,
+    val data: JsonElement? = null,
+    val source: V2FileSourceDto? = null,
+    val mention: V2PromptSourceDto? = null,
+)
+
+@Serializable
+data class V2FileSourceDto(
+    val type: String? = null,
+    val uri: String? = null,
+    val start: Int? = null,
+    val end: Int? = null,
+    val text: String? = null,
 )
 
 @Serializable
 data class V2AgentAttachmentDto(
     val name: String? = null,
     val source: V2PromptSourceDto? = null,
+    val mention: V2PromptSourceDto? = null,
 )
 
 @Serializable
@@ -76,6 +89,7 @@ data class V2AssistantContentDto(
     val text: String? = null,
     val name: String? = null,
     val state: V2ToolStateDto? = null,
+    val time: V2MessageTimeDto? = null,
 )
 
 @Serializable
@@ -85,6 +99,7 @@ data class V2ToolStateDto(
     val content: List<V2ToolContentDto> = emptyList(),
     val error: V2UnknownErrorDto? = null,
     val structured: JsonObject? = null,
+    val metadata: JsonObject? = null,
 )
 
 @Serializable

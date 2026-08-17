@@ -22,10 +22,10 @@ struct DefaultModelRepository: ModelRepository, Sendable {
     func listModelOptions(directory: String?) async throws -> ModelSelectionCatalog {
         do {
             if await activeConnectionManager?.currentProtocolOrProbe() == .v2 {
-                return adapter.catalog(
-                    providers: try await api.listProvidersV2(directory: directory),
-                    models: try await api.listModelsV2(directory: directory)
-                )
+                let providers = try await api.listProvidersV2(directory: directory)
+                let models = try await api.listModelsV2(directory: directory)
+                let defaultModel = try? await api.getDefaultModelV2(directory: directory)
+                return adapter.catalog(providers: providers, models: models, defaultModel: defaultModel)
             }
             return adapter.catalog(from: try await api.listProviders(directory: directory))
         } catch {

@@ -40,5 +40,7 @@ struct ServerProtocolClassifierTests {
     @Test func capabilitiesHideSessionMessageDiffOnV2() {
         #expect(ServerCapabilities.forProtocol(.v1).supportsSessionMessageDiff == true)
         #expect(ServerCapabilities.forProtocol(.v2).supportsSessionMessageDiff == false)
+        #expect(ServerCapabilities.forProtocol(.v1).supportsSessionArchive == true)
+        #expect(ServerCapabilities.forProtocol(.v2).supportsSessionArchive == false)
     }
 }

@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -111,6 +112,148 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvents_projectsPromptedIntoUserMessageAndTextPart() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"Hello from CLI"},"delivery":"steer"}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
+        assertEquals("user", events[0].rawProperties?.get("info")?.jsonObject?.get("role")?.jsonPrimitive?.content)
+        val part = events[1].rawProperties?.get("part")?.jsonObject
+        assertEquals("text", part?.get("type")?.jsonPrimitive?.content)
+        assertEquals("Hello from CLI", part?.get("text")?.jsonPrimitive?.content)
+        assertEquals("msg-1", part?.get("messageID")?.jsonPrimitive?.content)
+        assertEquals("msg-1:text:0", part?.get("id")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvents_projectsVersionedPromptedType() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.next.prompted.1","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"Hello from CLI"},"delivery":"steer"}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
+        assertEquals("Hello from CLI", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvents_projectsPromptedFilesIntoFileParts() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"See this","files":[{"uri":"data:image/png;base64,AA==","mime":"image/png","name":"a.png"}]},"delivery":"steer"}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated", "message.part.updated"), events.map { it.type })
+        val file = events[2].rawProperties?.get("part")?.jsonObject
+        assertEquals("file", file?.get("type")?.jsonPrimitive?.content)
+        assertEquals("data:image/png;base64,AA==", file?.get("url")?.jsonPrimitive?.content)
+        assertEquals("image/png", file?.get("mime")?.jsonPrimitive?.content)
+        assertEquals("a.png", file?.get("filename")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvents_projectsGlobalBusPromptedPayload() {
+        val events =
+            adapter.parseEvents(
+                """{"directory":"/repo","payload":{"id":"evt_1","type":"session.next.prompted","properties":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"Hello from CLI"},"delivery":"steer"}}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
+        assertEquals("Hello from CLI", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
+        assertEquals("ses-1", events[0].sessionId)
+    }
+
+    @Test
+    fun parseEvents_projectsFlattenedPromptedFields() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.next.prompted","sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"Hello from CLI"},"delivery":"steer"}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
+        assertEquals("Hello from CLI", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvents_projectsSyncSiblingPrompted() {
+        val events =
+            adapter.parseEvents(
+                """{"payload":{"type":"sync","syncEvent":{"type":"session.next.prompted.1","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"Hello from CLI"}}}}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
+        assertEquals("Hello from CLI", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvents_keepsPromptWhenNestedDataAlsoPresent() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"Hello from CLI"},"data":{"ignored":true}}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
+        assertEquals("Hello from CLI", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvents_projectsPromptedJsonStringPrompt() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":"{\"text\":\"Hello from CLI\"}"}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
+        assertEquals("Hello from CLI", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvents_projectsLiveToolEnvelopeCreatedIntoStateTimeStart() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.tool.input.started","created":1710000000000,"data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","name":"task"}}""",
+            )
+
+        assertEquals("message.part.updated", event?.type)
+        val part = event?.rawProperties?.get("part")?.jsonObject
+        val state = part?.get("state")?.jsonObject
+        assertEquals("prt-1", part?.get("id")?.jsonPrimitive?.content)
+        assertEquals("task", part?.get("tool")?.jsonPrimitive?.content)
+        assertEquals("pending", state?.get("status")?.jsonPrimitive?.content)
+        assertEquals(1_710_000_000_000L, state?.get("time")?.jsonObject?.get("start")?.jsonPrimitive?.longOrNull)
+    }
+
+    @Test
+    fun parseEvents_projectsInboxEnqueuedItemPayloadIntoUserText() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.inbox.enqueued","data":{"inboxID":"msg-2","sessionID":"ses-1","item":{"type":"user","payload":{"text":"Hello from inbox","files":[]},"delivery":"steer"}}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
+        assertEquals("ses-1", events[0].sessionId)
+        assertEquals("msg-2", events[0].rawProperties?.get("info")?.jsonObject?.get("id")?.jsonPrimitive?.content)
+        assertEquals("Hello from inbox", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
+        assertEquals("msg-2", events[1].rawProperties?.get("part")?.jsonObject?.get("messageID")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvents_projectsInboxEnqueuedCreatedIntoUserInfoTime() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.inbox.enqueued","created":1710000000000,"data":{"inboxID":"msg-2","sessionID":"ses-1","item":{"type":"user","payload":{"text":"Hello from inbox","files":[]},"delivery":"steer"}}}""",
+            )
+
+        assertEquals("message.updated", events[0].type)
+        assertEquals(
+            1_710_000_000_000L,
+            events[0].rawProperties?.get("info")?.jsonObject?.get("time")?.jsonObject?.get("created")?.jsonPrimitive?.longOrNull,
+        )
+    }
+
+    @Test
     fun parseEvents_projectsStepFailedIntoSessionErrorAndIdle() {
         val events =
             adapter.parseEvents(
@@ -126,14 +269,83 @@ class EventDomainAdapterTest {
     }
 
     @Test
-    fun parseEvent_projectsStepEndedIntoSessionIdle() {
+    fun parseEvents_projectsStepEndedIntoAssistantMessageAndActiveSnapshot() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.next.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
+            )
+
+        assertEquals(listOf("message.updated", "session.active.snapshot"), events.map { it.type })
+        assertEquals("ses-1", events[0].sessionId)
+        assertEquals("assistant", events[0].rawProperties?.get("info")?.jsonObject?.get("role")?.jsonPrimitive?.content)
+        assertTrue(events[1].triggersStatusRefresh)
+    }
+
+    @Test
+    fun parseEvent_projectsLiveExecutionStartedIntoBusyStatus() {
         val event =
             adapter.parseEvent(
-                """{"type":"session.next.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
+                """{"id":"evt_3","type":"session.execution.started","data":{"sessionID":"ses-1"}}""",
+            )
+
+        assertEquals("session.status", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        assertEquals("busy", event?.rawProperties?.get("status")?.jsonObject?.get("type")?.jsonPrimitive?.content)
+        assertTrue(event!!.triggersStatusRefresh)
+    }
+
+    @Test
+    fun parseEvent_projectsLiveExecutionSucceededIntoIdle() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.execution.succeeded","data":{"sessionID":"ses-1"}}""",
             )
 
         assertEquals("session.idle", event?.type)
         assertEquals("ses-1", event?.sessionId)
+        assertTrue(event!!.triggersStatusRefresh)
+    }
+
+    @Test
+    fun parseEvent_doesNotTreatLiveStepEndedAsIdle() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
+            )
+
+        assertEquals("session.step.ended", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        assertTrue(!event!!.triggersStatusRefresh)
+    }
+
+    @Test
+    fun parseEvent_projectsLiveTextDeltaUsingOrdinalPartId() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.text.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","ordinal":0,"delta":"Hi"}}""",
+            )
+
+        assertEquals("message.part.delta", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        assertEquals("msg-2", event?.rawProperties?.get("messageID")?.jsonPrimitive?.content)
+        assertEquals("text-0", event?.rawProperties?.get("partID")?.jsonPrimitive?.content)
+        assertEquals("Hi", event?.rawProperties?.get("delta")?.jsonPrimitive?.content)
+        assertTrue(event!!.triggersMessageRefresh)
+    }
+
+    @Test
+    fun parseEvent_projectsLiveRenamedIntoSessionUpdated() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.renamed","data":{"sessionID":"ses-1","title":"Testing conversation"}}""",
+            )
+
+        assertEquals("session.updated", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        assertEquals(
+            "Testing conversation",
+            event?.rawProperties?.get("info")?.jsonObject?.get("title")?.jsonPrimitive?.content,
+        )
     }
 
     @Test
@@ -144,6 +356,28 @@ class EventDomainAdapterTest {
             )
 
         assertEquals("permission.asked", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+    }
+
+    @Test
+    fun parseEvent_projectsFormCreatedIntoQuestionAsked() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"form.created","data":{"form":{"id":"frm_1","sessionID":"ses-1","title":"Questions"}}}""",
+            )
+
+        assertEquals("question.asked", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+    }
+
+    @Test
+    fun parseEvent_projectsFormRepliedIntoQuestionReplied() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"form.replied","data":{"id":"frm_1","sessionID":"ses-1","answer":{"q0":"Wait"}}}""",
+            )
+
+        assertEquals("question.replied", event?.type)
         assertEquals("ses-1", event?.sessionId)
     }
 
@@ -213,5 +447,18 @@ class EventDomainAdapterTest {
             )
 
         assertNull(adapter.sessionTitleUpdate(event!!))
+    }
+
+    @Test
+    fun parseEvent_readsOfficialSseEnvelopeWithEventAndJsonStringData() {
+        val event =
+            adapter.parseEvent(
+                """{"id":"evt_9","event":"session.next.tool.called","data":"{\"sessionID\":\"ses-1\",\"assistantMessageID\":\"msg-2\",\"callID\":\"call-1\",\"tool\":\"bash\",\"input\":{}}"}""",
+            )
+
+        assertEquals("message.part.updated", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        assertEquals("bash", event?.rawProperties?.get("part")?.jsonObject?.get("tool")?.jsonPrimitive?.content)
+        assertEquals("running", event?.rawProperties?.get("part")?.jsonObject?.get("state")?.jsonObject?.get("status")?.jsonPrimitive?.content)
     }
 }

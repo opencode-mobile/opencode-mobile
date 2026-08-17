@@ -76,6 +76,20 @@ class ConnectionProfileStoreTest {
         }
 
     @Test
+    fun removeWorktree_dropsLegacyUrlKeyedPathsAfterProfileExists() =
+        runTest {
+            val store = InMemoryConnectionProfileStore()
+            store.addWorktree(server, "/repo/a")
+            store.addWorktree(server, "/repo/b")
+            store.saveProfile(ConnectionProfile(baseUrl = server, username = "opencode"))
+            assertEquals(listOf("/repo/a", "/repo/b"), store.addedWorktrees(server))
+            store.removeWorktree(server, "/repo/a")
+            assertEquals(listOf("/repo/b"), store.addedWorktrees(server))
+            store.removeWorktree(server, "/repo/b")
+            assertEquals(emptyList<String>(), store.addedWorktrees(server))
+        }
+
+    @Test
     fun listProfiles_returnsSavedInOrder() =
         runTest {
             val store = InMemoryConnectionProfileStore()
@@ -170,9 +184,8 @@ private class InMemoryConnectionProfileStore(
 
     override suspend fun addedWorktrees(serverBaseUrl: String): List<String> {
         val profile = resolveProfile(serverBaseUrl)
-        if (profile != null) {
-            val byId = data[profile.id]
-            if (!byId.isNullOrEmpty()) return byId
+        if (profile != null && data.containsKey(profile.id)) {
+            return data[profile.id].orEmpty()
         }
         return data[ConnectionProfileIdentity.normalizeBaseUrl(serverBaseUrl)].orEmpty()
     }
@@ -181,35 +194,38 @@ private class InMemoryConnectionProfileStore(
         serverBaseUrl: String,
         worktree: String,
     ) {
-        val key = storageKey(serverBaseUrl)
-        val current = data[key].orEmpty()
-        if (worktree !in current) {
-            data[key] = current + worktree
-        }
+        val current = addedWorktrees(serverBaseUrl)
+        if (worktree in current) return
+        setAddedWorktrees(serverBaseUrl, current + worktree)
     }
 
     override suspend fun removeWorktree(
         serverBaseUrl: String,
         worktree: String,
     ) {
-        val key = storageKey(serverBaseUrl)
-        data[key] = data[key].orEmpty().filterNot { it == worktree }
+        val current = addedWorktrees(serverBaseUrl)
+        if (worktree !in current) return
+        setAddedWorktrees(serverBaseUrl, current.filterNot { it == worktree })
     }
 
     override suspend fun setAddedWorktrees(
         serverBaseUrl: String,
         worktrees: List<String>,
     ) {
-        data[storageKey(serverBaseUrl)] = worktrees.distinct()
+        val profile = resolveProfile(serverBaseUrl)
+        if (profile != null) {
+            data[profile.id] = worktrees.distinct()
+            data.remove(ConnectionProfileIdentity.normalizeBaseUrl(serverBaseUrl))
+            data.remove(ConnectionProfileIdentity.normalizeBaseUrl(profile.baseUrl))
+        } else {
+            data[ConnectionProfileIdentity.normalizeBaseUrl(serverBaseUrl)] = worktrees.distinct()
+        }
     }
 
     override suspend fun clearAll() {
         data.clear()
         catalog = ConnectionProfileCatalog()
     }
-
-    private fun storageKey(serverBaseUrl: String): String =
-        resolveProfile(serverBaseUrl)?.id ?: ConnectionProfileIdentity.normalizeBaseUrl(serverBaseUrl)
 
     private fun resolveProfile(serverBaseUrl: String): ConnectionProfile? {
         val normalized = ConnectionProfileIdentity.normalizeBaseUrl(serverBaseUrl)

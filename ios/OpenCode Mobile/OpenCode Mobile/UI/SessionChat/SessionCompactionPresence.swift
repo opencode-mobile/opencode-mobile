@@ -8,6 +8,17 @@ enum SessionCompactionPresence {
         return turn.contains(where: isCompactionSignal)
     }
 
+    static func completedCompactionIDs(in messages: [Message]) -> Set<String> {
+        Set(
+            messages.flatMap { message in
+                message.parts.compactMap { part -> String? in
+                    guard case let .compaction(compaction) = part, compaction.completed else { return nil }
+                    return compaction.id ?? message.id
+                }
+            }
+        )
+    }
+
     private static func activeTurn(in messages: [Message]) -> ArraySlice<Message> {
         if let lastUser = messages.lastIndex(where: { $0.role == .user }) {
             return messages[lastUser...]
@@ -16,12 +27,12 @@ enum SessionCompactionPresence {
     }
 
     private static func isCompactionSignal(_ message: Message) -> Bool {
-        if message.parts.contains(where: {
-            if case .compaction = $0 { return true }
-            return false
-        }) {
-            return true
+        let compactionParts = message.parts.compactMap { part -> CompactionPart? in
+            guard case let .compaction(compaction) = part else { return nil }
+            return compaction
         }
+        if compactionParts.contains(where: { !$0.completed }) { return true }
+        if compactionParts.contains(where: \.completed) { return false }
         guard message.role == .assistant else { return false }
         return isCompactionMode(message.mode)
     }

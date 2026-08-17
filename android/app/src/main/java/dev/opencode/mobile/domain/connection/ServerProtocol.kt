@@ -27,14 +27,21 @@ enum class ServerProtocol(
  */
 data class ServerCapabilities(
     val supportsSessionMessageDiff: Boolean,
+    val supportsSessionArchive: Boolean,
 ) {
     companion object {
         fun forProtocol(protocol: ServerProtocol): ServerCapabilities =
             when (protocol) {
                 ServerProtocol.V1 ->
-                    ServerCapabilities(supportsSessionMessageDiff = true)
+                    ServerCapabilities(
+                        supportsSessionMessageDiff = true,
+                        supportsSessionArchive = true,
+                    )
                 ServerProtocol.V2 ->
-                    ServerCapabilities(supportsSessionMessageDiff = false)
+                    ServerCapabilities(
+                        supportsSessionMessageDiff = false,
+                        supportsSessionArchive = false,
+                    )
             }
     }
 }

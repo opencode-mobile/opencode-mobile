@@ -60,6 +60,22 @@ struct ConnectionProfileStoreTests {
         #expect(await store.addedWorktrees(serverBaseURL: server) == ["/a", "/c"])
     }
 
+    @Test func removeWorktree_dropsLegacyUrlKeyedPathsAfterProfileExists() async throws {
+        let defaults = isolatedDefaults()
+        let store = UserDefaultsConnectionProfileStore(
+            defaults: defaults,
+            secureCredentialStore: InMemorySecureCredentialStore()
+        )
+        await store.addWorktree(serverBaseURL: server, worktree: "/repo/a")
+        await store.addWorktree(serverBaseURL: server, worktree: "/repo/b")
+        try await store.saveProfile(ConnectionProfile(baseURL: server, username: "opencode", password: "secret"))
+        #expect(await store.addedWorktrees(serverBaseURL: server) == ["/repo/a", "/repo/b"])
+        await store.removeWorktree(serverBaseURL: server, worktree: "/repo/a")
+        #expect(await store.addedWorktrees(serverBaseURL: server) == ["/repo/b"])
+        await store.removeWorktree(serverBaseURL: server, worktree: "/repo/b")
+        #expect(await store.addedWorktrees(serverBaseURL: server) == [])
+    }
+
     private func isolatedDefaults() -> UserDefaults {
         let suite = "ConnectionProfileStoreTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

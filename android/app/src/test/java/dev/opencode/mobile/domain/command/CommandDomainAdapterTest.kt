@@ -60,4 +60,37 @@ class CommandDomainAdapterTest {
         assertEquals("data:image/png;base64,abc", request.parts.single().url)
         assertTrue(request.parts.single().id == null)
     }
+
+    @Test
+    fun toV2RunRequest_mapsModelFilesAndDelivery() {
+        val request =
+            adapter.toV2RunRequest(
+                CommandRunOptions(
+                    command = "init",
+                    arguments = "please",
+                    attachments =
+                        listOf(
+                            Attachment(
+                                id = "att-1",
+                                filename = "a.png",
+                                mime = "image/png",
+                                kind = AttachmentKind.Image,
+                                dataUrl = "data:image/png;base64,abc",
+                                byteCount = 3,
+                            ),
+                        ),
+                    model = PromptModelSelection(providerId = "openai", modelId = "gpt-4"),
+                    variant = "high",
+                    mode = "build",
+                ),
+            )
+        assertEquals("init", request.command)
+        assertEquals("please", request.arguments)
+        assertEquals("build", request.agent)
+        assertEquals("gpt-4", request.model?.id)
+        assertEquals("openai", request.model?.providerId)
+        assertEquals("high", request.model?.variant)
+        assertEquals("data:image/png;base64,abc", request.files?.single()?.uri)
+        assertEquals("steer", request.delivery)
+    }
 }

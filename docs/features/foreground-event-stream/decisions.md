@@ -39,6 +39,20 @@ stream** is active:
   preserve in-flight send state (pending optimistic bubble and `isSending`).
   See [Message Repository decisions](../message-repository/decisions.md#post-send-ux).
 
+## Profile switch drops the previous server's live observations
+
+- Date: 2026-08-17
+- Decision: switching Connection Profiles clears session/status/ready live
+  stores and `MessageSync` observation, pops session-scoped routes back to
+  home, and treats `NotFoundError` / "Session not found" as terminal for that
+  observation (no overflow-recovery retry loop). `MessageSync.clearCache`
+  invalidates in-flight `shareIn` / detached loops; dropping the map alone
+  does not stop them.
+- Reason: after a v2→v1 switch the new HTTP client kept fetching the previous
+  server's session IDs (`/home/ivan…` on a Mac v1 host), 404ing every 5s.
+  Home Remove from home looked stuck when those leftover rows and chats
+  stayed on screen.
+
 ## Status display
 
 Map server status `type` to product copy: `busy` → **Working**, `retry` → **Retrying**, `idle` → hidden. Loaded from `GET /session/status` on section load and updated from `session.status` / `session.idle` SSE events.
@@ -76,6 +90,18 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
 
 `server.heartbeat` updates connection state only. `server.connected` schedules
 a synchronization reload; synthetic `stream.reconnected` reloads immediately.
+
+## Idle reconnect
+
+- Date: 2026-08-17
+- Decision: cancel and retry the foreground SSE read after **45s** with no
+  bytes (including heartbeats). Both platforms log
+  `foreground SSE idle timeout; reconnecting`.
+- Reason: a hung `/api/event` subscriber can stay open without EOF. Live v2
+  went silent on Android after another client subscribed; no stream-failed
+  line was logged. A socket read timeout is too aggressive (heartbeats can be
+  sparse); an activity watchdog is not.
+- Revisit when: heartbeat interval is published and a tighter bound is safe.
 
 ## Logging
 

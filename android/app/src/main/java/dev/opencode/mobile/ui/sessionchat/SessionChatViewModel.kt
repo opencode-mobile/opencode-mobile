@@ -212,7 +212,8 @@ class SessionChatViewModel
                         messages = timelineState.messages,
                         hasSelectedComposerModel = composerState.composer.selectedModel != null,
                     )
-                    publishUiState(timelineState, composerState, infoState, reviewChangesState, commandsState)
+                    commands.observeLoadedMessages(timeline.loadedMessages())
+                    publishUiState(timelineState, composerState, infoState, reviewChangesState, commands.state.value)
                 }
             }
             viewModelScope.launch {
@@ -684,8 +685,13 @@ class SessionChatViewModel
 
         fun abort() {
             logAction(ProductAnalytics.Action.COMPOSER_ABORT)
+            logI("abort tap session=$boundSessionId live=${isConnectionLive()}")
             if (!isConnectionLive()) return
-            composer.abort()
+            composer.abort { success ->
+                if (!success) return@abort
+                sessionInfo.clearOptimisticBusy()
+                sessionInfo.refreshStatus()
+            }
         }
 
         fun allowPermissionOnce(
@@ -1248,6 +1254,7 @@ class SessionChatViewModel
                 reviewChangesMessageId = reviewChangesState.messageId,
                 reviewChangesSummary = reviewChangesState.summary,
                 supportsSessionMessageDiff = activeConnectionManager.currentCapabilities().supportsSessionMessageDiff,
+                supportsSessionArchive = activeConnectionManager.currentCapabilities().supportsSessionArchive,
                 rename = infoState.rename,
                 slashSuggestionsVisible = composerState.slashSuggestionsVisible,
                 slashSuggestions = composerState.slashSuggestions,

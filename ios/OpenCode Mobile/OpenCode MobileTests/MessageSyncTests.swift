@@ -733,6 +733,116 @@ struct MessageSyncTests {
         #expect(last?.contains(where: { $0.id == "msg-2" }) == false)
     }
 
+    @Test func v2PromptedPublishesUserText() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        try? await Task.sleep(for: .milliseconds(100))
+
+        let events = EventDomainAdapter().parseEvents(
+            dataLine: #"{"type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-2","prompt":{"text":"Hello from CLI"},"delivery":"steer"}}"#
+        )
+        for event in events {
+            eventStream.emit(event)
+        }
+        let published = await waitUntil {
+            collector.latest()?.contains(where: { $0.id == "msg-2" && $0.text.contains("Hello from CLI") }) == true
+        }
+        task.cancel()
+        #expect(published)
+    }
+
+    @Test func v2InboxEnqueuedPublishesUserText() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        try? await Task.sleep(for: .milliseconds(100))
+
+        let events = EventDomainAdapter().parseEvents(
+            dataLine: #"{"type":"session.inbox.enqueued","data":{"inboxID":"msg-2","sessionID":"ses-1","item":{"type":"user","payload":{"text":"Hello from inbox","files":[]},"delivery":"steer"}}}"#
+        )
+        for event in events {
+            eventStream.emit(event)
+        }
+        let published = await waitUntil {
+            collector.latest()?.contains(where: { $0.id == "msg-2" && $0.text.contains("Hello from inbox") }) == true
+        }
+        task.cancel()
+        #expect(published)
+    }
+
+    @Test func pollSurvivesEpochBumpUntilAdopt() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let epoch = ConnectionEpoch()
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            pollIntervalMs: 40,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            connectionEpoch: epoch
+        )
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+
+        _ = epoch.bump()
+        try? await Task.sleep(for: .milliseconds(90))
+
+        eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: nil, rawProperties: nil))
+        try? await Task.sleep(for: .milliseconds(80))
+
+        repo.messages = [
+            Message(
+                id: "msg-1",
+                role: .user,
+                text: "From poll after reconnect",
+                parts: [.text(TextPart(text: "From poll after reconnect", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        let polled = await waitUntil {
+            collector.latest()?.first?.text == "From poll after reconnect"
+        }
+        task.cancel()
+        #expect(polled)
+    }
+
+    @Test func v2PromptedGlobalBusPublishesUserText() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        try? await Task.sleep(for: .milliseconds(100))
+
+        let events = EventDomainAdapter().parseEvents(
+            dataLine: #"{"directory":"/repo","payload":{"type":"session.next.prompted","properties":{"sessionID":"ses-1","messageID":"msg-2","prompt":{"text":"Hello from CLI"},"delivery":"steer"}}}"#
+        )
+        for event in events {
+            eventStream.emit(event)
+        }
+        let published = await waitUntil {
+            collector.latest()?.contains(where: { $0.id == "msg-2" && $0.text.contains("Hello from CLI") }) == true
+        }
+        task.cancel()
+        #expect(published)
+    }
+
     @Test func messagePartUpdated_textPartAppendsToSlot() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()

@@ -1,5 +1,32 @@
 # Session Chat Decisions
 
+## Display sort keeps store user-before-assistant (2026-08-17)
+
+- Date: 2026-08-17
+- Decision: After oldest-to-newest `time.created` sort, restore any user the
+  message store already placed before an assistant. Optimistic file rows
+  match on filename and mime. Unmatched pending users insert before a
+  streaming assistant that is not already preceded by a user.
+- Reason: V2 inbox user `time.created` can be later than the live assistant.
+  Timestamp-only sort put the prompt under its reply, and local photo
+  data URLs never matched the server file id, so the optimistic bubble
+  duplicated at the bottom.
+- Revisit when: REST message lists guarantee oldest-first without a UI sort.
+
+## User-row metadata survives live-then-REST (2026-08-17)
+
+- Date: 2026-08-17
+- Decision: iOS timeline return-previous must compare `metadataLabel` (and
+  model ids / context tokens) like Android `structurallyEqual`. Empty vs
+  non-empty metadata is layout-affecting. When an optimistic user row
+  reconciles to a live inbox row that still has no mode/model/time, copy the
+  pending caption onto that server row. Live `session.inbox.enqueued` also
+  projects envelope `created` onto user `info.time.created`.
+- Reason: v2 inbox paints a sparse `{id, role}` user message first. iOS then
+  reused that row after REST filled `build · model · variant · time`, so the
+  caption never appeared. Android already rebuilt when the label changed.
+- Revisit when: live inbox events carry agent/model themselves.
+
 ## OPE-170 child sessions cannot be prompted
 
 - Date: 2026-08-15
@@ -90,6 +117,19 @@
   insertion model would fight existing scroll/apply seams without a user-visible
   gain.
 - Revisit when: a shared timeline host abstraction lands.
+
+## Working row stays after completed tools while SSE says busy (2026-08-17)
+
+- Date: 2026-08-17
+- Decision: Hide the in-chat Working/Retrying row only for in-progress assistant
+  activity after the last user message (streaming text, pending/running tools).
+  Completed tools do not hide it. `session.active.snapshot` GET that returns an
+  empty active map does not clear SSE-applied busy; true idle stays
+  `session.idle` / `session.execution.*`.
+- Reason: v2 turns are multi-step. After a finished shell card, Android hid
+  Working even while SSE still reported busy. Step-end snapshots can briefly
+  return `{}` and were wiping that busy bit.
+- Revisit when: product wants Working hidden whenever any assistant chrome exists.
 
 ## Ship Android region row-reuse (Phase 4)
 

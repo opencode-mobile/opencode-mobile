@@ -39,6 +39,14 @@ nonisolated struct ModelsAPIClient: Sendable {
         return envelope.data
     }
 
+    func getDefaultModelV2(directory: String? = nil) async throws -> V2ModelInfoDTO {
+        let envelope: APILocatedEnvelope<V2ModelInfoDTO> = try await get(
+            path: "api/model/default",
+            locationDirectory: directory
+        )
+        return envelope.data
+    }
+
     private func requireConnection() throws -> ServerConnection {
         guard let connection = connectionProvider() else {
             throw ModelsAPIError.noActiveConnection

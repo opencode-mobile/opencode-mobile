@@ -59,17 +59,23 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         var cursor: String?
         var pages = 0
         repeat {
-            var query: [String: String] = ["order": "asc"]
+            // Cursor tokens already encode order. Sending `order` with `cursor`
+            // returns InvalidCursorError 400 on live v2.
+            var query: [String: String] = [:]
             if let cursor {
                 query["cursor"] = cursor
+            } else {
+                query["order"] = "asc"
             }
             let envelope: APIListEnvelope<V2SessionMessageDTO> = try await get(
                 path: "api/session/\(sessionID)/message",
-                directory: directory,
+                directory: nil,
                 query: query
             )
             messages.append(contentsOf: envelope.data)
-            cursor = envelope.cursor?.next.flatMap { $0.isEmpty ? nil : $0 }
+            let next = envelope.cursor?.next.flatMap { $0.isEmpty ? nil : $0 }
+            if next == cursor { break }
+            cursor = next
             pages += 1
         } while cursor != nil && pages < Self.maxV2MessageListPages
         return messages
@@ -91,19 +97,19 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
     }
 
     func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, directory: String? = nil) async throws {
-        try await postNoContent(path: "api/session/\(sessionID)/prompt", body: body, directory: directory)
+        try await postNoContent(path: "api/session/\(sessionID)/prompt", body: body, directory: nil)
     }
 
     func switchSessionAgent(sessionID: String, agent: String, directory: String? = nil) async throws {
         try await postNoContent(
             path: "api/session/\(sessionID)/agent",
             body: V2SwitchAgentRequestDTO(agent: agent),
-            directory: directory
+            directory: nil
         )
     }
 
     func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String? = nil) async throws {
-        try await postNoContent(path: "api/session/\(sessionID)/model", body: body, directory: directory)
+        try await postNoContent(path: "api/session/\(sessionID)/model", body: body, directory: nil)
     }
 
     private func postNoContent<B: Encodable>(path: String, body: B, directory: String?) async throws {
@@ -166,5 +172,5 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         return data
     }
 
-    private static let maxV2MessageListPages = 20
+    private static let maxV2MessageListPages = 500
 }

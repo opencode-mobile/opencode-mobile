@@ -1,6 +1,7 @@
 package dev.opencode.mobile.data.remote
 
 import dev.opencode.mobile.data.remote.dto.ApiListEnvelope
+import dev.opencode.mobile.data.remote.dto.ApiLocatedEnvelope
 import dev.opencode.mobile.data.remote.dto.ConfigProvidersResponseDto
 import dev.opencode.mobile.data.remote.dto.V2ModelInfoDto
 import dev.opencode.mobile.data.remote.dto.V2ProviderInfoDto
@@ -41,6 +42,14 @@ class ModelsApi private constructor(
             .get("api/model") {
                 applyLocationDirectory(directory)
             }.body<ApiListEnvelope<V2ModelInfoDto>>()
+            .data
+
+    suspend fun getDefaultModelV2(directory: String? = null): V2ModelInfoDto =
+        httpClient
+            .get()
+            .get("api/model/default") {
+                applyLocationDirectory(directory)
+            }.body<ApiLocatedEnvelope<V2ModelInfoDto>>()
             .data
 
     private fun interface ClientProvider {

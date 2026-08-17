@@ -1,10 +1,12 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -82,7 +84,7 @@ class TimelineProjectorTest {
                     id = "optimistic-1",
                     role = MessageRole.User,
                     text = "Hello",
-                    metadataLabel = "",
+                    metadataLabel = "build · deepseek-v4-flash-free · high · 10:21 AM",
                     isPending = true,
                     blocks =
                         listOf(
@@ -204,8 +206,276 @@ class TimelineProjectorTest {
 
         assertEquals(listOf("msg-user-0", "msg-user-1"), reconciled.rows.map { it.id })
         assertFalse(reconciled.rows.any { it.id == "optimistic-1" })
+        assertEquals(
+            "build · deepseek-v4-flash-free · high · 10:21 AM",
+            reconciled.rows.single { it.id == "msg-user-1" }.metadataLabel,
+        )
         assertEquals(setOf("msg-user-1"), reconciled.insertedRowIDs)
         assertEquals(setOf("optimistic-1"), reconciled.removedRowIDs)
+    }
+
+    @Test
+    fun orderedDisplayMessages_keepsStoreUserBeforeAssistantWhenUserTimestampIsLater() {
+        val ordered =
+            TimelineDisplayOrder.ordered(
+                listOf(
+                    DisplayMessage(
+                        Message(id = "msg-photo", role = MessageRole.User, text = "What is it", sentAtEpochMs = 3_000L),
+                    ),
+                    DisplayMessage(
+                        Message(id = "msg-asst", role = MessageRole.Assistant, text = "A photo", sentAtEpochMs = 1_000L),
+                    ),
+                    DisplayMessage(
+                        Message(id = "msg-hey", role = MessageRole.User, text = "hey", sentAtEpochMs = 2_000L),
+                    ),
+                ),
+            )
+        assertEquals(listOf("msg-photo", "msg-asst", "msg-hey"), ordered.map { it.id })
+    }
+
+    @Test
+    fun project_optimisticFile_reconcilesWhenLocalDataUrlDiffersFromServer() {
+        val pendingAttachment =
+            SessionChatAttachmentItem(
+                id = "local-file",
+                filename = "IMG_1234.JPG",
+                variant = OpenCodeAttachmentVariant.Image,
+                signature = "local-data-url",
+            )
+        val serverAttachment =
+            SessionChatAttachmentItem(
+                id = "server-file",
+                filename = "IMG_1234.JPG",
+                variant = OpenCodeAttachmentVariant.Image,
+                signature = "https://example.test/photo.jpg",
+            )
+        val pending =
+            TimelineProjector.rowFromMessageItem(
+                SessionChatMessageItem(
+                    id = "optimistic-photo",
+                    role = MessageRole.User,
+                    text = "What is it",
+                    metadataLabel = "build · 1:21 PM",
+                    isPending = true,
+                    blocks =
+                        listOf(
+                            SessionChatTimelineBlock.Text(
+                                blockID = PresentationBlockId.messageFallback("optimistic-photo"),
+                                text = "What is it",
+                            ),
+                            SessionChatTimelineBlock.Attachment(
+                                blockID = PresentationBlockId.direct("local-file"),
+                                attachment = pendingAttachment,
+                            ),
+                        ),
+                    attachments = listOf(pendingAttachment),
+                ),
+            )
+        val withOptimistic =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages = emptyList(),
+                    ),
+                optimisticInputs = OptimisticInputs(pendingRows = listOf(pending)),
+            )
+        assertEquals(listOf("optimistic-photo"), withOptimistic.rows.map { it.id })
+        val reconciled =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 2L,
+                        sourceRevision = 0L,
+                        messages =
+                            listOf(
+                                DisplayMessageBody(
+                                    message =
+                                        Message(
+                                            id = "msg-photo",
+                                            role = MessageRole.User,
+                                            text = "What is it",
+                                            parts = listOf(MessagePart.Text("What is it", id = "u1")),
+                                        ),
+                                    blocks =
+                                        listOf(
+                                            SessionChatTimelineBlock.Text(
+                                                blockID = PresentationBlockId.direct("u1"),
+                                                text = "What is it",
+                                            ),
+                                            SessionChatTimelineBlock.Attachment(
+                                                blockID = PresentationBlockId.direct("server-file"),
+                                                attachment = serverAttachment,
+                                            ),
+                                        ),
+                                ),
+                                DisplayMessageBody(
+                                    message =
+                                        Message(
+                                            id = "msg-asst",
+                                            role = MessageRole.Assistant,
+                                            text = "Working",
+                                            parts = listOf(MessagePart.Text("Working", id = "a1", isStreaming = true)),
+                                        ),
+                                    blocks =
+                                        listOf(
+                                            SessionChatTimelineBlock.Text(
+                                                blockID = PresentationBlockId.direct("a1"),
+                                                text = "Working",
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+                optimisticInputs = OptimisticInputs(pendingRows = listOf(pending)),
+                previous = withOptimistic,
+            )
+        assertFalse(reconciled.rows.any { it.isPending })
+        assertEquals(setOf("optimistic-photo"), reconciled.removedRowIDs)
+    }
+
+    @Test
+    fun project_unmatchedPendingUser_insertsBeforeStreamingAssistant() {
+        val pending =
+            TimelineProjector.rowFromMessageItem(
+                SessionChatMessageItem(
+                    id = "optimistic-photo",
+                    role = MessageRole.User,
+                    text = "What is it",
+                    metadataLabel = "",
+                    isPending = true,
+                    blocks =
+                        listOf(
+                            SessionChatTimelineBlock.Text(
+                                blockID = PresentationBlockId.messageFallback("optimistic-photo"),
+                                text = "What is it",
+                            ),
+                        ),
+                ),
+            )
+        val merged =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages =
+                            listOf(
+                                DisplayMessageBody(
+                                    message =
+                                        Message(
+                                            id = "msg-asst",
+                                            role = MessageRole.Assistant,
+                                            text = "Working",
+                                            parts = listOf(MessagePart.Text("Working", id = "a1", isStreaming = true)),
+                                        ),
+                                    blocks =
+                                        listOf(
+                                            SessionChatTimelineBlock.Text(
+                                                blockID = PresentationBlockId.direct("a1"),
+                                                text = "Working",
+                                            ),
+                                        ),
+                                ),
+                                DisplayMessageBody(
+                                    message =
+                                        Message(
+                                            id = "msg-hey",
+                                            role = MessageRole.User,
+                                            text = "hey",
+                                            parts = listOf(MessagePart.Text("hey", id = "u-hey")),
+                                        ),
+                                    blocks =
+                                        listOf(
+                                            SessionChatTimelineBlock.Text(
+                                                blockID = PresentationBlockId.direct("u-hey"),
+                                                text = "hey",
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+                optimisticInputs = OptimisticInputs(pendingRows = listOf(pending)),
+            )
+        assertEquals(listOf("optimistic-photo", "msg-asst", "msg-hey"), merged.rows.map { it.id })
+    }
+
+    @Test
+    fun project_metadataArrivingOnSameUserRow_updatesLabelAndLayout() {
+        val sparse =
+            Message(
+                id = "msg-user",
+                role = MessageRole.User,
+                text = "Hello",
+                parts = listOf(MessagePart.Text("Hello", id = "u1")),
+            )
+        val first =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages =
+                            listOf(
+                                DisplayMessageBody(
+                                    message = sparse,
+                                    blocks =
+                                        listOf(
+                                            SessionChatTimelineBlock.Text(
+                                                blockID = PresentationBlockId.direct("u1"),
+                                                text = "Hello",
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+            )
+        assertEquals("", first.rows.single().metadataLabel)
+
+        val enriched =
+            Message(
+                id = "msg-user",
+                role = MessageRole.User,
+                text = "Hello",
+                parts = listOf(MessagePart.Text("Hello", id = "u1")),
+                model = "deepseek-v4-flash-free",
+                variant = "high",
+                mode = "build",
+                sentAtEpochMs = 1_710_000_000_000L,
+            )
+        val second =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 2L,
+                        sourceRevision = 0L,
+                        messages =
+                            listOf(
+                                DisplayMessageBody(
+                                    message = enriched,
+                                    blocks =
+                                        listOf(
+                                            SessionChatTimelineBlock.Text(
+                                                blockID = PresentationBlockId.direct("u1"),
+                                                text = "Hello",
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+                previous = first,
+            )
+        val expected = TimelineProjector.metadataLabel(enriched)
+        assertTrue(expected.isNotEmpty())
+        assertEquals(expected, second.rows.single().metadataLabel)
+        assertEquals(setOf("msg-user"), second.changedRowIDs)
+        assertEquals(setOf("msg-user"), second.layoutChangedRowIDs)
     }
 
     @Test

@@ -21,8 +21,10 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.TimelineApply
+import dev.opencode.mobile.ui.sessionchat.TimelineDisplayOrder
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
 import dev.opencode.mobile.ui.sessionchat.TimelineProjector
+import dev.opencode.mobile.ui.sessionchat.TimelineRow
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -519,7 +521,7 @@ class SessionChatTimeline(
         val previousFrame = lastTimelineFrame
         val sessionKey = sourceSessionId
         val optimisticInputs =
-            if (fromQuietRefresh && mergePendingWhileSending) {
+            if (mergePendingWhileSending) {
                 val pendingItems =
                     pendingOptimisticRows.ifEmpty { stateSnapshot.messages.filter { it.isPending } }
                 OptimisticInputs(
@@ -607,11 +609,7 @@ class SessionChatTimeline(
                     },
             )
         }
-        if (!fromQuietRefresh) {
-            mergePendingWhileSending = false
-            pendingOptimisticRows = emptyList()
-            pendingBaselineSignatures = emptyMap()
-        }
+        clearOptimisticIfReconciled(stamped.rows)
         onPublished?.invoke()
     }
 
@@ -644,25 +642,28 @@ class SessionChatTimeline(
         }
     }
 
+    private fun clearOptimisticIfReconciled(rows: List<TimelineRow>) {
+        if (!mergePendingWhileSending) return
+        val pendingIds = pendingOptimisticRows.map { it.id }.toSet()
+        val stillPending =
+            if (pendingIds.isNotEmpty()) {
+                rows.any { it.id in pendingIds }
+            } else {
+                rows.any { it.isPending }
+            }
+        if (stillPending) return
+        mergePendingWhileSending = false
+        pendingOptimisticRows = emptyList()
+        pendingBaselineSignatures = emptyMap()
+    }
+
     private fun isCurrentBinding(
         sessionId: String,
         worktree: String,
     ): Boolean = boundSessionId == sessionId && boundWorktree == worktree
 
     private fun sortedDisplayMessages(displayMessages: List<DisplayMessage>): List<DisplayMessage> =
-        displayMessages
-            .withIndex()
-            .sortedWith { left, right ->
-                val leftTime = left.value.message.sentAtEpochMs
-                val rightTime = right.value.message.sentAtEpochMs
-                when {
-                    leftTime != null && rightTime != null && leftTime != rightTime -> leftTime.compareTo(rightTime)
-                    leftTime != null && rightTime != null ->
-                        left.value.message.id
-                            .compareTo(right.value.message.id)
-                    else -> left.index.compareTo(right.index)
-                }
-            }.map { it.value }
+        TimelineDisplayOrder.ordered(displayMessages)
 
     private fun displayMessageBody(
         display: DisplayMessage,

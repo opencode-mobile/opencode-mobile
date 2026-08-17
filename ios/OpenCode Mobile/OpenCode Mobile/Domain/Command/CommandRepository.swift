@@ -33,11 +33,10 @@ struct DefaultCommandRepository: CommandRepository, Sendable {
 
     func runCommand(sessionID: String, options: CommandRunOptions, directory: String?) async throws {
         do {
-            let body = adapter.toRunRequest(options)
             if await activeConnectionManager?.currentProtocolOrProbe() == .v2 {
-                try await api.runCommandV2(sessionID: sessionID, body: body, directory: directory)
+                try await api.runCommandV2(sessionID: sessionID, body: adapter.toV2RunRequest(options))
             } else {
-                try await api.runCommand(sessionID: sessionID, body: body, directory: directory)
+                try await api.runCommand(sessionID: sessionID, body: adapter.toRunRequest(options), directory: directory)
             }
         } catch {
             throw adapter.mapError(error)

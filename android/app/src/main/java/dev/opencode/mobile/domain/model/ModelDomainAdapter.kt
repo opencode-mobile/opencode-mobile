@@ -39,6 +39,7 @@ class ModelDomainAdapter {
     fun toCatalog(
         providers: List<V2ProviderInfoDto>,
         models: List<V2ModelInfoDto>,
+        defaultModel: V2ModelInfoDto? = null,
     ): ModelSelectionCatalog {
         val providerNames = providers.associate { it.id to (it.name ?: it.id) }
         val disabledProviders = providers.filter { it.disabled == true }.map { it.id }.toSet()
@@ -61,7 +62,10 @@ class ModelDomainAdapter {
                         supportsPdfInput = inputs.isEmpty() || "pdf" in inputs,
                     )
                 }.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.modelLabel })
-        return ModelSelectionCatalog(options = options, serverDefault = null)
+        return ModelSelectionCatalog(
+            options = options,
+            serverDefault = defaultOption(defaultModel, options),
+        )
     }
 
     fun mapError(throwable: Throwable): ModelSelectionError =
@@ -87,4 +91,15 @@ class ModelDomainAdapter {
             .firstNotNullOfOrNull { (providerId, modelId) ->
                 options.firstOrNull { it.providerId == providerId && it.modelId == modelId }
             }
+
+    private fun defaultOption(
+        defaultModel: V2ModelInfoDto?,
+        options: List<ModelSelectionOption>,
+    ): ModelSelectionOption? {
+        val model = defaultModel ?: return null
+        val ids = setOfNotNull(model.id.takeIf { it.isNotBlank() }, model.modelId?.takeIf { it.isNotBlank() })
+        return options.firstOrNull { option ->
+            option.providerId == model.providerId && option.modelId in ids
+        }
+    }
 }

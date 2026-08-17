@@ -55,8 +55,15 @@
   (case-insensitive). Keep compaction parts in the domain model for presence;
   do not render them in the timeline.
   Do not rely on `session.time.compacting`. Success snackbar stays initiator-only.
+  V2 compaction messages with `status: completed` are snapshots, not in-flight;
+  they do not keep Compacting… up. Local compact chrome also clears when a new
+  completed compaction id appears on the timeline (v2 `POST …/compact` can hang
+  after the server already finished).
 - **Reason:** A second client with the same session open never set the local
   Commands flag, so it only showed generic Working. Live message + busy signals
-  are what opencode already emits for a compact turn.
+  are what opencode already emits for a compact turn. Live v2 (`0.0.0-beta-17498`)
+  writes a completed compaction row into history while the compact HTTP call
+  may still be open, so treating any compaction marker as in-flight left
+  Compacting… on screen after web had already returned to idle.
 - **Revisit when:** Server exposes a dedicated compaction status field or V2
   `session.compaction.*` that is authoritative for all clients.

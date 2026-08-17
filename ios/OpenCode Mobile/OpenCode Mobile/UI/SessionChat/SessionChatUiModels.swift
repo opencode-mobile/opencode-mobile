@@ -198,6 +198,7 @@ struct SessionChatUiState: Equatable {
     var reviewChangesMessageID: String?
     var reviewChangesSummary: ReviewChangesSummary?
     var supportsSessionMessageDiff: Bool = true
+    var supportsSessionArchive: Bool = true
     var rename = SessionRenameUiState()
     var slashSuggestionsVisible = false
     var slashSuggestions: [SessionChatSlashSuggestion] = []
@@ -376,6 +377,27 @@ struct SessionChatTimelineRegionState: Equatable {
     var messagesFromCache: Bool = false
     var isSyncingMessages: Bool = false
     var errorMessage: String?
+
+    var knownChildSessionIDs: Set<String> {
+        Set(
+            messages.flatMap { message in
+                message.blocks.compactMap { block -> String? in
+                    switch block {
+                    case .childSessionRow(_, let row):
+                        row.childSessionId
+                    case .toolCard(_, let card):
+                        if card.status == .pending || card.status == .running {
+                            card.childSessionId
+                        } else {
+                            nil
+                        }
+                    default:
+                        nil
+                    }
+                }
+            }
+        )
+    }
 }
 
 struct SessionChatSlashSuggestion: Equatable, Identifiable {

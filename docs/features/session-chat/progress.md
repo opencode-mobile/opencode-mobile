@@ -1,5 +1,20 @@
 # Session Chat Progress
 
+## Display order for late v2 user rows (2026-08-17)
+
+- Status: implemented on both platforms (projector and load-path tests).
+- Display sort still uses `time.created`, then restores a store
+  user-before-assistant pair when the user's timestamp is later.
+- Optimistic file rows reconcile on filename and mime; unmatched pending
+  users splice before a streaming assistant.
+
+## User-row metadata (2026-08-17)
+
+- Status: implemented on both platforms (projector tests).
+- iOS no longer returns the previous user row when `metadataLabel` arrives
+  after a sparse live insert; optimistic captions copy onto matching inbox
+  rows; envelope `created` fills `info.time.created`.
+
 ## OPE-170 Lock child session composer (2026-08-15)
 
 - Status: implemented on both platforms (unit-tested composer kind).

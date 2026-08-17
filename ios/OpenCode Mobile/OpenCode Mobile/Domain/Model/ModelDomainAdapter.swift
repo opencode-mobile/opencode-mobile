@@ -24,7 +24,11 @@ struct ModelDomainAdapter: Sendable {
         return ModelSelectionCatalog(options: options, serverDefault: serverDefault)
     }
 
-    func catalog(providers: [V2ProviderInfoDTO], models: [V2ModelInfoDTO]) -> ModelSelectionCatalog {
+    func catalog(
+        providers: [V2ProviderInfoDTO],
+        models: [V2ModelInfoDTO],
+        defaultModel: V2ModelInfoDTO? = nil
+    ) -> ModelSelectionCatalog {
         let providerNames = Dictionary(uniqueKeysWithValues: providers.map { ($0.id, $0.name ?? $0.id) })
         let disabledProviders = Set(providers.filter { $0.disabled == true }.map(\.id))
         let options: [ModelSelectionOption] = models.compactMap { model in
@@ -47,7 +51,7 @@ struct ModelDomainAdapter: Sendable {
             )
         }
         .sorted { $0.modelLabel.localizedCaseInsensitiveCompare($1.modelLabel) == .orderedAscending }
-        return ModelSelectionCatalog(options: options, serverDefault: nil)
+        return ModelSelectionCatalog(options: options, serverDefault: defaultOption(from: defaultModel, in: options))
     }
 
     func mapError(_ error: Error) -> ModelSelectionError {
@@ -101,5 +105,15 @@ struct ModelDomainAdapter: Sendable {
             return option
         }
         return nil
+    }
+
+    private func defaultOption(from defaultModel: V2ModelInfoDTO?, in options: [ModelSelectionOption]) -> ModelSelectionOption? {
+        guard let defaultModel else { return nil }
+        var ids = Set<String>()
+        if !defaultModel.id.isEmpty { ids.insert(defaultModel.id) }
+        if let modelID = defaultModel.modelID, !modelID.isEmpty { ids.insert(modelID) }
+        return options.first { option in
+            option.providerID == defaultModel.providerID && ids.contains(option.modelID)
+        }
     }
 }

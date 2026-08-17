@@ -95,6 +95,7 @@ data class MessagePartDto(
     val hash: String? = null,
     val files: List<String>? = null,
     val auto: Boolean? = null,
+    val completed: Boolean? = null,
 )
 
 @Serializable
@@ -157,15 +158,10 @@ data class AgentPartSourceDto(
 
 @Serializable
 data class V2PromptRequestDto(
-    val prompt: V2PromptInputDto,
-    val delivery: String,
-)
-
-@Serializable
-data class V2PromptInputDto(
     val text: String,
     val files: List<V2PromptFileDto>? = null,
     val agents: List<V2PromptAgentDto>? = null,
+    val delivery: String,
 )
 
 @Serializable
@@ -177,7 +173,7 @@ data class V2PromptFileDto(
 @Serializable
 data class V2PromptAgentDto(
     val name: String,
-    val source: V2PromptSourceDto? = null,
+    val mention: V2PromptSourceDto? = null,
 )
 
 @Serializable

@@ -269,6 +269,7 @@ object TimelineProjector {
                     it is SessionChatTimelineBlock.Text && it.renderedMarkdown != null
                 },
             isStreaming = row.isStreaming,
+            hasMetadata = row.metadataLabel.isNotEmpty(),
             attachmentSignatures = row.attachments.map { "${it.id}\u0000${it.signature}" },
             blockLayoutFingerprints = row.blocks.map(::blockLayoutFingerprint),
         )
@@ -296,6 +297,7 @@ object TimelineProjector {
         val blockCount: Int,
         val hasMarkdown: Boolean,
         val isStreaming: Boolean,
+        val hasMetadata: Boolean,
         val attachmentSignatures: List<String>,
         val blockLayoutFingerprints: List<String>,
     )
@@ -314,7 +316,41 @@ object TimelineProjector {
                         matchesOptimistic(server, pending)
                 }
             }
+        val dropped = pendingRows.filter { pending -> pendingToKeep.none { it.id == pending.id } }
+        return splicePending(applyPendingMetadata(serverRows, dropped), pendingToKeep)
+    }
+
+    private fun splicePending(
+        serverRows: List<TimelineRow>,
+        pendingToKeep: List<TimelineRow>,
+    ): List<TimelineRow> {
+        if (pendingToKeep.isEmpty()) return serverRows
+        val index = serverRows.indexOfFirst { it.role == MessageRole.Assistant && it.isStreaming }
+        if (index >= 0) {
+            val precededByUser = index > 0 && serverRows[index - 1].role == MessageRole.User
+            if (!precededByUser) {
+                return serverRows.take(index) + pendingToKeep + serverRows.drop(index)
+            }
+        }
         return serverRows + pendingToKeep
+    }
+
+    private fun applyPendingMetadata(
+        serverRows: List<TimelineRow>,
+        dropped: List<TimelineRow>,
+    ): List<TimelineRow> {
+        if (dropped.isEmpty()) return serverRows
+        return serverRows.map { row ->
+            if (row.role != MessageRole.User || row.metadataLabel.isNotEmpty()) return@map row
+            val pending =
+                dropped.firstOrNull { candidate ->
+                    matchesOptimistic(row, candidate) && candidate.metadataLabel.isNotEmpty()
+                } ?: return@map row
+            row.copy(
+                metadataLabel = pending.metadataLabel,
+                layoutRevision = row.layoutRevision + 1,
+            )
+        }
     }
 
     private fun matchesOptimistic(
@@ -325,8 +361,20 @@ object TimelineProjector {
             server.text == pending.text &&
             server.attachments.size == pending.attachments.size &&
             server.attachments.zip(pending.attachments).all { (left, right) ->
-                left.id == right.id || left.signature == right.signature
+                attachmentsMatch(left, right)
             }
+
+    private fun attachmentsMatch(
+        left: SessionChatAttachmentItem,
+        right: SessionChatAttachmentItem,
+    ): Boolean {
+        if (left.variant != right.variant) return false
+        if (left.id == right.id) return true
+        val leftName = left.filename.trim()
+        val rightName = right.filename.trim()
+        if (leftName.isNotEmpty() && leftName == rightName) return true
+        return leftName.isEmpty() || rightName.isEmpty()
+    }
 
     private fun diffFrame(
         frameRevision: Long,

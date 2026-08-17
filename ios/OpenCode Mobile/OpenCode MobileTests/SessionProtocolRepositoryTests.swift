@@ -49,6 +49,43 @@ struct SessionProtocolRepositoryTests {
         #expect(queryValue(url, "directory") == "/repo")
     }
 
+    @Test func v2ListSessionsAcceptsUntitledSessions() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            {
+              "data": [
+                {
+                  "id": "ses_untitled",
+                  "projectID": "global",
+                  "cost": 0,
+                  "tokens": {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}},
+                  "time": {"created": 1, "updated": 1},
+                  "location": {"directory": "/home/ivan"},
+                  "subpath": "home/ivan"
+                },
+                {
+                  "id": "ses_titled",
+                  "title": "What is OpenCode 2?",
+                  "projectID": "global",
+                  "cost": 0,
+                  "tokens": {"input": 1, "output": 2, "reasoning": 0, "cache": {"read": 0, "write": 0}},
+                  "time": {"created": 2, "updated": 3},
+                  "location": {"directory": "/home/ivan"}
+                }
+              ],
+              "cursor": {"previous": null, "next": null}
+            }
+            """#)
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let sessions = try await repository.listSessions(directory: "/home/ivan")
+
+        #expect(sessions.map(\.id) == ["ses_untitled", "ses_titled"])
+        #expect(sessions.map(\.title) == ["New Session", "What is OpenCode 2?"])
+        #expect(sessions.first?.directory == "/home/ivan")
+    }
+
     @Test func v2ActiveStatusesMapRunningToBusy() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
             .json(#"{"data":{"ses_busy":{"type":"running"}},"watermarks":{}}"#)
@@ -82,7 +119,7 @@ struct SessionProtocolRepositoryTests {
         #expect(ProtocolRoutingURLProtocol.requests[1].url?.path.hasSuffix("/api/session/ses_1") == true)
     }
 
-    @Test func v2ForkPostsMessageIdEnvelope() async throws {
+    @Test func v2ForkPostsBoundaryEnvelope() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
             .json(sessionEnvelope(id: "ses_fork", title: "Fork", parentID: "ses_1"))
         ])
@@ -95,13 +132,15 @@ struct SessionProtocolRepositoryTests {
         let request = try #require(ProtocolRoutingURLProtocol.requests.first)
         #expect(request.httpMethod == "POST")
         #expect(request.url?.path.hasSuffix("/api/session/ses_1/fork") == true)
-        #expect(ProtocolRoutingURLProtocol.bodies.first??.contains(#""messageID":"msg_1""#) == true)
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first.flatMap { $0 })
+        #expect(body.contains(#""boundary""#))
+        #expect(body.contains(#""type":"before""#))
+        #expect(body.contains(#""messageID":"msg_1""#))
     }
 
-    @Test func v2CreateSessionPostsLocationThenOptionalRename() async throws {
+    @Test func v2CreateSessionPostsTitleAndLocation() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
-            .json(sessionEnvelope(id: "ses_new", title: "New session")),
-            .noContent
+            .json(sessionEnvelope(id: "ses_new", title: "Named")),
         ])
         let repository = makeSessionRepository(serverProtocol: .v2)
 
@@ -109,12 +148,38 @@ struct SessionProtocolRepositoryTests {
 
         #expect(created.id == "ses_new")
         #expect(created.title == "Named")
-        #expect(ProtocolRoutingURLProtocol.requests.count == 2)
+        #expect(ProtocolRoutingURLProtocol.requests.count == 1)
         #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.hasSuffix("/api/session") == true)
         let createBody = try #require(ProtocolRoutingURLProtocol.bodies[0])
+        #expect(createBody.contains(#""title":"Named""#))
         let location = try #require(jsonObject(createBody)?["location"] as? [String: Any])
         #expect(location["directory"] as? String == "/repo")
-        #expect(ProtocolRoutingURLProtocol.requests[1].url?.path.hasSuffix("/api/session/ses_new/rename") == true)
+    }
+
+    @Test func v2CreateSessionAcceptsUntitledCreateResponse() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(sessionEnvelope(id: "ses_new", title: nil))
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let created = try await repository.createSession(parentID: nil, title: nil, directory: "/repo")
+
+        #expect(created.id == "ses_new")
+        #expect(created.title == "New Session")
+        #expect(created.directory == "/repo")
+        #expect(ProtocolRoutingURLProtocol.requests.count == 1)
+    }
+
+    @Test func v2CreateSessionAcceptsUnwrappedCreateResponse() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(sessionEnvelope(id: "ses_bare", title: nil, wrapInData: false))
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let created = try await repository.createSession(parentID: nil, title: nil, directory: "/repo")
+
+        #expect(created.id == "ses_bare")
+        #expect(created.title == "New Session")
     }
 
     @Test func v2DeleteSessionUsesApiPath() async throws {
@@ -129,19 +194,14 @@ struct SessionProtocolRepositoryTests {
         #expect(request.url?.path.hasSuffix("/api/session/ses_1") == true)
     }
 
-    @Test func v2ArchiveSessionPostsArchiveThenReloadsSession() async throws {
-        ProtocolRoutingURLProtocol.reset(responses: [
-            .noContent,
-            .json(sessionEnvelope(id: "ses_1", title: "One", archived: 42))
-        ])
+    @Test func v2ArchiveSessionReturnsHttp404WithoutCallingArchive() async {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
         let repository = makeSessionRepository(serverProtocol: .v2)
 
-        let archived = try await repository.archiveSession(id: "ses_1", directory: "/repo")
-
-        #expect(archived.archivedAtEpochMs == 42)
-        #expect(ProtocolRoutingURLProtocol.requests[0].httpMethod == "POST")
-        #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.hasSuffix("/api/session/ses_1/archive") == true)
-        #expect(ProtocolRoutingURLProtocol.requests[1].url?.path.hasSuffix("/api/session/ses_1") == true)
+        await #expect(throws: SessionError.http(statusCode: 404, message: "session archive is not available")) {
+            _ = try await repository.archiveSession(id: "ses_1", directory: "/repo")
+        }
+        #expect(ProtocolRoutingURLProtocol.requests.isEmpty)
     }
 
     @Test func v2ProjectCurrentUsesLocationDirectoryQuery() async throws {
@@ -230,7 +290,7 @@ struct SessionProtocolRepositoryTests {
               "action":"edit",
               "resources":["src/a.kt"],
               "save":["src/*"],
-              "source":{"type":"tool","messageID":"msg_1","callID":"call_1"}
+              "source":{"type":"tool","messageID":"msg_1","id":"call_1"}
             }]}
             """#)
         ])
@@ -243,6 +303,7 @@ struct SessionProtocolRepositoryTests {
         #expect(permission.permission == "edit")
         #expect(permission.patterns == ["src/a.kt"])
         #expect(permission.toolMessageID == "msg_1")
+        #expect(permission.toolCallID == "call_1")
         let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
         #expect(url.path.hasSuffix("/api/permission/request"))
         #expect(queryValue(url, "location[directory]") == "/repo")
@@ -264,6 +325,38 @@ struct SessionProtocolRepositoryTests {
         #expect(request.httpMethod == "POST")
         #expect(request.url?.path.hasSuffix("/api/session/ses_1/permission/per_1/reply") == true)
         #expect(ProtocolRoutingURLProtocol.bodies.first??.contains(#""reply":"once""#) == true)
+    }
+
+    @Test func v2ListPendingQuestionsFallsBackToFormsWhenQuestionRoute404s() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            StubResponse(statusCode: 404, body: ""),
+            .json(#"""
+            {
+              "data": [{
+                "id": "frm_1",
+                "sessionID": "ses_1",
+                "title": "Task type",
+                "fields": [{
+                  "key": "q0",
+                  "title": "Task type",
+                  "description": "What would you like to work on?",
+                  "options": [{"value": "Code changes", "label": "Code changes"}],
+                  "custom": true
+                }]
+              }]
+            }
+            """#)
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let questions = try await repository.listPendingQuestions(directory: "/repo")
+
+        #expect(questions.map(\.id) == ["frm_1"])
+        let question = try #require(questions.first?.questions.first)
+        #expect(question.question == "What would you like to work on?")
+        #expect(ProtocolRoutingURLProtocol.requests.count == 2)
+        #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.hasSuffix("/api/question/request") == true)
+        #expect(ProtocolRoutingURLProtocol.requests[1].url?.path.hasSuffix("/api/form/request") == true)
     }
 
     @Test func v2ReplyToQuestionUsesSessionScopedPath() async throws {
@@ -319,7 +412,7 @@ struct SessionProtocolRepositoryTests {
         #expect(request.url?.path.hasSuffix("/api/session/ses_1/revert/stage") == true)
         let body = try #require(ProtocolRoutingURLProtocol.bodies.first.flatMap { $0 })
         #expect(body.contains("\"messageID\":\"msg_9\""))
-        #expect(body.contains("\"partID\":\"part_2\""))
+        #expect(!body.contains("\"partID\""))
         #expect(body.contains("\"files\":true"))
     }
 
@@ -427,6 +520,32 @@ struct SessionProtocolRepositoryTests {
         #expect(queryValue(url, "location[directory]") == "/repo")
     }
 
+    @Test func v2RunCommandPostsModelFilesAndDeliveryWithoutDirectory() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let manager = makeManager(serverProtocol: .v2)
+        let repository = DefaultCommandRepository(
+            api: CommandsAPIClient(connectionProvider: { manager.connection }, urlSession: makeURLSession()),
+            adapter: CommandDomainAdapter(),
+            activeConnectionManager: manager
+        )
+
+        try await repository.runCommand(
+            sessionID: "ses_1",
+            options: CommandRunOptions(command: "init", arguments: "now"),
+            directory: "/repo"
+        )
+
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path.hasSuffix("/api/session/ses_1/command") == true)
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first.flatMap { $0 })
+        #expect(body.contains(#""command":"init""#))
+        #expect(body.contains(#""delivery":"steer""#))
+        #expect(!body.contains(#""parts""#))
+        #expect(queryValue(try #require(request.url), "directory") == nil)
+        #expect(queryValue(try #require(request.url), "location[directory]") == nil)
+    }
+
     @Test func v2ListAgentsMapsIdAndFiltersPrimary() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
             .json(#"""
@@ -466,6 +585,16 @@ struct SessionProtocolRepositoryTests {
               "capabilities":{"tools":true,"input":["text","image"]},
               "limit":{"context":200000,"output":8192}
             }]}
+            """#),
+            .json(#"""
+            {"location":{"directory":"/repo"},"data":{
+              "id":"claude-sonnet",
+              "modelID":"claude-sonnet",
+              "providerID":"anthropic",
+              "name":"Claude Sonnet",
+              "enabled":true,
+              "status":"active"
+            }}
             """#)
         ])
         let manager = makeManager(serverProtocol: .v2)
@@ -485,10 +614,11 @@ struct SessionProtocolRepositoryTests {
         #expect(option.variants == ["high", "low"])
         #expect(option.supportsImageInput)
         #expect(!option.supportsPdfInput)
-        #expect(catalog.serverDefault == nil)
-        #expect(ProtocolRoutingURLProtocol.requests.count == 2)
+        #expect(catalog.serverDefault?.modelID == "claude-sonnet")
+        #expect(ProtocolRoutingURLProtocol.requests.count == 3)
         #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.hasSuffix("/api/provider") == true)
         #expect(ProtocolRoutingURLProtocol.requests[1].url?.path.hasSuffix("/api/model") == true)
+        #expect(ProtocolRoutingURLProtocol.requests[2].url?.path.hasSuffix("/api/model/default") == true)
         #expect(queryValue(try #require(ProtocolRoutingURLProtocol.requests[0].url), "location[directory]") == "/repo")
     }
 
@@ -536,17 +666,20 @@ struct SessionProtocolRepositoryTests {
 
     private func sessionEnvelope(
         id: String,
-        title: String,
+        title: String?,
         parentID: String? = nil,
-        archived: Int64? = nil
+        archived: Int64? = nil,
+        wrapInData: Bool = true
     ) -> String {
+        let titleField = title.map { "\"title\":\"\($0)\"," } ?? ""
         let parentField = parentID.map { ",\"parentID\":\"\($0)\"" } ?? ""
         let archivedField = archived.map { ",\"archived\":\($0)" } ?? ""
-        return "{\"data\":{"
-            + "\"id\":\"\(id)\",\"title\":\"\(title)\",\"projectID\":\"p\",\"cost\":0,"
+        let session = "{"
+            + "\"id\":\"\(id)\",\(titleField)\"projectID\":\"p\",\"cost\":0,"
             + "\"tokens\":{\"input\":0,\"output\":0,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}},"
             + "\"time\":{\"created\":1,\"updated\":2\(archivedField)},"
-            + "\"location\":{\"directory\":\"/repo\"}\(parentField)}}"
+            + "\"location\":{\"directory\":\"/repo\"}\(parentField)}"
+        return wrapInData ? "{\"data\":\(session)}" : session
     }
 }
 

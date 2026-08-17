@@ -50,23 +50,11 @@ nonisolated enum DisplayFrameBuilder {
     ) -> DisplayFrame {
         // pthread_main_np avoids the async-context warning on Thread.isMainThread.
         lastBuildWasOnMainThread = pthread_main_np() != 0
-        let sorted =
-            displayMessages
-                .enumerated()
-                .sorted { left, right in
-                    let leftTime = left.element.message.sentAtEpochMs
-                    let rightTime = right.element.message.sentAtEpochMs
-                    if let leftTime, let rightTime {
-                        if leftTime != rightTime { return leftTime < rightTime }
-                        return left.element.message.id < right.element.message.id
-                    }
-                    return left.offset < right.offset
-                }
-                .map(\.element)
+        let ordered = orderedDisplayMessages(displayMessages)
 
         var bodies: [DisplayMessageBody] = []
-        bodies.reserveCapacity(sorted.count)
-        for display in sorted {
+        bodies.reserveCapacity(ordered.count)
+        for display in ordered {
             let message = display.message
             var blocks = SessionChatTimelineBlocks.buildOrFallback(
                 role: message.role,
@@ -174,5 +162,54 @@ nonisolated enum DisplayFrameBuilder {
 
     static func isCollapsedAwayFromMessageText(message: Message, soleText: String) -> Bool {
         message.role == .user && soleText != message.text
+    }
+
+    /// Oldest-to-newest by `time.created`, without moving a user the store already
+    /// placed before an assistant (v2 inbox user rows can be persisted after the reply starts).
+    static func orderedDisplayMessages(_ displayMessages: [DisplayMessage]) -> [DisplayMessage] {
+        let inputIndex = Dictionary(
+            uniqueKeysWithValues: displayMessages.enumerated().map { ($0.element.id, $0.offset) }
+        )
+        var ordered =
+            displayMessages
+                .enumerated()
+                .sorted { left, right in
+                    let leftTime = left.element.message.sentAtEpochMs
+                    let rightTime = right.element.message.sentAtEpochMs
+                    if let leftTime, let rightTime {
+                        if leftTime != rightTime { return leftTime < rightTime }
+                        return left.element.message.id < right.element.message.id
+                    }
+                    return left.offset < right.offset
+                }
+                .map(\.element)
+
+        var i = 0
+        while i < ordered.count {
+            let current = ordered[i]
+            guard current.message.role == .assistant else {
+                i += 1
+                continue
+            }
+            let assistantInput = inputIndex[current.id] ?? i
+            var displaced: [DisplayMessage] = []
+            var rest: [DisplayMessage] = []
+            for message in ordered[(i + 1)...] {
+                let messageInput = inputIndex[message.id] ?? .max
+                if message.message.role == .user && messageInput < assistantInput {
+                    displaced.append(message)
+                } else {
+                    rest.append(message)
+                }
+            }
+            guard !displaced.isEmpty else {
+                i += 1
+                continue
+            }
+            displaced.sort { (inputIndex[$0.id] ?? 0) < (inputIndex[$1.id] ?? 0) }
+            ordered = Array(ordered[..<i]) + displaced + [current] + rest
+            i += displaced.count + 1
+        }
+        return ordered
     }
 }

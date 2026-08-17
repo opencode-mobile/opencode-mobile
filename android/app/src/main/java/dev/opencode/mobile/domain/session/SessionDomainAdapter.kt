@@ -1,7 +1,7 @@
 package dev.opencode.mobile.domain.session
 
-import dev.opencode.mobile.data.remote.dto.FileDiffDto
 import dev.opencode.mobile.data.remote.dto.ApiSessionActiveDto
+import dev.opencode.mobile.data.remote.dto.FileDiffDto
 import dev.opencode.mobile.data.remote.dto.MessageTokensDto
 import dev.opencode.mobile.data.remote.dto.PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.QuestionInfoDto
@@ -9,6 +9,8 @@ import dev.opencode.mobile.data.remote.dto.QuestionRequestDto
 import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.SessionRevertDto
 import dev.opencode.mobile.data.remote.dto.TodoDto
+import dev.opencode.mobile.data.remote.dto.V2FormFieldDto
+import dev.opencode.mobile.data.remote.dto.V2FormInfoDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
@@ -48,11 +50,11 @@ class SessionDomainAdapter {
     fun toSession(dto: V2SessionDto): Session =
         Session(
             id = dto.id,
-            title = dto.title,
+            title = dto.title.trim().ifBlank { "New Session" },
             slug = null,
             projectId = dto.projectId,
-            directory = dto.location?.directory,
-            parentId = dto.parentId,
+            directory = dto.location?.directory?.takeIf { it.isNotEmpty() },
+            parentId = dto.parentId ?: dto.fork?.sessionId,
             cost = dto.cost,
             tokens = toTokenUsage(dto.tokens),
             createdAtEpochMs = dto.time?.created,
@@ -114,8 +116,7 @@ class SessionDomainAdapter {
             priority = dto.priority,
         )
 
-    fun toTodos(dtos: List<TodoDto>): List<SessionTodo> =
-        dtos.mapIndexed { index, dto -> toTodo(dto, index) }
+    fun toTodos(dtos: List<TodoDto>): List<SessionTodo> = dtos.mapIndexed { index, dto -> toTodo(dto, index) }
 
     fun toTodosFromEventProperties(properties: JsonObject?): List<SessionTodo>? {
         val todosElement = properties?.get("todos") ?: return null
@@ -184,7 +185,7 @@ class SessionDomainAdapter {
             metadata = dto.metadata,
             always = dto.save,
             toolMessageId = dto.source?.messageId,
-            toolCallId = dto.source?.callId,
+            toolCallId = dto.source?.callId ?: dto.source?.id,
         )
 
     fun toQuestionRequest(dto: QuestionRequestDto): QuestionRequest =
@@ -193,7 +194,7 @@ class SessionDomainAdapter {
             sessionId = dto.sessionId,
             questions = dto.questions.map(::toQuestionInfo),
             toolMessageId = dto.tool?.messageId,
-            toolCallId = dto.tool?.callId,
+            toolCallId = dto.tool?.callId ?: dto.tool?.id,
         )
 
     fun toQuestionInfo(dto: QuestionInfoDto): QuestionInfo =
@@ -206,6 +207,50 @@ class SessionDomainAdapter {
                 },
             multiple = dto.multiple == true,
             custom = dto.custom != false,
+        )
+
+    fun toQuestionRequest(form: V2FormInfoDto): QuestionRequest =
+        QuestionRequest(
+            id = form.id,
+            sessionId = form.sessionId,
+            questions = form.fields.map { field -> toQuestionInfo(field, form.title) },
+            toolMessageId = form.metadata?.tool?.messageId,
+            toolCallId = form.metadata?.tool?.callId ?: form.metadata?.tool?.id,
+        )
+
+    fun formAnswer(
+        questions: List<QuestionInfo>,
+        answers: List<List<String>>,
+    ): Map<String, String> =
+        questions
+            .mapIndexed { index, question ->
+                val key = question.fieldKey ?: "q$index"
+                key to (answers.getOrNull(index)?.firstOrNull() ?: "")
+            }.toMap()
+            .ifEmpty { formAnswer(answers) }
+
+    fun formAnswer(answers: List<List<String>>): Map<String, String> =
+        answers.mapIndexed { index, values ->
+            "q$index" to (values.firstOrNull() ?: "")
+        }.toMap()
+
+    private fun toQuestionInfo(
+        field: V2FormFieldDto,
+        formTitle: String?,
+    ): QuestionInfo =
+        QuestionInfo(
+            question = field.description ?: field.title ?: field.key,
+            header = field.title ?: formTitle ?: field.key,
+            options =
+                field.options.map { option ->
+                    QuestionOption(
+                        label = option.label ?: option.value ?: "",
+                        description = option.description ?: "",
+                    )
+                },
+            multiple = field.multiple == true,
+            custom = field.custom != false,
+            fieldKey = field.key,
         )
 
     fun mapError(throwable: Throwable): SessionError =

@@ -68,6 +68,24 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                 }
                 continue
             }
+            if event.type == "session.active.snapshot" {
+                reconnectTask?.cancel()
+                reconnectTask = Task {
+                    try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs))
+                    guard !Task.isCancelled else { return }
+                    if let statuses = await loadStatuses(
+                        directory: directory,
+                        sessionRepository: sessionRepository
+                    ) {
+                        // Empty active maps are a between-step gap on v2, not idle.
+                        // True idle is session.idle / execution.*.
+                        if statuses.isEmpty, !current.isEmpty { return }
+                        current = statuses
+                        yield(current)
+                    }
+                }
+                continue
+            }
             guard event.triggersStatusRefresh else { continue }
             guard let next = applyStatusEvent(current: current, event: event, eventAdapter: eventAdapter),
                   next != current

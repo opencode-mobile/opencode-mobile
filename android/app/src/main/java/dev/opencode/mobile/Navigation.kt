@@ -115,6 +115,20 @@ fun MainNavigation() {
     val serversUiState by serversViewModel.uiState.collectAsStateWithLifecycle()
 
     val backStack = rememberNavBackStack(ProjectListHome)
+    val homeResetGeneration by rootViewModel.homeResetGeneration.collectAsStateWithLifecycle()
+    LaunchedEffect(homeResetGeneration) {
+        if (homeResetGeneration == 0) return@LaunchedEffect
+        while (backStack.size > 1) {
+            when (backStack.lastOrNull()) {
+                is SessionChat,
+                is SessionContext,
+                is Changes,
+                is SessionToolGroup,
+                -> backStack.removeLastOrNull()
+                else -> break
+            }
+        }
+    }
 
     fun presentConnectionSetup(
         initialProfile: ConnectionProfile?,

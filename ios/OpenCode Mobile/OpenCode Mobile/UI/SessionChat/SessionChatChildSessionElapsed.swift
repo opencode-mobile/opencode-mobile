@@ -2,7 +2,7 @@ import Foundation
 
 enum SessionChatChildSessionElapsed {
     static func format(startEpochMs: Int64?, nowEpochMs: Int64) -> String? {
-        guard let startEpochMs else { return nil }
+        guard let startEpochMs = ToolStartTime.normalizeEpochMs(startEpochMs) else { return nil }
         let elapsedMs = max(0, nowEpochMs - startEpochMs)
         let totalSeconds = elapsedMs / 1000
         let minutes = totalSeconds / 60

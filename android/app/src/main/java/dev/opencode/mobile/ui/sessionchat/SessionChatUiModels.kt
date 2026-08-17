@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.FileDiff
@@ -120,6 +121,7 @@ data class SessionChatUiState(
     val reviewChangesMessageId: String? = null,
     val reviewChangesSummary: ReviewChangesSummary? = null,
     val supportsSessionMessageDiff: Boolean = true,
+    val supportsSessionArchive: Boolean = true,
     val rename: SessionRenameUiState = SessionRenameUiState(),
     val slashSuggestionsVisible: Boolean = false,
     val slashSuggestions: List<SessionChatSlashSuggestion> = emptyList(),
@@ -283,6 +285,22 @@ data class SessionChatTimelineRegionState(
     val isSyncingMessages: Boolean = false,
     val errorMessage: String? = null,
 )
+
+/** Child session ids visible in the timeline (running subagent/task rows). */
+fun SessionChatTimelineRegionState.knownChildSessionIds(): Set<String> =
+    messages
+        .flatMap { message ->
+            message.blocks.mapNotNull { block ->
+                when (block) {
+                    is SessionChatTimelineBlock.ChildSessionRow -> block.childSessionId
+                    is SessionChatTimelineBlock.ToolCard ->
+                        block.childSessionId?.takeIf {
+                            block.status == ToolStatus.Pending || block.status == ToolStatus.Running
+                        }
+                    else -> null
+                }
+            }
+        }.toSet()
 
 data class SessionChatSlashSuggestion(
     val id: String,

@@ -79,6 +79,7 @@ nonisolated struct MessagePartDTO: Codable, Sendable {
     let hash: String?
     let files: [String]?
     let auto: Bool?
+    let completed: Bool?
     let subtask: String?
     let mime: String?
     let filename: String?
@@ -165,35 +166,37 @@ nonisolated struct AgentPartSourceDTO: Codable, Sendable {
 }
 
 nonisolated struct V2PromptRequestDTO: Codable, Sendable {
-    let prompt: V2PromptInputDTO
-    let delivery: String
-
-    init(prompt: V2PromptInputDTO, delivery: String = "steer") {
-        self.prompt = prompt
-        self.delivery = delivery
-    }
-}
-
-nonisolated struct V2PromptInputDTO: Codable, Sendable {
     let text: String
     let files: [V2PromptFileDTO]?
     let agents: [V2PromptAgentDTO]?
+    let delivery: String
 
-    init(text: String, files: [V2PromptFileDTO]? = nil, agents: [V2PromptAgentDTO]? = nil) {
+    init(
+        text: String,
+        files: [V2PromptFileDTO]? = nil,
+        agents: [V2PromptAgentDTO]? = nil,
+        delivery: String = "steer"
+    ) {
         self.text = text
         self.files = files
         self.agents = agents
+        self.delivery = delivery
     }
 }
 
 nonisolated struct V2PromptFileDTO: Codable, Sendable {
     let uri: String
     let name: String?
+
+    init(uri: String, name: String? = nil) {
+        self.uri = uri
+        self.name = name
+    }
 }
 
 nonisolated struct V2PromptAgentDTO: Codable, Sendable {
     let name: String
-    let source: V2PromptSourceDTO?
+    let mention: V2PromptSourceDTO?
 }
 
 nonisolated struct V2SwitchAgentRequestDTO: Codable, Sendable {
