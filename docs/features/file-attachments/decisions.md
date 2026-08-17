@@ -84,6 +84,19 @@ Resolved in the 2026-07-16 grilling session (all recommendations accepted).
   mobile IDE scope.
 - Revisit when: richer preview is requested.
 
+## Live inbox image without bytes shows a file-card placeholder
+
+- Date: 2026-08-17
+- Decision: Keep a domain **FilePart** when live inbox omits `url`/`uri` but
+  still has image `mime` or an image filename. Render the existing message
+  attachment file card (filename + IMAGE, no thumbnail) until REST supplies
+  the data URL and the local thumbnailer fills the preview.
+- Reason: SSE drops large file URIs, so dropping the part made the watching
+  client show nothing until a slow REST reload. The file card is already the
+  documented fallback when preview bytes are missing.
+- Revisit when: the server sends a thumbnail or a fetchable file URL instead
+  of embedding the full data URL.
+
 ## Hide synthetic and ignored text parts in Session Chat
 
 - Date: 2026-08-06

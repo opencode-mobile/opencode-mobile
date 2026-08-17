@@ -19,7 +19,6 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeSessionListDock
-import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListProjectPickerRows
 
@@ -28,8 +27,8 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
     var showCreateError by rememberSaveable { mutableStateOf(false) }
     var oneProject by rememberSaveable { mutableStateOf(false) }
+    var useProjectPicker by rememberSaveable { mutableStateOf(false) }
     var showProjectPicker by rememberSaveable { mutableStateOf(false) }
-    var projectPickerQuery by rememberSaveable { mutableStateOf("") }
     val filterTabs =
         if (oneProject) {
             sessionListDockGalleryOneProjectFilterTabs
@@ -63,13 +62,20 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
                 selected = showCreateError,
                 onClick = { showCreateError = !showCreateError },
             )
+            OpenCodeChoiceBadge(
+                label = "Picker",
+                selected = useProjectPicker,
+                onClick = { useProjectPicker = !useProjectPicker },
+            )
         }
 
         OpenCodeSessionListDock(
             filterTabs = filterTabs,
             selectedFilterId = selectedFilterId,
             createError = if (showCreateError) "Could not create session. Try again." else null,
+            useProjectPicker = useProjectPicker,
             onOpenProjectPicker = { showProjectPicker = true },
+            onFilterSelected = { selectedFilterId = it },
             onAddProject = {},
             onNewSession = {},
             modifier =
@@ -85,32 +91,18 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
         visible = showProjectPicker,
         title = "Filter by project",
         contentMode = OpenCodeBottomSheetContentMode.Form,
-        alwaysFixedHeight = true,
-        onDismissRequest = {
-            showProjectPicker = false
-            projectPickerQuery = ""
-        },
-        pinnedContent = {
-            OpenCodeTextInput(
-                value = projectPickerQuery,
-                onValueChange = { projectPickerQuery = it },
-                hint = "Search projects",
-            )
-        },
+        onDismissRequest = { showProjectPicker = false },
     ) {
         SessionListProjectPickerRows(
             tabs = filterTabs,
-            query = projectPickerQuery,
             onSelect = { id ->
                 selectedFilterId = id
                 showProjectPicker = false
-                projectPickerQuery = ""
             },
             onRemoveProject = { worktree ->
                 val remaining = filterTabs.filter { it.id != worktree }
                 selectedFilterId = remaining.firstOrNull()?.id ?: selectedFilterId
                 showProjectPicker = false
-                projectPickerQuery = ""
             },
         )
     }

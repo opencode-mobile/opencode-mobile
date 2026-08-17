@@ -4,24 +4,33 @@ struct OpenCodeSessionListDock: View {
     let filterTabs: [SessionListFilterTab]
     let selectedFilterId: String
     let createError: String?
+    let useProjectPicker: Bool
     let onOpenProjectPicker: () -> Void
+    let onFilterSelected: (String) -> Void
     let onAddProject: () -> Void
     let onNewSession: () -> Void
+    let onRemoveProject: ((String) -> Void)?
 
     init(
         filterTabs: [SessionListFilterTab],
         selectedFilterId: String,
         createError: String? = nil,
-        onOpenProjectPicker: @escaping () -> Void,
+        useProjectPicker: Bool = false,
+        onOpenProjectPicker: @escaping () -> Void = {},
+        onFilterSelected: @escaping (String) -> Void = { _ in },
         onAddProject: @escaping () -> Void,
-        onNewSession: @escaping () -> Void
+        onNewSession: @escaping () -> Void,
+        onRemoveProject: ((String) -> Void)? = nil
     ) {
         self.filterTabs = filterTabs
         self.selectedFilterId = selectedFilterId
         self.createError = createError
+        self.useProjectPicker = useProjectPicker
         self.onOpenProjectPicker = onOpenProjectPicker
+        self.onFilterSelected = onFilterSelected
         self.onAddProject = onAddProject
         self.onNewSession = onNewSession
+        self.onRemoveProject = onRemoveProject
     }
 
     var body: some View {
@@ -34,8 +43,24 @@ struct OpenCodeSessionListDock: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                if let selectedTab {
-                    SessionListScopeControl(tab: selectedTab, action: onOpenProjectPicker)
+                if useProjectPicker {
+                    if let selectedTab {
+                        SessionListScopeControl(tab: selectedTab, action: onOpenProjectPicker)
+                    }
+                } else if !filterTabs.isEmpty {
+                    ScrollViewReader { proxy in
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            filterChipsRow
+                        }
+                        .onChange(of: selectedFilterId) { _, id in
+                            Task { @MainActor in
+                                await Task.yield()
+                                withAnimation(.smooth(duration: 0.22)) {
+                                    proxy.scrollTo(id)
+                                }
+                            }
+                        }
+                    }
                 }
 
                 HStack(alignment: .center, spacing: 8) {
@@ -43,6 +68,32 @@ struct OpenCodeSessionListDock: View {
                     newSessionButton
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var filterChipsRow: some View {
+        let chips = HStack(spacing: 8) {
+            ForEach(filterTabs) { tab in
+                OpenCodeFilterChip(
+                    title: tab.title,
+                    count: tab.count,
+                    selected: tab.id == selectedFilterId,
+                    action: { onFilterSelected(tab.id) },
+                    removeAction: tab.id != SessionListFilterTab.allId
+                        && tab.id == selectedFilterId
+                        ? onRemoveProject.map { remove in { remove(tab.id) } }
+                        : nil
+                )
+                .id(tab.id)
+            }
+        }
+        if #available(iOS 26, *) {
+            GlassEffectContainer(spacing: 8) {
+                chips
+            }
+        } else {
+            chips
         }
     }
 
@@ -97,7 +148,7 @@ struct SessionListScopeControl: View {
             HStack(spacing: 10) {
                 SessionListScopeMark(tab: tab)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(tab.title)
+                    Text(tab.pickerTitle)
                         .font(OpenCodeTypography.bodySecondary.weight(.semibold))
                         .foregroundStyle(OpenCodeColors.textStrong)
                         .lineLimit(1)
@@ -138,9 +189,9 @@ struct SessionListScopeControl: View {
     private var accessibilityLabel: String {
         let subtitle = displayedSubtitle
         if subtitle.isEmpty {
-            return "\(tab.title), \(tab.count) sessions"
+            return "\(tab.pickerTitle), \(tab.count) sessions"
         }
-        return "\(tab.title), \(subtitle), \(tab.count) sessions"
+        return "\(tab.pickerTitle), \(subtitle), \(tab.count) sessions"
     }
 }
 
@@ -200,7 +251,6 @@ private struct OpenCodeSessionListDockCtaPressStyle: ButtonStyle {
                 .project(worktree: "/demo/b", title: "playground", count: 1),
             ],
             selectedFilterId: SessionListFilterTab.allId,
-            onOpenProjectPicker: {},
             onAddProject: {},
             onNewSession: {}
         )

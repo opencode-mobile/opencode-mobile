@@ -66,10 +66,12 @@ data class SessionListFilterTab(
     val letterAccent: LetterAccent? = null,
 ) {
     val isAll: Boolean get() = id == ALL_ID
+    val pickerTitle: String get() = if (isAll) PICKER_ALL_TITLE else title
 
     companion object {
         const val ALL_ID = "all"
-        const val ALL_TITLE = "All projects"
+        const val ALL_TITLE = "All"
+        const val PICKER_ALL_TITLE = "All projects"
 
         fun all(
             projectCount: Int,
@@ -98,32 +100,20 @@ data class SessionListFilterTab(
     }
 }
 
-object SessionListProjectPickerMatching {
-    fun tabs(
-        tabs: List<SessionListFilterTab>,
-        query: String,
-    ): List<SessionListFilterTab> {
-        val needle = query.trim().lowercase()
-        if (needle.isEmpty()) return tabs
-        return tabs.filter { tab ->
-            tab.title.lowercase().contains(needle) ||
-                tab.id.lowercase().contains(needle) ||
-                tab.subtitle.lowercase().contains(needle)
-        }
-    }
-}
-
 @Composable
 fun SessionList(
     sessions: List<SessionListSession>,
     filterTabs: List<SessionListFilterTab>,
     selectedFilterId: String,
-    onOpenProjectPicker: () -> Unit,
     onSessionSelected: (SessionListSession) -> Unit,
     onAddProject: () -> Unit,
     onNewSession: () -> Unit,
     modifier: Modifier = Modifier,
     createError: String? = null,
+    useProjectPicker: Boolean = false,
+    onOpenProjectPicker: () -> Unit = {},
+    onFilterSelected: (String) -> Unit = {},
+    onRemoveProject: ((String) -> Unit)? = null,
     emptyContent: (@Composable () -> Unit)? = null,
     onSessionLongPress: ((SessionListSession) -> Unit)? = null,
     revealNewestToken: Int = 0,
@@ -279,7 +269,10 @@ fun SessionList(
             filterTabs = filterTabs,
             selectedFilterId = selectedFilterId,
             createError = createError,
+            useProjectPicker = useProjectPicker,
             onOpenProjectPicker = onOpenProjectPicker,
+            onFilterSelected = onFilterSelected,
+            onRemoveProject = onRemoveProject,
             onAddProject = onAddProject,
             onNewSession = onNewSession,
             modifier =
@@ -432,7 +425,6 @@ private fun SessionListPreview() {
                     ),
                 ),
             selectedFilterId = SessionListFilterTab.ALL_ID,
-            onOpenProjectPicker = {},
             onSessionSelected = {},
             onAddProject = {},
             onNewSession = {},

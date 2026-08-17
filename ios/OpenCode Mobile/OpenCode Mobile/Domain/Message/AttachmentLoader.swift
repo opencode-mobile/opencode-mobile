@@ -51,6 +51,20 @@ enum AttachmentDataURL {
         guard !mime.isEmpty, kind(for: mime) != nil else { return nil }
         return mime
     }
+
+    nonisolated static func mime(fromFilename filename: String) -> String? {
+        let ext = URL(fileURLWithPath: filename).pathExtension.lowercased()
+        guard !ext.isEmpty else { return nil }
+        switch ext {
+        case "png": return "image/png"
+        case "jpg", "jpeg": return "image/jpeg"
+        case "gif": return "image/gif"
+        case "webp": return "image/webp"
+        case "pdf": return "application/pdf"
+        case "txt": return "text/plain"
+        default: return nil
+        }
+    }
 }
 
 struct AttachmentLoader: Sendable {

@@ -224,18 +224,29 @@ nonisolated enum SessionChatTimelineProjector {
         baselineSignatureCounts: [String: Int]
     ) -> [TimelineRow] {
         guard !pendingRows.isEmpty else { return serverRows }
-        var serverCounts = signatureCounts(serverRows)
+        var serverExact = signatureCounts(serverRows)
+        var serverTextOnly = textOnlySignatureCounts(serverRows)
+        let baselineTextOnly = textOnlySignatureCounts(fromExact: baselineSignatureCounts)
         let pendingToKeep = pendingRows.filter { pending in
-            let signature = optimisticSignature(pending)
-            let baselineCount = baselineSignatureCounts[signature, default: 0]
-            guard serverCounts[signature, default: 0] > baselineCount else { return true }
-            serverCounts[signature, default: 0] -= 1
+            let exact = optimisticSignature(pending)
+            if serverExact[exact, default: 0] > baselineSignatureCounts[exact, default: 0] {
+                serverExact[exact, default: 0] -= 1
+                return false
+            }
+            let text = textSignature(pending)
+            guard pending.hasAttachments,
+                  !text.isEmpty,
+                  serverTextOnly[text, default: 0] > baselineTextOnly[text, default: 0]
+            else {
+                return true
+            }
+            serverTextOnly[text, default: 0] -= 1
             return false
         }
         let keptIDs = Set(pendingToKeep.map(\.id))
         let dropped = pendingRows.filter { !keptIDs.contains($0.id) }
         return splicePending(
-            applyPendingMetadata(serverRows, dropped: dropped),
+            applyPendingChrome(serverRows, dropped: dropped),
             pendingToKeep: pendingToKeep
         )
     }
@@ -254,18 +265,46 @@ nonisolated enum SessionChatTimelineProjector {
         return serverRows + pendingToKeep
     }
 
-    private static func applyPendingMetadata(
+    private static func applyPendingChrome(
         _ serverRows: [TimelineRow],
         dropped: [TimelineRow]
     ) -> [TimelineRow] {
         guard !dropped.isEmpty else { return serverRows }
+        var remaining = dropped
+        var pendingByServerID: [String: TimelineRow] = [:]
+        for row in serverRows where row.role == .user {
+            let exact = optimisticSignature(row)
+            guard let index = remaining.firstIndex(where: { optimisticSignature($0) == exact }) else {
+                continue
+            }
+            pendingByServerID[row.id] = remaining.remove(at: index)
+        }
+        for pending in remaining where pending.hasAttachments {
+            let text = textSignature(pending)
+            guard !text.isEmpty else { continue }
+            guard let target = serverRows.last(where: { server in
+                server.role == .user
+                    && !server.hasAttachments
+                    && pendingByServerID[server.id] == nil
+                    && textSignature(server) == text
+            }) else { continue }
+            pendingByServerID[target.id] = pending
+        }
+        guard !pendingByServerID.isEmpty else { return serverRows }
         return serverRows.map { row in
-            guard row.role == .user, row.metadataLabel.isEmpty else { return row }
-            let signature = optimisticSignature(row)
-            guard let pending = dropped.first(where: {
-                optimisticSignature($0) == signature && !$0.metadataLabel.isEmpty
-            }) else { return row }
-            return row.withMetadataLabel(pending.metadataLabel)
+            guard let pending = pendingByServerID[row.id] else { return row }
+            var next = row
+            if row.metadataLabel.isEmpty, !pending.metadataLabel.isEmpty {
+                next = next.withMetadataLabel(pending.metadataLabel)
+            }
+            if !row.hasAttachments, pending.hasAttachments {
+                let attachments = pending.blocks.filter { block in
+                    if case .attachment = block { return true }
+                    return false
+                }
+                next = next.withBlocks(next.blocks + attachments)
+            }
+            return next
         }
     }
 
@@ -289,6 +328,43 @@ nonisolated enum SessionChatTimelineProjector {
             }
         }
         return content.isEmpty ? "text:\(row.text)" : content.joined(separator: "|")
+    }
+
+    static func textSignature(_ row: TimelineRow) -> String {
+        let texts = row.blocks.compactMap { block -> String? in
+            if case .text(_, let text, _) = block { return "text:\(text)" }
+            return nil
+        }
+        if !texts.isEmpty { return texts.joined(separator: "|") }
+        let trimmed = row.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "" : "text:\(trimmed)"
+    }
+
+    static func textOnlySignatureCounts(_ rows: [TimelineRow]) -> [String: Int] {
+        rows.reduce(into: [:]) { counts, row in
+            guard row.role == .user, !row.hasAttachments else { return }
+            let text = textSignature(row)
+            guard !text.isEmpty else { return }
+            counts[text, default: 0] += 1
+        }
+    }
+
+    static func textOnlySignatureCounts(fromExact counts: [String: Int]) -> [String: Int] {
+        counts.reduce(into: [:]) { aggregated, pair in
+            guard !pair.key.split(separator: "|").contains(where: { $0.hasPrefix("file:") }) else {
+                return
+            }
+            let text = textKey(fromExact: pair.key)
+            guard !text.isEmpty else { return }
+            aggregated[text, default: 0] += pair.value
+        }
+    }
+
+    static func textKey(fromExact exact: String) -> String {
+        let parts = exact.split(separator: "|", omittingEmptySubsequences: false)
+            .map(String.init)
+            .filter { $0.hasPrefix("text:") }
+        return parts.joined(separator: "|")
     }
 
     static func signatureCounts(fromSessionChatRows rows: [SessionChatRow]) -> [String: Int] {

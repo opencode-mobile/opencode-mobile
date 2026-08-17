@@ -1,6 +1,8 @@
 package dev.opencode.mobile.ui.componentgallery.components
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -15,7 +17,6 @@ import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
-import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListProjectPickerRows
@@ -26,8 +27,8 @@ import dev.opencode.mobile.ui.components.SessionListStatus
 fun SessionListGalleryScreen(modifier: Modifier = Modifier) {
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
     var oneProject by rememberSaveable { mutableStateOf(false) }
+    var useProjectPicker by rememberSaveable { mutableStateOf(false) }
     var showProjectPicker by rememberSaveable { mutableStateOf(false) }
-    var projectPickerQuery by rememberSaveable { mutableStateOf("") }
     val filterTabs =
         if (oneProject) {
             sessionListGalleryOneProjectFilterTabs
@@ -39,54 +40,52 @@ fun SessionListGalleryScreen(modifier: Modifier = Modifier) {
             sessions = sessionListGallerySamples,
             filterTabs = filterTabs,
             selectedFilterId = selectedFilterId,
+            useProjectPicker = useProjectPicker,
             onOpenProjectPicker = { showProjectPicker = true },
+            onFilterSelected = { selectedFilterId = it },
             onSessionSelected = {},
             onAddProject = {},
             onNewSession = {},
             modifier = Modifier.fillMaxSize(),
         )
-        OpenCodeChoiceBadge(
-            label = "1 project",
-            selected = oneProject,
-            onClick = {
-                oneProject = !oneProject
-                selectedFilterId =
-                    if (oneProject) {
-                        sessionListGalleryOneProjectFilterTabs.first().id
-                    } else {
-                        SessionListFilterTab.ALL_ID
-                    }
-            },
+        Row(
             modifier =
                 Modifier
                     .align(Alignment.TopStart)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-        )
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OpenCodeChoiceBadge(
+                label = "1 project",
+                selected = oneProject,
+                onClick = {
+                    oneProject = !oneProject
+                    selectedFilterId =
+                        if (oneProject) {
+                            sessionListGalleryOneProjectFilterTabs.first().id
+                        } else {
+                            SessionListFilterTab.ALL_ID
+                        }
+                },
+            )
+            OpenCodeChoiceBadge(
+                label = "Picker",
+                selected = useProjectPicker,
+                onClick = { useProjectPicker = !useProjectPicker },
+            )
+        }
     }
     OpenCodeBottomSheet(
         visible = showProjectPicker,
         title = "Filter by project",
         contentMode = OpenCodeBottomSheetContentMode.Form,
-        alwaysFixedHeight = true,
-        onDismissRequest = {
-            showProjectPicker = false
-            projectPickerQuery = ""
-        },
-        pinnedContent = {
-            OpenCodeTextInput(
-                value = projectPickerQuery,
-                onValueChange = { projectPickerQuery = it },
-                hint = "Search projects",
-            )
-        },
+        onDismissRequest = { showProjectPicker = false },
     ) {
         SessionListProjectPickerRows(
             tabs = filterTabs,
-            query = projectPickerQuery,
             onSelect = { id ->
                 selectedFilterId = id
                 showProjectPicker = false
-                projectPickerQuery = ""
             },
         )
     }

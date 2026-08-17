@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.event
 
+import dev.opencode.mobile.domain.message.AttachmentDataUrl
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -288,7 +289,11 @@ class EventDomainAdapter(
                 messageId?.let { put("messageID", it) }
                 put("type", "file")
                 file.string("uri")?.let { put("url", it) }
-                file.string("mime")?.let { put("mime", it) }
+                val mime =
+                    file.string("mime")
+                        ?: file.string("uri")?.let(AttachmentDataUrl::mimeFromDataUrl)
+                        ?: file.string("name")?.let(AttachmentDataUrl::mimeFromFilename)
+                mime?.let { put("mime", it) }
                 file.string("name")?.let { put("filename", it) }
             }
         return event("message.part.updated", buildJsonObject { put("part", part) })

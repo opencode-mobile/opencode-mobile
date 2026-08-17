@@ -10,6 +10,7 @@ final class HomeDisplayPreferences {
         static let hideUserDirectoryPrefix = "hideUserDirectoryPrefix"
         static let recentWindowHours = "recentWindowHours"
         static let lastHomeHiddenAtEpochMs = "lastHomeHiddenAtEpochMs"
+        static let sessionListProjectPickerEnabled = "sessionListProjectPickerEnabled"
     }
 
     private let defaults: UserDefaults
@@ -17,6 +18,8 @@ final class HomeDisplayPreferences {
     /// When true, replace remote `/Users/…` or `/home/…` with `~` in path labels.
     private(set) var hideUserDirectoryPrefix: Bool
     private(set) var recentWindowHours: Int
+    /// When true, home Session List uses the project picker instead of chips.
+    private(set) var sessionListProjectPickerEnabled: Bool
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -32,6 +35,7 @@ final class HomeDisplayPreferences {
                 defaults.integer(forKey: StorageKeys.recentWindowHours)
             )
         }
+        sessionListProjectPickerEnabled = defaults.bool(forKey: StorageKeys.sessionListProjectPickerEnabled)
     }
 
     func setHideUserDirectoryPrefix(_ value: Bool) {
@@ -61,12 +65,19 @@ final class HomeDisplayPreferences {
         defaults.set(sanitized, forKey: StorageKeys.recentWindowHours)
     }
 
+    func setSessionListProjectPickerEnabled(_ value: Bool) {
+        sessionListProjectPickerEnabled = value
+        defaults.set(value, forKey: StorageKeys.sessionListProjectPickerEnabled)
+    }
+
     func clear() {
         defaults.removeObject(forKey: StorageKeys.showSessionListOnHome)
         defaults.removeObject(forKey: StorageKeys.hideUserDirectoryPrefix)
         defaults.removeObject(forKey: StorageKeys.recentWindowHours)
         defaults.removeObject(forKey: StorageKeys.lastHomeHiddenAtEpochMs)
+        defaults.removeObject(forKey: StorageKeys.sessionListProjectPickerEnabled)
         hideUserDirectoryPrefix = true
         recentWindowHours = HomeSessionLadder.defaultWindowHours
+        sessionListProjectPickerEnabled = false
     }
 }

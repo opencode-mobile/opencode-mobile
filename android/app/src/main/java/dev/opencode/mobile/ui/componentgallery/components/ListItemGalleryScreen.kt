@@ -30,6 +30,17 @@ private enum class GalleryDecoratorKind {
     None,
     Letter,
     Icon,
+    IconCircle,
+    ;
+
+    val label: String
+        get() =
+            when (this) {
+                None -> "None"
+                Letter -> "Letter"
+                Icon -> "Icon"
+                IconCircle -> "Icon circle"
+            }
 }
 
 private enum class GallerySubtitleKind {
@@ -93,6 +104,8 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
             GalleryDecoratorKind.Letter -> StartDecorator.Letter('A', letterAccent)
             GalleryDecoratorKind.Icon ->
                 StartDecorator.Icon(imageVector = OpenCodeIcons.Folder, contentDescription = "Folder")
+            GalleryDecoratorKind.IconCircle ->
+                StartDecorator.IconCircle(imageVector = OpenCodeIcons.Widgets, contentDescription = "All projects")
         }
 
     val subtitle: String? = if (subtitleKind == GallerySubtitleKind.Plain) "http://127.0.0.1:4096/" else null
@@ -195,7 +208,7 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 GalleryDecoratorKind.entries.forEach { kind ->
                     OpenCodeChoiceBadge(
-                        label = kind.name,
+                        label = kind.label,
                         selected = decoratorKind == kind,
                         onClick = { decoratorKindName = kind.name },
                     )

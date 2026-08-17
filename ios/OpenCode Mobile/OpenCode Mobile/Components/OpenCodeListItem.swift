@@ -5,6 +5,7 @@ private let listItemLetterBadgeSize: CGFloat = 32
 private let listItemLetterGlyphSize: CGFloat = 14
 private let listItemLetterStatusDotSize: CGFloat = 10
 private let listItemIconDecoratorSize: CGFloat = 24
+private let listItemIconCircleGlyphSize: CGFloat = 16
 private let listItemVerticalPadding: CGFloat = 12
 private let listItemTitleSubtitleSpacing: CGFloat = 2
 private let listItemMetaSpacing: CGFloat = 4
@@ -335,6 +336,13 @@ struct OpenCodeListItem<Trailing: View>: View {
                 .foregroundStyle(OpenCodeColors.iconBase)
                 .accessibilityHidden(accessibilityLabel == nil)
                 .accessibilityLabel(accessibilityLabel ?? "")
+        case let .iconCircle(icon, accessibilityLabel):
+            OpenCodeIconImage(icon: icon, size: listItemIconCircleGlyphSize)
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .frame(width: listItemLetterBadgeSize, height: listItemLetterBadgeSize)
+                .background(OpenCodeColors.textStrong.opacity(0.10), in: Circle())
+                .accessibilityHidden(accessibilityLabel == nil)
+                .accessibilityLabel(accessibilityLabel ?? "")
         }
     }
 }
@@ -393,6 +401,11 @@ private struct OpenCodeListItemPressStyle: ButtonStyle {
             status: OpenCodeListItemStatus(text: "Idle", tone: .info),
             caption: "14m ago",
             startDecorator: .letter(Character("P"), .teal)
+        )
+        OpenCodeListItem(
+            title: "All projects",
+            subtitle: "8 projects",
+            startDecorator: .iconCircle(.widgets)
         )
         OpenCodeListItem(
             title: "Card style with border",

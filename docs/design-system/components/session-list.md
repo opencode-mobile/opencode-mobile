@@ -3,7 +3,8 @@
 ## Intent
 
 Provide the home-scale cross-project session feed: dense rows and a floating
-bottom dock with a project scope control plus Add project / New session.
+bottom dock with project filter chrome (chips or a scope control) plus Add
+project / New session.
 
 Use as the home session feed. Page chrome (`OpenCodeTopBar` title, live status,
 settings) is owned by the home shell, not this component.
@@ -16,14 +17,16 @@ settings) is owned by the home shell, not this component.
     time-ladder grouping and within-section sort).
   - `SessionListStatus`: `idle` | `running` | `ready`.
   - `SessionListFilterTab`: `id`, `title`, `subtitle`, `count`, optional letter
-    + accent. Use id `all` for the cross-project tab (title **All projects**);
-    other ids match `SessionListSession.worktree`.
+    + accent. Use id `all` for the cross-project tab (chip title **All**;
+    picker chrome **All projects**); other ids match `SessionListSession.worktree`.
 - Required content: `sessions` (may be empty; order before filter is not
   significant — the list filters then groups) and ordered `filterTabs`.
   **All** is required only when two or more projects are added; omit it for
   zero or one project. Zero projects may pass an empty tab list.
-- Required filter state: `selectedFilterId` plus `onOpenProjectPicker()`.
-  Callers own picker presentation, search, and `onFilterSelected(id)`.
+- Required filter state: `selectedFilterId`. Default chrome is chips via
+  `onFilterSelected(id)` and optional `onRemoveProject(id)`. When
+  `useProjectPicker` is on, `onOpenProjectPicker()` opens the caller-owned
+  Filter by project sheet.
 - Optional content:
   - `createError` string shown at the top of the dock when session create fails.
   - `emptyContent` composable / view shown centered above the dock when the
@@ -35,7 +38,8 @@ settings) is owned by the home shell, not this component.
   - `onSessionSelected(session)`.
   - `onAddProject()`.
   - `onNewSession()`.
-  - `onOpenProjectPicker()`.
+  - `onFilterSelected(id)` when using chips; `onOpenProjectPicker()` when using
+    the picker.
 - Optional callbacks:
   - `onSessionLongPress(session)` on both platforms.
 - States: default and empty filtered list (dock and filters remain; optional
@@ -49,8 +53,8 @@ settings) is owned by the home shell, not this component.
   badges; dock tokens via Floating Dock and Session List Dock; bottom fade
   via Bottom Fade.
 - Component dependencies: `OpenCodeListItem` for rows; `OpenCodeSessionListDock`
-  for scope + actions; `OpenCodeBottomFade`. Home shell supplies
-  `OpenCodeTopBar` and the Filter by project sheet.
+  for filter chrome + actions; `OpenCodeBottomFade`. Home shell supplies
+  `OpenCodeTopBar` and, when picker chrome is on, the Filter by project sheet.
 - Typography roles: list-item body/caption; dock scope/button roles via Session
   List Dock.
 
@@ -75,8 +79,8 @@ Layout:
    omit the dot.
 2. Bottom fade under the dock (`background.base` `0 → 0.7 → 0.7`; top = dock top
    + 16; bottom = physical screen edge).
-3. `OpenCodeSessionListDock`: optional create error, scope control, Add
-   project + New session.
+3. `OpenCodeSessionListDock`: optional create error, chips or scope control,
+  Add project + New session.
 
 When `selectedFilterId` is `all`, all sessions are shown. Otherwise only
 sessions whose `worktree` equals the selected filter id are shown.
@@ -92,8 +96,9 @@ sessions whose `worktree` equals the selected filter id are shown.
 ## Review Surfaces
 
 Both Component Galleries include a realistic mixed Idle/Running/Ready sample with
-the scope control and dock actions, plus a **1 project** control that hides All
-and shows only that project. Light and dark use the shared gallery theme control.
+chip or picker dock chrome (local **Picker** switch), plus a **1 project**
+control that hides All and shows only that project. Light and dark use the shared
+gallery theme control.
 Edge-to-edge fade is judged full-bleed in the gallery detail. Top bar chrome is
 reviewed via Top Bar gallery / home shell, not this entry.
 

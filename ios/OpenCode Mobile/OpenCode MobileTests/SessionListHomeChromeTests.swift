@@ -21,6 +21,8 @@ struct SessionListHomeChromeTests {
             SessionListFilterTab.project(worktree: "/repo", title: "opencode-mobile", count: 2),
             SessionListFilterTab.project(worktree: "/play", title: "playground", count: 1),
         ])
+        #expect(tabs.first?.title == "All")
+        #expect(tabs.first?.pickerTitle == "All projects")
     }
 
     @Test func resolvedFilterId_fallsBackToSoleProjectWhenAllIsOmitted() {

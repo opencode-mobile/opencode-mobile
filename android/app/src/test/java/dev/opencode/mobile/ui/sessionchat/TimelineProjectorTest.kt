@@ -338,6 +338,202 @@ class TimelineProjectorTest {
     }
 
     @Test
+    fun project_optimisticFile_reconcilesWhenLiveInboxOmitsFile() {
+        val pendingAttachment =
+            SessionChatAttachmentItem(
+                id = "local-file",
+                filename = "Photo 1.jpeg",
+                variant = OpenCodeAttachmentVariant.Image,
+                signature = "local-data-url",
+            )
+        val pending =
+            TimelineProjector.rowFromMessageItem(
+                SessionChatMessageItem(
+                    id = "optimistic-photo",
+                    role = MessageRole.User,
+                    text = "What",
+                    metadataLabel = "Build · MiMo V2.5 Free · 7:58 PM",
+                    isPending = true,
+                    blocks =
+                        listOf(
+                            SessionChatTimelineBlock.Text(
+                                blockID = PresentationBlockId.messageFallback("optimistic-photo"),
+                                text = "What",
+                            ),
+                            SessionChatTimelineBlock.Attachment(
+                                blockID = PresentationBlockId.direct("local-file"),
+                                attachment = pendingAttachment,
+                            ),
+                        ),
+                    attachments = listOf(pendingAttachment),
+                ),
+            )
+        val withOptimistic =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages = emptyList(),
+                    ),
+                optimisticInputs = OptimisticInputs(pendingRows = listOf(pending)),
+            )
+        val reconciled =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 2L,
+                        sourceRevision = 0L,
+                        messages =
+                            listOf(
+                                DisplayMessageBody(
+                                    message =
+                                        Message(
+                                            id = "msg-photo",
+                                            role = MessageRole.User,
+                                            text = "What",
+                                            parts = listOf(MessagePart.Text("What", id = "u1")),
+                                        ),
+                                    blocks =
+                                        listOf(
+                                            SessionChatTimelineBlock.Text(
+                                                blockID = PresentationBlockId.direct("u1"),
+                                                text = "What",
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+                optimisticInputs = OptimisticInputs(pendingRows = listOf(pending)),
+                previous = withOptimistic,
+            )
+        assertEquals(listOf("msg-photo"), reconciled.rows.map { it.id })
+        assertFalse(reconciled.rows.any { it.isPending })
+        assertEquals(setOf("optimistic-photo"), reconciled.removedRowIDs)
+        assertEquals(listOf(pendingAttachment), reconciled.rows.single().attachments)
+        assertEquals("Build · MiMo V2.5 Free · 7:58 PM", reconciled.rows.single().metadataLabel)
+    }
+
+    @Test
+    fun project_optimisticFile_reconcilesOntoNewestTextOnlyWhenHistorySharesText() {
+        val previous =
+            DisplayMessageBody(
+                message =
+                    Message(
+                        id = "msg-old",
+                        role = MessageRole.User,
+                        text = "What",
+                        parts = listOf(MessagePart.Text("What", id = "u-old")),
+                    ),
+                blocks =
+                    listOf(
+                        SessionChatTimelineBlock.Text(
+                            blockID = PresentationBlockId.direct("u-old"),
+                            text = "What",
+                        ),
+                    ),
+            )
+        val history =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages = listOf(previous),
+                    ),
+            )
+        val oldRow = history.rows.single()
+        val pendingAttachment =
+            SessionChatAttachmentItem(
+                id = "local-file",
+                filename = "Photo 1.jpeg",
+                variant = OpenCodeAttachmentVariant.Image,
+                signature = "local-data-url",
+            )
+        val pending =
+            TimelineProjector.rowFromMessageItem(
+                SessionChatMessageItem(
+                    id = "optimistic-photo",
+                    role = MessageRole.User,
+                    text = "What",
+                    metadataLabel = "Build · 7:58 PM",
+                    isPending = true,
+                    blocks =
+                        listOf(
+                            SessionChatTimelineBlock.Text(
+                                blockID = PresentationBlockId.messageFallback("optimistic-photo"),
+                                text = "What",
+                            ),
+                            SessionChatTimelineBlock.Attachment(
+                                blockID = PresentationBlockId.direct("local-file"),
+                                attachment = pendingAttachment,
+                            ),
+                        ),
+                    attachments = listOf(pendingAttachment),
+                ),
+            )
+        val baseline =
+            mapOf(oldRow.id to TimelineProjector.reconciliationSignature(oldRow))
+        val withOptimistic =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages = listOf(previous),
+                    ),
+                optimisticInputs =
+                    OptimisticInputs(
+                        pendingRows = listOf(pending),
+                        baselineSignatures = baseline,
+                    ),
+            )
+        assertEquals(listOf("msg-old", "optimistic-photo"), withOptimistic.rows.map { it.id })
+        val live =
+            DisplayMessageBody(
+                message =
+                    Message(
+                        id = "msg-new",
+                        role = MessageRole.User,
+                        text = "What",
+                        parts = listOf(MessagePart.Text("What", id = "u-new")),
+                    ),
+                blocks =
+                    listOf(
+                        SessionChatTimelineBlock.Text(
+                            blockID = PresentationBlockId.direct("u-new"),
+                            text = "What",
+                        ),
+                    ),
+            )
+        val reconciled =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 2L,
+                        sourceRevision = 0L,
+                        messages = listOf(previous, live),
+                    ),
+                optimisticInputs =
+                    OptimisticInputs(
+                        pendingRows = listOf(pending),
+                        baselineSignatures = baseline,
+                    ),
+                previous = withOptimistic,
+            )
+        assertEquals(listOf("msg-old", "msg-new"), reconciled.rows.map { it.id })
+        assertTrue(reconciled.rows[0].attachments.isEmpty())
+        assertEquals(listOf(pendingAttachment), reconciled.rows[1].attachments)
+        assertEquals("Build · 7:58 PM", reconciled.rows[1].metadataLabel)
+        assertEquals(setOf("optimistic-photo"), reconciled.removedRowIDs)
+    }
+
+    @Test
     fun project_unmatchedPendingUser_insertsBeforeStreamingAssistant() {
         val pending =
             TimelineProjector.rowFromMessageItem(

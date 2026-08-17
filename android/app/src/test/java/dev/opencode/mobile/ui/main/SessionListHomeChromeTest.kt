@@ -35,6 +35,8 @@ class SessionListHomeChromeTest {
             ),
             tabs,
         )
+        assertEquals("All", tabs.first().title)
+        assertEquals("All projects", tabs.first().pickerTitle)
     }
 
     @Test
