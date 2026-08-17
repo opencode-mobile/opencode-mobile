@@ -10,6 +10,12 @@ nonisolated enum ServerProtocol: String, Sendable, Equatable {
     case v2
 
     var wireValue: String { rawValue }
+
+    var shortLabel: String { rawValue }
+
+    var apiCaption: String { "API \(rawValue)" }
+
+    var reachableMessage: String { "Server reachable · API \(rawValue)" }
 }
 
 /// Product capabilities derived from `ServerProtocol`. Screen Models read these

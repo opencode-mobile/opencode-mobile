@@ -101,7 +101,7 @@ final class ConnectionSetupViewModel {
     var testResultMessage: String? {
         switch state {
         case .testSucceeded:
-            return ProbeStatus.reachable.label
+            return detectedProtocol?.reachableMessage ?? ProbeStatus.reachable.label
         case let .testFailed(message):
             return message
         default:

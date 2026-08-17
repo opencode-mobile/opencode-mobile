@@ -187,7 +187,8 @@ struct ProjectListHomeView: View {
                         OpenCodeListItem(
                             title: active.displayName,
                             subtitle: active.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
-                            status: OpenCodeListItemStatus(text: "Active", tone: .interactive),
+                            status: ConnectionProfileListMeta.status(active, isActive: true),
+                            caption: ConnectionProfileListMeta.caption(active, isActive: true),
                             style: .card,
                             startDecorator: .letter(
                                 letterCharacter(for: active.displayName),
@@ -202,6 +203,8 @@ struct ProjectListHomeView: View {
                             OpenCodeListItem(
                                 title: profile.displayName,
                                 subtitle: ConnectionProfileIdentity.hostLabel(profile.baseURL),
+                                status: ConnectionProfileListMeta.status(profile, isActive: false),
+                                caption: ConnectionProfileListMeta.caption(profile, isActive: false),
                                 startDecorator: .letter(
                                     letterCharacter(for: profile.displayName),
                                     letterAccent(for: profile.id.isEmpty ? profile.displayName : profile.id)

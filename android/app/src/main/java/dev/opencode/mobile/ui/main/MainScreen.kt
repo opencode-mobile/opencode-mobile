@@ -49,8 +49,6 @@ import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeListItem
-import dev.opencode.mobile.ui.components.OpenCodeListItemStatus
-import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
 import dev.opencode.mobile.ui.components.StartDecorator
@@ -59,6 +57,8 @@ import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
+import dev.opencode.mobile.ui.connection.listCaption
+import dev.opencode.mobile.ui.connection.listStatus
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 
@@ -390,7 +390,8 @@ internal fun MainScreen(
             OpenCodeListItem(
                 title = active.displayName,
                 subtitle = active.baseUrl.trimEnd('/'),
-                status = OpenCodeListItemStatus("Active", OpenCodeListItemStatusTone.Interactive),
+                caption = active.listCaption(isActive = true),
+                status = active.listStatus(isActive = true),
                 style = OpenCodeListItemStyle.Card,
                 startDecorator =
                     StartDecorator.Letter(
@@ -412,6 +413,8 @@ internal fun MainScreen(
                 OpenCodeListItem(
                     title = profile.displayName,
                     subtitle = ConnectionProfileIdentity.hostLabel(profile.baseUrl),
+                    caption = profile.listCaption(isActive = false),
+                    status = profile.listStatus(isActive = false),
                     startDecorator =
                         StartDecorator.Letter(
                             letterCharacterForProject(profile.displayName),

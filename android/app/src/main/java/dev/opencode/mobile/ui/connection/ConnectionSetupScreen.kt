@@ -202,7 +202,7 @@ private fun ConnectionSetupScreenReachablePreview() {
                 ConnectionSetupUiState(
                     name = "Mac Mini V1",
                     state = ConnectionSetupState.TestSucceeded,
-                    testResultMessage = "Server reachable",
+                    testResultMessage = "Server reachable · API v2",
                     mode = ConnectionSetupMode.Edit,
                     profileId = "profile-1",
                 ),

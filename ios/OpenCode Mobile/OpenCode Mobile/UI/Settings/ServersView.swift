@@ -62,12 +62,12 @@ struct ServersView: View {
                         .padding(.horizontal, 16)
                         .padding(.top, 16)
                     ForEach(viewModel.profiles, id: \.id) { profile in
+                        let isActive = profile.id == viewModel.activeId
                         OpenCodeListItem(
                             title: profile.displayName,
                             subtitle: ConnectionProfileIdentity.hostLabel(profile.baseURL),
-                            status: profile.id == viewModel.activeId
-                                ? OpenCodeListItemStatus(text: "Active", tone: .interactive)
-                                : nil,
+                            status: ConnectionProfileListMeta.status(profile, isActive: isActive),
+                            caption: ConnectionProfileListMeta.caption(profile, isActive: isActive),
                             style: .card,
                             startDecorator: .letter(
                                 letterCharacter(for: profile.displayName),
