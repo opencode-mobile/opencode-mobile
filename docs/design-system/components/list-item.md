@@ -36,6 +36,9 @@ trailing meta (caption above a status pill).
     sits on the circle edge. Omit the dot when status is only shown elsewhere
     (or not at all).
   - **`icon`**: **24×24** Material catalog icon.
+  - **`iconCircle`**: **16** Material catalog icon in a **32×32** circle filled
+    with `text-strong` at **0.10**. Same badge size as `letter`; used for All
+    projects in the Session List picker.
 
 ## Token Usage
 

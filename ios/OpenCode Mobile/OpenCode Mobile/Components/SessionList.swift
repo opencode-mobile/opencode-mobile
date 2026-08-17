@@ -51,7 +51,8 @@ struct SessionListSession: Identifiable, Hashable {
 
 struct SessionListFilterTab: Identifiable, Hashable {
     static let allId = "all"
-    static let allTitle = "All projects"
+    static let allTitle = "All"
+    static let pickerAllTitle = "All projects"
 
     let id: String
     let title: String
@@ -61,6 +62,7 @@ struct SessionListFilterTab: Identifiable, Hashable {
     let accent: LetterAccent?
 
     var isAll: Bool { id == Self.allId }
+    var pickerTitle: String { isAll ? Self.pickerAllTitle : title }
 
     init(
         id: String,
@@ -99,28 +101,19 @@ struct SessionListFilterTab: Identifiable, Hashable {
     }
 }
 
-enum SessionListProjectPickerMatching {
-    static func tabs(_ tabs: [SessionListFilterTab], query: String) -> [SessionListFilterTab] {
-        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !needle.isEmpty else { return tabs }
-        return tabs.filter { tab in
-            tab.title.lowercased().contains(needle)
-                || tab.id.lowercased().contains(needle)
-                || tab.subtitle.lowercased().contains(needle)
-        }
-    }
-}
-
 struct SessionList<EmptyContent: View>: View {
     let sessions: [SessionListSession]
     let filterTabs: [SessionListFilterTab]
     let selectedFilterId: String
     let createError: String?
+    let useProjectPicker: Bool
     let onOpenProjectPicker: () -> Void
+    let onFilterSelected: (String) -> Void
     let onSessionSelected: (SessionListSession) -> Void
     let onSessionLongPress: ((SessionListSession) -> Void)?
     let onAddProject: () -> Void
     let onNewSession: () -> Void
+    let onRemoveProject: ((String) -> Void)?
     let onRefresh: (() async -> Void)?
     let revealNewestToken: Int
     let showsEmptyContent: Bool
@@ -136,11 +129,14 @@ struct SessionList<EmptyContent: View>: View {
         filterTabs: [SessionListFilterTab],
         selectedFilterId: String,
         createError: String? = nil,
-        onOpenProjectPicker: @escaping () -> Void,
+        useProjectPicker: Bool = false,
+        onOpenProjectPicker: @escaping () -> Void = {},
+        onFilterSelected: @escaping (String) -> Void = { _ in },
         onSessionSelected: @escaping (SessionListSession) -> Void,
         onSessionLongPress: ((SessionListSession) -> Void)? = nil,
         onAddProject: @escaping () -> Void,
         onNewSession: @escaping () -> Void,
+        onRemoveProject: ((String) -> Void)? = nil,
         onRefresh: (() async -> Void)? = nil,
         revealNewestToken: Int = 0,
         showsEmptyContent: Bool = false,
@@ -150,11 +146,14 @@ struct SessionList<EmptyContent: View>: View {
         self.filterTabs = filterTabs
         self.selectedFilterId = selectedFilterId
         self.createError = createError
+        self.useProjectPicker = useProjectPicker
         self.onOpenProjectPicker = onOpenProjectPicker
+        self.onFilterSelected = onFilterSelected
         self.onSessionSelected = onSessionSelected
         self.onSessionLongPress = onSessionLongPress
         self.onAddProject = onAddProject
         self.onNewSession = onNewSession
+        self.onRemoveProject = onRemoveProject
         self.onRefresh = onRefresh
         self.revealNewestToken = revealNewestToken
         self.showsEmptyContent = showsEmptyContent
@@ -214,9 +213,12 @@ struct SessionList<EmptyContent: View>: View {
                 filterTabs: filterTabs,
                 selectedFilterId: selectedFilterId,
                 createError: createError,
+                useProjectPicker: useProjectPicker,
                 onOpenProjectPicker: onOpenProjectPicker,
+                onFilterSelected: onFilterSelected,
                 onAddProject: onAddProject,
-                onNewSession: onNewSession
+                onNewSession: onNewSession,
+                onRemoveProject: onRemoveProject
             )
             .background {
                 GeometryReader { geometry in
@@ -484,7 +486,6 @@ private struct SessionListRefreshableModifier: ViewModifier {
             .project(worktree: "/Users/demo/playground", title: "playground", count: 1),
         ],
         selectedFilterId: SessionListFilterTab.allId,
-        onOpenProjectPicker: {},
         onSessionSelected: { _ in },
         onAddProject: {},
         onNewSession: {}

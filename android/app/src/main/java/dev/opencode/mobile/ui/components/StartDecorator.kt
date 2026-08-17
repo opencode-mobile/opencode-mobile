@@ -16,6 +16,11 @@ sealed class StartDecorator {
         val imageVector: ImageVector,
         val contentDescription: String?,
     ) : StartDecorator()
+
+    data class IconCircle(
+        val imageVector: ImageVector,
+        val contentDescription: String?,
+    ) : StartDecorator()
 }
 
 internal fun normalizedBadgeLetter(character: Char): String {

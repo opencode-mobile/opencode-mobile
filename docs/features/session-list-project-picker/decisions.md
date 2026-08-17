@@ -1,14 +1,16 @@
 # Session List Project Picker — Decisions
 
-## Scope picker replaces dock chips
+## Scope picker is opt-in; chips stay default
 
-- Date: 2026-08-13
-- Decision: home Session List filters with a **single scope control** that
-  opens a searchable project sheet, not a horizontal chip scroller.
-- Reason: at four or more added projects, named chips clip and the rest of the
-  set is invisible until the user hunts. Prototype A (today’s scroller) vs B
-  (scope picker) locked B. There is no chips-below-N threshold; the picker is
-  the dock filter.
+- Date: 2026-08-17
+- Decision: home Session List keeps the **horizontal chip scroller** by
+  default. The scope picker ships behind Settings → Appearance
+  **Project Picker** so both versions stay available.
+- Reason: OPE-160 locked prototype B, but the replacement should not become
+  the only home chrome until it is explicitly enabled. Chips remain the
+  familiar default, including the **All** chip label; picker chrome keeps
+  **All projects**.
+- Supersedes: 2026-08-13 “Scope picker replaces dock chips”.
 - Prototype: `docs/prototypes/dock-many-projects/`.
 
 ## No selected checkmark in the picker
@@ -18,6 +20,13 @@
   the source of current filter identity.
 - Reason: the tick duplicated the dock control and added noise in a list whose
   job is to choose, not to display selection chrome.
+
+## Picker sheet has no search
+
+- Date: 2026-08-17
+- Decision: Filter by project is a plain list. There is no search field.
+- Reason: while chips and picker sit side by side, search is extra chrome the
+  chip scroller does not have. A short added-project list does not need it.
 
 ## Hold-to-remove, then confirm
 

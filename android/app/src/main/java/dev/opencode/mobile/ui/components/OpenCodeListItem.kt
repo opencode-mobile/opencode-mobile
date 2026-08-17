@@ -61,11 +61,13 @@ import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.badgeColors
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private val ListItemLetterBadgeSize = 32.dp
 private val ListItemLetterGlyphSize = 14.sp
 private val ListItemLetterStatusDotSize = 10.dp
 private val ListItemIconDecoratorSize = 24.dp
+private val ListItemIconCircleGlyphSize = 16.dp
 private val ListItemCornerRadius = 8.dp
 private val ListItemVerticalPadding = 12.dp
 private val ListItemTitleSubtitleSpacing = 2.dp
@@ -429,6 +431,25 @@ private fun ListItemStartDecoration(
                 tint = tint,
             )
         }
+        is StartDecorator.IconCircle -> {
+            val textStrong = openCodeColor("text-strong")
+            Box(
+                modifier =
+                    Modifier
+                        .size(ListItemLetterBadgeSize)
+                        .clip(CircleShape)
+                        .background(textStrong.copy(alpha = 0.10f))
+                        .then(emphasize),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = decorator.imageVector,
+                    contentDescription = decorator.contentDescription,
+                    modifier = Modifier.size(ListItemIconCircleGlyphSize),
+                    tint = textStrong,
+                )
+            }
+        }
         is StartDecorator.None -> Unit
     }
 }
@@ -468,6 +489,11 @@ private fun OpenCodeListItemPreview() {
                 status = OpenCodeListItemStatus(text = "Idle", tone = OpenCodeListItemStatusTone.Info),
                 caption = "14m ago",
                 startDecorator = StartDecorator.Letter('P', LetterAccent.Teal),
+            )
+            OpenCodeListItem(
+                title = "All projects",
+                subtitle = "8 projects",
+                startDecorator = StartDecorator.IconCircle(OpenCodeIcons.Widgets, null),
             )
         }
     }

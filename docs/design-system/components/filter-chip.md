@@ -61,7 +61,8 @@ catalog icon with frame/padding — not `.font` — per [`../icons.md`](../icons
 
 ## Review Surfaces
 
-Session List Dock no longer uses Filter Chip. Filter Tabs gallery remains the review
+Session List Dock uses Filter Chip when the Project Picker setting is off.
+Filter Tabs gallery remains the review
 surface for the standalone tab row. Session Composer / Choice Badge gallery
 cover glass **Choice Badge** pickers (related chrome, separate component).
 SwiftUI `#Preview("Filter Chip")` and Android `@Preview` on

@@ -4,8 +4,8 @@ struct SessionListDockGalleryView: View {
     @State private var selectedFilterId = SessionListFilterTab.allId
     @State private var showCreateError = false
     @State private var oneProject = false
+    @State private var useProjectPicker = false
     @State private var showProjectPicker = false
-    @State private var projectPickerQuery = ""
 
     private var filterTabs: [SessionListFilterTab] {
         oneProject
@@ -35,6 +35,11 @@ struct SessionListDockGalleryView: View {
                         selected: showCreateError,
                         action: { showCreateError.toggle() }
                     )
+                    OpenCodeChoiceBadge(
+                        label: "Picker",
+                        selected: useProjectPicker,
+                        action: { useProjectPicker.toggle() }
+                    )
                 }
                 Spacer()
             }
@@ -45,7 +50,9 @@ struct SessionListDockGalleryView: View {
                 filterTabs: filterTabs,
                 selectedFilterId: selectedFilterId,
                 createError: showCreateError ? "Could not create session. Try again." : nil,
+                useProjectPicker: useProjectPicker,
                 onOpenProjectPicker: { showProjectPicker = true },
+                onFilterSelected: { selectedFilterId = $0 },
                 onAddProject: {},
                 onNewSession: {}
             )
@@ -54,30 +61,20 @@ struct SessionListDockGalleryView: View {
         .openCodeBottomSheet(
             isPresented: $showProjectPicker,
             title: "Filter by project",
-            contentMode: .form,
-            alwaysFixedHeight: true,
-            pinnedContent: {
-                OpenCodeTextInput(text: $projectPickerQuery, hint: "Search projects")
-            }
+            contentMode: .form
         ) {
             SessionListProjectPickerRows(
                 tabs: filterTabs,
-                query: projectPickerQuery,
                 onSelect: { id in
                     selectedFilterId = id
                     showProjectPicker = false
-                    projectPickerQuery = ""
                 },
                 onRemoveProject: { worktree in
                     let remaining = filterTabs.filter { $0.id != worktree }
                     selectedFilterId = remaining.first?.id ?? selectedFilterId
                     showProjectPicker = false
-                    projectPickerQuery = ""
                 }
             )
-        }
-        .onChange(of: showProjectPicker) { _, visible in
-            if !visible { projectPickerQuery = "" }
         }
     }
 }

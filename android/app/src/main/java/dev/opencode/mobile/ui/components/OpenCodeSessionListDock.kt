@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,12 +13,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,11 +49,14 @@ private val ScopeControlShape = RoundedCornerShape(14.dp)
 fun OpenCodeSessionListDock(
     filterTabs: List<SessionListFilterTab>,
     selectedFilterId: String,
-    onOpenProjectPicker: () -> Unit,
     onAddProject: () -> Unit,
     onNewSession: () -> Unit,
     modifier: Modifier = Modifier,
     createError: String? = null,
+    useProjectPicker: Boolean = false,
+    onOpenProjectPicker: () -> Unit = {},
+    onFilterSelected: (String) -> Unit = {},
+    onRemoveProject: ((String) -> Unit)? = null,
 ) {
     val textStrong = openCodeColor("text-strong")
     val error = openCodeColor("error")
@@ -70,10 +79,19 @@ fun OpenCodeSessionListDock(
                 )
             }
 
-            selectedTab?.let { tab ->
-                SessionListScopeControl(
-                    tab = tab,
-                    onClick = onOpenProjectPicker,
+            if (useProjectPicker) {
+                selectedTab?.let { tab ->
+                    SessionListScopeControl(
+                        tab = tab,
+                        onClick = onOpenProjectPicker,
+                    )
+                }
+            } else if (filterTabs.isNotEmpty()) {
+                SessionListFilterChipRow(
+                    filterTabs = filterTabs,
+                    selectedFilterId = selectedFilterId,
+                    onFilterSelected = onFilterSelected,
+                    onRemoveProject = onRemoveProject,
                 )
             }
 
@@ -116,6 +134,49 @@ fun OpenCodeSessionListDock(
 }
 
 @Composable
+private fun SessionListFilterChipRow(
+    filterTabs: List<SessionListFilterTab>,
+    selectedFilterId: String,
+    onFilterSelected: (String) -> Unit,
+    onRemoveProject: ((String) -> Unit)?,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        filterTabs.forEach { tab ->
+            val selected = tab.id == selectedFilterId
+            val showRemove =
+                tab.id != SessionListFilterTab.ALL_ID &&
+                    selected &&
+                    onRemoveProject != null
+            val bringIntoViewRequester = remember(tab.id) { BringIntoViewRequester() }
+            LaunchedEffect(selected, showRemove) {
+                if (selected) {
+                    bringIntoViewRequester.bringIntoView()
+                }
+            }
+            OpenCodeFilterChip(
+                title = tab.title,
+                count = tab.count,
+                selected = selected,
+                onClick = { onFilterSelected(tab.id) },
+                onRemove =
+                    if (showRemove) {
+                        onRemoveProject?.let { remove -> { remove(tab.id) } }
+                    } else {
+                        null
+                    },
+                modifier = Modifier.bringIntoViewRequester(bringIntoViewRequester),
+            )
+        }
+    }
+}
+
+@Composable
 fun SessionListScopeControl(
     tab: SessionListFilterTab,
     onClick: () -> Unit,
@@ -126,9 +187,9 @@ fun SessionListScopeControl(
     val subtitle = displayedScopeSubtitle(tab)
     val description =
         if (subtitle.isEmpty()) {
-            "${tab.title}, ${tab.count} sessions"
+            "${tab.pickerTitle}, ${tab.count} sessions"
         } else {
-            "${tab.title}, $subtitle, ${tab.count} sessions"
+            "${tab.pickerTitle}, $subtitle, ${tab.count} sessions"
         }
     Row(
         modifier =
@@ -146,7 +207,7 @@ fun SessionListScopeControl(
         SessionListScopeMark(tab = tab)
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = tab.title,
+                text = tab.pickerTitle,
                 color = textStrong,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                 maxLines = 1,
@@ -235,27 +296,13 @@ fun SessionListScopeCountBadge(
 @Composable
 fun SessionListProjectPickerRows(
     tabs: List<SessionListFilterTab>,
-    query: String,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
     onRemoveProject: ((String) -> Unit)? = null,
 ) {
-    val matches = SessionListProjectPickerMatching.tabs(tabs, query)
-    if (matches.isEmpty()) {
-        Text(
-            text = "No matches",
-            color = openCodeColor("text-weak"),
-            style = MaterialTheme.typography.bodyMedium,
-            modifier =
-                modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-        )
-        return
-    }
-    matches.forEach { tab ->
+    tabs.forEach { tab ->
         OpenCodeListItem(
-            title = tab.title,
+            title = tab.pickerTitle,
             subtitle = displayedScopeSubtitle(tab),
             startDecorator = pickerStartDecorator(tab),
             onClick = { onSelect(tab.id) },
@@ -279,7 +326,7 @@ private fun pickerStartDecorator(tab: SessionListFilterTab): StartDecorator {
     return if (letter != null && accent != null) {
         StartDecorator.Letter(letter, accent)
     } else {
-        StartDecorator.Icon(OpenCodeIcons.Widgets, null)
+        StartDecorator.IconCircle(OpenCodeIcons.Widgets, null)
     }
 }
 
@@ -320,7 +367,6 @@ private fun OpenCodeSessionListDockPreview() {
                         SessionListFilterTab.project(worktree = "/b", title = "playground", count = 1),
                     ),
                 selectedFilterId = SessionListFilterTab.ALL_ID,
-                onOpenProjectPicker = {},
                 onAddProject = {},
                 onNewSession = {},
             )

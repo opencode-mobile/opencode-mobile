@@ -3,8 +3,8 @@ import SwiftUI
 struct SessionListGalleryView: View {
     @State private var selectedFilterId = SessionListFilterTab.allId
     @State private var oneProject = false
+    @State private var useProjectPicker = false
     @State private var showProjectPicker = false
-    @State private var projectPickerQuery = ""
 
     private var filterTabs: [SessionListFilterTab] {
         oneProject ? sessionListGalleryOneProjectFilterTabs : sessionListGalleryFilterTabs
@@ -16,46 +16,46 @@ struct SessionListGalleryView: View {
                 sessions: sessionListGallerySamples,
                 filterTabs: filterTabs,
                 selectedFilterId: selectedFilterId,
+                useProjectPicker: useProjectPicker,
                 onOpenProjectPicker: { showProjectPicker = true },
+                onFilterSelected: { selectedFilterId = $0 },
                 onSessionSelected: { _ in },
                 onAddProject: {},
                 onNewSession: {}
             )
-            OpenCodeChoiceBadge(
-                label: "1 project",
-                selected: oneProject,
-                action: {
-                    oneProject.toggle()
-                    selectedFilterId = oneProject
-                        ? sessionListGalleryOneProjectFilterTabs[0].id
-                        : SessionListFilterTab.allId
-                }
-            )
+            HStack(spacing: 8) {
+                OpenCodeChoiceBadge(
+                    label: "1 project",
+                    selected: oneProject,
+                    action: {
+                        oneProject.toggle()
+                        selectedFilterId = oneProject
+                            ? sessionListGalleryOneProjectFilterTabs[0].id
+                            : SessionListFilterTab.allId
+                    }
+                )
+                OpenCodeChoiceBadge(
+                    label: "Picker",
+                    selected: useProjectPicker,
+                    action: { useProjectPicker.toggle() }
+                )
+            }
             .padding(.horizontal, 16)
             .padding(.top, 8)
         }
         .openCodeBottomSheet(
             isPresented: $showProjectPicker,
             title: "Filter by project",
-            contentMode: .form,
-            alwaysFixedHeight: true,
-            pinnedContent: {
-                OpenCodeTextInput(text: $projectPickerQuery, hint: "Search projects")
-            }
+            contentMode: .form
         ) {
             SessionListProjectPickerRows(
                 tabs: filterTabs,
-                query: projectPickerQuery,
                 onSelect: { id in
                     selectedFilterId = id
                     showProjectPicker = false
-                    projectPickerQuery = ""
                 },
                 onRemoveProject: nil
             )
-        }
-        .onChange(of: showProjectPicker) { _, visible in
-            if !visible { projectPickerQuery = "" }
         }
     }
 }

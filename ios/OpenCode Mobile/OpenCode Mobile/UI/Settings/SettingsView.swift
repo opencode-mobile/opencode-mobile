@@ -145,6 +145,30 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
+                        title: "Project Picker",
+                        subtitle: "Replace home filter chips with a project picker",
+                        style: .card,
+                        startDecorator: .icon(.widgets, accessibilityLabel: "Project Picker"),
+                        trailing: {
+                            Toggle(
+                                "Project Picker",
+                                isOn: Binding(
+                                    get: { homeDisplayPreferences.sessionListProjectPickerEnabled },
+                                    set: { newValue in
+                                        logSettingsAction(
+                                            ProductAnalytics.Action.settingsToggleSessionListProjectPicker
+                                        )
+                                        homeDisplayPreferences.setSessionListProjectPickerEnabled(newValue)
+                                    }
+                                )
+                            )
+                            .labelsHidden()
+                            .tint(OpenCodeColors.interactive)
+                        }
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
                         title: "Collapse Consecutive Tool Calls",
                         subtitle: "Group back-to-back tools into one summary card",
                         style: .card,

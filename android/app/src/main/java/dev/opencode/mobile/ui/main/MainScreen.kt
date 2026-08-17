@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
+import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 import dev.opencode.mobile.theme.LetterAccent
@@ -49,7 +50,6 @@ import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
-import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
@@ -820,7 +820,6 @@ private fun HomeProjectsContent(
             mutableStateOf(SessionListFilterTab.ALL_ID)
         }
         var showProjectPicker by rememberSaveable { mutableStateOf(false) }
-        var projectPickerQuery by rememberSaveable { mutableStateOf("") }
         val resolvedFilterId =
             SessionListHomeChrome.resolvedFilterId(
                 selectedId = selectedFilterId,
@@ -834,7 +833,11 @@ private fun HomeProjectsContent(
         LaunchedEffect(removalSnackbar) {
             if (removalSnackbar != null) {
                 showProjectPicker = false
-                projectPickerQuery = ""
+            }
+        }
+        LaunchedEffect(HomeDisplayPreferences.sessionListProjectPickerEnabled) {
+            if (!HomeDisplayPreferences.sessionListProjectPickerEnabled) {
+                showProjectPicker = false
             }
         }
         ProductPresentedScreenViewEffect(
@@ -847,6 +850,7 @@ private fun HomeProjectsContent(
             filterTabs = filterTabs,
             selectedFilterId = resolvedFilterId,
             createError = projectSessionCreateError,
+            useProjectPicker = HomeDisplayPreferences.sessionListProjectPickerEnabled,
             onOpenProjectPicker = {
                 ProductAnalytics.logUserAction(
                     screenId = ProductAnalytics.Screen.HOME,
@@ -854,6 +858,14 @@ private fun HomeProjectsContent(
                 )
                 showProjectPicker = true
             },
+            onFilterSelected = { filterId ->
+                ProductAnalytics.logUserAction(
+                    screenId = ProductAnalytics.Screen.HOME,
+                    actionId = ProductAnalytics.Action.HOME_SELECT_SESSION_FILTER,
+                )
+                selectedFilterId = filterId
+            },
+            onRemoveProject = onRemoveProject,
             onSessionSelected = { session ->
                 ProductAnalytics.logUserAction(
                     screenId = ProductAnalytics.Screen.HOME,
@@ -891,26 +903,16 @@ private fun HomeProjectsContent(
             visible = showProjectPicker,
             title = "Filter by project",
             contentMode = OpenCodeBottomSheetContentMode.Form,
-            alwaysFixedHeight = true,
             onDismissRequest = {
                 ProductAnalytics.logUserAction(
                     screenId = ProductAnalytics.Screen.HOME_FILTER_PROJECT_PICKER,
                     actionId = ProductAnalytics.Action.PROJECT_PICKER_DISMISS,
                 )
                 showProjectPicker = false
-                projectPickerQuery = ""
-            },
-            pinnedContent = {
-                OpenCodeTextInput(
-                    value = projectPickerQuery,
-                    onValueChange = { projectPickerQuery = it },
-                    hint = "Search projects",
-                )
             },
         ) {
             SessionListProjectPickerRows(
                 tabs = filterTabs,
-                query = projectPickerQuery,
                 onSelect = { filterId ->
                     ProductAnalytics.logUserAction(
                         screenId = ProductAnalytics.Screen.HOME_FILTER_PROJECT_PICKER,
@@ -918,7 +920,6 @@ private fun HomeProjectsContent(
                     )
                     selectedFilterId = filterId
                     showProjectPicker = false
-                    projectPickerQuery = ""
                 },
                 onRemoveProject = onRemoveProject,
             )

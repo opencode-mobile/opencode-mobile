@@ -4,6 +4,7 @@ private enum GalleryDecoratorKind: String, CaseIterable, Identifiable {
     case none
     case letter
     case icon
+    case iconCircle
 
     var id: String { rawValue }
 
@@ -12,6 +13,7 @@ private enum GalleryDecoratorKind: String, CaseIterable, Identifiable {
         case .none: "None"
         case .letter: "Letter"
         case .icon: "Icon"
+        case .iconCircle: "Icon circle"
         }
     }
 }
@@ -115,6 +117,8 @@ struct ListItemGalleryView: View {
             .letter(Character("A"), letterAccent)
         case .icon:
             .icon(.folder, accessibilityLabel: "Folder")
+        case .iconCircle:
+            .iconCircle(.widgets, accessibilityLabel: "All projects")
         }
     }
 
