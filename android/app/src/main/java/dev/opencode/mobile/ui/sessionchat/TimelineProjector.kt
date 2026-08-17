@@ -317,7 +317,10 @@ object TimelineProjector {
                 }
             }
         val dropped = pendingRows.filter { pending -> pendingToKeep.none { it.id == pending.id } }
-        return splicePending(applyPendingMetadata(serverRows, dropped), pendingToKeep)
+        return splicePending(
+            applyPendingMetadata(serverRows, dropped, baselineSignatures),
+            pendingToKeep,
+        )
     }
 
     private fun splicePending(
@@ -338,16 +341,35 @@ object TimelineProjector {
     private fun applyPendingMetadata(
         serverRows: List<TimelineRow>,
         dropped: List<TimelineRow>,
+        baselineSignatures: Map<String, String>,
     ): List<TimelineRow> {
         if (dropped.isEmpty()) return serverRows
         return serverRows.map { row ->
-            if (row.role != MessageRole.User || row.metadataLabel.isNotEmpty()) return@map row
+            if (row.role != MessageRole.User) return@map row
+            if (baselineSignatures[row.id] == reconciliationSignature(row)) return@map row
             val pending =
-                dropped.firstOrNull { candidate ->
-                    matchesOptimistic(row, candidate) && candidate.metadataLabel.isNotEmpty()
-                } ?: return@map row
+                dropped.firstOrNull { candidate -> matchesOptimistic(row, candidate) } ?: return@map row
+            val metadata =
+                if (row.metadataLabel.isEmpty() && pending.metadataLabel.isNotEmpty()) {
+                    pending.metadataLabel
+                } else {
+                    row.metadataLabel
+                }
+            val copyAttachments = row.attachments.isEmpty() && pending.attachments.isNotEmpty()
+            val attachments = if (copyAttachments) pending.attachments else row.attachments
+            val blocks =
+                if (copyAttachments) {
+                    row.blocks + pending.blocks.filterIsInstance<SessionChatTimelineBlock.Attachment>()
+                } else {
+                    row.blocks
+                }
+            if (metadata == row.metadataLabel && attachments === row.attachments && blocks === row.blocks) {
+                return@map row
+            }
             row.copy(
-                metadataLabel = pending.metadataLabel,
+                metadataLabel = metadata,
+                attachments = attachments,
+                blocks = blocks,
                 layoutRevision = row.layoutRevision + 1,
             )
         }
@@ -356,13 +378,16 @@ object TimelineProjector {
     private fun matchesOptimistic(
         server: TimelineRow,
         pending: TimelineRow,
-    ): Boolean =
-        server.role == MessageRole.User &&
-            server.text == pending.text &&
-            server.attachments.size == pending.attachments.size &&
+    ): Boolean {
+        if (server.role != MessageRole.User || server.text != pending.text || pending.text.isBlank()) {
+            return false
+        }
+        if (server.attachments.isEmpty()) return true
+        return server.attachments.size == pending.attachments.size &&
             server.attachments.zip(pending.attachments).all { (left, right) ->
                 attachmentsMatch(left, right)
             }
+    }
 
     private fun attachmentsMatch(
         left: SessionChatAttachmentItem,

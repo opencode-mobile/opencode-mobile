@@ -71,6 +71,31 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
         )
     }
 
+    var hasAttachments: Bool {
+        blocks.contains { block in
+            if case .attachment = block { return true }
+            return false
+        }
+    }
+
+    func withBlocks(_ blocks: [SessionChatTimelineBlock]) -> TimelineRow {
+        TimelineRow(
+            id: id,
+            role: role,
+            text: text,
+            metadataLabel: metadataLabel,
+            isPending: isPending,
+            isStreaming: isStreaming,
+            renderedMarkdown: renderedMarkdown,
+            blocks: blocks,
+            modelProviderID: modelProviderID,
+            modelID: modelID,
+            contextInputTokens: contextInputTokens,
+            contentRevision: contentRevision,
+            layoutRevision: layoutRevision &+ 1
+        )
+    }
+
     static func == (lhs: TimelineRow, rhs: TimelineRow) -> Bool {
         guard lhs.id == rhs.id,
               lhs.role == rhs.role,

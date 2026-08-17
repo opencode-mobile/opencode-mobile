@@ -451,6 +451,103 @@ struct SessionChatTimelineProjectorTests {
         #expect(reconciled.removedRowIDs.contains("optimistic-photo"))
     }
 
+    @Test func optimisticFile_reconcilesWhenLiveInboxOmitsFile() {
+        let pendingFile = filePart(id: "local-file", dataURL: "data:image/jpeg;base64,abc")
+        let pending = TimelineRow(
+            id: "optimistic-photo",
+            role: .user,
+            text: "What",
+            metadataLabel: "Build · MiMo V2.5 Free · 7:58 PM",
+            isPending: true,
+            blocks: [
+                .text(
+                    blockID: PresentationBlockId.messageFallback("optimistic-photo"),
+                    text: "What",
+                    renderedMarkdown: nil
+                ),
+                .attachment(blockID: PresentationBlockId.direct("local-file"), file: pendingFile),
+            ],
+            contentRevision: ContentRevision.of("What"),
+            layoutRevision: 1
+        )
+        let signature = SessionChatTimelineProjector.optimisticSignature(pending)
+        let withOptimistic = project(
+            displayFrame(messages: []),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: [signature: 0],
+                mergePending: true
+            )
+        )
+        let serverUser = userMessage(id: "msg-photo", text: "What", parts: [text("u1", "What")])
+        let reconciled = project(
+            displayFrame(revision: 2, messages: [DisplayMessage(message: serverUser)]),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: [signature: 0],
+                mergePending: true
+            ),
+            previous: withOptimistic
+        )
+        #expect(reconciled.rows.map(\.id) == ["msg-photo"])
+        #expect(reconciled.rows.allSatisfy { !$0.isPending })
+        #expect(reconciled.removedRowIDs.contains("optimistic-photo"))
+        #expect(reconciled.rows[0].hasAttachments)
+        #expect(reconciled.rows[0].metadataLabel == "Build · MiMo V2.5 Free · 7:58 PM")
+    }
+
+    @Test func optimisticFile_reconcilesOntoNewestTextOnlyWhenHistorySharesText() {
+        let previous = userMessage(id: "msg-old", text: "What", sentAtEpochMs: 1)
+        let history = project(displayFrame(messages: [DisplayMessage(message: previous)]))
+        let baseline = SessionChatTimelineProjector.signatureCounts(history.rows)
+        let pendingFile = filePart(id: "local-file", dataURL: "data:image/jpeg;base64,abc")
+        let pending = TimelineRow(
+            id: "optimistic-photo",
+            role: .user,
+            text: "What",
+            metadataLabel: "Build · 7:58 PM",
+            isPending: true,
+            blocks: [
+                .text(
+                    blockID: PresentationBlockId.messageFallback("optimistic-photo"),
+                    text: "What",
+                    renderedMarkdown: nil
+                ),
+                .attachment(blockID: PresentationBlockId.direct("local-file"), file: pendingFile),
+            ],
+            contentRevision: ContentRevision.of("What"),
+            layoutRevision: 1
+        )
+        let withOptimistic = project(
+            displayFrame(messages: [DisplayMessage(message: previous)]),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: baseline,
+                mergePending: true
+            )
+        )
+        #expect(withOptimistic.rows.map(\.id) == ["msg-old", "optimistic-photo"])
+
+        let live = userMessage(id: "msg-new", text: "What", sentAtEpochMs: 2)
+        let reconciled = project(
+            displayFrame(revision: 2, messages: [
+                DisplayMessage(message: previous),
+                DisplayMessage(message: live),
+            ]),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: baseline,
+                mergePending: true
+            ),
+            previous: withOptimistic
+        )
+        #expect(reconciled.rows.map(\.id) == ["msg-old", "msg-new"])
+        #expect(!reconciled.rows[0].hasAttachments)
+        #expect(reconciled.rows[1].hasAttachments)
+        #expect(reconciled.rows[1].metadataLabel == "Build · 7:58 PM")
+        #expect(reconciled.removedRowIDs.contains("optimistic-photo"))
+    }
+
     @Test func unmatchedPendingUser_insertsBeforeStreamingAssistant() {
         let pending = TimelineRow(
             id: "optimistic-photo",
