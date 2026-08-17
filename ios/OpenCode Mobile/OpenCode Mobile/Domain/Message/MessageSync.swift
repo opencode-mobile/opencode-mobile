@@ -26,6 +26,9 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private var messageCacheHandles: [MessageSessionKey: any SessionMessageCacheHandle] = [:]
     /// Store slots that painted from cache and still need network confirmation.
     private var awaitingCacheSyncConfirm: Set<String> = []
+    private var observationGeneration = 0
+    private var terminalSessionKeys: Set<MessageSessionKey> = []
+    private var startedGenerationByKey: [MessageSessionKey: Int] = [:]
 
     init(
         listMessages: @escaping MessageListFetcher,
@@ -107,6 +110,9 @@ nonisolated final class MessageSync: @unchecked Sendable {
 
     func clearCache() {
         lock.lock()
+        observationGeneration += 1
+        terminalSessionKeys.formUnion(observationCache.keys)
+        startedGenerationByKey.removeAll()
         observationCache.removeAll()
         lastFingerprint.removeAll()
         lastPublishedFrame.removeAll()
@@ -185,10 +191,37 @@ nonisolated final class MessageSync: @unchecked Sendable {
         )
     }
 
+    private func nextObservationGeneration() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return observationGeneration
+    }
+
+    private func observationStillCurrent(key: MessageSessionKey) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let startedGeneration = startedGenerationByKey[key] else { return false }
+        return observationGeneration == startedGeneration && !terminalSessionKeys.contains(key)
+    }
+
+    private func markTerminal(key: MessageSessionKey) {
+        lock.lock()
+        terminalSessionKeys.insert(key)
+        lock.unlock()
+    }
+
+    private func registerObservation(key: MessageSessionKey, generation: Int) {
+        lock.lock()
+        startedGenerationByKey[key] = generation
+        lock.unlock()
+    }
+
     private func runMessageLoop(
         key: MessageSessionKey,
         yield: @escaping (MessageListUpdate) -> Void
     ) async {
+        let startedGeneration = nextObservationGeneration()
+        registerObservation(key: key, generation: startedGeneration)
         let observationEpoch = ObservationEpoch(connectionEpoch.current())
         // Register before the initial REST request. Bounded staging closes the
         // part-shell/delta loss window without an unbounded observation buffer.
@@ -406,7 +439,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
         reason: MessageSyncRecoveryReason,
         publishMessages: @escaping @Sendable ([Message]) -> Void
     ) async {
-        guard connectionEpoch.current() == observationEpoch.current else {
+        guard observationStillCurrent(key: key),
+              connectionEpoch.current() == observationEpoch.current else {
             staging.clearRecoveringLatch()
             setHealth(.healthy, for: key)
             return
@@ -417,7 +451,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         setHealth(staging.currentHealth, for: key)
         var backoffMs = MessageSyncRecoveryPolicy.initialBackoffMs
 
-        while !Task.isCancelled {
+        while !Task.isCancelled, observationStillCurrent(key: key) {
             staging.drain()
             staging.beginAuthorityWindow()
             let result = await fullReloadResult(key: key, reason: "overflow-recovery")
@@ -437,9 +471,16 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     }
                     return
                 }
-            case .failure:
+            case .failure(let error):
                 _ = staging.completeAuthorityWindow(reloadSucceeded: false)
                 setHealth(staging.currentHealth, for: key)
+                if isMissingSessionError(error) {
+                    markTerminal(key: key)
+                    OpenCodeLog.messageContent.error(
+                        "fullReload missing session=\(key.sessionID, privacy: .public) stopping recovery"
+                    )
+                    return
+                }
                 // Keep last published frame; do not emit LoadFailed.
             }
 
@@ -554,6 +595,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         defer { debounceTask?.cancel() }
 
         while let item = await staging.dequeue() {
+            guard observationStillCurrent(key: key) else { return }
             switch item {
             case .overflow, .recoveryRequired:
                 await performClosedLoopRecovery(
@@ -827,6 +869,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         while !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(pollIntervalMs))
             guard !Task.isCancelled else { return }
+            guard observationStillCurrent(key: key) else { return }
             if staging.needsAuthoritativeRecovery { continue }
             guard connectionEpoch.current() == observationEpoch.current else { continue }
             // Polling REST mid-stream publishes a behind snapshot and looks like the
@@ -834,23 +877,31 @@ nonisolated final class MessageSync: @unchecked Sendable {
             if store.hasStreamingText(sessionID: key.storeSlot) { continue }
             let expectedRevision = store.revision(sessionID: key.storeSlot)
             let directory = key.directory.isEmpty ? nil : key.directory
-            guard let messages = try? await listMessages(key.sessionID, directory) else { continue }
-            let fp = messageFingerprint(messages)
-            if fp != fingerprint(for: key.storeSlot) {
-                guard store.replaceAllIfRevision(
-                    sessionID: key.storeSlot,
-                    messages: messages,
-                    expectedRevision: expectedRevision
-                ) else { continue }
-                let merged = store.messages(sessionID: key.storeSlot)
-                publishMessages(merged)
+            do {
+                let messages = try await listMessages(key.sessionID, directory)
+                let fp = messageFingerprint(messages)
+                if fp != fingerprint(for: key.storeSlot) {
+                    guard store.replaceAllIfRevision(
+                        sessionID: key.storeSlot,
+                        messages: messages,
+                        expectedRevision: expectedRevision
+                    ) else { continue }
+                    let merged = store.messages(sessionID: key.storeSlot)
+                    publishMessages(merged)
+                    continue
+                }
+                guard isAwaitingCacheSyncConfirm(for: key.storeSlot) else { continue }
+                // Initial REST may still be hung after reconnect; poll already
+                // agrees with the cache — clear Syncing without a second paint.
+                openMessageCacheHandle(for: key).note(messages: messages)
+                confirmCacheSync()
+            } catch {
+                if isMissingSessionError(error) {
+                    markTerminal(key: key)
+                    return
+                }
                 continue
             }
-            guard isAwaitingCacheSyncConfirm(for: key.storeSlot) else { continue }
-            // Initial REST may still be hung after reconnect; poll already
-            // agrees with the cache — clear Syncing without a second paint.
-            openMessageCacheHandle(for: key).note(messages: messages)
-            confirmCacheSync()
         }
     }
 
@@ -879,5 +930,11 @@ nonisolated final class MessageSync: @unchecked Sendable {
         if fp == fingerprint(for: key.storeSlot) { return false }
         setFingerprint(fp, for: key.storeSlot)
         return true
+    }
+
+    private func isMissingSessionError(_ error: Error) -> Bool {
+        let text = String(describing: error) + " " + error.localizedDescription
+        return text.localizedCaseInsensitiveContains("NotFoundError")
+            || text.localizedCaseInsensitiveContains("Session not found")
     }
 }

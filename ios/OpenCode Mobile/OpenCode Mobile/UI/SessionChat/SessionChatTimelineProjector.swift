@@ -234,7 +234,24 @@ nonisolated enum SessionChatTimelineProjector {
         }
         let keptIDs = Set(pendingToKeep.map(\.id))
         let dropped = pendingRows.filter { !keptIDs.contains($0.id) }
-        return applyPendingMetadata(serverRows, dropped: dropped) + pendingToKeep
+        return splicePending(
+            applyPendingMetadata(serverRows, dropped: dropped),
+            pendingToKeep: pendingToKeep
+        )
+    }
+
+    private static func splicePending(
+        _ serverRows: [TimelineRow],
+        pendingToKeep: [TimelineRow]
+    ) -> [TimelineRow] {
+        guard !pendingToKeep.isEmpty else { return serverRows }
+        if let index = serverRows.firstIndex(where: { $0.role == .assistant && $0.isStreaming }) {
+            let precededByUser = index > 0 && serverRows[index - 1].role == .user
+            if !precededByUser {
+                return Array(serverRows[..<index]) + pendingToKeep + Array(serverRows[index...])
+            }
+        }
+        return serverRows + pendingToKeep
     }
 
     private static func applyPendingMetadata(
@@ -263,11 +280,12 @@ nonisolated enum SessionChatTimelineProjector {
         let content = row.blocks.compactMap { block -> String? in
             switch block {
             case .text(_, let text, _):
-                "text:\(text)"
+                return "text:\(text)"
             case .attachment(_, let file):
-                "file:\(file.id):\(file.mime):\(file.dataURL)"
+                let name = file.filename.trimmingCharacters(in: .whitespacesAndNewlines)
+                return name.isEmpty ? "file:\(file.mime)" : "file:\(name):\(file.mime)"
             case .toolCard, .toolGroup, .childSessionRow:
-                nil
+                return nil
             }
         }
         return content.isEmpty ? "text:\(row.text)" : content.joined(separator: "|")

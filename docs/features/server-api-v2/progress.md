@@ -89,6 +89,8 @@
 - [x] Live v2: permission/question tool `id` when `callID` is absent
 - [x] Live v2: question dock falls back to `/api/form/*` when
   `/api/question/request` 404s; `form.*` projects to `question.*`
+- [x] Live v2: question/form list 404 is read from HTTP status before JSON
+  decode so a missing Content-Type still falls back to forms
 - [x] Live v2: keep the optimistic user bubble until an authoritative user
   message matches (post-send reload no longer drops it while the inbox is
   still catching up)
@@ -100,6 +102,9 @@
   unpublished info-only slot
 - [x] Live v2: versioned `session.next.prompted.1` / sync unwrap, and late
   user rows insert before a live assistant
+- [x] Live v2: display sort keeps a store user-before-assistant pair even when
+  the user's `time.created` is later; optimistic file rows match on filename
+  and mime, and unmatched pending users splice before a streaming assistant
 - [x] Live v2: prompted prompt text survives GlobalBus payload, flattened
   fields, `payload.syncEvent`, nested `data`, and JSON-string `prompt`
 - [x] Live v2: `session.inbox.enqueued` `item.payload` publishes user text;
@@ -177,6 +182,8 @@
 - [x] Live v2: permission/question tool `id` when `callID` is absent
 - [x] Live v2: question dock falls back to `/api/form/*` when
   `/api/question/request` 404s; `form.*` projects to `question.*`
+- [x] Live v2: question/form list 404 is read from HTTP status before JSON
+  decode so a missing Content-Type still falls back to forms
 - [x] Live v2: keep the optimistic user bubble until an authoritative user
   message matches (post-send reload no longer drops it while the inbox is
   still catching up)
@@ -188,6 +195,9 @@
   unpublished info-only slot
 - [x] Live v2: versioned `session.next.prompted.1` / sync unwrap, and late
   user rows insert before a live assistant
+- [x] Live v2: display sort keeps a store user-before-assistant pair even when
+  the user's `time.created` is later; optimistic file rows match on filename
+  and mime, and unmatched pending users splice before a streaming assistant
 - [x] Live v2: prompted prompt text survives GlobalBus payload, flattened
   fields, `payload.syncEvent`, nested `data`, and JSON-string `prompt`
 - [x] Live v2: `session.inbox.enqueued` `item.payload` publishes user text;

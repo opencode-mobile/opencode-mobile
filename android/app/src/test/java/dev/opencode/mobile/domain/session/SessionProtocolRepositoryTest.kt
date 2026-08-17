@@ -433,6 +433,60 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
+    fun v2ListPendingQuestions_fallsBackToFormsWhenQuestionRoute404HasNoContentType() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    when {
+                        request.url.encodedPath.contains("/api/question/request") ->
+                            respond(
+                                content = "",
+                                status = HttpStatusCode.NotFound,
+                                headers = headersOf(),
+                            )
+                        request.url.encodedPath.contains("/api/form/request") ->
+                            respondJson(
+                                """
+                                {
+                                  "data":[{
+                                    "id":"frm_1",
+                                    "sessionID":"ses_1",
+                                    "title":"Task type",
+                                    "fields":[{
+                                      "key":"q0",
+                                      "title":"Task type",
+                                      "description":"What would you like to work on?",
+                                      "options":[{"value":"Code changes","label":"Code changes"}],
+                                      "custom":true
+                                    }]
+                                  }]
+                                }
+                                """.trimIndent(),
+                            )
+                        else -> respond("", HttpStatusCode.NotFound)
+                    }
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val questions = repository.listPendingQuestions("/repo")
+
+            assertEquals("frm_1", questions.single().id)
+            assertEquals("ses_1", questions.single().sessionId)
+            assertEquals("What would you like to work on?", questions.single().questions.single().question)
+            assertEquals("Code changes", questions.single().questions.single().options.single().label)
+            assertEquals(2, requests.size)
+            assertTrue(requests[0].url.encodedPath.contains("/api/question/request"))
+            assertTrue(requests[1].url.encodedPath.contains("/api/form/request"))
+        }
+
+    @Test
     fun v2ReplyToQuestion_usesSessionScopedPath() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()

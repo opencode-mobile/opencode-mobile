@@ -345,7 +345,7 @@ class SessionsApi private constructor(
             .get()
             .get("api/question/request") {
                 applyLocationDirectory(directory)
-            }.body<ApiListEnvelope<QuestionRequestDto>>()
+            }.bodyOnSuccess<ApiListEnvelope<QuestionRequestDto>>()
             .data
 
     suspend fun listPendingFormsV2(directory: String? = null): List<V2FormInfoDto> =
@@ -353,7 +353,7 @@ class SessionsApi private constructor(
             .get()
             .get("api/form/request") {
                 applyLocationDirectory(directory)
-            }.body<ApiListEnvelope<V2FormInfoDto>>()
+            }.bodyOnSuccess<ApiListEnvelope<V2FormInfoDto>>()
             .data
 
     suspend fun replyToQuestionV2(
@@ -546,6 +546,18 @@ class SessionsApi private constructor(
             .data
 
     private suspend fun HttpResponse.decodeV2Session(): V2SessionDto = json.decodeDataEnvelope(body<JsonElement>())
+
+    /**
+     * Live v2 404s can omit Content-Type. Decoding first then throws
+     * [io.ktor.client.call.NoTransformationFoundException] instead of HTTP 404,
+     * which skips the question→form fallback.
+     */
+    private suspend inline fun <reified T> HttpResponse.bodyOnSuccess(): T {
+        if (!status.isSuccess()) {
+            throw ResponseException(this, "HTTP ${status.value}: ${status.description}")
+        }
+        return body()
+    }
 
     private suspend fun HttpResponse.ensureSuccess(): Boolean {
         if (!status.isSuccess()) {

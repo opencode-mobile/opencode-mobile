@@ -125,6 +125,9 @@ class MainScreenViewModel
             refresh()
             viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
+                    stopLiveObservations()
+                    sessionLiveStore.clearCache()
+                    sessionStatusLiveStore.clearCache()
                     sessionReadyStore.clearCache()
                     messageRepository.clearMessageCache()
                     refresh()
@@ -132,6 +135,9 @@ class MainScreenViewModel
             }
             viewModelScope.launch {
                 connectionSessionCoordinator.profileCleared.collect {
+                    stopLiveObservations()
+                    sessionLiveStore.clearCache()
+                    sessionStatusLiveStore.clearCache()
                     sessionReadyStore.clearCache()
                     messageRepository.clearMessageCache()
                     _uiState.value = MainScreenUiState.Disconnected
@@ -403,6 +409,7 @@ class MainScreenViewModel
             viewModelScope.launch {
                 runCatching { connectionProfileStore.removeWorktree(serverBaseUrl, pending.worktree) }
                 runCatching { sessionCache.purgeWorktree(serverBaseUrl, pending.worktree) }
+                logI("remove project worktree=${pending.worktree}")
                 clearPendingProjectRemoval()
                 runHomeLoad(skipProbe = true)
                 _removalSnackbar.value =

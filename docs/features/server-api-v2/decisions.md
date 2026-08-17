@@ -425,6 +425,25 @@ not already preceded by a user.
 response can paint first. Appending the user after that assistant showed the
 reply above the prompt.
 
+## Display sort keeps store user-before-assistant (2026-08-17)
+
+**Choice:** Session Chat still sorts display messages oldest-to-newest by
+`time.created`, then message id. After that sort, restore any user the
+MessageSync store already placed before an assistant. Optimistic file rows
+reconcile on filename and mime (not local `id` / data URL). Unmatched pending
+user rows splice before a streaming assistant that is not already preceded by
+a user.
+
+**Why:** V2 inbox can persist the user row after the assistant has started, so
+`time.created` on the prompt is later than the reply. Timestamp-only display
+sort undid the live splice and put the prompt under its own answer. Local
+photo bubbles also never matched the server file part, so the optimistic row
+stuck at the bottom as a duplicate.
+
+**Alternative rejected:** Drop timestamp sort entirely. REST lists can still
+arrive newest-first in tests and some cache paths; two user-only rows should
+keep chronological order.
+
 ## V2 prompted keeps prompt across live envelope shapes (2026-08-17)
 
 **Choice:** Resolve live event fields from `payload.properties`, flattened
@@ -478,10 +497,17 @@ composer UI. Home still has no documented `session.created` event.
 `question.asked|replied|rejected`. Reply and dismiss for `frm_*` ids use
 `POST /api/session/{id}/form/{id}/reply` with `{ answer: { q0: "…" } }` and
 `POST .../form/{id}/cancel`. Keep `/api/question/*` when that list succeeds.
+Android maps that 404 from the HTTP status before JSON decode, matching iOS.
 
 **Why:** Live v2 (`0.0.0-beta-17498`) serves the question tool as forms. A
 captured reply body pinned `{ answer: { [fieldKey]: string } }`. The question
 dock already collects selected labels; field keys default to `q0`, `q1`, …
+Those 404s can omit `Content-Type`. Decoding first made Ktor throw
+`NoTransformationFoundException`, which Android treated as transport failure,
+so the forms fallback never ran and the dock stayed empty while iOS showed it.
+
+**Alternative rejected:** Parse 404 from the Ktor exception message — couples
+the fallback to client wording instead of status.
 
 ## V2 live tool events omit `time.start` (2026-08-17)
 

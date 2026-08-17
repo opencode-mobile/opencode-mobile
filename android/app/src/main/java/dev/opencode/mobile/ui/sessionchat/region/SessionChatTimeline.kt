@@ -21,6 +21,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.TimelineApply
+import dev.opencode.mobile.ui.sessionchat.TimelineDisplayOrder
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
 import dev.opencode.mobile.ui.sessionchat.TimelineProjector
 import dev.opencode.mobile.ui.sessionchat.TimelineRow
@@ -662,19 +663,7 @@ class SessionChatTimeline(
     ): Boolean = boundSessionId == sessionId && boundWorktree == worktree
 
     private fun sortedDisplayMessages(displayMessages: List<DisplayMessage>): List<DisplayMessage> =
-        displayMessages
-            .withIndex()
-            .sortedWith { left, right ->
-                val leftTime = left.value.message.sentAtEpochMs
-                val rightTime = right.value.message.sentAtEpochMs
-                when {
-                    leftTime != null && rightTime != null && leftTime != rightTime -> leftTime.compareTo(rightTime)
-                    leftTime != null && rightTime != null ->
-                        left.value.message.id
-                            .compareTo(right.value.message.id)
-                    else -> left.index.compareTo(right.index)
-                }
-            }.map { it.value }
+        TimelineDisplayOrder.ordered(displayMessages)
 
     private fun displayMessageBody(
         display: DisplayMessage,

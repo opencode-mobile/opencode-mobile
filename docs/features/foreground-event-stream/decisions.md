@@ -39,6 +39,20 @@ stream** is active:
   preserve in-flight send state (pending optimistic bubble and `isSending`).
   See [Message Repository decisions](../message-repository/decisions.md#post-send-ux).
 
+## Profile switch drops the previous server's live observations
+
+- Date: 2026-08-17
+- Decision: switching Connection Profiles clears session/status/ready live
+  stores and `MessageSync` observation, pops session-scoped routes back to
+  home, and treats `NotFoundError` / "Session not found" as terminal for that
+  observation (no overflow-recovery retry loop). `MessageSync.clearCache`
+  invalidates in-flight `shareIn` / detached loops; dropping the map alone
+  does not stop them.
+- Reason: after a v2→v1 switch the new HTTP client kept fetching the previous
+  server's session IDs (`/home/ivan…` on a Mac v1 host), 404ing every 5s.
+  Home Remove from home looked stuck when those leftover rows and chats
+  stayed on screen.
+
 ## Status display
 
 Map server status `type` to product copy: `busy` → **Working**, `retry` → **Retrying**, `idle` → hidden. Loaded from `GET /session/status` on section load and updated from `session.status` / `session.idle` SSE events.

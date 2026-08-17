@@ -1,5 +1,13 @@
 # Session Chat Progress
 
+## Display order for late v2 user rows (2026-08-17)
+
+- Status: implemented on both platforms (projector and load-path tests).
+- Display sort still uses `time.created`, then restores a store
+  user-before-assistant pair when the user's timestamp is later.
+- Optimistic file rows reconcile on filename and mime; unmatched pending
+  users splice before a streaming assistant.
+
 ## User-row metadata (2026-08-17)
 
 - Status: implemented on both platforms (projector tests).

@@ -1338,6 +1338,24 @@ struct SessionChatViewModelTests {
         #expect(messages.map(\.text) == ["Earlier", "Later"])
     }
 
+    @Test func loadMessages_keepsStoreUserBeforeAssistantWhenUserTimestampIsLater() async {
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(id: "msg-photo", role: .user, text: "What is it", model: nil, mode: nil, sentAtEpochMs: 3_000),
+                    Message(id: "msg-asst", role: .assistant, text: "A photo", model: nil, mode: nil, sentAtEpochMs: 1_000),
+                    Message(id: "msg-hey", role: .user, text: "hey", model: nil, mode: nil, sentAtEpochMs: 2_000),
+                ]
+            )
+        )
+        await viewModel.loadMessages()
+        guard viewModel.uiState.timeline == .ready else {
+            Issue.record("Expected ready timeline")
+            return
+        }
+        #expect(viewModel.uiState.messages.map(\.text) == ["What is it", "A photo", "hey"])
+    }
+
     @Test func loadMessages_preservesOrderWhenMessageTimestampIsMissing() async {
         let viewModel = makeViewModel(
             messageRepository: FakeMessageRepository(

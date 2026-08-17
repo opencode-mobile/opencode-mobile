@@ -175,7 +175,10 @@ final class ProjectListHomeViewModel {
         lastHomeHiddenAtEpochMs = HomeDisplayPreferences.shared.lastHomeHiddenAtEpochMs()
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
+                self?.stopLiveObservations()
                 self?.sessionReadyStore.clearCache()
+                self?.sessionLiveStore.clearCache()
+                self?.sessionStatusLiveStore.clearCache()
                 self?.messageRepository.clearMessageCache()
                 await self?.refresh()
             }
@@ -183,6 +186,8 @@ final class ProjectListHomeViewModel {
         connectionSessionCoordinator.onProfileCleared { [weak self] in
             Task { @MainActor in
                 self?.sessionReadyStore.clearCache()
+                self?.sessionLiveStore.clearCache()
+                self?.sessionStatusLiveStore.clearCache()
                 self?.messageRepository.clearMessageCache()
                 self?.stopLiveObservations()
                 self?.state = .disconnected

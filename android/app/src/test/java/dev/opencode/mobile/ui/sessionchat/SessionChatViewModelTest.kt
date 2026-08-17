@@ -2096,6 +2096,30 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun loadMessages_keepsStoreUserBeforeAssistantWhenUserTimestampIsLater() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(id = "msg-photo", role = MessageRole.User, text = "What is it", sentAtEpochMs = 3_000L),
+                                Message(id = "msg-asst", role = MessageRole.Assistant, text = "A photo", sentAtEpochMs = 1_000L),
+                                Message(id = "msg-hey", role = MessageRole.User, text = "hey", sentAtEpochMs = 2_000L),
+                            ),
+                    ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("What is it", "A photo", "hey"),
+                viewModel.uiState.value.messages
+                    .map { it.text },
+            )
+        }
+
+    @Test
     fun loadMessages_preservesOrderWhenMessageTimestampIsMissing() =
         runTest(testDispatcher) {
             val viewModel =

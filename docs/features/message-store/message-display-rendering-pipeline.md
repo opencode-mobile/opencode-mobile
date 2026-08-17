@@ -108,7 +108,8 @@ For every accepted snapshot the region:
 4. publishes loading, empty, ready, or error without discarding the last good
    timeline on recoverable refresh failure.
 
-Projector rules include sorting, structural blocks with stable `blockID`s,
+Projector rules include display-frame ordering (`time.created` with store
+user-before-assistant repair), structural blocks with stable `blockID`s,
 streaming markdown reuse when identity/text still match, empty-row removal, and
 per-row `contentRevision` / `layoutRevision` plus declared
 `inserted` / `changed` / `removed` / `layoutChanged` ID sets.

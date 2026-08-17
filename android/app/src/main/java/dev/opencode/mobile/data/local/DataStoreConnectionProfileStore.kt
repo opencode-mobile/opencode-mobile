@@ -69,41 +69,28 @@ class DataStoreConnectionProfileStore
             val catalog = catalogFrom(prefs)
             val profile = resolveProfile(catalog, serverBaseUrl)
             if (profile != null) {
-                val byId = decodeWorktrees(prefs[worktreeKey(profile.id)])
-                if (byId.isNotEmpty()) return byId
+                val raw = prefs[worktreeKey(profile.id)]
+                if (raw != null) return decodeWorktrees(raw)
             }
-            return decodeWorktrees(prefs[stringPreferencesKey(ConnectionProfileIdentity.normalizeBaseUrl(serverBaseUrl))])
+            return decodeWorktrees(prefs[legacyWorktreeKey(serverBaseUrl)])
         }
 
         override suspend fun addWorktree(
             serverBaseUrl: String,
             worktree: String,
         ) {
-            context.connectionProfileDataStore.edit { prefs ->
-                val catalog = catalogFrom(prefs)
-                val profile = resolveProfile(catalog, serverBaseUrl)
-                val key = worktreeStorageKey(profile, serverBaseUrl)
-                val current = decodeWorktrees(prefs[key]).toMutableList()
-                if (worktree !in current) {
-                    current.add(worktree)
-                    prefs[key] = json.encodeToString(current)
-                }
-            }
+            val current = addedWorktrees(serverBaseUrl)
+            if (worktree in current) return
+            setAddedWorktrees(serverBaseUrl, current + worktree)
         }
 
         override suspend fun removeWorktree(
             serverBaseUrl: String,
             worktree: String,
         ) {
-            context.connectionProfileDataStore.edit { prefs ->
-                val catalog = catalogFrom(prefs)
-                val profile = resolveProfile(catalog, serverBaseUrl)
-                val key = worktreeStorageKey(profile, serverBaseUrl)
-                val current = decodeWorktrees(prefs[key]).toMutableList()
-                if (current.remove(worktree)) {
-                    prefs[key] = json.encodeToString(current)
-                }
-            }
+            val current = addedWorktrees(serverBaseUrl)
+            if (worktree !in current) return
+            setAddedWorktrees(serverBaseUrl, current.filterNot { it == worktree })
         }
 
         override suspend fun setAddedWorktrees(
@@ -114,6 +101,10 @@ class DataStoreConnectionProfileStore
                 val catalog = catalogFrom(prefs)
                 val profile = resolveProfile(catalog, serverBaseUrl)
                 prefs[worktreeStorageKey(profile, serverBaseUrl)] = json.encodeToString(worktrees.distinct())
+                if (profile != null) {
+                    prefs.remove(legacyWorktreeKey(serverBaseUrl))
+                    prefs.remove(legacyWorktreeKey(profile.baseUrl))
+                }
             }
         }
 
@@ -226,7 +217,8 @@ class DataStoreConnectionProfileStore
         ) {
             next.profiles.forEach { profile ->
                 if (previous.profiles.any { it.id == profile.id }) return@forEach
-                val inherited = decodeWorktrees(prefs[stringPreferencesKey(profile.baseUrl)])
+                val inherited =
+                    decodeWorktrees(prefs[legacyWorktreeKey(profile.baseUrl)])
                 if (inherited.isNotEmpty() && decodeWorktrees(prefs[worktreeKey(profile.id)]).isEmpty()) {
                     prefs[worktreeKey(profile.id)] = json.encodeToString(inherited)
                 }
@@ -257,6 +249,9 @@ class DataStoreConnectionProfileStore
         }
 
         private fun worktreeKey(profileId: String) = stringPreferencesKey("worktrees.$profileId")
+
+        private fun legacyWorktreeKey(serverBaseUrl: String) =
+            stringPreferencesKey(ConnectionProfileIdentity.normalizeBaseUrl(serverBaseUrl))
 
         private fun decodeWorktrees(raw: String?): List<String> {
             if (raw.isNullOrBlank()) return emptyList()

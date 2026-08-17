@@ -112,8 +112,10 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
         defer { lock.unlock() }
         let catalog = migratedCatalog()
         if let profile = resolveProfile(catalog: catalog, serverBaseURL: serverBaseURL) {
-            let byId = defaults.stringArray(forKey: worktreeIdPrefix + profile.id) ?? []
-            if !byId.isEmpty { return byId }
+            let idKey = worktreeIdPrefix + profile.id
+            if defaults.object(forKey: idKey) != nil {
+                return defaults.stringArray(forKey: idKey) ?? []
+            }
         }
         return defaults.stringArray(forKey: worktreePrefix + ConnectionProfileIdentity.normalizeBaseURL(serverBaseURL)) ?? []
     }
@@ -140,6 +142,8 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
         let key: String
         if let profile = resolveProfile(catalog: catalog, serverBaseURL: serverBaseURL) {
             key = worktreeIdPrefix + profile.id
+            defaults.removeObject(forKey: worktreePrefix + ConnectionProfileIdentity.normalizeBaseURL(serverBaseURL))
+            defaults.removeObject(forKey: worktreePrefix + ConnectionProfileIdentity.normalizeBaseURL(profile.baseURL))
         } else {
             key = worktreePrefix + ConnectionProfileIdentity.normalizeBaseURL(serverBaseURL)
         }
@@ -241,7 +245,9 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
 
     private func copyLegacyWorktrees(from previous: ConnectionProfileCatalog, to next: ConnectionProfileCatalog) {
         for profile in next.profiles where previous.profiles.contains(where: { $0.id == profile.id }) == false {
-            let inherited = defaults.stringArray(forKey: worktreePrefix + profile.baseURL) ?? []
+            let inherited = defaults.stringArray(
+                forKey: worktreePrefix + ConnectionProfileIdentity.normalizeBaseURL(profile.baseURL)
+            ) ?? []
             let existing = defaults.stringArray(forKey: worktreeIdPrefix + profile.id) ?? []
             if !inherited.isEmpty, existing.isEmpty {
                 defaults.set(inherited, forKey: worktreeIdPrefix + profile.id)

@@ -46,6 +46,19 @@
 - Reason: matches the product model — "added projects" is device curation over
   a shared server; sessions stay and the path can be re-added any time.
 
+## Read and write home projects through one worktree list
+
+- Date: 2026-08-17
+- Decision: `addedWorktrees` uses the profile-id list whenever that key exists
+  (including an empty list). `removeWorktree` / `addWorktree` read that same
+  effective list, persist it on the profile-id key, and drop the legacy
+  URL-keyed copy. Do not fall back to the URL list after the profile-id key
+  has been written.
+- Reason: Android previously removed only from the profile-id key while home
+  still read a non-empty legacy URL list, so Remove from home appeared to
+  confirm and then showed the same projects again. An empty profile-id list
+  also resurrected the URL copy after the last project was removed.
+
 ## Snackbar confirms removal
 
 - Date: 2026-08-05

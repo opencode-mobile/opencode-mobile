@@ -58,6 +58,8 @@ class MessageSync(
     private val messageCacheHandles = ConcurrentHashMap<MessageSessionKey, SessionMessageCacheHandle>()
     /** Store slots that painted from cache and still need network confirmation. */
     private val awaitingCacheSyncConfirm = ConcurrentHashMap.newKeySet<String>()
+    private val observationGeneration = AtomicInteger(0)
+    private val terminalSessionKeys = ConcurrentHashMap.newKeySet<MessageSessionKey>()
 
     fun observeMessages(
         sessionId: String,
@@ -80,12 +82,15 @@ class MessageSync(
     ): List<Message> = fullReloadOrThrow(sessionKey(sessionId, directory), reason = "refresh")
 
     fun clearCache() {
+        observationGeneration.incrementAndGet()
+        observationCache.keys.forEach { terminalSessionKeys.add(it) }
         observationCache.clear()
         lastFingerprints.clear()
         lastPublishedFrames.clear()
         lastPublishedRevisions.clear()
         healthByKey.clear()
         awaitingCacheSyncConfirm.clear()
+        messageCacheHandles.keys.toList().forEach { closeMessageCacheHandle(it) }
         engine.clear()
     }
 
@@ -122,6 +127,9 @@ class MessageSync(
 
     private fun incrementalMessageFlow(key: MessageSessionKey): Flow<MessageListUpdate> =
         channelFlow {
+            val startedGeneration = observationGeneration.get()
+            fun observationStillCurrent(): Boolean =
+                observationGeneration.get() == startedGeneration && key !in terminalSessionKeys
             // Adopted forward on stream.reconnected / server.connected so a
             // ConnectionEpoch bump from SSE start/reconnect does not latch
             // Recovering on a stale observation generation.
@@ -297,7 +305,7 @@ class MessageSync(
                 launch {
                     eventStream.events.collect { event ->
                         assertOffMainThread()
-                        if (!isActive) return@collect
+                        if (!isActive || !observationStillCurrent()) return@collect
                         if (!MessageEventRouter.shouldStageForMessageSync(event)) return@collect
                         if (requiresRecovery()) {
                             if (isRelevant(event)) noteRelevantWhileRecovering()
@@ -367,7 +375,7 @@ class MessageSync(
                 }
 
             suspend fun performClosedLoopRecovery(reason: MessageSyncRecoveryReason) {
-                if (!isCurrentEpoch()) {
+                if (!observationStillCurrent() || !isCurrentEpoch()) {
                     // SSE start/reconnect bumps ConnectionEpoch under an in-flight
                     // observation. Never leave Recovering latched when we cannot
                     // complete authority for this generation.
@@ -380,7 +388,7 @@ class MessageSync(
                     enterRecovering(reason)
                 }
                 var backoffMs = MessageSyncRecoveryPolicy.INITIAL_BACKOFF_MS
-                while (isActive && isCurrentEpoch()) {
+                while (isActive && isCurrentEpoch() && observationStillCurrent()) {
                     drainStaging()
                     beginAuthorityWindow()
                     when (val result = fullReloadResult(key, reason = "overflow-recovery")) {
@@ -399,6 +407,14 @@ class MessageSync(
                         }
                         is ReloadResult.Failure -> {
                             completeAuthorityWindow(reloadSucceeded = false)
+                            if (isMissingSessionError(result.error)) {
+                                terminalSessionKeys.add(key)
+                                logW(
+                                    "fullReload missing session=${key.sessionId} reason=overflow-recovery " +
+                                        "stopping recovery",
+                                )
+                                return
+                            }
                             // Retain last good frame; do not emit LoadFailed.
                         }
                     }
@@ -410,6 +426,7 @@ class MessageSync(
 
             suspend fun handleEvent(event: OpencodeEvent) {
                 assertOffMainThread()
+                if (!observationStillCurrent()) return
                 if (event.type == "stream.reconnected") {
                     serverConnectedReloadJob?.cancel()
                     serverConnectedReloadJob = null
@@ -424,7 +441,7 @@ class MessageSync(
                     serverConnectedReloadJob =
                         launch {
                             delay(LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS)
-                            if (!claimReconnectCatchUp()) return@launch
+                            if (!observationStillCurrent() || !claimReconnectCatchUp()) return@launch
                             adoptCurrentEpoch()
                             enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
                             performClosedLoopRecovery(MessageSyncRecoveryReason.Reconnect)
@@ -651,6 +668,7 @@ class MessageSync(
                 }
 
                 for (item in staging) {
+                    if (!observationStillCurrent()) break
                     when (item) {
                         is StagedItem.Overflow, is StagedItem.RecoveryRequired -> {
                             val reason =
@@ -707,16 +725,27 @@ class MessageSync(
 
     private fun timelinePollFlow(key: MessageSessionKey): Flow<MessageListUpdate> =
         channelFlow {
+            val startedGeneration = observationGeneration.get()
             val storeSlot = key.storeSlot
             val directory = key.directory.ifEmpty { null }
-            while (true) {
+            while (isActive) {
                 delay(pollIntervalMs)
+                if (observationGeneration.get() != startedGeneration || key in terminalSessionKeys) return@channelFlow
                 if (healthByKey[key]?.requiresAuthoritativeRecovery == true) continue
                 // Polling REST mid-stream publishes a behind snapshot and looks like the
                 // assistant message clearing then reprinting from the start.
                 if (engine.hasStreamingText(storeSlot)) continue
                 val expectedRevision = engine.revision(storeSlot)
-                val messages = runCatching { listMessages(key.sessionId, directory) }.getOrNull() ?: continue
+                val load = runCatching { listMessages(key.sessionId, directory) }
+                if (load.isFailure) {
+                    val error = load.exceptionOrNull()
+                    if (error != null && isMissingSessionError(error)) {
+                        terminalSessionKeys.add(key)
+                        return@channelFlow
+                    }
+                    continue
+                }
+                val messages = load.getOrThrow()
                 val fp = messageFingerprint(messages)
                 if (fp != lastFingerprints[storeSlot]) {
                     if (!engine.replaceAllIfRevision(storeSlot, messages, expectedRevision)) continue
@@ -877,5 +906,20 @@ class MessageSync(
 
     private companion object {
         private const val TAG = "MessageSync"
+
+        fun isMissingSessionError(error: Throwable): Boolean {
+            var current: Throwable? = error
+            while (current != null) {
+                val text = current.message.orEmpty()
+                if (
+                    text.contains("NotFoundError") ||
+                    text.contains("Session not found", ignoreCase = true)
+                ) {
+                    return true
+                }
+                current = current.cause
+            }
+            return false
+        }
     }
 }

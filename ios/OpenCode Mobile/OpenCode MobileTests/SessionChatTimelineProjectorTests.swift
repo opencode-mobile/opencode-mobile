@@ -356,6 +356,138 @@ struct SessionChatTimelineProjectorTests {
         #expect(revision.textHash == stableMarkdownSourceHash("abc"))
     }
 
+    @Test func displayFrameBuilder_sortsOldestToNewestWithoutAnAssistant() {
+        let later = userMessage(id: "msg-2", text: "Later", sentAtEpochMs: 2_000)
+        let earlier = userMessage(id: "msg-1", text: "Earlier", sentAtEpochMs: 1_000)
+        let frame = displayFrame(messages: [
+            DisplayMessage(message: later),
+            DisplayMessage(message: earlier),
+        ])
+        #expect(frame.messages.map(\.id) == ["msg-1", "msg-2"])
+    }
+
+    @Test func displayFrameBuilder_keepsStoreUserBeforeAssistantWhenUserTimestampIsLater() {
+        let prompt = userMessage(
+            id: "msg-photo",
+            text: "What is it",
+            sentAtEpochMs: 3_000,
+            parts: [
+                text("u1", "What is it"),
+                .file(filePart(id: "server-file", dataURL: "https://example.test/photo.jpg")),
+            ]
+        )
+        let assistant = makeMessage(
+            id: "msg-asst",
+            parts: [text("a1", "A photo of a cat", isStreaming: true)],
+            text: "A photo of a cat",
+            sentAtEpochMs: 1_000
+        )
+        let hey = userMessage(id: "msg-hey", text: "hey", sentAtEpochMs: 2_000)
+        let frame = displayFrame(messages: [
+            DisplayMessage(message: prompt),
+            DisplayMessage(message: assistant),
+            DisplayMessage(message: hey),
+        ])
+        #expect(frame.messages.map(\.id) == ["msg-photo", "msg-asst", "msg-hey"])
+    }
+
+    @Test func optimisticFile_reconcilesWhenLocalDataURLDiffersFromServer() {
+        let pendingFile = filePart(id: "local-file", dataURL: "data:image/jpeg;base64,abc")
+        let pending = TimelineRow(
+            id: "optimistic-photo",
+            role: .user,
+            text: "What is it",
+            metadataLabel: "build · 1:21 PM",
+            isPending: true,
+            blocks: [
+                .text(
+                    blockID: PresentationBlockId.messageFallback("optimistic-photo"),
+                    text: "What is it",
+                    renderedMarkdown: nil
+                ),
+                .attachment(blockID: PresentationBlockId.direct("local-file"), file: pendingFile),
+            ],
+            contentRevision: ContentRevision.of("What is it"),
+            layoutRevision: 1
+        )
+        let signature = SessionChatTimelineProjector.optimisticSignature(pending)
+        let withOptimistic = project(
+            displayFrame(messages: []),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: [signature: 0],
+                mergePending: true
+            )
+        )
+        #expect(withOptimistic.rows.map(\.id) == ["optimistic-photo"])
+
+        let assistant = makeMessage(
+            id: "msg-asst",
+            parts: [text("a1", "Working", isStreaming: true)],
+            text: "Working"
+        )
+        let serverUser = userMessage(
+            id: "msg-photo",
+            text: "What is it",
+            parts: [
+                text("u1", "What is it"),
+                .file(filePart(id: "server-file", dataURL: "https://example.test/photo.jpg")),
+            ]
+        )
+        let reconciled = project(
+            displayFrame(revision: 2, messages: [
+                DisplayMessage(message: serverUser),
+                DisplayMessage(message: assistant),
+            ]),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: [signature: 0],
+                mergePending: true
+            ),
+            previous: withOptimistic
+        )
+        #expect(reconciled.rows.map(\.id) == ["msg-photo", "msg-asst"])
+        #expect(reconciled.rows.allSatisfy { !$0.isPending })
+        #expect(reconciled.removedRowIDs.contains("optimistic-photo"))
+    }
+
+    @Test func unmatchedPendingUser_insertsBeforeStreamingAssistant() {
+        let pending = TimelineRow(
+            id: "optimistic-photo",
+            role: .user,
+            text: "What is it",
+            metadataLabel: "",
+            isPending: true,
+            blocks: [
+                .text(
+                    blockID: PresentationBlockId.messageFallback("optimistic-photo"),
+                    text: "What is it",
+                    renderedMarkdown: nil
+                ),
+            ],
+            contentRevision: ContentRevision.of("What is it"),
+            layoutRevision: 1
+        )
+        let assistant = makeMessage(
+            id: "msg-asst",
+            parts: [text("a1", "Working", isStreaming: true)],
+            text: "Working"
+        )
+        let hey = userMessage(id: "msg-hey", text: "hey")
+        let merged = project(
+            displayFrame(messages: [
+                DisplayMessage(message: assistant),
+                DisplayMessage(message: hey),
+            ]),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: [:],
+                mergePending: true
+            )
+        )
+        #expect(merged.rows.map(\.id) == ["optimistic-photo", "msg-asst", "msg-hey"])
+    }
+
     // MARK: - Helpers
 
     private func project(
@@ -387,7 +519,8 @@ struct SessionChatTimelineProjectorTests {
         id: String,
         role: MessageRole = .assistant,
         parts: [MessagePart],
-        text: String
+        text: String,
+        sentAtEpochMs: Int64 = 1
     ) -> Message {
         Message(
             id: id,
@@ -396,7 +529,34 @@ struct SessionChatTimelineProjectorTests {
             parts: parts,
             model: nil,
             mode: nil,
-            sentAtEpochMs: 1
+            sentAtEpochMs: sentAtEpochMs
+        )
+    }
+
+    private func userMessage(
+        id: String,
+        text: String,
+        sentAtEpochMs: Int64? = 1,
+        parts: [MessagePart]? = nil
+    ) -> Message {
+        Message(
+            id: id,
+            role: .user,
+            text: text,
+            parts: parts ?? [self.text("u-\(id)", text)],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: sentAtEpochMs
+        )
+    }
+
+    private func filePart(id: String, dataURL: String) -> FilePart {
+        FilePart(
+            id: id,
+            filename: "IMG_1234.JPG",
+            mime: "image/jpeg",
+            kind: .image,
+            dataURL: dataURL
         )
     }
 

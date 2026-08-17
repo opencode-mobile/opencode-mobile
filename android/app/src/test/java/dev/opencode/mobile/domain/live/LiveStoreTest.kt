@@ -187,6 +187,51 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_missingSessionStopsOverflowRecovery() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            val callsAfterInitial = repository.listMessagesCallCount
+
+            repository.shouldFailMissingSession = true
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = "ses-1"))
+            advanceTimeBy(20_000)
+
+            assertTrue(repository.listMessagesCallCount <= callsAfterInitial + 2)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_clearCacheStopsReconnectRecovery() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            val callsAfterInitial = repository.listMessagesCallCount
+
+            repository.shouldFailLoad = true
+            sync.clearCache()
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = "ses-1"))
+            advanceTimeBy(20_000)
+
+            assertEquals(callsAfterInitial, repository.listMessagesCallCount)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
     fun observeMessages_eventDuringRecoveryKeepsRecoveringUntilQuietAuthority() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
@@ -1990,6 +2035,7 @@ private class FakeMessageRepository(
     var messages: List<Message> = listOf(Message(id = "msg-1", role = MessageRole.User, text = "Hello")),
     var messagesBySession: MutableMap<String, List<Message>> = mutableMapOf(),
     var shouldFailLoad: Boolean = false,
+    var shouldFailMissingSession: Boolean = false,
     private val holdLoadUntil: CompletableDeferred<Unit>? = null,
 ) : MessageRepository {
     var listMessagesCallCount = 0
@@ -2039,6 +2085,7 @@ private class FakeMessageRepository(
             it.await()
         }
         listMessagesCallCount += 1
+        if (shouldFailMissingSession) error("NotFoundError Session not found: $sessionId")
         if (shouldFailLoad) error("load failed")
         return messagesBySession[sessionId] ?: messages
     }

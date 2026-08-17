@@ -1,5 +1,18 @@
 # Session Chat Decisions
 
+## Display sort keeps store user-before-assistant (2026-08-17)
+
+- Date: 2026-08-17
+- Decision: After oldest-to-newest `time.created` sort, restore any user the
+  message store already placed before an assistant. Optimistic file rows
+  match on filename and mime. Unmatched pending users insert before a
+  streaming assistant that is not already preceded by a user.
+- Reason: V2 inbox user `time.created` can be later than the live assistant.
+  Timestamp-only sort put the prompt under its reply, and local photo
+  data URLs never matched the server file id, so the optimistic bubble
+  duplicated at the bottom.
+- Revisit when: REST message lists guarantee oldest-first without a UI sort.
+
 ## User-row metadata survives live-then-REST (2026-08-17)
 
 - Date: 2026-08-17

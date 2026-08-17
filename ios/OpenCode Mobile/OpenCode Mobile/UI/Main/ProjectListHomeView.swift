@@ -206,7 +206,12 @@ struct ProjectListHomeView: View {
                                     letterCharacter(for: profile.displayName),
                                     letterAccent(for: profile.id.isEmpty ? profile.displayName : profile.id)
                                 ),
-                                action: { Task { await viewModel.switchProfile(id: profile.id) } }
+                                action: {
+                                    Task {
+                                        await viewModel.switchProfile(id: profile.id)
+                                        navigationPath = NavigationPath()
+                                    }
+                                }
                             )
                         }
                     }

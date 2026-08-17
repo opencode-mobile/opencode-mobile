@@ -13,6 +13,7 @@ import dev.opencode.mobile.network.OpencodeSseHttpClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -39,6 +40,9 @@ class AppRootViewModel
         private val _presentConnectionSetup = MutableStateFlow(false)
         val presentConnectionSetup: StateFlow<Boolean> = _presentConnectionSetup.asStateFlow()
 
+        private val _homeResetGeneration = MutableStateFlow(0)
+        val homeResetGeneration: StateFlow<Int> = _homeResetGeneration.asStateFlow()
+
         init {
             viewModelScope.launch {
                 loadInitialState()
@@ -46,6 +50,7 @@ class AppRootViewModel
             viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
                     enterHome()
+                    _homeResetGeneration.update { it + 1 }
                 }
             }
         }

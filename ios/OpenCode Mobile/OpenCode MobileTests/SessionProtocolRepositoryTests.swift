@@ -327,6 +327,38 @@ struct SessionProtocolRepositoryTests {
         #expect(ProtocolRoutingURLProtocol.bodies.first??.contains(#""reply":"once""#) == true)
     }
 
+    @Test func v2ListPendingQuestionsFallsBackToFormsWhenQuestionRoute404s() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            StubResponse(statusCode: 404, body: ""),
+            .json(#"""
+            {
+              "data": [{
+                "id": "frm_1",
+                "sessionID": "ses_1",
+                "title": "Task type",
+                "fields": [{
+                  "key": "q0",
+                  "title": "Task type",
+                  "description": "What would you like to work on?",
+                  "options": [{"value": "Code changes", "label": "Code changes"}],
+                  "custom": true
+                }]
+              }]
+            }
+            """#)
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let questions = try await repository.listPendingQuestions(directory: "/repo")
+
+        #expect(questions.map(\.id) == ["frm_1"])
+        let question = try #require(questions.first?.questions.first)
+        #expect(question.question == "What would you like to work on?")
+        #expect(ProtocolRoutingURLProtocol.requests.count == 2)
+        #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.hasSuffix("/api/question/request") == true)
+        #expect(ProtocolRoutingURLProtocol.requests[1].url?.path.hasSuffix("/api/form/request") == true)
+    }
+
     @Test func v2ReplyToQuestionUsesSessionScopedPath() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [.noContent])
         let repository = makeSessionRepository(serverProtocol: .v2)
