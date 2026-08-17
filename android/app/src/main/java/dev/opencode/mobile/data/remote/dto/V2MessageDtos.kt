@@ -72,6 +72,7 @@ data class V2FileSourceDto(
 data class V2AgentAttachmentDto(
     val name: String? = null,
     val source: V2PromptSourceDto? = null,
+    val mention: V2PromptSourceDto? = null,
 )
 
 @Serializable

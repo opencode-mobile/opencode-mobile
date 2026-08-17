@@ -274,7 +274,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             contextEstimate: MessageContextEstimate(
                 userCharacters: text.count
                     + dto.files.reduce(0) { $0 + ($1.mention?.text?.count ?? $1.source?.text?.count ?? 0) }
-                    + dto.agents.reduce(0) { $0 + ($1.source?.text?.count ?? 0) }
+                    + dto.agents.reduce(0) { $0 + ($1.mention?.text?.count ?? $1.source?.text?.count ?? 0) }
             )
         )
     }

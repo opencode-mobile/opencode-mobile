@@ -2964,6 +2964,59 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun abort_parentSuccessChildFailure_clearsWorking() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessionStatusType = "busy",
+                    abortErrorsById =
+                        mapOf("ses-child" to SessionError.Http(statusCode = 500, message = "child abort failed")),
+                )
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(
+                                        id = "msg-1",
+                                        role = MessageRole.Assistant,
+                                        text = "",
+                                        parts =
+                                            listOf(
+                                                MessagePart.Tool(
+                                                    toolName = "subagent",
+                                                    status = ToolStatus.Running,
+                                                    id = "prt-1",
+                                                    input =
+                                                        buildJsonObject {
+                                                            put("agent", "explore")
+                                                            put("description", "Find git projects")
+                                                        },
+                                                    metadata =
+                                                        buildJsonObject {
+                                                            put("sessionID", "ses-child")
+                                                        },
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals("Working", viewModel.uiState.value.sessionStatusLabel)
+
+            viewModel.abort()
+            advanceUntilIdle()
+
+            assertEquals(setOf("ses-1", "ses-child"), sessionRepository.abortSessionIds.toSet())
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+            assertNull(viewModel.uiState.value.snackbar)
+        }
+
+    @Test
     fun runClientSlashAction_redo_unrevertsAndClearsComposerRestore() =
         runTest(testDispatcher) {
             val sessionRepository =
@@ -3629,7 +3682,8 @@ private class FakeSessionRepository(
     private val sessionDiffsByMessageId: Map<String, List<FileDiff>> = emptyMap(),
     private val sessionDiffDelayMsByMessageId: Map<String, Long> = emptyMap(),
     private val sessionDiffError: SessionError? = null,
-    private val sessionStatusType: String = "idle",
+    private var sessionStatusType: String = "idle",
+    private val abortErrorsById: Map<String, Throwable> = emptyMap(),
     private val sessionStatusError: SessionError? = null,
     private val updateSessionError: SessionError? = null,
     private val archiveError: Throwable? = null,
@@ -3835,6 +3889,8 @@ private class FakeSessionRepository(
     ): Boolean {
         abortCallCount += 1
         abortSessionIds = abortSessionIds + id
+        abortErrorsById[id]?.let { throw it }
+        sessionStatusType = "idle"
         return true
     }
 

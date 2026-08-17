@@ -678,7 +678,13 @@ final class SessionChatComposer {
         do {
             _ = try await sessionRepository.abortSession(id: sessionID, directory: worktree)
             for childID in extraIDs {
-                _ = try await sessionRepository.abortSession(id: childID, directory: worktree)
+                do {
+                    _ = try await sessionRepository.abortSession(id: childID, directory: worktree)
+                } catch {
+                    OpenCodeLog.sessionChat.error(
+                        "abort child failed session=\(self.sessionID, privacy: .public) child=\(childID, privacy: .public) message=\(error.localizedDescription, privacy: .public)"
+                    )
+                }
             }
             state.isAborting = false
             state.abortErrorMessage = nil

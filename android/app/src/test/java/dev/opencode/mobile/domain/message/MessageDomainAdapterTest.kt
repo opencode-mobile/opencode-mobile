@@ -859,6 +859,28 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun projectV2_countsAgentMentionTextForContextEstimate() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"",
+                    "agents":[{"name":"review","mention":{"start":0,"end":17,"text":"agent prompt text"}}],
+                    "time":{"created":1}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val message = adapter.projectV2(dtos).single()
+
+        assertEquals("agent prompt text".length, message.contextEstimate.userCharacters)
+    }
+
+    @Test
     fun projectV2_expandsShellAndCompaction() {
         val dtos =
             json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(

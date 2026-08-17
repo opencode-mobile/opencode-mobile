@@ -782,29 +782,36 @@ class SessionChatComposer(
         logI("abort start session=$sessionId children=${extraIds.joinToString(",")}")
         scope.launch {
             _state.update { it.copy(isAborting = true, abortErrorMessage = null) }
-            runCatching {
-                sessionRepository.abortSession(sessionId, directory = worktree)
-                extraIds.forEach { childId ->
+            val parentResult =
+                runCatching {
+                    sessionRepository.abortSession(sessionId, directory = worktree)
+                }
+            extraIds.forEach { childId ->
+                runCatching {
                     sessionRepository.abortSession(childId, directory = worktree)
+                }.onFailure { throwable ->
+                    logW("abort child failed session=$sessionId child=$childId message=${throwable.message}")
                 }
-            }.onFailure { throwable ->
-                logW("abort failed session=$sessionId message=${throwable.message}")
-                if (boundSessionId == sessionId && boundWorktree == worktree) {
-                    _state.update {
-                        it.copy(
-                            isAborting = false,
-                            abortErrorMessage = errorMessage(throwable),
-                        )
-                    }
-                }
-                onFinished(false)
-            }.onSuccess {
-                logI("abort success session=$sessionId")
-                if (boundSessionId == sessionId && boundWorktree == worktree) {
-                    _state.update { it.copy(isAborting = false, abortErrorMessage = null) }
-                }
-                onFinished(true)
             }
+            parentResult
+                .onFailure { throwable ->
+                    logW("abort failed session=$sessionId message=${throwable.message}")
+                    if (boundSessionId == sessionId && boundWorktree == worktree) {
+                        _state.update {
+                            it.copy(
+                                isAborting = false,
+                                abortErrorMessage = errorMessage(throwable),
+                            )
+                        }
+                    }
+                    onFinished(false)
+                }.onSuccess {
+                    logI("abort success session=$sessionId")
+                    if (boundSessionId == sessionId && boundWorktree == worktree) {
+                        _state.update { it.copy(isAborting = false, abortErrorMessage = null) }
+                    }
+                    onFinished(true)
+                }
         }
     }
 

@@ -237,8 +237,10 @@ hides the wire name and still misses metadata/`sessionID` mapping.
 ## V2 abort interrupts timeline child sessions (2026-08-16)
 
 **Choice:** Session Chat Stop posts interrupt for the bound session and every
-child session id already on the timeline (`task` / `subagent` rows). After a
-successful abort, clear optimistic Working and refresh GET `/api/session/active`.
+child session id already on the timeline (`task` / `subagent` rows). Parent
+interrupt success clears optimistic Working and refreshes GET
+`/api/session/active`, even if a child interrupt fails. Child interrupts are
+best-effort so a child 4xx/5xx cannot leave Stop stuck on Working.
 
 **Why:** Live v2 runs a subagent on the child session. Interrupting only the
 parent can 204 while the child keeps working, so Stop looks dead and Working
@@ -383,6 +385,14 @@ revert. Mime belongs on history file payloads, not the request.
 
 **Why:** Message list user files are `{ data, mime, source }`. Shell rows use an
 output object. Treating `output` as a required string failed the whole page.
+
+## V2 history agents decode mention (2026-08-17)
+
+**Choice:** History `agents[]` reads `mention` first, then `source`, when
+projecting context estimates.
+
+**Why:** Prompt send writes `agents[].mention`. History rows that echo that
+shape dropped agent mention text when only `source` was decoded.
 
 ## V2 permission and question tool ids use `id` (2026-08-17)
 

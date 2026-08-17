@@ -680,6 +680,28 @@ struct MessageDomainAdapterTests {
         #expect(message.modelProviderID == "openai")
     }
 
+    @Test func projectV2CountsAgentMentionTextForContextEstimate() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"",
+                    "agents":[{"name":"review","mention":{"start":0,"end":17,"text":"agent prompt text"}}],
+                    "time":{"created":1}
+                  }
+                ]
+                """.utf8
+            )
+        )
+
+        let message = try #require(adapter.messages(fromV2: dtos).first)
+        #expect(message.contextEstimate.userCharacters == "agent prompt text".count)
+    }
+
     @Test func projectV2ExpandsShellAndCompaction() throws {
         let dtos = try decoder.decode(
             [V2SessionMessageDTO].self,

@@ -86,6 +86,7 @@
 - [x] Live v2: `GET /api/model/default` fills `serverDefault`
 - [x] Live v2: message/session lists page until the cursor ends (500-page cap)
 - [x] Live v2: history files from `data`/`source.uri`; shell `output` object
+- [x] Live v2: history agents decode `mention` for context estimates
 - [x] Live v2: permission/question tool `id` when `callID` is absent
 - [x] Live v2: question dock falls back to `/api/form/*` when
   `/api/question/request` 404s; `form.*` projects to `question.*`
@@ -179,6 +180,7 @@
 - [x] Live v2: `GET /api/model/default` fills `serverDefault`
 - [x] Live v2: message/session lists page until the cursor ends (500-page cap)
 - [x] Live v2: history files from `data`/`source.uri`; shell `output` object
+- [x] Live v2: history agents decode `mention` for context estimates
 - [x] Live v2: permission/question tool `id` when `callID` is absent
 - [x] Live v2: question dock falls back to `/api/form/*` when
   `/api/question/request` 404s; `form.*` projects to `question.*`

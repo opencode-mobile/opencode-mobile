@@ -319,7 +319,7 @@ class MessageDomainAdapter {
                     userCharacters =
                         text.length +
                             dto.files.sumOf { it.mention?.text?.length ?: it.source?.text?.length ?: 0 } +
-                            dto.agents.sumOf { it.source?.text?.length ?: 0 },
+                            dto.agents.sumOf { it.mention?.text?.length ?: it.source?.text?.length ?: 0 },
                 ),
         )
     }

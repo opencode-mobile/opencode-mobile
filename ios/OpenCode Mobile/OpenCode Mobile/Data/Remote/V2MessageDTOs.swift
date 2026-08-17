@@ -119,6 +119,19 @@ nonisolated struct V2FileSourceDTO: Decodable, Sendable {
 nonisolated struct V2AgentAttachmentDTO: Decodable, Sendable {
     let name: String?
     let source: V2PromptSourceDTO?
+    let mention: V2PromptSourceDTO?
+
+    private enum CodingKeys: String, CodingKey {
+        case name, source, mention
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        source = try container.decodeIfPresent(V2PromptSourceDTO.self, forKey: .source)
+        mention = try container.decodeIfPresent(V2PromptSourceDTO.self, forKey: .mention)
+            ?? source
+    }
 }
 
 nonisolated struct V2PromptSourceDTO: Codable, Sendable {

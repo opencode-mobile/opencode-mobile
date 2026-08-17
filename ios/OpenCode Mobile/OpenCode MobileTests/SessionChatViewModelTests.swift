@@ -2026,6 +2026,51 @@ struct SessionChatViewModelTests {
         #expect(Set(sessionRepository.abortSessionIDs) == ["ses-1", "ses-child"])
     }
 
+    @Test func abortSession_parentSuccessChildFailure_clearsWorking() async {
+        let sessionRepository = FakeChatSessionRepository(
+            sessionStatusType: "busy",
+            abortErrorsByID: ["ses-child": .http(statusCode: 500, message: "child abort failed")]
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .assistant,
+                        text: "",
+                        parts: [
+                            .tool(
+                                ToolPart(
+                                    id: "prt-1",
+                                    toolName: "subagent",
+                                    status: .running,
+                                    input: [
+                                        "agent": .string("explore"),
+                                        "description": .string("Find git projects"),
+                                    ],
+                                    metadata: ["sessionID": .string("ses-child")]
+                                )
+                            ),
+                        ],
+                        model: nil,
+                        mode: nil,
+                        sentAtEpochMs: nil
+                    ),
+                ]
+            ),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        await waitUntil { viewModel.uiState.sessionStatusLabel == "Working" }
+
+        await viewModel.abortSession()
+
+        #expect(Set(sessionRepository.abortSessionIDs) == ["ses-1", "ses-child"])
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
+        #expect(viewModel.uiState.snackbar == nil)
+    }
+
     @Test func runClientSlashAction_redo_unrevertsAndClearsComposerRestore() async {
         let sessionRepository = FakeChatSessionRepository(
             getSessionResult: Session(
@@ -2811,7 +2856,8 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private let sessionDiffs: [FileDiff]
     private let sessionDiffError: SessionError?
     private let sessionDiffProvider: (@Sendable (String?) async throws -> [FileDiff])?
-    private let sessionStatusType: String
+    private var sessionStatusType: String
+    private let abortErrorsByID: [String: SessionError]
     private let updateSessionError: SessionError?
     private let archiveError: SessionError?
     private let deleteError: SessionError?
@@ -2863,6 +2909,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         sessionDiffError: SessionError? = nil,
         sessionStatusType: String = "idle",
         sessionDiffProvider: (@Sendable (String?) async throws -> [FileDiff])? = nil,
+        abortErrorsByID: [String: SessionError] = [:],
         updateSessionError: SessionError? = nil,
         archiveError: SessionError? = nil,
         deleteError: SessionError? = nil,
@@ -2890,6 +2937,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         self.sessionDiffs = sessionDiffs
         self.sessionDiffError = sessionDiffError
         self.sessionStatusType = sessionStatusType
+        self.abortErrorsByID = abortErrorsByID
         self.sessionDiffProvider = sessionDiffProvider
         self.updateSessionError = updateSessionError
         self.archiveError = archiveError
@@ -3009,6 +3057,8 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     func abortSession(id: String, directory: String?) async throws -> Bool {
         abortCallCount += 1
         abortSessionIDs.append(id)
+        if let abortError = abortErrorsByID[id] { throw abortError }
+        sessionStatusType = "idle"
         return true
     }
     func shareSession(id: String) async throws -> Session { fatalError() }
