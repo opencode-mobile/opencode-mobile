@@ -9,6 +9,8 @@ struct ProjectListHomeView: View {
     @State private var connectionSetupViewModel: ConnectionSetupViewModel?
     @State private var serversRefreshToken = 0
     @State private var showNewSessionProjectPicker = false
+    @State private var showProjectPicker = false
+    @State private var projectPickerQuery = ""
     @State private var selectedSessionFilterId = SessionListFilterTab.allId
     @Environment(\.scenePhase) private var scenePhase
     @Binding private var presentConnectionSetupOnAppear: Bool
@@ -154,6 +156,35 @@ struct ProjectListHomeView: View {
                 }
             }
             .openCodeBottomSheet(
+                isPresented: projectPickerBinding,
+                title: "Filter by project",
+                contentMode: .form,
+                alwaysFixedHeight: true,
+                pinnedContent: {
+                    OpenCodeTextInput(
+                        text: $projectPickerQuery,
+                        hint: "Search projects"
+                    )
+                }
+            ) {
+                SessionListProjectPickerRows(
+                    tabs: projectPickerTabs,
+                    query: projectPickerQuery,
+                    onSelect: { filterId in
+                        ProductAnalytics.logUserAction(
+                            screenId: ProductAnalytics.Screen.homeFilterProjectPicker,
+                            actionId: ProductAnalytics.Action.homeSelectSessionFilter
+                        )
+                        selectedSessionFilterId = filterId
+                        showProjectPicker = false
+                        projectPickerQuery = ""
+                    },
+                    onRemoveProject: { worktree in
+                        viewModel.requestRemoveProject(worktree: worktree)
+                    }
+                )
+            }
+            .openCodeBottomSheet(
                 isPresented: newSessionPickerBinding,
                 title: "New session"
             ) {
@@ -288,6 +319,8 @@ struct ProjectListHomeView: View {
                     title: "Remove",
                     destructive: true
                 ) {
+                    showProjectPicker = false
+                    projectPickerQuery = ""
                     Task { await viewModel.confirmRemoveProject() }
                 },
                 secondaryOption: OpenCodeDialogOption(title: "Cancel") {
@@ -474,6 +507,35 @@ struct ProjectListHomeView: View {
         )
     }
 
+    private var projectPickerTabs: [SessionListFilterTab] {
+        switch viewModel.state {
+        case let .loaded(sections, _, _, _):
+            let sessions = sections.crossProjectSessionListSessions()
+            return SessionListHomeChrome.filterTabs(
+                projects: sections.homeChromeProjects(),
+                sessionCount: sessions.count
+            )
+        default:
+            return []
+        }
+    }
+
+    private var projectPickerBinding: Binding<Bool> {
+        Binding(
+            get: { showProjectPicker },
+            set: { presented in
+                if !presented {
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.homeFilterProjectPicker,
+                        actionId: ProductAnalytics.Action.projectPickerDismiss
+                    )
+                    projectPickerQuery = ""
+                }
+                showProjectPicker = presented
+            }
+        )
+    }
+
     private var newSessionPickerBinding: Binding<Bool> {
         Binding(
             get: { showNewSessionProjectPicker },
@@ -609,12 +671,17 @@ struct ProjectListHomeView: View {
             filterTabs: filterTabs,
             selectedFilterId: selectedFilterId,
             createError: createError,
-            onFilterSelected: { filterId in
+            onOpenProjectPicker: {
                 ProductAnalytics.logUserAction(
                     screenId: ProductAnalytics.Screen.home,
-                    actionId: ProductAnalytics.Action.homeSelectSessionFilter
+                    actionId: ProductAnalytics.Action.homeOpenProjectPicker
                 )
-                selectedSessionFilterId = filterId
+                ProductAnalytics.logScreenView(
+                    screenId: ProductAnalytics.Screen.homeFilterProjectPicker,
+                    presentation: ProductAnalytics.Presentation.sheet,
+                    trigger: ProductAnalytics.Trigger.present
+                )
+                showProjectPicker = true
             },
             onSessionSelected: { session in
                 ProductAnalytics.logUserAction(
@@ -657,7 +724,6 @@ struct ProjectListHomeView: View {
                 }
             },
             onRefresh: { await viewModel.pullToRefresh() },
-            onRemoveProject: { worktree in viewModel.requestRemoveProject(worktree: worktree) },
             revealNewestToken: viewModel.revealNewestToken,
             showsEmptyContent: sections.isEmpty,
             emptyContent: { NoProjectsEmptyState() }

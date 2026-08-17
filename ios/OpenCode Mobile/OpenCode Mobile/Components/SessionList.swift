@@ -51,15 +51,63 @@ struct SessionListSession: Identifiable, Hashable {
 
 struct SessionListFilterTab: Identifiable, Hashable {
     static let allId = "all"
+    static let allTitle = "All projects"
 
     let id: String
     let title: String
+    let subtitle: String
     let count: Int
+    let letter: Character?
+    let accent: LetterAccent?
 
-    init(id: String, title: String, count: Int) {
+    var isAll: Bool { id == Self.allId }
+
+    init(
+        id: String,
+        title: String,
+        count: Int,
+        subtitle: String = "",
+        letter: Character? = nil,
+        accent: LetterAccent? = nil
+    ) {
         self.id = id
         self.title = title
+        self.subtitle = subtitle
         self.count = count
+        self.letter = letter
+        self.accent = accent
+    }
+
+    static func all(projectCount: Int, sessionCount: Int) -> SessionListFilterTab {
+        SessionListFilterTab(
+            id: allId,
+            title: allTitle,
+            count: sessionCount,
+            subtitle: projectCount == 1 ? "1 project" : "\(projectCount) projects"
+        )
+    }
+
+    static func project(worktree: String, title: String, count: Int) -> SessionListFilterTab {
+        SessionListFilterTab(
+            id: worktree,
+            title: title,
+            count: count,
+            subtitle: worktree,
+            letter: letterCharacter(for: title),
+            accent: letterAccent(for: worktree)
+        )
+    }
+}
+
+enum SessionListProjectPickerMatching {
+    static func tabs(_ tabs: [SessionListFilterTab], query: String) -> [SessionListFilterTab] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !needle.isEmpty else { return tabs }
+        return tabs.filter { tab in
+            tab.title.lowercased().contains(needle)
+                || tab.id.lowercased().contains(needle)
+                || tab.subtitle.lowercased().contains(needle)
+        }
     }
 }
 
@@ -68,13 +116,12 @@ struct SessionList<EmptyContent: View>: View {
     let filterTabs: [SessionListFilterTab]
     let selectedFilterId: String
     let createError: String?
-    let onFilterSelected: (String) -> Void
+    let onOpenProjectPicker: () -> Void
     let onSessionSelected: (SessionListSession) -> Void
     let onSessionLongPress: ((SessionListSession) -> Void)?
     let onAddProject: () -> Void
     let onNewSession: () -> Void
     let onRefresh: (() async -> Void)?
-    let onRemoveProject: ((String) -> Void)?
     let revealNewestToken: Int
     let showsEmptyContent: Bool
     let emptyContent: EmptyContent
@@ -89,13 +136,12 @@ struct SessionList<EmptyContent: View>: View {
         filterTabs: [SessionListFilterTab],
         selectedFilterId: String,
         createError: String? = nil,
-        onFilterSelected: @escaping (String) -> Void,
+        onOpenProjectPicker: @escaping () -> Void,
         onSessionSelected: @escaping (SessionListSession) -> Void,
         onSessionLongPress: ((SessionListSession) -> Void)? = nil,
         onAddProject: @escaping () -> Void,
         onNewSession: @escaping () -> Void,
         onRefresh: (() async -> Void)? = nil,
-        onRemoveProject: ((String) -> Void)? = nil,
         revealNewestToken: Int = 0,
         showsEmptyContent: Bool = false,
         @ViewBuilder emptyContent: () -> EmptyContent = { EmptyView() }
@@ -104,13 +150,12 @@ struct SessionList<EmptyContent: View>: View {
         self.filterTabs = filterTabs
         self.selectedFilterId = selectedFilterId
         self.createError = createError
-        self.onFilterSelected = onFilterSelected
+        self.onOpenProjectPicker = onOpenProjectPicker
         self.onSessionSelected = onSessionSelected
         self.onSessionLongPress = onSessionLongPress
         self.onAddProject = onAddProject
         self.onNewSession = onNewSession
         self.onRefresh = onRefresh
-        self.onRemoveProject = onRemoveProject
         self.revealNewestToken = revealNewestToken
         self.showsEmptyContent = showsEmptyContent
         self.emptyContent = emptyContent()
@@ -169,10 +214,9 @@ struct SessionList<EmptyContent: View>: View {
                 filterTabs: filterTabs,
                 selectedFilterId: selectedFilterId,
                 createError: createError,
-                onFilterSelected: onFilterSelected,
+                onOpenProjectPicker: onOpenProjectPicker,
                 onAddProject: onAddProject,
-                onNewSession: onNewSession,
-                onRemoveProject: onRemoveProject
+                onNewSession: onNewSession
             )
             .background {
                 GeometryReader { geometry in
@@ -359,7 +403,7 @@ private struct SessionListScrollView<SectionContent: View>: View {
     }
 }
 
-private func compactHomePath(_ path: String, hideUserDirectoryPrefix: Bool) -> String {
+func compactHomePath(_ path: String, hideUserDirectoryPrefix: Bool) -> String {
     let home = NSHomeDirectory()
     if path == home { return "~" }
     if path.hasPrefix(home + "/") {
@@ -435,12 +479,12 @@ private struct SessionListRefreshableModifier: ViewModifier {
             ),
         ],
         filterTabs: [
-            SessionListFilterTab(id: SessionListFilterTab.allId, title: "All", count: 2),
-            SessionListFilterTab(id: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 1),
-            SessionListFilterTab(id: "/Users/demo/playground", title: "playground", count: 1),
+            .all(projectCount: 2, sessionCount: 2),
+            .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 1),
+            .project(worktree: "/Users/demo/playground", title: "playground", count: 1),
         ],
         selectedFilterId: SessionListFilterTab.allId,
-        onFilterSelected: { _ in },
+        onOpenProjectPicker: {},
         onSessionSelected: { _ in },
         onAddProject: {},
         onNewSession: {}

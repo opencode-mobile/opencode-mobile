@@ -12,9 +12,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
+import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
+import dev.opencode.mobile.ui.components.SessionListProjectPickerRows
 import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
 
@@ -22,6 +26,8 @@ import dev.opencode.mobile.ui.components.SessionListStatus
 fun SessionListGalleryScreen(modifier: Modifier = Modifier) {
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
     var oneProject by rememberSaveable { mutableStateOf(false) }
+    var showProjectPicker by rememberSaveable { mutableStateOf(false) }
+    var projectPickerQuery by rememberSaveable { mutableStateOf("") }
     val filterTabs =
         if (oneProject) {
             sessionListGalleryOneProjectFilterTabs
@@ -33,7 +39,7 @@ fun SessionListGalleryScreen(modifier: Modifier = Modifier) {
             sessions = sessionListGallerySamples,
             filterTabs = filterTabs,
             selectedFilterId = selectedFilterId,
-            onFilterSelected = { selectedFilterId = it },
+            onOpenProjectPicker = { showProjectPicker = true },
             onSessionSelected = {},
             onAddProject = {},
             onNewSession = {},
@@ -55,6 +61,33 @@ fun SessionListGalleryScreen(modifier: Modifier = Modifier) {
                 Modifier
                     .align(Alignment.TopStart)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+    }
+    OpenCodeBottomSheet(
+        visible = showProjectPicker,
+        title = "Filter by project",
+        contentMode = OpenCodeBottomSheetContentMode.Form,
+        alwaysFixedHeight = true,
+        onDismissRequest = {
+            showProjectPicker = false
+            projectPickerQuery = ""
+        },
+        pinnedContent = {
+            OpenCodeTextInput(
+                value = projectPickerQuery,
+                onValueChange = { projectPickerQuery = it },
+                hint = "Search projects",
+            )
+        },
+    ) {
+        SessionListProjectPickerRows(
+            tabs = filterTabs,
+            query = projectPickerQuery,
+            onSelect = { id ->
+                selectedFilterId = id
+                showProjectPicker = false
+                projectPickerQuery = ""
+            },
         )
     }
 }
@@ -112,20 +145,20 @@ private val sessionListGallerySamples: List<SessionListSession>
 
 private val sessionListGalleryFilterTabs =
     listOf(
-        SessionListFilterTab(id = SessionListFilterTab.ALL_ID, title = "All", count = 4),
-        SessionListFilterTab(
-            id = "/Users/demo/opencode-mobile",
+        SessionListFilterTab.all(projectCount = 3, sessionCount = 4),
+        SessionListFilterTab.project(
+            worktree = "/Users/demo/opencode-mobile",
             title = "opencode-mobile",
             count = 2,
         ),
-        SessionListFilterTab(id = "/Users/demo/playground", title = "playground", count = 1),
-        SessionListFilterTab(id = "/Users/demo/api-client", title = "api-client", count = 1),
+        SessionListFilterTab.project(worktree = "/Users/demo/playground", title = "playground", count = 1),
+        SessionListFilterTab.project(worktree = "/Users/demo/api-client", title = "api-client", count = 1),
     )
 
 private val sessionListGalleryOneProjectFilterTabs =
     listOf(
-        SessionListFilterTab(
-            id = "/Users/demo/opencode-mobile",
+        SessionListFilterTab.project(
+            worktree = "/Users/demo/opencode-mobile",
             title = "opencode-mobile",
             count = 2,
         ),

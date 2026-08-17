@@ -41,6 +41,7 @@ enum ProductAnalytics {
         static let connectionSetup = "connection_setup"
         static let homeAddProject = "home_add_project"
         static let homeNewSessionProjectPicker = "home_new_session_project_picker"
+        static let homeFilterProjectPicker = "home_filter_project_picker"
         static let homeSessionActions = "home_session_actions"
         static let homeRenameSession = "home_rename_session"
         static let homeForkSession = "home_fork_session"
@@ -87,6 +88,7 @@ enum ProductAnalytics {
         static let homeLongPressSession = "home_long_press_session"
         static let homeCreateSession = "home_create_session"
         static let homeOpenNewSessionProjectPicker = "home_open_new_session_project_picker"
+        static let homeOpenProjectPicker = "home_open_project_picker"
         static let homeAddProject = "home_add_project"
         static let homeRemoveProject = "home_remove_project"
         static let homeSelectSessionFilter = "home_select_session_filter"
@@ -108,6 +110,7 @@ enum ProductAnalytics {
         static let addProjectSelectCurrent = "add_project_select_current"
         static let addProjectRetryNavigator = "add_project_retry_navigator"
         static let newSessionPickerDismiss = "new_session_picker_dismiss"
+        static let projectPickerDismiss = "project_picker_dismiss"
         static let newSessionPickerSelectProject = "new_session_picker_select_project"
 
         static let sessionActionsDismiss = "session_actions_dismiss"

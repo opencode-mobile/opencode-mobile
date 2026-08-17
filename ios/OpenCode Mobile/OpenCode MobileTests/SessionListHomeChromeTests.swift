@@ -2,24 +2,24 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct SessionListHomeChromeTests {
-    @Test func filterTabs_zeroProjectsOmitsAllAndChipRow() {
+    @Test func filterTabs_zeroProjectsOmitsAllAndScopeControl() {
         let tabs = SessionListHomeChrome.filterTabs(projects: [], sessionCount: 0)
         #expect(tabs.isEmpty)
     }
 
-    @Test func filterTabs_oneProjectShowsOnlyThatChip() {
+    @Test func filterTabs_oneProjectShowsOnlyThatProject() {
         let tabs = SessionListHomeChrome.filterTabs(projects: [mobile], sessionCount: 2)
         #expect(tabs == [
-            SessionListFilterTab(id: "/repo", title: "opencode-mobile", count: 2),
+            SessionListFilterTab.project(worktree: "/repo", title: "opencode-mobile", count: 2),
         ])
     }
 
     @Test func filterTabs_twoProjectsPrependsAll() {
         let tabs = SessionListHomeChrome.filterTabs(projects: [mobile, playground], sessionCount: 3)
         #expect(tabs == [
-            SessionListFilterTab(id: SessionListFilterTab.allId, title: "All", count: 3),
-            SessionListFilterTab(id: "/repo", title: "opencode-mobile", count: 2),
-            SessionListFilterTab(id: "/play", title: "playground", count: 1),
+            SessionListFilterTab.all(projectCount: 2, sessionCount: 3),
+            SessionListFilterTab.project(worktree: "/repo", title: "opencode-mobile", count: 2),
+            SessionListFilterTab.project(worktree: "/play", title: "playground", count: 1),
         ])
     }
 

@@ -27,35 +27,38 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
-import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
+import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
+import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
-import dev.opencode.mobile.ui.components.OpenCodeListItem
-import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
-import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
+import dev.opencode.mobile.ui.components.SessionListProjectPickerRows
 import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
+import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
 import dev.opencode.mobile.ui.connection.listCaption
 import dev.opencode.mobile.ui.connection.listStatus
@@ -359,6 +362,7 @@ internal fun MainScreen(
                         },
                         onCreateSession = onNewSession,
                         onRemoveProject = onRemoveProject,
+                        removalSnackbar = removalSnackbar,
                         onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
                         revealNewestToken = revealNewestToken,
                         modifier = Modifier.weight(1f),
@@ -454,7 +458,9 @@ internal fun MainScreen(
             OpenCodeDialogOption(
                 title = "Remove",
                 destructive = true,
-                onClick = onConfirmRemoveProject,
+                onClick = {
+                    onConfirmRemoveProject()
+                },
             ),
         secondaryOption =
             OpenCodeDialogOption(
@@ -791,6 +797,7 @@ private fun HomeProjectsContent(
     onRequestNewSessionProjectPicker: () -> Unit,
     onCreateSession: (String) -> Unit,
     onRemoveProject: (String) -> Unit,
+    removalSnackbar: OpenCodeSnackbarMessage?,
     onSessionLongPress: (SessionListSession) -> Unit,
     revealNewestToken: Int = 0,
     modifier: Modifier = Modifier,
@@ -810,6 +817,8 @@ private fun HomeProjectsContent(
         var selectedFilterId by rememberSaveable {
             mutableStateOf(SessionListFilterTab.ALL_ID)
         }
+        var showProjectPicker by rememberSaveable { mutableStateOf(false) }
+        var projectPickerQuery by rememberSaveable { mutableStateOf("") }
         val resolvedFilterId =
             SessionListHomeChrome.resolvedFilterId(
                 selectedId = selectedFilterId,
@@ -820,17 +829,28 @@ private fun HomeProjectsContent(
                 selectedFilterId = resolvedFilterId
             }
         }
+        LaunchedEffect(removalSnackbar) {
+            if (removalSnackbar != null) {
+                showProjectPicker = false
+                projectPickerQuery = ""
+            }
+        }
+        ProductPresentedScreenViewEffect(
+            screenId = ProductAnalytics.Screen.HOME_FILTER_PROJECT_PICKER,
+            presentation = ProductAnalytics.Presentation.SHEET,
+            visible = showProjectPicker,
+        )
         SessionList(
             sessions = sessions,
             filterTabs = filterTabs,
             selectedFilterId = resolvedFilterId,
             createError = projectSessionCreateError,
-            onFilterSelected = { filterId ->
+            onOpenProjectPicker = {
                 ProductAnalytics.logUserAction(
                     screenId = ProductAnalytics.Screen.HOME,
-                    actionId = ProductAnalytics.Action.HOME_SELECT_SESSION_FILTER,
+                    actionId = ProductAnalytics.Action.HOME_OPEN_PROJECT_PICKER,
                 )
-                selectedFilterId = filterId
+                showProjectPicker = true
             },
             onSessionSelected = { session ->
                 ProductAnalytics.logUserAction(
@@ -855,7 +875,6 @@ private fun HomeProjectsContent(
                         onCreateSession(action.worktree)
                 }
             },
-            onRemoveProject = onRemoveProject,
             onSessionLongPress = onSessionLongPress,
             revealNewestToken = revealNewestToken,
             modifier = Modifier.fillMaxSize(),
@@ -866,6 +885,42 @@ private fun HomeProjectsContent(
                     null
                 },
         )
+        OpenCodeBottomSheet(
+            visible = showProjectPicker,
+            title = "Filter by project",
+            contentMode = OpenCodeBottomSheetContentMode.Form,
+            alwaysFixedHeight = true,
+            onDismissRequest = {
+                ProductAnalytics.logUserAction(
+                    screenId = ProductAnalytics.Screen.HOME_FILTER_PROJECT_PICKER,
+                    actionId = ProductAnalytics.Action.PROJECT_PICKER_DISMISS,
+                )
+                showProjectPicker = false
+                projectPickerQuery = ""
+            },
+            pinnedContent = {
+                OpenCodeTextInput(
+                    value = projectPickerQuery,
+                    onValueChange = { projectPickerQuery = it },
+                    hint = "Search projects",
+                )
+            },
+        ) {
+            SessionListProjectPickerRows(
+                tabs = filterTabs,
+                query = projectPickerQuery,
+                onSelect = { filterId ->
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.HOME_FILTER_PROJECT_PICKER,
+                        actionId = ProductAnalytics.Action.HOME_SELECT_SESSION_FILTER,
+                    )
+                    selectedFilterId = filterId
+                    showProjectPicker = false
+                    projectPickerQuery = ""
+                },
+                onRemoveProject = onRemoveProject,
+            )
+        }
     }
 }
 

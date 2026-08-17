@@ -10,21 +10,18 @@ Linear: [OPE-160](https://linear.app/opencode-mobile/issue/OPE-160/session-list-
 
 ## Design system
 
-- not started — Session List Dock scope control; picker sheet uses List Item +
-  Bottom Sheet + Dialog.
+- complete — Session List Dock scope control; picker sheet uses List Item +
+  Bottom Sheet + Dialog. Filter Chip remains in the collection unused on home.
 
 ## iOS
 
-- not started.
+- complete — dock scope control, searchable Filter by project sheet, hold-to-
+  remove on project rows, home + gallery wiring.
 
 ## Android
 
-- not started.
+- complete — same behavior as iOS.
 
 ## Remaining
 
-- [ ] Extend Session List Dock (scope control; no chip row / dock ×).
-- [ ] Searchable project picker sheet (All + projects; no checkmarks).
-- [ ] Hold-to-remove on project rows: List Item pop, then Remove-project dialog.
-- [ ] Wire home Screen Models; gallery + Session List review surfaces.
-- [ ] iOS and Android parity.
+- none.
