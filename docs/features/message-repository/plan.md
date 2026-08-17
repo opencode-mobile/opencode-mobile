@@ -17,7 +17,9 @@ while the app remains in the foreground.
   snapshot with ordered foreground SSE message patches.
 - Live `message.part.delta` text streaming with bounded display-update
   coalescing, finalization on full-part or `session.idle`, and a changed-message
-  watchdog poll when text is not actively streaming.
+  watchdog poll when text is not actively streaming. A silent streaming stall
+  (no message events for one poll interval) REST-catches-up when the snapshot
+  is ahead of the local stream.
 - Pull-to-refresh, reload on screen appear, and authoritative synchronization
   after stream connection or reconnection signals.
 - Responsive display preparation for large histories and large streaming

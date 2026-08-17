@@ -26,6 +26,8 @@
   timeline coalescing
 - [x] OPE-82 parity follow-up: stable REST part IDs keep active replies
   streaming without dropping siblings or waiting on a selective reload
+- [x] OPE-177: silent streaming stall REST catch-up when the live stream
+  looks connected but stops delivering message events
 
 ## iOS
 
@@ -42,6 +44,8 @@
   concurrency-safe markdown preparation
 - [x] OPE-82 parity follow-up: stable REST part IDs keep active replies
   streaming without dropping siblings or waiting on a selective reload
+- [x] OPE-177: silent streaming stall REST catch-up when the live stream
+  looks connected but stops delivering message events
 
 ## Remaining
 

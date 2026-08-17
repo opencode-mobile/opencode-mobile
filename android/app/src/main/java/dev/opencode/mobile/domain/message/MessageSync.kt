@@ -47,6 +47,7 @@ class MessageSync(
     private val eventStagingByteCapacity: Int = MESSAGE_EVENT_STAGING_BYTE_CAPACITY,
     private val connectionProfileIdProvider: () -> String = { "local" },
     private val recoveryDelay: suspend (Long) -> Unit = { ms -> delay(ms) },
+    private val nowMs: () -> Long = { System.currentTimeMillis() },
     private val connectionEpoch: ConnectionEpoch = ConnectionEpoch.shared,
     private val sessionCache: SessionCache = NoOpSessionCache,
 ) {
@@ -60,6 +61,7 @@ class MessageSync(
     private val awaitingCacheSyncConfirm = ConcurrentHashMap.newKeySet<String>()
     private val observationGeneration = AtomicInteger(0)
     private val terminalSessionKeys = ConcurrentHashMap.newKeySet<MessageSessionKey>()
+    private val lastMessageEventAtMs = ConcurrentHashMap<String, Long>()
 
     fun observeMessages(
         sessionId: String,
@@ -128,6 +130,7 @@ class MessageSync(
     private fun incrementalMessageFlow(key: MessageSessionKey): Flow<MessageListUpdate> =
         channelFlow {
             val startedGeneration = observationGeneration.get()
+            noteMessageActivity(key.storeSlot)
             fun observationStillCurrent(): Boolean =
                 observationGeneration.get() == startedGeneration && key !in terminalSessionKeys
             // Adopted forward on stream.reconnected / server.connected so a
@@ -451,6 +454,15 @@ class MessageSync(
 
                 if (!isCurrentEpoch()) return
                 if (event.sessionId != key.sessionId) return
+                when (event.type) {
+                    "message.updated",
+                    "message.part.updated",
+                    "message.part.delta",
+                    "message.removed",
+                    "message.part.removed",
+                    "session.idle",
+                    -> noteMessageActivity(storeSlot)
+                }
                 MessagePipelineProbe.emit(MessagePipelineProbe.Marker.EventAccepted)
 
                 var applyResult: MessageStoreApplyResult? = null
@@ -734,8 +746,10 @@ class MessageSync(
                 if (healthByKey[key]?.requiresAuthoritativeRecovery == true) continue
                 // Polling REST mid-stream publishes a behind snapshot and looks like the
                 // assistant message clearing then reprinting from the start.
-                if (engine.hasStreamingText(storeSlot)) continue
+                val streaming = engine.hasStreamingText(storeSlot)
+                if (streaming && !isStreamingStalled(storeSlot)) continue
                 val expectedRevision = engine.revision(storeSlot)
+                val directory = key.directory.ifEmpty { null }
                 val load = runCatching { listMessages(key.sessionId, directory) }
                 if (load.isFailure) {
                     val error = load.exceptionOrNull()
@@ -746,10 +760,18 @@ class MessageSync(
                     continue
                 }
                 val messages = load.getOrThrow()
+                if (streaming) {
+                    val local = engine.messages(storeSlot)
+                    if (!MessageSnapshotAuthority.isAheadOrEqual(remote = messages, local = local)) {
+                        continue
+                    }
+                    logI("streaming stall catch-up session=${key.sessionId}")
+                }
                 val fp = messageFingerprint(messages)
                 if (fp != lastFingerprints[storeSlot]) {
                     if (!engine.replaceAllIfRevision(storeSlot, messages, expectedRevision)) continue
                     val merged = engine.messages(storeSlot)
+                    noteMessageActivity(storeSlot)
                     rememberPublishedFrame(storeSlot, merged)
                     logD(
                         "observeMessages emit session=${key.sessionId} count=${merged.size} " +
@@ -890,6 +912,15 @@ class MessageSync(
         if (fp == lastFingerprints[storeSlot]) return false
         rememberPublishedFrame(storeSlot, messages)
         return true
+    }
+
+    private fun noteMessageActivity(storeSlot: String) {
+        lastMessageEventAtMs[storeSlot] = nowMs()
+    }
+
+    private fun isStreamingStalled(storeSlot: String): Boolean {
+        val last = lastMessageEventAtMs[storeSlot] ?: return true
+        return nowMs() - last >= pollIntervalMs
     }
 
     private fun logI(message: String) {

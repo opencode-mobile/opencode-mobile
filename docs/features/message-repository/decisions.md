@@ -79,12 +79,17 @@ part update targeting a REST-seeded message can replace that part locally while
 preserving every sibling and following delta. Legacy decoded parts without an
 ID keep the full-reload fallback rather than inventing unstable local identity.
 
-Polling pauses while text is streaming. A final part update clears the streaming
-flag; `session.idle` reloads the authoritative REST snapshot so a missed final
-part event cannot leave a message streaming indefinitely. A failed idle reload
-clears the local streaming flag and resumes watchdog polling. REST results are
-applied only when the store revision is unchanged since the request started, so
-an in-flight poll cannot overwrite a newer SSE delta.
+Polling pauses while text is streaming. If no message events arrive for one
+poll interval while text is still marked streaming, the watchdog REST-polls
+anyway and applies the snapshot only when it is ahead of (or equal to and more
+finalized than) the local stream. That recovers a hung socket that still looks
+`connected` without rewinding a healthy mid-stream pause. A final part update
+clears the streaming flag; `session.idle` reloads the authoritative REST
+snapshot so a missed final part event cannot leave a message streaming
+indefinitely. A failed idle reload clears the local streaming flag and resumes
+watchdog polling. REST results are applied only when the store revision is
+unchanged since the request started, so an in-flight poll cannot overwrite a
+newer SSE delta.
 
 `message.updated` can arrive before visible parts. The store may record
 that message slot internally, but Session Chat should not render a brand-new

@@ -28,7 +28,10 @@ reloads. The event stream does not call the repository directly.
   ignored. Non-text part shells (e.g. `reasoning`) are also ignored so their
   text-field deltas never become assistant message text.
 - Timeline polling pauses while a text part is streaming so a lagging REST
-  snapshot cannot clear-and-reprint the live reply. A final full-part update
+  snapshot cannot clear-and-reprint the live reply. If no message events arrive
+  for one poll interval while text is still marked streaming, the watchdog
+  REST-polls and applies the snapshot only when REST is ahead of or more
+  finalized than the local stream (OPE-177). A final full-part update
   clears streaming normally; `session.idle` performs an authoritative REST
   reload as the fallback finalization path. If that reload fails, the store
   still clears its streaming flags so watchdog polling resumes and can recover
