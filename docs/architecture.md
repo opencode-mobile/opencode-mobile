@@ -18,8 +18,9 @@ release distribution (Firebase Test Lab + Play internal track) is planned under
 [`android-release-distribution`](features/android-release-distribution/); iOS
 App Store / TestFlight remains deferred until an Apple Developer account exists.
 
-The v1 app remains a foreground session-control client for one reachable,
-password-protected opencode server's current project.
+The app remains a foreground session-control client for one reachable,
+password-protected opencode server's current project. Live Session Chat
+tracks official TUI v2, not classic TUI v1.
 
 ## Layer Shape
 

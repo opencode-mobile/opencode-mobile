@@ -30,7 +30,6 @@ while the app remains in the foreground.
 - Background or guaranteed event delivery. SSE is foreground-only and REST
   remains authoritative after reconnect.
 - Dedicated command/tool message UI components.
-- Rendering reasoning parts in the normal assistant transcript.
 - Attachment upload, permissions, abort, diff from chat.
 - Connection Profile Keychain storage.
 - App-build OpenAPI codegen.

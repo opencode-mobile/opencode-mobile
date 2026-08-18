@@ -354,7 +354,10 @@ Working and reloaded history mid-turn.
 
 **Choice:** Map `session.next.tool.*`, `session.next.shell.*`, and
 `session.next.compaction.*` into v1-shaped `message.part.updated` /
-`message.part.delta`. Do not project live reasoning (v1 timeline parity).
+`message.part.delta`.
+
+**Superseded (2026-08-18):** “Do not project live reasoning (v1 timeline
+parity)” — see [Live reasoning matches TUI v2](#live-reasoning-matches-tui-v2-2026-08-18).
 
 **Why:** Without this, tools and compaction only appear after a full REST
 reload, and that reload used to wait on a false idle.
@@ -492,13 +495,17 @@ page safety cap and a repeated-cursor stop.
 
 **Choice:** Do not call published `/api/form/*`, durable
 `GET /api/session/{id}/event|history`, or experimental session log in this
-pass. Keep questions on `/api/question/*`. Leave reasoning unrendered. Do not
-send prompt `skills[]`.
+pass. Keep questions on `/api/question/*`. Do not send prompt `skills[]`.
+
+**Superseded (2026-08-18):** “Leave reasoning unrendered” / “Reasoning stays
+at v1 timeline parity” — see
+[Live reasoning matches TUI v2](#live-reasoning-matches-tui-v2-2026-08-18).
+Forms fallback is superseded for the question dock only (see below).
 
 **Why:** Form reply `{ answer }` is a different product model than the question
 dock. Durable catch-up routes are experimental; MessageSync already REST-reloads
-messages on reconnect. Reasoning stays at v1 timeline parity. Skills need
-composer UI. Home still has no documented `session.created` event.
+messages on reconnect. Skills need composer UI. Home still has no documented
+`session.created` event.
 
 ## V2 question dock uses forms when question routes 404 (2026-08-17)
 
@@ -533,4 +540,38 @@ without time was wiping any start, so the Child Session Row stayed at `0:00`.
 **Supersedes:** “do not call `/api/form/*`” in
 [V2 leftovers](#v2-leftovers-stay-documented-not-dual-pathed-2026-08-16) for
 the question dock only.
+
+## No v1-parity constraints on session UX (2026-08-18)
+
+**Choice:** Session Chat, live SSE, and message display track official **TUI
+v2** (`origin/beta`). “v1 timeline parity”, “hide because v1 also hides it”,
+and “success is not TUI parity” are not reasons to drop events, skip
+thinking, or delay the first visible token. Dual-stack HTTP (still talk to
+v1 servers) stays. Product-wide out of scope (tunnels, push, mobile IDE)
+is unchanged until those docs are revisited.
+
+**Why:** Agents and reviews were treating classic TUI v1 as a ceiling. The
+live product target is opencode2’s session stream.
+
+**Supersedes:** any remaining “leave it at v1 parity” notes for session
+timeline, reasoning, and live event projection.
+
+## Live reasoning matches TUI v2 (2026-08-18)
+
+**Choice:** Session Chat parity target is official TUI v2
+(`origin/beta` `stream-v2.transport.ts`), not classic TUI v1. Project
+`session.reasoning.started` / `.delta` / `.ended` and
+`session.next.reasoning.*` into a distinct reasoning part. Render thinking
+live. Do not fold reasoning text into assistant `TextPart`. Do not treat
+“v1 timeline parity” as a reason to hide thinking or delay the first visible
+token.
+
+**Why:** v2 turns emit hundreds of milliseconds of `session.reasoning.delta`
+before any `session.text.delta`. Hiding that made mobile look idle and slower
+than TUI. The old v1-hide rule blocked the work.
+
+**Supersedes:** “Do not project live reasoning” in
+[V2 live tool, shell, and compaction](#v2-live-tool-shell-and-compaction-project-into-message-parts-2026-08-16)
+and “Leave reasoning unrendered” in
+[V2 leftovers](#v2-leftovers-stay-documented-not-dual-pathed-2026-08-16).
 

@@ -202,6 +202,6 @@ track opencode server schema changes.
 ## Conclusion
 
 The project is feasible as a focused native mobile companion for opencode
-session control. The success condition for v1 is not feature parity with the TUI
-or a mobile IDE; it is reliable foreground control of sessions on a reachable,
-password-protected opencode server.
+session control. Session Chat live UX tracks official **TUI v2**, not classic
+TUI v1. That is not a mandate to become a mobile IDE. Reliable foreground
+control of a reachable, password-protected server remains required.

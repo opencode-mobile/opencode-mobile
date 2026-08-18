@@ -653,7 +653,7 @@ identity, error, recovery, scroll, and responsiveness contracts must agree.
 - revision-gated replace;
 - dense ordered deltas;
 - REST-seeded multipart preservation;
-- ignored non-text/reasoning deltas;
+- text-lane deltas stay on text parts; reasoning deltas stay on reasoning parts;
 - final full-part update and idle finalization;
 - reload failure and repeated recovery;
 - event racing recovery;

@@ -103,9 +103,9 @@ flight, and deltas received during it are applied after the snapshot is seeded.
 They also suppress duplicate unchanged timeline emissions from SSE events, so
 placeholder-only events do not repaint or blank the chat.
 
-Reasoning parts are hidden from normal chat text for v1. A future collapsible
-reasoning component can surface them without changing the message repository
-contract.
+Reasoning is a first-class part, not folded into assistant text. Session Chat
+should render thinking to match TUI v2. A collapsible thinking component can
+sit on the existing repository contract.
 
 ## Display preparation and pacing
 

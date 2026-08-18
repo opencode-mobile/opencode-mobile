@@ -16,6 +16,8 @@
 - **iOS:** Tool-part fallback summary (e.g. tool name); `info.error` message when the provider fails.
 - **Android:** Tool-part fallback summary (e.g. tool name); `info.error` message when the provider fails.
 - **Area:** Behavior.
-- **Reason:** Minimal v1 mapping until rich assistant UI exists. Provider errors are surfaced as plain text; reasoning and other non-text part types are not rendered yet.
-- **Next action:** Rich part rendering in Session Chat.
-- **Status:** Temporary (tool/reasoning parts); provider error text is shipped.
+- **Reason:** Provider errors are plain text. Reasoning/thinking is now in
+  product scope (TUI v2 parity) but not implemented yet.
+- **Next action:** Project and render reasoning parts in Session Chat.
+- **Status:** Temporary (reasoning); provider error text is shipped. Tools have
+  cards.

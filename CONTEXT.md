@@ -273,18 +273,18 @@ still has a `text` fallback.
 
 ### message part
 
-A typed content unit within a message. Parts are ordered. For v1 the domain
-model defines three variants:
+A typed content unit within a message. Parts are ordered. The domain
+model includes:
 
 - **TextPart**: user prompt text or assistant response text. May carry
   `isStreaming: true` while delta chunks are still arriving. Model reasoning
-  traces are hidden from normal chat text in v1.
+  traces are a distinct part, not folded into this text.
 - **ToolPart**: a named tool call inside a message, with a tool status,
   optional running title, optional error text, call id when the server
   provides one, opaque string-keyed input and metadata maps, and optional
   string output for later card chrome.
   _Avoid_: treating a preformatted status string as the tool part itself;
-  modeling every server tool schema as its own domain type in v1.
+  modeling every server tool schema as its own domain type.
 - **FilePart**: a user **Attachment** that arrived on the wire as a server
   `type: "file"` part with a `data:` URL (image, PDF, or text-like file).
   Shown on the user message as an attachment row (thumbnail or file card),
@@ -293,13 +293,15 @@ model defines three variants:
   slice; confusing with **file-change tool**.
 
 Outbound **agent mention** parts on prompt send are domain-modeled for the
-composer. Inbound `agent` parts on timeline messages stay adapter-consumed
-without dedicated Session Chat chrome in v1.
+composer.
 
-Server-only part types that remain adapter-consumed without a visible domain
-part in v1 include `step-start`, `step-finish`, inbound `agent`, `subtask`,
-`snapshot`, `patch`, `compaction`, `retry`, and non-`data:` `file` parts
-(project path mentions).
+**ReasoningPart**: live and historical model thinking. Distinct from
+TextPart. Session Chat should show it (TUI v2 parity).
+
+Other wire types (`step-start`, `step-finish`, inbound `agent`, `subtask`,
+`snapshot`, `patch`, `retry`, non-`data:` `file` mentions) stay adapter
+concerns until a timeline mapping exists. That is leftover work, not a
+v1-forbid.
 
 ### Attachment
 

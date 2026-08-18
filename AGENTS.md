@@ -29,7 +29,8 @@ server's current project:
 - list, create, rename, delete, and fork sessions;
 - read session messages;
 - send prompts asynchronously;
-- stream foreground events and refresh state after reconnect;
+- stream foreground events (TUI v2 live timeline, including thinking) and
+  refresh state after reconnect;
 - show session status;
 - abort active work;
 - approve or deny permission requests without setting persistent `remember`

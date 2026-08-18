@@ -4,6 +4,7 @@
 
 - [x] Research: [`../server-connection/research-opencode-api-v2.md`](../server-connection/research-opencode-api-v2.md)
 - [x] Official HttpApi inventory: [`official-docs-inventory.md`](official-docs-inventory.md)
+- [x] TUI session v1/v2: [`research-tui-session-v1-v2.md`](research-tui-session-v1-v2.md)
 - [x] Work-split plan: [`plan.md`](plan.md)
 - [x] Integration branch `feature/ope-146-server-api-v2` (phase PRs target this,
   not `main`; ship when epic is ready)
@@ -227,6 +228,9 @@
 - Upstream: `/api/event` is volatile. Durable session logs are experimental
   (`GET /api/experimental/session/{id}/log`) and unused.
 
+- [x] Docs: drop v1-parity ceiling for session UX / reasoning (TUI v2 is
+  the live target). Implementation of thinking + faster stream still open.
+
 ## Remaining work
 
 - Live v2 validation for P1–P6 is deferred.
@@ -240,7 +244,8 @@
   need a richer answer mapping than `{ qN: selectedLabel }`.
 - Durable reconnect catch-up (`GET /api/experimental/session/{id}/log`) once
   the route is stable. MessageSync already REST-reloads messages on reconnect.
-- Render assistant `reasoning` in history/live (v1 also hides it).
+- Render assistant reasoning / thinking live and in history (TUI v2 parity).
+  Docs no longer forbid this; implementation is remaining.
 - Prompt `skills[]` needs composer skill mentions.
 - Home has no documented v2 `session.created` event; list refresh still
   depends on remapped `session.updated` (`moved` / agent / model / renamed).

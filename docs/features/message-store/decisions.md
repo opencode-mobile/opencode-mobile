@@ -22,11 +22,10 @@ reloads. The event stream does not call the repository directly.
 
 - `message.part.updated` upserts the full part (and clears streaming on text
   replace).
-- `message.part.delta` appends text chunks by `partID` and sets
-  `isStreaming: true` (OPE-82; matches current opencode server + web client).
-  Only events with `field=text` are accepted; missing and non-text fields are
-  ignored. Non-text part shells (e.g. `reasoning`) are also ignored so their
-  text-field deltas never become assistant message text.
+- `message.part.delta` appends chunks by `partID` and sets `isStreaming: true`
+  (OPE-82). Text parts accept `field=text`. Reasoning is a distinct part type:
+  accept reasoning shells and `field=reasoning` (or projected reasoning deltas)
+  on that part only. Never apply a reasoning delta onto a `TextPart`.
 - Timeline polling pauses while a text part is streaming so a lagging REST
   snapshot cannot clear-and-reprint the live reply. If no message events arrive
   for one poll interval while text is still marked streaming, the watchdog

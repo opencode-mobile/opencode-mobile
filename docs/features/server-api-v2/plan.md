@@ -3,13 +3,15 @@
 Related research:
 [`../server-connection/research-opencode-api-v2.md`](../server-connection/research-opencode-api-v2.md)
 (mobile v1 usage vs v2). Official public HttpApi inventory:
-[`official-docs-inventory.md`](official-docs-inventory.md).
+[`official-docs-inventory.md`](official-docs-inventory.md). Official TUI session logic (`opencode` vs `opencode2`, REST + SSE
+translation): [`research-tui-session-v1-v2.md`](research-tui-session-v1-v2.md).
 
 ## User Goal
 
 Connect OpenCode Mobile to both OpenCode **v1** (unprefixed) and **v2**
 (`/api/*`) servers without rewriting feature UI. Detect protocol on connect;
-route under repositories; keep Screen Models on stable domain types.
+route under repositories; keep Screen Models on stable domain types. Live
+Session Chat tracks official **TUI v2**, not classic TUI v1.
 
 ## In Scope
 
