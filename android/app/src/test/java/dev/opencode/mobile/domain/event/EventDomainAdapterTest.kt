@@ -274,6 +274,19 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvent_projectsInboxCancelledIntoMessageRemoved() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.inbox.cancelled","data":{"inboxID":"msg-2","sessionID":"ses-1"}}""",
+            )
+
+        assertEquals("message.removed", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        assertEquals("msg-2", event?.rawProperties?.get("messageID")?.jsonPrimitive?.content)
+        assertTrue(event!!.triggersMessageRefresh)
+    }
+
+    @Test
     fun parseEvents_projectsInboxEnqueuedItemPayloadIntoUserText() {
         val events =
             adapter.parseEvents(
