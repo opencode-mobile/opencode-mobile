@@ -194,29 +194,31 @@ patches).
 
 ## Integration branch
 
-All phase work stacks on one long-lived branch and reaches `main` only when the
-epic is ready:
+P0–P6 shipped on `main`. Live Session Chat event follow-up stacks on:
 
 ```text
 main
-  └─ feature/ope-146-server-api-v2          ← integration (merge to main once)
-       ├─ feature/ope-147-…  → PR → ope-146
-       ├─ feature/ope-148-…  → PR → ope-146
-       └─ … P2–P6 likewise
+  └─ feature/ope-183-align-session-chat-live-events   ← parent PR → main
+       ├─ feature/ope-178-…  → PR → ope-183
+       ├─ feature/ope-179-…  → PR → ope-183
+       ├─ feature/ope-180-…  → PR → ope-183
+       ├─ feature/ope-182-…  → PR → ope-183
+       └─ feature/ope-181-…  → PR → ope-183
 ```
 
 Rules:
 
-- Cut each phase branch from the current tip of `feature/ope-146-server-api-v2`
-  (after prior phases are merged into it), never from `main`.
-- Open every phase PR with **base** `feature/ope-146-server-api-v2`, not `main`.
-- Do not merge `feature/ope-146-server-api-v2` → `main` until P0–P6 (or the
-  agreed shippable subset) are complete and validated on the integration branch.
-- Final ship is one PR: `feature/ope-146-server-api-v2` → `main`.
+- Cut each child from the current tip of
+  `feature/ope-183-align-session-chat-live-events`, never from `main`.
+- Open every child PR with **base** `feature/ope-183-align-session-chat-live-events`.
+- Do not merge the parent → `main` until the children are in.
+- Final ship is one PR: `feature/ope-183-align-session-chat-live-events` → `main`.
 
 ## Linear
 
-Epic: [OPE-146](https://linear.app/opencode-mobile/issue/OPE-146/server-api-v2-compatibility)
+Shipped epic: [OPE-146](https://linear.app/opencode-mobile/issue/OPE-146/server-api-v2-compatibility)
+
+Live-event parent: [OPE-183](https://linear.app/opencode-mobile/issue/OPE-183/align-session-chat-live-events-with-tui-v2)
 
 | Phase | Issue |
 | --- | --- |
@@ -229,9 +231,9 @@ Epic: [OPE-146](https://linear.app/opencode-mobile/issue/OPE-146/server-api-v2-c
 | P6 | [OPE-153](https://linear.app/opencode-mobile/issue/OPE-153/p6-capability-gates-cleanup-and-protocol-matrix-tests) |
 | Follow-up | [OPE-155](https://linear.app/opencode-mobile/issue/OPE-155/isolate-v1-and-v2-http-remotes-behind-repository-ports) isolate v1/v2 remotes |
 
-Each ticket: both platforms, tests, progress update, no UI rewrite unless
-capability gate. Phase PRs target `feature/ope-146-server-api-v2`.
-OPE-155 is post-ship and must not block the epic merge.
+Each ticket: both platforms, tests, no UI rewrite unless capability gate.
+Child PRs target `feature/ope-183-align-session-chat-live-events`.
+OPE-155 is post-ship and must not block this follow-up.
 
 ## Dependencies / Order
 
