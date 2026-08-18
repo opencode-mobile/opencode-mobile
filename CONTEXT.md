@@ -7,8 +7,8 @@ The project documents product scope, feasibility, and native app architecture.
 App shells exist under `android/` and `ios/OpenCode Mobile/`. Session list home
 loads curated **added projects** and sessions via **Project Selection**;
 **Session Repository** and **Message Repository** scope calls with `directory`;
-Session Chat sends async prompts (see `docs/features/project-selection/`,
-`docs/features/session-repository/`, `docs/features/message-repository/`).
+Session Chat sends async prompts. Feature contracts live under
+`docs/features/`.
 OpenAPI fetch tooling and maintained sessions/messages specs exist; full `/doc`
 codegen is not wired into app builds yet.
 Release processes are not started.

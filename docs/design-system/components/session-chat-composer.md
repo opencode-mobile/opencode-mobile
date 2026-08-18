@@ -208,4 +208,4 @@ resize motion can be reviewed in a realistic Session Chat placement.
 
 Intentional Floating Chrome material difference (iOS Liquid Glass vs Android
 raised Surface) is documented in `../divergences.md`. Temporary feature
-mismatches belong in `docs/features/composer-liquid-glass/parity-gaps.md`.
+mismatches belong in `docs/design-system/divergences.md`.

@@ -60,7 +60,7 @@ xcodebuild test \
 
 If the simulator name is wrong, use `.github/scripts/select-ios-simulator.sh` / `xcrun simctl list`. Skip iOS on Linux.
 
-Android: skip generate unless `./gradlew :app:tasks` lists `recordPaparazziDebug` or `updateDebugScreenshotTest`. Those plugins are **not** applied on `:app` today (see `docs/features/ui-snapshot-evidence/decisions.md`). Name the gap in the reply and still publish iOS shots. If a generate task exists later, copy PNGs into `.snapshot-evidence/out/` and rename to the filename convention. Never add verify/validate screenshot tasks to Checks.
+Android: skip generate unless `./gradlew :app:tasks` lists `recordPaparazziDebug` or `updateDebugScreenshotTest`. Those plugins are **not** applied on `:app` today (Paparazzi is not applied on `:app` today). Name the gap in the reply and still publish iOS shots. If a generate task exists later, copy PNGs into `.snapshot-evidence/out/` and rename to the filename convention. Never add verify/validate screenshot tasks to Checks.
 
 Then:
 

@@ -71,7 +71,7 @@ the docs say otherwise.
   feature screen.
 - Feature work should proceed as a synchronized Feature Slice across both apps.
   Document progress and Parity Gaps under `docs/features/<feature-slug>/` as
-  work happens.
+  work happens. Live contracts only — see `docs/features/README.md`.
 - Record intentional platform differences in the same change that introduces
   them.
 - On iOS, do not place design-system list components (OpenCodeListItem, etc.)

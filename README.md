@@ -109,7 +109,7 @@ After cloning, run `./scripts/sync-agent-links.sh` if agent symlinks are missing
 - [AGENTS.md](AGENTS.md) — scope, architecture rules, skill usage
 - [docs/architecture.md](docs/architecture.md) — native app architecture
 - [docs/design-system/](docs/design-system/) — shared UI system
-- [docs/features/](docs/features/) — feature slice progress and decisions
+- [docs/features/](docs/features/) — live feature contracts
 
 ## Agent skills
 
