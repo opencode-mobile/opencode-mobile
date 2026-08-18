@@ -372,14 +372,38 @@ class EventDomainAdapterTest {
 
     @Test
     fun parseEvent_doesNotTreatLiveStepEndedAsIdle() {
-        val event =
-            adapter.parseEvent(
+        val events =
+            adapter.parseEvents(
                 """{"type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
             )
 
-        assertEquals("session.step.ended", event?.type)
-        assertEquals("ses-1", event?.sessionId)
-        assertTrue(!event!!.triggersStatusRefresh)
+        assertEquals(listOf("message.updated", "session.active.snapshot"), events.map { it.type })
+        assertEquals("ses-1", events[0].sessionId)
+        assertTrue(events.none { it.type == "session.idle" })
+        assertTrue(events[1].triggersStatusRefresh)
+    }
+
+    @Test
+    fun parseEvents_projectsLiveShellStartedIntoBusyAndBashPart() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.shell.started","data":{"sessionID":"ses-1","callID":"sh-1","assistantMessageID":"msg-2"}}""",
+            )
+
+        assertEquals(listOf("session.status", "message.part.updated"), events.map { it.type })
+        assertEquals("busy", events[0].rawProperties?.get("status")?.jsonObject?.get("type")?.jsonPrimitive?.content)
+        assertEquals("bash", events[1].rawProperties?.get("part")?.jsonObject?.get("tool")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvents_projectsLiveCompactionEndedIntoPartNotIdle() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c"}}""",
+            )
+
+        assertEquals(listOf("message.part.updated", "session.active.snapshot"), events.map { it.type })
+        assertTrue(events.none { it.type == "session.idle" })
     }
 
     @Test

@@ -301,12 +301,32 @@ struct EventDomainAdapterTests {
 
     @Test func parseEvent_doesNotTreatLiveStepEndedAsIdle() {
         let adapter = EventDomainAdapter()
-        let event = adapter.parseEvent(
+        let events = adapter.parseEvents(
             dataLine: #"{"type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
         )
-        #expect(event?.type == "session.step.ended")
-        #expect(event?.sessionID == "ses-1")
-        #expect(event?.triggersStatusRefresh == false)
+        #expect(events.map(\.type) == ["message.updated", "session.active.snapshot"])
+        #expect(events[0].sessionID == "ses-1")
+        #expect(!events.contains(where: { $0.type == "session.idle" }))
+        #expect(events[1].triggersStatusRefresh == true)
+    }
+
+    @Test func parseEvents_projectsLiveShellStartedIntoBusyAndBashPart() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.shell.started","data":{"sessionID":"ses-1","callID":"sh-1","assistantMessageID":"msg-2"}}"#
+        )
+        #expect(events.map(\.type) == ["session.status", "message.part.updated"])
+        #expect(events[0].rawProperties?["status"]?.dictionaryValue?["type"]?.stringValue == "busy")
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["tool"]?.stringValue == "bash")
+    }
+
+    @Test func parseEvents_projectsLiveCompactionEndedIntoPartNotIdle() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c"}}"#
+        )
+        #expect(events.map(\.type) == ["message.part.updated", "session.active.snapshot"])
+        #expect(!events.contains(where: { $0.type == "session.idle" }))
     }
 
     @Test func parseEvents_projectsStepEndedIntoAssistantMessageAndActiveSnapshot() {
