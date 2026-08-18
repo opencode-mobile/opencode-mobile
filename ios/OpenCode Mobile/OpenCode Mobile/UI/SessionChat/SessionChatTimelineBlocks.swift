@@ -9,6 +9,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     case toolCard(blockID: String, card: SessionChatToolCardBlock)
     case toolGroup(blockID: String, group: SessionChatToolGroupBlock)
     case childSessionRow(blockID: String, row: SessionChatChildSessionRowBlock)
+    case reasoning(blockID: String, text: String, isStreaming: Bool)
 
     var blockID: String {
         switch self {
@@ -21,6 +22,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case .toolGroup(let blockID, _):
             blockID
         case .childSessionRow(let blockID, _):
+            blockID
+        case .reasoning(let blockID, _, _):
             blockID
         }
     }
@@ -40,6 +43,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             lID == rID && lGroup == rGroup
         case let (.childSessionRow(lID, lRow), .childSessionRow(rID, rRow)):
             lID == rID && lRow == rRow
+        case let (.reasoning(lID, lText, lStreaming), .reasoning(rID, rText, rStreaming)):
+            lID == rID && lText == rText && lStreaming == rStreaming
         default:
             false
         }
@@ -159,6 +164,20 @@ nonisolated enum SessionChatTimelineBlocks {
                 )
                 index += 1
             case .compaction:
+                index += 1
+            case .reasoning(let reasoning):
+                flushText()
+                let trimmed = reasoning.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty || reasoning.isStreaming {
+                    guard let partId = reasoning.id else { return .missingPartIds }
+                    blocks.append(
+                        .reasoning(
+                            blockID: PresentationBlockId.direct(partId),
+                            text: trimmed,
+                            isStreaming: reasoning.isStreaming
+                        )
+                    )
+                }
                 index += 1
             case .tool(let tool):
                 guard allowToolCards, isVisibleTool(tool) else {
@@ -292,7 +311,7 @@ nonisolated enum SessionChatTimelineBlocks {
             true
         case .toolCard(_, let card):
             !Self.isChildSessionTool(card.toolName)
-        case .text, .attachment, .childSessionRow:
+        case .text, .attachment, .childSessionRow, .reasoning:
             false
         }
     }
@@ -340,6 +359,9 @@ nonisolated enum SessionChatTimelineBlocks {
             !isVisibleTool(tool)
         case .file:
             false
+        case .reasoning(let reasoning):
+            !reasoning.isStreaming
+                && reasoning.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
 

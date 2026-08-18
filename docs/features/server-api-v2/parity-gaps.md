@@ -11,7 +11,7 @@ session).
 | --- | --- |
 | Last-turn session diff | Capability-gated off on v2 on both platforms |
 | Todos REST seed | 404 on v2 so an empty list does not wipe event-seeded todos |
-| Reasoning live/history | Target: TUI v2 thinking block. Not implemented yet (temporary, both platforms). |
+| Reasoning live/history | Shown as a thinking block on both platforms |
 | Forms vs questions | Both platforms keep `/api/question/*` when it works and fall back to `/api/form/*` on 404 |
 | Prompt skills | No composer skill mentions on either platform |
 | Permission `always` | Mobile never sends persistent remember |

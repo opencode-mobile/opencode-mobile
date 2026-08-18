@@ -69,6 +69,12 @@ sealed class SessionChatTimelineBlock {
         val timeStartEpochMs: Long? = null,
         val childSessionId: String? = null,
     ) : SessionChatTimelineBlock()
+
+    data class Reasoning(
+        override val blockID: String,
+        val text: String,
+        val isStreaming: Boolean,
+    ) : SessionChatTimelineBlock()
 }
 
 object SessionChatTimelineBlocks {
@@ -155,6 +161,20 @@ object SessionChatTimelineBlocks {
                             blockID = PresentationBlockId.direct(part.id),
                             attachment = AttachmentPresentationMapper.from(part),
                         )
+                    index += 1
+                }
+                is MessagePart.Reasoning -> {
+                    if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
+                    val trimmed = part.text.trim()
+                    if (trimmed.isNotEmpty() || part.isStreaming) {
+                        val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                        blocks +=
+                            SessionChatTimelineBlock.Reasoning(
+                                blockID = PresentationBlockId.direct(partId),
+                                text = trimmed,
+                                isStreaming = part.isStreaming,
+                            )
+                    }
                     index += 1
                 }
                 is MessagePart.Compaction -> {
@@ -251,6 +271,7 @@ object SessionChatTimelineBlocks {
             is SessionChatTimelineBlock.Text,
             is SessionChatTimelineBlock.Attachment,
             is SessionChatTimelineBlock.ChildSessionRow,
+            is SessionChatTimelineBlock.Reasoning,
             -> false
         }
 
@@ -293,6 +314,7 @@ object SessionChatTimelineBlocks {
             is MessagePart.Text -> !part.isDisplayable || part.text.isBlank()
             is MessagePart.Tool -> !isVisibleTool(part)
             is MessagePart.File -> false
+            is MessagePart.Reasoning -> !part.isStreaming && part.text.isBlank()
         }
 
     private fun isContextTool(toolName: String): Boolean = toolName.lowercase() in contextToolNames

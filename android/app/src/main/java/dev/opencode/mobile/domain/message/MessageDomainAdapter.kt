@@ -104,6 +104,12 @@ class MessageDomainAdapter {
                     auto = dto.auto == true,
                     completed = dto.completed == true,
                 )
+            "reasoning" ->
+                MessagePart.Reasoning(
+                    text = dto.text.orEmpty(),
+                    isStreaming = false,
+                    id = dto.id,
+                )
             else -> null
         }
     }
@@ -501,6 +507,11 @@ class MessageDomainAdapter {
                 val text = content.text ?: return null
                 MessagePart.Text(text = text, id = content.id)
             }
+            "reasoning" ->
+                MessagePart.Reasoning(
+                    text = content.text.orEmpty(),
+                    id = content.id,
+                )
             "tool" -> {
                 val name = content.name ?: return null
                 val state = content.state
@@ -638,6 +649,7 @@ class MessageDomainAdapter {
                     is MessagePart.Tool,
                     is MessagePart.File,
                     is MessagePart.Compaction,
+                    is MessagePart.Reasoning,
                     -> null
                 }
             }

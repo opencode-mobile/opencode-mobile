@@ -35,6 +35,8 @@ enum WorkingTurnIndicator {
             switch block {
             case let .text(_, text, _):
                 !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case let .reasoning(_, text, isStreaming):
+                isStreaming || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             case .attachment, .childSessionRow:
                 true
             case let .toolCard(_, card):

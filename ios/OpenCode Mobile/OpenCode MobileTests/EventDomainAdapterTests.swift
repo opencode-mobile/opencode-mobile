@@ -276,6 +276,29 @@ struct EventDomainAdapterTests {
         #expect(event?.triggersStatusRefresh == true)
     }
 
+    @Test func parseEvents_projectsReasoningStartedIntoAssistantAndReasoningPart() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.reasoning.started","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"r-1"}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["type"]?.stringValue == "reasoning")
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["id"]?.stringValue == "r-1")
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["messageID"]?.stringValue == "msg-2")
+    }
+
+    @Test func parseEvent_projectsReasoningDeltaIntoPartDelta() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.reasoning.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"r-1","delta":"hmm"}}"#
+        )
+        #expect(event?.type == "message.part.delta")
+        #expect(event?.rawProperties?["field"]?.stringValue == "reasoning")
+        #expect(event?.rawProperties?["delta"]?.stringValue == "hmm")
+        #expect(event?.rawProperties?["partID"]?.stringValue == "r-1")
+        #expect(event?.triggersMessageRefresh == true)
+    }
+
     @Test func parseEvent_doesNotTreatLiveStepEndedAsIdle() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(

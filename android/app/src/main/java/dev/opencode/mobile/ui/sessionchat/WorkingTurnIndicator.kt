@@ -37,6 +37,7 @@ object WorkingTurnIndicator {
         return message.blocks.any { block ->
             when (block) {
                 is SessionChatTimelineBlock.Text -> block.text.isNotBlank()
+                is SessionChatTimelineBlock.Reasoning -> block.isStreaming || block.text.isNotBlank()
                 is SessionChatTimelineBlock.Attachment,
                 is SessionChatTimelineBlock.ChildSessionRow,
                 -> true
