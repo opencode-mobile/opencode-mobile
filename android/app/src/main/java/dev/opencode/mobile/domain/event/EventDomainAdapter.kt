@@ -120,7 +120,9 @@ class EventDomainAdapter(
             "session.next.prompted",
             "session.inbox.enqueued",
             "session.inbox.delivered",
+            "session.inbox.delivery.changed",
             -> userPromptEvents(properties)
+            "session.inbox.cancelled" -> listOf(inboxCancelled(properties))
             "session.next.step.started",
             "session.step.started",
             -> stepStarted(properties)
@@ -252,6 +254,17 @@ class EventDomainAdapter(
                 properties.string("title")?.let { put("title", it) }
             }
         return event("session.updated", buildJsonObject { put("info", info) })
+    }
+
+    private fun inboxCancelled(properties: JsonObject): OpencodeEvent {
+        val sessionId = sessionIdFromProperties(properties)
+        val messageId = userMessageId(properties)
+        val projected =
+            buildJsonObject {
+                sessionId?.let { put("sessionID", it) }
+                messageId?.let { put("messageID", it) }
+            }
+        return event("message.removed", projected)
     }
 
     private fun userPromptEvents(properties: JsonObject): List<OpencodeEvent> =

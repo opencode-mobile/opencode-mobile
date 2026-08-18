@@ -110,8 +110,11 @@ nonisolated struct EventDomainAdapter: Sendable {
         case "question.v2.rejected", "form.cancelled":
             [event(type: "question.rejected", properties: properties)]
         case "session.next.prompt.admitted", "session.next.prompted",
-             "session.inbox.enqueued", "session.inbox.delivered":
+             "session.inbox.enqueued", "session.inbox.delivered",
+             "session.inbox.delivery.changed":
             userPromptEvents(properties)
+        case "session.inbox.cancelled":
+            [inboxCancelled(properties)]
         case "session.next.step.started", "session.step.started":
             stepStarted(properties)
         case "session.execution.started":
@@ -213,6 +216,17 @@ nonisolated struct EventDomainAdapter: Sendable {
             info["title"] = title
         }
         return event(type: "session.updated", properties: ["info": info])
+    }
+
+    private func inboxCancelled(_ properties: [String: Any]) -> OpencodeEvent {
+        var projected: [String: Any] = [:]
+        if let sessionID = sessionID(from: properties) {
+            projected["sessionID"] = sessionID
+        }
+        if let messageID = userMessageID(in: properties) {
+            projected["messageID"] = messageID
+        }
+        return event(type: "message.removed", properties: projected)
     }
 
     private func userPromptEvents(_ properties: [String: Any]) -> [OpencodeEvent] {

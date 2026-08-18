@@ -231,6 +231,17 @@ struct EventDomainAdapterTests {
         #expect(state?["time"]?.dictionaryValue?["start"]?.int64Value == 1_710_000_000_000)
     }
 
+    @Test func parseEvent_projectsInboxCancelledIntoMessageRemoved() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.inbox.cancelled","data":{"inboxID":"msg-2","sessionID":"ses-1"}}"#
+        )
+        #expect(event?.type == "message.removed")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.rawProperties?["messageID"]?.stringValue == "msg-2")
+        #expect(event?.triggersMessageRefresh == true)
+    }
+
     @Test func parseEvents_projectsInboxEnqueuedItemPayloadIntoUserText() {
         let adapter = EventDomainAdapter()
         let events = adapter.parseEvents(
