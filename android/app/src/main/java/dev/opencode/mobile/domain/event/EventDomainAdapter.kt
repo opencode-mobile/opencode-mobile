@@ -181,6 +181,15 @@ class EventDomainAdapter(
                     compactionPartUpdated(properties, completed = true),
                     event("session.active.snapshot", properties),
                 )
+            "session.next.reasoning.started",
+            "session.reasoning.started",
+            -> reasoningStarted(properties)
+            "session.next.reasoning.delta",
+            "session.reasoning.delta",
+            -> listOf(reasoningDelta(properties))
+            "session.next.reasoning.ended",
+            "session.reasoning.ended",
+            -> listOf(reasoningPartUpdated(properties))
             "session.next.text.started",
             "session.text.started",
             -> textStarted(properties)
@@ -468,6 +477,50 @@ class EventDomainAdapter(
         return event("message.part.updated", buildJsonObject { put("part", part) })
     }
 
+    private fun reasoningStarted(properties: JsonObject): List<OpencodeEvent> {
+        val sessionId = sessionIdFromProperties(properties)
+        val assistantId = properties.string("assistantMessageID")
+        val info =
+            buildJsonObject {
+                assistantId?.let { put("id", it) }
+                sessionId?.let { put("sessionID", it) }
+                put("role", "assistant")
+            }
+        return listOf(
+            event("message.updated", buildJsonObject { put("info", info) }),
+            reasoningPartUpdated(properties, text = ""),
+        )
+    }
+
+    private fun reasoningDelta(properties: JsonObject): OpencodeEvent {
+        val sessionId = sessionIdFromProperties(properties)
+        val projected =
+            buildJsonObject {
+                sessionId?.let { put("sessionID", it) }
+                properties.string("assistantMessageID")?.let { put("messageID", it) }
+                properties.reasoningPartId()?.let { put("partID", it) }
+                put("field", "reasoning")
+                properties.string("delta")?.let { put("delta", it) }
+            }
+        return event("message.part.delta", projected)
+    }
+
+    private fun reasoningPartUpdated(
+        properties: JsonObject,
+        text: String? = properties.string("text"),
+    ): OpencodeEvent {
+        val sessionId = sessionIdFromProperties(properties)
+        val part =
+            buildJsonObject {
+                properties.reasoningPartId()?.let { put("id", it) }
+                sessionId?.let { put("sessionID", it) }
+                properties.string("assistantMessageID")?.let { put("messageID", it) }
+                put("type", "reasoning")
+                put("text", text.orEmpty())
+            }
+        return event("message.part.updated", buildJsonObject { put("part", part) })
+    }
+
     private fun textStarted(properties: JsonObject): List<OpencodeEvent> {
         val sessionId = sessionIdFromProperties(properties)
         val assistantId = properties.string("assistantMessageID")
@@ -543,6 +596,14 @@ class EventDomainAdapter(
         val ordinal = this["ordinal"]?.jsonPrimitive ?: return null
         val value = ordinal.intOrNull?.toString() ?: ordinal.contentOrNull ?: return null
         return "text-$value"
+    }
+
+    private fun JsonObject.reasoningPartId(): String? {
+        string("reasoningID")?.let { return it }
+        string("id")?.let { return it }
+        val ordinal = this["ordinal"]?.jsonPrimitive ?: return null
+        val value = ordinal.intOrNull?.toString() ?: ordinal.contentOrNull ?: return null
+        return "reasoning-$value"
     }
 
     private fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull

@@ -165,6 +165,12 @@ nonisolated struct EventDomainAdapter: Sendable {
                 compactionPartUpdated(properties, completed: true),
                 event(type: "session.active.snapshot", properties: properties),
             ]
+        case "session.next.reasoning.started", "session.reasoning.started":
+            reasoningStarted(properties)
+        case "session.next.reasoning.delta", "session.reasoning.delta":
+            [reasoningDelta(properties)]
+        case "session.next.reasoning.ended", "session.reasoning.ended":
+            [reasoningPartUpdated(properties)]
         case "session.next.text.started", "session.text.started":
             textStarted(properties)
         case "session.next.text.delta", "session.text.delta":
@@ -445,6 +451,52 @@ nonisolated struct EventDomainAdapter: Sendable {
         return event(type: "message.part.updated", properties: ["part": part])
     }
 
+    private func reasoningStarted(_ properties: [String: Any]) -> [OpencodeEvent] {
+        let sessionID = sessionID(from: properties)
+        var info: [String: Any] = ["role": "assistant"]
+        if let assistantID = string(in: properties, key: "assistantMessageID") {
+            info["id"] = assistantID
+        }
+        if let sessionID {
+            info["sessionID"] = sessionID
+        }
+        return [
+            event(type: "message.updated", properties: ["info": info]),
+            reasoningPartUpdated(properties, text: ""),
+        ]
+    }
+
+    private func reasoningDelta(_ properties: [String: Any]) -> OpencodeEvent {
+        var projected: [String: Any] = ["field": "reasoning"]
+        if let sessionID = sessionID(from: properties) {
+            projected["sessionID"] = sessionID
+        }
+        if let messageID = string(in: properties, key: "assistantMessageID") {
+            projected["messageID"] = messageID
+        }
+        if let partID = reasoningPartID(in: properties) {
+            projected["partID"] = partID
+        }
+        if let delta = string(in: properties, key: "delta") {
+            projected["delta"] = delta
+        }
+        return event(type: "message.part.delta", properties: projected)
+    }
+
+    private func reasoningPartUpdated(_ properties: [String: Any], text: String? = nil) -> OpencodeEvent {
+        var part: [String: Any] = ["type": "reasoning", "text": text ?? string(in: properties, key: "text") ?? ""]
+        if let partID = reasoningPartID(in: properties) {
+            part["id"] = partID
+        }
+        if let sessionID = sessionID(from: properties) {
+            part["sessionID"] = sessionID
+        }
+        if let messageID = string(in: properties, key: "assistantMessageID") {
+            part["messageID"] = messageID
+        }
+        return event(type: "message.part.updated", properties: ["part": part])
+    }
+
     private func textStarted(_ properties: [String: Any]) -> [OpencodeEvent] {
         let sessionID = sessionID(from: properties)
         var info: [String: Any] = ["role": "assistant"]
@@ -529,6 +581,19 @@ nonisolated struct EventDomainAdapter: Sendable {
         }
         if let ordinal = string(in: properties, key: "ordinal") {
             return "text-\(ordinal)"
+        }
+        return nil
+    }
+
+    private func reasoningPartID(in properties: [String: Any]) -> String? {
+        if let reasoningID = string(in: properties, key: "reasoningID") {
+            return reasoningID
+        }
+        if let id = string(in: properties, key: "id") {
+            return id
+        }
+        if let ordinal = string(in: properties, key: "ordinal") {
+            return "reasoning-\(ordinal)"
         }
         return nil
     }

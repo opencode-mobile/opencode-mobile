@@ -343,6 +343,34 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvents_projectsReasoningStartedIntoAssistantAndReasoningPart() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.reasoning.started","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"r-1"}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
+        val part = events[1].rawProperties?.get("part")?.jsonObject
+        assertEquals("reasoning", part?.get("type")?.jsonPrimitive?.content)
+        assertEquals("r-1", part?.get("id")?.jsonPrimitive?.content)
+        assertEquals("msg-2", part?.get("messageID")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvent_projectsReasoningDeltaIntoPartDelta() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.reasoning.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"r-1","delta":"hmm"}}""",
+            )
+
+        assertEquals("message.part.delta", event?.type)
+        assertEquals("reasoning", event?.rawProperties?.get("field")?.jsonPrimitive?.content)
+        assertEquals("hmm", event?.rawProperties?.get("delta")?.jsonPrimitive?.content)
+        assertEquals("r-1", event?.rawProperties?.get("partID")?.jsonPrimitive?.content)
+        assertTrue(event!!.triggersMessageRefresh)
+    }
+
+    @Test
     fun parseEvent_doesNotTreatLiveStepEndedAsIdle() {
         val event =
             adapter.parseEvent(

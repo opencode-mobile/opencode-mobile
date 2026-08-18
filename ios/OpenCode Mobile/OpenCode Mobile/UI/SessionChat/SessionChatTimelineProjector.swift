@@ -323,7 +323,7 @@ nonisolated enum SessionChatTimelineProjector {
             case .attachment(_, let file):
                 let name = file.filename.trimmingCharacters(in: .whitespacesAndNewlines)
                 return name.isEmpty ? "file:\(file.mime)" : "file:\(name):\(file.mime)"
-            case .toolCard, .toolGroup, .childSessionRow:
+            case .toolCard, .toolGroup, .childSessionRow, .reasoning:
                 return nil
             }
         }
@@ -410,6 +410,8 @@ nonisolated enum SessionChatTimelineProjector {
                 "g:\(id):\(group.count):\(group.status.rawValue):\(group.title):\(group.subtitle ?? ""):\(group.errorText ?? "")"
             case .childSessionRow(let id, let row):
                 "r:\(id):\(row.agentName):\(row.secondLine ?? ""):\(row.childSessionId ?? "")"
+            case .reasoning(let id, let text, let isStreaming):
+                "n:\(id):\(text.count):\(isStreaming)"
             }
         }.joined(separator: "|")
         return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(blockKey)"
@@ -440,6 +442,8 @@ nonisolated enum SessionChatTimelineProjector {
                 "g:\(id):\(group.count):\(group.status.rawValue):\(group.title):\(group.subtitle ?? ""):\(group.errorText ?? "")"
             case .childSessionRow(let id, let row):
                 "r:\(id):\(row.agentName):\(row.secondLine ?? ""):\(row.childSessionId ?? "")"
+            case .reasoning(let id, _, let isStreaming):
+                "n:\(id):\(isStreaming)"
             }
         }.joined(separator: "|")
         return "\(row.blocks.count)|\(attachments)|\(blocks)"

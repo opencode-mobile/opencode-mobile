@@ -504,6 +504,13 @@ private extension MessagePart {
         case .compaction:
             // Live marker only; rehydrated from SSE / refresh while session is open.
             return nil
+        case let .reasoning(part):
+            return CachedMessagePartPayload(
+                kind: "reasoning",
+                id: part.id,
+                text: part.text,
+                isStreaming: part.isStreaming
+            )
         }
     }
 }
@@ -547,6 +554,8 @@ private extension CachedMessagePartPayload {
                     dataURL: dataUrl ?? ""
                 )
             )
+        case "reasoning":
+            return .reasoning(ReasoningPart(id: id, text: text ?? "", isStreaming: isStreaming))
         default:
             return nil
         }

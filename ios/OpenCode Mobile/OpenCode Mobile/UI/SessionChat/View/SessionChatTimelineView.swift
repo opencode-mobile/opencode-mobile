@@ -436,7 +436,7 @@ private extension SessionChatRow {
                 .text(id: blockID, text: text)
             case .attachment(_, let file):
                 .attachment(file.attachmentPresentation)
-            case .toolCard, .toolGroup, .childSessionRow:
+            case .toolCard, .toolGroup, .childSessionRow, .reasoning:
                 nil
             }
         }
@@ -560,6 +560,8 @@ private struct AssistantMessageContent: View {
                             { onChildSessionTap(id, row.agentName) }
                         }
                     )
+                case .reasoning(_, let text, let isStreaming):
+                    ReasoningBlock(text: text, isStreaming: isStreaming)
                 }
             }
         }
@@ -648,6 +650,28 @@ private extension ToolStatus {
         case .completed: .completed
         case .error: .error
         }
+    }
+}
+
+private struct ReasoningBlock: View {
+    let text: String
+    let isStreaming: Bool
+
+    var body: some View {
+        let label = isStreaming ? "Thinking" : "Thought"
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textBase)
+            if !text.isEmpty {
+                Text(text)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textBase)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label). \(text.isEmpty ? "…" : text)")
     }
 }
 

@@ -469,6 +469,7 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
                 OpenCodeOutgoingMessageContent.Attachment(AttachmentPresentationMapper.from(block.attachment))
             is SessionChatTimelineBlock.ToolCard, is SessionChatTimelineBlock.ToolGroup,
             is SessionChatTimelineBlock.ChildSessionRow,
+            is SessionChatTimelineBlock.Reasoning,
             -> null
         }
     }
@@ -605,6 +606,11 @@ private fun AssistantMessageContent(
                                     }
                                 },
                         )
+                    is SessionChatTimelineBlock.Reasoning ->
+                        ReasoningBlock(
+                            text = block.text,
+                            isStreaming = block.isStreaming,
+                        )
                 }
             }
         }
@@ -722,6 +728,35 @@ private fun SessionChatWorkingIndicatorRow(label: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun ReasoningBlock(
+    text: String,
+    isStreaming: Boolean,
+) {
+    val label = if (isStreaming) "Thinking" else "Thought"
+    val body = text.ifBlank { "…" }
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = "$label. $body" },
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (text.isNotBlank()) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

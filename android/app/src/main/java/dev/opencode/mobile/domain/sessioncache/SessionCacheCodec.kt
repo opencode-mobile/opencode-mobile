@@ -328,6 +328,13 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 dataUrl = dataUrl,
             )
         is MessagePart.Compaction -> null
+        is MessagePart.Reasoning ->
+            CachedMessagePartPayload(
+                kind = "reasoning",
+                id = id,
+                text = text,
+                isStreaming = isStreaming,
+            )
     }
 
 private fun CachedMessagePartPayload.toDomain(): MessagePart? =
@@ -367,5 +374,11 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                 dataUrl = dataUrl.orEmpty(),
             )
         }
+        "reasoning" ->
+            MessagePart.Reasoning(
+                text = text.orEmpty(),
+                isStreaming = isStreaming,
+                id = id,
+            )
         else -> null
     }

@@ -101,6 +101,12 @@ sealed class MessagePart {
         val auto: Boolean = false,
         val completed: Boolean = false,
     ) : MessagePart()
+
+    data class Reasoning(
+        val text: String,
+        val isStreaming: Boolean = false,
+        val id: String? = null,
+    ) : MessagePart()
 }
 
 data class PromptSendOptions(

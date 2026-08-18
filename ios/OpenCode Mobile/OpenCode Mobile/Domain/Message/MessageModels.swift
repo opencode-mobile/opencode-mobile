@@ -88,6 +88,7 @@ nonisolated enum MessagePart: Equatable, Sendable {
     case tool(ToolPart)
     /// Server compaction marker. Kept for live Compacting… detection; not rendered in timeline.
     case compaction(CompactionPart)
+    case reasoning(ReasoningPart)
 }
 
 nonisolated struct TextPart: Equatable, Sendable {
@@ -187,6 +188,18 @@ nonisolated struct ToolPart: Equatable, Sendable {
             metadata: metadata,
             timeStartEpochMs: timeStartEpochMs
         )
+    }
+}
+
+nonisolated struct ReasoningPart: Equatable, Sendable {
+    let id: String?
+    let text: String
+    var isStreaming: Bool
+
+    init(id: String? = nil, text: String, isStreaming: Bool = false) {
+        self.id = id
+        self.text = text
+        self.isStreaming = isStreaming
     }
 }
 
