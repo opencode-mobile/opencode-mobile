@@ -190,8 +190,6 @@ Domain documentation uses the single-context layout. See
   Do not add progress logs, ticket plans, or research dumps.
 - Commit durable documentation artifacts. Keep scratch notes, debug dumps,
   temporary investigations, and reproducible generated noise out of git.
-- Add ADRs only for decisions that are hard to reverse, surprising without
-  context, and the result of a real trade-off.
 - Do not couple domain language to generated code names unless the server API has
   made that language part of the user-facing model.
 

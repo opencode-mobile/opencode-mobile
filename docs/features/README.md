@@ -28,8 +28,6 @@ Do not keep a changelog of every ticket.
 Only choices that still constrain implementation. When a choice is reversed,
 replace it — do not pile superseded essays.
 
-ADRs stay in `docs/adr/` for hard-to-reverse project trade-offs.
-
 ## `parity-gaps.md`
 
 Omit the file if there are no open gaps. Each remaining gap: intent, iOS,

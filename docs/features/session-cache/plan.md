@@ -26,7 +26,7 @@ refresh from the server when connectivity returns.
   block send / mutations until reconnected.
 - Versioned JSON codec for current domain `Session` / `Message` models;
   corrupt or unknown schema → treat as miss.
-- Feature docs, `CONTEXT.md` glossary term, and ADR 0006.
+- Feature docs and `CONTEXT.md` glossary term.
 
 ## Out Of Scope
 

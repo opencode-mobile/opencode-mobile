@@ -19,9 +19,8 @@ I update it?".
 │   ├── architecture.md            # native app architecture + layer shape + parity rules
 │   ├── feasibility.md             # server-API evidence
 │   ├── mac-mini-runner.md         # iOS CI self-hosted runner ops
-│   ├── adr/                       # 6 architectural decision records (0001–0006)
 │   ├── agents/                    # agent-facing how-to docs
-│   │   ├── domain.md              #   how skills consume CONTEXT.md + docs/adr
+│   │   ├── domain.md              #   how skills consume CONTEXT.md
 │   │   ├── issue-tracker.md       #   Linear + GitHub conventions
 │   │   └── triage-labels.md       #   canonical triage label mapping
 │   ├── design-system/             # canonical design-system planning source
@@ -93,16 +92,11 @@ run. Markdown only.
   Intent, Public API (variants/states/content), Token Usage, Behavior, Platform
   Notes, Review Surfaces, Parity And Divergence.
 
-### 2.3 ADRs and domain
+### 2.3 Domain
 
-- `docs/adr/NNNN-<slug>.md` — used only for decisions that are hard to reverse,
-  surprising without context, and the result of a real trade-off. Format:
-  Status / Context / Decision / Consequences / Review Triggers.
-- `CONTEXT.md` — the domain glossary. Single-context layout: product terms with
-  definitions plus explicit `_Avoid:_` synonyms, so agents and docs stay on one
-  vocabulary. `docs/agents/domain.md` tells skills to read `CONTEXT.md` and
-  relevant ADRs before exploring, and to flag ADR conflicts instead of silently
-  overriding them.
+`CONTEXT.md` is the domain glossary. Single-context layout: product terms with
+definitions plus explicit `_Avoid:_` synonyms. `docs/agents/domain.md` tells
+skills to read it before exploring.
 
 ### 2.4 No HTML companions
 
@@ -151,7 +145,6 @@ committing an HTML file. Markdown is the source of truth.
   `docs/design-system/` for design-system planning, `docs/features/<slug>/` for
   feature progress/decisions/parity;
 - requires durable docs committed, while scratch notes stay out of git;
-- reserves ADRs for hard-to-reverse decisions;
 - keeps tooling-specific paths as symlinks so skills are shared across agents:
   `.cursor/skills` → `.agents/skills`, `.claude/skills` → `.agents/skills`,
   `CLAUDE.md` → `AGENTS.md` (recreated by `./scripts/sync-agent-links.sh`);
@@ -267,7 +260,6 @@ then add the PR backlink to Linear and verify the cross-references.
 | Domain term | `CONTEXT.md` | `domain-modeling` (via `docs/agents/domain.md`) | glossary convention |
 | Product architecture | `docs/architecture.md` | — (read before changes) | architecture doc itself |
 | Server feasibility | `docs/feasibility.md` | — (read before changes) | feasibility doc |
-| Hard-to-reverse decision | `docs/adr/NNNN-….md` | — | ADR format |
 | Feature intent / remaining | `docs/features/<slug>/plan.md` | `synced-native-feature` | `docs/features/README.md` |
 | Cross-app mismatch | `docs/features/<slug>/parity-gaps.md` | `synced-native-feature` | `docs/features/README.md` |
 | Feature decision | `docs/features/<slug>/decisions.md` | `synced-native-feature` | `docs/features/README.md` |
@@ -285,6 +277,5 @@ then add the PR backlink to Linear and verify the cross-references.
 - **A temporary or intentional platform difference** → feature `parity-gaps.md`
   (temporary) or `docs/design-system/divergences.md` (intentional, persistent)
 - **Reusable UI decision** → design-system component workflow, not feature-local
-- **A hard-to-reverse, surprising, trade-off decision** → ADR
 - **Raw evidence (screenshots, logs, command output)** → never commit; distill the
   durable fact into its canonical artifact
