@@ -192,6 +192,8 @@ nonisolated struct EventDomainAdapter: Sendable {
             [event(type: "session.updated", properties: properties)]
         case "session.renamed":
             [renamedToUpdated(properties)]
+        case "session.usage.updated", "session.next.usage.updated":
+            [usageUpdated(properties)]
         default:
             [event(type: type, properties: properties)]
         }
@@ -203,6 +205,23 @@ nonisolated struct EventDomainAdapter: Sendable {
             sessionID: sessionID(from: properties),
             rawProperties: properties.mapValues { AnySendable.from($0) ?? .null }
         )
+    }
+
+    private func usageUpdated(_ properties: [String: Any]) -> OpencodeEvent {
+        var info: [String: Any] = ["role": "assistant"]
+        if let assistantID = string(in: properties, key: "assistantMessageID") ?? string(in: properties, key: "messageID") {
+            info["id"] = assistantID
+        }
+        if let sessionID = sessionID(from: properties) {
+            info["sessionID"] = sessionID
+        }
+        if let tokens = properties["tokens"] {
+            info["tokens"] = tokens
+        }
+        if let cost = properties["cost"] {
+            info["cost"] = cost
+        }
+        return event(type: "message.updated", properties: ["info": info])
     }
 
     private func renamedToUpdated(_ properties: [String: Any]) -> OpencodeEvent {

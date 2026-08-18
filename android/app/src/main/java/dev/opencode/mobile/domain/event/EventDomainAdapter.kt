@@ -232,6 +232,9 @@ class EventDomainAdapter(
             "session.model.selected",
             -> listOf(event("session.updated", properties))
             "session.renamed" -> listOf(renamedToUpdated(properties))
+            "session.usage.updated",
+            "session.next.usage.updated",
+            -> listOf(usageUpdated(properties))
             else -> listOf(event(type, properties))
         }
 
@@ -244,6 +247,21 @@ class EventDomainAdapter(
             sessionId = sessionIdFromProperties(properties),
             rawProperties = properties,
         )
+
+    private fun usageUpdated(properties: JsonObject): OpencodeEvent {
+        val sessionId = sessionIdFromProperties(properties)
+        val assistantId = properties.string("assistantMessageID") ?: properties.string("messageID")
+        val tokens = properties["tokens"]
+        val info =
+            buildJsonObject {
+                assistantId?.let { put("id", it) }
+                sessionId?.let { put("sessionID", it) }
+                put("role", "assistant")
+                if (tokens != null) put("tokens", tokens)
+                properties["cost"]?.let { put("cost", it) }
+            }
+        return event("message.updated", buildJsonObject { put("info", info) })
+    }
 
     private fun renamedToUpdated(properties: JsonObject): OpencodeEvent {
         val sessionId = sessionIdFromProperties(properties)
