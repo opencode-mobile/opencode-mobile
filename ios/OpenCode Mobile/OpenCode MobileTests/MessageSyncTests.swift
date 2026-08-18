@@ -1038,7 +1038,7 @@ struct MessageSyncTests {
         #expect(textPart.isStreaming == false)
     }
 
-    @Test func messagePartDelta_ignoresReasoningPartDeltas() async {
+    @Test func messagePartDelta_keepsReasoningPartSeparateFromText() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
         let sync = makeMessageSync(repo: repo, eventStream: eventStream)
@@ -1050,7 +1050,15 @@ struct MessageSyncTests {
         eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
         try? await Task.sleep(for: .milliseconds(50))
         eventStream.emit(eventWithReasoningPart(partID: "prt-reason", messageID: "msg-2", text: "", sessionID: "ses-1"))
-        eventStream.emit(eventWithPartDelta(partID: "prt-reason", messageID: "msg-2", delta: "The user said hello.", sessionID: "ses-1"))
+        eventStream.emit(
+            eventWithPartDelta(
+                partID: "prt-reason",
+                messageID: "msg-2",
+                delta: "The user said hello.",
+                field: "reasoning",
+                sessionID: "ses-1"
+            )
+        )
         eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
         eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Hello!", sessionID: "ses-1"))
         let updated = await waitUntil {
@@ -1061,7 +1069,12 @@ struct MessageSyncTests {
         #expect(updated)
         let msg2 = collector.latest()?.first(where: { $0.id == "msg-2" })
         #expect(msg2?.text == "Hello!")
-        #expect(msg2?.parts.count == 1)
+        #expect(msg2?.parts.count == 2)
+        guard case .reasoning(let reasoning) = msg2?.parts.first else {
+            Issue.record("Expected reasoning part")
+            return
+        }
+        #expect(reasoning.text == "The user said hello.")
     }
 
     @Test func sessionIdle_reloadClearsStreaming() async {
