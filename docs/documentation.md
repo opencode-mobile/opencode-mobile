@@ -36,14 +36,10 @@ I update it?".
 │   │       └── <name>.md          #     34 component docs (button, list-item, …)
 │   └── features/                  # synchronized Feature Slices (one dir per feature)
 │       ├── README.md              #   canonical schema — single source of truth
-│       └── <feature-slug>/        #   41 feature directories
-│           ├── plan.md            #   shared product intent (before implementation)
-│           ├── progress.md        #   implementation status working log
-│           ├── parity-gaps.md     #   temporary/intentional cross-app differences
-│           ├── decisions.md       #   feature-level decisions (below ADR threshold)
-│           ├── <ticket>-plan.md   #   focused task plan
-│           └── …                  #   optional: research-*.md, manual-test.md,
-│                                  #   web-spec.md, operator-runbook.md, ruleset.md
+│       └── <feature-slug>/        #   one directory per feature
+│           ├── plan.md            #   current state (goal, now, remaining)
+│           ├── decisions.md       #   still-binding choices only
+│           └── parity-gaps.md     #   open iOS/Android gaps only
 └── .agents/
     └── skills/                    # canonical skills (source of truth)
         ├── design-system-component/SKILL.md
@@ -57,10 +53,8 @@ I update it?".
         └── synced-native-feature/SKILL.md
 ```
 
-Scale today: **271 markdown files under `docs/`** (committed HTML companions are
-retired), **41 feature directories**, **6 ADRs**, **35 files under
-`docs/design-system/components/`** (README + 34 component docs), **3 agent
-how-to docs**, **8 skills**.
+Feature docs are lean: `plan.md` is current state. No progress diaries,
+ticket plans, or research dumps. History is git.
 
 ---
 
@@ -68,33 +62,17 @@ how-to docs**, **8 skills**.
 
 ### 2.1 Feature slices — the core unit
 
-`docs/features/README.md` is the single source of truth for feature artifacts and
-their schemas. Each feature is one directory; the four feature-wide files express
-shared intent and state:
+`docs/features/README.md` is the schema. Each feature directory has:
 
 | Artifact | Purpose |
 | --- | --- |
-| `plan.md` | Shared product intent before implementation: user goal, in/out-of-scope behavior, server APIs, expected logs, domain objects, Screen Model UI states + actions, navigation entry points, error states, permission behavior, design-system components needed. |
-| `progress.md` | Working log of implementation status: shared planning, design-system dependencies, iOS/Android status, blockers, remaining work. Durable status only — no raw command output, screenshots, or debug dumps. |
-| `parity-gaps.md` | Temporary or intentional differences between the two apps. Each gap: shared intent, current iOS state, current Android state, affected area, reason, owner/next action, status (`temporary` / `intentional`). |
-| `decisions.md` | Feature-level decisions useful locally but below ADR threshold. |
+| `plan.md` | Current state: goal, what shipped, remaining work, APIs that still matter. |
+| `decisions.md` | Still-binding choices only. Reverse by replacing. |
+| `parity-gaps.md` | Open iOS/Android gaps only. Omit if none. |
 
-Focused execution work adds task plans: `<ticket-or-task>-plan.md`. A task plan
-does not replace `plan.md`. Plans are Markdown only; committed HTML companions
-are retired.
-
-Optional feature artifacts that appear in practice:
-
-- `research-*.md` — topic/implementation research (e.g. `initial-load-indicator/research-ope-27-implementation.md`).
-- `manual-test.md` — reproducible device test flows (e.g. `message-repository/manual-test.md`).
-- `web-spec.md` — behavioral reference of the upstream opencode web client pinned to a commit, for a future feature slice (e.g. `permission-approval/web-spec.md`).
-- `operator-runbook.md` — non-secret release/ops ownership contract (e.g. `android-release-distribution/operator-runbook.md`).
-- `ruleset.md`, `phase-*.md`, `pipeline-*.md` — CI or engineering-phase specifics where the feature needs them.
-
-HTML plan companions stay retired. Throwaway UX prototypes that lock a
-decision may live under `docs/prototypes/` as evidence, cited from the
-feature's `plan.md` and `decisions.md`. Fold the verdict into those Markdown
-artifacts; do not treat the HTML as the source of truth.
+Do not commit `progress.md`, ticket plans, research dumps, web-specs, or soak
+reports. Optional ops files (`operator-runbook.md`, `ruleset.md`) stay if still
+run. Markdown only.
 
 ### 2.2 Design system
 
@@ -140,13 +118,13 @@ committing an HTML file. Markdown is the source of truth.
 1. **Agents are the primary consumers.** Skills read canonical docs before any
    mutation. `synced-native-feature` reads `docs/features/README.md` sections per
    phase; `design-system-component` reads the token/typography/component
-   references; `feature` reads the feature's `plan.md`/`progress.md`/
-   `decisions.md`/`parity-gaps.md`; `documentation-planning` loads
-   `docs/features/README.md` and every routed artifact before editing.
+    references; `feature` reads the feature's `plan.md` /
+    `decisions.md` / `parity-gaps.md`; `documentation-planning` loads
+    `docs/features/README.md` and every routed artifact before editing.
 
 2. **Linear is the execution board; the docs are the source of truth.**
-   `linear-project-tracking` reads the canonical docs (especially `progress.md`,
-   `plan.md`, `parity-gaps.md`) and mirrors scope/state/remaining work onto Linear
+    `linear-project-tracking` reads the canonical docs (`plan.md`,
+    `parity-gaps.md`) and mirrors scope/state/remaining work onto Linear
    issues under the `opencode apps` project. Authority boundaries: canonical docs
    own product scope, progress, parity, decisions, intentional differences;
    Linear owns scheduling, assignment, priority, status, dependencies.
@@ -311,25 +289,19 @@ then add the PR backlink to Linear and verify the cross-references.
 | Product architecture | `docs/architecture.md` | — (read before changes) | architecture doc itself |
 | Server feasibility | `docs/feasibility.md` | — (read before changes) | feasibility doc |
 | Hard-to-reverse decision | `docs/adr/NNNN-….md` | `documentation-planning` | ADR format |
-| Feature intent | `docs/features/<slug>/plan.md` | `synced-native-feature` + `documentation-planning` | `docs/features/README.md` |
-| Task plan | `docs/features/<slug>/<ticket>-plan.md` | `documentation-planning` | `docs/features/README.md` |
-| Feature status | `docs/features/<slug>/progress.md` | `synced-native-feature` + `linear-project-tracking` | `docs/features/README.md` |
+| Feature intent / remaining | `docs/features/<slug>/plan.md` | `synced-native-feature` + `documentation-planning` | `docs/features/README.md` |
 | Cross-app mismatch | `docs/features/<slug>/parity-gaps.md` | `synced-native-feature` | `docs/features/README.md` |
 | Feature decision | `docs/features/<slug>/decisions.md` | `synced-native-feature` | `docs/features/README.md` |
 | Intentional platform difference | `docs/design-system/divergences.md` | `design-system-component` | divergence template |
 | Token / typography | `docs/design-system/{tokens,typography}.md` | `design-system-component` | those documents |
 | Component | `docs/design-system/components/<name>.md` | `design-system-component` | `components/README.md` template |
-| Web behavior baseline | `<slug>/web-spec.md` | research workflow | pinned-commit spec |
-| Device test script | `<slug>/manual-test.md` | test workflow | manual-test convention |
 | Release ops | `<slug>/operator-runbook.md` | release workflow | non-secret contract |
 
 ---
 
 ## 7. Routing cheat sheet — where new facts go
 
-- **Product scope / strategy for a feature** → `docs/features/<slug>/plan.md`
-- **Focused ticket/task execution detail** → `docs/features/<slug>/<ticket>-plan.md`
-- **Implementation status / remaining work** → `docs/features/<slug>/progress.md`
+- **Product scope / current state / remaining work** → `docs/features/<slug>/plan.md`
 - **A durable feature-level choice** → `docs/features/<slug>/decisions.md`
 - **A temporary or intentional platform difference** → feature `parity-gaps.md`
   (temporary) or `docs/design-system/divergences.md` (intentional, persistent)

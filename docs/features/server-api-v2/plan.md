@@ -1,10 +1,7 @@
 # Server API v2 Compatibility
 
-Related research:
-[`../server-connection/research-opencode-api-v2.md`](../server-connection/research-opencode-api-v2.md)
-(mobile v1 usage vs v2). Official public HttpApi inventory:
-[`official-docs-inventory.md`](official-docs-inventory.md). Official TUI session logic (`opencode` vs `opencode2`, REST + SSE
-translation): [`research-tui-session-v1-v2.md`](research-tui-session-v1-v2.md).
+Related: [`official-docs-inventory.md`](official-docs-inventory.md),
+[`research-tui-session-v1-v2.md`](research-tui-session-v1-v2.md).
 
 ## User Goal
 

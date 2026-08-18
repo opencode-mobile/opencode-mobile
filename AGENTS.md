@@ -158,7 +158,7 @@ them.
 - Use `.agents/skills/synced-native-feature/SKILL.md` when planning or
   implementing a feature that should exist in both native apps.
 - Use `.agents/skills/documentation-planning/SKILL.md` when creating or updating
-  plans, feature docs, progress notes, decisions, or parity gaps.
+  plans, feature docs, decisions, or parity gaps.
 - Use `.agents/skills/run-github-actions/SKILL.md` when triggering GitHub
   Actions, checking workflow status, or troubleshooting failed CI runs.
 - Use `.agents/skills/pull-app-logs/SKILL.md` when reading Android logcat or
@@ -216,14 +216,11 @@ Domain documentation uses the single-context layout. See
 - Keep implementation feasibility and API evidence in `docs/feasibility.md`.
 - Keep future app architecture in `docs/architecture.md`.
 - Keep the canonical design-system planning source under `docs/design-system/`.
-- Keep feature progress, decisions, and parity gaps under
-  `docs/features/<feature-slug>/`.
-- Keep durable feature and task plans under `docs/features/<feature-slug>/`.
-  Use Markdown only; committed HTML plan companions are retired. For
-  task-specific plans, prefer names like `<ticket-or-task>-plan.md`.
+- Keep current feature state in `docs/features/<feature-slug>/plan.md`.
+  Add `decisions.md` / `parity-gaps.md` only when they still constrain work.
+  Do not add progress logs, ticket plans, or research dumps.
 - Commit durable documentation artifacts. Keep scratch notes, debug dumps,
-  temporary investigations, and reproducible generated noise out of git unless
-  they become useful review or handoff material.
+  temporary investigations, and reproducible generated noise out of git.
 - Add ADRs only for decisions that are hard to reverse, surprising without
   context, and the result of a real trade-off.
 - Do not couple domain language to generated code names unless the server API has

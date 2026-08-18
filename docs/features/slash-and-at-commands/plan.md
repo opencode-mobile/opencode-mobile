@@ -27,7 +27,6 @@ mobile v1 allows.
 
 ## Shipped (OPE-59)
 
-See [ope-59-plan.md](./ope-59-plan.md). Summary:
 
 - `@` opens mentionable-agent suggestions (non-primary, not hidden).
 - Select inserts inline `@name` (`syntax-type` color) with structured mention
@@ -36,7 +35,6 @@ See [ope-59-plan.md](./ope-59-plan.md). Summary:
 
 ## In Scope (OPE-58)
 
-See [ope-58-plan.md](./ope-58-plan.md). Summary:
 
 - Composer Commands `/` button next to Attach opens a **Commands** bottom sheet.
 - Curated client actions: `new`, `fork`, `undo`, `redo`, `compact` (hide when
@@ -52,7 +50,7 @@ See [ope-58-plan.md](./ope-58-plan.md). Summary:
 - Client `share` / `unshare` slash actions.
 - Desktop-only client builtins (terminal, themes, exit, MCP admin, …).
 
-Research: [slash-and-at-commands.md](../../research/slash-and-at-commands.md).
+Research: slash-and-at-commands.md.
 
 ## Server APIs Involved
 
@@ -62,7 +60,7 @@ Research: [slash-and-at-commands.md](../../research/slash-and-at-commands.md).
   (OPE-59).
 - Async prompt send — `agent` parts for selected **agent mentions** (OPE-59).
 - Session create / fork / revert / unrevert / abort / summarize — **client slash
-  actions** (OPE-58); see [ope-58-plan.md](./ope-58-plan.md).
+  actions** (OPE-58); see ope-58-plan.md.
 
 ## Domain Objects
 
@@ -88,7 +86,6 @@ Research: [slash-and-at-commands.md](../../research/slash-and-at-commands.md).
 - Catalog failure: quiet empty suggestions; retry on trigger / reconnect.
 - Command or prompt send failure: restore composer snapshot (text, attachments,
   mentions).
-- Client action failure: snackbar or dialog error; see [ope-58-plan.md](./ope-58-plan.md).
 
 ## Design-System Components
 

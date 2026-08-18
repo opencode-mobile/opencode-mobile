@@ -39,7 +39,7 @@ fresh reads of both the docs and Linear.
 ### 1. Resolve the canonical slice
 
 Identify the feature slug, then read every existing planning artifact under
-`docs/features/<slug>/` that can affect scope or state, especially `progress.md`,
+`docs/features/<slug>/` that can affect scope or state, especially `plan.md`,
 `plan.md`, and `parity-gaps.md`.
 
 If the directory or the planning artifact needed to establish scope is missing,

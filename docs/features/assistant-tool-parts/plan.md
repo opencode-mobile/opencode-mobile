@@ -107,5 +107,3 @@ Android.
 
 ## Research
 
-- `docs/research/opencode-assistant-tool-messages.md`
-- `docs/research/opencode-assistant-messages.md`

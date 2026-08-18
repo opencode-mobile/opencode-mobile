@@ -18,9 +18,6 @@
   - **D6 tight inline:** same label rules but no letter; D2 wins for parity with
     home project marks.
 - Evidence: throwaway UI prototypes
-  - `docs/prototypes/session-project-info/` (initial variants)
-  - `docs/prototypes/session-project-info-d2/` (D refinements)
-  - `docs/prototypes/session-project-info-d3/` (D2/D6 + smart label) — locked set
 - Revisit when: top-bar density fails on long titles + long disambiguated labels,
   or product wants a tappable project affordance.
 

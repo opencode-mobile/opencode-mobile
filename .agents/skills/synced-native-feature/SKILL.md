@@ -13,8 +13,7 @@ implementations.
 Identify the feature directory and requested phase, then read only the applicable
 sections of [`docs/features/README.md`](../../../docs/features/README.md):
 
-- read the artifact overview and `plan.md` section for planning;
-- read the `plan.md` and `progress.md` sections for implementation or status;
+- read the artifact overview and `plan.md` section for planning or status;
 - read the `parity-gaps.md` section when a platform mismatch exists;
 - read the `decisions.md` section when a local decision must be recorded.
 

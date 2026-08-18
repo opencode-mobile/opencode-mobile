@@ -166,4 +166,3 @@ perform mutations.
 
 ## Focused Execution Plan
 
-See [`ope-43-two-screen-diff-plan.md`](ope-43-two-screen-diff-plan.md).

@@ -27,7 +27,7 @@ session, without returning to the desktop client.
 - `permission.asked`
 - `permission.replied`
 
-The response wire values are `once` and `reject`. See [web-spec.md](web-spec.md)
+The response wire values are `once` and `reject`. See web-spec.md
 for the upstream evidence and recovery contract.
 
 ## Domain Objects

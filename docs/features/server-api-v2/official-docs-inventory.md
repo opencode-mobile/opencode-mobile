@@ -7,7 +7,7 @@ remotely controls sessions. This is a source-cited inventory, not an
 implementation plan.
 
 Related in-repo research (mobile v1 usage vs v2, not a substitute for this
-page): [`../server-connection/research-opencode-api-v2.md`](../server-connection/research-opencode-api-v2.md).
+page): `../server-connection/research-opencode-api-v2.md`.
 
 ## Sources
 

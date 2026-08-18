@@ -3,7 +3,7 @@
 Linear: [OPE-174](https://linear.app/opencode-mobile/issue/OPE-174/show-api-version-on-servers)
 
 Prototype (locked UX):
-[`docs/prototypes/api-version-indicator/index.html`](../../prototypes/api-version-indicator/index.html)
+`docs/prototypes/api-version-indicator/index.html`
 
 ## User Goal
 

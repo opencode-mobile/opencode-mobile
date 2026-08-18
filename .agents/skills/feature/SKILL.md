@@ -84,8 +84,8 @@ confirmed from Linear.
 ## Docs Route
 
 1. Resolve `docs/features/<feature-slug>/`, preferring an existing directory.
-2. Read the feature files that exist: `plan.md`, `progress.md`, `decisions.md`,
-   `parity-gaps.md`, and relevant task-specific plans.
+2. Read the feature files that exist: `plan.md`, `decisions.md`,
+    `parity-gaps.md`.
 3. Use `documentation-planning` for requested artifact changes. Also use
    `synced-native-feature` when the change concerns shared iOS/Android intent,
    progress, decisions, or parity; use `design-system-component` when it changes

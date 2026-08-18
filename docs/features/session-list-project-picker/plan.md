@@ -4,7 +4,7 @@ Linear: [OPE-160](https://linear.app/opencode-mobile/issue/OPE-160/session-list-
 [OPE-176](https://linear.app/opencode-mobile/issue/OPE-176/gate-session-list-project-picker-behind-a-setting)
 
 Prototype (locked UX):
-[`docs/prototypes/dock-many-projects/index.html`](../../prototypes/dock-many-projects/index.html)
+`docs/prototypes/dock-many-projects/index.html`
 (variant B — scope picker).
 
 ## User Goal

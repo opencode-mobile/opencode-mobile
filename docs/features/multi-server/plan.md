@@ -3,7 +3,7 @@
 Linear: [OPE-159](https://linear.app/opencode-mobile/issue/OPE-159/multiple-connection-profiles)
 
 Prototype (locked UX):
-[`docs/prototypes/multi-server-switcher-d4/index.html`](../../prototypes/multi-server-switcher-d4/index.html)
+`docs/prototypes/multi-server-switcher-d4/index.html`
 
 ## User Goal
 

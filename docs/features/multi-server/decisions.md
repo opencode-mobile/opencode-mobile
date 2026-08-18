@@ -7,7 +7,6 @@
   only. There is no all-servers feed or server-grouped mixed list.
 - Reason: prototype prompt and round-1 rejection of a unified feed. Switching
   is the product; aggregation is not.
-- Prototype: `docs/prototypes/multi-server-switcher/`.
 
 ## Home title is the active server; tap opens the workspace sheet
 
@@ -28,7 +27,6 @@
   Settings manages.
 - Reason: round-4 prototype. Putting the full list on Settings mixed switch
   and manage; one entry matches today’s Server Connection row.
-- Prototype: `docs/prototypes/multi-server-switcher-d4/`.
 
 ## First launch still creates the first profile
 
@@ -83,8 +81,6 @@
 
 - Date: 2026-08-16
 - Decision: On connection setup, **Save** is the only full-width footer action. **Test** is a text link under the fields (`Test connection` / `Test again`). **Remove** is a top-bar trash icon in edit mode only, then the existing confirm dialog.
-- Reason: Three stacked full-width buttons made edit feel crowded. Locked from `docs/prototypes/edit-server-test-placement/` variant A (B chrome + Test off the host row).
-- Prototype: `docs/prototypes/edit-server-test-placement/index.html`.
 
 ## Add-save activates; edit-save does not switch
 

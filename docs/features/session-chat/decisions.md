@@ -42,7 +42,6 @@
 - Reason: Web already blocks prompting in a child session. Mobile had the same
   composer as a root session. Prototype variant A kept the composer shell and
   made back the primary action.
-- Evidence: [ope-170-plan.md](./ope-170-plan.md)
 - Revisit when: mobile should send follow-up prompts into a child session.
 
 ## OPE-169 promote assistant bubble; keep paint deferral local
@@ -56,7 +55,6 @@
   card is the matching incoming chrome and was duplicated by snapshot-evidence
   hosts. Paint deferral is a Session Chat performance seam, not component
   chrome.
-- Evidence: [ope-169-plan.md](./ope-169-plan.md)
 - Revisit when: another surface needs the same late-markdown deferral.
 
 ## OPE-167 top overlay stack; Scroll to end stays at the bottom
@@ -72,7 +70,6 @@
 - Reason: The bottom stack covered the last message. Prototype variant A
   (`docs/prototypes/pills-on-top/`) keeps the same capsules and leaves only
   the scroll action at the bottom.
-- Evidence: [ope-167-plan.md](./ope-167-plan.md)
 - Revisit when: a reserved strip or top-bar fold is preferred over the overlay.
 
 ## OPE-145 Android scroll-to-end pill uses user-scroll and settle gates
@@ -86,7 +83,6 @@
   a fling that stops near the end flashed the pill on settle then hid it again
   when follow snapped. Fade was rejected because OPE-106 `spacedBy` ghost gaps
   return if invisible pills stay composed.
-- Evidence: [ope-145-plan.md](./ope-145-plan.md)
 - Revisit when: iOS needs the same hide slack, or a fade can be restored without
   reintroducing float-stack gaps.
 
@@ -104,8 +100,8 @@
   Android emptyMap-on-failure could also clear busy mid-turn. Marking busy before
   composer validation could leave Stop/Working stuck on no-op sends; keeping
   optimistic across resolved idle did the same after a fast turn.
-- Evidence: [research-session-running-indicator-gap.md](./research-session-running-indicator-gap.md),
-  [ope-113-plan.md](./ope-113-plan.md)
+- Evidence: research-session-running-indicator-gap.md,
+  ope-113-plan.md
 - Revisit when: product wants web-style progress-dot chrome or a shared shimmer
   primitive.
 

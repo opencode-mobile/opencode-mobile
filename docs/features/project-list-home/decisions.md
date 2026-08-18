@@ -16,7 +16,6 @@
   configured base URL to `10.0.2.2` so `GET /session` reaches `opencode serve`
   on the development machine (iOS Simulator uses host loopback directly).
 - Reason: emulator loopback is not the host machine.
-- See: [`session-repository/manual-test.md`](../session-repository/manual-test.md).
 
 ## Keep component gallery as secondary developer route
 

@@ -40,7 +40,7 @@ from the connected opencode server's configured providers.
 ## Persistent Cache
 
 The delivered per-session cache is extended by the focused
-[Reliable Model Selection and New-Session Handoff](reliable-selection-plan.md)
+Reliable Model Selection and New-Session Handoff
 plan. That follow-up adds deterministic initialization, a timestamped New
 Session Model Preference, cross-client history reconciliation, and ordered
 writes.

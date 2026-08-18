@@ -36,8 +36,8 @@ Product language: **Attachment** (pending in the composer, sent as
 - Restoring pending chips after post-204 `Session.Event.Error`.
 
 Upstream evidence and mobile product rules:
-[web-spec.md](web-spec.md). Research note:
-[opencode-file-upload.md](../../research/opencode-file-upload.md).
+web-spec.md. Research note:
+opencode-file-upload.md.
 
 ## Server APIs Involved
 

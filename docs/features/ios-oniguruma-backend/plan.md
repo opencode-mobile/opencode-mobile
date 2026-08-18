@@ -142,7 +142,6 @@ install (arm64 device + simulator).
 - [ ] Minimal cinterop + `onig_version()` callable from `iosMain`.
 - [ ] One hard-coded pattern match test in KMP (`iosSimulatorArm64` test or small
       `iosTest` source set).
-- [ ] Document build steps in `progress.md`.
 
 **Exit:** `OpenCodeMarkdownCore` builds from Xcode for simulator and device.
 
@@ -176,7 +175,6 @@ invariants hold.
   - `markdown_preparation` probe duration vs hybrid baseline.
 - [ ] Update `docs/features/native-rendered-markdown/parity-gaps.md` (TextMate
       highlighter gap → resolved or narrowed).
-- [ ] Record benchmark numbers in `progress.md`.
 
 **Exit:** Measurable improvement or parity with Android parser-ms on the 20-msg /
 3,000-line fixture; Big Session cold path improves materially.
@@ -240,5 +238,3 @@ invariants hold.
 
 - `docs/features/native-rendered-markdown/plan.md` — highlighter gate (step 3).
 - `docs/features/native-rendered-markdown/parity-gaps.md` — TextMate highlighter gap.
-- `docs/features/session-chat/progress.md` — Big Session performance repro.
-- `docs/features/native-rendered-markdown/progress.md` — profiling synthesis.

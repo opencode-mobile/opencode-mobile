@@ -105,6 +105,3 @@ Parent: [OPE-60](https://linear.app/opencode-mobile/issue/OPE-60/session-todos).
 ## References
 
 - Domain terms: `CONTEXT.md` (Session Todo List / Session Todo)
-- Research: `docs/research/opencode-session-todos.md`
-- Sync task plan: `docs/features/session-todos/ope-95-plan.md`
-- Idle visibility: `docs/features/session-todos/ope-168-plan.md`

@@ -2,7 +2,7 @@
 
 Ticket: [OPE-107](https://linear.app/opencode-mobile/issue/OPE-107/home-activity-grouping)
 
-High-level implementation plan: [`ope-107-plan.md`](ope-107-plan.md)
+High-level implementation plan: `ope-107-plan.md`
 
 ## User Goal
 
@@ -72,7 +72,7 @@ without scanning a flat last-changed list.
 - Recent stack is **feature-local chrome** on home (raised group), not a new
   shared component until a second consumer appears.
 - Settings control: reuse existing list-item + sheet / discrete-choice pattern;
-  lock concrete pattern in [`ope-107-plan.md`](ope-107-plan.md) Phase 0.
+  lock concrete pattern in `ope-107-plan.md` Phase 0.
 
 ## Prototype
 

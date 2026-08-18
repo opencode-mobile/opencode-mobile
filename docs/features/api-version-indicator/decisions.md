@@ -9,7 +9,6 @@
 - Reason: Protocol is a property of a saved server, useful when switching among
   mixed v1/v2 profiles. Home chrome already answers connectivity. Locked from
   prototype variants B + C; A was rejected.
-- Prototype: `docs/prototypes/api-version-indicator/`.
 
 ## Unknown protocol is omitted
 

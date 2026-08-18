@@ -11,7 +11,6 @@
   familiar default, including the **All** chip label; picker chrome keeps
   **All projects**.
 - Supersedes: 2026-08-13 “Scope picker replaces dock chips”.
-- Prototype: `docs/prototypes/dock-many-projects/`.
 
 ## No selected checkmark in the picker
 

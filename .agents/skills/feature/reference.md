@@ -75,7 +75,7 @@ unavailable:
 - ...
 
 ## Docs
-- `docs/features/<feature-slug>/progress.md`
+- `docs/features/<feature-slug>/plan.md`
 
 ## Checks
 - ...

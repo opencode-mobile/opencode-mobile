@@ -10,7 +10,7 @@ Analytics stays behind store-form verification and in-app Analytics consent.
 Linear: [OPE-121](https://linear.app/opencode-mobile/issue/OPE-121/release-observability).
 
 Android already delivered the release-only half in
-[OPE-72](../android-release-distribution/ope-72-plan.md)
+OPE-72
 ([OPE-72](https://linear.app/opencode-mobile/issue/OPE-72/ship-crashlytics-and-minimal-analytics-on-release-builds)).
 iOS distribution under
 [OPE-100](../ios-release-distribution/plan.md) left Crashlytics / Analytics as
@@ -124,7 +124,6 @@ Primary parity ticket. Mirror Android OPE-72: client plist in repo, SPM
 dependencies, release-only seam, collection flags, protected verification
 non-fatal, TestFlight or App Distribution acceptance, runbook update.
 
-See [`ope-122-plan.md`](ope-122-plan.md).
 
 ### OPE-123 — Shared release-observability seam
 
@@ -151,9 +150,8 @@ events ship.
 
 - **OPE-128** — **Done.** Store privacy / data-safety forms verified for
   current Crashlytics + minimal Analytics. Task plan:
-  [`ope-128-plan.md`](ope-128-plan.md).
+  `ope-128-plan.md`.
 - **OPE-129** — **Done.** In-app Analytics consent UI for product / custom
-  events. Task plan: [`ope-129-plan.md`](ope-129-plan.md). Settings Privacy
   toggle + seam gate shipped; taxonomy instrumentation remains OPE-124.
 
 ### OPE-124 — Product Analytics taxonomy and instrumentation
@@ -161,7 +159,7 @@ events ship.
 OPE-128 and OPE-129 complete. Taxonomy: consented `product_screen_view` +
 `product_user_action` covering all product screens and interactions (developer
 tools excluded). Perf / SSE internals deferred. Task plan:
-[`ope-124-plan.md`](ope-124-plan.md).
+`ope-124-plan.md`.
 
 Store forms must still be updated for product-event collection before treating
 disclosure as complete; runtime sends remain consent-gated.

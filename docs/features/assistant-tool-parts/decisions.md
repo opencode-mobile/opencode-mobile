@@ -223,7 +223,6 @@ Tool Call Card.
   for this row; that component stays collapsed tool-agnostic status chrome.
   Session Chat keeps only the local elapsed tick and passes a formatted
   string.
-- Prototype: `docs/prototypes/running-child-session-thread/` (`?variant=A`).
 
 ## OPE-162 design-system Child Session Row
 
