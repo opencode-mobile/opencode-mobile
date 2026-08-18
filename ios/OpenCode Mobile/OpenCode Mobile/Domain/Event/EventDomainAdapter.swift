@@ -116,20 +116,23 @@ nonisolated struct EventDomainAdapter: Sendable {
             stepStarted(properties)
         case "session.execution.started":
             [statusEvent(properties, statusType: "busy")]
-        case "session.next.step.ended":
+        case "session.next.step.ended", "session.step.ended":
             [
                 assistantMessageUpdated(properties),
                 event(type: "session.active.snapshot", properties: properties),
             ]
         case "session.execution.succeeded",
-             "session.execution.interrupted",
-             "session.compaction.ended",
-             "session.compaction.failed":
+             "session.execution.interrupted":
             [event(type: "session.idle", properties: properties)]
         case "session.next.step.failed", "session.execution.failed":
             [
                 event(type: "session.error", properties: properties),
                 event(type: "session.idle", properties: properties),
+            ]
+        case "session.step.failed":
+            [
+                event(type: "session.error", properties: properties),
+                assistantMessageUpdated(properties),
             ]
         case "session.next.retried", "session.retry.scheduled":
             [statusEvent(properties, statusType: "retry")]
@@ -139,31 +142,32 @@ nonisolated struct EventDomainAdapter: Sendable {
              "session.next.tool.success", "session.tool.success",
              "session.next.tool.failed", "session.tool.failed":
             [toolPartUpdated(type: type, properties: properties)]
-        case "session.next.shell.started":
+        case "session.next.shell.started", "session.shell.started":
             [
                 statusEvent(properties, statusType: "busy"),
                 shellPartUpdated(properties, status: "running"),
             ]
-        case "session.next.shell.ended":
+        case "session.next.shell.ended", "session.shell.ended":
             [
                 shellPartUpdated(properties, status: "completed"),
                 event(type: "session.active.snapshot", properties: properties),
             ]
-        case "session.shell.started":
-            [statusEvent(properties, statusType: "busy")]
-        case "session.shell.ended":
-            [event(type: "session.idle", properties: properties)]
         case "session.next.compaction.started", "session.compaction.started":
             [
                 statusEvent(properties, statusType: "busy"),
                 compactionPartUpdated(properties, completed: false),
             ]
-        case "session.next.compaction.delta":
+        case "session.next.compaction.delta", "session.compaction.delta":
             [compactionTextDelta(properties)]
-        case "session.next.compaction.ended":
+        case "session.next.compaction.ended", "session.compaction.ended":
             [
                 compactionPartUpdated(properties, completed: true),
                 event(type: "session.active.snapshot", properties: properties),
+            ]
+        case "session.next.compaction.failed", "session.compaction.failed":
+            [
+                compactionPartUpdated(properties, completed: true),
+                event(type: "session.error", properties: properties),
             ]
         case "session.next.reasoning.started", "session.reasoning.started":
             reasoningStarted(properties)

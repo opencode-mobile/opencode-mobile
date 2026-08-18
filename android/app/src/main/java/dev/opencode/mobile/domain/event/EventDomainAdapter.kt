@@ -125,15 +125,15 @@ class EventDomainAdapter(
             "session.step.started",
             -> stepStarted(properties)
             "session.execution.started" -> listOf(statusEvent(properties, "busy"))
-            "session.next.step.ended" ->
+            "session.next.step.ended",
+            "session.step.ended",
+            ->
                 listOf(
                     assistantMessageUpdated(properties),
                     event("session.active.snapshot", properties),
                 )
             "session.execution.succeeded",
             "session.execution.interrupted",
-            "session.compaction.ended",
-            "session.compaction.failed",
             -> listOf(event("session.idle", properties))
             "session.next.step.failed",
             "session.execution.failed",
@@ -141,6 +141,11 @@ class EventDomainAdapter(
                 listOf(
                     event("session.error", properties),
                     event("session.idle", properties),
+                )
+            "session.step.failed" ->
+                listOf(
+                    event("session.error", properties),
+                    assistantMessageUpdated(properties),
                 )
             "session.next.retried",
             "session.retry.scheduled",
@@ -156,18 +161,20 @@ class EventDomainAdapter(
             "session.next.tool.failed",
             "session.tool.failed",
             -> listOf(toolPartUpdated(type, properties))
-            "session.next.shell.started" ->
+            "session.next.shell.started",
+            "session.shell.started",
+            ->
                 listOf(
                     statusEvent(properties, "busy"),
                     shellPartUpdated(properties, status = "running"),
                 )
-            "session.next.shell.ended" ->
+            "session.next.shell.ended",
+            "session.shell.ended",
+            ->
                 listOf(
                     shellPartUpdated(properties, status = "completed"),
                     event("session.active.snapshot", properties),
                 )
-            "session.shell.started" -> listOf(statusEvent(properties, "busy"))
-            "session.shell.ended" -> listOf(event("session.idle", properties))
             "session.next.compaction.started",
             "session.compaction.started",
             ->
@@ -175,11 +182,22 @@ class EventDomainAdapter(
                     statusEvent(properties, "busy"),
                     compactionPartUpdated(properties, completed = false),
                 )
-            "session.next.compaction.delta" -> listOf(compactionTextDelta(properties))
-            "session.next.compaction.ended" ->
+            "session.next.compaction.delta",
+            "session.compaction.delta",
+            -> listOf(compactionTextDelta(properties))
+            "session.next.compaction.ended",
+            "session.compaction.ended",
+            ->
                 listOf(
                     compactionPartUpdated(properties, completed = true),
                     event("session.active.snapshot", properties),
+                )
+            "session.next.compaction.failed",
+            "session.compaction.failed",
+            ->
+                listOf(
+                    compactionPartUpdated(properties, completed = true),
+                    event("session.error", properties),
                 )
             "session.next.reasoning.started",
             "session.reasoning.started",
