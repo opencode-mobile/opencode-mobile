@@ -4,9 +4,11 @@ import dev.opencode.mobile.data.remote.dto.MessageInfoDto
 import dev.opencode.mobile.data.remote.dto.MessagePartDto
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -331,6 +333,22 @@ class InMemoryMessageStore
             if (ignoredPartIds[sessionId]?.get(messageId)?.contains(partId) == true) return null
             val msgParts = partsCaches[sessionId]?.get(messageId) ?: return null
             val existing = msgParts[partId] ?: return null
+            if (existing is MessagePart.Tool) {
+                val previous = existing.input?.get("preview")?.jsonPrimitive?.contentOrNull.orEmpty()
+                msgParts[partId] =
+                    existing.copy(
+                        input =
+                            buildJsonObject {
+                                existing.input?.forEach { (key, value) -> if (key != "preview") put(key, value) }
+                                put("preview", previous + delta)
+                            },
+                    )
+                return SessionChangeSet(
+                    sessionRevision = 0,
+                    changedMessageIds = setOf(messageId),
+                    changedPartIdsByMessage = mapOf(messageId to setOf(partId)),
+                )
+            }
             val baseText =
                 when (existing) {
                     is MessagePart.Text -> existing.text

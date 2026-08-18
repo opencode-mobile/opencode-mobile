@@ -137,11 +137,14 @@ nonisolated struct EventDomainAdapter: Sendable {
         case "session.next.retried", "session.retry.scheduled":
             [statusEvent(properties, statusType: "retry")]
         case "session.next.tool.input.started", "session.tool.input.started",
+             "session.next.tool.input.ended", "session.tool.input.ended",
              "session.next.tool.called", "session.tool.called",
              "session.next.tool.progress", "session.tool.progress",
              "session.next.tool.success", "session.tool.success",
              "session.next.tool.failed", "session.tool.failed":
             [toolPartUpdated(type: type, properties: properties)]
+        case "session.next.tool.input.delta", "session.tool.input.delta":
+            [toolInputDelta(properties)]
         case "session.next.shell.started", "session.shell.started":
             [
                 statusEvent(properties, statusType: "busy"),
@@ -345,7 +348,7 @@ nonisolated struct EventDomainAdapter: Sendable {
 
     private func toolPartUpdated(type: String, properties: [String: Any]) -> OpencodeEvent {
         let status: String
-        if type.hasSuffix("tool.input.started") {
+        if type.hasSuffix("tool.input.started") || type.hasSuffix("tool.input.ended") {
             status = "pending"
         } else if type.hasSuffix("tool.success") {
             status = "completed"
@@ -377,6 +380,23 @@ nonisolated struct EventDomainAdapter: Sendable {
             error: error,
             metadata: properties["structured"] as? [String: Any]
         )
+    }
+
+    private func toolInputDelta(_ properties: [String: Any]) -> OpencodeEvent {
+        var projected: [String: Any] = ["field": "input"]
+        if let sessionID = sessionID(from: properties) {
+            projected["sessionID"] = sessionID
+        }
+        if let messageID = string(in: properties, key: "assistantMessageID") {
+            projected["messageID"] = messageID
+        }
+        if let partID = string(in: properties, key: "id") ?? string(in: properties, key: "callID") {
+            projected["partID"] = partID
+        }
+        if let delta = string(in: properties, key: "delta") {
+            projected["delta"] = delta
+        }
+        return event(type: "message.part.delta", properties: projected)
     }
 
     private func shellPartUpdated(_ properties: [String: Any], status: String) -> OpencodeEvent {

@@ -353,6 +353,29 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         guard let existing = partsCache[sessionID]?[messageID]?[partID] else { return nil }
         let baseText: String
         switch existing {
+        case .tool(let tool):
+            let previous = tool.input?["preview"]?.stringValue ?? ""
+            var input = tool.input ?? [:]
+            input["preview"] = .string(previous + delta)
+            partsCache[sessionID]?[messageID]?[partID] = .tool(
+                ToolPart(
+                    id: tool.id,
+                    toolName: tool.toolName,
+                    status: tool.status,
+                    title: tool.title,
+                    error: tool.error,
+                    callID: tool.callID,
+                    input: input,
+                    output: tool.output,
+                    metadata: tool.metadata,
+                    timeStartEpochMs: tool.timeStartEpochMs
+                )
+            )
+            return SessionChangeSet(
+                sessionRevision: 0,
+                changedMessageIDs: [messageID],
+                changedPartIDsByMessage: [messageID: [partID]]
+            )
         case .text(let text):
             baseText = text.text
         case .reasoning(let reasoning):

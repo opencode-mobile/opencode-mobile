@@ -505,7 +505,7 @@ class MessageSync(
                     "message.part.delta" -> {
                         val props = event.rawProperties ?: return
                         val field = props["field"]?.jsonPrimitive?.contentOrNull
-                        if (field != "text" && field != "reasoning") return
+                        if (field != "text" && field != "reasoning" && field != "input") return
                         val messageId = props["messageID"]?.jsonPrimitive?.contentOrNull ?: return
                         val partId = props["partID"]?.jsonPrimitive?.contentOrNull ?: return
                         val delta = props["delta"]?.jsonPrimitive?.contentOrNull ?: return
