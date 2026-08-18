@@ -35,9 +35,8 @@ state changes:
 
 - `linear-project-tracking` creates or updates Linear issues, statuses, and
   links.
-- `documentation-planning` creates or updates durable docs artifacts.
-- `synced-native-feature` owns cross-platform feature planning, progress, and
-  parity changes.
+- `synced-native-feature` owns cross-platform feature planning and parity.
+  Docs follow `docs/features/README.md`.
 - `design-system-component` owns reusable UI, tokens, variants, previews, and
   galleries.
 - GitHub `yeet` owns staging, committing, pushing, and pull-request creation
@@ -84,12 +83,12 @@ confirmed from Linear.
 ## Docs Route
 
 1. Resolve `docs/features/<feature-slug>/`, preferring an existing directory.
-2. Read the feature files that exist: `plan.md`, `progress.md`, `decisions.md`,
-   `parity-gaps.md`, and relevant task-specific plans.
-3. Use `documentation-planning` for requested artifact changes. Also use
-   `synced-native-feature` when the change concerns shared iOS/Android intent,
-   progress, decisions, or parity; use `design-system-component` when it changes
-   reusable UI documentation.
+2. Read the feature files that exist: `plan.md`, `decisions.md`,
+    `parity-gaps.md`.
+3. Follow `docs/features/README.md` for docs changes. Use
+    `synced-native-feature` when the change concerns shared iOS/Android intent
+    or parity; use `design-system-component` when it changes reusable UI
+    documentation.
 4. Verify that the resulting docs path still resolves from the issue or branch
    anchor used for this request.
 

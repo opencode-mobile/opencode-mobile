@@ -84,14 +84,14 @@ Not applicable — no app UI.
 ### OPE-101 — Provisioning and signed release artifacts
 
 Human Apple/Firebase/GitHub setup, then protected CI that archives and exports a
-verified App Store IPA without publishing. See [`ope-101-plan.md`](ope-101-plan.md).
+verified App Store IPA without publishing. See `ope-101-plan.md`.
 
 ### OPE-103 — TestFlight Internal Testing
 
 Extend the signed foundation with a manual protected upload to App Store Connect
-/ TestFlight Internal Testing. See [`ope-103-plan.md`](ope-103-plan.md).
+/ TestFlight Internal Testing. See `ope-103-plan.md`.
 
 ### OPE-102 — Firebase App Distribution
 
 Distribute every successful `main` merge to a private iOS tester group via
-signed Ad Hoc IPA. See [`ope-102-plan.md`](ope-102-plan.md).
+signed Ad Hoc IPA. See `ope-102-plan.md`.

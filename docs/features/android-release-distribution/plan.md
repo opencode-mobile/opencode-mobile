@@ -99,7 +99,6 @@ This slice is the decision that starts Android release pipelines. See
 
 ### OPE-70 — Provisioning and signed release artifacts
 
-Follow the detailed [`ope-70-plan.md`](ope-70-plan.md) through three checkpoints:
 
 1. Human setup: personal account ownership with an accepted private-phase
    solo-owner posture, one GCP/Firebase project, Play app draft, upload key with
@@ -117,7 +116,6 @@ OPE-70 keeps `ready-for-human` until checkpoint 1 is complete, then switches to
 
 ### OPE-71 — Play internal and Firebase Test Lab
 
-Follow the focused [`ope-71-plan.md`](ope-71-plan.md).
 
 1. Extend the canonical Android Release workflow to upload its signed AAB to
    the Play internal testing track for the owner's tester account.
@@ -129,7 +127,6 @@ Follow the focused [`ope-71-plan.md`](ope-71-plan.md).
 
 ### OPE-72 — Release observability
 
-Follow the focused [`ope-72-plan.md`](ope-72-plan.md).
 
 1. Add Firebase app configuration and release-only Crashlytics/Analytics
    dependencies without adding a Firebase runtime to debug/local builds.
@@ -141,7 +138,6 @@ Follow the focused [`ope-72-plan.md`](ope-72-plan.md).
 
 ### OPE-73 — Firebase App Distribution on every merge
 
-Follow the focused [`ope-73-plan.md`](ope-73-plan.md).
 
 1. Keep the Firebase Android app linked to its existing Google Play app, while
    using direct signed-APK delivery until the Play app is intentionally reviewed.

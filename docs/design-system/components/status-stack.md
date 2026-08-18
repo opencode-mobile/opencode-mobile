@@ -60,5 +60,5 @@ Ring size is locked at ~32pt in the implementation.
 
 ## Parity And Divergence
 
-None. Temporary feature wiring gaps live under
-`docs/features/initial-load-indicator/parity-gaps.md`.
+None. Temporary feature wiring gaps live under the live feature dir or
+`docs/design-system/divergences.md`.

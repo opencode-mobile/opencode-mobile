@@ -16,7 +16,7 @@ After reconnect, state is refreshed from the server.
 - Session status labels on home rows and Session Chat chrome (`Working`, `Retrying`).
 - Screen Model connection states: `idle`, `connecting`, `connected`, `disconnected`, `reconnecting`.
 - Device network path (`ready` / `unavailable`) composed with SSE for **live** /
-  **connecting** / **offline** chrome. See [ope-173-plan.md](ope-173-plan.md).
+  **connecting** / **offline** chrome. See ope-173-plan.md.
 
 ## Out Of Scope
 

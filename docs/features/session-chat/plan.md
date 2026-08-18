@@ -25,7 +25,7 @@ Chat screen with visible messages and a composer ready for new prompts.
 - Real server-backed message history and async prompt send are implemented in
   [Message Repository](../message-repository/plan.md) and wired into Session Chat.
 - Foreground SSE observation, reconnect refresh, and live session/message state
-  shipped in [Foreground Event Stream](../foreground-event-stream/progress.md).
+  shipped in Foreground Event Stream.
 - Abort/stop is wired through `SessionRepository` from the composer.
 - Permission requests are observed and resolved from the native composer state;
   mobile exposes allow-once and deny only.

@@ -12,42 +12,14 @@ the docs say otherwise.
 
 ## Product Direction
 
-- Build native mobile clients for opencode, not a mobile terminal emulator.
+- Build native mobile clients for opencode.
 - Use the headless opencode server API as the primary integration surface.
 - Treat `/tui/*` endpoints as optional compatibility for a user who already has
   the terminal UI running.
 - Assume the opencode server normally runs on the user's development machine for
   the current project.
 - Keep the design open to user-managed LAN, VPN, HTTPS, self-hosted, or tunneled
-  access, but do not design an app-managed relay or tunnel for v1.
-
-## V1 Scope
-
-The first useful product boundary is session control for a single opencode
-server's current project:
-
-- list, create, rename, delete, and fork sessions;
-- read session messages;
-- send prompts asynchronously;
-- stream foreground events and refresh state after reconnect;
-- show session status;
-- abort active work;
-- approve or deny permission requests without setting persistent `remember`
-  decisions from mobile;
-- inspect session diffs.
-
-## Explicitly Out Of Scope
-
-Do not add these to v1 without revisiting the project docs:
-
-- cross-platform app frameworks;
-- app-managed tunnel, relay, or account system;
-- push notifications or guaranteed background execution;
-- QR pairing or mDNS discovery;
-- multi-project switching;
-- direct mobile shell execution;
-- config, provider auth, auth credential, or MCP administration;
-- full file browsing, editing, search, or mobile IDE behavior.
+  access.
 
 ## Native App Architecture
 
@@ -99,7 +71,7 @@ Do not add these to v1 without revisiting the project docs:
   feature screen.
 - Feature work should proceed as a synchronized Feature Slice across both apps.
   Document progress and Parity Gaps under `docs/features/<feature-slug>/` as
-  work happens.
+  work happens. Live contracts only — see `docs/features/README.md`.
 - Record intentional platform differences in the same change that introduces
   them.
 - On iOS, do not place design-system list components (OpenCodeListItem, etc.)
@@ -156,15 +128,13 @@ them.
   previews, or gallery entries.
 - Use `.agents/skills/synced-native-feature/SKILL.md` when planning or
   implementing a feature that should exist in both native apps.
-- Use `.agents/skills/documentation-planning/SKILL.md` when creating or updating
-  plans, feature docs, progress notes, decisions, or parity gaps.
+  Feature docs follow `docs/features/README.md`.
 - Use `.agents/skills/run-github-actions/SKILL.md` when triggering GitHub
   Actions, checking workflow status, or troubleshooting failed CI runs.
 - Use `.agents/skills/pull-app-logs/SKILL.md` when reading Android logcat or
   iOS simulator/device logs for OpenCode Mobile runtime debugging.
-- Use `.agents/skills/linear-project-tracking/SKILL.md` when planning or
-  implementing work that should be tracked in Linear, updating feature progress,
-  or keeping issues in sync with `docs/features/`.
+- Use `.agents/skills/linear-project-tracking/SKILL.md` when reading or
+  updating Linear. Tickets live in Linear; do not copy them into `docs/`.
 - Use `.agents/skills/feature/SKILL.md` when linking a Linear ticket, branch,
   feature docs directory, merge checklist, and pull request for a feature task.
 - Use `.agents/skills/publish-prototype/SKILL.md` when building a throwaway
@@ -215,16 +185,11 @@ Domain documentation uses the single-context layout. See
 - Keep implementation feasibility and API evidence in `docs/feasibility.md`.
 - Keep future app architecture in `docs/architecture.md`.
 - Keep the canonical design-system planning source under `docs/design-system/`.
-- Keep feature progress, decisions, and parity gaps under
-  `docs/features/<feature-slug>/`.
-- Keep durable feature and task plans under `docs/features/<feature-slug>/`.
-  Use Markdown only; committed HTML plan companions are retired. For
-  task-specific plans, prefer names like `<ticket-or-task>-plan.md`.
+- Keep current feature state in `docs/features/<feature-slug>/plan.md`.
+  Add `decisions.md` / `parity-gaps.md` only when they still constrain work.
+  Do not add progress logs, ticket plans, or research dumps.
 - Commit durable documentation artifacts. Keep scratch notes, debug dumps,
-  temporary investigations, and reproducible generated noise out of git unless
-  they become useful review or handoff material.
-- Add ADRs only for decisions that are hard to reverse, surprising without
-  context, and the result of a real trade-off.
+  temporary investigations, and reproducible generated noise out of git.
 - Do not couple domain language to generated code names unless the server API has
   made that language part of the user-facing model.
 

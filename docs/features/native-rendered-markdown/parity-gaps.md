@@ -117,7 +117,7 @@
   timeline on the same fixture (2026-06-24 probes).
 - Owner or next action: measure the staged pipeline on a deterministic large
   fixture; optional JSON-bridge slimming or code-block virtualization if larger
-  sessions still regress. See `docs/features/session-chat/progress.md`.
+    sessions still regress.
 
 ## Final Native Annotation Construction
 

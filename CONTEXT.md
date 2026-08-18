@@ -7,8 +7,8 @@ The project documents product scope, feasibility, and native app architecture.
 App shells exist under `android/` and `ios/OpenCode Mobile/`. Session list home
 loads curated **added projects** and sessions via **Project Selection**;
 **Session Repository** and **Message Repository** scope calls with `directory`;
-Session Chat sends async prompts (see `docs/features/project-selection/`,
-`docs/features/session-repository/`, `docs/features/message-repository/`).
+Session Chat sends async prompts. Feature contracts live under
+`docs/features/`.
 OpenAPI fetch tooling and maintained sessions/messages specs exist; full `/doc`
 codegen is not wired into app builds yet.
 Release processes are not started.
@@ -16,8 +16,7 @@ Release processes are not started.
 ## Bounded Context
 
 The mobile client connects to an opencode server that is already running for a
-development project. In v1, the mobile client operates inside that server's
-current project context and does not switch projects remotely.
+development project. Calls can be scoped to an added project via `directory=`.
 
 ```mermaid
 flowchart LR
@@ -34,9 +33,8 @@ flowchart LR
 The HTTP server exposed by opencode. It provides the API used by the mobile
 client to inspect and control sessions.
 
-For v1, the server is expected to run on the user's development machine. The
-user may reach it through LAN, VPN, HTTPS, or a tunnel, but the mobile client
-does not provide that transport.
+The server usually runs on the user's development machine. The user may reach
+it through LAN, VPN, HTTPS, or a tunnel.
 
 ### Connection Profile
 
@@ -45,8 +43,7 @@ A saved mobile configuration for one reachable opencode server.
 A Connection Profile includes the server base URL, username, password (stored in
 platform secure storage), and an ordered list of **added project** worktree
 paths the user chose to show on home. It represents how the mobile client reaches
-opencode, not a user account. v1 supports one active Connection Profile at a
-time.
+opencode, not a user account. One Connection Profile is active at a time.
 
 ### Connection onboarding
 
@@ -86,7 +83,7 @@ respond to permission requests.
 The agent-owned, view-only task list for one **session**.
 
 The model maintains the list while working; the mobile client reads it and does
-not let the user check off or edit items in v1. The Session Todo List is the
+not let the user check off or edit items. The Session Todo List is the
 only user-facing surface for that data: `todowrite` tool parts stay hidden in
 the Session Chat timeline. The client loads the list with `GET` when the session
 is open, applies SSE `todo.updated` as a full-list replace while observing,
@@ -117,7 +114,7 @@ One item in a **Session Todo List**.
 
 It has a brief description, a status (`pending`, `in_progress`, `completed`, or
 `cancelled`), and a priority. List order is identity; there is no separate
-server id per item. Mobile v1 does not show or sort by priority.
+server id per item. Mobile does not show or sort by priority.
 
 In the Session Todo List sheet, the header is progress-first (“N of M
 completed”), matching the pill’s completed-count / total rule. Status rows are
@@ -139,7 +136,7 @@ _Avoid_: hide, soft-delete, dismiss.
 
 A session that has been archived and is excluded from active session lists.
 
-The mobile client does not browse or restore archived sessions in v1.
+The mobile client does not currently browse or restore archived sessions.
 _Avoid_: hidden session.
 
 ### delete (session)
@@ -273,18 +270,18 @@ still has a `text` fallback.
 
 ### message part
 
-A typed content unit within a message. Parts are ordered. For v1 the domain
-model defines three variants:
+A typed content unit within a message. Parts are ordered. The domain
+model includes:
 
 - **TextPart**: user prompt text or assistant response text. May carry
   `isStreaming: true` while delta chunks are still arriving. Model reasoning
-  traces are hidden from normal chat text in v1.
+  traces are a distinct part, not folded into this text.
 - **ToolPart**: a named tool call inside a message, with a tool status,
   optional running title, optional error text, call id when the server
   provides one, opaque string-keyed input and metadata maps, and optional
   string output for later card chrome.
   _Avoid_: treating a preformatted status string as the tool part itself;
-  modeling every server tool schema as its own domain type in v1.
+  modeling every server tool schema as its own domain type.
 - **FilePart**: a user **Attachment** that arrived on the wire as a server
   `type: "file"` part with a `data:` URL (image, PDF, or text-like file).
   Shown on the user message as an attachment row (thumbnail or file card),
@@ -293,13 +290,14 @@ model defines three variants:
   slice; confusing with **file-change tool**.
 
 Outbound **agent mention** parts on prompt send are domain-modeled for the
-composer. Inbound `agent` parts on timeline messages stay adapter-consumed
-without dedicated Session Chat chrome in v1.
+composer.
 
-Server-only part types that remain adapter-consumed without a visible domain
-part in v1 include `step-start`, `step-finish`, inbound `agent`, `subtask`,
-`snapshot`, `patch`, `compaction`, `retry`, and non-`data:` `file` parts
-(project path mentions).
+**ReasoningPart**: live and historical model thinking. Distinct from
+TextPart. Session Chat should show it (TUI v2 parity).
+
+Other wire types (`step-start`, `step-finish`, inbound `agent`, `subtask`,
+`snapshot`, `patch`, `retry`, non-`data:` `file` mentions) stay adapter
+concerns until a timeline mapping exists.
 
 ### Attachment
 
@@ -412,8 +410,8 @@ server-backed user-facing selector is **Variant**.
 A request from opencode for the user to approve or deny an action during a
 session.
 
-The mobile client may approve or deny a permission request in v1, but it should
-not create persistent `remember` decisions from mobile.
+The mobile client may approve or deny a permission request. It does not
+create persistent `remember` decisions from mobile.
 
 ### question request
 
@@ -431,7 +429,7 @@ tool alone; implying dismiss from navigation away.
 The line-level representation of one file's changes inside a **Change Set**.
 
 The mobile client may show diffs so the user can understand the result of remote
-work. In v1, diff viewing does not imply mobile file editing.
+work. Diff viewing does not imply mobile file editing.
 
 ### Change Set
 
@@ -500,7 +498,7 @@ Design System foundations.
 The Component Gallery is allowed to be the temporary app entry point during
 design-system work. It lists gallery entries and opens a dedicated screen per
 entry with consistent controls for reviewing themes, states, variants, and
-platform behavior. It is not part of the v1 user-facing product navigation.
+platform behavior. It is not part of user-facing product navigation.
 
 ### Feature Slice
 
@@ -528,15 +526,3 @@ A Parity Gap may describe behavior, state, copy, visual semantics, token
 mapping, accessibility behavior, error handling, or missing implementation. It
 records the shared intent, current platform states, reason, next action, and
 whether the difference is intentional or temporary.
-
-## Deferred Concepts
-
-These concepts are intentionally outside the v1 context:
-
-- mobile IDE;
-- mobile terminal remote;
-- app-managed tunnel or relay;
-- account system;
-- push notification service;
-- multi-project manager;
-- direct remote admin console for shell, config, auth, or MCP management.

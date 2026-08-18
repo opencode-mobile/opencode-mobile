@@ -9,7 +9,7 @@
 | Current Android state | OPE-72 release-only Crashlytics / minimal Analytics complete. |
 | Affected area | Missing implementation (observability). |
 | Reason | Explicitly out of OPE-100; moved to Release Observability. |
-| Owner / next action | [OPE-122](../release-observability/ope-122-plan.md) under [OPE-121](../release-observability/plan.md). |
+| Owner / next action | OPE-122 under [OPE-121](../release-observability/plan.md). |
 | Status | Temporary (tracked under release-observability) |
 
 ## Distribution channels aligned (closed)

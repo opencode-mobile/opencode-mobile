@@ -1,94 +1,51 @@
 # Feature Documentation
 
-Feature work should be documented as a synchronized Feature Slice across iOS and
-Android.
-
-The Android app lives under [`android/`](../../android/) and the iOS app under
-[`ios/OpenCode Mobile/`](../../ios/OpenCode%20Mobile/).
-
-Create one directory per feature:
+Only **live** contracts live here. Shipped one-offs are listed below; details
+are in git and Linear.
 
 ```text
-docs/features/<feature-slug>/
-├── plan.md
-├── progress.md
-├── parity-gaps.md
-└── decisions.md
+docs/features/<slug>/
+├── plan.md           # current state: goal, now, remaining
+├── decisions.md      # still-binding choices only
+└── parity-gaps.md    # only if an open iOS/Android gap exists
 ```
 
-The four feature-wide files describe shared intent and state. Add focused
-execution detail as needed for ticket or task work:
+Do not add `progress.md`, ticket plans, or research dumps.
 
-```text
-docs/features/<feature-slug>/<ticket-or-task>-plan.md
-```
+## Live
 
-A task-specific plan does not replace `plan.md`. Plans are Markdown only;
-committed HTML companions are retired. Render a temporary visual review on
-demand when one is needed.
+| Slug | Why it stays |
+| --- | --- |
+| [session-chat](session-chat/plan.md) | Session screen contract |
+| [message-store](message-store/plan.md) | REST/SSE merge + display pipeline |
+| [foreground-event-stream](foreground-event-stream/plan.md) | App-wide SSE |
+| [server-api-v2](server-api-v2/plan.md) | Dual-stack + TUI v2 projection |
+| [native-rendered-markdown](native-rendered-markdown/plan.md) | Shared highlighter |
+| [ci-pr-gating](ci-pr-gating/plan.md) | Checks / `ruleset.md` |
+| [android-release-distribution](android-release-distribution/operator-runbook.md) | Play / Firebase runbook |
+| [ios-release-distribution](ios-release-distribution/operator-runbook.md) | TestFlight / Firebase runbook |
 
-## `plan.md`
+## Shipped (no live docs dir)
 
-Use `plan.md` to define the shared product intent before implementation.
+Home and connection: server-connection, multi-server, api-version-indicator,
+app-onboarding, project-selection, project-list-home, add-project,
+remove-project, session-list-project-picker, skip-all-chip-one-project,
+home-session-actions, home-activity-grouping, session-repository,
+session-rename, session-archive-delete, session-ready, session-project-identity,
+sync-probe, new-session-progress, initial-load-indicator.
 
-Include:
+Chat: message-repository, file-attachments, permission-approval,
+question-request, session-todos, review-changes, session-compact,
+session-context, model-selection, slash-and-at-commands, assistant-tool-parts,
+collapse-consecutive-tool-calls, composer-drafts, composer-liquid-glass,
+liquid-glass-home-list, session-cache, session-cache-sync-indicator,
+clear-data, diagnostic-logs.
 
-- user goal;
-- in-scope behavior;
-- out-of-scope behavior;
-- server APIs involved;
-- expected platform logs for API calls, live updates, and important mutations;
-- domain objects involved;
-- Screen Model UI states and user actions or events;
-- native navigation entry points;
-- error states;
-- permission request behavior, if relevant;
-- design-system components needed and whether each is existing, new or extended,
-  or intentionally feature-local.
+Other: theme, rendered-markdown (superseded), retire-project-session-selector,
+ios-oniguruma-backend, ios-ui-organization, release-observability,
+ui-snapshot-evidence.
 
-Record a reason for any field that does not apply instead of leaving its status
-ambiguous.
+## New work
 
-## `progress.md`
-
-Use `progress.md` as the working log for implementation status.
-
-Track:
-
-- shared planning status;
-- design-system dependencies;
-- iOS implementation status;
-- Android implementation status;
-- blockers affecting implementation;
-- remaining work.
-
-Keep transient command output, screenshots, and debug evidence out of canonical
-feature progress. Record any durable status or decision revealed by that
-evidence instead of copying the raw artifact.
-
-## `parity-gaps.md`
-
-Use `parity-gaps.md` for temporary or intentional differences between the two
-apps.
-
-Each gap should include:
-
-- expected shared intent;
-- current iOS state;
-- current Android state;
-- affected area: behavior, state model, copy, visual semantics, token mapping,
-  accessibility behavior, error handling, or missing implementation;
-- reason;
-- owner or next action;
-- status: temporary or intentional.
-
-Move broad design-system differences that are meant to persist into
-`docs/design-system/divergences.md`.
-
-## `decisions.md`
-
-Use `decisions.md` for feature-level decisions that are useful locally but do
-not rise to the level of an ADR.
-
-Create an ADR instead only when a decision is hard to reverse, surprising
-without context, and the result of a real trade-off.
+Create a directory only if the contract will stay live. Otherwise put the
+ticket in Linear.
