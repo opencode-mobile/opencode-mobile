@@ -121,10 +121,4 @@ Skills live in `.agents/skills/` and are symlinked for Cursor and Claude:
 
 `AGENTS.md` and `CLAUDE.md` share the same content. Edit skills under `.agents/skills/<skill-name>/SKILL.md` only.
 
-## V1 scope (summary)
-
-In scope: session list/control, messages, async prompts, foreground event stream, session status, abort, permission approve/deny, session diffs.
-
-Out of scope for v1: cross-platform frameworks, app-managed tunnels, push notifications, multi-project switching, mobile shell execution, and full IDE-style file editing.
-
-See [AGENTS.md](AGENTS.md) for the full boundary.
+See [AGENTS.md](AGENTS.md) for agent and documentation rules.

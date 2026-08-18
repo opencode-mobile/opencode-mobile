@@ -56,7 +56,7 @@ error message (same style as other Session Chat mutations).
 ## Domain Objects
 
 - **session** — includes `archivedAtEpochMs` for list filtering.
-- **archived session** — excluded from active lists; not browsable in v1.
+- **archived session** — excluded from active lists; no browser yet.
 - **archive** / **delete (session)** — distinct lifecycle actions.
 - **Session Repository** — `archiveSession`, `deleteSession`.
 - **Live Store** — refreshes lists; archived rows filtered out after reload.

@@ -28,9 +28,8 @@ No intentional or temporary platform differences recorded for OPE-57.
 - **iOS / Android:** Same Commands-sheet allowlist and hide rules.
 - **Reason:** Mobile needs a persistent discovery affordance; keeping catalogs
   separate avoids mixing skills/MCP with session lifecycle actions.
-- **Intentional** for v1.
-- **Next action:** Keep documented; do not add client rows to the typed `/`
-  overlay without revisiting this decision.
+- **Intentional** for this slice (typed `/` stays server commands).
+- **Next action:** Revisit if product wants client rows in the typed `/` overlay.
 
 ### iOS pushes new/forked session instead of replacing the backstack entry
 

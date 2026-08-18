@@ -1,12 +1,11 @@
 # Server Connection Decisions
 
-## Single active Connection Profile for v1
+## Single active Connection Profile (original)
 
 - Date: 2026-05-27
 - Decision: persist exactly one active Connection Profile; no server list or
   switcher.
-- Reason: matches v1 bounded context (one opencode server, one project context
-  at a time).
+- Reason: one server at a time for the first ship.
 - Revisit when: multi-server or multi-project switching is in scope.
   Tracked as [OPE-159](https://linear.app/opencode-mobile/issue/OPE-159/multiple-connection-profiles)
   (`docs/features/multi-server/`).

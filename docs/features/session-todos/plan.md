@@ -19,7 +19,7 @@ unfinished so the user can see progress without editing or checking off items.
 ## Out Of Scope
 
 - Client edit or check-off of Session Todos (no write API).
-- Showing or sorting by priority in v1.
+- Showing or sorting by priority (not built).
 - Showing `todowrite` tool parts in the timeline (already hidden).
 - Push / background sync of todos.
 - Brief all-done close animation timing beyond exposing finished state for the
@@ -38,7 +38,7 @@ Canonical naming and UX live in `CONTEXT.md` (**Session Todo List** /
 | All-done | Brief stay after an in-session finish, then close; no replay on reopen |
 | Active preview | `in_progress` → first `pending` → last `completed` → first |
 | Progress | `N` = completed only; `M` = total; cancelled finishes list without bumping `N` |
-| Priority | Not shown or sorted in v1 |
+| Priority | Not shown or sorted |
 | Sheet | Progress-first header; view-only status rows |
 | Float stack | Todos + Review + Syncing at top; Scroll to end only at bottom; hide Todos and Review while sheet open |
 | Permission | Wins over the todos sheet (dismiss/block sheet; pill may stay) |

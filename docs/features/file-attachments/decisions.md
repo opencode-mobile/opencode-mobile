@@ -7,7 +7,7 @@ Resolved in the 2026-07-16 grilling session (all recommendations accepted).
 - Date: 2026-07-16
 - Decision: Mobile attaches files by embedding `data:` URLs in
   `FilePartInput` on `prompt_async`, matching upstream. Do not design an
-  app-managed upload/relay endpoint for v1.
+  app-managed upload/relay endpoint unless the server adds one.
 - Reason: OpenAPI and web clients have no separate upload API for composer
   attachments; the prompt body is the transfer.
 - Revisit when: server adds a first-class upload API that mobile should adopt.
@@ -26,11 +26,11 @@ Resolved in the 2026-07-16 grilling session (all recommendations accepted).
 ## Local device files only in this slice
 
 - Date: 2026-07-16
-- Decision: In scope is device photos/documents encoded as data URLs. Project
-  `@` mentions and `file://` server-path attachments stay out of scope.
-  Camera capture is out of v1.
-- Reason: Server-path attach needs project browsing (excluded from v1). Camera
-  is not required for web parity.
+- Decision: This slice is device photos/documents encoded as data URLs. Project
+  `@` mentions, `file://` server-path attachments, and camera capture were
+  not built here.
+- Reason: Server-path attach needs project browsing. Camera was not required
+  for the first web-parity pass.
 - Revisit when: project-context or camera follow-ups are planned.
 
 ## Match web acceptance semantics
@@ -62,7 +62,7 @@ Resolved in the 2026-07-16 grilling session (all recommendations accepted).
   failure is messy. HTTP failure still deserves draft restore.
 - Revisit when: mobile adds a dedicated async send-result model.
 
-## No hard client image resize in v1
+## No hard client image resize in this slice
 
 - Date: 2026-07-16
 - Decision: Rely on server normalize (default 5 MiB base64 / 2000×2000) and
@@ -79,7 +79,7 @@ Resolved in the 2026-07-16 grilling session (all recommendations accepted).
   flattened into `text`. Prefer the chip/card for text-like attachments over
   inventing a second bubble from synthetic server text. Inline image preview
   in timeline; PDF/text tap may open a system viewer/share sheet; no in-app
-  PDF reader in v1.
+  PDF reader.
 - Reason: Matches web’s data-URL attachment presentation without expanding
   mobile IDE scope.
 - Revisit when: richer preview is requested.

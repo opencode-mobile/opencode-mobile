@@ -6,10 +6,10 @@ Session Chat observes `MessageRepository.observeDisplayMessages` for timeline
 rows and `refreshDisplayMessages` for explicit reloads. Send stays on the same
 repository. `MessageLiveStore` is removed.
 
-## Store is in-memory for v1
+## Store is in-memory
 
 `InMemoryMessageStore` holds REST snapshots plus SSE-derived info/parts. No local
-database until offline scope is revisited.
+database until offline persistence is added.
 
 ## Sync owns transport merge policy
 

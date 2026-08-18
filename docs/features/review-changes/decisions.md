@@ -59,5 +59,4 @@
 ## Read-Only Boundary
 
 - Decision: Review Changes does not edit, apply, or revert patches.
-- Reason: v1 scope is inspection, and mobile file mutation would expand the
-  product into file-editing and shell-control behavior.
+- Reason: this slice is inspection only. File mutation is a separate feature.

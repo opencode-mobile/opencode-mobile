@@ -17,7 +17,7 @@ I update it?".
 ├── CLAUDE.md -> AGENTS.md         # symlink (same content)
 ├── docs/
 │   ├── architecture.md            # native app architecture + layer shape + parity rules
-│   ├── feasibility.md             # server-API feasibility study for v1
+│   ├── feasibility.md             # server-API evidence
 │   ├── mac-mini-runner.md         # iOS CI self-hosted runner ops
 │   ├── adr/                       # 6 architectural decision records (0001–0006)
 │   ├── agents/                    # agent-facing how-to docs
@@ -120,12 +120,8 @@ committing an HTML file. Markdown is the source of truth.
     references; `feature` reads `plan.md` / `decisions.md` / `parity-gaps.md`
     per `docs/features/README.md`.
 
-2. **Linear is the execution board; the docs are the source of truth.**
-    `linear-project-tracking` reads the canonical docs (`plan.md`,
-    `parity-gaps.md`) and mirrors scope/state/remaining work onto Linear
-   issues under the `opencode apps` project. Authority boundaries: canonical docs
-   own product scope, progress, parity, decisions, intentional differences;
-   Linear owns scheduling, assignment, priority, status, dependencies.
+2. **Linear is the ticket.** Refine issues in Linear. Repo `plan.md` is
+    only the durable product contract, not a ticket mirror.
 
 3. **Architecture docs feed the apps.** `docs/architecture.md` defines the layer
    shape; its mermaid diagram shows Feature Docs + Design System Docs feeding the
@@ -225,7 +221,7 @@ diff is only intended durable documentation.
 5. Account for affected checks (build/lint/test/preview) — report in handoff, not
    in canonical docs.
 6. Close the Feature Slice ledger: every item complete / not-applicable-with-
-   reason / blocked-with-evidence; stay inside documented v1 scope.
+    reason / blocked-with-evidence.
 
 ### 5.3 Design-system creation: `design-system-component`
 
@@ -239,14 +235,11 @@ diff is only intended durable documentation.
    parity-gaps.md for temporary).
 6. Close the completion ledger; run the affected build/lint/test/preview checks.
 
-### 5.4 Linear sync: `linear-project-tracking`
+### 5.4 Linear: `linear-project-tracking`
 
-Six-statement reconciliation contract (one parent issue per slice; issue links
-`docs/features/<slug>/`; every incomplete canonical item appears under
-**Remaining** or a child; no completed item stays open; every unresolved parity
-gap is tracked; issue state/milestone/labels match docs). Sync loop: resolve the
-canonical slice → resolve the Linear issue → mirror each observable transition
-(docs first, then Linear) → reconcile before handoff on fresh reads.
+Linear owns the ticket (detail, refinement, remaining, status). Repo docs
+own the durable product contract only. Do not create markdown to keep Linear
+“in sync.”
 
 ### 5.5 Generated docs and scripts
 

@@ -329,14 +329,13 @@
 - Reason: placement matters for the chat composer, but real attachment behavior
   may imply file upload or mobile IDE capabilities that remain outside this
   slice.
-- Revisit when: context attachment behavior is explicitly designed within v1
-  scope.
+- Revisit when: context attachment behavior is explicitly designed.
 - Revisited: 2026-07-16 — device **Attachments** are specified under
   [File Attachments](../file-attachments/plan.md) with glossary terms in
   `CONTEXT.md`.
 - Superseded: 2026-07-16 by OPE-55. The affordance now opens native Photos and
   Files/document entry points and uses **Add attachment**. Project `@` /
-  `file://` browsing remains out of scope.
+  `file://` browsing was not part of that slice.
 
 ## WhatsApp-style timeline order and scroll anchor
 

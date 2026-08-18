@@ -57,7 +57,7 @@ Disambiguation uses local added-project worktrees for the active server URL.
   inputs (today: facade / `SessionInfo` + nav worktree), not a new screen.
 - UI state (conceptual): `sessionTitle`, `projectLetter`, `projectLetterAccent`,
   `projectLabel`, `connectionStatus`.
-- No new user actions for v1 (label is not interactive).
+- Label is not interactive.
 
 ## Native Navigation
 

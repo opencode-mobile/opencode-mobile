@@ -547,8 +547,7 @@ the question dock only.
 v2** (`origin/beta`). “v1 timeline parity”, “hide because v1 also hides it”,
 and “success is not TUI parity” are not reasons to drop events, skip
 thinking, or delay the first visible token. Dual-stack HTTP (still talk to
-v1 servers) stays. Product-wide out of scope (tunnels, push, mobile IDE)
-is unchanged until those docs are revisited.
+v1 servers) stays.
 
 **Why:** Agents and reviews were treating classic TUI v1 as a ceiling. The
 live product target is opencode2’s session stream.

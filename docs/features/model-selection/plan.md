@@ -59,7 +59,7 @@ When a session has **no saved selection yet**, desktop bootstraps from the
 
 ### Mobile Target
 
-Mirror the durable parts of desktop behavior without expanding v1 scope:
+Mirror the durable parts of desktop behavior:
 
 | Step | Source | Notes |
 | --- | --- | --- |
@@ -86,7 +86,7 @@ or legacy session entry and rewrites only that session entry. This intentionally
 improves cross-client correctness beyond desktop's strict local-cache guard.
 
 **Unavailable model handling:** keep existing non-blocking notice and fall back
-to catalog default; do not delete the stale cache automatically in v1.
+to catalog default; do not delete the stale cache automatically.
 
 ### History Bootstrap Alignment
 

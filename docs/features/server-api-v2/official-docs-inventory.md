@@ -728,7 +728,7 @@ No documented **write/edit** FS API (out of v1 mobile scope anyway).
 
 ---
 
-## Other index groups (mobile v1 usually out of scope)
+## Other index groups (not inventoried here)
 
 Documented on [index](https://opencode.ai/v2/docs/api) but not expanded here
 except as names: **plugin**, **generate**, **integration** (OAuth/key/command

@@ -8,7 +8,7 @@
 
 ## Raw Message Rows
 
-- Decision: Raw messages are rows only for v1.
+- Decision: Raw messages are rows only in this slice.
 - Reason: mobile should expose the audit trail without the density and layout
   cost of expandable JSON payloads.
 
