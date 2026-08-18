@@ -7,8 +7,7 @@ them, runs them to generate images, publishes the report, and does not stage
 them. Checks never see them.
 
 **Why:** The user wants proof of work, not a visual-regression gate. Committing
-goldens would fight `docs/documentation.md` (raw evidence stays out of
-canonical docs) and would make every padding tweak a CI failure.
+goldens stay out of git and would make every padding tweak a CI failure.
 
 ## Two frames per subject: isolated + in-session
 

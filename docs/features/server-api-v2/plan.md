@@ -1,8 +1,5 @@
 # Server API v2 Compatibility
 
-Related: [`official-docs-inventory.md`](official-docs-inventory.md),
-[`research-tui-session-v1-v2.md`](research-tui-session-v1-v2.md).
-
 ## User Goal
 
 Connect OpenCode Mobile to both OpenCode **v1** (unprefixed) and **v2**
