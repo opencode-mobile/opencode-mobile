@@ -110,61 +110,78 @@ nonisolated struct EventDomainAdapter: Sendable {
         case "question.v2.rejected", "form.cancelled":
             [event(type: "question.rejected", properties: properties)]
         case "session.next.prompt.admitted", "session.next.prompted",
-             "session.inbox.enqueued", "session.inbox.delivered":
+             "session.inbox.enqueued", "session.inbox.delivered",
+             "session.inbox.delivery.changed":
             userPromptEvents(properties)
+        case "session.inbox.cancelled":
+            [inboxCancelled(properties)]
         case "session.next.step.started", "session.step.started":
             stepStarted(properties)
         case "session.execution.started":
             [statusEvent(properties, statusType: "busy")]
-        case "session.next.step.ended":
+        case "session.next.step.ended", "session.step.ended":
             [
                 assistantMessageUpdated(properties),
                 event(type: "session.active.snapshot", properties: properties),
             ]
         case "session.execution.succeeded",
-             "session.execution.interrupted",
-             "session.compaction.ended",
-             "session.compaction.failed":
+             "session.execution.interrupted":
             [event(type: "session.idle", properties: properties)]
         case "session.next.step.failed", "session.execution.failed":
             [
                 event(type: "session.error", properties: properties),
                 event(type: "session.idle", properties: properties),
             ]
+        case "session.step.failed":
+            [
+                event(type: "session.error", properties: properties),
+                assistantMessageUpdated(properties),
+            ]
         case "session.next.retried", "session.retry.scheduled":
             [statusEvent(properties, statusType: "retry")]
         case "session.next.tool.input.started", "session.tool.input.started",
+             "session.next.tool.input.ended", "session.tool.input.ended",
              "session.next.tool.called", "session.tool.called",
              "session.next.tool.progress", "session.tool.progress",
              "session.next.tool.success", "session.tool.success",
              "session.next.tool.failed", "session.tool.failed":
             [toolPartUpdated(type: type, properties: properties)]
-        case "session.next.shell.started":
+        case "session.next.tool.input.delta", "session.tool.input.delta":
+            [toolInputDelta(properties)]
+        case "session.next.shell.started", "session.shell.started":
             [
                 statusEvent(properties, statusType: "busy"),
                 shellPartUpdated(properties, status: "running"),
             ]
-        case "session.next.shell.ended":
+        case "session.next.shell.ended", "session.shell.ended":
             [
                 shellPartUpdated(properties, status: "completed"),
                 event(type: "session.active.snapshot", properties: properties),
             ]
-        case "session.shell.started":
-            [statusEvent(properties, statusType: "busy")]
-        case "session.shell.ended":
-            [event(type: "session.idle", properties: properties)]
         case "session.next.compaction.started", "session.compaction.started":
             [
                 statusEvent(properties, statusType: "busy"),
                 compactionPartUpdated(properties, completed: false),
             ]
-        case "session.next.compaction.delta":
+        case "session.next.compaction.delta", "session.compaction.delta":
             [compactionTextDelta(properties)]
-        case "session.next.compaction.ended":
+        case "session.next.compaction.ended", "session.compaction.ended":
             [
                 compactionPartUpdated(properties, completed: true),
                 event(type: "session.active.snapshot", properties: properties),
             ]
+        case "session.next.compaction.failed", "session.compaction.failed":
+            [
+                compactionPartUpdated(properties, completed: true),
+                event(type: "session.error", properties: properties),
+                event(type: "session.idle", properties: properties),
+            ]
+        case "session.next.reasoning.started", "session.reasoning.started":
+            reasoningStarted(properties)
+        case "session.next.reasoning.delta", "session.reasoning.delta":
+            [reasoningDelta(properties)]
+        case "session.next.reasoning.ended", "session.reasoning.ended":
+            [reasoningPartUpdated(properties)]
         case "session.next.text.started", "session.text.started":
             textStarted(properties)
         case "session.next.text.delta", "session.text.delta":
@@ -176,6 +193,8 @@ nonisolated struct EventDomainAdapter: Sendable {
             [event(type: "session.updated", properties: properties)]
         case "session.renamed":
             [renamedToUpdated(properties)]
+        case "session.usage.updated", "session.next.usage.updated":
+            [usageUpdated(properties)]
         default:
             [event(type: type, properties: properties)]
         }
@@ -189,6 +208,23 @@ nonisolated struct EventDomainAdapter: Sendable {
         )
     }
 
+    private func usageUpdated(_ properties: [String: Any]) -> OpencodeEvent {
+        var info: [String: Any] = ["role": "assistant"]
+        if let assistantID = string(in: properties, key: "assistantMessageID") ?? string(in: properties, key: "messageID") {
+            info["id"] = assistantID
+        }
+        if let sessionID = sessionID(from: properties) {
+            info["sessionID"] = sessionID
+        }
+        if let tokens = properties["tokens"] {
+            info["tokens"] = tokens
+        }
+        if let cost = properties["cost"] {
+            info["cost"] = cost
+        }
+        return event(type: "message.updated", properties: ["info": info])
+    }
+
     private func renamedToUpdated(_ properties: [String: Any]) -> OpencodeEvent {
         let sessionID = sessionID(from: properties)
         var info: [String: Any] = [:]
@@ -200,6 +236,17 @@ nonisolated struct EventDomainAdapter: Sendable {
             info["title"] = title
         }
         return event(type: "session.updated", properties: ["info": info])
+    }
+
+    private func inboxCancelled(_ properties: [String: Any]) -> OpencodeEvent {
+        var projected: [String: Any] = [:]
+        if let sessionID = sessionID(from: properties) {
+            projected["sessionID"] = sessionID
+        }
+        if let messageID = userMessageID(in: properties) {
+            projected["messageID"] = messageID
+        }
+        return event(type: "message.removed", properties: projected)
     }
 
     private func userPromptEvents(_ properties: [String: Any]) -> [OpencodeEvent] {
@@ -335,7 +382,7 @@ nonisolated struct EventDomainAdapter: Sendable {
 
     private func toolPartUpdated(type: String, properties: [String: Any]) -> OpencodeEvent {
         let status: String
-        if type.hasSuffix("tool.input.started") {
+        if type.hasSuffix("tool.input.started") || type.hasSuffix("tool.input.ended") {
             status = "pending"
         } else if type.hasSuffix("tool.success") {
             status = "completed"
@@ -367,6 +414,23 @@ nonisolated struct EventDomainAdapter: Sendable {
             error: error,
             metadata: properties["structured"] as? [String: Any]
         )
+    }
+
+    private func toolInputDelta(_ properties: [String: Any]) -> OpencodeEvent {
+        var projected: [String: Any] = ["field": "input"]
+        if let sessionID = sessionID(from: properties) {
+            projected["sessionID"] = sessionID
+        }
+        if let messageID = string(in: properties, key: "assistantMessageID") {
+            projected["messageID"] = messageID
+        }
+        if let partID = string(in: properties, key: "id") ?? string(in: properties, key: "callID") {
+            projected["partID"] = partID
+        }
+        if let delta = string(in: properties, key: "delta") {
+            projected["delta"] = delta
+        }
+        return event(type: "message.part.delta", properties: projected)
     }
 
     private func shellPartUpdated(_ properties: [String: Any], status: String) -> OpencodeEvent {
@@ -442,6 +506,52 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let sessionID = sessionID(from: properties) { part["sessionID"] = sessionID }
         if let messageID { part["messageID"] = messageID }
         if let callID { part["callID"] = callID }
+        return event(type: "message.part.updated", properties: ["part": part])
+    }
+
+    private func reasoningStarted(_ properties: [String: Any]) -> [OpencodeEvent] {
+        let sessionID = sessionID(from: properties)
+        var info: [String: Any] = ["role": "assistant"]
+        if let assistantID = string(in: properties, key: "assistantMessageID") {
+            info["id"] = assistantID
+        }
+        if let sessionID {
+            info["sessionID"] = sessionID
+        }
+        return [
+            event(type: "message.updated", properties: ["info": info]),
+            reasoningPartUpdated(properties, text: ""),
+        ]
+    }
+
+    private func reasoningDelta(_ properties: [String: Any]) -> OpencodeEvent {
+        var projected: [String: Any] = ["field": "reasoning"]
+        if let sessionID = sessionID(from: properties) {
+            projected["sessionID"] = sessionID
+        }
+        if let messageID = string(in: properties, key: "assistantMessageID") {
+            projected["messageID"] = messageID
+        }
+        if let partID = reasoningPartID(in: properties) {
+            projected["partID"] = partID
+        }
+        if let delta = string(in: properties, key: "delta") {
+            projected["delta"] = delta
+        }
+        return event(type: "message.part.delta", properties: projected)
+    }
+
+    private func reasoningPartUpdated(_ properties: [String: Any], text: String? = nil) -> OpencodeEvent {
+        var part: [String: Any] = ["type": "reasoning", "text": text ?? string(in: properties, key: "text") ?? ""]
+        if let partID = reasoningPartID(in: properties) {
+            part["id"] = partID
+        }
+        if let sessionID = sessionID(from: properties) {
+            part["sessionID"] = sessionID
+        }
+        if let messageID = string(in: properties, key: "assistantMessageID") {
+            part["messageID"] = messageID
+        }
         return event(type: "message.part.updated", properties: ["part": part])
     }
 
@@ -529,6 +639,19 @@ nonisolated struct EventDomainAdapter: Sendable {
         }
         if let ordinal = string(in: properties, key: "ordinal") {
             return "text-\(ordinal)"
+        }
+        return nil
+    }
+
+    private func reasoningPartID(in properties: [String: Any]) -> String? {
+        if let reasoningID = string(in: properties, key: "reasoningID") {
+            return reasoningID
+        }
+        if let id = string(in: properties, key: "id") {
+            return id
+        }
+        if let ordinal = string(in: properties, key: "ordinal") {
+            return "reasoning-\(ordinal)"
         }
         return nil
     }

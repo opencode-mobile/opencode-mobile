@@ -4,9 +4,11 @@ import dev.opencode.mobile.data.remote.dto.MessageInfoDto
 import dev.opencode.mobile.data.remote.dto.MessagePartDto
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -148,7 +150,8 @@ class InMemoryMessageStore
             val sessionParts = partsCaches[sessionId] ?: return false
             return sessionParts.any { (messageId, messageParts) ->
                 messageParts.any { (partId, part) ->
-                    part is MessagePart.Text && (part.isStreaming || hasChunks(sessionId, messageId, partId))
+                    (part is MessagePart.Text || part is MessagePart.Reasoning) &&
+                        (part.isStreamingPart() || hasChunks(sessionId, messageId, partId))
                 }
             }
         }
@@ -172,13 +175,27 @@ class InMemoryMessageStore
             var changed = false
             for ((messageId, messageParts) in partsCaches[sessionId].orEmpty()) {
                 for (entry in messageParts.entries) {
-                    val text = entry.value as? MessagePart.Text ?: continue
-                    val flattened = flattenedText(sessionId, messageId, text)
-                    val wasStreaming = text.isStreaming || hasChunks(sessionId, messageId, text.id)
-                    if (wasStreaming || flattened != text.text) {
-                        entry.setValue(text.copy(text = flattened, isStreaming = false))
-                        clearChunks(sessionId, messageId, text.id)
-                        changed = true
+                    when (val part = entry.value) {
+                        is MessagePart.Text -> {
+                            val flattened = flattenedText(sessionId, messageId, part)
+                            val wasStreaming = part.isStreaming || hasChunks(sessionId, messageId, part.id)
+                            if (wasStreaming || flattened != part.text) {
+                                entry.setValue(part.copy(text = flattened, isStreaming = false))
+                                clearChunks(sessionId, messageId, part.id)
+                                changed = true
+                            }
+                        }
+                        is MessagePart.Reasoning -> {
+                            val flattened =
+                                flattenedText(sessionId, messageId, partId = part.id, baseText = part.text)
+                            val wasStreaming = part.isStreaming || hasChunks(sessionId, messageId, part.id)
+                            if (wasStreaming || flattened != part.text) {
+                                entry.setValue(part.copy(text = flattened, isStreaming = false))
+                                clearChunks(sessionId, messageId, part.id)
+                                changed = true
+                            }
+                        }
+                        else -> Unit
                     }
                 }
             }
@@ -311,9 +328,7 @@ class InMemoryMessageStore
             if (delta == null) {
                 clearChunks(sessionId, messageId, partId)
             }
-            val streamingChanged =
-                (previous as? MessagePart.Text)?.isStreaming !=
-                    (resolvedPart as? MessagePart.Text)?.isStreaming
+            val streamingChanged = previous?.isStreamingPart() != resolvedPart.isStreamingPart()
             return SessionChangeSet(
                 sessionRevision = 0,
                 changedMessageIds = setOf(messageId),
@@ -331,12 +346,39 @@ class InMemoryMessageStore
         ): SessionChangeSet? {
             if (ignoredPartIds[sessionId]?.get(messageId)?.contains(partId) == true) return null
             val msgParts = partsCaches[sessionId]?.get(messageId) ?: return null
-            val existing = msgParts[partId] as? MessagePart.Text ?: return null
-            val appended = appendChunk(sessionId, messageId, partId, existing.text, delta)
+            val existing = msgParts[partId] ?: return null
+            if (existing is MessagePart.Tool) {
+                val previous = existing.input?.get("preview")?.jsonPrimitive?.contentOrNull.orEmpty()
+                msgParts[partId] =
+                    existing.copy(
+                        input =
+                            buildJsonObject {
+                                existing.input?.forEach { (key, value) -> if (key != "preview") put(key, value) }
+                                put("preview", previous + delta)
+                            },
+                    )
+                return SessionChangeSet(
+                    sessionRevision = 0,
+                    changedMessageIds = setOf(messageId),
+                    changedPartIdsByMessage = mapOf(messageId to setOf(partId)),
+                )
+            }
+            val baseText =
+                when (existing) {
+                    is MessagePart.Text -> existing.text
+                    is MessagePart.Reasoning -> existing.text
+                    else -> return null
+                }
+            val appended = appendChunk(sessionId, messageId, partId, baseText, delta)
             if (!appended) return null
-            val wasStreaming = existing.isStreaming
+            val wasStreaming = existing.isStreamingPart()
             if (!wasStreaming) {
-                msgParts[partId] = existing.copy(isStreaming = true)
+                msgParts[partId] =
+                    when (existing) {
+                        is MessagePart.Text -> existing.copy(isStreaming = true)
+                        is MessagePart.Reasoning -> existing.copy(isStreaming = true)
+                        else -> existing
+                    }
             }
             return SessionChangeSet(
                 sessionRevision = 0,
@@ -472,12 +514,19 @@ class InMemoryMessageStore
             sessionId: String,
             messageId: String,
             part: MessagePart.Text,
+        ): String = flattenedText(sessionId, messageId, partId = part.id, baseText = part.text)
+
+        private fun flattenedText(
+            sessionId: String,
+            messageId: String,
+            partId: String?,
+            baseText: String,
         ): String {
-            val key = chunkKey(messageId, part.id) ?: return part.text
+            val key = chunkKey(messageId, partId) ?: return baseText
             val chunks = deltaChunks[sessionId]?.get(key).orEmpty()
-            if (chunks.isEmpty()) return part.text
-            return buildString(part.text.length + chunks.sumOf { it.length }) {
-                append(part.text)
+            if (chunks.isEmpty()) return baseText
+            return buildString(baseText.length + chunks.sumOf { it.length }) {
+                append(baseText)
                 chunks.forEach { append(it) }
             }
         }
@@ -512,6 +561,24 @@ class InMemoryMessageStore
                     appendChunk(sessionId, messageId, partId, baseText, delta)
                 }
                 return textPart
+            }
+            if (delta != null && partDto.type == "reasoning") {
+                val baseText =
+                    when (existingPart) {
+                        is MessagePart.Reasoning -> existingPart.text
+                        else -> partDto.text.orEmpty()
+                    }
+                val partId = partDto.id
+                val reasoningPart =
+                    MessagePart.Reasoning(
+                        text = baseText,
+                        isStreaming = true,
+                        id = partId,
+                    )
+                if (partId != null) {
+                    appendChunk(sessionId, messageId, partId, baseText, delta)
+                }
+                return reasoningPart
             }
             return resolveToolStart(adapter.toMessagePart(partDto), existingPart)
         }
@@ -558,11 +625,18 @@ class InMemoryMessageStore
             sessionId: String,
             messageId: String,
             part: MessagePart,
-        ): MessagePart {
-            val text = part as? MessagePart.Text ?: return part
-            val flattened = flattenedText(sessionId, messageId, text)
-            return if (flattened == text.text) text else text.copy(text = flattened)
-        }
+        ): MessagePart =
+            when (part) {
+                is MessagePart.Text -> {
+                    val flattened = flattenedText(sessionId, messageId, part)
+                    if (flattened == part.text) part else part.copy(text = flattened)
+                }
+                is MessagePart.Reasoning -> {
+                    val flattened = flattenedText(sessionId, messageId, partId = part.id, baseText = part.text)
+                    if (flattened == part.text) part else part.copy(text = flattened)
+                }
+                else -> part
+            }
 
         private fun toolStartTimesLocked(sessionId: String): Map<String, Long> {
             val starts = mutableMapOf<String, Long>()
@@ -622,6 +696,14 @@ class InMemoryMessageStore
                 is MessagePart.Tool -> id
                 is MessagePart.File -> id
                 is MessagePart.Compaction -> id
+                is MessagePart.Reasoning -> id
+            }
+
+        private fun MessagePart.isStreamingPart(): Boolean =
+            when (this) {
+                is MessagePart.Text -> isStreaming
+                is MessagePart.Reasoning -> isStreaming
+                else -> false
             }
 
         private fun tryParsePartDto(jsonObject: JsonObject): MessagePartDto? =

@@ -208,6 +208,16 @@ struct EventDomainAdapterTests {
         #expect(events[1].rawProperties?["part"]?.dictionaryValue?["text"]?.stringValue == "Hello from CLI")
     }
 
+    @Test func parseEvent_projectsToolInputDeltaIntoPartDelta() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.tool.input.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","delta":"path"}}"#
+        )
+        #expect(event?.type == "message.part.delta")
+        #expect(event?.rawProperties?["field"]?.stringValue == "input")
+        #expect(event?.rawProperties?["partID"]?.stringValue == "prt-1")
+    }
+
     @Test func parseEvents_projectsLiveToolEnvelopeCreatedIntoStateTimeStart() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(
@@ -219,6 +229,17 @@ struct EventDomainAdapterTests {
         #expect(event?.rawProperties?["part"]?.dictionaryValue?["tool"]?.stringValue == "task")
         #expect(state?["status"]?.stringValue == "pending")
         #expect(state?["time"]?.dictionaryValue?["start"]?.int64Value == 1_710_000_000_000)
+    }
+
+    @Test func parseEvent_projectsInboxCancelledIntoMessageRemoved() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.inbox.cancelled","data":{"inboxID":"msg-2","sessionID":"ses-1"}}"#
+        )
+        #expect(event?.type == "message.removed")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.rawProperties?["messageID"]?.stringValue == "msg-2")
+        #expect(event?.triggersMessageRefresh == true)
     }
 
     @Test func parseEvents_projectsInboxEnqueuedItemPayloadIntoUserText() {
@@ -276,14 +297,66 @@ struct EventDomainAdapterTests {
         #expect(event?.triggersStatusRefresh == true)
     }
 
-    @Test func parseEvent_doesNotTreatLiveStepEndedAsIdle() {
+    @Test func parseEvents_projectsReasoningStartedIntoAssistantAndReasoningPart() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.reasoning.started","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"r-1"}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["type"]?.stringValue == "reasoning")
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["id"]?.stringValue == "r-1")
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["messageID"]?.stringValue == "msg-2")
+    }
+
+    @Test func parseEvent_projectsReasoningDeltaIntoPartDelta() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.reasoning.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"r-1","delta":"hmm"}}"#
+        )
+        #expect(event?.type == "message.part.delta")
+        #expect(event?.rawProperties?["field"]?.stringValue == "reasoning")
+        #expect(event?.rawProperties?["delta"]?.stringValue == "hmm")
+        #expect(event?.rawProperties?["partID"]?.stringValue == "r-1")
+        #expect(event?.triggersMessageRefresh == true)
+    }
+
+    @Test func parseEvent_doesNotTreatLiveStepEndedAsIdle() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
             dataLine: #"{"type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
         )
-        #expect(event?.type == "session.step.ended")
-        #expect(event?.sessionID == "ses-1")
-        #expect(event?.triggersStatusRefresh == false)
+        #expect(events.map(\.type) == ["message.updated", "session.active.snapshot"])
+        #expect(events[0].sessionID == "ses-1")
+        #expect(!events.contains(where: { $0.type == "session.idle" }))
+        #expect(events[1].triggersStatusRefresh == true)
+    }
+
+    @Test func parseEvents_projectsLiveShellStartedIntoBusyAndBashPart() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.shell.started","data":{"sessionID":"ses-1","callID":"sh-1","assistantMessageID":"msg-2"}}"#
+        )
+        #expect(events.map(\.type) == ["session.status", "message.part.updated"])
+        #expect(events[0].rawProperties?["status"]?.dictionaryValue?["type"]?.stringValue == "busy")
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["tool"]?.stringValue == "bash")
+    }
+
+    @Test func parseEvents_projectsLiveCompactionEndedIntoPartNotIdle() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c"}}"#
+        )
+        #expect(events.map(\.type) == ["message.part.updated", "session.active.snapshot"])
+        #expect(!events.contains(where: { $0.type == "session.idle" }))
+    }
+
+    @Test func parseEvents_projectsLiveCompactionFailedIntoPartErrorAndIdle() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.compaction.failed","data":{"sessionID":"ses-1","messageID":"msg-c"}}"#
+        )
+        #expect(events.map(\.type) == ["message.part.updated", "session.error", "session.idle"])
+        #expect(events.last?.triggersStatusRefresh == true)
     }
 
     @Test func parseEvents_projectsStepEndedIntoAssistantMessageAndActiveSnapshot() {
@@ -318,6 +391,18 @@ struct EventDomainAdapterTests {
         #expect(event?.rawProperties?["messageID"]?.stringValue == "msg-2")
         #expect(event?.rawProperties?["partID"]?.stringValue == "text-0")
         #expect(event?.rawProperties?["delta"]?.stringValue == "Hi")
+        #expect(event?.triggersMessageRefresh == true)
+    }
+
+    @Test func parseEvent_projectsUsageUpdatedIntoAssistantTokens() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.usage.updated","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","tokens":{"input":120,"output":4,"reasoning":0}}}"#
+        )
+        #expect(event?.type == "message.updated")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.rawProperties?["info"]?.dictionaryValue?["id"]?.stringValue == "msg-2")
+        #expect(event?.rawProperties?["info"]?.dictionaryValue?["tokens"]?.dictionaryValue?["input"]?.int64Value == 120)
         #expect(event?.triggersMessageRefresh == true)
     }
 

@@ -66,6 +66,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             return .tool(toolPart(id: dto.id, toolName: toolName, callID: dto.callID, state: dto.state))
         case "compaction":
             return .compaction(CompactionPart(id: dto.id, auto: dto.auto == true, completed: dto.completed == true))
+        case "reasoning":
+            return .reasoning(ReasoningPart(id: dto.id, text: dto.text ?? "", isStreaming: false))
         default:
             return nil
         }
@@ -407,6 +409,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
         case "text":
             guard let text = content.text else { return nil }
             return .text(TextPart(id: content.id, text: text, isStreaming: false))
+        case "reasoning":
+            return .reasoning(ReasoningPart(id: content.id, text: content.text ?? "", isStreaming: false))
         case "tool":
             guard let name = content.name else { return nil }
             let state = content.state
@@ -575,7 +579,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 guard t.isDisplayable else { return nil }
                 let trimmed = t.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 return trimmed.isEmpty ? nil : trimmed
-            case .file, .tool, .compaction:
+            case .file, .tool, .compaction, .reasoning:
                 return nil
             }
         }

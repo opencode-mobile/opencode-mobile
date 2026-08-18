@@ -217,6 +217,32 @@ class SessionMessageEngineTest {
     }
 
     @Test
+    fun finishStreaming_clearsReasoningStreamingFlag() {
+        engine.replaceAll(
+            "ses-1",
+            listOf(
+                Message(
+                    id = "msg-1",
+                    role = MessageRole.Assistant,
+                    text = "",
+                    parts =
+                        listOf(
+                            MessagePart.Reasoning(text = "hmm", isStreaming = true, id = "prt-r"),
+                        ),
+                ),
+            ),
+        )
+        engine.apply("ses-1", MessagePatch.PartDelta("msg-1", "prt-r", " more"))
+        assertTrue(engine.hasStreamingText("ses-1"))
+        engine.finishStreamingText("ses-1")
+        assertFalse(engine.hasStreamingText("ses-1"))
+        val reasoning =
+            engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Reasoning>().single()
+        assertFalse(reasoning.isStreaming)
+        assertEquals("hmm more", reasoning.text)
+    }
+
+    @Test
     fun revision_isMonotonicAcrossMutations() {
         seedStreamingAssistant()
         val r0 = engine.revision("ses-1")

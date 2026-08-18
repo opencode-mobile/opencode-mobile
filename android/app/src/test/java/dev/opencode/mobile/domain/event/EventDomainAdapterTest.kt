@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -246,6 +247,18 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvent_projectsToolInputDeltaIntoPartDelta() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.tool.input.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","delta":"path"}}""",
+            )
+
+        assertEquals("message.part.delta", event?.type)
+        assertEquals("input", event?.rawProperties?.get("field")?.jsonPrimitive?.content)
+        assertEquals("prt-1", event?.rawProperties?.get("partID")?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun parseEvents_projectsLiveToolEnvelopeCreatedIntoStateTimeStart() {
         val event =
             adapter.parseEvent(
@@ -259,6 +272,19 @@ class EventDomainAdapterTest {
         assertEquals("task", part?.get("tool")?.jsonPrimitive?.content)
         assertEquals("pending", state?.get("status")?.jsonPrimitive?.content)
         assertEquals(1_710_000_000_000L, state?.get("time")?.jsonObject?.get("start")?.jsonPrimitive?.longOrNull)
+    }
+
+    @Test
+    fun parseEvent_projectsInboxCancelledIntoMessageRemoved() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.inbox.cancelled","data":{"inboxID":"msg-2","sessionID":"ses-1"}}""",
+            )
+
+        assertEquals("message.removed", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        assertEquals("msg-2", event?.rawProperties?.get("messageID")?.jsonPrimitive?.content)
+        assertTrue(event!!.triggersMessageRefresh)
     }
 
     @Test
@@ -343,15 +369,78 @@ class EventDomainAdapterTest {
     }
 
     @Test
-    fun parseEvent_doesNotTreatLiveStepEndedAsIdle() {
+    fun parseEvents_projectsReasoningStartedIntoAssistantAndReasoningPart() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.reasoning.started","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"r-1"}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
+        val part = events[1].rawProperties?.get("part")?.jsonObject
+        assertEquals("reasoning", part?.get("type")?.jsonPrimitive?.content)
+        assertEquals("r-1", part?.get("id")?.jsonPrimitive?.content)
+        assertEquals("msg-2", part?.get("messageID")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvent_projectsReasoningDeltaIntoPartDelta() {
         val event =
             adapter.parseEvent(
+                """{"type":"session.reasoning.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"r-1","delta":"hmm"}}""",
+            )
+
+        assertEquals("message.part.delta", event?.type)
+        assertEquals("reasoning", event?.rawProperties?.get("field")?.jsonPrimitive?.content)
+        assertEquals("hmm", event?.rawProperties?.get("delta")?.jsonPrimitive?.content)
+        assertEquals("r-1", event?.rawProperties?.get("partID")?.jsonPrimitive?.content)
+        assertTrue(event!!.triggersMessageRefresh)
+    }
+
+    @Test
+    fun parseEvent_doesNotTreatLiveStepEndedAsIdle() {
+        val events =
+            adapter.parseEvents(
                 """{"type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
             )
 
-        assertEquals("session.step.ended", event?.type)
-        assertEquals("ses-1", event?.sessionId)
-        assertTrue(!event!!.triggersStatusRefresh)
+        assertEquals(listOf("message.updated", "session.active.snapshot"), events.map { it.type })
+        assertEquals("ses-1", events[0].sessionId)
+        assertTrue(events.none { it.type == "session.idle" })
+        assertTrue(events[1].triggersStatusRefresh)
+    }
+
+    @Test
+    fun parseEvents_projectsLiveShellStartedIntoBusyAndBashPart() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.shell.started","data":{"sessionID":"ses-1","callID":"sh-1","assistantMessageID":"msg-2"}}""",
+            )
+
+        assertEquals(listOf("session.status", "message.part.updated"), events.map { it.type })
+        assertEquals("busy", events[0].rawProperties?.get("status")?.jsonObject?.get("type")?.jsonPrimitive?.content)
+        assertEquals("bash", events[1].rawProperties?.get("part")?.jsonObject?.get("tool")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvents_projectsLiveCompactionEndedIntoPartNotIdle() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c"}}""",
+            )
+
+        assertEquals(listOf("message.part.updated", "session.active.snapshot"), events.map { it.type })
+        assertTrue(events.none { it.type == "session.idle" })
+    }
+
+    @Test
+    fun parseEvents_projectsLiveCompactionFailedIntoPartErrorAndIdle() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.compaction.failed","data":{"sessionID":"ses-1","messageID":"msg-c"}}""",
+            )
+
+        assertEquals(listOf("message.part.updated", "session.error", "session.idle"), events.map { it.type })
+        assertTrue(events.last().triggersStatusRefresh)
     }
 
     @Test
@@ -366,6 +455,21 @@ class EventDomainAdapterTest {
         assertEquals("msg-2", event?.rawProperties?.get("messageID")?.jsonPrimitive?.content)
         assertEquals("text-0", event?.rawProperties?.get("partID")?.jsonPrimitive?.content)
         assertEquals("Hi", event?.rawProperties?.get("delta")?.jsonPrimitive?.content)
+        assertTrue(event!!.triggersMessageRefresh)
+    }
+
+    @Test
+    fun parseEvent_projectsUsageUpdatedIntoAssistantTokens() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.usage.updated","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","tokens":{"input":120,"output":4,"reasoning":0}}}""",
+            )
+
+        assertEquals("message.updated", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        val info = event?.rawProperties?.get("info")?.jsonObject
+        assertEquals("msg-2", info?.get("id")?.jsonPrimitive?.content)
+        assertEquals(120, info?.get("tokens")?.jsonObject?.get("input")?.jsonPrimitive?.intOrNull)
         assertTrue(event!!.triggersMessageRefresh)
     }
 

@@ -513,6 +513,34 @@ import Testing
         #expect(reloaded.timeStartEpochMs == stamped)
     }
 
+    @Test func finishStreaming_clearsReasoningStreamingFlag() {
+        let engine = makeEngine()
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "msg-1",
+                    role: .assistant,
+                    text: "",
+                    parts: [.reasoning(ReasoningPart(id: "prt-r", text: "hmm", isStreaming: true))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+        )
+        _ = engine.apply(sessionID: "ses-1", patch: .partDelta(messageID: "msg-1", partID: "prt-r", delta: " more"))
+        #expect(engine.hasStreamingText(sessionID: "ses-1"))
+        engine.finishStreamingText(sessionID: "ses-1")
+        #expect(engine.hasStreamingText(sessionID: "ses-1") == false)
+        guard case .reasoning(let reasoning) = engine.messages(sessionID: "ses-1").first?.parts.first else {
+            Issue.record("expected reasoning part")
+            return
+        }
+        #expect(reasoning.isStreaming == false)
+        #expect(reasoning.text == "hmm more")
+    }
+
     private func makeEngine() -> SessionMessageEngine {
         SessionMessageEngine(store: InMemoryMessageStore())
     }

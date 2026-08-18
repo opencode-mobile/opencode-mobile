@@ -120,20 +120,22 @@ class EventDomainAdapter(
             "session.next.prompted",
             "session.inbox.enqueued",
             "session.inbox.delivered",
+            "session.inbox.delivery.changed",
             -> userPromptEvents(properties)
+            "session.inbox.cancelled" -> listOf(inboxCancelled(properties))
             "session.next.step.started",
             "session.step.started",
             -> stepStarted(properties)
             "session.execution.started" -> listOf(statusEvent(properties, "busy"))
-            "session.next.step.ended" ->
+            "session.next.step.ended",
+            "session.step.ended",
+            ->
                 listOf(
                     assistantMessageUpdated(properties),
                     event("session.active.snapshot", properties),
                 )
             "session.execution.succeeded",
             "session.execution.interrupted",
-            "session.compaction.ended",
-            "session.compaction.failed",
             -> listOf(event("session.idle", properties))
             "session.next.step.failed",
             "session.execution.failed",
@@ -142,11 +144,18 @@ class EventDomainAdapter(
                     event("session.error", properties),
                     event("session.idle", properties),
                 )
+            "session.step.failed" ->
+                listOf(
+                    event("session.error", properties),
+                    assistantMessageUpdated(properties),
+                )
             "session.next.retried",
             "session.retry.scheduled",
             -> listOf(statusEvent(properties, "retry"))
             "session.next.tool.input.started",
             "session.tool.input.started",
+            "session.next.tool.input.ended",
+            "session.tool.input.ended",
             "session.next.tool.called",
             "session.tool.called",
             "session.next.tool.progress",
@@ -156,18 +165,23 @@ class EventDomainAdapter(
             "session.next.tool.failed",
             "session.tool.failed",
             -> listOf(toolPartUpdated(type, properties))
-            "session.next.shell.started" ->
+            "session.next.tool.input.delta",
+            "session.tool.input.delta",
+            -> listOf(toolInputDelta(properties))
+            "session.next.shell.started",
+            "session.shell.started",
+            ->
                 listOf(
                     statusEvent(properties, "busy"),
                     shellPartUpdated(properties, status = "running"),
                 )
-            "session.next.shell.ended" ->
+            "session.next.shell.ended",
+            "session.shell.ended",
+            ->
                 listOf(
                     shellPartUpdated(properties, status = "completed"),
                     event("session.active.snapshot", properties),
                 )
-            "session.shell.started" -> listOf(statusEvent(properties, "busy"))
-            "session.shell.ended" -> listOf(event("session.idle", properties))
             "session.next.compaction.started",
             "session.compaction.started",
             ->
@@ -175,12 +189,33 @@ class EventDomainAdapter(
                     statusEvent(properties, "busy"),
                     compactionPartUpdated(properties, completed = false),
                 )
-            "session.next.compaction.delta" -> listOf(compactionTextDelta(properties))
-            "session.next.compaction.ended" ->
+            "session.next.compaction.delta",
+            "session.compaction.delta",
+            -> listOf(compactionTextDelta(properties))
+            "session.next.compaction.ended",
+            "session.compaction.ended",
+            ->
                 listOf(
                     compactionPartUpdated(properties, completed = true),
                     event("session.active.snapshot", properties),
                 )
+            "session.next.compaction.failed",
+            "session.compaction.failed",
+            ->
+                listOf(
+                    compactionPartUpdated(properties, completed = true),
+                    event("session.error", properties),
+                    event("session.idle", properties),
+                )
+            "session.next.reasoning.started",
+            "session.reasoning.started",
+            -> reasoningStarted(properties)
+            "session.next.reasoning.delta",
+            "session.reasoning.delta",
+            -> listOf(reasoningDelta(properties))
+            "session.next.reasoning.ended",
+            "session.reasoning.ended",
+            -> listOf(reasoningPartUpdated(properties))
             "session.next.text.started",
             "session.text.started",
             -> textStarted(properties)
@@ -198,6 +233,9 @@ class EventDomainAdapter(
             "session.model.selected",
             -> listOf(event("session.updated", properties))
             "session.renamed" -> listOf(renamedToUpdated(properties))
+            "session.usage.updated",
+            "session.next.usage.updated",
+            -> listOf(usageUpdated(properties))
             else -> listOf(event(type, properties))
         }
 
@@ -211,6 +249,21 @@ class EventDomainAdapter(
             rawProperties = properties,
         )
 
+    private fun usageUpdated(properties: JsonObject): OpencodeEvent {
+        val sessionId = sessionIdFromProperties(properties)
+        val assistantId = properties.string("assistantMessageID") ?: properties.string("messageID")
+        val tokens = properties["tokens"]
+        val info =
+            buildJsonObject {
+                assistantId?.let { put("id", it) }
+                sessionId?.let { put("sessionID", it) }
+                put("role", "assistant")
+                if (tokens != null) put("tokens", tokens)
+                properties["cost"]?.let { put("cost", it) }
+            }
+        return event("message.updated", buildJsonObject { put("info", info) })
+    }
+
     private fun renamedToUpdated(properties: JsonObject): OpencodeEvent {
         val sessionId = sessionIdFromProperties(properties)
         val info =
@@ -220,6 +273,17 @@ class EventDomainAdapter(
                 properties.string("title")?.let { put("title", it) }
             }
         return event("session.updated", buildJsonObject { put("info", info) })
+    }
+
+    private fun inboxCancelled(properties: JsonObject): OpencodeEvent {
+        val sessionId = sessionIdFromProperties(properties)
+        val messageId = userMessageId(properties)
+        val projected =
+            buildJsonObject {
+                sessionId?.let { put("sessionID", it) }
+                messageId?.let { put("messageID", it) }
+            }
+        return event("message.removed", projected)
     }
 
     private fun userPromptEvents(properties: JsonObject): List<OpencodeEvent> =
@@ -342,7 +406,7 @@ class EventDomainAdapter(
     ): OpencodeEvent {
         val status =
             when {
-                type.endsWith("tool.input.started") -> "pending"
+                type.endsWith("tool.input.started") || type.endsWith("tool.input.ended") -> "pending"
                 type.endsWith("tool.success") -> "completed"
                 type.endsWith("tool.failed") -> "error"
                 else -> "running"
@@ -380,6 +444,19 @@ class EventDomainAdapter(
             error = error,
             metadata = metadata,
         )
+    }
+
+    private fun toolInputDelta(properties: JsonObject): OpencodeEvent {
+        val sessionId = sessionIdFromProperties(properties)
+        val projected =
+            buildJsonObject {
+                sessionId?.let { put("sessionID", it) }
+                properties.string("assistantMessageID")?.let { put("messageID", it) }
+                (properties.string("id") ?: properties.string("callID"))?.let { put("partID", it) }
+                put("field", "input")
+                properties.string("delta")?.let { put("delta", it) }
+            }
+        return event("message.part.delta", projected)
     }
 
     private fun shellPartUpdated(
@@ -468,6 +545,50 @@ class EventDomainAdapter(
         return event("message.part.updated", buildJsonObject { put("part", part) })
     }
 
+    private fun reasoningStarted(properties: JsonObject): List<OpencodeEvent> {
+        val sessionId = sessionIdFromProperties(properties)
+        val assistantId = properties.string("assistantMessageID")
+        val info =
+            buildJsonObject {
+                assistantId?.let { put("id", it) }
+                sessionId?.let { put("sessionID", it) }
+                put("role", "assistant")
+            }
+        return listOf(
+            event("message.updated", buildJsonObject { put("info", info) }),
+            reasoningPartUpdated(properties, text = ""),
+        )
+    }
+
+    private fun reasoningDelta(properties: JsonObject): OpencodeEvent {
+        val sessionId = sessionIdFromProperties(properties)
+        val projected =
+            buildJsonObject {
+                sessionId?.let { put("sessionID", it) }
+                properties.string("assistantMessageID")?.let { put("messageID", it) }
+                properties.reasoningPartId()?.let { put("partID", it) }
+                put("field", "reasoning")
+                properties.string("delta")?.let { put("delta", it) }
+            }
+        return event("message.part.delta", projected)
+    }
+
+    private fun reasoningPartUpdated(
+        properties: JsonObject,
+        text: String? = properties.string("text"),
+    ): OpencodeEvent {
+        val sessionId = sessionIdFromProperties(properties)
+        val part =
+            buildJsonObject {
+                properties.reasoningPartId()?.let { put("id", it) }
+                sessionId?.let { put("sessionID", it) }
+                properties.string("assistantMessageID")?.let { put("messageID", it) }
+                put("type", "reasoning")
+                put("text", text.orEmpty())
+            }
+        return event("message.part.updated", buildJsonObject { put("part", part) })
+    }
+
     private fun textStarted(properties: JsonObject): List<OpencodeEvent> {
         val sessionId = sessionIdFromProperties(properties)
         val assistantId = properties.string("assistantMessageID")
@@ -543,6 +664,14 @@ class EventDomainAdapter(
         val ordinal = this["ordinal"]?.jsonPrimitive ?: return null
         val value = ordinal.intOrNull?.toString() ?: ordinal.contentOrNull ?: return null
         return "text-$value"
+    }
+
+    private fun JsonObject.reasoningPartId(): String? {
+        string("reasoningID")?.let { return it }
+        string("id")?.let { return it }
+        val ordinal = this["ordinal"]?.jsonPrimitive ?: return null
+        val value = ordinal.intOrNull?.toString() ?: ordinal.contentOrNull ?: return null
+        return "reasoning-$value"
     }
 
     private fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull

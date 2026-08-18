@@ -821,7 +821,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
         publishMessages: @escaping @Sendable ([Message]) -> Void
     ) {
         guard let props = event.rawProperties else { return }
-        guard props["field"]?.stringValue == "text" else { return }
+        let field = props["field"]?.stringValue
+        guard field == "text" || field == "reasoning" || field == "input" else { return }
         guard let messageID = props["messageID"]?.stringValue,
               let partID = props["partID"]?.stringValue,
               let delta = props["delta"]?.stringValue
@@ -965,6 +966,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
             "tool:\(tool.toolName):\(tool.status.rawValue):\(tool.title ?? ""):\(tool.error ?? "")"
         case .compaction(let part):
             "compaction:\(part.id ?? ""):\(part.auto):\(part.completed)"
+        case .reasoning(let part):
+            "reasoning:\(part.text.count):\(part.text.hashValue):\(part.isStreaming)"
         }
     }
 

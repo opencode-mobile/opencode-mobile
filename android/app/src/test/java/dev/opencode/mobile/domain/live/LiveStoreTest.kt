@@ -1250,7 +1250,7 @@ class MessageSyncTest {
         }
 
     @Test
-    fun observeMessages_messagePartDelta_ignoresReasoningPartDeltas() =
+    fun observeMessages_messagePartDelta_keepsReasoningSeparateFromText() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
@@ -1267,7 +1267,14 @@ class MessageSyncTest {
             eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
             advanceTimeBy(50)
             eventStream.emit(reasoningPartEvent(partId = "prt-reason", messageId = "msg-2", text = ""))
-            eventStream.emit(partDeltaEvent(partId = "prt-reason", messageId = "msg-2", delta = "The user said hello."))
+            eventStream.emit(
+                partDeltaEvent(
+                    partId = "prt-reason",
+                    messageId = "msg-2",
+                    delta = "The user said hello.",
+                    field = "reasoning",
+                ),
+            )
             eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
             eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Hello!"))
             advanceTimeBy(350)
@@ -1276,8 +1283,10 @@ class MessageSyncTest {
 
             val msg2 = emissions.last().first { it.id == "msg-2" }
             assertEquals("Hello!", msg2.text)
-            assertEquals(1, msg2.parts.size)
-            assertTrue(msg2.parts.single() is MessagePart.Text)
+            assertEquals(2, msg2.parts.size)
+            assertTrue(msg2.parts[0] is MessagePart.Reasoning)
+            assertEquals("The user said hello.", (msg2.parts[0] as MessagePart.Reasoning).text)
+            assertTrue(msg2.parts[1] is MessagePart.Text)
         }
 
     @Test
@@ -1453,7 +1462,7 @@ class MessageSyncTest {
             advanceTimeBy(50)
             eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = "Hi"))
             advanceTimeBy(50)
-            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "!", field = "reasoning"))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "!", field = "metadata"))
             advanceTimeBy(350)
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)

@@ -505,7 +505,7 @@ class MessageSync(
                     "message.part.delta" -> {
                         val props = event.rawProperties ?: return
                         val field = props["field"]?.jsonPrimitive?.contentOrNull
-                        if (field != "text") return
+                        if (field != "text" && field != "reasoning" && field != "input") return
                         val messageId = props["messageID"]?.jsonPrimitive?.contentOrNull ?: return
                         val partId = props["partID"]?.jsonPrimitive?.contentOrNull ?: return
                         val delta = props["delta"]?.jsonPrimitive?.contentOrNull ?: return
@@ -889,6 +889,8 @@ class MessageSync(
                             "file:${part.id}:${part.filename}:${part.mime}:" +
                                 "${part.dataUrl.length}:${part.dataUrl.hashCode()}"
                         is MessagePart.Compaction -> "compaction:${part.id}:${part.auto}:${part.completed}"
+                        is MessagePart.Reasoning ->
+                            "reasoning:${part.text.length}:${part.text.hashCode()}:${part.isStreaming}"
                     }
                 }
             "${message.id}:${message.text.length}:${message.text.hashCode()}:$parts"

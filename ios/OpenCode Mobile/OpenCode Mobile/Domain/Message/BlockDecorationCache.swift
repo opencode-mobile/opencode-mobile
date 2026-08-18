@@ -222,7 +222,7 @@ nonisolated enum StreamingTextBlockIdentity {
                     runs.append(current)
                     current = []
                 }
-            case .file, .compaction:
+            case .file, .compaction, .reasoning:
                 if !current.isEmpty {
                     runs.append(current)
                     current = []

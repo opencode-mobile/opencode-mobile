@@ -143,8 +143,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         guard let sessionParts = partsCache[sessionID] else { return false }
         for (messageID, messageParts) in sessionParts {
             for (partID, part) in messageParts {
-                guard case .text(let textPart) = part else { continue }
-                if textPart.isStreaming || hasChunks(sessionID: sessionID, messageID: messageID, partID: partID) {
+                if isStreamingPart(part) || hasChunks(sessionID: sessionID, messageID: messageID, partID: partID) {
                     return true
                 }
             }
@@ -177,21 +176,40 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         guard var sessionParts = partsCache[sessionID] else { return }
         for (messageID, var messageParts) in sessionParts {
             for (partID, part) in messageParts {
-                guard case .text(let text) = part else { continue }
-                let flattened = flattenedText(sessionID: sessionID, messageID: messageID, part: text)
-                let wasStreaming = text.isStreaming || hasChunks(sessionID: sessionID, messageID: messageID, partID: text.id)
-                guard wasStreaming || flattened != text.text else { continue }
-                messageParts[partID] = .text(
-                    TextPart(
-                        id: text.id,
-                        text: flattened,
-                        isStreaming: false,
-                        isSynthetic: text.isSynthetic,
-                        isIgnored: text.isIgnored
+                switch part {
+                case .text(let text):
+                    let flattened = flattenedText(sessionID: sessionID, messageID: messageID, part: text)
+                    let wasStreaming = text.isStreaming || hasChunks(sessionID: sessionID, messageID: messageID, partID: text.id)
+                    guard wasStreaming || flattened != text.text else { continue }
+                    messageParts[partID] = .text(
+                        TextPart(
+                            id: text.id,
+                            text: flattened,
+                            isStreaming: false,
+                            isSynthetic: text.isSynthetic,
+                            isIgnored: text.isIgnored
+                        )
                     )
-                )
-                clearChunks(sessionID: sessionID, messageID: messageID, partID: text.id)
-                changed = true
+                    clearChunks(sessionID: sessionID, messageID: messageID, partID: text.id)
+                    changed = true
+                case .reasoning(let reasoning):
+                    let flattened = flattenedText(
+                        sessionID: sessionID,
+                        messageID: messageID,
+                        partID: reasoning.id,
+                        baseText: reasoning.text
+                    )
+                    let wasStreaming = reasoning.isStreaming
+                        || hasChunks(sessionID: sessionID, messageID: messageID, partID: reasoning.id)
+                    guard wasStreaming || flattened != reasoning.text else { continue }
+                    messageParts[partID] = .reasoning(
+                        ReasoningPart(id: reasoning.id, text: flattened, isStreaming: false)
+                    )
+                    clearChunks(sessionID: sessionID, messageID: messageID, partID: reasoning.id)
+                    changed = true
+                default:
+                    continue
+                }
             }
             sessionParts[messageID] = messageParts
         }
@@ -332,14 +350,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         if delta == nil {
             clearChunks(sessionID: sessionID, messageID: messageID, partID: partID)
         }
-        let previousStreaming: Bool? = {
-            if case .text(let text) = previous { return text.isStreaming }
-            return nil
-        }()
-        let resolvedStreaming: Bool? = {
-            if case .text(let text) = resolvedPart { return text.isStreaming }
-            return nil
-        }()
+        let previousStreaming = isStreamingPart(previous)
+        let resolvedStreaming = isStreamingPart(resolvedPart)
         let streamingChanged = previousStreaming != resolvedStreaming
         return SessionChangeSet(
             sessionRevision: 0,
@@ -357,27 +369,67 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         delta: String
     ) -> SessionChangeSet? {
         if ignoredPartIDs[sessionID]?[messageID]?.contains(partID) == true { return nil }
-        guard case .text(let existing)? = partsCache[sessionID]?[messageID]?[partID] else { return nil }
+        guard let existing = partsCache[sessionID]?[messageID]?[partID] else { return nil }
+        let baseText: String
+        switch existing {
+        case .tool(let tool):
+            let previous = tool.input?["preview"]?.stringValue ?? ""
+            var input = tool.input ?? [:]
+            input["preview"] = .string(previous + delta)
+            partsCache[sessionID]?[messageID]?[partID] = .tool(
+                ToolPart(
+                    id: tool.id,
+                    toolName: tool.toolName,
+                    status: tool.status,
+                    title: tool.title,
+                    error: tool.error,
+                    callID: tool.callID,
+                    input: input,
+                    output: tool.output,
+                    metadata: tool.metadata,
+                    timeStartEpochMs: tool.timeStartEpochMs
+                )
+            )
+            return SessionChangeSet(
+                sessionRevision: 0,
+                changedMessageIDs: [messageID],
+                changedPartIDsByMessage: [messageID: [partID]]
+            )
+        case .text(let text):
+            baseText = text.text
+        case .reasoning(let reasoning):
+            baseText = reasoning.text
+        default:
+            return nil
+        }
         let appended = appendChunk(
             sessionID: sessionID,
             messageID: messageID,
             partID: partID,
-            baseText: existing.text,
+            baseText: baseText,
             delta: delta
         )
         guard appended else { return nil }
-        let wasStreaming = existing.isStreaming
+        let wasStreaming = isStreamingPart(existing)
         if !wasStreaming {
-            partsCache[sessionID]?[messageID]?[partID] =
-                .text(
-                    TextPart(
-                        id: existing.id,
-                        text: existing.text,
-                        isStreaming: true,
-                        isSynthetic: existing.isSynthetic,
-                        isIgnored: existing.isIgnored
+            switch existing {
+            case .text(let text):
+                partsCache[sessionID]?[messageID]?[partID] =
+                    .text(
+                        TextPart(
+                            id: text.id,
+                            text: text.text,
+                            isStreaming: true,
+                            isSynthetic: text.isSynthetic,
+                            isIgnored: text.isIgnored
+                        )
                     )
-                )
+            case .reasoning(let reasoning):
+                partsCache[sessionID]?[messageID]?[partID] =
+                    .reasoning(ReasoningPart(id: reasoning.id, text: reasoning.text, isStreaming: true))
+            default:
+                break
+            }
         }
         return SessionChangeSet(
             sessionRevision: 0,
@@ -503,10 +555,14 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
     }
 
     private func flattenedText(sessionID: String, messageID: String, part: TextPart) -> String {
-        guard let key = chunkKey(messageID: messageID, partID: part.id) else { return part.text }
+        flattenedText(sessionID: sessionID, messageID: messageID, partID: part.id, baseText: part.text)
+    }
+
+    private func flattenedText(sessionID: String, messageID: String, partID: String?, baseText: String) -> String {
+        guard let key = chunkKey(messageID: messageID, partID: partID) else { return baseText }
         let chunks = deltaChunks[sessionID]?[key] ?? []
-        if chunks.isEmpty { return part.text }
-        return part.text + chunks.joined()
+        if chunks.isEmpty { return baseText }
+        return baseText + chunks.joined()
     }
 
     private func decodeInfo(from dict: [String: AnySendable]) -> MessageInfoDTO? {
@@ -562,6 +618,25 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             }
             return .text(textPart)
         }
+        if let delta, partDTO.type == "reasoning" {
+            let existingText: String
+            if case .reasoning(let reasoning) = existingPart {
+                existingText = reasoning.text
+            } else {
+                existingText = partDTO.text ?? ""
+            }
+            let partID = partDTO.id
+            if let partID {
+                appendChunk(
+                    sessionID: sessionID,
+                    messageID: messageID,
+                    partID: partID,
+                    baseText: existingText,
+                    delta: delta
+                )
+            }
+            return .reasoning(ReasoningPart(id: partID, text: existingText, isStreaming: true))
+        }
         return resolveToolStart(adapter.messagePart(from: partDTO), existing: existingPart)
     }
 
@@ -601,19 +676,33 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
     }
 
     private func resolveStoredPart(sessionID: String, messageID: String, part: MessagePart) -> MessagePart {
-        guard case .text(let text) = part else { return part }
-        let flattened = flattenedText(sessionID: sessionID, messageID: messageID, part: text)
-        return flattened == text.text
-            ? part
-            : .text(
-                TextPart(
-                    id: text.id,
-                    text: flattened,
-                    isStreaming: text.isStreaming,
-                    isSynthetic: text.isSynthetic,
-                    isIgnored: text.isIgnored
+        switch part {
+        case .text(let text):
+            let flattened = flattenedText(sessionID: sessionID, messageID: messageID, part: text)
+            return flattened == text.text
+                ? part
+                : .text(
+                    TextPart(
+                        id: text.id,
+                        text: flattened,
+                        isStreaming: text.isStreaming,
+                        isSynthetic: text.isSynthetic,
+                        isIgnored: text.isIgnored
+                    )
                 )
+        case .reasoning(let reasoning):
+            let flattened = flattenedText(
+                sessionID: sessionID,
+                messageID: messageID,
+                partID: reasoning.id,
+                baseText: reasoning.text
             )
+            return flattened == reasoning.text
+                ? part
+                : .reasoning(ReasoningPart(id: reasoning.id, text: flattened, isStreaming: reasoning.isStreaming))
+        default:
+            return part
+        }
     }
 
     private func hasRenderableContent(_ message: Message) -> Bool {
@@ -702,6 +791,19 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             file.id
         case .compaction(let part):
             part.id
+        case .reasoning(let part):
+            part.id
+        }
+    }
+
+    private func isStreamingPart(_ part: MessagePart?) -> Bool {
+        switch part {
+        case .text(let text):
+            text.isStreaming
+        case .reasoning(let reasoning):
+            reasoning.isStreaming
+        default:
+            false
         }
     }
 }
