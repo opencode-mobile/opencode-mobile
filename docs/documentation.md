@@ -43,7 +43,6 @@ I update it?".
 └── .agents/
     └── skills/                    # canonical skills (source of truth)
         ├── design-system-component/SKILL.md
-        ├── documentation-planning/SKILL.md
         ├── feature/{SKILL.md, reference.md, agents/}
         ├── linear-project-tracking/{SKILL.md, reference.md}
         ├── pull-app-logs/{SKILL.md, ANDROID.md, IOS.md, TROUBLESHOOTING.md}
@@ -118,9 +117,8 @@ committing an HTML file. Markdown is the source of truth.
 1. **Agents are the primary consumers.** Skills read canonical docs before any
    mutation. `synced-native-feature` reads `docs/features/README.md` sections per
    phase; `design-system-component` reads the token/typography/component
-    references; `feature` reads the feature's `plan.md` /
-    `decisions.md` / `parity-gaps.md`; `documentation-planning` loads
-    `docs/features/README.md` and every routed artifact before editing.
+    references; `feature` reads `plan.md` / `decisions.md` / `parity-gaps.md`
+    per `docs/features/README.md`.
 
 2. **Linear is the execution board; the docs are the source of truth.**
     `linear-project-tracking` reads the canonical docs (`plan.md`,
@@ -171,19 +169,17 @@ reference files). Ownership boundaries are explicit:
 
 | Skill | Owns | Delegates to / is delegated by |
 | --- | --- | --- |
-| `documentation-planning` | Routing and creating/updating **all durable docs artifacts** | Used by `feature`, `linear-project-tracking`, `synced-native-feature` for docs mutations |
-| `synced-native-feature` | Cross-platform Feature Slice planning, progress, parity | Delegates reusable-UI work to `design-system-component`; docs routes via `documentation-planning` |
+| `synced-native-feature` | Cross-platform Feature Slice planning and parity | Docs follow `docs/features/README.md`; reusable UI → `design-system-component` |
 | `design-system-component` | Design-system tokens, typography, components, variants, previews, galleries, divergences | Reads `docs/design-system/*`; feature work delegates reusable-UI needs to it |
-| `linear-project-tracking` | Linear issue/status/link mutations and reconciliation with docs | Reads docs; calls `documentation-planning` when planning artifacts are missing |
+| `linear-project-tracking` | Linear issue/status/link mutations and reconciliation with docs | Reads docs; creates `plan.md` if missing |
 | `feature` | Resolving anchors (Linear ↔ branch ↔ docs ↔ PR) and running Start/Docs/Merge/Publish routes | Dispatches each mutation to its owner; owns branch creation/switching |
 | `run-github-actions` | Running/monitoring/diagnosing GitHub Actions | Reads `.github/workflows/*.yml` as executable authority; no canonical docs |
 | `pull-app-logs` | Reading Android logcat / iOS simulator logs | Operational; references platform docs (`ANDROID.md`, `IOS.md`, `TROUBLESHOOTING.md`) |
 
 Coordination rules that keep docs and skills consistent:
 
-- `documentation-planning` coordinates with `synced-native-feature` (feature
-  slices), `design-system-component` (reusable UI), and `linear-project-tracking`
-  (Linear mirror) — but repository documentation does not require Linear.
+- Feature docs follow `docs/features/README.md`. Repository documentation
+  does not require Linear.
 - `feature` is a router: it never mutates state itself; it reads owning-skill
   state after a mutation and verifies the requested link (issue, docs path,
   branch, PR).
@@ -206,22 +202,12 @@ carries the `## Docs` path back to Linear.
 
 ## 5. How the documentation is created
 
-### 5.1 Canonical workflow: `documentation-planning`
+### 5.1 Canonical workflow
 
-1. **Route the request** — classify each fact into its canonical artifact
-   (plan/progress/decisions/parity-gaps/task-plan) using the routing table;
-   ADR only for hard-to-reverse project decisions.
-2. **Load the canonical contract** — read `docs/features/README.md`, then every
-   routed artifact before editing. Create a feature directory and its four
-   files only for new features; create a missing routed artifact only when a
-   request or another artifact requires it.
-3. **Update routed artifacts together** — so scope, status, decisions, and parity
-   never contradict one another; keep feature-wide intent in `plan.md`, focused
-   execution detail in task plans.
-4. **Do not create HTML companions** — plans stay Markdown only; render a
-   temporary visual review on demand when needed.
-5. **Apply the durability boundary** — durable facts into canonical artifacts;
-   scratch notes, debug dumps, screenshots, and raw command output stay out.
+Follow [`docs/features/README.md`](features/README.md): rewrite `plan.md` as
+current state; add `decisions.md` / `parity-gaps.md` only when they still
+constrain work. No progress logs, ticket plans, or research dumps. Markdown
+only. Scratch notes stay out of git.
 
 Completion gate: every routed artifact is `updated`, `unchanged with a reason`,
 `not applicable with a reason`, or `blocked with a named dependency`; Markdown
@@ -288,8 +274,8 @@ then add the PR backlink to Linear and verify the cross-references.
 | Domain term | `CONTEXT.md` | `domain-modeling` (via `docs/agents/domain.md`) | glossary convention |
 | Product architecture | `docs/architecture.md` | — (read before changes) | architecture doc itself |
 | Server feasibility | `docs/feasibility.md` | — (read before changes) | feasibility doc |
-| Hard-to-reverse decision | `docs/adr/NNNN-….md` | `documentation-planning` | ADR format |
-| Feature intent / remaining | `docs/features/<slug>/plan.md` | `synced-native-feature` + `documentation-planning` | `docs/features/README.md` |
+| Hard-to-reverse decision | `docs/adr/NNNN-….md` | — | ADR format |
+| Feature intent / remaining | `docs/features/<slug>/plan.md` | `synced-native-feature` | `docs/features/README.md` |
 | Cross-app mismatch | `docs/features/<slug>/parity-gaps.md` | `synced-native-feature` | `docs/features/README.md` |
 | Feature decision | `docs/features/<slug>/decisions.md` | `synced-native-feature` | `docs/features/README.md` |
 | Intentional platform difference | `docs/design-system/divergences.md` | `design-system-component` | divergence template |

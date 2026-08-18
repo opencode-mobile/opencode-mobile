@@ -157,8 +157,7 @@ them.
   previews, or gallery entries.
 - Use `.agents/skills/synced-native-feature/SKILL.md` when planning or
   implementing a feature that should exist in both native apps.
-- Use `.agents/skills/documentation-planning/SKILL.md` when creating or updating
-  plans, feature docs, decisions, or parity gaps.
+  Feature docs follow `docs/features/README.md`.
 - Use `.agents/skills/run-github-actions/SKILL.md` when triggering GitHub
   Actions, checking workflow status, or troubleshooting failed CI runs.
 - Use `.agents/skills/pull-app-logs/SKILL.md` when reading Android logcat or

@@ -43,7 +43,7 @@ Identify the feature slug, then read every existing planning artifact under
 `plan.md`, and `parity-gaps.md`.
 
 If the directory or the planning artifact needed to establish scope is missing,
-use the `documentation-planning` skill to create it before changing Linear. For
+create `plan.md` per `docs/features/README.md` before changing Linear. For
 a new synchronized iOS and Android feature slice, use `synced-native-feature`
 for the feature plan, then resume this loop.
 
@@ -107,8 +107,7 @@ to satisfy it.
 - Linear owns scheduling, assignment, priority, status, dependencies, and a
   concise projection of remaining work.
 - Never resolve a disagreement by copying undocumented Linear scope into the
-  repo. Confirm the scope with the user or add it through
-  `documentation-planning` first.
+  repo. Confirm the scope with the user or add it in `plan.md` first.
 - Agent-only maintenance and CI changes without product impact stay out of
   Linear unless the user asks to track them.
 
