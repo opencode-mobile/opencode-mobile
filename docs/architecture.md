@@ -4,8 +4,9 @@ Two native apps: SwiftUI on iOS, Kotlin + Jetpack Compose + Material 3 on
 Android. Same product language, feature boundaries, design-system meaning,
 and server integration. Separate implementations.
 
-Live Session Chat tracks official TUI v2. Dual-stack HTTP talks to classic
-unprefixed APIs and `/api/*`.
+Live Session Chat tracks official TUI v2. That TUI and the v2-only server
+live on the **opencode `beta` branch**, not `dev`/`main`. Dual-stack HTTP
+talks to classic unprefixed APIs and `/api/*`.
 
 ## Layout
 

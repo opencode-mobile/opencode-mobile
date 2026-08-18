@@ -5,7 +5,10 @@ Still binding:
 - Detect `v1` | `v2` on connect. Route under remotes. Screen Models stay on
   domain types.
 - Dual-stack HTTP stays (still talk to v1 servers).
-- Live Session Chat tracks official TUI v2. Project `session.reasoning.*` /
+- Live Session Chat tracks official TUI v2 on opencode **`origin/beta`**
+  (`packages/tui` `stream-v2.transport.ts`, `GET /api/event`). Do not treat
+  `dev`/`main` TUI (`/global/event`, `message.updated`) as the live spec.
+  Project `session.reasoning.*` /
   `session.next.reasoning.*` into a distinct reasoning part. Render thinking.
 - `session.inbox.enqueued` / `.delivered` / `session.next.prompted` project
   to user `message.*`. Read `item.payload` (and `inboxID`).
