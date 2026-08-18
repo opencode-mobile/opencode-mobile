@@ -174,6 +174,7 @@ nonisolated struct EventDomainAdapter: Sendable {
             [
                 compactionPartUpdated(properties, completed: true),
                 event(type: "session.error", properties: properties),
+                event(type: "session.idle", properties: properties),
             ]
         case "session.next.reasoning.started", "session.reasoning.started":
             reasoningStarted(properties)

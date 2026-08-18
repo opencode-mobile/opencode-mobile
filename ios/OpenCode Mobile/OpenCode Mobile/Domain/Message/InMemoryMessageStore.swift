@@ -176,21 +176,40 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         guard var sessionParts = partsCache[sessionID] else { return }
         for (messageID, var messageParts) in sessionParts {
             for (partID, part) in messageParts {
-                guard case .text(let text) = part else { continue }
-                let flattened = flattenedText(sessionID: sessionID, messageID: messageID, part: text)
-                let wasStreaming = text.isStreaming || hasChunks(sessionID: sessionID, messageID: messageID, partID: text.id)
-                guard wasStreaming || flattened != text.text else { continue }
-                messageParts[partID] = .text(
-                    TextPart(
-                        id: text.id,
-                        text: flattened,
-                        isStreaming: false,
-                        isSynthetic: text.isSynthetic,
-                        isIgnored: text.isIgnored
+                switch part {
+                case .text(let text):
+                    let flattened = flattenedText(sessionID: sessionID, messageID: messageID, part: text)
+                    let wasStreaming = text.isStreaming || hasChunks(sessionID: sessionID, messageID: messageID, partID: text.id)
+                    guard wasStreaming || flattened != text.text else { continue }
+                    messageParts[partID] = .text(
+                        TextPart(
+                            id: text.id,
+                            text: flattened,
+                            isStreaming: false,
+                            isSynthetic: text.isSynthetic,
+                            isIgnored: text.isIgnored
+                        )
                     )
-                )
-                clearChunks(sessionID: sessionID, messageID: messageID, partID: text.id)
-                changed = true
+                    clearChunks(sessionID: sessionID, messageID: messageID, partID: text.id)
+                    changed = true
+                case .reasoning(let reasoning):
+                    let flattened = flattenedText(
+                        sessionID: sessionID,
+                        messageID: messageID,
+                        partID: reasoning.id,
+                        baseText: reasoning.text
+                    )
+                    let wasStreaming = reasoning.isStreaming
+                        || hasChunks(sessionID: sessionID, messageID: messageID, partID: reasoning.id)
+                    guard wasStreaming || flattened != reasoning.text else { continue }
+                    messageParts[partID] = .reasoning(
+                        ReasoningPart(id: reasoning.id, text: flattened, isStreaming: false)
+                    )
+                    clearChunks(sessionID: sessionID, messageID: messageID, partID: reasoning.id)
+                    changed = true
+                default:
+                    continue
+                }
             }
             sessionParts[messageID] = messageParts
         }

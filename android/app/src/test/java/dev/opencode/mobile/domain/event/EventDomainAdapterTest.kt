@@ -433,6 +433,17 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvents_projectsLiveCompactionFailedIntoPartErrorAndIdle() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.compaction.failed","data":{"sessionID":"ses-1","messageID":"msg-c"}}""",
+            )
+
+        assertEquals(listOf("message.part.updated", "session.error", "session.idle"), events.map { it.type })
+        assertTrue(events.last().triggersStatusRefresh)
+    }
+
+    @Test
     fun parseEvent_projectsLiveTextDeltaUsingOrdinalPartId() {
         val event =
             adapter.parseEvent(

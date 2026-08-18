@@ -175,13 +175,27 @@ class InMemoryMessageStore
             var changed = false
             for ((messageId, messageParts) in partsCaches[sessionId].orEmpty()) {
                 for (entry in messageParts.entries) {
-                    val text = entry.value as? MessagePart.Text ?: continue
-                    val flattened = flattenedText(sessionId, messageId, text)
-                    val wasStreaming = text.isStreaming || hasChunks(sessionId, messageId, text.id)
-                    if (wasStreaming || flattened != text.text) {
-                        entry.setValue(text.copy(text = flattened, isStreaming = false))
-                        clearChunks(sessionId, messageId, text.id)
-                        changed = true
+                    when (val part = entry.value) {
+                        is MessagePart.Text -> {
+                            val flattened = flattenedText(sessionId, messageId, part)
+                            val wasStreaming = part.isStreaming || hasChunks(sessionId, messageId, part.id)
+                            if (wasStreaming || flattened != part.text) {
+                                entry.setValue(part.copy(text = flattened, isStreaming = false))
+                                clearChunks(sessionId, messageId, part.id)
+                                changed = true
+                            }
+                        }
+                        is MessagePart.Reasoning -> {
+                            val flattened =
+                                flattenedText(sessionId, messageId, partId = part.id, baseText = part.text)
+                            val wasStreaming = part.isStreaming || hasChunks(sessionId, messageId, part.id)
+                            if (wasStreaming || flattened != part.text) {
+                                entry.setValue(part.copy(text = flattened, isStreaming = false))
+                                clearChunks(sessionId, messageId, part.id)
+                                changed = true
+                            }
+                        }
+                        else -> Unit
                     }
                 }
             }

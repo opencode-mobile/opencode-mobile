@@ -350,6 +350,15 @@ struct EventDomainAdapterTests {
         #expect(!events.contains(where: { $0.type == "session.idle" }))
     }
 
+    @Test func parseEvents_projectsLiveCompactionFailedIntoPartErrorAndIdle() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.compaction.failed","data":{"sessionID":"ses-1","messageID":"msg-c"}}"#
+        )
+        #expect(events.map(\.type) == ["message.part.updated", "session.error", "session.idle"])
+        #expect(events.last?.triggersStatusRefresh == true)
+    }
+
     @Test func parseEvents_projectsStepEndedIntoAssistantMessageAndActiveSnapshot() {
         let adapter = EventDomainAdapter()
         let events = adapter.parseEvents(

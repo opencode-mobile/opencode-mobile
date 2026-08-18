@@ -205,6 +205,7 @@ class EventDomainAdapter(
                 listOf(
                     compactionPartUpdated(properties, completed = true),
                     event("session.error", properties),
+                    event("session.idle", properties),
                 )
             "session.next.reasoning.started",
             "session.reasoning.started",
