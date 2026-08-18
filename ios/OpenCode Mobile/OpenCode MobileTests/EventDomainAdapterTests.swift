@@ -385,6 +385,18 @@ struct EventDomainAdapterTests {
         #expect(event?.triggersMessageRefresh == true)
     }
 
+    @Test func parseEvent_projectsUsageUpdatedIntoAssistantTokens() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.usage.updated","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","tokens":{"input":120,"output":4,"reasoning":0}}}"#
+        )
+        #expect(event?.type == "message.updated")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.rawProperties?["info"]?.dictionaryValue?["id"]?.stringValue == "msg-2")
+        #expect(event?.rawProperties?["info"]?.dictionaryValue?["tokens"]?.dictionaryValue?["input"]?.intValue == 120)
+        #expect(event?.triggersMessageRefresh == true)
+    }
+
     @Test func parseEvent_projectsLiveRenamedIntoSessionUpdated() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(

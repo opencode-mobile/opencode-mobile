@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -443,6 +444,21 @@ class EventDomainAdapterTest {
         assertEquals("msg-2", event?.rawProperties?.get("messageID")?.jsonPrimitive?.content)
         assertEquals("text-0", event?.rawProperties?.get("partID")?.jsonPrimitive?.content)
         assertEquals("Hi", event?.rawProperties?.get("delta")?.jsonPrimitive?.content)
+        assertTrue(event!!.triggersMessageRefresh)
+    }
+
+    @Test
+    fun parseEvent_projectsUsageUpdatedIntoAssistantTokens() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.usage.updated","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","tokens":{"input":120,"output":4,"reasoning":0}}}""",
+            )
+
+        assertEquals("message.updated", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        val info = event?.rawProperties?.get("info")?.jsonObject
+        assertEquals("msg-2", info?.get("id")?.jsonPrimitive?.content)
+        assertEquals(120, info?.get("tokens")?.jsonObject?.get("input")?.jsonPrimitive?.intOrNull)
         assertTrue(event!!.triggersMessageRefresh)
     }
 
