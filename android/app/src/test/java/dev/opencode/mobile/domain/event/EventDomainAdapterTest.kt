@@ -246,6 +246,18 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvent_projectsToolInputDeltaIntoPartDelta() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.tool.input.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","delta":"path"}}""",
+            )
+
+        assertEquals("message.part.delta", event?.type)
+        assertEquals("input", event?.rawProperties?.get("field")?.jsonPrimitive?.content)
+        assertEquals("prt-1", event?.rawProperties?.get("partID")?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun parseEvents_projectsLiveToolEnvelopeCreatedIntoStateTimeStart() {
         val event =
             adapter.parseEvent(

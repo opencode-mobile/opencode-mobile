@@ -208,6 +208,16 @@ struct EventDomainAdapterTests {
         #expect(events[1].rawProperties?["part"]?.dictionaryValue?["text"]?.stringValue == "Hello from CLI")
     }
 
+    @Test func parseEvent_projectsToolInputDeltaIntoPartDelta() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.tool.input.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","delta":"path"}}"#
+        )
+        #expect(event?.type == "message.part.delta")
+        #expect(event?.rawProperties?["field"]?.stringValue == "input")
+        #expect(event?.rawProperties?["partID"]?.stringValue == "prt-1")
+    }
+
     @Test func parseEvents_projectsLiveToolEnvelopeCreatedIntoStateTimeStart() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(

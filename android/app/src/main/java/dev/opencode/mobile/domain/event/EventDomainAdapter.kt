@@ -152,6 +152,8 @@ class EventDomainAdapter(
             -> listOf(statusEvent(properties, "retry"))
             "session.next.tool.input.started",
             "session.tool.input.started",
+            "session.next.tool.input.ended",
+            "session.tool.input.ended",
             "session.next.tool.called",
             "session.tool.called",
             "session.next.tool.progress",
@@ -161,6 +163,9 @@ class EventDomainAdapter(
             "session.next.tool.failed",
             "session.tool.failed",
             -> listOf(toolPartUpdated(type, properties))
+            "session.next.tool.input.delta",
+            "session.tool.input.delta",
+            -> listOf(toolInputDelta(properties))
             "session.next.shell.started",
             "session.shell.started",
             ->
@@ -369,7 +374,7 @@ class EventDomainAdapter(
     ): OpencodeEvent {
         val status =
             when {
-                type.endsWith("tool.input.started") -> "pending"
+                type.endsWith("tool.input.started") || type.endsWith("tool.input.ended") -> "pending"
                 type.endsWith("tool.success") -> "completed"
                 type.endsWith("tool.failed") -> "error"
                 else -> "running"
@@ -407,6 +412,19 @@ class EventDomainAdapter(
             error = error,
             metadata = metadata,
         )
+    }
+
+    private fun toolInputDelta(properties: JsonObject): OpencodeEvent {
+        val sessionId = sessionIdFromProperties(properties)
+        val projected =
+            buildJsonObject {
+                sessionId?.let { put("sessionID", it) }
+                properties.string("assistantMessageID")?.let { put("messageID", it) }
+                (properties.string("id") ?: properties.string("callID"))?.let { put("partID", it) }
+                put("field", "input")
+                properties.string("delta")?.let { put("delta", it) }
+            }
+        return event("message.part.delta", projected)
     }
 
     private fun shellPartUpdated(
