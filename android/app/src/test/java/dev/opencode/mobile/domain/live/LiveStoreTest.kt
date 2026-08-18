@@ -1462,7 +1462,7 @@ class MessageSyncTest {
             advanceTimeBy(50)
             eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = "Hi"))
             advanceTimeBy(50)
-            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "!", field = "reasoning"))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "!", field = "metadata"))
             advanceTimeBy(350)
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)

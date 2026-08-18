@@ -402,7 +402,7 @@ struct EventDomainAdapterTests {
         #expect(event?.type == "message.updated")
         #expect(event?.sessionID == "ses-1")
         #expect(event?.rawProperties?["info"]?.dictionaryValue?["id"]?.stringValue == "msg-2")
-        #expect(event?.rawProperties?["info"]?.dictionaryValue?["tokens"]?.dictionaryValue?["input"]?.intValue == 120)
+        #expect(event?.rawProperties?["info"]?.dictionaryValue?["tokens"]?.dictionaryValue?["input"]?.int64Value == 120)
         #expect(event?.triggersMessageRefresh == true)
     }
 
