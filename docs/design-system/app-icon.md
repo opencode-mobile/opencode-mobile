@@ -76,8 +76,10 @@ The coordinate space mirrors the Android adaptive-icon foreground vector
 (`viewBox="0 0 240 300"`). The source viewBox is intentionally **portrait
 (240×300, 4:5)**. Android's adaptive-icon pipeline compensates for the
 non-square viewport by pairing the glyph group's `scaleX`/`scaleY` in a 0.8
-ratio, so the effective transform on the 108dp square canvas is uniform. iOS
-has no such compensation step, so the generator derives the equivalent uniform
+ratio, so the effective transform on the 108dp square canvas is uniform. The
+glyph is then scaled 0.88 about the canvas center so circular Android launcher
+masks keep a black margin; iOS and store rasters keep the pre-inset size. iOS
+has no viewport-compensation step, so the generator derives the equivalent uniform
 transform for a square 108×108 target and renders that into 1024×1024 PNGs and
 Icon Composer layer assets. Never rasterize the 240×300 viewBox into a square
 PNG without recomputing the transform.

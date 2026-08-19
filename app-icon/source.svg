@@ -21,14 +21,16 @@
   - viewBox 0 0 240 300 (Android viewport, non-uniformly squashed to a square)
   - background rect is the launcher background color
   - glyph group carries the same scale/translate as ic_launcher_foreground.xml
-  - scale(1, 1.25) aspect-compensates the 240x300 viewport so the 240-square
-    design (already padded like the source render) is uniform on 108dp
+  - scaleY/scaleX = 1.25 aspect-compensates the 240x300 viewport so the
+    240-square design is uniform on 108dp
+  - scaled 0.88 about the 108dp canvas center so circular Android masks keep
+    a black margin; iOS/store keep the previous size via IOS_GLYPH_SCALE
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 240 300">
   <!-- @opencode/background -->
   <rect x="0" y="0" width="240" height="300" fill="#070707"/>
   <!-- @opencode/glyph -->
-  <g transform="translate(0,0) scale(1,1.25)">
+  <g transform="translate(14.4,18) scale(0.88,1.1)">
     <path d="M 179.844 120.873 A 58.194 58.194 0 0 1 63.725 126.450 L 83.892 109.688 A 39.380 39.380 0 1 0 161.030 120.873 L 161.030 74.041 L 179.588 55.227 L 179.844 55.227 Z" fill="#4B4646"/>
     <path d="M 63.725 126.450 A 58.194 58.194 0 0 1 157.189 74.791 L 145.700 89.689 A 39.380 39.380 0 0 0 83.892 109.688 Z" fill="#F1ECEC"/>
   </g>

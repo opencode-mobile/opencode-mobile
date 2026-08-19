@@ -12,7 +12,11 @@ export const PNG_SIZE = 1024;
 export const GLASS_FILL = "#F1ECEC";
 
 const IOS_SQUARE_SIDE = 108;
-const IOS_GLYPH_SCALE = 1.5;
+// Source glyph is inset on the Android 108dp canvas (currently 0.88) so
+// circular launcher masks keep a black margin. Hold iOS / store rasters at
+// the pre-inset on-canvas size (original 1.5× of the un-inset glyph).
+const ANDROID_CANVAS_INSET = 0.88;
+const IOS_GLYPH_SCALE = 1.5 / ANDROID_CANVAS_INSET;
 
 export function parseSource(src) {
   const viewBoxMatch = src.match(/<svg[^>]*\sviewBox="0\s+0\s+(\d+)\s+(\d+)"/);
@@ -62,6 +66,11 @@ export function svgTransformToAndroid(transform) {
 export function deriveSquareTransform(parsed) {
   const { viewBoxWidth, viewBoxHeight, transform } = parsed;
   const android = svgTransformToAndroid(transform);
+  if (Math.abs(android.scaleX - ANDROID_CANVAS_INSET) > 1e-4) {
+    throw new Error(
+      `source.svg: glyph scaleX ${android.scaleX} must match ANDROID_CANVAS_INSET ${ANDROID_CANVAS_INSET} (iOS compensation).`,
+    );
+  }
   const scaleX = android.scaleX * (IOS_SQUARE_SIDE / viewBoxWidth);
   const scaleY = android.scaleY * (IOS_SQUARE_SIDE / viewBoxHeight);
   if (Math.abs(scaleX - scaleY) > 1e-4) {
