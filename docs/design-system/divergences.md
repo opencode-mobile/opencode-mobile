@@ -262,3 +262,19 @@ implementation belong in the feature's `parity-gaps.md`.
 - Review trigger: revisit if Android adds a system glass icon material.
   Store listings use a flattened raster of the same “d”; they cannot carry
   iOS glass or Android parallax.
+
+## Launch screen branding
+
+- Status: intentional
+- Area: other
+- Shared intent: Cold start follows system light/dark using app chrome
+  (`background-base`), not a stuck light frame.
+- iOS behavior: Generated `UILaunchScreen` (no branded glyph). System
+  background already tracks appearance.
+- Android behavior: `Theme.SplashScreen` + `ic_splash` with day/night
+  `splash_colors.xml`. Light mode darkens the glass cap; dark mode keeps the
+  source two-tone. Home-screen launcher stays the dark `#070707` tile.
+- Reason: Android 12+ splash is a themed window plus a foreground icon; iOS
+  generated launch screens do not take a custom glyph without a storyboard.
+- Review trigger: if iOS adds a branded Launch Screen storyboard, or Android
+  splash should match the launcher tile instead of `background-base`.

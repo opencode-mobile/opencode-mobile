@@ -195,12 +195,15 @@ function maybeValidateIconComposer() {
   }
 }
 
-function writeAndroidForeground({ transform, paths }) {
+function androidVectorXml({ transform, paths, fillFor }) {
   const { translateX, translateY, scaleX, scaleY } = svgTransformToAndroid(transform);
   const pathsXml = paths
-    .map((p) => `    <path\n        android:pathData="${p.d}"\n        android:fillColor="${p.fill}" />`)
+    .map((p) => {
+      const fill = fillFor ? fillFor(p) : p.fill;
+      return `    <path\n        android:pathData="${p.d}"\n        android:fillColor="${fill}" />`;
+    })
     .join("\n");
-  const xml = `<?xml version="1.0" encoding="utf-8"?>
+  return `<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -214,48 +217,80 @@ ${pathsXml}
   </group>
 </vector>
 `;
-  const outDir = join(ANDROID_RES, "drawable");
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, "ic_launcher_foreground.xml"), xml, "utf8");
+}
+
+function writeAndroidRes(relativePath, contents) {
+  const out = join(ANDROID_RES, relativePath);
+  mkdirSync(dirname(out), { recursive: true });
+  writeFileSync(out, contents, "utf8");
+}
+
+function writeAndroidForeground(parsed) {
+  writeAndroidRes("drawable/ic_launcher_foreground.xml", androidVectorXml(parsed));
 }
 
 function writeAndroidBackgroundColor({ backgroundFill }) {
-  const xml = `<?xml version="1.0" encoding="utf-8"?>
+  writeAndroidRes(
+    "values/ic_launcher_background.xml",
+    `<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">${backgroundFill}</color>
 </resources>
-`;
-  const outDir = join(ANDROID_RES, "values");
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(
-    join(outDir, "ic_launcher_background.xml"),
-    xml,
-    "utf8",
+`,
   );
 }
 
-function writeAndroidMonochrome({ transform, paths }) {
-  const { translateX, translateY, scaleX, scaleY } = svgTransformToAndroid(transform);
-  const pathsXml = paths
-    .map((p) => `    <path\n        android:pathData="${p.d}"\n        android:fillColor="#FFFFFF" />`)
-    .join("\n");
-  const xml = `<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="240"
-    android:viewportHeight="300">
-  <group android:scaleX="${scaleX}"
-      android:scaleY="${scaleY}"
-      android:translateX="${translateX}"
-      android:translateY="${translateY}">
-${pathsXml}
-  </group>
-</vector>
-`;
-  const outDir = join(ANDROID_RES, "drawable");
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, "ic_launcher_monochrome.xml"), xml, "utf8");
+function writeAndroidMonochrome(parsed) {
+  writeAndroidRes(
+    "drawable/ic_launcher_monochrome.xml",
+    androidVectorXml({
+      ...parsed,
+      fillFor: () => "#FFFFFF",
+    }),
+  );
+}
+
+// Splash uses app chrome (`background-base` / light ink), not the launcher
+// tile `#070707`. Light mode darkens the glass cap so it still reads on
+// `#F8F8F8`; dark mode keeps the source two-tone.
+const SPLASH_BACKGROUND_LIGHT = "#F8F8F8";
+const SPLASH_BACKGROUND_DARK = "#1C1C1C";
+const SPLASH_GLASS_LIGHT = "#171311";
+
+function writeAndroidSplash(parsed) {
+  const { body, glass } = splitLayers(parsed.paths);
+  const bodyFill = body[0].fill;
+  const glassFill = glass[0].fill;
+  writeAndroidRes(
+    "values/splash_colors.xml",
+    `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="splash_background">${SPLASH_BACKGROUND_LIGHT}</color>
+    <color name="splash_glyph_body">${bodyFill}</color>
+    <color name="splash_glyph_glass">${SPLASH_GLASS_LIGHT}</color>
+</resources>
+`,
+  );
+  writeAndroidRes(
+    "values-night/splash_colors.xml",
+    `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="splash_background">${SPLASH_BACKGROUND_DARK}</color>
+    <color name="splash_glyph_body">${bodyFill}</color>
+    <color name="splash_glyph_glass">${glassFill}</color>
+</resources>
+`,
+  );
+  writeAndroidRes(
+    "drawable/ic_splash.xml",
+    androidVectorXml({
+      ...parsed,
+      fillFor: (p) =>
+        p.fill.trim().toUpperCase() === GLASS_FILL.toUpperCase()
+          ? "@color/splash_glyph_glass"
+          : "@color/splash_glyph_body",
+    }),
+  );
 }
 
 function writeAndroidAdaptive() {
@@ -329,9 +364,10 @@ function run() {
   writeAndroidMonochrome(parsed);
   writeAndroidBackgroundColor(parsed);
   writeAndroidAdaptive();
+  writeAndroidSplash(parsed);
   writeAndroidLegacyMipmaps(flattened);
 
-  console.log("app-icon: synced iOS AppIcon + AppIcon.icon + Android adaptive icon from app-icon/source.svg");
+  console.log("app-icon: synced iOS AppIcon + AppIcon.icon + Android adaptive icon + splash from app-icon/source.svg");
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

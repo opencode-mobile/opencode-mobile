@@ -102,6 +102,9 @@ which:
 - emits Android `drawable/ic_launcher_monochrome.xml` (white silhouette),
 - emits `values/ic_launcher_background.xml` and
   `mipmap-anydpi-v26/ic_launcher{,_round}.xml`,
+- emits Android splash `drawable/ic_splash.xml` plus day/night
+  `splash_colors.xml` (`background-base` canvas; light mode darkens the glass
+  cap so it still reads),
 - regenerates pre-API-26 `mipmap-*/ic_launcher{,_round}.png` fallbacks.
 
 The generator uses `rsvg-convert` (librsvg) for SVG→PNG. Install with
@@ -119,6 +122,7 @@ any keeper settings back into the script before the next sync.
 | iOS 26+ | `ios/OpenCode Mobile/OpenCode Mobile/AppIcon.icon/` (`.icon` package; `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon`) |
 | iOS catalog fallback | `…/Assets.xcassets/AppIcon.appiconset/{icon-1024,icon-tinted-1024}.png` + `Contents.json` |
 | Android API 26+ | `drawable/ic_launcher_foreground.xml`, `drawable/ic_launcher_monochrome.xml`, `values/ic_launcher_background.xml`, `mipmap-anydpi-v26/ic_launcher{,_round}.xml` |
+| Android splash | `drawable/ic_splash.xml`, `values/splash_colors.xml`, `values-night/splash_colors.xml` |
 | Android API 24–25 | `mipmap-{m,h,x,xx,xxx}dpi/ic_launcher{,_round}.png` |
 
 ## iOS appearance variants (launcher)
@@ -129,6 +133,21 @@ explicit pre-26 / git-diff copy of the flattened mark:
 
 - `universal` / `dark` — flattened two-tone on `#070707`.
 - `tinted` — white-on-transparent silhouette from the same glyph paths.
+
+## Launch / splash
+
+The home-screen launcher tile stays the dark brand mark (`#070707`). The
+**Android splash** follows system light/dark and uses app chrome, not that
+tile:
+
+| Appearance | Canvas | Body | Glass cap |
+| --- | --- | --- | --- |
+| Light | `background-base` `#F8F8F8` | `#4B4646` | `#171311` (ink, so the cap still reads) |
+| Dark | `background-base` `#1C1C1C` | `#4B4646` | `#F1ECEC` (source glass) |
+
+`Theme.OpenCodeMobile.Splash` (`Theme.SplashScreen`) paints that canvas behind
+`ic_splash`. iOS uses the generated `UILaunchScreen` (system background, no
+glyph); that already follows light/dark.
 
 ## Editing
 
