@@ -386,12 +386,7 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func isVisibleTool(_ tool: ToolPart) -> Bool {
-        let name = tool.toolName.lowercased()
-        if name == "todowrite" { return false }
-        if name == "question", tool.status == .pending || tool.status == .running {
-            return false
-        }
-        return true
+        ToolPartIdentity.isVisibleOnTimeline(tool)
     }
 
     /// Parts that never become timeline blocks. Grouping looks through them so
@@ -489,7 +484,7 @@ nonisolated enum SessionChatTimelineBlocks {
         case "write": return count == 1 ? "Write" : "\(count) writes"
         case "webfetch": return count == 1 ? "Fetch" : "\(count) fetches"
         case "websearch": return count == 1 ? "Search" : "\(count) searches"
-        case "question": return count == 1 ? "Question" : "\(count) questions"
+        case "question": return askedQuestionsTitle(count)
         case "skill": return count == 1 ? "Skill" : "\(count) skills"
         case "apply_patch": return count == 1 ? "Patch" : "\(count) patches"
         case "linear_get_issue": return count == 1 ? "Get issue" : "\(count) Get issues"
@@ -604,13 +599,14 @@ nonisolated enum SessionChatTimelineBlocks {
             }
             ?? runningTitleOverride(tool)
         return Chrome(
-            title: "Called \(tool.toolName)",
+            title: ToolPartIdentity.calledTitle(tool.toolName),
             subtitle: subtitle,
             detailText: settledDetail(tool)
         )
     }
 
     private static func specializedChrome(name: String, tool: ToolPart) -> Chrome? {
+        if isQuestionTool(tool) { return questionChrome(tool) }
         switch name {
         case "read":
             return contextChrome(tool: tool, displayTitle: "Read", subtitle: pathSubtitle(tool.input))
@@ -630,8 +626,6 @@ nonisolated enum SessionChatTimelineBlocks {
             return networkChrome(tool: tool, displayTitle: "Fetch", subtitleKey: "url")
         case "websearch":
             return networkChrome(tool: tool, displayTitle: "Search", subtitleKey: "query")
-        case "question":
-            return questionChrome(tool)
         case "skill":
             return Chrome(
                 title: "Skill",
@@ -805,7 +799,7 @@ nonisolated enum SessionChatTimelineBlocks {
     private static func contextChrome(tool: ToolPart, displayTitle: String, subtitle: String?) -> Chrome {
         guard let subtitle else {
             return Chrome(
-                title: "Called \(tool.toolName)",
+                title: ToolPartIdentity.calledTitle(tool.toolName),
                 subtitle: runningTitleOverride(tool)
             )
         }
@@ -970,6 +964,14 @@ nonisolated enum SessionChatTimelineBlocks {
         }
     }
 
+    private static func isQuestionTool(_ tool: ToolPart) -> Bool {
+        ToolPartIdentity.isQuestion(name: tool.toolName, input: tool.input)
+    }
+
+    private static func askedQuestionsTitle(_ count: Int) -> String {
+        count == 1 ? "Asked 1 question" : "Asked \(count) questions"
+    }
+
     private static func questionChrome(_ tool: ToolPart) -> Chrome {
         let questions = questionTexts(tool.input)
         let answers = answerTexts(tool.metadata)
@@ -977,8 +979,9 @@ nonisolated enum SessionChatTimelineBlocks {
             ?? inputString(tool.input, keys: "prompt", "text", "question")
             ?? runningTitleOverride(tool)
         let dismissed = tool.status == .error ? nonEmpty(tool.error) : nil
+        let count = max(questions.count, firstQuestion == nil ? 0 : 1)
         return Chrome(
-            title: firstQuestion ?? "Question",
+            title: askedQuestionsTitle(count),
             subtitle: answers.first,
             detailText: questionDetail(
                 questions: questions.isEmpty ? [firstQuestion].compactMap { $0 } : questions,

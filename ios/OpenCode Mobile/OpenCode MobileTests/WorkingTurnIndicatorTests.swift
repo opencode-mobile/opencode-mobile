@@ -21,6 +21,22 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
+    @Test func labelForActiveTurn_hidesWhenAwaitingUserAfterSettledThought() {
+        let thought: SessionChatTimelineBlock = .reasoning(
+            blockID: "r1",
+            text: "plan",
+            isStreaming: false,
+            durationMs: 2000
+        )
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                messages: [user("u1"), assistant("a1", text: "", blocks: [thought])],
+                isAwaitingUser: true
+            ) == nil
+        )
+    }
+
     @Test func labelForActiveTurn_showsThinkingWhenAssistantHasSettledText() {
         #expect(
             WorkingTurnIndicator.labelForActiveTurn(

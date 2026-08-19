@@ -1203,6 +1203,7 @@ class SessionChatViewModel
                     statusLabel = sessionStatusLabel,
                     messages = messages,
                     isCompacting = isCompacting,
+                    isAwaitingUser = permissionRequests.isNotEmpty() || questionRequests.isNotEmpty(),
                 )
             val syncingIndicatorLabel =
                 if (timelineState.isSyncingMessages) {

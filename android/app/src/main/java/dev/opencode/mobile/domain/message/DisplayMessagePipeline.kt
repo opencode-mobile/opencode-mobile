@@ -707,16 +707,8 @@ internal fun resolveStreamingDecorationTarget(message: Message): StreamingDecora
 }
 
 /** Mirrors [SessionChatTimelineBlocks] visibility used when flushing text runs. */
-private fun isVisibleToolForStreamingDecoration(tool: MessagePart.Tool): Boolean {
-    val name = tool.toolName.lowercase()
-    if (name == "todowrite") return false
-    if (name == "question" &&
-        (tool.status == ToolStatus.Pending || tool.status == ToolStatus.Running)
-    ) {
-        return false
-    }
-    return true
-}
+private fun isVisibleToolForStreamingDecoration(tool: MessagePart.Tool): Boolean =
+    ToolPartIdentity.isVisibleOnTimeline(tool)
 
 private fun messageHasSoleTextBlock(message: Message): Boolean {
     val blocks =

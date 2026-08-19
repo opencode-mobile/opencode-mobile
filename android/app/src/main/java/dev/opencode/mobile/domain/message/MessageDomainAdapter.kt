@@ -93,7 +93,7 @@ class MessageDomainAdapter {
                 )
             }
             "tool" -> {
-                val toolName = dto.tool ?: dto.name ?: return null
+                val toolName = ToolPartIdentity.canonical(dto.tool ?: dto.name)
                 val stateDto = parseToolState(dto.state)
                 toToolPart(toolName = toolName, callId = dto.callId, state = stateDto, id = dto.id)
             }

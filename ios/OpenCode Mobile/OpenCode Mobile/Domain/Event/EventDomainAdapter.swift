@@ -409,7 +409,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         } else {
             status = "running"
         }
-        let name = string(in: properties, key: "tool") ?? string(in: properties, key: "name") ?? "tool"
+        let name = resolvedToolName(properties)
         let callID = string(in: properties, key: "callID")
         let partID = string(in: properties, key: "id") ?? callID
         var output = string(in: properties, key: "output")
@@ -691,6 +691,13 @@ nonisolated struct EventDomainAdapter: Sendable {
             return "reasoning-\(ordinal)"
         }
         return nil
+    }
+
+    private func resolvedToolName(_ properties: [String: Any]) -> String {
+        ToolPartIdentity.resolvedName(
+            explicit: string(in: properties, key: "tool") ?? string(in: properties, key: "name"),
+            input: objectInput(properties["input"])
+        )
     }
 
     private func objectInput(_ value: Any?) -> [String: Any]? {

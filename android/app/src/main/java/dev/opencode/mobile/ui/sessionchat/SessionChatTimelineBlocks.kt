@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import kotlinx.serialization.json.JsonArray
@@ -344,16 +345,7 @@ object SessionChatTimelineBlocks {
         return duration.takeIf { it >= 0 }
     }
 
-    private fun isVisibleTool(tool: MessagePart.Tool): Boolean {
-        val name = tool.toolName.lowercase()
-        if (name == "todowrite") return false
-        if (name == "question" &&
-            (tool.status == ToolStatus.Pending || tool.status == ToolStatus.Running)
-        ) {
-            return false
-        }
-        return true
-    }
+    private fun isVisibleTool(tool: MessagePart.Tool): Boolean = ToolPartIdentity.isVisibleOnTimeline(tool)
 
     /**
      * Parts that never become timeline blocks. Grouping looks through them so
@@ -442,7 +434,7 @@ object SessionChatTimelineBlocks {
             "write" -> if (count == 1) "Write" else "$count writes"
             "webfetch" -> if (count == 1) "Fetch" else "$count fetches"
             "websearch" -> if (count == 1) "Search" else "$count searches"
-            "question" -> if (count == 1) "Question" else "$count questions"
+            "question" -> askedQuestionsTitle(count)
             "skill" -> if (count == 1) "Skill" else "$count skills"
             "apply_patch" -> if (count == 1) "Patch" else "$count patches"
             "linear_get_issue" -> if (count == 1) "Get issue" else "$count Get issues"
@@ -529,7 +521,7 @@ object SessionChatTimelineBlocks {
                 ?: tool.title?.takeIf { it.isNotEmpty() && !it.equals(tool.toolName, ignoreCase = true) }
                 ?: runningTitleOverride(tool)
         return Chrome(
-            title = "Called ${tool.toolName}",
+            title = ToolPartIdentity.calledTitle(tool.toolName),
             subtitle = subtitle,
             detailText = settledDetail(tool),
         )
@@ -538,8 +530,9 @@ object SessionChatTimelineBlocks {
     private fun specializedChrome(
         name: String,
         tool: MessagePart.Tool,
-    ): Chrome? =
-        when (name) {
+    ): Chrome? {
+        if (isQuestionTool(tool)) return questionChrome(tool)
+        return when (name) {
             "read" -> contextChrome(tool, displayTitle = "Read", subtitle = pathSubtitle(tool.input))
             "glob" ->
                 contextChrome(
@@ -559,7 +552,6 @@ object SessionChatTimelineBlocks {
             "plan_exit" -> planExitChrome(tool)
             "webfetch" -> networkChrome(tool, displayTitle = "Fetch", subtitleKey = "url")
             "websearch" -> networkChrome(tool, displayTitle = "Search", subtitleKey = "query")
-            "question" -> questionChrome(tool)
             "skill" ->
                 Chrome(
                     title = "Skill",
@@ -573,6 +565,7 @@ object SessionChatTimelineBlocks {
             "apply_patch" -> fileChangeChrome(tool, displayTitle = "Patch")
             else -> null
         }
+    }
 
     private fun fileChangeChrome(
         tool: MessagePart.Tool,
@@ -729,7 +722,7 @@ object SessionChatTimelineBlocks {
     ): Chrome {
         if (subtitle == null) {
             return Chrome(
-                title = "Called ${tool.toolName}",
+                title = ToolPartIdentity.calledTitle(tool.toolName),
                 subtitle = runningTitleOverride(tool),
             )
         }
@@ -891,6 +884,12 @@ object SessionChatTimelineBlocks {
         }
     }
 
+    private fun isQuestionTool(tool: MessagePart.Tool): Boolean =
+        ToolPartIdentity.isQuestion(tool.toolName, tool.input)
+
+    private fun askedQuestionsTitle(count: Int): String =
+        if (count == 1) "Asked 1 question" else "Asked $count questions"
+
     private fun questionChrome(tool: MessagePart.Tool): Chrome {
         val questions = questionTexts(tool.input)
         val answers = answerTexts(tool.metadata)
@@ -900,8 +899,9 @@ object SessionChatTimelineBlocks {
                 ?: runningTitleOverride(tool)
         val firstAnswer = answers.firstOrNull()
         val dismissed = if (tool.status == ToolStatus.Error) tool.error?.takeIf { it.isNotEmpty() } else null
+        val count = questions.size.coerceAtLeast(if (firstQuestion != null) 1 else 0)
         return Chrome(
-            title = firstQuestion ?: "Question",
+            title = askedQuestionsTitle(count),
             subtitle = firstAnswer,
             detailText =
                 questionDetail(

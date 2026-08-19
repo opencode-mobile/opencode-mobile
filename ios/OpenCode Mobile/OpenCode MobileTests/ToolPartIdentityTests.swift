@@ -1,0 +1,42 @@
+import Foundation
+import Testing
+@testable import OpenCode_Mobile
+
+struct ToolPartIdentityTests {
+    @Test func placeholderIncludesBlankAndLiteralTool() {
+        #expect(ToolPartIdentity.isPlaceholder(nil))
+        #expect(ToolPartIdentity.isPlaceholder(""))
+        #expect(ToolPartIdentity.isPlaceholder("tool"))
+        #expect(ToolPartIdentity.isPlaceholder("TOOL"))
+        #expect(!ToolPartIdentity.isPlaceholder("question"))
+        #expect(!ToolPartIdentity.isPlaceholder("read"))
+    }
+
+    @Test func coalesceKeepsKnownNameWhenIncomingIsPlaceholder() {
+        #expect(ToolPartIdentity.coalesce(incoming: "tool", existing: "question") == "question")
+        #expect(ToolPartIdentity.coalesce(incoming: "", existing: "question") == "question")
+        #expect(ToolPartIdentity.coalesce(incoming: "bash", existing: "question") == "bash")
+        #expect(ToolPartIdentity.coalesce(incoming: "bash", existing: "tool") == "bash")
+    }
+
+    @Test func resolvedNameInfersQuestionOnlyWhenWireNameIsMissing() {
+        let questions: [String: Any] = ["questions": [["header": "A"]]]
+        #expect(ToolPartIdentity.resolvedName(explicit: nil, input: questions) == "question")
+        #expect(ToolPartIdentity.resolvedName(explicit: "tool", input: questions) == "question")
+        #expect(ToolPartIdentity.resolvedName(explicit: "read", input: questions) == "read")
+        #expect(ToolPartIdentity.resolvedName(explicit: nil, input: nil) == "")
+    }
+
+    @Test func calledTitleDoesNotInventCalledTool() {
+        #expect(ToolPartIdentity.calledTitle("tool") == "Tool")
+        #expect(ToolPartIdentity.calledTitle("") == "Tool")
+        #expect(ToolPartIdentity.calledTitle("read") == "Called read")
+    }
+
+    @Test func placeholderToolWithoutQuestionsIsHidden() {
+        let part = ToolPart(id: "prt-1", toolName: "tool", status: .running)
+        #expect(!ToolPartIdentity.isVisibleOnTimeline(part))
+        #expect(!ToolPartIdentity.isVisibleOnTimeline(ToolPart(id: "prt-1", toolName: "tool", status: .completed)))
+        #expect(ToolPartIdentity.isVisibleOnTimeline(ToolPart(id: "prt-2", toolName: "read", status: .running)))
+    }
+}

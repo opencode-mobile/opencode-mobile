@@ -1491,6 +1491,28 @@ struct MessageSyncTests {
         #expect(second.text == "Second")
     }
 
+    @Test func messagePartUpdated_placeholderToolNameDoesNotOverwriteQuestion() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        try? await Task.sleep(for: .milliseconds(100))
+
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        eventStream.emit(eventWithToolPart(partID: "prt-q", messageID: "msg-2", tool: "question", status: "pending", sessionID: "ses-1"))
+        eventStream.emit(eventWithToolPart(partID: "prt-q", messageID: "msg-2", tool: "tool", status: "completed", sessionID: "ses-1"))
+        let updated = await waitUntil {
+            guard case .tool(let tool) = collector.latest()?.first(where: { $0.id == "msg-2" })?.parts.first else {
+                return false
+            }
+            return tool.toolName == "question" && tool.status == .completed
+        }
+        task.cancel()
+        #expect(updated)
+    }
+
     @Test func messagePartUpdated_forRestSeededMessageReloadsTimeline() async {
         let repo = FakeLiveMessageRepository()
         repo.messages = [

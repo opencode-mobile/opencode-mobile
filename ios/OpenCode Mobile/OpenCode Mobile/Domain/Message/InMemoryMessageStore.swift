@@ -917,7 +917,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             merged = .tool(
                 ToolPart(
                     id: prior.id,
-                    toolName: next.toolName.isEmpty ? prior.toolName : next.toolName,
+                    toolName: ToolPartIdentity.coalesce(incoming: next.toolName, existing: prior.toolName),
                     status: next.status,
                     title: next.title ?? prior.title,
                     error: next.error ?? prior.error,

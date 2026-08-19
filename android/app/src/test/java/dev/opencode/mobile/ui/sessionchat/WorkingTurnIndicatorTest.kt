@@ -29,6 +29,33 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
+    fun labelForActiveTurn_hidesWhenAwaitingUserAfterSettledThought() {
+        assertNull(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Working",
+                messages =
+                    listOf(
+                        user("u1"),
+                        assistant(
+                            id = "a1",
+                            text = "",
+                            blocks =
+                                listOf(
+                                    SessionChatTimelineBlock.Reasoning(
+                                        blockID = "r1",
+                                        text = "plan",
+                                        isStreaming = false,
+                                        durationMs = 2000,
+                                    ),
+                                ),
+                        ),
+                    ),
+                isAwaitingUser = true,
+            ),
+        )
+    }
+
+    @Test
     fun labelForActiveTurn_showsThinkingWhenAssistantHasSettledText() {
         assertEquals(
             "Thinking",

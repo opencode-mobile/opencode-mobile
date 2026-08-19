@@ -62,7 +62,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
         case "file":
             return filePart(from: dto)
         case "tool":
-            guard let toolName = dto.tool ?? dto.name else { return nil }
+            let toolName = ToolPartIdentity.canonical(dto.tool ?? dto.name)
             return .tool(toolPart(id: dto.id, toolName: toolName, callID: dto.callID, state: dto.state))
         case "compaction":
             return .compaction(CompactionPart(id: dto.id, auto: dto.auto == true, completed: dto.completed == true))

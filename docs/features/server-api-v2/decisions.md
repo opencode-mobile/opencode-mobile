@@ -22,7 +22,8 @@ Still binding:
 - `session.next.step.ended` is not idle. Idle is execution succeeded /
   interrupted / failed.
 - Tool, shell, compaction, and text `session.next.*` / `session.*` project
-  into `message.part.*`.
+  into `message.part.*`. Later `session.tool.*` events omit `name`; project
+  them as sparse overlays, not full replacements with invented identity.
 - Capability-gate last-turn diff and archive when v2 has no twin.
 - On v2, question list 404 falls back to forms. Keep `/api/question/*` when
   it works.

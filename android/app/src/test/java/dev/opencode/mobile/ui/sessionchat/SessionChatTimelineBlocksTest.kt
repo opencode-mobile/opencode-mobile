@@ -331,7 +331,7 @@ class SessionChatTimelineBlocksTest {
             )
         val tool = shown.single() as SessionChatTimelineBlock.ToolCard
         assertEquals(PresentationBlockId.direct("prt-3"), tool.blockID)
-        assertEquals("Which option?", tool.title)
+        assertEquals("Asked 1 question", tool.title)
         assertNull(tool.subtitle)
         assertEquals("Which option?", tool.detailText)
     }
@@ -361,7 +361,7 @@ class SessionChatTimelineBlocksTest {
                     ),
             )
         val tool = shown.single() as SessionChatTimelineBlock.ToolCard
-        assertEquals("What would you like to do in this session?", tool.title)
+        assertEquals("Asked 1 question", tool.title)
         assertEquals("The user dismissed this question", tool.errorText)
         assertEquals(
             "What would you like to do in this session?\n\nThe user dismissed this question",
@@ -402,12 +402,69 @@ class SessionChatTimelineBlocksTest {
                     ),
             )
         val tool = shown.single() as SessionChatTimelineBlock.ToolCard
-        assertEquals("What should we do with these two projects this session?", tool.title)
+        assertEquals("Asked 1 question", tool.title)
         assertEquals("Build a third sibling", tool.subtitle)
         assertEquals(
             "What should we do with these two projects this session?\nBuild a third sibling",
             tool.detailText,
         )
+    }
+
+    @Test
+    fun build_questionToolUsesAskedCountTitleEvenWhenNameIsPlaceholder() {
+        val questions =
+            buildJsonArray {
+                repeat(3) { index ->
+                    add(buildJsonObject { put("question", "Q$index") })
+                }
+            }
+        val hidden =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "tool",
+                            status = ToolStatus.Running,
+                            id = "prt-q",
+                            input = JsonObject(mapOf("questions" to questions)),
+                        ),
+                    ),
+            )
+        assertTrue(hidden.isEmpty())
+
+        val shown =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "tool",
+                            status = ToolStatus.Completed,
+                            id = "prt-q",
+                            input = JsonObject(mapOf("questions" to questions)),
+                        ),
+                    ),
+            )
+        val tool = shown.single() as SessionChatTimelineBlock.ToolCard
+        assertEquals("Asked 3 questions", tool.title)
+    }
+
+    @Test
+    fun build_hidesPlaceholderToolNameWithoutQuestions() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "tool",
+                            status = ToolStatus.Running,
+                            id = "prt-unknown",
+                        ),
+                    ),
+            )
+        assertTrue(blocks.isEmpty())
     }
 
     @Test

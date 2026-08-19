@@ -9,6 +9,8 @@ import dev.opencode.mobile.domain.message.ToolStatus
  * plus [SessionCompactChrome.STATUS_LABEL] while compact is in flight.
  * After settled assistant content, a still-busy turn shows [THINKING_LABEL]
  * unless Retrying. Working stays first when nothing has landed yet.
+ * In-flight questions are hidden from the timeline and shown in the dock —
+ * that dock is the wait state, so do not add a second Thinking line.
  */
 object WorkingTurnIndicator {
     const val THINKING_LABEL = "Thinking"
@@ -17,8 +19,10 @@ object WorkingTurnIndicator {
         statusLabel: String?,
         messages: List<SessionChatMessageItem>,
         isCompacting: Boolean = false,
+        isAwaitingUser: Boolean = false,
     ): String? {
         if (isCompacting) return SessionCompactChrome.STATUS_LABEL
+        if (isAwaitingUser) return null
         if (statusLabel == null) return null
         if (hasInProgressAssistantContentAfterLastUser(messages)) return null
         if (statusLabel == "Working" && hasSettledAssistantContentAfterLastUser(messages)) {

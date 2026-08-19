@@ -5,15 +5,19 @@ import Foundation
 /// plus `SessionCompactChrome.statusLabel` while compact is in flight.
 /// After settled assistant content, a still-busy turn shows `thinkingLabel`
 /// unless Retrying. Working stays first when nothing has landed yet.
+/// In-flight questions are hidden from the timeline and shown in the dock —
+/// that dock is the wait state, so do not add a second Thinking line.
 enum WorkingTurnIndicator {
     static let thinkingLabel = "Thinking"
 
     static func labelForActiveTurn(
         statusLabel: String?,
         messages: [SessionChatRow],
-        isCompacting: Bool = false
+        isCompacting: Bool = false,
+        isAwaitingUser: Bool = false
     ) -> String? {
         if isCompacting { return SessionCompactChrome.statusLabel }
+        if isAwaitingUser { return nil }
         guard let statusLabel else { return nil }
         if hasInProgressAssistantContentAfterLastUser(messages) { return nil }
         if statusLabel == "Working", hasSettledAssistantContentAfterLastUser(messages) {

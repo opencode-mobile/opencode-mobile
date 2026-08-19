@@ -12,6 +12,10 @@ Still binding:
   not live, or when streaming is stalled. Skip a UI emit when reconnect
   merge leaves the fingerprint unchanged. Revision-gate in-flight REST
   so it cannot overwrite a newer SSE revision.
+- v2 `session.tool.*` events after `input.started` are sparse. TUI keeps
+  name on its tools map (`current.part.name ?? "tool"` is display only).
+  Do not invent `"tool"` as part identity. Parse nameless tool updates.
+  Store overlay: a real name is never replaced by blank / `"tool"`.
 - Reasoning is a distinct part. Never apply a reasoning delta onto `TextPart`.
 - Markdown is prepared in `DisplayMessagePipeline`, not in UI or the raw store.
   16/48 coalesce is for markdown decoration, not for hiding the raw stream.

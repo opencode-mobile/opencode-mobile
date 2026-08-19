@@ -761,7 +761,7 @@ class InMemoryMessageStore
                 when {
                     existing is MessagePart.Tool && incoming is MessagePart.Tool ->
                         existing.copy(
-                            toolName = incoming.toolName.ifBlank { existing.toolName },
+                            toolName = ToolPartIdentity.coalesce(incoming.toolName, existing.toolName),
                             status = incoming.status,
                             title = incoming.title ?: existing.title,
                             error = incoming.error ?: existing.error,
@@ -865,4 +865,5 @@ class InMemoryMessageStore
             }.getOrNull()
 
         private fun Message.hasRenderableContent(): Boolean = text.isNotBlank() || parts.isNotEmpty()
+
     }

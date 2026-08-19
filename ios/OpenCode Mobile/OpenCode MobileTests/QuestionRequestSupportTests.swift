@@ -87,7 +87,28 @@ struct QuestionRequestSupportTests {
             questions: questions,
             answers: [["Allow search via Exa, Firecrawl, Parallel, Tavily"]]
         )
-        #expect(answer == ["choice": "allow"])
+        #expect(answer["choice"] == .string("allow"))
+    }
+
+    @Test func formAnswer_usesArraysForMultiselectFields() {
+        let questions = [
+            QuestionInfo(
+                question: "What are your main interests?",
+                header: "Interests",
+                options: [
+                    QuestionOption(label: "Scenery & nature", description: "", value: "nature"),
+                    QuestionOption(label: "Wildlife", description: "", value: "wildlife"),
+                ],
+                multiple: true,
+                custom: false,
+                fieldKey: "interests"
+            ),
+        ]
+        let answer = SessionDomainAdapter().formAnswer(
+            questions: questions,
+            answers: [["Scenery & nature", "Wildlife"]]
+        )
+        #expect(answer["interests"] == .array([.string("nature"), .string("wildlife")]))
     }
 
     private func questionRequest(

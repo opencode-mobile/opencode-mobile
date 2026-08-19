@@ -180,7 +180,7 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(blockID == PresentationBlockId.direct("q3"))
-        #expect(tool.title == "Which option?")
+        #expect(tool.title == "Asked 1 question")
         #expect(tool.subtitle == nil)
         #expect(tool.detailText == "Which option?")
     }
@@ -207,7 +207,7 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "What would you like to do in this session?")
+        #expect(tool.title == "Asked 1 question")
         #expect(tool.errorText == "The user dismissed this question")
         #expect(
             tool.detailText ==
@@ -241,12 +241,66 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "What should we do with these two projects this session?")
+        #expect(tool.title == "Asked 1 question")
         #expect(tool.subtitle == "Build a third sibling")
         #expect(
             tool.detailText ==
                 "What should we do with these two projects this session?\nBuild a third sibling"
         )
+    }
+
+    @Test func build_questionToolUsesAskedCountTitleEvenWhenNameIsPlaceholder() {
+        let questions: AnyCodable = .array([
+            .dictionary(["question": .string("Q0")]),
+            .dictionary(["question": .string("Q1")]),
+            .dictionary(["question": .string("Q2")]),
+        ])
+        let hidden = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "prt-q",
+                        toolName: "tool",
+                        status: .running,
+                        input: ["questions": questions]
+                    )
+                ),
+            ]
+        )
+        #expect(hidden.isEmpty)
+
+        let shown = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "prt-q",
+                        toolName: "tool",
+                        status: .completed,
+                        input: ["questions": questions]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(_, let tool) = shown.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Asked 3 questions")
+    }
+
+    @Test func build_hidesPlaceholderToolNameWithoutQuestions() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "prt-unknown",
+                        toolName: "tool",
+                        status: .running
+                    )
+                ),
+            ]
+        )
+        #expect(blocks.isEmpty)
     }
 
     @Test func build_nonAssistantRolesAreTextOnly() {

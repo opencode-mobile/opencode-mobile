@@ -1134,7 +1134,8 @@ final class SessionChatViewModel {
             workingIndicatorLabel: WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel: sessionStatusLabel,
                 messages: timelineState.messages,
-                isCompacting: isCompacting
+                isCompacting: isCompacting,
+                isAwaitingUser: !permissionRequests.isEmpty || !questionRequests.isEmpty
             ),
             syncingIndicatorLabel: timelineState.isSyncingMessages
                 ? SessionMessageSyncChrome.statusLabel
