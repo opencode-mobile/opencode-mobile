@@ -225,12 +225,15 @@ class DefaultForegroundEventStreamTest {
     fun start_isIdempotentWhileStreamIsRunning() =
         runBlocking {
             val openCount = AtomicInteger(0)
+            val opened = CompletableDeferred<Unit>()
+            val channel = ByteChannel(autoFlush = true)
             val client =
                 HttpClient(
-                    MockEngine { request ->
+                    MockEngine {
                         openCount.incrementAndGet()
+                        opened.complete(Unit)
                         respond(
-                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            content = channel,
                             status = HttpStatusCode.OK,
                             headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
                         )
@@ -242,7 +245,7 @@ class DefaultForegroundEventStreamTest {
                     store,
                     ConnectionProbing { ServerProtocol.V2 },
                 )
-            manager.applyProfile(sampleProfile)
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
             val stream =
                 DefaultForegroundEventStream(
                     eventsApi = EventsApi(client),
@@ -253,16 +256,13 @@ class DefaultForegroundEventStreamTest {
                 )
             try {
                 stream.start()
-                withTimeout(5_000) {
-                    while (openCount.get() < 1) {
-                        delay(10)
-                    }
-                }
+                withTimeout(5_000) { opened.await() }
                 stream.start()
                 delay(50)
                 assertEquals(1, openCount.get())
             } finally {
                 stream.stop()
+                channel.close()
                 client.close()
             }
         }
