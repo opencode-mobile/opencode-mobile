@@ -109,7 +109,8 @@ which:
   as circular-masked rasters (Firebase App Distribution and other APK
   extractors show `android:icon` unmasked; adaptive layers stay square).
 
-Legacy mipmaps keep the Android 0.88 canvas inset and a circular clip.
+Legacy mipmaps keep the Android 0.88 canvas inset and a pixel-coverage
+circle (not an SVG clip, which tessellates into a polygon).
 Home-screen API 26+ still uses the unmasked adaptive layers. Do not circular-
 mask store rasters — Play and Apple apply their own chrome.
 
