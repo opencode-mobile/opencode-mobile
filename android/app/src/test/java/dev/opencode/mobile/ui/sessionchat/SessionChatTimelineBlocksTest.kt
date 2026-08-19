@@ -898,6 +898,25 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
+    fun build_taskStaysTaskUntilInputAgentLands() {
+        val row =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "task",
+                            status = ToolStatus.Running,
+                            id = "prt-1",
+                            title = "explore",
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ChildSessionRow
+
+        assertEquals("Task", row.agentName)
+    }
+
+    @Test
     fun build_pendingTaskQuietRowUsesPromptWhenTitleMissing() {
         val row =
             buildBlocks(
@@ -949,8 +968,8 @@ class SessionChatTimelineBlocksTest {
                     ),
             ).single() as SessionChatTimelineBlock.ChildSessionRow
 
-        assertEquals("coder", row.agentName)
-        assertEquals("C", row.letter)
+        assertEquals("Task", row.agentName)
+        assertEquals("T", row.letter)
         assertNull(row.secondLine)
         assertTrue(row.isBackground)
         assertNull(row.childSessionId)

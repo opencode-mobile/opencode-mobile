@@ -612,6 +612,26 @@ struct SessionChatTimelineBlocksTests {
         #expect(row.timeStartEpochMs == nil)
     }
 
+    @Test func build_taskStaysTaskUntilInputAgentLands() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "task-1",
+                        toolName: "task",
+                        status: .running,
+                        title: "explore"
+                    )
+                ),
+            ]
+        )
+        guard case .childSessionRow(_, let row) = blocks.first else {
+            Issue.record("Expected child session row")
+            return
+        }
+        #expect(row.agentName == "Task")
+    }
+
     @Test func build_pendingTaskQuietRowUsesPromptWhenTitleMissing() {
         let blocks = okBlocks(
             parts: [
@@ -663,8 +683,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected child session row")
             return
         }
-        #expect(row.agentName == "coder")
-        #expect(row.letter == "C")
+        #expect(row.agentName == "Task")
+        #expect(row.letter == "T")
         #expect(row.secondLine == nil)
         #expect(row.isBackground == true)
         #expect(row.childSessionId == nil)

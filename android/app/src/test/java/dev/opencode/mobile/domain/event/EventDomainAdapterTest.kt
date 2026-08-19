@@ -289,6 +289,26 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvent_parsesToolInputJsonString() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.tool.called","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","callID":"prt-1","name":"task","input":"{\"agent\":\"explore\",\"description\":\"Find auth\"}"}}""",
+            )
+
+        val input =
+            event
+                ?.rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("state")
+                ?.jsonObject
+                ?.get("input")
+                ?.jsonObject
+        assertEquals("explore", input?.get("agent")?.jsonPrimitive?.content)
+        assertEquals("Find auth", input?.get("description")?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun parseEvent_projectsInboxCancelledIntoMessageRemoved() {
         val event =
             adapter.parseEvent(

@@ -675,7 +675,7 @@ object SessionChatTimelineBlocks {
     }
 
     private fun taskAgentName(tool: MessagePart.Tool): String =
-        inputString(tool.input, "agent", "name")
+        inputString(tool.input, "agent")
             ?: metadataString(tool.metadata, "agent")
             ?: "Task"
 

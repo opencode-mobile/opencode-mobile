@@ -9,6 +9,9 @@ protocol MessageStore: AnyObject {
     func hasStreamingText(sessionID: String) -> Bool
     func revision(sessionID: String) -> UInt64
     func replaceAllIfRevision(sessionID: String, messages: [Message], expectedRevision: UInt64) -> Bool
+    /// Idle REST overlay: patch existing parts in place. Does not rematerialize
+    /// unchanged tools. No-op when `expectedRevision` is stale.
+    func mergeAuthoritativeIfRevision(sessionID: String, messages: [Message], expectedRevision: UInt64) -> Bool
     func finishStreamingText(sessionID: String)
     func clear()
 }

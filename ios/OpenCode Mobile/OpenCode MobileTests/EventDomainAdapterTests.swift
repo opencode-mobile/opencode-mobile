@@ -243,6 +243,16 @@ struct EventDomainAdapterTests {
         #expect(state?["time"]?.dictionaryValue?["start"]?.int64Value == 1_710_000_000_000)
     }
 
+    @Test func parseEvent_parsesToolInputJsonString() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.tool.called","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","callID":"prt-1","name":"task","input":"{\"agent\":\"explore\",\"description\":\"Find auth\"}"}}"#
+        )
+        let input = event?.rawProperties?["part"]?.dictionaryValue?["state"]?.dictionaryValue?["input"]?.dictionaryValue
+        #expect(input?["agent"]?.stringValue == "explore")
+        #expect(input?["description"]?.stringValue == "Find auth")
+    }
+
     @Test func parseEvent_projectsInboxCancelledIntoMessageRemoved() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(

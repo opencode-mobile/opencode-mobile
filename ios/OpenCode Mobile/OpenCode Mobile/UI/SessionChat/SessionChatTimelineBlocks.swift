@@ -753,7 +753,7 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func taskAgentName(_ tool: ToolPart) -> String {
-        inputString(tool.input, keys: "agent", "name")
+        inputString(tool.input, keys: "agent")
             ?? metadataString(tool.metadata, keys: "agent")
             ?? "Task"
     }

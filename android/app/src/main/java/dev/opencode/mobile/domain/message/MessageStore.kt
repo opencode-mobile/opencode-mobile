@@ -31,6 +31,16 @@ interface MessageStore {
         expectedRevision: Long,
     ): Boolean
 
+    /**
+     * Idle REST overlay: patch existing parts in place. Does not rematerialize
+     * unchanged tools. No-op when [expectedRevision] is stale.
+     */
+    fun mergeAuthoritativeIfRevision(
+        sessionId: String,
+        messages: List<Message>,
+        expectedRevision: Long,
+    ): Boolean
+
     /** Ends cached streaming state after an idle reload failure so polling can recover. */
     fun finishStreamingText(sessionId: String)
 

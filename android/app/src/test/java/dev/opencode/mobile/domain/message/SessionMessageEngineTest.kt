@@ -1,6 +1,8 @@
 package dev.opencode.mobile.domain.message
 
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -380,6 +382,112 @@ class SessionMessageEngineTest {
         )
         val reloaded = engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Tool>().single()
         assertEquals(stamped, reloaded.timeStartEpochMs)
+    }
+
+    @Test
+    fun mergeAuthoritative_patchesToolInputAndKeepsStartTime() {
+        engine.replaceAll(
+            "ses-1",
+            listOf(
+                Message(
+                    id = "msg-1",
+                    role = MessageRole.Assistant,
+                    text = "",
+                    parts =
+                        listOf(
+                            MessagePart.Tool(
+                                toolName = "subagent",
+                                status = ToolStatus.Running,
+                                id = "prt-task",
+                                timeStartEpochMs = 1_710_000_000_000L,
+                            ),
+                        ),
+                ),
+            ),
+        )
+        val stamped =
+            engine
+                .messages("ses-1")
+                .single()
+                .parts
+                .filterIsInstance<MessagePart.Tool>()
+                .single()
+                .timeStartEpochMs
+        val revision = engine.revision("ses-1")
+        assertTrue(
+            engine.mergeAuthoritativeIfRevision(
+                "ses-1",
+                listOf(
+                    Message(
+                        id = "msg-1",
+                        role = MessageRole.Assistant,
+                        text = "",
+                        parts =
+                            listOf(
+                                MessagePart.Tool(
+                                    toolName = "subagent",
+                                    status = ToolStatus.Completed,
+                                    id = "prt-task",
+                                    input = buildJsonObject { put("agent", "general") },
+                                ),
+                            ),
+                    ),
+                ),
+                revision,
+            ),
+        )
+        val tool = engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Tool>().single()
+        assertEquals(ToolStatus.Completed, tool.status)
+        assertEquals("general", tool.input?.get("agent")?.jsonPrimitive?.contentOrNull)
+        assertEquals(stamped, tool.timeStartEpochMs)
+    }
+
+    @Test
+    fun mergeAuthoritative_staleRevisionIsNoOp() {
+        seedStreamingAssistant()
+        val stale = engine.revision("ses-1")
+        engine.apply(
+            "ses-1",
+            MessagePatch.PartDelta(messageId = "msg-1", partId = "prt-1", delta = " world"),
+        )
+        assertFalse(
+            engine.mergeAuthoritativeIfRevision(
+                "ses-1",
+                listOf(
+                    Message(
+                        id = "msg-1",
+                        role = MessageRole.Assistant,
+                        text = "Nope",
+                        parts = listOf(MessagePart.Text(text = "Nope", id = "prt-1")),
+                    ),
+                ),
+                stale,
+            ),
+        )
+        assertEquals("Hello world", engine.messages("ses-1").single().text)
+    }
+
+    @Test
+    fun mergeAuthoritative_finishesStreamingWhenRestPartsLackIds() {
+        seedStreamingAssistant()
+        val revision = engine.revision("ses-1")
+        assertTrue(
+            engine.mergeAuthoritativeIfRevision(
+                "ses-1",
+                listOf(
+                    Message(
+                        id = "msg-1",
+                        role = MessageRole.Assistant,
+                        text = "Hello",
+                        parts = listOf(MessagePart.Text(text = "Hello", isStreaming = false)),
+                    ),
+                ),
+                revision,
+            ),
+        )
+        val text = engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Text>().single()
+        assertEquals("Hello", text.text)
+        assertFalse(text.isStreaming)
     }
 
     private fun seedStreamingAssistant() {

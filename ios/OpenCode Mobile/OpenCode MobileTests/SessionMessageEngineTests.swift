@@ -608,6 +608,130 @@ import Testing
         #expect(reasoning.text == "hmm more")
     }
 
+    @Test func mergeAuthoritative_patchesToolInputAndKeepsStartTime() {
+        let engine = makeEngine()
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "msg-1",
+                    role: .assistant,
+                    text: "",
+                    parts: [
+                        .tool(
+                            ToolPart(
+                                id: "prt-task",
+                                toolName: "subagent",
+                                status: .running,
+                                timeStartEpochMs: 1_710_000_000_000
+                            )
+                        ),
+                    ],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+        )
+        let stamped: Int64?
+        if case .tool(let seeded) = engine.messages(sessionID: "ses-1").first?.parts.first {
+            stamped = seeded.timeStartEpochMs
+        } else {
+            stamped = nil
+        }
+        let revision = engine.revision(sessionID: "ses-1")
+        #expect(
+            engine.mergeAuthoritativeIfRevision(
+                sessionID: "ses-1",
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .assistant,
+                        text: "",
+                        parts: [
+                            .tool(
+                                ToolPart(
+                                    id: "prt-task",
+                                    toolName: "subagent",
+                                    status: .completed,
+                                    input: ["agent": .string("general")]
+                                )
+                            ),
+                        ],
+                        model: nil,
+                        mode: nil,
+                        sentAtEpochMs: nil
+                    ),
+                ],
+                expectedRevision: revision
+            )
+        )
+        guard case .tool(let tool) = engine.messages(sessionID: "ses-1").first?.parts.first else {
+            Issue.record("expected tool part")
+            return
+        }
+        #expect(tool.status == .completed)
+        #expect(tool.input?["agent"]?.stringValue == "general")
+        #expect(tool.timeStartEpochMs == stamped)
+    }
+
+    @Test func mergeAuthoritative_staleRevisionIsNoOp() {
+        let engine = makeEngine()
+        seedStreamingAssistant(engine)
+        let stale = engine.revision(sessionID: "ses-1")
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .partDelta(messageID: "msg-1", partID: "prt-1", delta: " world")
+        )
+        #expect(
+            engine.mergeAuthoritativeIfRevision(
+                sessionID: "ses-1",
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .assistant,
+                        text: "Nope",
+                        parts: [.text(TextPart(id: "prt-1", text: "Nope", isStreaming: false))],
+                        model: nil,
+                        mode: nil,
+                        sentAtEpochMs: nil
+                    ),
+                ],
+                expectedRevision: stale
+            ) == false
+        )
+        #expect(engine.messages(sessionID: "ses-1").first?.text == "Hello world")
+    }
+
+    @Test func mergeAuthoritative_finishesStreamingWhenRestPartsLackIDs() {
+        let engine = makeEngine()
+        seedStreamingAssistant(engine)
+        let revision = engine.revision(sessionID: "ses-1")
+        #expect(
+            engine.mergeAuthoritativeIfRevision(
+                sessionID: "ses-1",
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .assistant,
+                        text: "Hello",
+                        parts: [.text(TextPart(text: "Hello", isStreaming: false))],
+                        model: nil,
+                        mode: nil,
+                        sentAtEpochMs: nil
+                    ),
+                ],
+                expectedRevision: revision
+            )
+        )
+        guard case .text(let text) = engine.messages(sessionID: "ses-1").first?.parts.first else {
+            Issue.record("expected text part")
+            return
+        }
+        #expect(text.text == "Hello")
+        #expect(text.isStreaming == false)
+    }
+
     private func makeEngine() -> SessionMessageEngine {
         SessionMessageEngine(store: InMemoryMessageStore())
     }

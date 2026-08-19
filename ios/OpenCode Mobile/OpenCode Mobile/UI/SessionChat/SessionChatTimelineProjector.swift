@@ -401,17 +401,17 @@ nonisolated enum SessionChatTimelineProjector {
         let blockKey = row.blocks.map { block -> String in
             switch block {
             case .text(let id, _, let doc):
-                "t:\(id):\(doc != nil):\(doc?.sourceHash ?? 0):\(doc?.renderTreeVersion ?? 0)"
+                "t:\(id):\(doc != nil)"
             case .attachment(let id, let file):
                 "a:\(id):\(file.id)"
             case .toolCard(let id, let card):
-                "c:\(id):\(card.toolName):\(card.status.rawValue):\(card.title)"
+                "c:\(id):\(card.errorText != nil):\(card.additions ?? -1):\(card.deletions ?? -1)"
             case .toolGroup(let id, let group):
-                "g:\(id):\(group.count):\(group.status.rawValue):\(group.title):\(group.subtitle ?? ""):\(group.errorText ?? "")"
+                "g:\(id):\(group.count):\(group.errorText != nil)"
             case .childSessionRow(let id, let row):
-                "r:\(id):\(row.agentName):\(row.secondLine ?? ""):\(row.childSessionId ?? "")"
-            case .reasoning(let id, let text, let isStreaming, let durationMs):
-                "n:\(id):\(text.count):\(isStreaming):\(durationMs ?? -1)"
+                "r:\(id):\(row.childSessionId != nil)"
+            case .reasoning(let id, _, let isStreaming, _):
+                "n:\(id):\(isStreaming)"
             }
         }.joined(separator: "|")
         return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(blockKey)"
@@ -436,12 +436,12 @@ nonisolated enum SessionChatTimelineProjector {
                 "t:\(id)"
             case .attachment(let id, let file):
                 "a:\(id):\(file.id)"
-            case .toolCard(let id, let card):
-                "c:\(id):\(card.toolName):\(card.status.rawValue):\(card.title)"
+            case .toolCard(let id, _):
+                "c:\(id)"
             case .toolGroup(let id, let group):
-                "g:\(id):\(group.count):\(group.status.rawValue):\(group.title):\(group.subtitle ?? ""):\(group.errorText ?? "")"
+                "g:\(id):\(group.count)"
             case .childSessionRow(let id, let row):
-                "r:\(id):\(row.agentName):\(row.secondLine ?? ""):\(row.childSessionId ?? "")"
+                "r:\(id):\(row.childSessionId != nil)"
             case .reasoning(let id, _, let isStreaming, let durationMs):
                 "n:\(id):\(isStreaming):\(durationMs ?? -1)"
             }

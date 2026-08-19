@@ -171,6 +171,17 @@ class InMemoryMessageStore
         }
 
         @Synchronized
+        override fun mergeAuthoritativeIfRevision(
+            sessionId: String,
+            messages: List<Message>,
+            expectedRevision: Long,
+        ): Boolean {
+            if (revision(sessionId) != expectedRevision) return false
+            mergeAuthoritativeLocked(sessionId, messages)
+            return true
+        }
+
+        @Synchronized
         override fun finishStreamingText(sessionId: String) {
             var changed = false
             for ((messageId, messageParts) in partsCaches[sessionId].orEmpty()) {
@@ -662,6 +673,128 @@ class InMemoryMessageStore
                 }
             }
             return starts
+        }
+
+        private fun mergeAuthoritativeLocked(
+            sessionId: String,
+            messages: List<Message>,
+        ) {
+            ensureCaches(sessionId)
+            val previousStarts = toolStartTimesLocked(sessionId)
+            val incomingIds = messages.map { it.id }.toSet()
+            val existingParts = partsCaches[sessionId]!!
+            val existingOrders = partOrders[sessionId]!!
+            val now = System.currentTimeMillis()
+            val nextParts = mutableMapOf<String, MutableMap<String, MessagePart>>()
+            val nextOrders = mutableMapOf<String, MutableList<String>>()
+
+            for (message in messages) {
+                val restById = linkedMapOf<String, MessagePart>()
+                for (part in message.parts) {
+                    val partId = part.stablePartId() ?: continue
+                    restById[partId] = resolveSeededTool(part, partId, previousStarts, now)
+                }
+                val prior = existingParts[message.id].orEmpty()
+                if (restById.isEmpty()) {
+                    if (prior.isEmpty()) continue
+                    val finished = finishPartsAgainstRest(prior, message)
+                    nextParts[message.id] = finished.toMutableMap()
+                    nextOrders[message.id] =
+                        (existingOrders[message.id] ?: finished.keys.toMutableList()).toMutableList()
+                    continue
+                }
+                val merged = linkedMapOf<String, MessagePart>()
+                val order = mutableListOf<String>()
+                for ((partId, incoming) in restById) {
+                    merged[partId] = mergePart(prior[partId], incoming)
+                    order.add(partId)
+                }
+                nextParts[message.id] = merged
+                nextOrders[message.id] = order
+            }
+
+            partsCaches[sessionId] = nextParts
+            partOrders[sessionId] = nextOrders
+            infoCaches[sessionId]!!.keys.retainAll(incomingIds)
+            ignoredPartIds[sessionId]!!.keys.retainAll(incomingIds)
+            messageOrders[sessionId] = messages.map { it.id }.toMutableList()
+            baseMessages[sessionId] = messages
+            deltaChunks[sessionId]!!.clear()
+            absorbedReplayChars[sessionId]!!.clear()
+            bumpRevision(sessionId)
+        }
+
+        private fun finishPartsAgainstRest(
+            existing: Map<String, MessagePart>,
+            rest: Message,
+        ): Map<String, MessagePart> {
+            val streamingTextIds =
+                existing
+                    .filter { (_, part) -> part is MessagePart.Text && part.isStreaming }
+                    .keys
+            val targetTextId =
+                streamingTextIds.singleOrNull()
+                    ?: existing.entries.lastOrNull { it.value is MessagePart.Text }?.key
+            return existing.mapValues { (id, part) ->
+                when (part) {
+                    is MessagePart.Text -> {
+                        val text =
+                            if (id == targetTextId && rest.text.isNotBlank()) rest.text else part.text
+                        val next = part.copy(text = text, isStreaming = false)
+                        if (next == part) part else next
+                    }
+                    is MessagePart.Reasoning -> {
+                        val next = part.copy(isStreaming = false)
+                        if (next == part) part else next
+                    }
+                    else -> part
+                }
+            }
+        }
+
+        private fun mergePart(
+            existing: MessagePart?,
+            incoming: MessagePart,
+        ): MessagePart {
+            if (existing == null) return incoming
+            val merged =
+                when {
+                    existing is MessagePart.Tool && incoming is MessagePart.Tool ->
+                        existing.copy(
+                            toolName = incoming.toolName.ifBlank { existing.toolName },
+                            status = incoming.status,
+                            title = incoming.title ?: existing.title,
+                            error = incoming.error ?: existing.error,
+                            callId = incoming.callId ?: existing.callId,
+                            input = mergeJson(existing.input, incoming.input),
+                            output = incoming.output ?: existing.output,
+                            metadata = mergeJson(existing.metadata, incoming.metadata),
+                            timeStartEpochMs = incoming.timeStartEpochMs ?: existing.timeStartEpochMs,
+                        )
+                    existing is MessagePart.Text && incoming is MessagePart.Text ->
+                        incoming.copy(
+                            text = incoming.text.ifBlank { existing.text },
+                            isStreaming = false,
+                        )
+                    existing is MessagePart.Reasoning && incoming is MessagePart.Reasoning ->
+                        incoming.copy(
+                            text = incoming.text.ifBlank { existing.text },
+                            isStreaming = false,
+                            timeStartEpochMs = incoming.timeStartEpochMs ?: existing.timeStartEpochMs,
+                            timeEndEpochMs = incoming.timeEndEpochMs ?: existing.timeEndEpochMs,
+                        )
+                    else -> incoming
+                }
+            return if (merged == existing) existing else merged
+        }
+
+        private fun mergeJson(
+            existing: JsonObject?,
+            incoming: JsonObject?,
+        ): JsonObject? {
+            if (incoming == null) return existing
+            if (existing == null) return incoming
+            return JsonObject(existing + incoming)
         }
 
         private fun seedPartIdentities(

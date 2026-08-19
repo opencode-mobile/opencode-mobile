@@ -539,17 +539,29 @@ nonisolated final class MessageSync: @unchecked Sendable {
         return merged
     }
 
-    private func fullReloadResult(key: MessageSessionKey, reason: String) async -> ReloadResult {
+    private func fullReloadResult(
+        key: MessageSessionKey,
+        reason: String,
+        mergeExisting: Bool = false
+    ) async -> ReloadResult {
         SessionPerformanceProbe.emit("history_request_started")
         let expectedRevision = store.revision(sessionID: key.storeSlot)
         let directory = key.directory.isEmpty ? nil : key.directory
         do {
             let messages = try await listMessages(key.sessionID, directory)
-            _ = store.replaceAllIfRevision(
-                sessionID: key.storeSlot,
-                messages: messages,
-                expectedRevision: expectedRevision
-            )
+            if mergeExisting {
+                _ = store.mergeAuthoritativeIfRevision(
+                    sessionID: key.storeSlot,
+                    messages: messages,
+                    expectedRevision: expectedRevision
+                )
+            } else {
+                _ = store.replaceAllIfRevision(
+                    sessionID: key.storeSlot,
+                    messages: messages,
+                    expectedRevision: expectedRevision
+                )
+            }
             let merged = store.messages(sessionID: key.storeSlot)
             setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
             setFingerprint(messageFingerprint(merged), for: key.storeSlot)
@@ -769,7 +781,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             }
             handleMessagePartRemoved(event: event, key: key, publishMessages: publishMessages)
         case "session.idle":
-            switch await fullReloadResult(key: key, reason: "session.idle") {
+            switch await fullReloadResult(key: key, reason: "session.idle", mergeExisting: true) {
             case .success(let messages):
                 publishMessages(messages)
                 setHealth(.healthy, for: key)

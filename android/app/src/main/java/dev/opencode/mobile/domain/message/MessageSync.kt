@@ -555,7 +555,7 @@ class MessageSync(
                         applyResult = engine.apply(storeSlot, MessagePatch.PartRemoved(messageId, partId))
                     }
                     "session.idle" -> {
-                        when (val result = fullReloadResult(key, reason = "session.idle")) {
+                        when (val result = fullReloadResult(key, reason = "session.idle", mergeExisting = true)) {
                             is ReloadResult.Success -> {
                                 rememberPublishedFrame(storeSlot, result.messages)
                                 logI(
@@ -827,6 +827,7 @@ class MessageSync(
     private suspend fun fullReloadResult(
         key: MessageSessionKey,
         reason: String,
+        mergeExisting: Boolean = false,
     ): ReloadResult {
         var messages: List<Message>? = null
         var failure: Throwable? = null
@@ -844,7 +845,11 @@ class MessageSync(
             logW("fullReload failed session=${key.sessionId} reason=$reason ms=$elapsedMs")
             return ReloadResult.Failure(failure ?: IllegalStateException("Message load failed"))
         }
-        engine.replaceAllIfRevision(storeSlot, loaded, expectedRevision)
+        if (mergeExisting) {
+            engine.mergeAuthoritativeIfRevision(storeSlot, loaded, expectedRevision)
+        } else {
+            engine.replaceAllIfRevision(storeSlot, loaded, expectedRevision)
+        }
         val merged = engine.messages(storeSlot)
         rememberPublishedFrame(storeSlot, merged)
         logI(

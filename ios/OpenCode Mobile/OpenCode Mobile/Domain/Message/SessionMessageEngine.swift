@@ -29,6 +29,18 @@ nonisolated final class SessionMessageEngine: @unchecked Sendable {
         )
     }
 
+    func mergeAuthoritativeIfRevision(
+        sessionID: String,
+        messages: [Message],
+        expectedRevision: UInt64
+    ) -> Bool {
+        store.mergeAuthoritativeIfRevision(
+            sessionID: sessionID,
+            messages: messages,
+            expectedRevision: expectedRevision
+        )
+    }
+
     func messages(sessionID: String) -> [Message] {
         store.messages(sessionID: sessionID)
     }

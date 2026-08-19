@@ -450,7 +450,7 @@ class EventDomainAdapter(
                             null
                         }
                     }?.takeIf { it.isNotEmpty() }
-        val input = properties["input"]
+        val input = jsonObjectInput(properties["input"])
         val metadata = properties["structured"]?.jsonObject
         return toolLikePartUpdated(
             properties = properties,
@@ -682,6 +682,16 @@ class EventDomainAdapter(
             }
         return event("session.status", projected)
     }
+
+    private fun jsonObjectInput(value: JsonElement?): JsonObject? =
+        when (value) {
+            is JsonObject -> value
+            is JsonPrimitive ->
+                value.contentOrNull?.let { raw ->
+                    runCatching { json.parseToJsonElement(raw) }.getOrNull() as? JsonObject
+                }
+            else -> null
+        }
 
     private fun sessionIdFromProperties(properties: JsonObject): String? {
         fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull

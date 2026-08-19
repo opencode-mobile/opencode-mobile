@@ -427,7 +427,7 @@ nonisolated struct EventDomainAdapter: Sendable {
             toolName: name,
             status: status,
             callID: callID,
-            input: properties["input"] as? [String: Any],
+            input: objectInput(properties["input"]),
             output: output,
             error: error,
             metadata: properties["structured"] as? [String: Any]
@@ -691,6 +691,15 @@ nonisolated struct EventDomainAdapter: Sendable {
             return "reasoning-\(ordinal)"
         }
         return nil
+    }
+
+    private func objectInput(_ value: Any?) -> [String: Any]? {
+        if let object = value as? [String: Any] { return object }
+        guard let raw = value as? String,
+              let data = raw.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return object
     }
 
     private func string(in object: [String: Any]?, key: String) -> String? {

@@ -585,6 +585,108 @@ struct SessionChatTimelineProjectorTests {
         #expect(merged.rows.map(\.id) == ["optimistic-photo", "msg-asst", "msg-hey"])
     }
 
+    @Test func streamingMarkdownSourceHashChange_isGrowBottomNotLayout() {
+        let firstMessage = makeMessage(
+            id: "msg-1",
+            parts: [text("prt-1", "Hi", isStreaming: true)],
+            text: "Hi"
+        )
+        let first = project(
+            displayFrame(
+                messages: [
+                    DisplayMessage(
+                        message: firstMessage,
+                        renderedMarkdown: NativeMarkdownDocument(sourceHash: 1, blocks: [])
+                    ),
+                ]
+            )
+        )
+        let secondMessage = makeMessage(
+            id: "msg-1",
+            parts: [text("prt-1", "Hi there", isStreaming: true)],
+            text: "Hi there"
+        )
+        let second = project(
+            displayFrame(
+                revision: 2,
+                messages: [
+                    DisplayMessage(
+                        message: secondMessage,
+                        renderedMarkdown: NativeMarkdownDocument(sourceHash: 2, blocks: [])
+                    ),
+                ]
+            ),
+            previous: first
+        )
+        #expect(second.changedRowIDs == ["msg-1"])
+        #expect(second.layoutChangedRowIDs.isEmpty)
+        #expect(second.grewBottomRowIDs == ["msg-1"])
+        #expect(second.layoutAffectingRowIDs.isEmpty)
+        #expect(second.rows[0].layoutRevision == first.rows[0].layoutRevision)
+        let kinds = TimelineApply.classify(second).kinds
+        #expect(kinds.contains(.growBottom))
+        #expect(!kinds.contains(.structure))
+    }
+
+    @Test func streamingReasoningGrowth_isContentNotLayout() {
+        let firstMessage = makeMessage(
+            id: "msg-1",
+            parts: [.reasoning(ReasoningPart(id: "prt-r", text: "Think", isStreaming: true))],
+            text: ""
+        )
+        let first = project(displayFrame(messages: [DisplayMessage(message: firstMessage)]))
+        let secondMessage = makeMessage(
+            id: "msg-1",
+            parts: [.reasoning(ReasoningPart(id: "prt-r", text: "Think harder", isStreaming: true))],
+            text: ""
+        )
+        let second = project(
+            displayFrame(revision: 2, messages: [DisplayMessage(message: secondMessage)]),
+            previous: first
+        )
+        #expect(second.changedRowIDs == ["msg-1"])
+        #expect(second.layoutChangedRowIDs.isEmpty)
+        #expect(second.layoutAffectingRowIDs.isEmpty)
+        #expect(second.rows[0].layoutRevision == first.rows[0].layoutRevision)
+        let kinds = TimelineApply.classify(second).kinds
+        #expect(kinds.contains(.content))
+        #expect(!kinds.contains(.structure))
+    }
+
+    @Test func toolTitleChange_isContentNotLayout() {
+        let firstMessage = makeMessage(
+            id: "msg-1",
+            parts: [
+                .tool(ToolPart(id: "prt-1", toolName: "task", status: .running, title: "Working…")),
+            ],
+            text: ""
+        )
+        let secondMessage = makeMessage(
+            id: "msg-1",
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "prt-1",
+                        toolName: "task",
+                        status: .running,
+                        title: "explore",
+                        input: ["agent": .string("explore")]
+                    )
+                ),
+            ],
+            text: ""
+        )
+        let first = project(displayFrame(messages: [DisplayMessage(message: firstMessage)]))
+        let second = project(
+            displayFrame(revision: 2, messages: [DisplayMessage(message: secondMessage)]),
+            previous: first
+        )
+        #expect(second.changedRowIDs == ["msg-1"])
+        #expect(second.layoutChangedRowIDs.isEmpty)
+        #expect(second.layoutAffectingRowIDs.isEmpty)
+        #expect(second.rows[0].layoutRevision == first.rows[0].layoutRevision)
+    }
+
     // MARK: - Helpers
 
     private func project(

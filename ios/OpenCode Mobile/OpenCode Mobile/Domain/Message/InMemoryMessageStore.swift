@@ -169,6 +169,18 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         return true
     }
 
+    func mergeAuthoritativeIfRevision(
+        sessionID: String,
+        messages: [Message],
+        expectedRevision: UInt64
+    ) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard (revisions[sessionID] ?? 0) == expectedRevision else { return false }
+        mergeAuthoritativeLocked(sessionID: sessionID, messages: messages)
+        return true
+    }
+
     func finishStreamingText(sessionID: String) {
         lock.lock()
         defer { lock.unlock() }
@@ -792,6 +804,167 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             }
         }
         return starts
+    }
+
+    private func mergeAuthoritativeLocked(sessionID: String, messages: [Message]) {
+        ensureCaches(sessionID: sessionID)
+        let previousStarts = toolStartTimesLocked(sessionID: sessionID)
+        let incomingIDs = Set(messages.map(\.id))
+        let existingParts = partsCache[sessionID] ?? [:]
+        let existingOrders = partOrder[sessionID] ?? [:]
+        let now = ToolStartTime.nowEpochMs()
+        var nextParts: [String: [String: MessagePart]] = [:]
+        var nextOrders: [String: [String]] = [:]
+
+        for message in messages {
+            var restByID: [(String, MessagePart)] = []
+            for part in message.parts {
+                guard let partID = stablePartID(part) else { continue }
+                restByID.append((
+                    partID,
+                    resolveSeededTool(
+                        part,
+                        partID: partID,
+                        previousStarts: previousStarts,
+                        nowEpochMs: now
+                    )
+                ))
+            }
+            let prior = existingParts[message.id] ?? [:]
+            if restByID.isEmpty {
+                guard !prior.isEmpty else { continue }
+                nextParts[message.id] = finishPartsAgainstRest(prior, rest: message)
+                nextOrders[message.id] = existingOrders[message.id] ?? Array(prior.keys)
+                continue
+            }
+            var merged: [String: MessagePart] = [:]
+            var order: [String] = []
+            for (partID, incoming) in restByID {
+                merged[partID] = mergePart(existing: prior[partID], incoming: incoming)
+                order.append(partID)
+            }
+            nextParts[message.id] = merged
+            nextOrders[message.id] = order
+        }
+
+        partsCache[sessionID] = nextParts
+        partOrder[sessionID] = nextOrders
+        if var infos = infoCache[sessionID] {
+            infos = infos.filter { incomingIDs.contains($0.key) }
+            infoCache[sessionID] = infos
+        }
+        if var ignored = ignoredPartIDs[sessionID] {
+            ignored = ignored.filter { incomingIDs.contains($0.key) }
+            ignoredPartIDs[sessionID] = ignored
+        }
+        messageOrder[sessionID] = messages.map(\.id)
+        baseMessages[sessionID] = messages
+        deltaChunks[sessionID] = [:]
+        absorbedReplayChars[sessionID] = [:]
+        bumpRevision(sessionID: sessionID)
+    }
+
+    private func finishPartsAgainstRest(
+        _ existing: [String: MessagePart],
+        rest: Message
+    ) -> [String: MessagePart] {
+        let streamingTextIDs = existing.compactMap { id, part -> String? in
+            if case .text(let text) = part, text.isStreaming { return id }
+            return nil
+        }
+        let targetTextID: String? = {
+            if streamingTextIDs.count == 1 { return streamingTextIDs[0] }
+            return existing.first(where: {
+                if case .text = $0.value { return true }
+                return false
+            })?.key
+        }()
+        var next: [String: MessagePart] = [:]
+        for (id, part) in existing {
+            switch part {
+            case .text(let text):
+                let body = (id == targetTextID && !rest.text.isEmpty) ? rest.text : text.text
+                let updated = TextPart(
+                    id: text.id,
+                    text: body,
+                    isStreaming: false,
+                    isSynthetic: text.isSynthetic,
+                    isIgnored: text.isIgnored
+                )
+                next[id] = .text(updated)
+            case .reasoning(let reasoning):
+                next[id] = .reasoning(
+                    ReasoningPart(
+                        id: reasoning.id,
+                        text: reasoning.text,
+                        isStreaming: false,
+                        timeStartEpochMs: reasoning.timeStartEpochMs,
+                        timeEndEpochMs: reasoning.timeEndEpochMs
+                    )
+                )
+            default:
+                next[id] = part
+            }
+        }
+        return next
+    }
+
+    private func mergePart(existing: MessagePart?, incoming: MessagePart) -> MessagePart {
+        guard let existing else { return incoming }
+        let merged: MessagePart
+        switch (existing, incoming) {
+        case (.tool(let prior), .tool(let next)):
+            merged = .tool(
+                ToolPart(
+                    id: prior.id,
+                    toolName: next.toolName.isEmpty ? prior.toolName : next.toolName,
+                    status: next.status,
+                    title: next.title ?? prior.title,
+                    error: next.error ?? prior.error,
+                    callID: next.callID ?? prior.callID,
+                    input: mergeDict(prior.input, next.input),
+                    output: next.output ?? prior.output,
+                    metadata: mergeDict(prior.metadata, next.metadata),
+                    timeStartEpochMs: next.timeStartEpochMs ?? prior.timeStartEpochMs
+                )
+            )
+        case (.text(let prior), .text(let next)):
+            merged = .text(
+                TextPart(
+                    id: next.id ?? prior.id,
+                    text: next.text.isEmpty ? prior.text : next.text,
+                    isStreaming: false,
+                    isSynthetic: next.isSynthetic,
+                    isIgnored: next.isIgnored
+                )
+            )
+        case (.reasoning(let prior), .reasoning(let next)):
+            merged = .reasoning(
+                ReasoningPart(
+                    id: next.id ?? prior.id,
+                    text: next.text.isEmpty ? prior.text : next.text,
+                    isStreaming: false,
+                    timeStartEpochMs: next.timeStartEpochMs ?? prior.timeStartEpochMs,
+                    timeEndEpochMs: next.timeEndEpochMs ?? prior.timeEndEpochMs
+                )
+            )
+        default:
+            merged = incoming
+        }
+        return merged == existing ? existing : merged
+    }
+
+    private func mergeDict(
+        _ existing: [String: AnyCodable]?,
+        _ incoming: [String: AnyCodable]?
+    ) -> [String: AnyCodable]? {
+        guard let incoming else { return existing }
+        guard let existing else { return incoming }
+        var merged = existing
+        for (key, value) in incoming {
+            merged[key] = value
+        }
+        return merged
     }
 
     private func seedPartIdentities(
