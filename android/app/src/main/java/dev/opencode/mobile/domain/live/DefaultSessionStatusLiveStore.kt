@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.live
 
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
@@ -58,6 +60,7 @@ class DefaultSessionStatusLiveStore
                 reloadFromServer()?.let {
                     current = it
                     send(current)
+                    logStatusEmit(directory, current, reason = "initial")
                 }
 
                 try {
@@ -71,6 +74,7 @@ class DefaultSessionStatusLiveStore
                                         reloadFromServer()?.let { statuses ->
                                             current = statuses
                                             send(current)
+                                            logStatusEmit(directory, current, reason = event.type)
                                         }
                                     }
                             }
@@ -85,6 +89,7 @@ class DefaultSessionStatusLiveStore
                                             if (statuses.isEmpty() && current.isNotEmpty()) return@let
                                             current = statuses
                                             send(current)
+                                            logStatusEmit(directory, current, reason = "session.active.snapshot")
                                         }
                                     }
                             }
@@ -93,6 +98,7 @@ class DefaultSessionStatusLiveStore
                                 if (next != current) {
                                     current = next
                                     send(current)
+                                    logStatusEmit(directory, current, reason = event.type)
                                 }
                             }
                         }
@@ -101,6 +107,21 @@ class DefaultSessionStatusLiveStore
                     reconnectRefresh?.cancel()
                 }
             }
+
+        private fun logStatusEmit(
+            directory: String,
+            statuses: Map<String, SessionStatus>,
+            reason: String,
+        ) {
+            val busy =
+                statuses.values.count { status ->
+                    status.raw["type"] == "busy" || status.raw["type"] == "retry"
+                }
+            DiagnosticLog.debug(
+                DiagnosticLogArea.Session,
+                "session-status emit directory=$directory reason=$reason size=${statuses.size} busy=$busy",
+            )
+        }
 
         private fun applyStatusEvent(
             current: Map<String, SessionStatus>,

@@ -242,9 +242,17 @@ nonisolated enum StreamingTextBlockIdentity {
     private static func isVisibleToolForDecoration(_ tool: ToolPart) -> Bool {
         let name = tool.toolName.lowercased()
         if name == "todowrite" { return false }
-        if name == "question", tool.status == .pending || tool.status == .running {
+        if isQuestionToolForDecoration(tool), tool.status == .pending || tool.status == .running {
             return false
         }
         return true
+    }
+
+    private static func isQuestionToolForDecoration(_ tool: ToolPart) -> Bool {
+        let name = tool.toolName.lowercased()
+        if name == "question" { return true }
+        if case .array = tool.input?["questions"] { return true }
+        let output = tool.output ?? ""
+        return name == "tool" && output.localizedCaseInsensitiveContains("answered your questions")
     }
 }

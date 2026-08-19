@@ -230,7 +230,8 @@ class InMemoryMessageStore
             sessionId: String,
             infoJson: JsonObject,
         ): SessionChangeSet? {
-            val info = runCatching { json.decodeFromJsonElement<MessageInfoDto>(infoJson) }.getOrNull() ?: return null
+            // SSE / v2 projections can emit `message.updated` without `info.id`.
+            val info = tryParseInfoDto(infoJson) ?: return null
             val messageId = info.id
 
             ensureCaches(sessionId)

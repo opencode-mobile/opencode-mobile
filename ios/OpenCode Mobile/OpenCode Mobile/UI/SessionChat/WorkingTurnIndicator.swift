@@ -15,6 +15,8 @@ enum WorkingTurnIndicator {
     ) -> String? {
         if isCompacting { return SessionCompactChrome.statusLabel }
         guard let statusLabel else { return nil }
+        // ReasoningBlock already paints Thinking/Thought. Do not stack Working.
+        if hasThoughtChromeAfterLastUser(messages) { return nil }
         if hasInProgressAssistantContentAfterLastUser(messages) { return nil }
         if statusLabel == "Working", hasSettledAssistantContentAfterLastUser(messages) {
             return thinkingLabel
@@ -38,6 +40,15 @@ enum WorkingTurnIndicator {
         let mode = message.metadataLabel.split(separator: " · ", maxSplits: 1, omittingEmptySubsequences: false)
             .first.map(String.init) ?? message.metadataLabel
         return mode.compare("compaction", options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+    }
+
+    private static func hasThoughtChromeAfterLastUser(_ messages: [SessionChatRow]) -> Bool {
+        assistantsAfterLastUser(messages).contains { message in
+            message.blocks.contains { block in
+                if case .reasoning(_, _, _, _) = block { return true }
+                return false
+            }
+        }
     }
 
     private static func hasInProgressAssistantContentAfterLastUser(_ messages: [SessionChatRow]) -> Bool {

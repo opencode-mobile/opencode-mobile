@@ -80,6 +80,7 @@ sealed class SessionChatTimelineBlock {
 
 object SessionChatTimelineBlocks {
     private val contextToolNames = setOf("read", "glob", "grep")
+    private val answeredQuestionPairRegex = Regex("\"([^\"]+)\"\\s*=\\s*\"([^\"]*)\"")
 
     fun build(
         role: MessageRole,
@@ -325,12 +326,25 @@ object SessionChatTimelineBlocks {
     private fun isVisibleTool(tool: MessagePart.Tool): Boolean {
         val name = tool.toolName.lowercase()
         if (name == "todowrite") return false
-        if (name == "question" &&
+        if (isQuestionTool(tool) &&
             (tool.status == ToolStatus.Pending || tool.status == ToolStatus.Running)
         ) {
             return false
         }
         return true
+    }
+
+    /**
+     * Question tools are sometimes projected with a generic name (`tool`) when
+     * live events omit `tool` / `name`. Detect the question shape so chrome and
+     * hide-while-in-flight still apply.
+     */
+    internal fun isQuestionTool(tool: MessagePart.Tool): Boolean {
+        val name = tool.toolName.lowercase()
+        if (name == "question") return true
+        if (tool.input?.get("questions") is JsonArray) return true
+        val output = tool.output.orEmpty()
+        return name == "tool" && output.contains("answered your questions", ignoreCase = true)
     }
 
     /**
@@ -357,6 +371,7 @@ object SessionChatTimelineBlocks {
      */
     private fun isGroupableTool(tool: MessagePart.Tool, collapse: Boolean): Boolean {
         if (isChildSessionTool(tool.toolName)) return false
+        if (isQuestionTool(tool)) return false
         if (collapse) return true
         return isContextTool(tool.toolName)
     }
@@ -468,7 +483,12 @@ object SessionChatTimelineBlocks {
     private fun toToolCard(tool: MessagePart.Tool): SessionChatTimelineBlock.ToolCard? {
         val partId = tool.id ?: return null
         val name = tool.toolName.lowercase()
-        val chrome = specializedChrome(name, tool) ?: genericChrome(tool)
+        val chrome =
+            if (isQuestionTool(tool)) {
+                questionChrome(tool)
+            } else {
+                specializedChrome(name, tool) ?: genericChrome(tool)
+            }
         val errorText =
             when (tool.status) {
                 ToolStatus.Error -> tool.error?.takeIf { it.isNotEmpty() }
@@ -870,8 +890,9 @@ object SessionChatTimelineBlocks {
     }
 
     private fun questionChrome(tool: MessagePart.Tool): Chrome {
-        val questions = questionTexts(tool.input)
-        val answers = answerTexts(tool.metadata)
+        val parsedPairs = answeredQuestionPairs(tool.output)
+        val questions = questionTexts(tool.input).ifEmpty { parsedPairs.map { it.first } }
+        val answers = answerTexts(tool.metadata).ifEmpty { parsedPairs.map { it.second } }
         val firstQuestion =
             questions.firstOrNull()
                 ?: inputString(tool.input, "prompt", "text", "question")
@@ -888,6 +909,14 @@ object SessionChatTimelineBlocks {
                     error = dismissed,
                 ),
         )
+    }
+
+    private fun answeredQuestionPairs(output: String?): List<Pair<String, String>> {
+        if (output.isNullOrEmpty()) return emptyList()
+        if (!output.contains("answered your questions", ignoreCase = true)) return emptyList()
+        return answeredQuestionPairRegex.findAll(output).map { match ->
+            match.groupValues[1] to match.groupValues[2]
+        }.toList()
     }
 
     private fun questionTexts(input: JsonObject?): List<String> {

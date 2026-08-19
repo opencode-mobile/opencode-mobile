@@ -10,6 +10,8 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.DeviceNetworkPath
 import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.smartProjectLabel
@@ -1122,7 +1124,10 @@ class SessionChatViewModel
             reviewChangesState: SessionChatReviewChangesRegionState,
             commandsState: SessionChatCommandsRegionState,
         ) {
-            _uiState.value = mergeUiState(timelineState, composerState, infoState, reviewChangesState, commandsState)
+            val previous = _uiState.value
+            val next = mergeUiState(timelineState, composerState, infoState, reviewChangesState, commandsState)
+            logUiPublish(previous, next)
+            _uiState.value = next
         }
 
         private fun mergeUiState(
@@ -1278,6 +1283,51 @@ class SessionChatViewModel
                 projectLabel = projectLabel,
                 projectLetter = projectLetter,
                 projectLetterAccent = projectLetterAccent,
+            )
+        }
+
+        private fun logUiPublish(
+            previous: SessionChatUiState,
+            next: SessionChatUiState,
+        ) {
+            if (previous == next) {
+                DiagnosticLog.debug(
+                    DiagnosticLogArea.Session,
+                    "ui-publish skip equal session=${next.sessionId}",
+                )
+                return
+            }
+            val changed = mutableListOf<String>()
+            if (previous.messages !== next.messages || previous.timelineFrame !== next.timelineFrame) {
+                changed += "timeline:${previous.messages.size}->${next.messages.size}"
+            }
+            if (previous.sessionStatusLabel != next.sessionStatusLabel) {
+                changed += "status:${previous.sessionStatusLabel ?: "-"}->${next.sessionStatusLabel ?: "-"}"
+            }
+            if (previous.workingIndicatorLabel != next.workingIndicatorLabel) {
+                changed += "working:${previous.workingIndicatorLabel ?: "-"}->${next.workingIndicatorLabel ?: "-"}"
+            }
+            if (previous.syncingIndicatorLabel != next.syncingIndicatorLabel) {
+                changed += "syncing:${previous.syncingIndicatorLabel ?: "-"}->${next.syncingIndicatorLabel ?: "-"}"
+            }
+            if (previous.connectionStatus != next.connectionStatus) {
+                changed += "conn:${previous.connectionStatus}->${next.connectionStatus}"
+            }
+            if (previous.timeline != next.timeline) {
+                changed += "phase:${previous.timeline}->${next.timeline}"
+            }
+            if (previous.sessionTitle != next.sessionTitle) {
+                changed += "title"
+            }
+            if (previous.composer != next.composer) {
+                changed += "composer"
+            }
+            if (changed.isEmpty()) {
+                changed += "other"
+            }
+            DiagnosticLog.debug(
+                DiagnosticLogArea.Session,
+                "ui-publish session=${next.sessionId} msgs=${next.messages.size} changed=${changed.joinToString(",")}",
             )
         }
 

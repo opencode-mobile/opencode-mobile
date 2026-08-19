@@ -52,6 +52,25 @@ class SessionMessageEngineTest {
     }
 
     @Test
+    fun infoUpdated_missingId_isNoChange() {
+        seedStreamingAssistant()
+        val before = engine.revision("ses-1")
+        val result =
+            engine.apply(
+                "ses-1",
+                MessagePatch.InfoUpdated(
+                    buildJsonObject {
+                        put("role", "assistant")
+                        put("sessionID", "ses-1")
+                    },
+                ),
+            )
+        assertEquals(MessageStoreApplyResult.NoChange, result)
+        assertEquals(before, engine.revision("ses-1"))
+        assertEquals(1, engine.messages("ses-1").size)
+    }
+
+    @Test
     fun userInsert_landsBeforeStreamingAssistant() {
         engine.replaceAll(
             "ses-1",

@@ -365,10 +365,21 @@ nonisolated enum SessionChatTimelineBlocks {
     private static func isVisibleTool(_ tool: ToolPart) -> Bool {
         let name = tool.toolName.lowercased()
         if name == "todowrite" { return false }
-        if name == "question", tool.status == .pending || tool.status == .running {
+        if isQuestionTool(tool), tool.status == .pending || tool.status == .running {
             return false
         }
         return true
+    }
+
+    /// Question tools are sometimes projected with a generic name (`tool`) when
+    /// live events omit `tool` / `name`. Detect the question shape so chrome and
+    /// hide-while-in-flight still apply.
+    static func isQuestionTool(_ tool: ToolPart) -> Bool {
+        let name = tool.toolName.lowercased()
+        if name == "question" { return true }
+        if case .array = tool.input?["questions"] { return true }
+        let output = tool.output ?? ""
+        return name == "tool" && output.localizedCaseInsensitiveContains("answered your questions")
     }
 
     /// Parts that never become timeline blocks. Grouping looks through them so
@@ -401,6 +412,7 @@ nonisolated enum SessionChatTimelineBlocks {
     /// tools do.
     private static func isGroupableTool(_ tool: ToolPart, collapse: Bool) -> Bool {
         if isChildSessionTool(tool.toolName) { return false }
+        if isQuestionTool(tool) { return false }
         if collapse { return true }
         return isContextTool(tool.toolName)
     }
@@ -515,7 +527,12 @@ nonisolated enum SessionChatTimelineBlocks {
     private static func toToolCard(_ tool: ToolPart) -> SessionChatTimelineBlock? {
         guard let partId = tool.id else { return nil }
         let name = tool.toolName.lowercased()
-        let chrome = specializedChrome(name: name, tool: tool) ?? genericChrome(tool)
+        let chrome: Chrome
+        if isQuestionTool(tool) {
+            chrome = questionChrome(tool)
+        } else {
+            chrome = specializedChrome(name: name, tool: tool) ?? genericChrome(tool)
+        }
         let errorText: String? =
             switch tool.status {
             case .error:
@@ -948,8 +965,11 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func questionChrome(_ tool: ToolPart) -> Chrome {
-        let questions = questionTexts(tool.input)
-        let answers = answerTexts(tool.metadata)
+        let parsedPairs = answeredQuestionPairs(from: tool.output)
+        let questionsFromInput = questionTexts(tool.input)
+        let questions = questionsFromInput.isEmpty ? parsedPairs.map(\.question) : questionsFromInput
+        let answersFromMetadata = answerTexts(tool.metadata)
+        let answers = answersFromMetadata.isEmpty ? parsedPairs.map(\.answer) : answersFromMetadata
         let firstQuestion = questions.first
             ?? inputString(tool.input, keys: "prompt", "text", "question")
             ?? runningTitleOverride(tool)
@@ -963,6 +983,23 @@ nonisolated enum SessionChatTimelineBlocks {
                 error: dismissed
             )
         )
+    }
+
+    private static func answeredQuestionPairs(from output: String?) -> [(question: String, answer: String)] {
+        guard let output, output.localizedCaseInsensitiveContains("answered your questions") else {
+            return []
+        }
+        guard let regex = try? NSRegularExpression(pattern: "\"([^\"]+)\"\\s*=\\s*\"([^\"]*)\"") else {
+            return []
+        }
+        let range = NSRange(output.startIndex..<output.endIndex, in: output)
+        return regex.matches(in: output, range: range).compactMap { match in
+            guard match.numberOfRanges == 3,
+                  let questionRange = Range(match.range(at: 1), in: output),
+                  let answerRange = Range(match.range(at: 2), in: output)
+            else { return nil }
+            return (String(output[questionRange]), String(output[answerRange]))
+        }
     }
 
     private static func questionTexts(_ input: [String: AnyCodable]?) -> [String] {

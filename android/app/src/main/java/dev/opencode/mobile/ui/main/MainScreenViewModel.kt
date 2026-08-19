@@ -12,6 +12,8 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.DeviceNetworkPath
 import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
@@ -1209,6 +1211,24 @@ class MainScreenViewModel
                     allSessions = summaries,
                     sessionsFromCache = sessionsFromCache,
                 )
+            if (updatedSection == section || homeLiveVisibleUnchanged(section, updatedSection)) {
+                DiagnosticLog.debug(
+                    DiagnosticLogArea.Session,
+                    "home-live skip worktree=$worktree equal=true sessions=${summaries.size}" +
+                        if (updatedSection != section) {
+                            " visible=${homeLiveDelta(section.allSessions, summaries)}"
+                        } else {
+                            ""
+                        },
+                )
+                return
+            }
+            DiagnosticLog.debug(
+                DiagnosticLogArea.Session,
+                "home-live apply worktree=$worktree sessions=${summaries.size} " +
+                    "cache=${section.sessionsFromCache}->$sessionsFromCache " +
+                    homeLiveDelta(section.allSessions, summaries),
+            )
             val updatedSections =
                 state.sections.map { current ->
                     if (current.worktree == worktree) updatedSection else current
@@ -1237,6 +1257,54 @@ class MainScreenViewModel
             const val DELETE_ERROR = "Couldn't delete session."
         }
     }
+
+internal fun homeLiveVisibleUnchanged(
+    previous: ProjectSectionUi,
+    next: ProjectSectionUi,
+): Boolean =
+    previous.sessionsFromCache == next.sessionsFromCache &&
+        previous.loadError == next.loadError &&
+        homeLiveVisibleSessionsUnchanged(previous.allSessions, next.allSessions)
+
+internal fun homeLiveVisibleSessionsUnchanged(
+    previous: List<SessionSummary>,
+    next: List<SessionSummary>,
+): Boolean {
+    if (previous.size != next.size) return false
+    return previous.zip(next).all { (before, after) ->
+        before.id == after.id &&
+            before.title == after.title &&
+            before.statusLabel == after.statusLabel &&
+            before.isReady == after.isReady
+    }
+}
+
+internal fun homeLiveDelta(
+    previous: List<SessionSummary>,
+    next: List<SessionSummary>,
+): String {
+    val previousById = previous.associateBy(SessionSummary::id)
+    val nextIds = next.map(SessionSummary::id)
+    val added = nextIds.filterNot(previousById::containsKey)
+    val removed = previous.map(SessionSummary::id).filterNot(nextIds::contains)
+    val fieldChanges =
+        next.mapNotNull { summary ->
+            val before = previousById[summary.id] ?: return@mapNotNull null
+            val bits = mutableListOf<String>()
+            if (before.title != summary.title) bits += "title"
+            if (before.statusLabel != summary.statusLabel) {
+                bits += "status:${before.statusLabel ?: "-"}->${summary.statusLabel ?: "-"}"
+            }
+            if (before.isReady != summary.isReady) bits += "ready:${before.isReady}->${summary.isReady}"
+            if (before.updatedAtEpochMs != summary.updatedAtEpochMs) bits += "updatedAt"
+            if (bits.isEmpty()) null else "${summary.id}:${bits.joinToString("+")}"
+        }
+    val parts = mutableListOf<String>()
+    if (added.isNotEmpty()) parts += "added=${added.joinToString(",")}"
+    if (removed.isNotEmpty()) parts += "removed=${removed.joinToString(",")}"
+    if (fieldChanges.isNotEmpty()) parts += fieldChanges.joinToString(",")
+    return if (parts.isEmpty()) "delta=none" else parts.joinToString(" ")
+}
 
 fun suggestedHomeForkTitle(currentTitle: String): String {
     val trimmed = currentTitle.trim()

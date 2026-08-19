@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.live
 
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.sessioncache.SessionCache
@@ -52,11 +54,19 @@ class DefaultSessionLiveStore
                             ?: return false
                     sessionCache.rememberSessions(directory, sessions)
                     send(SessionListSnapshot(sessions = sessions, isFromCache = false))
+                    DiagnosticLog.debug(
+                        DiagnosticLogArea.Session,
+                        "session-list refresh directory=$directory count=${sessions.size} fromCache=false",
+                    )
                     return true
                 }
 
                 sessionCache.seedSessions(directory)?.let { seeded ->
                     send(SessionListSnapshot(sessions = seeded, isFromCache = true))
+                    DiagnosticLog.debug(
+                        DiagnosticLogArea.Session,
+                        "session-list seed directory=$directory count=${seeded.size} fromCache=true",
+                    )
                 }
 
                 refreshFromNetwork()

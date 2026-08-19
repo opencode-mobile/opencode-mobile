@@ -744,6 +744,7 @@ class TimelineProjectorTest {
         assertNotEquals(plain.rows.single(), decorated.rows.single())
         assertEquals(setOf("msg-1"), decorated.layoutAffectingRowIDs())
         assertEquals(2L, decorated.layoutAffectingRevision())
+        assertEquals(0L, decorated.structureAffectingRevision())
     }
 
     @Test
@@ -872,6 +873,7 @@ class TimelineProjectorTest {
         assertTrue(apply.kinds.contains(TimelineApplyKind.Decorate))
         assertFalse(apply.kinds.contains(TimelineApplyKind.Structure))
         assertEquals(setOf("msg-1"), decorated.layoutAffectingRowIDs())
+        assertEquals(0L, decorated.structureAffectingRevision())
     }
 
     @Test

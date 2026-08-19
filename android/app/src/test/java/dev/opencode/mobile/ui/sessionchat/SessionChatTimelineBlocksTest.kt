@@ -372,6 +372,69 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
+    fun build_genericNamedQuestionOutput_usesQuestionChrome() {
+        val output =
+            "User has answered your questions: \"Which problem would you like me to think about? " +
+                "I want to make sure I focus on the right one before diving in.\"=\"The calendar/date problem\". " +
+                "You can now continue with the user's answers in mind."
+        val shown =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "tool",
+                            status = ToolStatus.Completed,
+                            id = "prt-q-generic",
+                            output = output,
+                        ),
+                    ),
+            )
+        val tool = shown.single() as SessionChatTimelineBlock.ToolCard
+        assertEquals(
+            "Which problem would you like me to think about? I want to make sure I focus on the right one before diving in.",
+            tool.title,
+        )
+        assertEquals("The calendar/date problem", tool.subtitle)
+        assertEquals(
+            "Which problem would you like me to think about? I want to make sure I focus on the right one before diving in.\nThe calendar/date problem",
+            tool.detailText,
+        )
+    }
+
+    @Test
+    fun build_genericNamedInFlightQuestion_isHidden() {
+        val questions =
+            buildJsonArray {
+                add(
+                    buildJsonObject {
+                        put("question", "Which problem would you like me to think about?")
+                    },
+                )
+            }
+        val hidden =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "tool",
+                            status = ToolStatus.Pending,
+                            id = "prt-q-pending",
+                            input = JsonObject(mapOf("questions" to questions)),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "tool",
+                            status = ToolStatus.Running,
+                            id = "prt-q-running",
+                            input = JsonObject(mapOf("questions" to questions)),
+                        ),
+                    ),
+            )
+        assertTrue(hidden.isEmpty())
+    }
+
+    @Test
     fun build_nonAssistantRolesAreTextOnly() {
         val blocks =
             buildBlocks(

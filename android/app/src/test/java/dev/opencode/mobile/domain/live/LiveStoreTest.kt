@@ -2103,6 +2103,71 @@ class SessionLiveStoreTest {
             assertEquals(1, emissions.size)
             assertEquals("First", emissions.single().single().title)
         }
+
+    @Test
+    fun observeSessions_sessionUpdatedBurstCoalescesToOneRefresh() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    sessions = listOf(testSession(id = "ses-1", title = "First")),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store =
+                DefaultSessionLiveStore(
+                    repository,
+                    eventStream,
+                    LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
+                    sessionCache = NoOpSessionCache,
+                )
+            val collectJob =
+                launch {
+                    store.observeSessions("/repo").collect { }
+                }
+            advanceUntilIdle()
+            val callsAfterInitial = repository.listSessionsCallCount
+
+            repeat(10) {
+                eventStream.emit(OpencodeEvent(type = "session.updated", sessionId = "ses-1"))
+                advanceTimeBy(100)
+            }
+            advanceTimeBy(550)
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals(callsAfterInitial + 1, repository.listSessionsCallCount)
+        }
+
+    @Test
+    fun observeSessions_spacedSessionUpdatedReloadsEachQuietWindow() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    sessions = listOf(testSession(id = "ses-1", title = "First")),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store =
+                DefaultSessionLiveStore(
+                    repository,
+                    eventStream,
+                    LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
+                    sessionCache = NoOpSessionCache,
+                )
+            val collectJob =
+                launch {
+                    store.observeSessions("/repo").collect { }
+                }
+            advanceUntilIdle()
+            val callsAfterInitial = repository.listSessionsCallCount
+
+            repeat(4) {
+                eventStream.emit(OpencodeEvent(type = "session.updated", sessionId = "ses-1"))
+                advanceTimeBy(600)
+            }
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals(callsAfterInitial + 4, repository.listSessionsCallCount)
+        }
 }
 
 private fun testSession(
@@ -2198,11 +2263,13 @@ private class FakeSessionRepository(
     var statuses: List<SessionStatus> = emptyList(),
     var todos: List<SessionTodo> = emptyList(),
     var listTodosCallCount: Int = 0,
+    var listSessionsCallCount: Int = 0,
     var statusFetchCount: Int = 0,
     var shouldFailList: Boolean = false,
     var shouldFailStatuses: Boolean = false,
 ) : SessionRepository {
     override suspend fun listSessions(directory: String?): List<Session> {
+        listSessionsCallCount += 1
         if (shouldFailList) error("list failed")
         return sessions
     }

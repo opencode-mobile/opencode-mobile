@@ -1256,6 +1256,9 @@ final class ProjectListHomeViewModel {
             loadError: section.loadError,
             sessionsFromCache: sessionsFromCache
         )
+        if updatedSection == section || homeLiveVisibleUnchanged(previous: section, next: updatedSection) {
+            return
+        }
         let updatedSections =
             sections.map { current in
                 current.worktree == worktree ? updatedSection : current
@@ -1284,4 +1287,20 @@ final class ProjectListHomeViewModel {
         }
     }
 
+}
+
+func homeLiveVisibleUnchanged(previous: ProjectSectionItem, next: ProjectSectionItem) -> Bool {
+    previous.sessionsFromCache == next.sessionsFromCache
+        && previous.loadError == next.loadError
+        && homeLiveVisibleSessionsUnchanged(previous.allSessions, next.allSessions)
+}
+
+func homeLiveVisibleSessionsUnchanged(_ previous: [SessionListItem], _ next: [SessionListItem]) -> Bool {
+    guard previous.count == next.count else { return false }
+    return zip(previous, next).allSatisfy { before, after in
+        before.id == after.id
+            && before.title == after.title
+            && before.statusLabel == after.statusLabel
+            && before.isReady == after.isReady
+    }
 }

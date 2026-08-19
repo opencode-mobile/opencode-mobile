@@ -207,6 +207,52 @@ struct SessionChatTimelineBlocksTests {
         )
     }
 
+    @Test func build_genericNamedQuestionOutput_usesQuestionChrome() {
+        let output = """
+        User has answered your questions: "Which problem would you like me to think about? I want to make sure I focus on the right one before diving in."="The calendar/date problem". You can now continue with the user's answers in mind.
+        """
+        let shown = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "q-generic",
+                        toolName: "tool",
+                        status: .completed,
+                        output: output.trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(_, let tool) = shown.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(
+            tool.title ==
+                "Which problem would you like me to think about? I want to make sure I focus on the right one before diving in."
+        )
+        #expect(tool.subtitle == "The calendar/date problem")
+        #expect(
+            tool.detailText ==
+                "Which problem would you like me to think about? I want to make sure I focus on the right one before diving in.\nThe calendar/date problem"
+        )
+    }
+
+    @Test func build_genericNamedInFlightQuestion_isHidden() {
+        let questions: [String: AnyCodable] = [
+            "questions": .array([
+                .dictionary(["question": .string("Which problem would you like me to think about?")]),
+            ]),
+        ]
+        let hidden = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "q-pending", toolName: "tool", status: .pending, input: questions)),
+                .tool(ToolPart(id: "q-running", toolName: "tool", status: .running, input: questions)),
+            ]
+        )
+        #expect(hidden.isEmpty)
+    }
+
     @Test func build_nonAssistantRolesAreTextOnly() {
         let blocks = okBlocks(
             role: .user,

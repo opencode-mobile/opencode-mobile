@@ -38,7 +38,7 @@ data class TimelineFrame(
     val grewBottomRowIDs: Set<String> = emptySet(),
     /**
      * Markdown-only subset of [layoutChangedRowIDs] (streaming flag and block structure
-     * unchanged). Still layout-affecting for scroll in Phase 2; Phase 3 may coalesce.
+     * unchanged). Hosts must not treat this as structure-affecting for scroll restore.
      */
     val decorateRowIDs: Set<String> = emptySet(),
     /**

@@ -151,6 +151,31 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
+    fun labelForActiveTurn_hidesWhenReasoningBlockExistsEvenWithSettledText() {
+        assertNull(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Working",
+                messages =
+                    listOf(
+                        user("u1"),
+                        assistant(
+                            id = "a1",
+                            text = "Hello",
+                            blocks =
+                                listOf(
+                                    SessionChatTimelineBlock.Reasoning(
+                                        blockID = "r1",
+                                        text = "hmm",
+                                        isStreaming = true,
+                                    ),
+                                ),
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
     fun labelForActiveTurn_ignoresCompletedCompactionSnapshot() {
         assertEquals(
             "Working",

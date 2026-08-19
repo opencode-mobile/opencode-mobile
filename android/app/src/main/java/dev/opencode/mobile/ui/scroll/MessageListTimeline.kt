@@ -168,8 +168,8 @@ internal fun rememberMessageListTimeline(
     )
 
     // Armed: declared-ID structure follow → await layout → exact end.
-    // Decorate-only (TextMate / slash collapse) uses layoutAffectingRevision for
-    // unarmed restore only — not armed re-scroll.
+    // Decorate-only (TextMate / slash collapse) is not structure-affecting, so it
+    // does not re-scroll while pinned.
     MessageListAutoFollowLayoutAffectingEffect(
         layoutAffectingRevision = structureAffectingRevision,
         messageCount = messageCount,
@@ -194,8 +194,10 @@ internal fun rememberMessageListTimeline(
     )
 
     // Unarmed: capture visible anchor ID+offset → restore after layout settles.
+    // Use structure, not layoutAffecting: decorate-only markdown paint used to
+    // re-pin every TextMate frame and flicker the list.
     MessageListUnarmedVisibleAnchorEffect(
-        layoutAffectingRevision = layoutAffectingRevision,
+        layoutAffectingRevision = structureAffectingRevision,
         messageIdsChronological = resolvedMessageIds,
         autoFollowEnabled = autoFollowEnabled,
         listState = listState,
@@ -237,6 +239,7 @@ internal fun <T> MessageListReversedTimelineColumn(
     workingIndicatorKey: String? = null,
     workingIndicatorContent: (@Composable () -> Unit)? = null,
     statusIndicatorKey: String? = null,
+    statusIndicatorVisible: Boolean = false,
     statusIndicatorContent: (@Composable () -> Unit)? = null,
     itemContent:
         @Composable (
@@ -256,9 +259,11 @@ internal fun <T> MessageListReversedTimelineColumn(
         item(key = bottomAnchorKey) {
             Spacer(modifier = Modifier.height(bottomAnchorHeight))
         }
-        if (statusIndicatorKey != null && statusIndicatorContent != null) {
+        if (statusIndicatorKey != null) {
             item(key = statusIndicatorKey) {
-                statusIndicatorContent()
+                if (statusIndicatorVisible) {
+                    statusIndicatorContent?.invoke()
+                }
             }
         } else if (workingIndicatorKey != null && workingIndicatorContent != null) {
             item(key = workingIndicatorKey) {
@@ -271,7 +276,7 @@ internal fun <T> MessageListReversedTimelineColumn(
         ) { reversedIndex, item ->
             val isNewestMessage =
                 reversedIndex == 0 &&
-                    statusIndicatorContent == null &&
+                    !statusIndicatorVisible &&
                     workingIndicatorContent == null
             itemContent(
                 item,

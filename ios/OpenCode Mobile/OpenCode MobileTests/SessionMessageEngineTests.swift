@@ -263,6 +263,22 @@ import Testing
         #expect(!engine.shouldPublishLive(changeSet))
     }
 
+    @Test func infoUpdated_missingId_isNoChange() {
+        let engine = makeEngine()
+        seedStreamingAssistant(engine)
+        let before = engine.revision(sessionID: "ses-1")
+        let result = engine.apply(
+            sessionID: "ses-1",
+            patch: .infoUpdated([
+                "role": .string("assistant"),
+                "sessionID": .string("ses-1"),
+            ])
+        )
+        #expect(result == .noChange)
+        #expect(engine.revision(sessionID: "ses-1") == before)
+        #expect(engine.messages(sessionID: "ses-1").count == 1)
+    }
+
     @Test func userInsert_landsBeforeStreamingAssistant() {
         let engine = makeEngine()
         engine.replaceAll(

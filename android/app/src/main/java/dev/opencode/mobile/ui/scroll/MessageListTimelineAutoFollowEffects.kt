@@ -542,7 +542,10 @@ internal suspend fun followMessageListLayoutChangeIfNeeded(
                 messageCount = messageCount,
             )
 
-        autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = autoFollowEnabled) ->
+        autoFollowState.shouldFollowLayoutChange(
+            autoFollowEnabled = autoFollowEnabled,
+            isPinnedToEnd = pinned,
+        ) ->
             scrollController.snapToEndAfterLayoutChange(
                 messageCount = messageCount,
                 tolerancePx = autoFollowTolerancePx,

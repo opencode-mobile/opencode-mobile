@@ -54,6 +54,57 @@ struct ProjectListHomeViewModelTests {
         #expect(sections.first?.allSessions.count == 7)
     }
 
+    @Test func homeLiveVisibleSessionsUnchanged_ignoresTimestampOnly() {
+        let previous = [
+            SessionListItem(
+                id: "1",
+                title: "One",
+                worktree: "/repo",
+                updatedAtLabel: "Aug 19 • 4:00 PM",
+                updatedAtEpochMs: 1
+            ),
+        ]
+        let next = [
+            SessionListItem(
+                id: "1",
+                title: "One",
+                worktree: "/repo",
+                updatedAtLabel: "Aug 19 • 4:00 PM",
+                updatedAtEpochMs: 2
+            ),
+        ]
+        #expect(homeLiveVisibleSessionsUnchanged(previous, next))
+        #expect(
+            !homeLiveVisibleSessionsUnchanged(
+                previous,
+                [
+                    SessionListItem(
+                        id: "1",
+                        title: "Two",
+                        worktree: "/repo",
+                        updatedAtLabel: "Aug 19 • 4:00 PM",
+                        updatedAtEpochMs: 2
+                    ),
+                ]
+            )
+        )
+        #expect(
+            !homeLiveVisibleSessionsUnchanged(
+                previous,
+                [
+                    SessionListItem(
+                        id: "1",
+                        title: "One",
+                        worktree: "/repo",
+                        statusLabel: "Working",
+                        updatedAtLabel: "Aug 19 • 4:00 PM",
+                        updatedAtEpochMs: 2
+                    ),
+                ]
+            )
+        )
+    }
+
     @Test func refresh_excludesArchivedSessionsFromActiveLists() async {
         let sessions = [
             Session(id: "active", title: "Active", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 2),

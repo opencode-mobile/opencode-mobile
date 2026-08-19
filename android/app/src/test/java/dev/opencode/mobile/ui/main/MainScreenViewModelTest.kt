@@ -37,6 +37,7 @@ import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
+import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.OptimisticSessionCreateCoordinator
 import dev.opencode.mobile.domain.session.SessionRepository
@@ -51,6 +52,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -59,6 +61,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -584,6 +588,206 @@ class MainScreenViewModelTest {
             assertEquals(before + 1, after)
             assertTrue(sessionRepository.listSessionsCallCount >= 2)
         }
+
+    @Test
+    fun sessionUpdatedTimestampBurst_skipsHomeUiWhenCaptionUnchanged() =
+        runTest(testDispatcher) {
+            val eventStream = FakeForegroundEventStream()
+            val sessionsByWorktree =
+                mutableMapOf(
+                    "/repo" to listOf(Session(id = "1", title = "Session 1", updatedAtEpochMs = 1_000L)),
+                )
+            val sessionRepository = FakeSessionRepository(sessionsByWorktree)
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    eventStream = eventStream,
+                    sessionsByWorktree = sessionsByWorktree,
+                    sessionRepository = sessionRepository,
+                )
+            advanceUntilIdle()
+            val loadedEmissions = mutableListOf<MainScreenUiState.Loaded>()
+            val collectJob =
+                launch {
+                    viewModel.uiState.collect { state ->
+                        if (state is MainScreenUiState.Loaded) loadedEmissions.add(state)
+                    }
+                }
+            advanceUntilIdle()
+            val baseline = loadedEmissions.size
+            val listCallsBefore = sessionRepository.listSessionsCallCount
+
+            repeat(10) { index ->
+                sessionsByWorktree["/repo"] =
+                    listOf(
+                        Session(
+                            id = "1",
+                            title = "Session 1",
+                            updatedAtEpochMs = 1_000L + ((index + 1) * 50L),
+                        ),
+                    )
+                eventStream.emit(OpencodeEvent(type = "session.updated", sessionId = "1"))
+                advanceTimeBy(100)
+            }
+            advanceTimeBy(550)
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            val after = loadedEmissions.drop(baseline)
+            // Debounce waits for a quiet window, so a 100ms burst coalesces to one reload.
+            assertEquals(listCallsBefore + 1, sessionRepository.listSessionsCallCount)
+            assertTrue(after.isEmpty())
+            val held =
+                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                    .sections
+                    .single()
+                    .allSessions
+                    .single()
+            assertEquals(1_000L, held.updatedAtEpochMs)
+        }
+
+    @Test
+    fun spacedSessionUpdated_republishesHomeEachQuietWindow() =
+        runTest(testDispatcher) {
+            val eventStream = FakeForegroundEventStream()
+            val sessionsByWorktree =
+                mutableMapOf(
+                    "/repo" to listOf(Session(id = "1", title = "Session 1", updatedAtEpochMs = 1_000L)),
+                )
+            val sessionRepository = FakeSessionRepository(sessionsByWorktree)
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    eventStream = eventStream,
+                    sessionsByWorktree = sessionsByWorktree,
+                    sessionRepository = sessionRepository,
+                )
+            advanceUntilIdle()
+            val loadedEmissions = mutableListOf<MainScreenUiState.Loaded>()
+            val collectJob =
+                launch {
+                    viewModel.uiState.collect { state ->
+                        if (state is MainScreenUiState.Loaded) loadedEmissions.add(state)
+                    }
+                }
+            advanceUntilIdle()
+            val baseline = loadedEmissions.size
+            val listCallsBefore = sessionRepository.listSessionsCallCount
+
+            repeat(4) { index ->
+                sessionsByWorktree["/repo"] =
+                    listOf(
+                        Session(
+                            id = "1",
+                            title = "Session 1",
+                            updatedAtEpochMs = 1_000L + ((index + 1) * 100L),
+                        ),
+                    )
+                eventStream.emit(OpencodeEvent(type = "session.updated", sessionId = "1"))
+                advanceTimeBy(600)
+            }
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            val after = loadedEmissions.drop(baseline)
+            assertEquals(listCallsBefore + 4, sessionRepository.listSessionsCallCount)
+            // Timestamp-only quiet-window reloads must not rewrite home rows.
+            // The clock caption stays "MMM d • h:mm a", so Compose would flicker
+            // on identity-stable lists if we published each updatedAtEpochMs.
+            assertTrue(after.isEmpty())
+            val held =
+                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                    .sections
+                    .single()
+                    .allSessions
+                    .single()
+            assertEquals(1_000L, held.updatedAtEpochMs)
+        }
+
+    @Test
+    fun sessionStatusBusyIdle_republishesHomeStatusLabel() =
+        runTest(testDispatcher) {
+            val eventStream = FakeForegroundEventStream()
+            val sessionsByWorktree =
+                mutableMapOf(
+                    "/repo" to listOf(Session(id = "1", title = "Session 1", updatedAtEpochMs = 1_000L)),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    eventStream = eventStream,
+                    sessionsByWorktree = sessionsByWorktree,
+                )
+            advanceUntilIdle()
+
+            eventStream.emit(
+                OpencodeEvent(
+                    type = "session.status",
+                    sessionId = "1",
+                    rawProperties =
+                        buildJsonObject {
+                            put(
+                                "status",
+                                buildJsonObject { put("type", "busy") },
+                            )
+                        },
+                ),
+            )
+            advanceUntilIdle()
+            val busy =
+                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                    .sections
+                    .single()
+                    .allSessions
+                    .single()
+            assertEquals("Working", busy.statusLabel)
+
+            eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "1"))
+            advanceUntilIdle()
+            val idle =
+                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                    .sections
+                    .single()
+                    .allSessions
+                    .single()
+            assertNull(idle.statusLabel)
+        }
+
+    @Test
+    fun homeLiveDelta_reportsTimestampAndStatusChanges() {
+        val previous =
+            listOf(
+                SessionSummary(id = "1", title = "One", statusLabel = null, updatedAtEpochMs = 1L),
+            )
+        val next =
+            listOf(
+                SessionSummary(id = "1", title = "One", statusLabel = "Working", updatedAtEpochMs = 2L),
+            )
+        assertEquals("1:status:-->Working+updatedAt", homeLiveDelta(previous, next))
+    }
+
+    @Test
+    fun homeLiveVisibleUnchanged_ignoresTimestampOnly() {
+        val previous =
+            listOf(
+                SessionSummary(id = "1", title = "One", updatedAtLabel = "Aug 19 • 4:00 PM", updatedAtEpochMs = 1L),
+            )
+        val next =
+            listOf(
+                SessionSummary(id = "1", title = "One", updatedAtLabel = "Aug 19 • 4:00 PM", updatedAtEpochMs = 2L),
+            )
+        assertTrue(homeLiveVisibleSessionsUnchanged(previous, next))
+        assertTrue(
+            homeLiveVisibleSessionsUnchanged(
+                previous,
+                next.map { it.copy(updatedAtLabel = "Aug 19 • 4:01 PM") },
+            ),
+        )
+        assertFalse(homeLiveVisibleSessionsUnchanged(previous, next.map { it.copy(title = "Two") }))
+        assertFalse(
+            homeLiveVisibleSessionsUnchanged(previous, next.map { it.copy(statusLabel = "Working") }),
+        )
+    }
 
     @Test
     fun onSessionLongPress_showsSheetAndEnablesForkWhenUserMessagesExist() =

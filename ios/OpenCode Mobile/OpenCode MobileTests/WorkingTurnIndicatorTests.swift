@@ -106,6 +106,21 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
+    @Test func labelForActiveTurn_hidesWhenReasoningBlockExistsEvenWithSettledText() {
+        let reasoning: SessionChatTimelineBlock = .reasoning(
+            blockID: "r1",
+            text: "hmm",
+            isStreaming: true,
+            durationMs: nil
+        )
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                messages: [user("u1"), assistant("a1", text: "Hello", blocks: [reasoning])]
+            ) == nil
+        )
+    }
+
     @Test func labelForActiveTurn_showsCompactingEvenWithAssistantContent() {
         #expect(
             WorkingTurnIndicator.labelForActiveTurn(

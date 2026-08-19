@@ -710,7 +710,7 @@ internal fun resolveStreamingDecorationTarget(message: Message): StreamingDecora
 private fun isVisibleToolForStreamingDecoration(tool: MessagePart.Tool): Boolean {
     val name = tool.toolName.lowercase()
     if (name == "todowrite") return false
-    if (name == "question" &&
+    if (SessionChatTimelineBlocks.isQuestionTool(tool) &&
         (tool.status == ToolStatus.Pending || tool.status == ToolStatus.Running)
     ) {
         return false

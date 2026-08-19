@@ -50,6 +50,10 @@ class MessageListAutoFollowStateTest {
         state.updatePinnedState(isPinnedToEnd = true, messageCount = 8)
 
         assertTrue(state.shouldEnsureLayoutEnd(autoFollowEnabled = true))
+        // Already at end: snapping every growBottom token jerks the list.
+        assertFalse(
+            state.shouldFollowLayoutChange(autoFollowEnabled = true, isPinnedToEnd = true),
+        )
     }
 
     @Test

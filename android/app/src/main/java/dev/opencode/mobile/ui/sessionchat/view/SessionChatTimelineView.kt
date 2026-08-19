@@ -282,20 +282,13 @@ private fun SessionChatTimelineReadyView(
                         bottom = bottomOverlayInset,
                     ),
                 key = { message -> message.id },
-                statusIndicatorKey =
-                    if (workingIndicatorLabel != null) {
-                        SESSION_CHAT_STATUS_INDICATOR_KEY
-                    } else {
-                        null
-                    },
-                statusIndicatorContent =
-                    if (workingIndicatorLabel != null) {
-                        {
-                            SessionChatWorkingIndicatorRow(label = workingIndicatorLabel)
-                        }
-                    } else {
-                        null
-                    },
+                statusIndicatorKey = SESSION_CHAT_STATUS_INDICATOR_KEY,
+                statusIndicatorVisible = workingIndicatorLabel != null,
+                statusIndicatorContent = {
+                    workingIndicatorLabel?.let { label ->
+                        SessionChatWorkingIndicatorRow(label = label)
+                    }
+                },
             ) { message, isNewestMessage, onContentSizeSettled ->
                 SessionChatMessageRow(
                     message = message,

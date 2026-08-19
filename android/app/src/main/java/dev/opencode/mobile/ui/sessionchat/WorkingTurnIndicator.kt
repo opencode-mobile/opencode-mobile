@@ -20,6 +20,8 @@ object WorkingTurnIndicator {
     ): String? {
         if (isCompacting) return SessionCompactChrome.STATUS_LABEL
         if (statusLabel == null) return null
+        // ReasoningBlock already paints Thinking/Thought. Do not stack Working.
+        if (hasThoughtChromeAfterLastUser(messages)) return null
         if (hasInProgressAssistantContentAfterLastUser(messages)) return null
         if (statusLabel == "Working" && hasSettledAssistantContentAfterLastUser(messages)) {
             return THINKING_LABEL
@@ -43,6 +45,11 @@ object WorkingTurnIndicator {
         val mode = message.metadataLabel.substringBefore(" · ")
         return mode.equals("compaction", ignoreCase = true)
     }
+
+    private fun hasThoughtChromeAfterLastUser(messages: List<SessionChatMessageItem>): Boolean =
+        assistantsAfterLastUser(messages).any { message ->
+            message.blocks.any { it is SessionChatTimelineBlock.Reasoning }
+        }
 
     private fun hasInProgressAssistantContentAfterLastUser(messages: List<SessionChatMessageItem>): Boolean =
         assistantsAfterLastUser(messages).any(::hasInProgressContent)
