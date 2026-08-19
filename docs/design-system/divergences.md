@@ -243,3 +243,21 @@ implementation belong in the feature's `parity-gaps.md`.
   aligned while materials remain platform-native.
 - Review trigger: if Android gains a system glass material API or product asks
   for a shared custom blur stack, revisit the Android mapping.
+
+## Launcher icon depth (Liquid Glass vs adaptive parallax)
+
+- Status: intentional
+- Area: other
+- Shared intent: On-device launcher is a flat two-layer “d” (dark body, light
+  glass cap) on `#070707`. Depth comes from the OS, not baked lighting.
+- iOS behavior: `AppIcon.icon` (Icon Composer). Body and glass cap are separate
+  layers with Liquid Glass, specular, and translucency; the system renders
+  Default / Dark / Clear / Tinted.
+- Android behavior: Adaptive icon with color background, two-tone vector
+  foreground, and a white monochrome silhouette for themed icons. Launchers may
+  parallax foreground against background. No system glass material.
+- Reason: iOS 26 supplies live glass lighting; Android does not. The same SVG
+  paths feed both. A pre-rendered 3D PNG would fight iOS glass and collapse
+  under Android theming.
+- Review trigger: revisit if Android adds a system glass icon material, or if
+  product wants the store interlocking mark on-device as well.

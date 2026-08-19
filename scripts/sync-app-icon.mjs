@@ -1,19 +1,22 @@
 #!/usr/bin/env node
 // Generates the app launcher icon set for both platforms from
-// app-icon/source.svg. Emits the Android adaptive-icon vector drawables and
-// the iOS AppIcon.appiconset PNGs (any/dark/tinted). See
-// docs/design-system/app-icon.md.
+// app-icon/source.svg. Emits Android adaptive-icon vectors, iOS AppIcon
+// PNGs (any/dark/tinted), and the iOS 26 AppIcon.icon Liquid Glass package.
+// See docs/design-system/app-icon.md.
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE_SVG = join(REPO_ROOT, "app-icon/source.svg");
 const IOS_APPICONSET = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Assets.xcassets/AppIcon.appiconset");
+const IOS_ICON_COMPOSER = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/AppIcon.icon");
 const ANDROID_RES = join(REPO_ROOT, "android/app/src/main/res");
 
 const PNG_SIZE = 1024;
+// Light glyph fill is the glass cap; every other glyph fill is the body.
+const GLASS_FILL = "#F1ECEC";
 
 function fail(msg) {
   console.error(`app-icon: ${msg}`);
@@ -156,11 +159,11 @@ function buildSilhouetteSvg(parsed, square) {
 import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
 
-function renderPng(svg, outPath) {
+function renderPng(svg, outPath, size = PNG_SIZE) {
   const tmp = join(tmpdir(), `opencode-app-icon-${randomBytes(4).toString("hex")}.svg`);
   writeFileSync(tmp, svg, "utf8");
   try {
-    execFileSync("rsvg-convert", ["-w", PNG_SIZE, "-h", PNG_SIZE, tmp, "-o", outPath], {
+    execFileSync("rsvg-convert", ["-w", String(size), "-h", String(size), tmp, "-o", outPath], {
       stdio: "pipe",
     });
   } catch (err) {
@@ -170,6 +173,26 @@ function renderPng(svg, outPath) {
       rmSync(tmp);
     } catch {}
   }
+}
+
+function hexToExtendedSrgb(hex) {
+  const h = hex.trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) {
+    fail(`unsupported fill "${hex}" (need #RRGGBB)`);
+  }
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  return `extended-srgb:${r.toFixed(5)},${g.toFixed(5)},${b.toFixed(5)},1.00000`;
+}
+
+function splitLayers(paths) {
+  const norm = (f) => f.trim().toUpperCase();
+  const glass = paths.filter((p) => norm(p.fill) === GLASS_FILL);
+  const body = paths.filter((p) => norm(p.fill) !== GLASS_FILL);
+  if (body.length === 0) fail("source.svg: glyph has no body paths (non-#F1ECEC fills)");
+  if (glass.length === 0) fail("source.svg: glyph has no glass cap (fill #F1ECEC)");
+  return { body, glass };
 }
 
 function writeIosContentsJson() {
@@ -206,6 +229,113 @@ function writeIosContentsJson() {
     JSON.stringify(json, null, 2) + "\n",
     "utf8",
   );
+}
+
+function writeIconComposer(parsed, square) {
+  const { body, glass } = splitLayers(parsed.paths);
+  const assetsDir = join(IOS_ICON_COMPOSER, "Assets");
+  mkdirSync(assetsDir, { recursive: true });
+
+  const bodySvg = buildSquareSvg({
+    backgroundFill: "none",
+    square,
+    paths: body,
+    fillOverride: "#FFFFFF",
+  });
+  const glassSvg = buildSquareSvg({
+    backgroundFill: "none",
+    square,
+    paths: glass,
+    fillOverride: "#FFFFFF",
+  });
+  renderPng(bodySvg, join(assetsDir, "body.png"));
+  renderPng(glassSvg, join(assetsDir, "glass.png"));
+
+  const background = hexToExtendedSrgb(parsed.backgroundFill);
+  const bodyFill = hexToExtendedSrgb(body[0].fill);
+  const glassFill = hexToExtendedSrgb(glass[0].fill);
+  const json = {
+    "fill-specializations": [
+      { value: { solid: background } },
+      { appearance: "dark", value: { solid: background } },
+    ],
+    groups: [
+      {
+        name: "D Mark",
+        layers: [
+          {
+            name: "Body",
+            "image-name": "body.png",
+            glass: true,
+            "fill-specializations": [
+              { value: { solid: bodyFill } },
+              { appearance: "dark", value: { solid: bodyFill } },
+            ],
+          },
+          {
+            name: "Glass",
+            "image-name": "glass.png",
+            glass: true,
+            "fill-specializations": [
+              { value: { solid: glassFill } },
+              { appearance: "dark", value: { solid: glassFill } },
+            ],
+            translucency: { enabled: true, value: 0.28 },
+          },
+        ],
+        shadow: { kind: "neutral", opacity: 0.4 },
+        specular: true,
+        translucency: { enabled: true, value: 0.16 },
+        lighting: "combined",
+      },
+    ],
+    "supported-platforms": { squares: ["iOS"] },
+  };
+  writeFileSync(join(IOS_ICON_COMPOSER, "icon.json"), JSON.stringify(json, null, 2) + "\n", "utf8");
+}
+
+function maybeValidateIconComposer() {
+  let ictool;
+  try {
+    const xcode = execFileSync("xcode-select", ["-p"], { encoding: "utf8" }).trim();
+    ictool = join(dirname(xcode), "Applications/Icon Composer.app/Contents/Executables/ictool");
+  } catch {
+    console.log("app-icon: Icon Composer ictool not found; skipped .icon render check");
+    return;
+  }
+  if (!existsSync(ictool)) {
+    console.log("app-icon: Icon Composer ictool not found; skipped .icon render check");
+    return;
+  }
+  const out = join(tmpdir(), `opencode-app-icon-ictool-${randomBytes(4).toString("hex")}.png`);
+  try {
+    execFileSync(
+      ictool,
+      [
+        IOS_ICON_COMPOSER,
+        "--export-image",
+        "--output-file",
+        out,
+        "--platform",
+        "iOS",
+        "--rendition",
+        "Default",
+        "--width",
+        "64",
+        "--height",
+        "64",
+        "--scale",
+        "1",
+      ],
+      { stdio: "pipe" },
+    );
+  } catch (err) {
+    fail(`ictool rejected AppIcon.icon: ${err.stdout?.toString() || err.stderr?.toString() || err.message}`);
+  } finally {
+    try {
+      rmSync(out);
+    } catch {}
+  }
 }
 
 function writeAndroidForeground({ transform, paths }) {
@@ -247,18 +377,62 @@ function writeAndroidBackgroundColor({ backgroundFill }) {
   );
 }
 
+function writeAndroidMonochrome({ transform, paths }) {
+  const { translateX, translateY, scaleX, scaleY } = svgTransformToAndroid(transform);
+  const pathsXml = paths
+    .map((p) => `    <path\n        android:pathData="${p.d}"\n        android:fillColor="#FFFFFF" />`)
+    .join("\n");
+  const xml = `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="240"
+    android:viewportHeight="300">
+  <group android:scaleX="${scaleX}"
+      android:scaleY="${scaleY}"
+      android:translateX="${translateX}"
+      android:translateY="${translateY}">
+${pathsXml}
+  </group>
+</vector>
+`;
+  const outDir = join(ANDROID_RES, "drawable");
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(join(outDir, "ic_launcher_monochrome.xml"), xml, "utf8");
+}
+
 function writeAndroidAdaptive() {
   const adaptive = `<?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background"/>
     <foreground android:drawable="@drawable/ic_launcher_foreground"/>
-    <monochrome android:drawable="@drawable/ic_launcher_foreground"/>
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>
 </adaptive-icon>
 `;
   const outDir = join(ANDROID_RES, "mipmap-anydpi-v26");
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, "ic_launcher.xml"), adaptive, "utf8");
   writeFileSync(join(outDir, "ic_launcher_round.xml"), adaptive, "utf8");
+}
+
+function writeAndroidLegacyMipmaps(flattenedSvg) {
+  const densities = [
+    ["mipmap-mdpi", 48],
+    ["mipmap-hdpi", 72],
+    ["mipmap-xhdpi", 96],
+    ["mipmap-xxhdpi", 144],
+    ["mipmap-xxxhdpi", 192],
+  ];
+  for (const [folder, size] of densities) {
+    const dir = join(ANDROID_RES, folder);
+    mkdirSync(dir, { recursive: true });
+    for (const name of ["ic_launcher", "ic_launcher_round"]) {
+      const png = join(dir, `${name}.png`);
+      const webp = join(dir, `${name}.webp`);
+      renderPng(flattenedSvg, png, size);
+      if (existsSync(webp)) unlinkSync(webp);
+    }
+  }
 }
 
 function main() {
@@ -280,12 +454,19 @@ function main() {
 
   writeIosContentsJson();
 
+  // iOS 26+: layered Liquid Glass package. Xcode generates pre-26 fallbacks
+  // from this file; the appiconset PNGs stay as an explicit catalog copy.
+  writeIconComposer(parsed, square);
+  maybeValidateIconComposer();
+
   // Android: emit adaptive-icon layers from the same source.
   writeAndroidForeground(parsed);
+  writeAndroidMonochrome(parsed);
   writeAndroidBackgroundColor(parsed);
   writeAndroidAdaptive();
+  writeAndroidLegacyMipmaps(flattened);
 
-  console.log("app-icon: synced iOS AppIcon + Android adaptive icon from app-icon/source.svg");
+  console.log("app-icon: synced iOS AppIcon + AppIcon.icon + Android adaptive icon from app-icon/source.svg");
 }
 
 main();
