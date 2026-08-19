@@ -113,7 +113,7 @@ nonisolated struct SessionChatChildSessionRowBlock: Equatable, Sendable {
 }
 
 nonisolated enum SessionChatTimelineBlocks {
-    private static let contextToolNames: Set<String> = ["read", "glob", "grep"]
+    private static let contextToolNames: Set<String> = ["read", "glob", "grep", "websearch"]
 
     static func build(
         role: MessageRole,
@@ -441,7 +441,7 @@ nonisolated enum SessionChatTimelineBlocks {
             group: SessionChatToolGroupBlock(
                 count: tools.count,
                 status: status,
-                title: groupTitle(tools.count),
+                title: groupTitle(tools),
                 subtitle: groupSubtitle(tools),
                 errorText: errorText,
                 members: members
@@ -449,14 +449,20 @@ nonisolated enum SessionChatTimelineBlocks {
         )
     }
 
-    /// Count headline for the Tool Call Card (`7 tools`).
-    private static func groupTitle(_ count: Int) -> String {
-        "\(count) tools"
+    /// Context-only groups match TUI (`Explored — 1 read`). Mixed groups stay `N tools`.
+    private static func groupTitle(_ tools: [ToolPart]) -> String {
+        if !tools.isEmpty, tools.allSatisfy({ isContextTool($0.toolName) }) {
+            return exploredTitle(tools)
+        }
+        return "\(tools.count) tools"
     }
 
     /// Family one-liner in encounter order (`Edit · Write · 5 shells`).
-    /// A single member of a family is just the verb; multiples get a count.
-    private static func groupSubtitle(_ tools: [ToolPart]) -> String {
+    /// Context-only groups keep the first path as subtitle.
+    private static func groupSubtitle(_ tools: [ToolPart]) -> String? {
+        if !tools.isEmpty, tools.allSatisfy({ isContextTool($0.toolName) }) {
+            return tools.lazy.compactMap(contextSubtitle).first
+        }
         var order: [String] = []
         var counts: [String: Int] = [:]
         for tool in tools {
@@ -469,6 +475,41 @@ nonisolated enum SessionChatTimelineBlocks {
         return order.map { name in
             familyPhrase(name, count: counts[name, default: 0])
         }.joined(separator: " · ")
+    }
+
+    private static func exploredTitle(_ tools: [ToolPart]) -> String {
+        var order: [String] = []
+        var counts: [String: Int] = [:]
+        for tool in tools {
+            let key = tool.toolName.lowercased()
+            if counts[key] == nil {
+                order.append(key)
+            }
+            counts[key, default: 0] += 1
+        }
+        let summary = order.map { name in
+            exploredFamilyPhrase(name, count: counts[name, default: 0])
+        }.joined(separator: " · ")
+        return "Explored — \(summary)"
+    }
+
+    private static func exploredFamilyPhrase(_ name: String, count: Int) -> String {
+        switch name {
+        case "read": return count == 1 ? "1 read" : "\(count) reads"
+        case "grep": return count == 1 ? "1 grep" : "\(count) greps"
+        case "glob": return count == 1 ? "1 glob" : "\(count) globs"
+        case "websearch": return count == 1 ? "1 search" : "\(count) searches"
+        default: return familyPhrase(name, count: count)
+        }
+    }
+
+    private static func contextSubtitle(_ tool: ToolPart) -> String? {
+        switch tool.toolName.lowercased() {
+        case "read": return readPathSubtitle(tool.input)
+        case "glob", "grep": return patternPathSubtitle(tool.input)
+        case "websearch": return inputString(tool.input, keys: "query")
+        default: return nil
+        }
     }
 
     private static func familyPhrase(_ name: String, count: Int) -> String {
@@ -609,11 +650,11 @@ nonisolated enum SessionChatTimelineBlocks {
         if isQuestionTool(tool) { return questionChrome(tool) }
         switch name {
         case "read":
-            return contextChrome(tool: tool, displayTitle: "Read", subtitle: pathSubtitle(tool.input))
+            return contextChrome(tool: tool, subtitle: readPathSubtitle(tool.input))
         case "glob":
-            return contextChrome(tool: tool, displayTitle: "Glob", subtitle: patternPathSubtitle(tool.input))
+            return contextChrome(tool: tool, subtitle: patternPathSubtitle(tool.input))
         case "grep":
-            return contextChrome(tool: tool, displayTitle: "Grep", subtitle: patternPathSubtitle(tool.input))
+            return contextChrome(tool: tool, subtitle: patternPathSubtitle(tool.input))
         case "bash", "shell":
             return shellChrome(tool)
         case "execute":
@@ -625,7 +666,7 @@ nonisolated enum SessionChatTimelineBlocks {
         case "webfetch":
             return networkChrome(tool: tool, displayTitle: "Fetch", subtitleKey: "url")
         case "websearch":
-            return networkChrome(tool: tool, displayTitle: "Search", subtitleKey: "query")
+            return contextChrome(tool: tool, subtitle: inputString(tool.input, keys: "query"))
         case "skill":
             return Chrome(
                 title: "Skill",
@@ -796,15 +837,9 @@ nonisolated enum SessionChatTimelineBlocks {
         metadataString(tool.metadata, keys: "sessionId", "sessionID")
     }
 
-    private static func contextChrome(tool: ToolPart, displayTitle: String, subtitle: String?) -> Chrome {
-        guard let subtitle else {
-            return Chrome(
-                title: ToolPartIdentity.calledTitle(tool.toolName),
-                subtitle: runningTitleOverride(tool)
-            )
-        }
-        return Chrome(
-            title: displayTitle,
+    private static func contextChrome(tool: ToolPart, subtitle: String?) -> Chrome {
+        Chrome(
+            title: exploredTitle([tool]),
             subtitle: runningTitleOverride(tool) ?? subtitle
         )
     }
@@ -947,6 +982,11 @@ nonisolated enum SessionChatTimelineBlocks {
 
     private static func pathSubtitle(_ input: [String: AnyCodable]?) -> String? {
         inputString(input, keys: "filePath", "path", "file")
+    }
+
+    /// Read chrome is the file, not explore/cwd `path` (often the project root).
+    private static func readPathSubtitle(_ input: [String: AnyCodable]?) -> String? {
+        inputString(input, keys: "filePath", "file")
     }
 
     private static func patternPathSubtitle(_ input: [String: AnyCodable]?) -> String? {

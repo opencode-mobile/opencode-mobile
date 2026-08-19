@@ -284,6 +284,7 @@ data class SessionChatTimelineRegionState(
     val messagesFromCache: Boolean = false,
     val isSyncingMessages: Boolean = false,
     val errorMessage: String? = null,
+    val assistantTurnExists: Boolean = false,
 )
 
 /** Child session ids visible in the timeline (running subagent/task rows). */

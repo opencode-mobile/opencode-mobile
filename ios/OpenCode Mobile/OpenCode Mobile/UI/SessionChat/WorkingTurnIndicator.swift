@@ -4,7 +4,9 @@ import Foundation
 /// Reuses product labels from `EventDomainAdapter` (`Working` / `Retrying`),
 /// plus `SessionCompactChrome.statusLabel` while compact is in flight.
 /// After settled assistant content, a still-busy turn shows `thinkingLabel`
-/// unless Retrying. Working stays first when nothing has landed yet.
+/// unless Retrying. Working is only for “no assistant turn yet.” An empty
+/// or still-hidden assistant slot is the wait — do not paint Working over
+/// it or it blinks off as soon as the first part lands.
 /// In-flight questions are hidden from the timeline and shown in the dock —
 /// that dock is the wait state, so do not add a second Thinking line.
 enum WorkingTurnIndicator {
@@ -14,7 +16,8 @@ enum WorkingTurnIndicator {
         statusLabel: String?,
         messages: [SessionChatRow],
         isCompacting: Bool = false,
-        isAwaitingUser: Bool = false
+        isAwaitingUser: Bool = false,
+        assistantTurnExists: Bool = false
     ) -> String? {
         if isCompacting { return SessionCompactChrome.statusLabel }
         if isAwaitingUser { return nil }
@@ -23,7 +26,26 @@ enum WorkingTurnIndicator {
         if statusLabel == "Working", hasSettledAssistantContentAfterLastUser(messages) {
             return thinkingLabel
         }
+        if statusLabel == "Working",
+           assistantTurnExists || !assistantsAfterLastUser(messages).isEmpty
+        {
+            return nil
+        }
         return statusLabel
+    }
+
+    static func assistantTurnExists(_ messages: [Message]) -> Bool {
+        let lastUserIndex = messages.lastIndex(where: { $0.role == .user })
+        let after: ArraySlice<Message>
+        if let lastUserIndex {
+            after = messages[(lastUserIndex + 1)...]
+        } else {
+            after = messages[...]
+        }
+        return after.contains { message in
+            message.role == .assistant
+                && !(message.mode?.compare("compaction", options: [.caseInsensitive]) == .orderedSame)
+        }
     }
 
     private static func assistantsAfterLastUser(_ messages: [SessionChatRow]) -> [SessionChatRow] {

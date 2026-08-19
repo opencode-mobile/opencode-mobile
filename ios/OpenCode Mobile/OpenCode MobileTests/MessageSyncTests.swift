@@ -1513,6 +1513,37 @@ struct MessageSyncTests {
         #expect(updated)
     }
 
+    @Test func messagePartUpdated_namelessToolInfersWebsearchFromMergedQuery() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        try? await Task.sleep(for: .milliseconds(100))
+
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        eventStream.emit(eventWithToolPart(partID: "prt-s", messageID: "msg-2", tool: "", status: "pending", sessionID: "ses-1"))
+        eventStream.emit(
+            eventWithToolPart(
+                partID: "prt-s",
+                messageID: "msg-2",
+                tool: "",
+                status: "completed",
+                sessionID: "ses-1",
+                inputJSON: "{\"query\":\"opencode mobile\"}"
+            )
+        )
+        let updated = await waitUntil {
+            guard case .tool(let tool) = collector.latest()?.first(where: { $0.id == "msg-2" })?.parts.first else {
+                return false
+            }
+            return tool.toolName == "websearch" && tool.status == .completed
+        }
+        task.cancel()
+        #expect(updated)
+    }
+
     @Test func messagePartUpdated_forRestSeededMessageReloadsTimeline() async {
         let repo = FakeLiveMessageRepository()
         repo.messages = [
@@ -1794,10 +1825,19 @@ struct MessageSyncTests {
         return EventDomainAdapter().parseEvent(dataLine: json)!
     }
 
-    private func eventWithToolPart(partID: String, messageID: String, tool: String, status: String, title: String? = nil, sessionID: String) -> OpencodeEvent {
+    private func eventWithToolPart(
+        partID: String,
+        messageID: String,
+        tool: String,
+        status: String,
+        title: String? = nil,
+        sessionID: String,
+        inputJSON: String? = nil
+    ) -> OpencodeEvent {
         let titleJson = title.map { ", \"title\": \"\($0)\"" } ?? ""
+        let inputState = inputJSON.map { ", \"input\": \($0)" } ?? ""
         let json = """
-        {"payload":{"type":"message.part.updated","properties":{"part":{"id":"\(partID)","messageID":"\(messageID)","sessionID":"\(sessionID)","type":"tool","tool":"\(tool)","state":{"status":"\(status)"\(titleJson)}}}}}
+        {"payload":{"type":"message.part.updated","properties":{"part":{"id":"\(partID)","messageID":"\(messageID)","sessionID":"\(sessionID)","type":"tool","tool":"\(tool)","state":{"status":"\(status)"\(titleJson)\(inputState)}}}}}
         """
         return EventDomainAdapter().parseEvent(dataLine: json)!
     }

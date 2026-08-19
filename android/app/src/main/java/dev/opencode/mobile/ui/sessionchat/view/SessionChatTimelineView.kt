@@ -706,6 +706,27 @@ private const val SESSION_CHAT_STATUS_INDICATOR_KEY = "session-chat-status-indic
 /** Feature-local Working/Retrying/Compacting status chrome (not prose). */
 @Composable
 private fun SessionChatWorkingIndicatorRow(label: String) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 4.dp, top = 12.dp, bottom = 8.dp)
+                .semantics { contentDescription = label },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SessionChatWorkingStatusDot()
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun SessionChatWorkingStatusDot() {
     val pulse =
         rememberInfiniteTransition(label = "session-chat-working-dot").animateFloat(
             initialValue = 1f,
@@ -717,32 +738,16 @@ private fun SessionChatWorkingIndicatorRow(label: String) {
                 ),
             label = "session-chat-working-dot-alpha",
         )
-    Row(
+    Box(
         modifier =
             Modifier
-                .fillMaxWidth()
-                .padding(start = 4.dp, top = 12.dp, bottom = 8.dp)
-                .semantics { contentDescription = label },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(6.dp)
-                    .alpha(pulse.value)
-                    .background(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        shape = CircleShape,
-                    ),
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.weight(1f))
-    }
+                .size(6.dp)
+                .alpha(pulse.value)
+                .background(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    shape = CircleShape,
+                ),
+    )
 }
 
 @Composable
@@ -765,7 +770,11 @@ private fun ReasoningBlock(
                 .fillMaxWidth()
                 .padding(start = 4.dp, top = 12.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        if (isStreaming) {
+            SessionChatWorkingStatusDot()
+        }
         Text(
             text = label,
             modifier =

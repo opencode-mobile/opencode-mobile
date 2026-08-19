@@ -1135,7 +1135,8 @@ final class SessionChatViewModel {
                 statusLabel: sessionStatusLabel,
                 messages: timelineState.messages,
                 isCompacting: isCompacting,
-                isAwaitingUser: !permissionRequests.isEmpty || !questionRequests.isEmpty
+                isAwaitingUser: !permissionRequests.isEmpty || !questionRequests.isEmpty,
+                assistantTurnExists: timelineState.assistantTurnExists
             ),
             syncingIndicatorLabel: timelineState.isSyncingMessages
                 ? SessionMessageSyncChrome.statusLabel

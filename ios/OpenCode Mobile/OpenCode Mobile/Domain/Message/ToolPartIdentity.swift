@@ -22,7 +22,13 @@ enum ToolPartIdentity {
         let fromWire = canonical(explicit)
         if !fromWire.isEmpty { return fromWire }
         if hasQuestions(input) { return "question" }
+        if hasNonBlank(input, "query") { return "websearch" }
+        if hasFilePath(input) { return "read" }
         return ""
+    }
+
+    static func resolvedName(explicit: String?, input: [String: AnyCodable]?) -> String {
+        resolvedName(explicit: explicit, input: dictionary(from: input))
     }
 
     static func isQuestion(name: String, input: [String: AnyCodable]?) -> Bool {
@@ -42,12 +48,37 @@ enum ToolPartIdentity {
         if question, tool.status == .pending || tool.status == .running {
             return false
         }
-        if isPlaceholder(tool.toolName), !question { return false }
+        if isPlaceholder(resolvedName(explicit: tool.toolName, input: tool.input)), !question { return false }
         return true
     }
 
     private static func hasQuestions(_ input: [String: Any]?) -> Bool {
         guard let questions = input?["questions"] as? [Any] else { return false }
         return !questions.isEmpty
+    }
+
+    private static func hasFilePath(_ input: [String: Any]?) -> Bool {
+        hasNonBlank(input, "filePath") || hasNonBlank(input, "file")
+    }
+
+    private static func hasNonBlank(_ input: [String: Any]?, _ key: String) -> Bool {
+        guard let value = input?[key] as? String else { return false }
+        return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private static func dictionary(from input: [String: AnyCodable]?) -> [String: Any]? {
+        guard let input else { return nil }
+        var raw: [String: Any] = [:]
+        for (key, value) in input {
+            switch value {
+            case let .string(string):
+                raw[key] = string
+            case let .array(array):
+                raw[key] = array
+            default:
+                continue
+            }
+        }
+        return raw
     }
 }

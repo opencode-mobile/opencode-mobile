@@ -560,9 +560,29 @@ class SessionChatTimelineBlocksTest {
             ).single() as SessionChatTimelineBlock.ToolCard
 
         assertEquals(PresentationBlockId.direct("prt-1"), tool.blockID)
-        assertEquals("Read", tool.title)
+        assertEquals("Explored — 1 read", tool.title)
         assertEquals("src/Main.kt", tool.subtitle)
         assertNull(tool.detailText)
+    }
+
+    @Test
+    fun build_readDoesNotUseDirectoryPathAsSubtitle() {
+        val tool =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "read",
+                            status = ToolStatus.Completed,
+                            id = "prt-1",
+                            input = json("path" to "/home/ivan/Projects/session-test"),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("Explored — 1 read", tool.title)
+        assertNull(tool.subtitle)
     }
 
     @Test
@@ -574,7 +594,7 @@ class SessionChatTimelineBlocksTest {
             ).single() as SessionChatTimelineBlock.ToolCard
 
         assertEquals(PresentationBlockId.direct("prt-1"), tool.blockID)
-        assertEquals("Called glob", tool.title)
+        assertEquals("Explored — 1 glob", tool.title)
         assertNull(tool.subtitle)
     }
 
@@ -595,7 +615,7 @@ class SessionChatTimelineBlocksTest {
                     ),
             ).single() as SessionChatTimelineBlock.ToolCard
 
-        assertEquals("Grep", tool.title)
+        assertEquals("Explored — 1 grep", tool.title)
         assertEquals("Searching…", tool.subtitle)
     }
 
@@ -610,7 +630,7 @@ class SessionChatTimelineBlocksTest {
                             toolName = "read",
                             status = ToolStatus.Completed,
                             id = "prt-1",
-                            input = json("path" to "a.kt"),
+                            input = json("filePath" to "a.kt"),
                         ),
                         MessagePart.Tool(
                             toolName = "grep",
@@ -631,8 +651,34 @@ class SessionChatTimelineBlocksTest {
         assertEquals(PresentationBlockId.toolGroup(listOf("prt-1", "prt-2", "prt-3")), group.blockID)
         assertEquals(3, group.count)
         assertEquals(ToolStatus.Running, group.status)
-        assertEquals("3 tools", group.title)
-        assertEquals("Read · Grep · Glob", group.subtitle)
+        assertEquals("Explored — 1 read · 1 grep · 1 glob", group.title)
+        assertEquals("a.kt", group.subtitle)
+    }
+
+    @Test
+    fun build_consecutiveWebsearchesUseExploredSearchChrome() {
+        val group =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "websearch",
+                            status = ToolStatus.Completed,
+                            id = "prt-1",
+                            input = json("query" to "one"),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "websearch",
+                            status = ToolStatus.Completed,
+                            id = "prt-2",
+                            input = json("query" to "two"),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolGroup
+
+        assertEquals("Explored — 2 searches", group.title)
+        assertEquals("one", group.subtitle)
     }
 
     @Test
@@ -826,9 +872,9 @@ class SessionChatTimelineBlocksTest {
                         ),
                     ),
             ).single() as SessionChatTimelineBlock.ToolCard
-        assertEquals("Search", search.title)
+        assertEquals("Explored — 1 search", search.title)
         assertEquals("opencode mobile", search.subtitle)
-        assertEquals("https://a.example\nhttps://b.example", search.detailText)
+        assertNull(search.detailText)
     }
 
     @Test
@@ -1549,8 +1595,8 @@ class SessionChatTimelineBlocksTest {
         assertEquals(2, blocks.size)
         val group = blocks[0] as SessionChatTimelineBlock.ToolGroup
         assertEquals(PresentationBlockId.toolGroup(listOf("prt-1", "prt-2")), group.blockID)
-        assertEquals("2 tools", group.title)
-        assertEquals("2 reads", group.subtitle)
+        assertEquals("Explored — 2 reads", group.title)
+        assertNull(group.subtitle)
         assertTrue(blocks[1] is SessionChatTimelineBlock.ToolCard)
     }
 
@@ -1587,8 +1633,8 @@ class SessionChatTimelineBlocksTest {
             ).single() as SessionChatTimelineBlock.ToolGroup
         assertEquals(PresentationBlockId.toolGroup(listOf("prt-1", "prt-3")), group.blockID)
         assertEquals(2, group.count)
-        assertEquals("2 tools", group.title)
-        assertEquals("2 reads", group.subtitle)
+        assertEquals("Explored — 2 reads", group.title)
+        assertNull(group.subtitle)
     }
 
     @Test

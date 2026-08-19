@@ -55,12 +55,22 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
-    @Test func labelForActiveTurn_showsWhenAssistantHasBlankTextOnly() {
+    @Test func labelForActiveTurn_hidesWorkingWhenAssistantSlotExists() {
         #expect(
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel: "Working",
                 messages: [user("u1"), assistant("a1", text: "   ")]
-            ) == "Working"
+            ) == nil
+        )
+    }
+
+    @Test func labelForActiveTurn_hidesWorkingWhenUnprojectedAssistantTurnExists() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                messages: [user("u1")],
+                assistantTurnExists: true
+            ) == nil
         )
     }
 

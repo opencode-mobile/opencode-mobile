@@ -706,4 +706,14 @@ class EventDomainAdapterTest {
 
         assertEquals("question", event?.rawProperties?.get("part")?.jsonObject?.get("tool")?.jsonPrimitive?.content)
     }
+
+    @Test
+    fun parseEvent_infersWebsearchToolFromInputQuery() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.next.tool.success","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","input":{"query":"opencode mobile"}}}""",
+            )
+
+        assertEquals("websearch", event?.rawProperties?.get("part")?.jsonObject?.get("tool")?.jsonPrimitive?.content)
+    }
 }

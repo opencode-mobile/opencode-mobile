@@ -451,6 +451,14 @@ struct EventDomainAdapterTests {
         #expect(event?.rawProperties?["part"]?.dictionaryValue?["tool"]?.stringValue == "question")
     }
 
+    @Test func parseEvent_infersWebsearchToolFromInputQuery() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.next.tool.success","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","input":{"query":"opencode mobile"}}}"#
+        )
+        #expect(event?.rawProperties?["part"]?.dictionaryValue?["tool"]?.stringValue == "websearch")
+    }
+
     @Test func parseEvent_projectsLiveTextDeltaUsingOrdinalPartID() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(

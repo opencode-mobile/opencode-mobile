@@ -78,12 +78,22 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
-    fun labelForActiveTurn_showsWhenAssistantHasBlankTextOnly() {
-        assertEquals(
-            "Working",
+    fun labelForActiveTurn_hidesWorkingWhenAssistantSlotExists() {
+        assertNull(
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel = "Working",
                 messages = listOf(user("u1"), assistant("a1", "   ")),
+            ),
+        )
+    }
+
+    @Test
+    fun labelForActiveTurn_hidesWorkingWhenUnprojectedAssistantTurnExists() {
+        assertNull(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Working",
+                messages = listOf(user("u1")),
+                assistantTurnExists = true,
             ),
         )
     }

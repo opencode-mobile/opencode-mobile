@@ -377,6 +377,7 @@ struct SessionChatTimelineRegionState: Equatable {
     var messagesFromCache: Bool = false
     var isSyncingMessages: Bool = false
     var errorMessage: String?
+    var assistantTurnExists: Bool = false
 
     var knownChildSessionIDs: Set<String> {
         Set(

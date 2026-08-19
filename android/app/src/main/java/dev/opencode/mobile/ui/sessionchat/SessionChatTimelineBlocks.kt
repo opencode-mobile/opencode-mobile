@@ -81,7 +81,7 @@ sealed class SessionChatTimelineBlock {
 }
 
 object SessionChatTimelineBlocks {
-    private val contextToolNames = setOf("read", "glob", "grep")
+    private val contextToolNames = setOf("read", "glob", "grep", "websearch")
 
     fun build(
         role: MessageRole,
@@ -391,21 +391,29 @@ object SessionChatTimelineBlocks {
             blockID = PresentationBlockId.toolGroup(memberIds),
             count = tools.size,
             status = status,
-            title = groupTitle(tools.size),
+            title = groupTitle(tools),
             subtitle = groupSubtitle(tools),
             errorText = errorText,
             members = members,
         )
     }
 
-    /** Count headline for the Tool Call Card (`7 tools`). */
-    private fun groupTitle(count: Int): String = "$count tools"
+    /** Context-only groups match TUI (`Explored — 1 read`). Mixed groups stay `N tools`. */
+    private fun groupTitle(tools: List<MessagePart.Tool>): String =
+        if (tools.isNotEmpty() && tools.all { isContextTool(it.toolName) }) {
+            exploredTitle(tools)
+        } else {
+            "${tools.size} tools"
+        }
 
     /**
      * Family one-liner in encounter order (`Edit · Write · 5 shells`).
      * A single member of a family is just the verb; multiples get a count.
      */
-    private fun groupSubtitle(tools: List<MessagePart.Tool>): String {
+    private fun groupSubtitle(tools: List<MessagePart.Tool>): String? {
+        if (tools.isNotEmpty() && tools.all { isContextTool(it.toolName) }) {
+            return tools.firstNotNullOfOrNull(::contextSubtitle)
+        }
         val order = mutableListOf<String>()
         val counts = mutableMapOf<String, Int>()
         for (tool in tools) {
@@ -417,6 +425,41 @@ object SessionChatTimelineBlocks {
             familyPhrase(name, counts.getValue(name))
         }
     }
+
+    private fun exploredTitle(tools: List<MessagePart.Tool>): String {
+        val order = mutableListOf<String>()
+        val counts = mutableMapOf<String, Int>()
+        for (tool in tools) {
+            val key = tool.toolName.lowercase()
+            if (key !in counts) order += key
+            counts[key] = (counts[key] ?: 0) + 1
+        }
+        val summary =
+            order.joinToString(" · ") { name ->
+                exploredFamilyPhrase(name, counts.getValue(name))
+            }
+        return "Explored — $summary"
+    }
+
+    private fun exploredFamilyPhrase(
+        name: String,
+        count: Int,
+    ): String =
+        when (name) {
+            "read" -> if (count == 1) "1 read" else "$count reads"
+            "grep" -> if (count == 1) "1 grep" else "$count greps"
+            "glob" -> if (count == 1) "1 glob" else "$count globs"
+            "websearch" -> if (count == 1) "1 search" else "$count searches"
+            else -> familyPhrase(name, count)
+        }
+
+    private fun contextSubtitle(tool: MessagePart.Tool): String? =
+        when (tool.toolName.lowercase()) {
+            "read" -> readPathSubtitle(tool.input)
+            "glob", "grep" -> patternPathSubtitle(tool.input)
+            "websearch" -> inputString(tool.input, "query")
+            else -> null
+        }
 
     private fun familyPhrase(
         name: String,
@@ -533,25 +576,15 @@ object SessionChatTimelineBlocks {
     ): Chrome? {
         if (isQuestionTool(tool)) return questionChrome(tool)
         return when (name) {
-            "read" -> contextChrome(tool, displayTitle = "Read", subtitle = pathSubtitle(tool.input))
-            "glob" ->
-                contextChrome(
-                    tool,
-                    displayTitle = "Glob",
-                    subtitle = patternPathSubtitle(tool.input),
-                )
-            "grep" ->
-                contextChrome(
-                    tool,
-                    displayTitle = "Grep",
-                    subtitle = patternPathSubtitle(tool.input),
-                )
+            "read" -> contextChrome(tool, subtitle = readPathSubtitle(tool.input))
+            "glob" -> contextChrome(tool, subtitle = patternPathSubtitle(tool.input))
+            "grep" -> contextChrome(tool, subtitle = patternPathSubtitle(tool.input))
             "bash", "shell" -> shellChrome(tool)
             "execute" -> executeChrome(tool)
             "lsp" -> lspChrome(tool)
             "plan_exit" -> planExitChrome(tool)
             "webfetch" -> networkChrome(tool, displayTitle = "Fetch", subtitleKey = "url")
-            "websearch" -> networkChrome(tool, displayTitle = "Search", subtitleKey = "query")
+            "websearch" -> contextChrome(tool, subtitle = inputString(tool.input, "query"))
             "skill" ->
                 Chrome(
                     title = "Skill",
@@ -717,20 +750,12 @@ object SessionChatTimelineBlocks {
 
     private fun contextChrome(
         tool: MessagePart.Tool,
-        displayTitle: String,
         subtitle: String?,
-    ): Chrome {
-        if (subtitle == null) {
-            return Chrome(
-                title = ToolPartIdentity.calledTitle(tool.toolName),
-                subtitle = runningTitleOverride(tool),
-            )
-        }
-        return Chrome(
-            title = displayTitle,
+    ): Chrome =
+        Chrome(
+            title = exploredTitle(listOf(tool)),
             subtitle = runningTitleOverride(tool) ?: subtitle,
         )
-    }
 
     private fun shellChrome(tool: MessagePart.Tool): Chrome {
         val command =
@@ -872,6 +897,10 @@ object SessionChatTimelineBlocks {
 
     private fun pathSubtitle(input: JsonObject?): String? =
         inputString(input, "filePath", "path", "file")
+
+    /** Read chrome is the file, not explore/cwd `path` (often the project root). */
+    private fun readPathSubtitle(input: JsonObject?): String? =
+        inputString(input, "filePath", "file")
 
     private fun patternPathSubtitle(input: JsonObject?): String? {
         val pattern = inputString(input, "pattern")

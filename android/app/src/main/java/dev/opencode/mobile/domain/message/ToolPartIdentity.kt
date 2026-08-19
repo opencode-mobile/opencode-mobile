@@ -2,6 +2,8 @@ package dev.opencode.mobile.domain.message
 
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * v2 tool lifecycle events after `input.started` usually omit `name`. TUI keeps
@@ -31,6 +33,8 @@ object ToolPartIdentity {
         val fromWire = canonical(explicit)
         if (fromWire.isNotEmpty()) return fromWire
         if (hasQuestions(input)) return "question"
+        if (hasNonBlank(input, "query")) return "websearch"
+        if (hasFilePath(input)) return "read"
         return ""
     }
 
@@ -48,10 +52,18 @@ object ToolPartIdentity {
         if (question && (tool.status == ToolStatus.Pending || tool.status == ToolStatus.Running)) {
             return false
         }
-        if (isPlaceholder(tool.toolName) && !question) return false
+        if (isPlaceholder(resolvedName(tool.toolName, tool.input)) && !question) return false
         return true
     }
 
     private fun hasQuestions(input: JsonObject?): Boolean =
         (input?.get("questions") as? JsonArray)?.isNotEmpty() == true
+
+    private fun hasFilePath(input: JsonObject?): Boolean =
+        hasNonBlank(input, "filePath") || hasNonBlank(input, "file")
+
+    private fun hasNonBlank(
+        input: JsonObject?,
+        key: String,
+    ): Boolean = (input?.get(key) as? JsonPrimitive)?.contentOrNull?.isNotBlank() == true
 }

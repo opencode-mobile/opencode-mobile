@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
 
@@ -8,7 +9,9 @@ import dev.opencode.mobile.domain.message.ToolStatus
  * Reuses product labels from [EventDomainAdapter] (`Working` / `Retrying`),
  * plus [SessionCompactChrome.STATUS_LABEL] while compact is in flight.
  * After settled assistant content, a still-busy turn shows [THINKING_LABEL]
- * unless Retrying. Working stays first when nothing has landed yet.
+ * unless Retrying. Working is only for “no assistant turn yet.” An empty
+ * or still-hidden assistant slot is the wait — do not paint Working over
+ * it or it blinks off as soon as the first part lands.
  * In-flight questions are hidden from the timeline and shown in the dock —
  * that dock is the wait state, so do not add a second Thinking line.
  */
@@ -20,6 +23,7 @@ object WorkingTurnIndicator {
         messages: List<SessionChatMessageItem>,
         isCompacting: Boolean = false,
         isAwaitingUser: Boolean = false,
+        assistantTurnExists: Boolean = false,
     ): String? {
         if (isCompacting) return SessionCompactChrome.STATUS_LABEL
         if (isAwaitingUser) return null
@@ -28,7 +32,26 @@ object WorkingTurnIndicator {
         if (statusLabel == "Working" && hasSettledAssistantContentAfterLastUser(messages)) {
             return THINKING_LABEL
         }
+        if (statusLabel == "Working" &&
+            (assistantTurnExists || assistantsAfterLastUser(messages).isNotEmpty())
+        ) {
+            return null
+        }
         return statusLabel
+    }
+
+    fun assistantTurnExists(messages: List<Message>): Boolean {
+        val lastUserIndex = messages.indexOfLast { it.role == MessageRole.User }
+        val after =
+            if (lastUserIndex < 0) {
+                messages
+            } else {
+                messages.drop(lastUserIndex + 1)
+            }
+        return after.any { message ->
+            message.role == MessageRole.Assistant &&
+                !message.mode.equals("compaction", ignoreCase = true)
+        }
     }
 
     private fun assistantsAfterLastUser(messages: List<SessionChatMessageItem>): List<SessionChatMessageItem> {

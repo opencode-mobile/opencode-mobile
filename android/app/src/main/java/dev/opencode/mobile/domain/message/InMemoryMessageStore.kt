@@ -335,11 +335,12 @@ class InMemoryMessageStore
                 msgPartOrder.add(partId)
             }
             val previous = msgParts[partId]
-            msgParts[partId] = resolvedPart
-            if (delta == null) {
+            val stored = mergePart(previous, resolvedPart)
+            msgParts[partId] = stored
+            if (delta == null && replacesStreamSnapshot(resolvedPart)) {
                 clearChunks(sessionId, messageId, partId)
             }
-            val streamingChanged = previous?.isStreamingPart() != resolvedPart.isStreamingPart()
+            val streamingChanged = previous?.isStreamingPart() != stored.isStreamingPart()
             return SessionChangeSet(
                 sessionRevision = 0,
                 changedMessageIds = setOf(messageId),
@@ -756,32 +757,69 @@ class InMemoryMessageStore
             existing: MessagePart?,
             incoming: MessagePart,
         ): MessagePart {
-            if (existing == null) return incoming
+            if (existing == null) {
+                return if (incoming is MessagePart.Tool) {
+                    incoming.copy(toolName = ToolPartIdentity.resolvedName(incoming.toolName, incoming.input))
+                } else {
+                    incoming
+                }
+            }
             val merged =
                 when {
-                    existing is MessagePart.Tool && incoming is MessagePart.Tool ->
+                    existing is MessagePart.Tool && incoming is MessagePart.Tool -> {
+                        val mergedInput = mergeJson(existing.input, incoming.input)
                         existing.copy(
-                            toolName = ToolPartIdentity.coalesce(incoming.toolName, existing.toolName),
+                            toolName =
+                                ToolPartIdentity.resolvedName(
+                                    ToolPartIdentity.coalesce(incoming.toolName, existing.toolName),
+                                    mergedInput,
+                                ),
                             status = incoming.status,
-                            title = incoming.title ?: existing.title,
+                            title = incoming.title?.takeIf { it.isNotBlank() } ?: existing.title,
                             error = incoming.error ?: existing.error,
                             callId = incoming.callId ?: existing.callId,
-                            input = mergeJson(existing.input, incoming.input),
-                            output = incoming.output ?: existing.output,
+                            input = mergedInput,
+                            output = incoming.output?.takeIf { it.isNotEmpty() } ?: existing.output,
                             metadata = mergeJson(existing.metadata, incoming.metadata),
                             timeStartEpochMs = incoming.timeStartEpochMs ?: existing.timeStartEpochMs,
                         )
-                    existing is MessagePart.Text && incoming is MessagePart.Text ->
-                        incoming.copy(
-                            text = incoming.text.ifBlank { existing.text },
-                            isStreaming = false,
+                    }
+                    existing is MessagePart.Text && incoming is MessagePart.Text -> {
+                        val hasSnapshot = incoming.text.isNotBlank()
+                        existing.copy(
+                            text = if (hasSnapshot) incoming.text else existing.text,
+                            isStreaming = if (hasSnapshot) incoming.isStreaming else existing.isStreaming,
+                            id = incoming.id ?: existing.id,
+                            isSynthetic = if (hasSnapshot) incoming.isSynthetic else existing.isSynthetic,
+                            isIgnored = if (hasSnapshot) incoming.isIgnored else existing.isIgnored,
                         )
-                    existing is MessagePart.Reasoning && incoming is MessagePart.Reasoning ->
-                        incoming.copy(
-                            text = incoming.text.ifBlank { existing.text },
-                            isStreaming = false,
+                    }
+                    existing is MessagePart.Reasoning && incoming is MessagePart.Reasoning -> {
+                        val hasSnapshot = incoming.text.isNotBlank()
+                        existing.copy(
+                            text = if (hasSnapshot) incoming.text else existing.text,
+                            isStreaming =
+                                when {
+                                    hasSnapshot -> incoming.isStreaming
+                                    incoming.timeEndEpochMs != null -> false
+                                    else -> existing.isStreaming
+                                },
+                            id = incoming.id ?: existing.id,
                             timeStartEpochMs = incoming.timeStartEpochMs ?: existing.timeStartEpochMs,
                             timeEndEpochMs = incoming.timeEndEpochMs ?: existing.timeEndEpochMs,
+                        )
+                    }
+                    existing is MessagePart.File && incoming is MessagePart.File ->
+                        existing.copy(
+                            filename = incoming.filename.ifBlank { existing.filename },
+                            mime = incoming.mime.ifBlank { existing.mime },
+                            kind = incoming.kind,
+                            dataUrl = incoming.dataUrl.ifBlank { existing.dataUrl },
+                        )
+                    existing is MessagePart.Compaction && incoming is MessagePart.Compaction ->
+                        existing.copy(
+                            auto = existing.auto || incoming.auto,
+                            completed = existing.completed || incoming.completed,
                         )
                     else -> incoming
                 }
@@ -792,10 +830,18 @@ class InMemoryMessageStore
             existing: JsonObject?,
             incoming: JsonObject?,
         ): JsonObject? {
-            if (incoming == null) return existing
-            if (existing == null) return incoming
+            if (incoming == null || incoming.isEmpty()) return existing
+            if (existing == null || existing.isEmpty()) return incoming
             return JsonObject(existing + incoming)
         }
+
+        /** Sparse overlays must not drop live text/reasoning deltas. */
+        private fun replacesStreamSnapshot(incoming: MessagePart): Boolean =
+            when (incoming) {
+                is MessagePart.Text -> incoming.text.isNotBlank()
+                is MessagePart.Reasoning -> incoming.text.isNotBlank()
+                else -> true
+            }
 
         private fun seedPartIdentities(
             sessionId: String,

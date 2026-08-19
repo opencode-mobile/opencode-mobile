@@ -46,6 +46,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
@@ -1707,6 +1708,46 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_namelessToolInfersWebsearchFromMergedQuery() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            eventStream.emit(toolPartEvent(partId = "prt-s", messageId = "msg-2", tool = "", status = "pending"))
+            eventStream.emit(
+                toolPartEvent(
+                    partId = "prt-s",
+                    messageId = "msg-2",
+                    tool = "",
+                    status = "completed",
+                    input = buildJsonObject { put("query", "opencode mobile") },
+                ),
+            )
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val tool =
+                emissions
+                    .last()
+                    .first { it.id == "msg-2" }
+                    .parts
+                    .single() as MessagePart.Tool
+            assertEquals("websearch", tool.toolName)
+            assertEquals(ToolStatus.Completed, tool.status)
+        }
+
+    @Test
     fun observeMessages_partUpdateForRestSeededMessageReloadsTimeline() =
         runTest(testDispatcher) {
             val repository =
@@ -1918,8 +1959,13 @@ class MessageSyncTest {
         messageId: String,
         tool: String,
         status: String,
+        input: JsonObject? = null,
     ): OpencodeEvent {
-        val stateJson = buildJsonObject { put("status", status) }
+        val stateJson =
+            buildJsonObject {
+                put("status", status)
+                input?.let { put("input", it) }
+            }
         val partJson =
             buildJsonObject {
                 put("id", partId)

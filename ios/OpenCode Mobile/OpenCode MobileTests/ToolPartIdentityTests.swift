@@ -25,6 +25,9 @@ struct ToolPartIdentityTests {
         #expect(ToolPartIdentity.resolvedName(explicit: "tool", input: questions) == "question")
         #expect(ToolPartIdentity.resolvedName(explicit: "read", input: questions) == "read")
         #expect(ToolPartIdentity.resolvedName(explicit: nil, input: nil) == "")
+        #expect(ToolPartIdentity.resolvedName(explicit: nil, input: ["filePath": "src/Main.kt"]) == "read")
+        #expect(ToolPartIdentity.resolvedName(explicit: nil, input: ["query": "opencode mobile"]) == "websearch")
+        #expect(ToolPartIdentity.resolvedName(explicit: nil, input: ["path": "/home/ivan/Projects/session-test"]) == "")
     }
 
     @Test func calledTitleDoesNotInventCalledTool() {
@@ -38,5 +41,15 @@ struct ToolPartIdentityTests {
         #expect(!ToolPartIdentity.isVisibleOnTimeline(part))
         #expect(!ToolPartIdentity.isVisibleOnTimeline(ToolPart(id: "prt-1", toolName: "tool", status: .completed)))
         #expect(ToolPartIdentity.isVisibleOnTimeline(ToolPart(id: "prt-2", toolName: "read", status: .running)))
+        #expect(
+            ToolPartIdentity.isVisibleOnTimeline(
+                ToolPart(
+                    id: "prt-3",
+                    toolName: "tool",
+                    status: .completed,
+                    input: ["query": .string("opencode")]
+                )
+            )
+        )
     }
 }

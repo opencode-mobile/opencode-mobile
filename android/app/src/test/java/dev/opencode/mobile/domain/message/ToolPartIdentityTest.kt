@@ -37,6 +37,27 @@ class ToolPartIdentityTest {
         assertEquals("question", ToolPartIdentity.resolvedName("tool", questions))
         assertEquals("read", ToolPartIdentity.resolvedName("read", questions))
         assertEquals("", ToolPartIdentity.resolvedName(null, null))
+        assertEquals(
+            "read",
+            ToolPartIdentity.resolvedName(
+                null,
+                JsonObject(mapOf("filePath" to JsonPrimitive("src/Main.kt"))),
+            ),
+        )
+        assertEquals(
+            "websearch",
+            ToolPartIdentity.resolvedName(
+                null,
+                JsonObject(mapOf("query" to JsonPrimitive("opencode mobile"))),
+            ),
+        )
+        assertEquals(
+            "",
+            ToolPartIdentity.resolvedName(
+                null,
+                JsonObject(mapOf("path" to JsonPrimitive("/home/ivan/Projects/session-test"))),
+            ),
+        )
     }
 
     @Test
@@ -59,6 +80,16 @@ class ToolPartIdentityTest {
         assertTrue(
             ToolPartIdentity.isVisibleOnTimeline(
                 MessagePart.Tool(toolName = "read", status = ToolStatus.Running, id = "prt-2"),
+            ),
+        )
+        assertTrue(
+            ToolPartIdentity.isVisibleOnTimeline(
+                MessagePart.Tool(
+                    toolName = "tool",
+                    status = ToolStatus.Completed,
+                    id = "prt-3",
+                    input = JsonObject(mapOf("query" to JsonPrimitive("opencode"))),
+                ),
             ),
         )
     }

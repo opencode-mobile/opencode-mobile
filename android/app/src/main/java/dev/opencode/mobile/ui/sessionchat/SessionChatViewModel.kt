@@ -1204,6 +1204,7 @@ class SessionChatViewModel
                     messages = messages,
                     isCompacting = isCompacting,
                     isAwaitingUser = permissionRequests.isNotEmpty() || questionRequests.isNotEmpty(),
+                    assistantTurnExists = timelineState.assistantTurnExists,
                 )
             val syncingIndicatorLabel =
                 if (timelineState.isSyncingMessages) {

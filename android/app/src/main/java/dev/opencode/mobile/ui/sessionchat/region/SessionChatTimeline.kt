@@ -25,6 +25,7 @@ import dev.opencode.mobile.ui.sessionchat.TimelineDisplayOrder
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
 import dev.opencode.mobile.ui.sessionchat.TimelineProjector
 import dev.opencode.mobile.ui.sessionchat.TimelineRow
+import dev.opencode.mobile.ui.sessionchat.WorkingTurnIndicator
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -597,6 +598,7 @@ class SessionChatTimeline(
                 isRefreshing = isRefreshing,
                 messagesFromCache = pending.messagesFromCache && !networkCacheSyncConfirmed,
                 isSyncingMessages = pending.messagesFromCache && !networkCacheSyncConfirmed,
+                assistantTurnExists = WorkingTurnIndicator.assistantTurnExists(lastLoadedMessages),
                 errorMessage =
                     if (fromQuietRefresh) {
                         if (merged.isNotEmpty() && state.timeline == SessionChatTimelineState.Error) {
