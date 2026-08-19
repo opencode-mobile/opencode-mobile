@@ -185,3 +185,29 @@ export function assertOpaque(rgba) {
     }
   }
 }
+
+export function applyCircularAlpha(rgba, width, height) {
+  if (width !== height) {
+    throw new Error("circular mask requires a square PNG");
+  }
+  if (rgba.length !== width * height * 4) {
+    throw new Error("RGBA buffer size does not match width*height");
+  }
+  const cx = width / 2;
+  const cy = height / 2;
+  const r = width / 2 - 0.5;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+      const aa = 0.75;
+      let coverage = 1;
+      if (d >= r + aa) coverage = 0;
+      else if (d > r - aa) {
+        const t = (r + aa - d) / (2 * aa);
+        coverage = t * t * (3 - 2 * t);
+      }
+      const i = (y * width + x) * 4 + 3;
+      rgba[i] = Math.round(rgba[i] * coverage);
+    }
+  }
+}

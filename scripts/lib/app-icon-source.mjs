@@ -117,28 +117,6 @@ export function buildFlattenedSvg(parsed, square) {
   });
 }
 
-export function buildCircularSvg(parsed, square) {
-  const side = IOS_SQUARE_SIDE;
-  const r = side / 2;
-  const pathsXml = parsed.paths
-    .map((p) => `    <path d="${p.d}" fill="${p.fill}"/>`)
-    .join("\n");
-  return `<?xml version="1.0" encoding="utf-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${PNG_SIZE}" height="${PNG_SIZE}" viewBox="0 0 ${side} ${side}">
-  <defs>
-    <clipPath id="legacy-circle">
-      <circle cx="${r}" cy="${r}" r="${r}"/>
-    </clipPath>
-  </defs>
-  <g clip-path="url(#legacy-circle)">
-    <rect x="0" y="0" width="${side}" height="${side}" fill="${parsed.backgroundFill}"/>
-    <g transform="translate(${square.translateX},${square.translateY}) scale(${square.scale},${square.scale})">
-${pathsXml}
-    </g>
-  </g>
-</svg>`;
-}
-
 export function buildSilhouetteSvg(parsed, square) {
   return buildSquareSvg({
     backgroundFill: "none",

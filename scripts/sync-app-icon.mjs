@@ -9,10 +9,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
+import { applyCircularAlpha, decodePng, encodePng } from "./lib/png-bytes.mjs";
 import {
   GLASS_FILL,
   SOURCE_SVG,
-  buildCircularSvg,
   buildFlattenedSvg,
   buildSilhouetteSvg,
   buildSquareSvg,
@@ -309,7 +309,7 @@ function writeAndroidAdaptive() {
   writeFileSync(join(outDir, "ic_launcher_round.xml"), adaptive, "utf8");
 }
 
-function writeAndroidLegacyMipmaps(circularSvg) {
+function writeAndroidLegacyMipmaps(squareSvg) {
   const densities = [
     ["mipmap-mdpi", 48],
     ["mipmap-hdpi", 72],
@@ -323,7 +323,10 @@ function writeAndroidLegacyMipmaps(circularSvg) {
     for (const name of ["ic_launcher", "ic_launcher_round"]) {
       const png = join(dir, `${name}.png`);
       const webp = join(dir, `${name}.webp`);
-      renderPng(circularSvg, png, size);
+      renderPng(squareSvg, png, size);
+      const decoded = decodePng(readFileSync(png));
+      applyCircularAlpha(decoded.rgba, decoded.width, decoded.height);
+      writeFileSync(png, encodePng(decoded.rgba, decoded.width, decoded.height, { alpha: true }));
       if (existsSync(webp)) unlinkSync(webp);
     }
   }
@@ -368,8 +371,11 @@ function run() {
   writeAndroidAdaptive();
   writeAndroidSplash(parsed);
   // FAD / aapt / pre-26 launchers show these PNGs unmasked. Keep the
-  // adaptive layers full-bleed; only the fallback rasters are circular.
-  writeAndroidLegacyMipmaps(buildCircularSvg(parsed, deriveInsetSquareTransform(parsed)));
+  // adaptive layers full-bleed; only the fallback rasters get a pixel
+  // circle (SVG clipPath tessellates into a polygon).
+  writeAndroidLegacyMipmaps(
+    buildFlattenedSvg(parsed, deriveInsetSquareTransform(parsed)),
+  );
 
   console.log("app-icon: synced iOS AppIcon + AppIcon.icon + Android adaptive icon + splash from app-icon/source.svg");
 }
