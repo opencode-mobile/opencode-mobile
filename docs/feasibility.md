@@ -9,8 +9,11 @@ running dual-stack clients.
 ## Summary
 
 The apps talk to a user-managed opencode server over HTTP and SSE. Both
-unprefixed (classic) and `/api/*` (v2) surfaces exist. Detect protocol on
-connect; Session Chat live UX tracks official TUI v2.
+unprefixed (classic **v1**) and `/api/*` (**v2**) surfaces stay supported.
+Detect protocol on connect. Session Chat live UX tracks official TUI v2
+shape; v1 servers must keep working. Both protocols must deliver relevant
+live events over SSE (session lifecycle, message/part, status, permissions,
+questions). REST is reconnect / history, not a substitute for SSE.
 
 ```mermaid
 flowchart LR
@@ -25,7 +28,9 @@ flowchart LR
 Used today:
 
 - health: `GET /global/health`, `GET /api/health`
-- events: `GET /global/event`, `GET /api/event`
+- events: v1 `GET /global/event` and instance `GET /event`; v2 `GET /api/event`.
+  Relevant session/message/status/permission/question events on both, not
+  heartbeats only.
 - project: `GET /project`, `GET /project/current`, plus `directory=` scoping
 - sessions: list / create / get / update / delete / fork
 - messages: history + async prompt (`prompt_async` or `POST /api/session/{id}/prompt`)

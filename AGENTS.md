@@ -81,11 +81,24 @@ the docs say otherwise.
 
 ## API Assumptions
 
-- The opencode OpenAPI 3.1 spec at `/doc` is the source of truth.
-- Future Swift and Kotlin clients should be generated or derived from the
-  OpenAPI contract where practical.
-- Generated API types should be wrapped in a small app domain layer so product
-  language remains stable even if server schemas change.
+- Support **both** server protocols on every Connection Profile: classic
+  unprefixed **v1** and `/api/*` **v2**. Detect `v1` | `v2` on connect. Do not
+  remove, skip, or “v2-only” a repository, remote, event path, or test matrix
+  while adding the other protocol.
+- Route protocol differences behind remotes and domain adapters. Feature UI and
+  Screen Models stay on product types, not wire schemas or a v1/v2 UI fork.
+- Live Session Chat **UX** tracks official TUI v2 (`GET /api/event` on opencode
+  `origin/beta`). That is the live *shape* spec, not permission to drop v1.
+- **Both** protocols must deliver relevant live events over SSE (session
+  lifecycle, message/part updates, status, permissions, questions — not just
+  heartbeats) so home and Session Chat update without waiting on REST poll.
+  REST is the reconnect / history authority, not a substitute for missing SSE.
+- v1 event paths: `GET /global/event` **and** instance `GET /event`
+  (directory-scoped). Official desktop uses `/global/event`; instance `/event`
+  is the bus that carries `session.created`, `message.*`, and the rest. Do not
+  treat heartbeat-only as acceptable. v2: `GET /api/event`.
+- The opencode OpenAPI 3.1 spec at `/doc` (v2: `/openapi.json`) is the contract.
+- Generated API types stay behind a small domain adapter.
 - Use the server health endpoint before treating a Connection Profile as usable.
 - Use server-sent events only while the app is foregrounded; refresh on reconnect
   rather than promising reliable background synchronization.

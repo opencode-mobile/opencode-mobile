@@ -2,7 +2,17 @@
 
 ## Endpoint
 
-Use `GET /global/event` for a single app-wide stream. Per-instance `GET /event` is equivalent for one-server v1; global matches multi-project home without per-worktree streams.
+One app-wide stream, protocol-selected: v1 `GET /global/event` **and**
+instance `GET /event`; v2 `GET /api/event`. Keep all three paths. Do not
+collapse to v2-only.
+
+Both protocols must deliver relevant live events over SSE (session
+lifecycle, message/part, status, permissions, questions — not just
+`server.connected` / `server.heartbeat`). Official desktop uses
+`/global/event` for v1; instance `/event` is the directory-scoped bus.
+REST reconnect and the chat watchdog are catch-up after a drop, not a
+substitute for missing SSE. Project v2 types into the existing
+`OpencodeEvent` vocabulary; do not fork Screen Models by protocol.
 
 ## Event envelope
 
