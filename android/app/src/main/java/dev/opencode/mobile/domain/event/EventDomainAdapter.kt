@@ -54,7 +54,13 @@ class EventDomainAdapter(
         id: String?,
     ): List<OpencodeEvent> {
         if (id.isNullOrBlank()) return events
-        return events.map { event -> if (event.id == null) event.copy(id = id) else event }
+        return events.mapIndexed { index, event ->
+            if (event.id != null) {
+                event
+            } else {
+                event.copy(id = if (events.size == 1) id else "$id:$index")
+            }
+        }
     }
 
     private fun propertiesFromData(data: JsonElement?): JsonObject? =
@@ -606,8 +612,11 @@ class EventDomainAdapter(
                     put(
                         "time",
                         buildJsonObject {
-                            put("start", created)
-                            if (completed) put("end", created)
+                            if (completed) {
+                                put("end", created)
+                            } else {
+                                put("start", created)
+                            }
                         },
                     )
                 }

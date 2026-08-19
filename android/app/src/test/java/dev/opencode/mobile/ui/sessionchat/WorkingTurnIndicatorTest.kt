@@ -151,6 +151,26 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
+    fun labelForActiveTurn_ignoresCompletedCompactionSnapshot() {
+        assertEquals(
+            "Working",
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Working",
+                messages =
+                    listOf(
+                        user("u1"),
+                        SessionChatMessageItem(
+                            id = "c1",
+                            role = MessageRole.Assistant,
+                            text = "summary",
+                            metadataLabel = "compaction · m",
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
     fun labelForActiveTurn_showsCompactingEvenWithAssistantContent() {
         assertEquals(
             SessionCompactChrome.STATUS_LABEL,

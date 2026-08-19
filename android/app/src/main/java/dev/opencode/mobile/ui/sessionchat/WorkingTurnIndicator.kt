@@ -35,7 +35,13 @@ object WorkingTurnIndicator {
             } else {
                 messages.drop(lastUserIndex + 1)
             }
-        return candidates.filter { it.role == MessageRole.Assistant }
+        return candidates.filter { it.role == MessageRole.Assistant && !isCompactionSnapshot(it) }
+    }
+
+    private fun isCompactionSnapshot(message: SessionChatMessageItem): Boolean {
+        if (message.metadataLabel.isEmpty()) return false
+        val mode = message.metadataLabel.substringBefore(" · ")
+        return mode.equals("compaction", ignoreCase = true)
     }
 
     private fun hasInProgressAssistantContentAfterLastUser(messages: List<SessionChatMessageItem>): Boolean =

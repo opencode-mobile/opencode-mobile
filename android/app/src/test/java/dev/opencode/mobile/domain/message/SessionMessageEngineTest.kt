@@ -274,6 +274,53 @@ class SessionMessageEngineTest {
     }
 
     @Test
+    fun reasoningEnded_keepsStartFromWhenThinkingBegan() {
+        engine.replaceAll(
+            "ses-1",
+            listOf(
+                Message(
+                    id = "msg-1",
+                    role = MessageRole.Assistant,
+                    text = "",
+                    parts =
+                        listOf(
+                            MessagePart.Reasoning(
+                                text = "hmm",
+                                isStreaming = true,
+                                id = "prt-r",
+                                timeStartEpochMs = 1_000,
+                            ),
+                        ),
+                ),
+            ),
+        )
+        engine.apply(
+            "ses-1",
+            MessagePatch.PartUpdated(
+                buildJsonObject {
+                    put("id", "prt-r")
+                    put("messageID", "msg-1")
+                    put("sessionID", "ses-1")
+                    put("type", "reasoning")
+                    put("text", "hmm")
+                    put(
+                        "time",
+                        buildJsonObject {
+                            put("start", 2_000)
+                            put("end", 2_000)
+                        },
+                    )
+                },
+                delta = null,
+            ),
+        )
+        val reasoning =
+            engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Reasoning>().single()
+        assertEquals(1_000L, reasoning.timeStartEpochMs)
+        assertEquals(2_000L, reasoning.timeEndEpochMs)
+    }
+
+    @Test
     fun runningToolWithoutTime_stampsStartAndPreservesAcrossUpdateAndReplaceAll() {
         engine.replaceAll(
             "ses-1",

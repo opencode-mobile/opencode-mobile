@@ -42,15 +42,14 @@ nonisolated struct EventDomainAdapter: Sendable {
 
     private func stampEnvelopeId(_ events: [OpencodeEvent], id: String?) -> [OpencodeEvent] {
         guard let id, !id.isEmpty else { return events }
-        return events.map { event in
-            event.id == nil
-                ? OpencodeEvent(
-                    type: event.type,
-                    sessionID: event.sessionID,
-                    rawProperties: event.rawProperties,
-                    id: id
-                )
-                : event
+        return events.enumerated().map { index, event in
+            guard event.id == nil else { return event }
+            return OpencodeEvent(
+                type: event.type,
+                sessionID: event.sessionID,
+                rawProperties: event.rawProperties,
+                id: events.count == 1 ? id : "\(id):\(index)"
+            )
         }
     }
 
@@ -579,9 +578,11 @@ nonisolated struct EventDomainAdapter: Sendable {
             part["messageID"] = messageID
         }
         if let created = int64(in: properties, key: "created") {
-            var time: [String: Any] = ["start": created]
+            var time: [String: Any] = [:]
             if completed {
                 time["end"] = created
+            } else {
+                time["start"] = created
             }
             part["time"] = time
         }

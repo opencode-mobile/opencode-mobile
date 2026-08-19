@@ -592,7 +592,7 @@ class InMemoryMessageStore
         ): MessagePart? {
             val incoming = part as? MessagePart.Reasoning ?: return part
             val prior = existing as? MessagePart.Reasoning ?: return part
-            val start = incoming.timeStartEpochMs ?: prior.timeStartEpochMs
+            val start = prior.timeStartEpochMs ?: incoming.timeStartEpochMs
             val end = incoming.timeEndEpochMs ?: prior.timeEndEpochMs
             if (start == incoming.timeStartEpochMs && end == incoming.timeEndEpochMs) return incoming
             return incoming.copy(timeStartEpochMs = start, timeEndEpochMs = end)

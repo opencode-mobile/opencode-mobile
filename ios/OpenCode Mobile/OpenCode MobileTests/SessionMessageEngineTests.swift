@@ -464,6 +464,56 @@ import Testing
         #expect(frame.map(\.id) == ["msg-b"])
     }
 
+    @Test func reasoningEnded_keepsStartFromWhenThinkingBegan() {
+        let engine = makeEngine()
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "msg-1",
+                    role: .assistant,
+                    text: "",
+                    parts: [
+                        .reasoning(
+                            ReasoningPart(
+                                id: "prt-r",
+                                text: "hmm",
+                                isStreaming: true,
+                                timeStartEpochMs: 1_000
+                            )
+                        ),
+                    ],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+        )
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .partUpdated(
+                part: [
+                    "id": .string("prt-r"),
+                    "messageID": .string("msg-1"),
+                    "sessionID": .string("ses-1"),
+                    "type": .string("reasoning"),
+                    "text": .string("hmm"),
+                    "time": .dictionary([
+                        "start": .int64(2_000),
+                        "end": .int64(2_000),
+                    ]),
+                ],
+                delta: nil
+            )
+        )
+        guard case .reasoning(let reasoning) = engine.messages(sessionID: "ses-1").first?.parts.first else {
+            Issue.record("expected reasoning part")
+            return
+        }
+        #expect(reasoning.timeStartEpochMs == 1_000)
+        #expect(reasoning.timeEndEpochMs == 2_000)
+    }
+
     @Test func runningToolWithoutTime_stampsStartAndPreservesAcrossUpdateAndReplaceAll() {
         let engine = makeEngine()
         engine.replaceAll(

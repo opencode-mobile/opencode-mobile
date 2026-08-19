@@ -674,7 +674,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
     private func resolveReasoningTimes(_ part: MessagePart?, existing: MessagePart?) -> MessagePart? {
         guard case .reasoning(let incoming) = part else { return part }
         guard case .reasoning(let prior) = existing else { return part }
-        let start = incoming.timeStartEpochMs ?? prior.timeStartEpochMs
+        let start = prior.timeStartEpochMs ?? incoming.timeStartEpochMs
         let end = incoming.timeEndEpochMs ?? prior.timeEndEpochMs
         guard start != incoming.timeStartEpochMs || end != incoming.timeEndEpochMs else { return part }
         return .reasoning(

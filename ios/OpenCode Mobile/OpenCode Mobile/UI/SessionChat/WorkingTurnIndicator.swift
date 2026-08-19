@@ -30,7 +30,14 @@ enum WorkingTurnIndicator {
         } else {
             candidates = messages[...]
         }
-        return candidates.filter { $0.role == .assistant }
+        return candidates.filter { $0.role == .assistant && !isCompactionSnapshot($0) }
+    }
+
+    private static func isCompactionSnapshot(_ message: SessionChatRow) -> Bool {
+        guard !message.metadataLabel.isEmpty else { return false }
+        let mode = message.metadataLabel.split(separator: " · ", maxSplits: 1, omittingEmptySubsequences: false)
+            .first.map(String.init) ?? message.metadataLabel
+        return mode.compare("compaction", options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
     }
 
     private static func hasInProgressAssistantContentAfterLastUser(_ messages: [SessionChatRow]) -> Bool {

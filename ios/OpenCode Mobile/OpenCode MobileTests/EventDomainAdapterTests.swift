@@ -382,6 +382,38 @@ struct EventDomainAdapterTests {
         #expect(events[1].triggersStatusRefresh == true)
     }
 
+    @Test func parseEvents_promptedTextPartSurvivesDeduper() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"id":"evt_prompt","type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"What are you up to?"}}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
+        #expect(events.map(\.id) == ["evt_prompt:0", "evt_prompt:1"])
+        let deduper = SseEventDeduper()
+        #expect(events.allSatisfy { deduper.accept($0.id) })
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["text"]?.stringValue == "What are you up to?")
+    }
+
+    @Test func parseEvents_stampsDistinctIdsOnProjectedSiblings() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"id":"evt_step","type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
+        )
+        #expect(events.map(\.id) == ["evt_step:0", "evt_step:1"])
+        let deduper = SseEventDeduper()
+        #expect(events.allSatisfy { deduper.accept($0.id) })
+    }
+
+    @Test func parseEvents_projectsReasoningEndedWithEndOnly() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.reasoning.ended","created":2000,"data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"r-1","text":"hmm"}}"#
+        )
+        let time = events.first?.rawProperties?["part"]?.dictionaryValue?["time"]?.dictionaryValue
+        #expect(time?["start"] == nil)
+        #expect(time?["end"]?.int64Value == 2000)
+    }
+
     @Test func parseEvent_readsOfficialSSEEnvelopeWithEventAndJSONStringData() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(

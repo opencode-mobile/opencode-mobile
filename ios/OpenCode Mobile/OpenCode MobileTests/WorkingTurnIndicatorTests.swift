@@ -116,6 +116,23 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
+    @Test func labelForActiveTurn_ignoresCompletedCompactionSnapshot() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                messages: [
+                    user("u1"),
+                    SessionChatRow(
+                        id: "c1",
+                        role: .assistant,
+                        text: "summary",
+                        metadataLabel: "compaction · m"
+                    ),
+                ]
+            ) == "Working"
+        )
+    }
+
     @Test func labelForActiveTurn_showsCompactingWhenIdleStatus() {
         #expect(
             WorkingTurnIndicator.labelForActiveTurn(

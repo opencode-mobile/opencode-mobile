@@ -358,6 +358,47 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvents_promptedTextPartSurvivesDeduper() {
+        val events =
+            adapter.parseEvents(
+                """{"id":"evt_prompt","type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"What are you up to?"}}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
+        assertEquals(listOf("evt_prompt:0", "evt_prompt:1"), events.map { it.id })
+        val deduper = SseEventDeduper()
+        assertTrue(events.all { deduper.accept(it.id) })
+        assertEquals(
+            "What are you up to?",
+            events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content,
+        )
+    }
+
+    @Test
+    fun parseEvents_stampsDistinctIdsOnProjectedSiblings() {
+        val events =
+            adapter.parseEvents(
+                """{"id":"evt_step","type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
+            )
+
+        assertEquals(listOf("evt_step:0", "evt_step:1"), events.map { it.id })
+        val deduper = SseEventDeduper()
+        assertTrue(events.all { deduper.accept(it.id) })
+    }
+
+    @Test
+    fun parseEvents_projectsReasoningEndedWithEndOnly() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.reasoning.ended","created":2000,"data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"r-1","text":"hmm"}}""",
+            )
+
+        val time = events.single().rawProperties?.get("part")?.jsonObject?.get("time")?.jsonObject
+        assertNull(time?.get("start"))
+        assertEquals(2000L, time?.get("end")?.jsonPrimitive?.longOrNull)
+    }
+
+    @Test
     fun parseEvent_projectsLiveExecutionStartedIntoBusyStatus() {
         val event =
             adapter.parseEvent(
