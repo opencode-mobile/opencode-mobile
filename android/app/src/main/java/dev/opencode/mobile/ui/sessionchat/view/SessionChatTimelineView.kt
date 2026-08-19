@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -758,21 +759,31 @@ private fun ReasoningBlock(
             duration != null -> "Thought · $duration"
             else -> "Thought"
         }
-    Text(
-        text = label,
+    Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .then(
-                    if (onClick != null) {
-                        Modifier.clickable(onClick = onClick)
-                    } else {
-                        Modifier
-                    },
-                ).semantics { contentDescription = label },
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+                .padding(start = 4.dp, top = 12.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            modifier =
+                Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .then(
+                        if (onClick != null) {
+                            Modifier
+                                .clickable(role = Role.Button, onClick = onClick)
+                                .semantics { contentDescription = label }
+                        } else {
+                            Modifier.semantics { contentDescription = label }
+                        },
+                    ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 @Composable

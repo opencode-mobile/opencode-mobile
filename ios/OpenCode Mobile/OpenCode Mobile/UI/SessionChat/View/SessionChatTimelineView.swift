@@ -674,14 +674,23 @@ private struct ReasoningBlock: View {
 
     var body: some View {
         let label = thoughtLabel
-        Button(action: onTap) {
+        HStack(alignment: .center, spacing: 8) {
             Text(label)
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textBase)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .font(OpenCodeTypography.body)
+                .foregroundStyle(OpenCodeColors.textWeak)
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
-        .disabled(text.isEmpty)
+        .padding(.leading, 4)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard !text.isEmpty else { return }
+            onTap()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(text.isEmpty ? [] : .isButton)
         .accessibilityLabel(label)
         .accessibilityHint(text.isEmpty ? "" : "Shows the full thought")
     }
