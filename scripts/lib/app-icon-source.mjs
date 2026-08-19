@@ -63,7 +63,7 @@ export function svgTransformToAndroid(transform) {
   };
 }
 
-export function deriveSquareTransform(parsed) {
+export function deriveInsetSquareTransform(parsed) {
   const { viewBoxWidth, viewBoxHeight, transform } = parsed;
   const android = svgTransformToAndroid(transform);
   if (Math.abs(android.scaleX - ANDROID_CANVAS_INSET) > 1e-4) {
@@ -78,15 +78,21 @@ export function deriveSquareTransform(parsed) {
       `source.svg: glyph group scale is not aspect-compensated for the ${viewBoxWidth}x${viewBoxHeight} viewBox (sx=${scaleX}, sy=${scaleY}). iOS square render would still distort.`,
     );
   }
-  const baseScale = scaleX;
-  const baseTx = android.translateX * (IOS_SQUARE_SIDE / viewBoxWidth);
-  const baseTy = android.translateY * (IOS_SQUARE_SIDE / viewBoxHeight);
+  return {
+    scale: scaleX,
+    translateX: android.translateX * (IOS_SQUARE_SIDE / viewBoxWidth),
+    translateY: android.translateY * (IOS_SQUARE_SIDE / viewBoxHeight),
+  };
+}
+
+export function deriveSquareTransform(parsed) {
+  const inset = deriveInsetSquareTransform(parsed);
   const k = IOS_GLYPH_SCALE;
   const c = IOS_SQUARE_SIDE / 2;
   return {
-    scale: baseScale * k,
-    translateX: c - k * (c - baseTx),
-    translateY: c - k * (c - baseTy),
+    scale: inset.scale * k,
+    translateX: c - k * (c - inset.translateX),
+    translateY: c - k * (c - inset.translateY),
   };
 }
 
@@ -109,6 +115,28 @@ export function buildFlattenedSvg(parsed, square) {
     square,
     paths: parsed.paths,
   });
+}
+
+export function buildCircularSvg(parsed, square) {
+  const side = IOS_SQUARE_SIDE;
+  const r = side / 2;
+  const pathsXml = parsed.paths
+    .map((p) => `    <path d="${p.d}" fill="${p.fill}"/>`)
+    .join("\n");
+  return `<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${PNG_SIZE}" height="${PNG_SIZE}" viewBox="0 0 ${side} ${side}">
+  <defs>
+    <clipPath id="legacy-circle">
+      <circle cx="${r}" cy="${r}" r="${r}"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#legacy-circle)">
+    <rect x="0" y="0" width="${side}" height="${side}" fill="${parsed.backgroundFill}"/>
+    <g transform="translate(${square.translateX},${square.translateY}) scale(${square.scale},${square.scale})">
+${pathsXml}
+    </g>
+  </g>
+</svg>`;
 }
 
 export function buildSilhouetteSvg(parsed, square) {
