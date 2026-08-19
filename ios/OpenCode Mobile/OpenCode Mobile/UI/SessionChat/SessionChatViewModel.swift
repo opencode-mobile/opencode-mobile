@@ -43,6 +43,8 @@ final class SessionChatViewModel {
     private var sessionTodos: [SessionTodo] = []
     private var lastTodoLive: Bool?
     private var lastSnackbarKey: String?
+    private var loggedWorkingLamp = false
+    private var lastWorkingLamp: String?
     private var suppressedSnackbarKey: String?
     private var snackbarSequence: UInt64 = 0
     /// Free-text edits log once per dialog / question so keystrokes are not
@@ -1117,6 +1119,21 @@ final class SessionChatViewModel {
             : nextTimelineFrame
         let sessionStatusLabel =
             isCompacting ? SessionCompactChrome.statusLabel : infoState.sessionStatusLabel
+        let awaitingUser = !permissionRequests.isEmpty || !questionRequests.isEmpty
+        let workingIndicatorLabel = WorkingTurnIndicator.labelForActiveTurn(
+            statusLabel: sessionStatusLabel,
+            messages: timelineState.messages,
+            isCompacting: isCompacting,
+            isAwaitingUser: awaitingUser,
+            assistantTurnExists: timelineState.assistantTurnExists
+        )
+        if !loggedWorkingLamp || lastWorkingLamp != workingIndicatorLabel {
+            loggedWorkingLamp = true
+            lastWorkingLamp = workingIndicatorLabel
+            OpenCodeLog.sessionChat.info(
+                "workingLamp label=\(workingIndicatorLabel ?? "none", privacy: .public) status=\(sessionStatusLabel ?? "none", privacy: .public) assistantTurn=\(timelineState.assistantTurnExists ? 1 : 0) awaitingUser=\(awaitingUser ? 1 : 0)"
+            )
+        }
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
@@ -1131,13 +1148,7 @@ final class SessionChatViewModel {
             isRefreshing: timelineState.isRefreshing,
             isAborting: composerState.isAborting,
             sessionStatusLabel: sessionStatusLabel,
-            workingIndicatorLabel: WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel: sessionStatusLabel,
-                messages: timelineState.messages,
-                isCompacting: isCompacting,
-                isAwaitingUser: !permissionRequests.isEmpty || !questionRequests.isEmpty,
-                assistantTurnExists: timelineState.assistantTurnExists
-            ),
+            workingIndicatorLabel: workingIndicatorLabel,
             syncingIndicatorLabel: timelineState.isSyncingMessages
                 ? SessionMessageSyncChrome.statusLabel
                 : nil,

@@ -664,6 +664,40 @@ struct SessionChatTimelineProjectorTests {
         #expect(!kinds.contains(.structure))
     }
 
+    @Test func reasoningComplete_isContentNotLayout() {
+        let firstMessage = makeMessage(
+            id: "msg-1",
+            parts: [.reasoning(ReasoningPart(id: "prt-r", text: "Think", isStreaming: true))],
+            text: ""
+        )
+        let first = project(displayFrame(messages: [DisplayMessage(message: firstMessage)]))
+        let secondMessage = makeMessage(
+            id: "msg-1",
+            parts: [
+                .reasoning(
+                    ReasoningPart(
+                        id: "prt-r",
+                        text: "Think",
+                        isStreaming: false,
+                        timeStartEpochMs: 1,
+                        timeEndEpochMs: 2
+                    )
+                ),
+            ],
+            text: ""
+        )
+        let second = project(
+            displayFrame(revision: 2, messages: [DisplayMessage(message: secondMessage)]),
+            previous: first
+        )
+        #expect(second.changedRowIDs == ["msg-1"])
+        #expect(second.layoutChangedRowIDs.isEmpty)
+        #expect(second.rows[0].layoutRevision == first.rows[0].layoutRevision)
+        let kinds = TimelineApply.classify(second).kinds
+        #expect(kinds.contains(.content))
+        #expect(!kinds.contains(.structure))
+    }
+
     @Test func toolTitleChange_isContentNotLayout() {
         let firstMessage = makeMessage(
             id: "msg-1",

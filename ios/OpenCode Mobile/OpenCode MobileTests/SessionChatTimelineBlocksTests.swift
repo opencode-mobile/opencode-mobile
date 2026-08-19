@@ -90,6 +90,29 @@ struct SessionChatTimelineBlocksTests {
         #expect(SessionChatTimelineBlocks.thoughtDurationLabel(nil) == nil)
     }
 
+    @Test func build_keepsBlankCompletedReasoningAsThinking() {
+        let blocks = okBlocks(
+            parts: [
+                .reasoning(
+                    ReasoningPart(
+                        id: "r1",
+                        text: "",
+                        isStreaming: false,
+                        timeStartEpochMs: 1,
+                        timeEndEpochMs: 2
+                    )
+                ),
+            ]
+        )
+        guard case .reasoning(_, let text, let isStreaming, let durationMs) = blocks.first else {
+            Issue.record("expected reasoning")
+            return
+        }
+        #expect(text.isEmpty)
+        #expect(isStreaming)
+        #expect(durationMs == nil)
+    }
+
     @Test func build_reasoningPart_includesDuration() {
         let blocks = okBlocks(
             parts: [

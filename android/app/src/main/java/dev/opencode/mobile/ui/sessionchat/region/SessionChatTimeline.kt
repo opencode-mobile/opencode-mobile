@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.ThoughtPartChrome
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.sessionchat.ContentRevision
 import dev.opencode.mobile.ui.sessionchat.DisplayFrame
@@ -588,7 +589,11 @@ class SessionChatTimeline(
                 "layoutChanged=${stamped.layoutChangedRowIDs.size} " +
                 "decorate=${stamped.decorateRowIDs.size} grewBottom=${stamped.grewBottomRowIDs.size} " +
                 "layoutAffectingRev=${stamped.layoutAffectingRevision()} " +
-                "growBottomRev=${stamped.growBottomRevision()}",
+                "growBottomRev=${stamped.growBottomRevision()} " +
+                ThoughtPartChrome.summarize(
+                    messages = lastLoadedMessages,
+                    paintedCount = merged.size,
+                ),
         )
         _state.update { state ->
             state.copy(

@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
     private let lock = NSLock()
@@ -366,6 +367,14 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         let previous = partsCache[sessionID]?[messageID]?[partID]
         let stored = mergePart(existing: previous, incoming: resolvedPart)
         partsCache[sessionID]?[messageID]?[partID] = stored
+        logReasoningOverlay(
+            sessionID: sessionID,
+            messageID: messageID,
+            partID: partID,
+            previous: previous,
+            stored: stored,
+            inserted: insertedPart
+        )
         if delta == nil, replacesStreamSnapshot(resolvedPart) {
             clearChunks(sessionID: sessionID, messageID: messageID, partID: partID)
         }
@@ -1108,5 +1117,27 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         default:
             false
         }
+    }
+
+    private func logReasoningOverlay(
+        sessionID: String,
+        messageID: String,
+        partID: String,
+        previous: MessagePart?,
+        stored: MessagePart,
+        inserted: Bool
+    ) {
+        guard case let .reasoning(storedReasoning) = stored else { return }
+        let from: String
+        if case let .reasoning(previousReasoning)? = previous {
+            from = ThoughtPartChrome.paintLabel(previousReasoning)
+        } else {
+            from = "none"
+        }
+        let to = ThoughtPartChrome.paintLabel(storedReasoning)
+        guard inserted || from != to else { return }
+        OpenCodeLog.messageStore.info(
+            "reasoning overlay session=\(sessionID, privacy: .public) message=\(messageID, privacy: .public) part=\(partID, privacy: .public) from=\(from, privacy: .public) to=\(to, privacy: .public) inserted=\(inserted ? 1 : 0) chars=\(storedReasoning.text.count) streaming=\(storedReasoning.isStreaming ? 1 : 0) end=\(storedReasoning.timeEndEpochMs == nil ? 0 : 1)"
+        )
     }
 }

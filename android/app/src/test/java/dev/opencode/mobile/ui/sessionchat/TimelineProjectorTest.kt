@@ -1204,6 +1204,40 @@ class TimelineProjectorTest {
     }
 
     @Test
+    fun project_reasoningComplete_isContentNotLayout() {
+        val first =
+            projectAssistant(
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(text = "Think", isStreaming = true, id = "prt-r"),
+                    ),
+                frameRevision = 1L,
+            )
+        val second =
+            projectAssistant(
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(
+                            text = "Think",
+                            isStreaming = false,
+                            id = "prt-r",
+                            timeStartEpochMs = 1,
+                            timeEndEpochMs = 2,
+                        ),
+                    ),
+                frameRevision = 2L,
+                previous = first,
+            )
+
+        assertEquals(setOf("msg-1"), second.changedRowIDs)
+        assertTrue(second.layoutChangedRowIDs.isEmpty())
+        assertEquals(first.rows.single().layoutRevision, second.rows.single().layoutRevision)
+        val apply = TimelineApply.classify(second)
+        assertTrue(apply.kinds.contains(TimelineApplyKind.Content))
+        assertFalse(apply.kinds.contains(TimelineApplyKind.Structure))
+    }
+
+    @Test
     fun project_toolTitleChange_isContentNotLayout() {
         val first =
             projectAssistant(

@@ -79,6 +79,29 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
+    fun build_keepsBlankCompletedReasoningAsThinking() {
+        val result =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(
+                            text = "",
+                            isStreaming = false,
+                            id = "r1",
+                            timeStartEpochMs = 1,
+                            timeEndEpochMs = 2,
+                        ),
+                    ),
+            )
+        val thought = (result as SessionChatTimelineBlocksResult.Ok).blocks.single()
+            as SessionChatTimelineBlock.Reasoning
+        assertTrue(thought.isStreaming)
+        assertEquals("", thought.text)
+        assertNull(thought.durationMs)
+    }
+
+    @Test
     fun build_reasoningPart_becomesThoughtBlock() {
         val result =
             SessionChatTimelineBlocks.build(

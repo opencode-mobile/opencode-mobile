@@ -24,4 +24,6 @@ Still binding:
   non-context groups stay `N tools`.
 - Streaming thought chrome is `Thinking` with the same pulsing status
   dot as Working. Finished thought is `Thought` / `Thought · Nms` with
-  no dot.
+  no dot. The thought row is one stable item (TUI): keep it once the
+  part exists, and only change the label. Do not drop or remount it
+  between Thinking and Thought.

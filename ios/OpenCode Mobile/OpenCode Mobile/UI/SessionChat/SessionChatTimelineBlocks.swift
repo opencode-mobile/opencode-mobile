@@ -168,17 +168,20 @@ nonisolated enum SessionChatTimelineBlocks {
             case .reasoning(let reasoning):
                 flushText()
                 let trimmed = reasoning.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty || reasoning.isStreaming {
+                if isLiveReasoning(reasoning) {
                     guard let partId = reasoning.id else { return .missingPartIds }
+                    let thinking = reasoning.isStreaming || trimmed.isEmpty
                     blocks.append(
                         .reasoning(
                             blockID: PresentationBlockId.direct(partId),
                             text: trimmed,
-                            isStreaming: reasoning.isStreaming,
-                            durationMs: Self.thoughtDurationMs(
-                                start: reasoning.timeStartEpochMs,
-                                end: reasoning.timeEndEpochMs
-                            )
+                            isStreaming: thinking,
+                            durationMs: thinking
+                                ? nil
+                                : Self.thoughtDurationMs(
+                                    start: reasoning.timeStartEpochMs,
+                                    end: reasoning.timeEndEpochMs
+                                )
                         )
                     )
                 }
@@ -385,6 +388,14 @@ nonisolated enum SessionChatTimelineBlocks {
         return duration >= 0 ? duration : nil
     }
 
+    /// TUI keeps one thought row once the part exists. Do not drop it between Thinking and Thought.
+    private static func isLiveReasoning(_ part: ReasoningPart) -> Bool {
+        part.isStreaming
+            || !part.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || part.timeStartEpochMs != nil
+            || part.timeEndEpochMs != nil
+    }
+
     private static func isVisibleTool(_ tool: ToolPart) -> Bool {
         ToolPartIdentity.isVisibleOnTimeline(tool)
     }
@@ -404,8 +415,7 @@ nonisolated enum SessionChatTimelineBlocks {
         case .file:
             false
         case .reasoning(let reasoning):
-            !reasoning.isStreaming
-                && reasoning.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            !isLiveReasoning(reasoning)
         }
     }
 

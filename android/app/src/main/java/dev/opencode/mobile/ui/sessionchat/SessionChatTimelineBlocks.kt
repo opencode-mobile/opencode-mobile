@@ -169,14 +169,20 @@ object SessionChatTimelineBlocks {
                 is MessagePart.Reasoning -> {
                     if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
                     val trimmed = part.text.trim()
-                    if (trimmed.isNotEmpty() || part.isStreaming) {
+                    if (isLiveReasoning(part)) {
                         val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                        val thinking = part.isStreaming || trimmed.isEmpty()
                         blocks +=
                             SessionChatTimelineBlock.Reasoning(
                                 blockID = PresentationBlockId.direct(partId),
                                 text = trimmed,
-                                isStreaming = part.isStreaming,
-                                durationMs = thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs),
+                                isStreaming = thinking,
+                                durationMs =
+                                    if (thinking) {
+                                        null
+                                    } else {
+                                        thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs)
+                                    },
                             )
                     }
                     index += 1
@@ -345,6 +351,13 @@ object SessionChatTimelineBlocks {
         return duration.takeIf { it >= 0 }
     }
 
+    /** TUI keeps one thought row once the part exists. Do not drop it between Thinking and Thought. */
+    private fun isLiveReasoning(part: MessagePart.Reasoning): Boolean =
+        part.isStreaming ||
+            part.text.isNotBlank() ||
+            part.timeStartEpochMs != null ||
+            part.timeEndEpochMs != null
+
     private fun isVisibleTool(tool: MessagePart.Tool): Boolean = ToolPartIdentity.isVisibleOnTimeline(tool)
 
     /**
@@ -358,7 +371,7 @@ object SessionChatTimelineBlocks {
             is MessagePart.Text -> !part.isDisplayable || part.text.isBlank()
             is MessagePart.Tool -> !isVisibleTool(part)
             is MessagePart.File -> false
-            is MessagePart.Reasoning -> !part.isStreaming && part.text.isBlank()
+            is MessagePart.Reasoning -> !isLiveReasoning(part)
         }
 
     private fun isContextTool(toolName: String): Boolean = toolName.lowercase() in contextToolNames

@@ -5,6 +5,7 @@ nonisolated enum OpenCodeLog {
     static let api = Logger(subsystem: subsystem, category: "api")
     static let sse = Logger(subsystem: subsystem, category: "sse")
     static let sessionChat = Logger(subsystem: subsystem, category: "session-chat")
+    static let messageStore = Logger(subsystem: subsystem, category: "MessageStore")
     static let changes = Logger(subsystem: subsystem, category: "changes")
     static let messageContent = Logger(subsystem: subsystem, category: "MessageContentPreparer")
 

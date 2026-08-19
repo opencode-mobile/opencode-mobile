@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.message
 
+import android.util.Log
 import dev.opencode.mobile.data.remote.dto.MessageInfoDto
 import dev.opencode.mobile.data.remote.dto.MessagePartDto
 import kotlinx.serialization.json.Json
@@ -337,6 +338,14 @@ class InMemoryMessageStore
             val previous = msgParts[partId]
             val stored = mergePart(previous, resolvedPart)
             msgParts[partId] = stored
+            logReasoningOverlay(
+                sessionId = sessionId,
+                messageId = messageId,
+                partId = partId,
+                previous = previous,
+                stored = stored,
+                inserted = insertedPart,
+            )
             if (delta == null && replacesStreamSnapshot(resolvedPart)) {
                 clearChunks(sessionId, messageId, partId)
             }
@@ -900,6 +909,31 @@ class InMemoryMessageStore
                 else -> false
             }
 
+        private fun logReasoningOverlay(
+            sessionId: String,
+            messageId: String,
+            partId: String,
+            previous: MessagePart?,
+            stored: MessagePart,
+            inserted: Boolean,
+        ) {
+            val previousReasoning = previous as? MessagePart.Reasoning
+            val storedReasoning = stored as? MessagePart.Reasoning ?: return
+            val from = previousReasoning?.let(ThoughtPartChrome::paintLabel) ?: "none"
+            val to = ThoughtPartChrome.paintLabel(storedReasoning)
+            if (!inserted && from == to) return
+            runCatching {
+                Log.i(
+                    STORE_TAG,
+                    "reasoning overlay session=$sessionId message=$messageId part=$partId " +
+                        "from=$from to=$to inserted=${if (inserted) 1 else 0} " +
+                        "chars=${storedReasoning.text.length} " +
+                        "streaming=${if (storedReasoning.isStreaming) 1 else 0} " +
+                        "end=${if (storedReasoning.timeEndEpochMs != null) 1 else 0}",
+                )
+            }
+        }
+
         private fun tryParsePartDto(jsonObject: JsonObject): MessagePartDto? =
             runCatching {
                 json.decodeFromJsonElement<MessagePartDto>(jsonObject)
@@ -912,4 +946,7 @@ class InMemoryMessageStore
 
         private fun Message.hasRenderableContent(): Boolean = text.isNotBlank() || parts.isNotEmpty()
 
+        companion object {
+            private const val STORE_TAG = "MessageStore"
+        }
     }

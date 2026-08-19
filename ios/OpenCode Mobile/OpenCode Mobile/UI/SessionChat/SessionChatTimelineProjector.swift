@@ -410,8 +410,8 @@ nonisolated enum SessionChatTimelineProjector {
                 "g:\(id):\(group.count):\(group.errorText != nil)"
             case .childSessionRow(let id, let row):
                 "r:\(id):\(row.childSessionId != nil)"
-            case .reasoning(let id, _, let isStreaming, _):
-                "n:\(id):\(isStreaming)"
+            case .reasoning(let id, _, _, _):
+                "n:\(id)"
             }
         }.joined(separator: "|")
         return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(blockKey)"
@@ -442,8 +442,8 @@ nonisolated enum SessionChatTimelineProjector {
                 "g:\(id):\(group.count)"
             case .childSessionRow(let id, let row):
                 "r:\(id):\(row.childSessionId != nil)"
-            case .reasoning(let id, _, let isStreaming, let durationMs):
-                "n:\(id):\(isStreaming):\(durationMs ?? -1)"
+            case .reasoning(let id, _, _, _):
+                "n:\(id)"
             }
         }.joined(separator: "|")
         return "\(row.blocks.count)|\(attachments)|\(blocks)"
