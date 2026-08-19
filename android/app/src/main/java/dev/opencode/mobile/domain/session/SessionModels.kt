@@ -155,6 +155,7 @@ data class PermissionRequest(
 data class QuestionOption(
     val label: String,
     val description: String,
+    val value: String = label,
 )
 
 data class QuestionInfo(

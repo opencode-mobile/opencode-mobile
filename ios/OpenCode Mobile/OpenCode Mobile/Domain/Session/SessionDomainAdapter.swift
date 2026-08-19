@@ -181,7 +181,7 @@ nonisolated struct SessionDomainAdapter: Sendable {
         QuestionInfo(
             question: dto.question,
             header: dto.header,
-            options: dto.options.map { QuestionOption(label: $0.label, description: $0.description ?? "") },
+            options: dto.options.map { QuestionOption(label: $0.label, description: $0.description ?? "", value: $0.label) },
             multiple: dto.multiple ?? false,
             custom: dto.custom != false
         )
@@ -203,12 +203,26 @@ nonisolated struct SessionDomainAdapter: Sendable {
         })
     }
 
+    func formAnswer(questions: [QuestionInfo], answers: [[String]]) -> [String: String] {
+        guard !questions.isEmpty else { return formAnswer(from: answers) }
+        return Dictionary(uniqueKeysWithValues: questions.enumerated().map { index, question in
+            let selected = answers.indices.contains(index) ? (answers[index].first ?? "") : ""
+            let key = question.fieldKey ?? "q\(index)"
+            let value = question.options.first { $0.label == selected || $0.value == selected }?.value ?? selected
+            return (key, value)
+        })
+    }
+
     private func questionInfo(from field: V2FormFieldDTO, formTitle: String?) -> QuestionInfo {
         QuestionInfo(
             question: field.description ?? field.title ?? field.key,
             header: field.title ?? formTitle ?? field.key,
             options: field.options.map { option in
-                QuestionOption(label: option.label ?? option.value ?? "", description: option.description ?? "")
+                QuestionOption(
+                    label: option.label ?? option.value ?? "",
+                    description: option.description ?? "",
+                    value: option.value ?? option.label
+                )
             },
             multiple: field.multiple ?? false,
             custom: field.custom != false,

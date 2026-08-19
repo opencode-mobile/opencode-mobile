@@ -657,7 +657,8 @@ final class SessionChatViewModel {
                 questionID: request.id,
                 answers: answers,
                 directory: worktree,
-                sessionID: request.sessionID
+                sessionID: request.sessionID,
+                questions: request.questions
             )
         } catch {
             await handleQuestionMutationFailure(requestID: request.id, error: error, dismiss: false)

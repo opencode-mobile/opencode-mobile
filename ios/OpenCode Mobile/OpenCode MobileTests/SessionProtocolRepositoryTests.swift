@@ -375,6 +375,43 @@ struct SessionProtocolRepositoryTests {
         #expect(request.url?.path.hasSuffix("/api/session/ses_1/question/que_1/reply") == true)
     }
 
+    @Test func v2ReplyToFormUsesFieldKeysAndOptionValues() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+        let questions = [
+            QuestionInfo(
+                question: "Allow OpenCode to search the web for up-to-date information?",
+                header: "Web Search",
+                options: [
+                    QuestionOption(
+                        label: "Allow search via Exa, Firecrawl, Parallel, Tavily",
+                        description: "",
+                        value: "allow"
+                    ),
+                ],
+                multiple: false,
+                custom: false,
+                fieldKey: "choice"
+            ),
+        ]
+
+        let ok = try await repository.replyToQuestion(
+            questionID: "frm_1",
+            answers: [["Allow search via Exa, Firecrawl, Parallel, Tavily"]],
+            directory: "/repo",
+            sessionID: "ses_1",
+            questions: questions
+        )
+
+        #expect(ok)
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        #expect(request.url?.path.hasSuffix("/api/session/ses_1/form/frm_1/reply") == true)
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first.flatMap { $0 })
+        #expect(body.contains(#""choice""#))
+        #expect(body.contains(#""allow""#))
+        #expect(!body.contains(#""q0""#))
+    }
+
     @Test func v2AbortSessionPostsInterrupt() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [.noContent])
         let repository = makeSessionRepository(serverProtocol: .v2)

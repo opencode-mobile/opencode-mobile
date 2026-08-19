@@ -136,11 +136,22 @@ struct ProtocolSelectedSessionRemote: SessionRemote, Sendable {
         directory: String?,
         sessionID: String?
     ) async throws -> Bool {
+        try await replyToQuestion(questionID: questionID, answers: answers, directory: directory, sessionID: sessionID, questions: [])
+    }
+
+    func replyToQuestion(
+        questionID: String,
+        answers: [[String]],
+        directory: String?,
+        sessionID: String?,
+        questions: [QuestionInfo]
+    ) async throws -> Bool {
         try await selected().replyToQuestion(
             questionID: questionID,
             answers: answers,
             directory: directory,
-            sessionID: sessionID
+            sessionID: sessionID,
+            questions: questions
         )
     }
 

@@ -23,6 +23,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -507,6 +508,55 @@ class SessionProtocolRepositoryTest {
             assertTrue(ok)
             assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/question/que_1/reply"))
             assertTrue(requests.single().requestBodyText().contains("\"answers\""))
+        }
+
+    @Test
+    fun v2ReplyToForm_sendsFieldKeysAndOptionValues() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+            val questions =
+                listOf(
+                    QuestionInfo(
+                        question = "Allow OpenCode to search the web for up-to-date information?",
+                        header = "Web Search",
+                        options =
+                            listOf(
+                                QuestionOption(
+                                    label = "Allow search via Exa, Firecrawl, Parallel, Tavily",
+                                    description = "",
+                                    value = "allow",
+                                ),
+                            ),
+                        fieldKey = "choice",
+                    ),
+                )
+
+            val ok =
+                repository.replyToQuestion(
+                    "ses_1",
+                    "frm_1",
+                    listOf(listOf("Allow search via Exa, Firecrawl, Parallel, Tavily")),
+                    questions,
+                    "/repo",
+                )
+
+            assertTrue(ok)
+            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/form/frm_1/reply"))
+            val body = requests.single().requestBodyText()
+            assertTrue(body.contains("\"choice\""))
+            assertTrue(body.contains("\"allow\""))
+            assertFalse(body.contains("q0"))
         }
 
     @Test

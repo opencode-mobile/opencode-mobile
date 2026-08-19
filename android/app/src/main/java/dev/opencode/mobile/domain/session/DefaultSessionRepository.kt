@@ -208,8 +208,16 @@ class DefaultSessionRepository
             requestId: String,
             answers: List<List<String>>,
             directory: String?,
+        ): Boolean = replyToQuestion(sessionId, requestId, answers, emptyList(), directory)
+
+        override suspend fun replyToQuestion(
+            sessionId: String,
+            requestId: String,
+            answers: List<List<String>>,
+            questions: List<QuestionInfo>,
+            directory: String?,
         ): Boolean =
-            runCatching { remote.replyToQuestion(sessionId, requestId, answers, directory) }
+            runCatching { remote.replyToQuestion(sessionId, requestId, answers, questions, directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun rejectQuestion(

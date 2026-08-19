@@ -159,8 +159,15 @@ struct PermissionRequest: Sendable, Equatable, Identifiable {
 struct QuestionOption: Sendable, Equatable, Identifiable {
     let label: String
     let description: String
+    let value: String
 
     var id: String { label }
+
+    init(label: String, description: String, value: String? = nil) {
+        self.label = label
+        self.description = description
+        self.value = value ?? label
+    }
 }
 
 struct QuestionInfo: Sendable, Equatable {
