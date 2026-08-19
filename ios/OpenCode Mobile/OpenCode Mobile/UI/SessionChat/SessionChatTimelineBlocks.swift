@@ -495,10 +495,8 @@ nonisolated enum SessionChatTimelineBlocks {
         guard let partId = tool.id else { return nil }
         let agentName = taskAgentName(tool)
         let secondLine =
-            nonEmpty(tool.title).flatMap { title in
-                title.lowercased() == tool.toolName.lowercased() ? nil : title
-            }
-            ?? inputString(tool.input, keys: "description", "prompt")
+            inputString(tool.input, keys: "description", "prompt")
+            ?? childSessionTitle(tool)
         return .childSessionRow(
             blockID: PresentationBlockId.direct(partId),
             row: SessionChatChildSessionRowBlock(
@@ -753,9 +751,23 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func taskAgentName(_ tool: ToolPart) -> String {
-        inputString(tool.input, keys: "agent")
+        inputString(tool.input, keys: "agent", "subagent_type")
             ?? metadataString(tool.metadata, keys: "agent")
-            ?? "Task"
+            ?? (tool.toolName.compare("subagent", options: .caseInsensitive) == .orderedSame ? "General" : "Task")
+    }
+
+    private static func childSessionTitle(_ tool: ToolPart) -> String? {
+        guard let title = nonEmpty(tool.title) else { return nil }
+        if title.lowercased() == tool.toolName.lowercased() { return nil }
+        if isCompositeChildTitle(title) { return nil }
+        return title
+    }
+
+    private static func isCompositeChildTitle(_ title: String) -> Bool {
+        let lower = title.lowercased()
+        return lower.contains(" subagent")
+            || title.contains(" — ")
+            || title.contains(" – ")
     }
 
     private static func isChildSessionTool(_ toolName: String) -> Bool {

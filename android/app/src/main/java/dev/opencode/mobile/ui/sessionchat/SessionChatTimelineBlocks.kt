@@ -447,9 +447,8 @@ object SessionChatTimelineBlocks {
         val partId = tool.id ?: return null
         val agentName = taskAgentName(tool)
         val secondLine =
-            tool.title
-                ?.takeIf { it.isNotEmpty() && !it.equals(tool.toolName, ignoreCase = true) }
-                ?: inputString(tool.input, "description", "prompt")
+            inputString(tool.input, "description", "prompt")
+                ?: childSessionTitle(tool)
         return SessionChatTimelineBlock.ChildSessionRow(
             blockID = PresentationBlockId.direct(partId),
             agentName = agentName,
@@ -675,9 +674,23 @@ object SessionChatTimelineBlocks {
     }
 
     private fun taskAgentName(tool: MessagePart.Tool): String =
-        inputString(tool.input, "agent")
+        inputString(tool.input, "agent", "subagent_type")
             ?: metadataString(tool.metadata, "agent")
-            ?: "Task"
+            ?: if (tool.toolName.equals("subagent", ignoreCase = true)) "General" else "Task"
+
+    private fun childSessionTitle(tool: MessagePart.Tool): String? {
+        val title = tool.title?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        if (title.equals(tool.toolName, ignoreCase = true)) return null
+        if (isCompositeChildTitle(title)) return null
+        return title
+    }
+
+    private fun isCompositeChildTitle(title: String): Boolean {
+        val lower = title.lowercase()
+        return lower.contains(" subagent") ||
+            title.contains(" — ") ||
+            title.contains(" – ")
+    }
 
     private fun isChildSessionTool(toolName: String): Boolean {
         val name = toolName.lowercase()

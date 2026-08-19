@@ -891,7 +891,7 @@ class SessionChatTimelineBlocksTest {
 
         assertEquals("Task", row.agentName)
         assertEquals("T", row.letter)
-        assertEquals("Working…", row.secondLine)
+        assertEquals("Investigate flaky tests", row.secondLine)
         assertNull(row.childSessionId)
         assertFalse(row.isBackground)
         assertNull(row.timeStartEpochMs)
@@ -914,6 +914,47 @@ class SessionChatTimelineBlocksTest {
             ).single() as SessionChatTimelineBlock.ChildSessionRow
 
         assertEquals("Task", row.agentName)
+    }
+
+    @Test
+    fun build_subagentDefaultsToGeneralAndPrefersDescriptionOverCompositeTitle() {
+        val row =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "subagent",
+                            status = ToolStatus.Running,
+                            id = "prt-1",
+                            title = "General Subagent – First 7 days of October 2026",
+                            input = json("description" to "First 7 days of October 2026"),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ChildSessionRow
+
+        assertEquals("General", row.agentName)
+        assertEquals("G", row.letter)
+        assertEquals("First 7 days of October 2026", row.secondLine)
+    }
+
+    @Test
+    fun build_subagentUsesSubagentTypeBeforeDefault() {
+        val row =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "subagent",
+                            status = ToolStatus.Running,
+                            id = "prt-1",
+                            input = json("subagent_type" to "explore"),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ChildSessionRow
+
+        assertEquals("explore", row.agentName)
     }
 
     @Test

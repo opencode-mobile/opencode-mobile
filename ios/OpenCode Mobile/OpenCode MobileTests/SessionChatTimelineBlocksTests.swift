@@ -606,7 +606,7 @@ struct SessionChatTimelineBlocksTests {
         }
         #expect(row.agentName == "Task")
         #expect(row.letter == "T")
-        #expect(row.secondLine == "Working…")
+        #expect(row.secondLine == "Investigate flaky tests")
         #expect(row.childSessionId == nil)
         #expect(row.isBackground == false)
         #expect(row.timeStartEpochMs == nil)
@@ -630,6 +630,49 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(row.agentName == "Task")
+    }
+
+    @Test func build_subagentDefaultsToGeneralAndPrefersDescriptionOverCompositeTitle() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "prt-1",
+                        toolName: "subagent",
+                        status: .running,
+                        title: "General Subagent – First 7 days of October 2026",
+                        input: ["description": .string("First 7 days of October 2026")]
+                    )
+                ),
+            ]
+        )
+        guard case .childSessionRow(_, let row) = blocks.first else {
+            Issue.record("Expected child session row")
+            return
+        }
+        #expect(row.agentName == "General")
+        #expect(row.letter == "G")
+        #expect(row.secondLine == "First 7 days of October 2026")
+    }
+
+    @Test func build_subagentUsesSubagentTypeBeforeDefault() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "prt-1",
+                        toolName: "subagent",
+                        status: .running,
+                        input: ["subagent_type": .string("explore")]
+                    )
+                ),
+            ]
+        )
+        guard case .childSessionRow(_, let row) = blocks.first else {
+            Issue.record("Expected child session row")
+            return
+        }
+        #expect(row.agentName == "explore")
     }
 
     @Test func build_pendingTaskQuietRowUsesPromptWhenTitleMissing() {
