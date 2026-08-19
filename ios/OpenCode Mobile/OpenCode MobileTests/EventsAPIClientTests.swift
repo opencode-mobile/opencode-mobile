@@ -54,11 +54,14 @@ struct EventsAPIClientTests {
         let client = makeClient(responseBody: body, serverProtocol: .v1)
         MockSSEURLProtocol.resetPaths()
         try await client.streamSubscriptions(directories: ["/tmp/project"]) { _ in }
-        let paths = MockSSEURLProtocol.recordedPaths
-        #expect(paths.contains { $0.hasSuffix("/global/event") })
-        #expect(paths.contains { $0.hasSuffix("/event") && !$0.contains("/global/") })
-        #expect(MockSSEURLProtocol.lastQuery?.contains("directory=/tmp/project") == true)
-        #expect(paths.contains { $0.hasSuffix("/api/event") } == false)
+        let requests = MockSSEURLProtocol.recordedRequests
+        #expect(requests.contains { $0.path.hasSuffix("/global/event") })
+        #expect(requests.contains { request in
+            request.path.hasSuffix("/event")
+                && !request.path.contains("/global/")
+                && directoryQueryValue(request.query) == "/tmp/project"
+        })
+        #expect(requests.contains { $0.path.hasSuffix("/api/event") } == false)
     }
 
     @Test func streamSubscriptions_v2OpensOnlyApiEvent() async throws {
@@ -66,8 +69,10 @@ struct EventsAPIClientTests {
         let client = makeClient(responseBody: body, serverProtocol: .v2)
         MockSSEURLProtocol.resetPaths()
         try await client.streamSubscriptions(directories: ["/tmp/project"]) { _ in }
-        #expect(MockSSEURLProtocol.recordedPaths == ["/api/event"] || MockSSEURLProtocol.recordedPaths.allSatisfy { $0.hasSuffix("/api/event") })
-        #expect(MockSSEURLProtocol.lastQuery?.contains("directory=") != true)
+        let requests = MockSSEURLProtocol.recordedRequests
+        #expect(!requests.isEmpty)
+        #expect(requests.allSatisfy { $0.path.hasSuffix("/api/event") })
+        #expect(requests.allSatisfy { directoryQueryValue($0.query) == nil })
     }
 
     @Test func streamGlobalEvents_cacheMissOpensV1HintPath() async throws {
@@ -106,27 +111,37 @@ struct EventsAPIClientTests {
     }
 }
 
+private func directoryQueryValue(_ query: String?) -> String? {
+    guard let query else { return nil }
+    return URLComponents(string: "http://dummy?\(query)")?
+        .queryItems?
+        .first { $0.name == "directory" }?
+        .value
+}
+
+private struct MockSSERequest: Equatable {
+    let path: String
+    let query: String?
+}
+
 private final class MockSSEURLProtocol: URLProtocol {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var responseBody = Data()
     nonisolated(unsafe) static var lastPath: String?
-    nonisolated(unsafe) static var lastQuery: String?
-    nonisolated(unsafe) static var recordedPaths: [String] = []
+    nonisolated(unsafe) static var recordedRequests: [MockSSERequest] = []
 
     static func register(responseBody: Data) {
         lock.lock()
         self.responseBody = responseBody
         self.lastPath = nil
-        self.lastQuery = nil
-        self.recordedPaths = []
+        self.recordedRequests = []
         lock.unlock()
     }
 
     static func resetPaths() {
         lock.lock()
         lastPath = nil
-        lastQuery = nil
-        recordedPaths = []
+        recordedRequests = []
         lock.unlock()
     }
 
@@ -143,9 +158,8 @@ private final class MockSSEURLProtocol: URLProtocol {
         Self.lock.lock()
         let body = Self.responseBody
         Self.lastPath = request.url?.path
-        Self.lastQuery = request.url?.query
         if let path = request.url?.path {
-            Self.recordedPaths.append(path)
+            Self.recordedRequests.append(MockSSERequest(path: path, query: request.url?.query))
         }
         Self.lock.unlock()
 
