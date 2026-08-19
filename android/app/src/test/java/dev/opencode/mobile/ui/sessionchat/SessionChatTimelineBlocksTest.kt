@@ -40,6 +40,45 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
+    fun ensureLiveRow_keepsEmptyStreamingAssistant() {
+        val message =
+            Message(
+                id = "msg-2",
+                role = MessageRole.Assistant,
+                text = "",
+                parts = listOf(MessagePart.Text(text = "", isStreaming = true, id = "prt-1")),
+            )
+        val blocks =
+            SessionChatTimelineBlocks.ensureLiveRow(
+                message = message,
+                isStreaming = true,
+                blocks = emptyList(),
+            )
+        val text = blocks.single() as SessionChatTimelineBlock.Text
+        assertEquals(PresentationBlockId.messageFallback("msg-2"), text.blockID)
+        assertEquals("", text.text)
+    }
+
+    @Test
+    fun ensureLiveRow_omitsHiddenToolOnlyAssistant() {
+        val message =
+            Message(
+                id = "msg-2",
+                role = MessageRole.Assistant,
+                text = "",
+                parts =
+                    listOf(
+                        MessagePart.Tool(toolName = "todowrite", status = ToolStatus.Running, id = "prt-1"),
+                    ),
+            )
+        assertTrue(
+            SessionChatTimelineBlocks
+                .ensureLiveRow(message = message, isStreaming = false, blocks = emptyList())
+                .isEmpty(),
+        )
+    }
+
+    @Test
     fun build_reasoningPart_becomesThoughtBlock() {
         val result =
             SessionChatTimelineBlocks.build(

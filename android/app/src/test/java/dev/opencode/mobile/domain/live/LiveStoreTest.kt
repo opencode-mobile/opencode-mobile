@@ -889,6 +889,57 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_reconnectUnchangedFingerprintDoesNotRepaint() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = "ses-1"))
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            assertEquals(1, emissions.size)
+            assertEquals("Hello", emissions.single().single().text)
+        }
+
+    @Test
+    fun observeMessages_doesNotPollWhileEventStreamConnected() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            repository.messages = listOf(Message(id = "msg-2", role = MessageRole.Assistant, text = "Polled"))
+            advanceTimeBy(
+                LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS + LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS,
+            )
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            assertEquals(1, emissions.size)
+            assertEquals("Hello", emissions.single().single().text)
+        }
+
+    @Test
     fun observeMessages_ignoresEventsForOtherSessions() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
@@ -1326,7 +1377,7 @@ class MessageSyncTest {
             val final = emissions.last().single()
             assertEquals("Hello", final.text)
             assertFalse((final.parts.single() as MessagePart.Text).isStreaming)
-            assertEquals(2, repository.listMessagesCallCount)
+            assertEquals(1, repository.listMessagesCallCount)
         }
 
     @Test

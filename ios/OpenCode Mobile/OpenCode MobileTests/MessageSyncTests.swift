@@ -242,6 +242,7 @@ struct MessageSyncTests {
     @Test func repeatedOverflowCycles_recoverToHealthyOnlyAfterValidatedReplace() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
+        let epoch = ConnectionEpoch()
         let sync = MessageSync(
             listMessages: { sessionID, directory in
                 try await repo.listMessages(sessionID: sessionID, directory: directory)
@@ -252,7 +253,8 @@ struct MessageSyncTests {
             eventStagingCapacity: 64,
             eventStagingByteCapacity: 200,
             connectionProfileIDProvider: { "local" },
-            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) }
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            connectionEpoch: epoch
         )
         let collector = MessageCollector()
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
@@ -261,30 +263,18 @@ struct MessageSyncTests {
 
         for cycle in 0..<2 {
             let recoveredText = "recovered-\(cycle)"
-            // Block the event consumer on REST so staging can accumulate. A waiting
-            // consumer otherwise handoffs each enqueue without buffering, so byte
-            // overflow never trips under real scheduling (CI flake).
-            repo.holdNextListMessages()
-            eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1", rawProperties: nil))
-            let blocked = await waitUntil { repo.isListBlocked }
-            #expect(blocked)
-
+            // A single staged payload larger than byteCapacity trips overflow
+            // on enqueue. session.idle used to block the consumer on REST so a
+            // burst could fill the buffer; idle no longer hits the network.
             repo.shouldFailList = true
-            for _ in 0..<8 {
-                eventStream.emit(
-                    eventWithPartDelta(
-                        partID: "prt-\(cycle)",
-                        messageID: "msg-1",
-                        delta: String(repeating: "x", count: 80),
-                        sessionID: "ses-1"
-                    )
+            eventStream.emit(
+                eventWithPartDelta(
+                    partID: "prt-\(cycle)",
+                    messageID: "msg-1",
+                    delta: String(repeating: "x", count: 250),
+                    sessionID: "ses-1"
                 )
-            }
-            // Let the producer drain AsyncStream into staging while the consumer
-            // remains blocked on the idle reload.
-            await Task.yield()
-            try? await Task.sleep(for: .milliseconds(20))
-            repo.resumeListMessages()
+            )
 
             let recovering = await waitUntil {
                 if case .recovering = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
@@ -1118,7 +1108,56 @@ struct MessageSyncTests {
         task.cancel()
 
         #expect(finalized)
-        #expect(repo.listMessagesCallCount == 2)
+        #expect(repo.listMessagesCallCount == 1)
+    }
+
+    @Test func reconnectUnchangedFingerprintDoesNotRepaint() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+        #expect(collector.emissions.count == 1)
+
+        eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: "ses-1", rawProperties: nil))
+        let reloaded = await waitUntil { repo.listMessagesCallCount >= 2 }
+        try? await Task.sleep(for: .milliseconds(50))
+        task.cancel()
+
+        #expect(reloaded)
+        #expect(collector.emissions.count == 1)
+        #expect(collector.latest()?.first?.text == "Hello")
+    }
+
+    @Test func doesNotPollWhileEventStreamConnected() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 25)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+
+        repo.messages = [
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "Polled",
+                parts: [.text(TextPart(text: "Polled", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        try? await Task.sleep(for: .milliseconds(90))
+        task.cancel()
+
+        #expect(collector.emissions.count == 1)
+        #expect(collector.latest()?.first?.text == "Hello")
+        #expect(repo.listMessagesCallCount == 1)
     }
 
     @Test func failedIdleReloadEndsStreamingAndPollingRecovers() async {

@@ -41,6 +41,48 @@ struct SessionChatTimelineBlocksTests {
         ])
     }
 
+    @Test func ensureLiveRow_keepsEmptyStreamingAssistant() {
+        let message = Message(
+            id: "msg-2",
+            role: .assistant,
+            text: "",
+            parts: [.text(TextPart(id: "prt-1", text: "", isStreaming: true))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        let blocks = SessionChatTimelineBlocks.ensureLiveRow(
+            message: message,
+            isStreaming: true,
+            blocks: []
+        )
+        #expect(blocks.count == 1)
+        guard case .text(let blockID, let text, _) = blocks[0] else {
+            Issue.record("expected text block")
+            return
+        }
+        #expect(blockID == PresentationBlockId.messageFallback("msg-2"))
+        #expect(text.isEmpty)
+    }
+
+    @Test func ensureLiveRow_omitsHiddenToolOnlyAssistant() {
+        let message = Message(
+            id: "msg-2",
+            role: .assistant,
+            text: "",
+            parts: [.tool(ToolPart(id: "prt-1", toolName: "todowrite", status: .running))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        let blocks = SessionChatTimelineBlocks.ensureLiveRow(
+            message: message,
+            isStreaming: false,
+            blocks: []
+        )
+        #expect(blocks.isEmpty)
+    }
+
     @Test func thoughtDurationLabel_matchesTuiBuckets() {
         #expect(SessionChatTimelineBlocks.thoughtDurationLabel(438) == "438ms")
         #expect(SessionChatTimelineBlocks.thoughtDurationLabel(6400) == "6.4s")

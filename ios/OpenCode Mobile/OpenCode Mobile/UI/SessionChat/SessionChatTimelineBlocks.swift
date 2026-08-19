@@ -254,6 +254,29 @@ nonisolated enum SessionChatTimelineBlocks {
         }
     }
 
+    /// TUI starts a fragment on `session.text.started` before any delta. Keep a
+    /// stable row so an empty streaming assistant does not vanish from the timeline.
+    /// Hidden-tool-only messages stay omitted.
+    static func ensureLiveRow(
+        message: Message,
+        isStreaming: Bool,
+        blocks: [SessionChatTimelineBlock]
+    ) -> [SessionChatTimelineBlock] {
+        if !blocks.isEmpty { return blocks }
+        let hasTextPart = message.parts.contains { part in
+            if case .text = part { return true }
+            return false
+        }
+        guard isStreaming || hasTextPart else { return [] }
+        return [
+            .text(
+                blockID: PresentationBlockId.messageFallback(message.id),
+                text: message.text,
+                renderedMarkdown: nil
+            ),
+        ]
+    }
+
     /// When collapse is on, consecutive assistant messages whose visible blocks
     /// are only groupable tools become one tool group. OpenCode emits each
     /// sequential tool step as its own assistant message (`parentID` = user

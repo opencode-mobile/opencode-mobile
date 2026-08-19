@@ -15,6 +15,8 @@ internal class SseDataLineParser {
             return finish()
         }
         if (trimmed.startsWith(":")) {
+            // Keep-alive comments are not events. The stream loop still counts
+            // the received line as activity so a quiet socket is not torn down.
             return emptyList()
         }
         if (trimmed.startsWith("data:")) {

@@ -27,16 +27,24 @@ class EventsApi private constructor(
     suspend fun streamGlobalEvents(
         protocol: ServerProtocol = ServerProtocol.V1,
         onHTTPResponse: suspend (Int) -> Unit = {},
+        onActivity: suspend () -> Unit = {},
         onDataLine: suspend (String) -> Unit,
     ) {
         val path = if (protocol == ServerProtocol.V2) "api/event" else "global/event"
-        streamEvents(path = path, directory = null, onHTTPResponse = onHTTPResponse, onDataLine = onDataLine)
+        streamEvents(
+            path = path,
+            directory = null,
+            onHTTPResponse = onHTTPResponse,
+            onActivity = onActivity,
+            onDataLine = onDataLine,
+        )
     }
 
     suspend fun streamEvents(
         path: String,
         directory: String? = null,
         onHTTPResponse: suspend (Int) -> Unit = {},
+        onActivity: suspend () -> Unit = {},
         onDataLine: suspend (String) -> Unit,
     ) {
         httpClient
@@ -56,6 +64,9 @@ class EventsApi private constructor(
                 try {
                     while (!channel.isClosedForRead) {
                         val line = channel.readUTF8Line() ?: break
+                        // Comments, id/event fields, and incomplete data still prove the
+                        // socket is alive. TUI keeps the iterator open on those frames.
+                        onActivity()
                         for (payload in parser.ingest(line)) {
                             onDataLine(payload)
                         }

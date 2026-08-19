@@ -241,6 +241,9 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
                         owner.markStreamConnected()
                         retry.attempt = 0
                     },
+                    onActivity: {
+                        activity.touch()
+                    },
                     onDataLine: { dataLine in
                         activity.touch()
                         let parsed = adapter.parseEvents(dataLine: dataLine)

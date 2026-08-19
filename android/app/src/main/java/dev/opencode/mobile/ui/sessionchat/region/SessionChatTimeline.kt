@@ -671,17 +671,22 @@ class SessionChatTimeline(
     ): DisplayMessageBody? {
         val message = display.message
         val resolvedBlocks =
-            SessionChatTimelineBlocks.collapseCommandInvocations(
-                role = message.role,
+            SessionChatTimelineBlocks.ensureLiveRow(
+                message = message,
+                isStreaming = display.isStreaming,
                 blocks =
-                    SessionChatTimelineBlocks.buildOrFallback(
+                    SessionChatTimelineBlocks.collapseCommandInvocations(
                         role = message.role,
-                        parts = message.parts,
-                        messageId = message.id,
-                        fallbackText = message.text,
-                        collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
+                        blocks =
+                            SessionChatTimelineBlocks.buildOrFallback(
+                                role = message.role,
+                                parts = message.parts,
+                                messageId = message.id,
+                                fallbackText = message.text,
+                                collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
+                            ),
+                        commands = serverCommands,
                     ),
-                commands = serverCommands,
             )
         if (resolvedBlocks.isEmpty()) return null
 

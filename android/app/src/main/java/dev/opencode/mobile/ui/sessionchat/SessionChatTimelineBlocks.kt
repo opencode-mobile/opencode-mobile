@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.command.CommandInvocationCollapser
 import dev.opencode.mobile.domain.command.ServerCommand
+import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
@@ -213,6 +214,27 @@ object SessionChatTimelineBlocks {
                 result.blocks.ifEmpty { fallbackBlocks() }
             SessionChatTimelineBlocksResult.MissingPartIds -> fallbackBlocks()
         }
+    }
+
+    /**
+     * TUI starts a fragment on `session.text.started` before any delta. Keep a
+     * stable row so an empty streaming assistant does not vanish from the timeline.
+     * Hidden-tool-only messages stay omitted.
+     */
+    fun ensureLiveRow(
+        message: Message,
+        isStreaming: Boolean,
+        blocks: List<SessionChatTimelineBlock>,
+    ): List<SessionChatTimelineBlock> {
+        if (blocks.isNotEmpty()) return blocks
+        val hasTextPart = message.parts.any { it is MessagePart.Text }
+        if (!isStreaming && !hasTextPart) return emptyList()
+        return listOf(
+            SessionChatTimelineBlock.Text(
+                blockID = PresentationBlockId.messageFallback(message.id),
+                text = message.text,
+            ),
+        )
     }
 
     /**

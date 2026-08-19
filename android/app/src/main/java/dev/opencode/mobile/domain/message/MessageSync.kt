@@ -394,17 +394,25 @@ class MessageSync(
                 while (isActive && isCurrentEpoch() && observationStillCurrent()) {
                     drainStaging()
                     beginAuthorityWindow()
-                    when (val result = fullReloadResult(key, reason = "overflow-recovery")) {
+                    val fingerprintBefore = lastFingerprints[storeSlot]
+                    when (val result = fullReloadResult(key, reason = "overflow-recovery", mergeExisting = true)) {
                         is ReloadResult.Success -> {
                             val becameHealthy = completeAuthorityWindow(reloadSucceeded = true)
-                            logI(
-                                "observeMessages emit session=${key.sessionId} count=${result.messages.size} " +
-                                    "source=overflow-recovery highWater=${highWater.get()}",
-                            )
                             if (isCurrentEpoch()) {
                                 rememberPublishedFrame(storeSlot, result.messages)
-                                emitMessages(result.messages)
-                                MessagePipelineProbe.emit(MessagePipelineProbe.Marker.DisplayFramePublished)
+                                if (fingerprintBefore != messageFingerprint(result.messages)) {
+                                    logI(
+                                        "observeMessages emit session=${key.sessionId} count=${result.messages.size} " +
+                                            "source=overflow-recovery highWater=${highWater.get()}",
+                                    )
+                                    emitMessages(result.messages)
+                                    MessagePipelineProbe.emit(MessagePipelineProbe.Marker.DisplayFramePublished)
+                                } else {
+                                    logI(
+                                        "observeMessages skip session=${key.sessionId} " +
+                                            "source=overflow-recovery fingerprint-unchanged",
+                                    )
+                                }
                             }
                             if (becameHealthy) return
                         }
@@ -555,25 +563,17 @@ class MessageSync(
                         applyResult = engine.apply(storeSlot, MessagePatch.PartRemoved(messageId, partId))
                     }
                     "session.idle" -> {
-                        when (val result = fullReloadResult(key, reason = "session.idle", mergeExisting = true)) {
-                            is ReloadResult.Success -> {
-                                rememberPublishedFrame(storeSlot, result.messages)
-                                logI(
-                                    "observeMessages emit session=${key.sessionId} count=${result.messages.size} " +
-                                        "source=session.idle",
-                                )
-                                emitMessages(result.messages)
-                                publishHealth(MessageSyncHealth.Healthy)
-                            }
-                            is ReloadResult.Failure -> {
-                                engine.finishStreamingText(storeSlot)
-                                val recovered = engine.messages(storeSlot)
-                                if (markChanged(storeSlot, recovered)) {
-                                    rememberPublishedFrame(storeSlot, recovered)
-                                    logW("session.idle reload failed; resumed polling session=${key.sessionId}")
-                                    emitMessages(recovered)
-                                }
-                            }
+                        // TUI v2 only flips footer idle on execution.* — it does not
+                        // REST-reload the transcript. Finalize local streaming parts.
+                        engine.finishStreamingText(storeSlot)
+                        val recovered = engine.messages(storeSlot)
+                        publishHealth(MessageSyncHealth.Healthy)
+                        if (markChanged(storeSlot, recovered)) {
+                            logI(
+                                "observeMessages emit session=${key.sessionId} count=${recovered.size} " +
+                                    "source=session.idle",
+                            )
+                            emitMessages(recovered)
                         }
                         return
                     }
@@ -747,9 +747,13 @@ class MessageSync(
                 // Polling REST mid-stream publishes a behind snapshot and looks like the
                 // assistant message clearing then reprinting from the start.
                 val streaming = engine.hasStreamingText(storeSlot)
-                if (streaming && !isStreamingStalled(storeSlot)) continue
+                val stalled = streaming && isStreamingStalled(storeSlot)
+                if (streaming && !stalled) continue
+                // TUI does not poll GET …/message while the event iterator is live.
+                // Keep the watchdog for transport drop and stalled streaming only.
+                val connected = eventStream.connectionState.value == EventStreamConnectionState.Connected
+                if (connected && !stalled) continue
                 val expectedRevision = engine.revision(storeSlot)
-                val directory = key.directory.ifEmpty { null }
                 val load = runCatching { listMessages(key.sessionId, directory) }
                 if (load.isFailure) {
                     val error = load.exceptionOrNull()

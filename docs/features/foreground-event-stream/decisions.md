@@ -10,9 +10,11 @@ Both protocols must deliver relevant live events over SSE (session
 lifecycle, message/part, status, permissions, questions — not just
 `server.connected` / `server.heartbeat`). Official desktop uses
 `/global/event` for v1; instance `/event` is the directory-scoped bus.
-REST reconnect and the chat watchdog are catch-up after a drop, not a
-substitute for missing SSE. Project v2 types into the existing
-`OpencodeEvent` vocabulary; do not fork Screen Models by protocol.
+REST reconnect is catch-up after a drop, not a substitute for missing SSE.
+Project v2 types into the existing `OpencodeEvent` vocabulary; do not fork
+Screen Models by protocol. Live Session Chat shape is TUI v2 — see
+[server-api-v2](../server-api-v2/decisions.md). Message merge policy is
+[message-store](../message-store/decisions.md).
 
 ## Event envelope
 
@@ -23,12 +25,7 @@ Server sends JSON SSE data as `{ "payload": { "type", "properties" } }`. Parser 
 Feature-specific subscribers own refresh policy while the **foreground event
 stream** is active:
 
-- **MessageSync:** incrementally merges `message.updated`,
-  `message.part.updated`, `message.part.delta`, `message.part.removed`, and
-  `message.removed` for the bound session. It performs authoritative reloads on
-  reconnect, `session.idle`, and legacy part mutations whose REST row lacks a
-  stable part ID, plus a changed-message watchdog poll while the chat observes
-  the session (paused while text is actively streaming).
+- **MessageSync:** [message-store](../message-store/decisions.md).
 - **SessionLiveStore:** debounced `listSessions` reload (500 ms) on `session.created`, `session.updated`, `session.deleted`, and reconnect.
 - **SessionStatusLiveStore:** debounced bulk `getAllSessionStatuses` (300 ms) on `session.status`, `session.idle`, and reconnect.
 - **Connect/reconnect:** Both platforms forward the server's
@@ -40,8 +37,7 @@ stream** is active:
   `Connected` triggers the same reconnect fullReload when `server.connected`
   is missed (OPE-119 / OPE-165). TransportResumed, `server.connected`, and
   `stream.reconnected` share one catch-up per ConnectionEpoch so overlapping
-  signals do not double-fetch. Transport drop clears any latched streaming
-  text so the poll watchdog is not blocked. Home does not run a broad section
+  signals do not double-fetch. Home does not run a broad section
   reload per SSE event. Explicit project additions can reload with
   `skipProbe = true`; saved profile changes run the normal probe-backed
   refresh path.
@@ -103,14 +99,16 @@ a synchronization reload; synthetic `stream.reconnected` reloads immediately.
 
 ## Idle reconnect
 
-- Date: 2026-08-17
+- Date: 2026-08-19
 - Decision: cancel and retry the foreground SSE read after **45s** with no
-  bytes (including heartbeats). Both platforms log
+  received lines. Every SSE line counts as activity: JSON `data:` payloads,
+  `server.heartbeat`, keep-alive comments (`: …`), and `id` / `event` fields.
+  Comments are still not published as events. Both platforms log
   `foreground SSE idle timeout; reconnecting`.
-- Reason: a hung `/api/event` subscriber can stay open without EOF. Live v2
-  went silent on Android after another client subscribed; no stream-failed
-  line was logged. A socket read timeout is too aggressive (heartbeats can be
-  sparse); an activity watchdog is not.
+- Reason: a hung `/api/event` subscriber can stay open without EOF. Counting
+  only complete JSON `data:` lines treated comment keep-alives as silence and
+  cancelled a live socket every 45s. A socket read timeout is too aggressive
+  (heartbeats can be sparse); an activity watchdog on any received line is not.
 - Revisit when: heartbeat interval is published and a tighter bound is safe.
 
 ## Logging

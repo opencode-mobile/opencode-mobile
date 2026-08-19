@@ -350,6 +350,17 @@ struct SessionChatTimelineProjectorTests {
         #expect(frame.messages[0].renderedMarkdown == nil)
     }
 
+    @Test func displayFrameBuilder_keepsEmptyStreamingAssistant() {
+        let message = makeMessage(
+            id: "msg-2",
+            parts: [text("prt-1", "", isStreaming: true)],
+            text: ""
+        )
+        let frame = displayFrame(messages: [DisplayMessage(message: message)])
+        #expect(frame.messages.map(\.id) == ["msg-2"])
+        #expect(frame.messages[0].blocks.map(\.blockID) == [PresentationBlockId.messageFallback("msg-2")])
+    }
+
     @Test func contentRevision_usesTextHashAndLength() {
         let revision = ContentRevision.of("abc")
         #expect(revision.textLength == 3)
