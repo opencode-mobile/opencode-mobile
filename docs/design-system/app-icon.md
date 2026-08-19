@@ -105,7 +105,13 @@ which:
 - emits Android splash `drawable/ic_splash.xml` plus day/night
   `splash_colors.xml` (`background-base` canvas; light mode darkens the glass
   cap so it still reads),
-- regenerates pre-API-26 `mipmap-*/ic_launcher{,_round}.png` fallbacks.
+- regenerates pre-API-26 `mipmap-*/ic_launcher{,_round}.png` fallbacks
+  as circular-masked rasters (Firebase App Distribution and other APK
+  extractors show `android:icon` unmasked; adaptive layers stay square).
+
+Legacy mipmaps keep the Android 0.88 canvas inset and a circular clip.
+Home-screen API 26+ still uses the unmasked adaptive layers. Do not circular-
+mask store rasters — Play and Apple apply their own chrome.
 
 The generator uses `rsvg-convert` (librsvg) for SVG→PNG. Install with
 `brew install librsvg` (macOS) or `apt install librsvg2-bin` (Linux).
@@ -123,7 +129,7 @@ any keeper settings back into the script before the next sync.
 | iOS catalog fallback | `…/Assets.xcassets/AppIcon.appiconset/{icon-1024,icon-tinted-1024}.png` + `Contents.json` |
 | Android API 26+ | `drawable/ic_launcher_foreground.xml`, `drawable/ic_launcher_monochrome.xml`, `values/ic_launcher_background.xml`, `mipmap-anydpi-v26/ic_launcher{,_round}.xml` |
 | Android splash | `drawable/ic_splash.xml`, `values/splash_colors.xml`, `values-night/splash_colors.xml` |
-| Android API 24–25 | `mipmap-{m,h,x,xx,xxx}dpi/ic_launcher{,_round}.png` |
+| Android API 24–25 / APK extractors | `mipmap-{m,h,x,xx,xxx}dpi/ic_launcher{,_round}.png` (circular, transparent corners) |
 
 ## iOS appearance variants (launcher)
 
