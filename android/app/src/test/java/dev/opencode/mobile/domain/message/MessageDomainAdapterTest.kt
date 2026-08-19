@@ -62,6 +62,26 @@ class MessageDomainAdapterTest {
         assertEquals("", message.text)
         val tool = message.parts.single() as MessagePart.Tool
         assertEquals(ToolStatus.Pending, tool.status)
+        assertEquals("glob", tool.toolName)
+    }
+
+    @Test
+    fun toMessage_mapsV2ToolNameWhenToolFieldAbsent() {
+        val raw =
+            """
+            {
+              "info": { "id": "msg-2", "role": "assistant" },
+              "parts": [
+                { "type": "tool", "name": "websearch", "state": { "status": "completed" } }
+              ]
+            }
+            """.trimIndent()
+
+        val dto = json.decodeFromString<MessageDto>(raw)
+        val message = adapter.toMessage(dto)
+        val tool = message.parts.single() as MessagePart.Tool
+        assertEquals("websearch", tool.toolName)
+        assertEquals(ToolStatus.Completed, tool.status)
     }
 
     @Test
