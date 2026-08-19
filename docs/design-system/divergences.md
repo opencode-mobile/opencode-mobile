@@ -259,5 +259,6 @@ implementation belong in the feature's `parity-gaps.md`.
 - Reason: iOS 26 supplies live glass lighting; Android does not. The same SVG
   paths feed both. A pre-rendered 3D PNG would fight iOS glass and collapse
   under Android theming.
-- Review trigger: revisit if Android adds a system glass icon material, or if
-  product wants the store interlocking mark on-device as well.
+- Review trigger: revisit if Android adds a system glass icon material.
+  Store listings use a flattened raster of the same “d”; they cannot carry
+  iOS glass or Android parallax.

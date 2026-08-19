@@ -5,12 +5,13 @@
   Flat geometry traced from the 3D “d” mark. Lighting is NOT baked in —
   iOS 26 Liquid Glass (AppIcon.icon) and Android adaptive parallax supply depth.
 
-  This SVG feeds scripts/sync-app-icon.mjs (npm run app-icon:sync).
-  Store listing art is separate: app-icon/interlock.svg via app-icon:sync-store.
+  This SVG feeds scripts/sync-app-icon.mjs (npm run app-icon:sync) and the
+  flattened store rasters (npm run app-icon:sync-store).
   See docs/design-system/app-icon.md.
 
   Layers (by fill):
-    #4B4646  body (bowl + stem; bowl ends at the diagonal joint)
+    #4B4646  body — one closed path (bowl + stem) so the stem join cannot
+             rasterize as a hairline. Bowl ends at the diagonal joint.
     #F1ECEC  glass cap (upper-left arc)
   The left joint is a diagonal across the stroke (outer ~174.5°, inner ~196.5°),
   matching the 3D reference chevron — not a radial cut.
@@ -28,8 +29,7 @@
   <rect x="0" y="0" width="240" height="300" fill="#070707"/>
   <!-- @opencode/glyph -->
   <g transform="translate(0,0) scale(1,1.25)">
-    <path d="M 179.844 120.873 A 58.194 58.194 0 0 1 63.725 126.450 L 83.892 109.688 A 39.380 39.380 0 1 0 161.031 120.873 Z" fill="#4B4646"/>
-    <path d="M 179.844 120.873 L 179.844 55.227 L 179.588 55.227 L 161.030 74.041 L 161.030 120.873 Z" fill="#4B4646"/>
+    <path d="M 179.844 120.873 A 58.194 58.194 0 0 1 63.725 126.450 L 83.892 109.688 A 39.380 39.380 0 1 0 161.030 120.873 L 161.030 74.041 L 179.588 55.227 L 179.844 55.227 Z" fill="#4B4646"/>
     <path d="M 63.725 126.450 A 58.194 58.194 0 0 1 157.189 74.791 L 145.700 89.689 A 39.380 39.380 0 0 0 83.892 109.688 Z" fill="#F1ECEC"/>
   </g>
 </svg>
