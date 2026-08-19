@@ -83,15 +83,18 @@ Layout:
   Add project + New session.
 
 When `selectedFilterId` is `all`, all sessions are shown. Otherwise only
-sessions whose `worktree` equals the selected filter id are shown.
+sessions whose `worktree` equals the selected filter id are shown. In picker
+chrome, a committed scope-control swipe does not page the home list sideways.
 
 ## Platform Notes
 
 - iOS: dense list + Liquid Glass dock/key controls on iOS 26+ with material
   fallbacks below iOS 26. Pull-to-refresh is available when `onRefresh` is
-  provided.
+  provided. A committed scope-control swipe identity-fades the filtered list
+  in **0.16s**.
 - Android: same hierarchy with Material raised glass-like dock; no system Liquid
   Glass. Android `SessionList` does not expose pull-to-refresh in this version.
+  A committed swipe updates the same list instance and scrolls to top.
 
 ## Review Surfaces
 

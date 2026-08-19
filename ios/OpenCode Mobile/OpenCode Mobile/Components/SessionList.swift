@@ -176,29 +176,42 @@ struct SessionList<EmptyContent: View>: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            if visibleSessions.isEmpty, showsEmptyContent {
-                ScrollView {
-                    emptyContent
-                        .frame(maxWidth: .infinity, minHeight: 420)
-                        .padding(.bottom, max(dockHeight, sessionListFallbackBottomSpacer))
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(OpenCodeColors.backgroundBase)
-                .modifier(SessionListRefreshableModifier(onRefresh: onRefresh))
-            } else {
-                SessionListScrollView(
-                    ladderSections: ladderSections,
-                    newestSessionId: visibleSessions.first?.id,
-                    revealNewestToken: revealNewestToken,
-                    followingTop: $followingTop,
-                    onRefresh: onRefresh
-                ) { section in
-                    switch section.kind {
-                    case .recent:
-                        recentStack(section)
-                    case .day, .week:
-                        dayOrWeekSection(section)
+            Group {
+                if visibleSessions.isEmpty, showsEmptyContent {
+                    ScrollView {
+                        emptyContent
+                            .frame(maxWidth: .infinity, minHeight: 420)
+                            .padding(.bottom, max(dockHeight, sessionListFallbackBottomSpacer))
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(OpenCodeColors.backgroundBase)
+                    .modifier(SessionListRefreshableModifier(onRefresh: onRefresh))
+                } else {
+                    SessionListScrollView(
+                        ladderSections: ladderSections,
+                        newestSessionId: visibleSessions.first?.id,
+                        revealNewestToken: revealNewestToken,
+                        followingTop: $followingTop,
+                        onRefresh: onRefresh
+                    ) { section in
+                        switch section.kind {
+                        case .recent:
+                            recentStack(section)
+                        case .day, .week:
+                            dayOrWeekSection(section)
+                        }
+                    }
+                }
+            }
+            .id(useProjectPicker ? selectedFilterId : "chips-list")
+            .transition(.opacity)
+            .animation(
+                .smooth(duration: SessionListScopePaging.listCrossfadeDuration),
+                value: useProjectPicker ? selectedFilterId : "chips-list"
+            )
+            .onChange(of: selectedFilterId) { _, _ in
+                if useProjectPicker {
+                    followingTop = true
                 }
             }
 

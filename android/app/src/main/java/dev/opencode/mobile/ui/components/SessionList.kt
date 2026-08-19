@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.HorizontalDivider
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.domain.home.HomeSessionLadder
 import dev.opencode.mobile.domain.home.HomeSessionLadderKind
+import dev.opencode.mobile.domain.home.HomeSessionLadderSection
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -184,6 +186,12 @@ fun SessionList(
             listState.scrollToItem(0)
         }
     }
+    LaunchedEffect(selectedFilterId, useProjectPicker) {
+        if (useProjectPicker) {
+            followingTop = true
+            listState.scrollToItem(0)
+        }
+    }
 
     var dockBlockHeight by remember { mutableStateOf(0.dp) }
     val listBottomFadeHeight =
@@ -199,66 +207,16 @@ fun SessionList(
                 .fillMaxSize()
                 .background(background),
     ) {
-        if (visibleSessions.isEmpty() && emptyContent != null) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(bottom = listBottomFadeHeight),
-                contentAlignment = Alignment.Center,
-            ) {
-                emptyContent()
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.matchParentSize(),
-                state = listState,
-                contentPadding = PaddingValues(bottom = listBottomFadeHeight),
-            ) {
-                ladderSections.forEach { section ->
-                    when (section.kind) {
-                        HomeSessionLadderKind.Recent -> {
-                            item(key = "header-${section.id}") {
-                                SessionListSectionHeader(title = "Recent")
-                            }
-                            itemsIndexed(
-                                section.items,
-                                key = { _, session -> "${section.id}-${session.id}" },
-                            ) { index, session ->
-                                SessionListRow(
-                                    session = session,
-                                    showStatusDot = true,
-                                    showDivider = index < section.items.lastIndex,
-                                    borderWeaker = borderWeaker,
-                                    onSessionSelected = onSessionSelected,
-                                    onSessionLongPress = onSessionLongPress,
-                                )
-                            }
-                        }
-                        HomeSessionLadderKind.Day,
-                        HomeSessionLadderKind.Week,
-                        -> {
-                            item(key = "header-${section.id}") {
-                                SessionListSectionHeader(title = section.title)
-                            }
-                            itemsIndexed(
-                                section.items,
-                                key = { _, session -> "${section.id}-${session.id}" },
-                            ) { index, session ->
-                                SessionListRow(
-                                    session = session,
-                                    showStatusDot = false,
-                                    showDivider = index < section.items.lastIndex,
-                                    borderWeaker = borderWeaker,
-                                    onSessionSelected = onSessionSelected,
-                                    onSessionLongPress = onSessionLongPress,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        SessionListFeed(
+            visibleSessions = visibleSessions,
+            ladderSections = ladderSections,
+            listState = listState,
+            listBottomFadeHeight = listBottomFadeHeight,
+            borderWeaker = borderWeaker,
+            emptyContent = emptyContent,
+            onSessionSelected = onSessionSelected,
+            onSessionLongPress = onSessionLongPress,
+        )
 
         OpenCodeBottomFade(
             height = listBottomFadeHeight,
@@ -288,6 +246,79 @@ fun SessionList(
                     .navigationBarsPadding()
                     .padding(horizontal = 12.dp, vertical = 8.dp),
         )
+    }
+}
+
+@Composable
+private fun SessionListFeed(
+    visibleSessions: List<SessionListSession>,
+    ladderSections: List<HomeSessionLadderSection<SessionListSession>>,
+    listState: LazyListState,
+    listBottomFadeHeight: Dp,
+    borderWeaker: androidx.compose.ui.graphics.Color,
+    emptyContent: (@Composable () -> Unit)?,
+    onSessionSelected: (SessionListSession) -> Unit,
+    onSessionLongPress: ((SessionListSession) -> Unit)?,
+) {
+    if (visibleSessions.isEmpty() && emptyContent != null) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(bottom = listBottomFadeHeight),
+            contentAlignment = Alignment.Center,
+        ) {
+            emptyContent()
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = listState,
+            contentPadding = PaddingValues(bottom = listBottomFadeHeight),
+        ) {
+            ladderSections.forEach { section ->
+                when (section.kind) {
+                    HomeSessionLadderKind.Recent -> {
+                        item(key = "header-${section.id}") {
+                            SessionListSectionHeader(title = "Recent")
+                        }
+                        itemsIndexed(
+                            section.items,
+                            key = { _, session -> "${section.id}-${session.id}" },
+                        ) { index, session ->
+                            SessionListRow(
+                                session = session,
+                                showStatusDot = true,
+                                showDivider = index < section.items.lastIndex,
+                                borderWeaker = borderWeaker,
+                                onSessionSelected = onSessionSelected,
+                                onSessionLongPress = onSessionLongPress,
+                            )
+                        }
+                    }
+                    HomeSessionLadderKind.Day,
+                    HomeSessionLadderKind.Week,
+                    -> {
+                        item(key = "header-${section.id}") {
+                            SessionListSectionHeader(title = section.title)
+                        }
+                        itemsIndexed(
+                            section.items,
+                            key = { _, session -> "${section.id}-${session.id}" },
+                        ) { index, session ->
+                            SessionListRow(
+                                session = session,
+                                showStatusDot = false,
+                                showDivider = index < section.items.lastIndex,
+                                borderWeaker = borderWeaker,
+                                onSessionSelected = onSessionSelected,
+                                onSessionLongPress = onSessionLongPress,
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
