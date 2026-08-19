@@ -896,6 +896,24 @@ class TimelineProjectorTest {
         )
         assertEquals(0L, apply.layoutAffectingRevision)
         assertEquals(2L, apply.growBottomRevision)
+        assertTrue(apply.hasVisibleRowChanges)
+    }
+
+    @Test
+    fun classify_requiredWithoutRowChanges_isNotVisible() {
+        val frame =
+            TimelineFrame(
+                frameRevision = 3L,
+                rows = emptyList(),
+                insertedRowIDs = emptySet(),
+                changedRowIDs = emptySet(),
+                removedRowIDs = emptySet(),
+                layoutChangedRowIDs = emptySet(),
+                isRequired = true,
+            )
+        val apply = TimelineApply.classify(frame)
+        assertEquals(setOf(TimelineApplyKind.Required), apply.kinds)
+        assertFalse(apply.hasVisibleRowChanges)
     }
 
     @Test

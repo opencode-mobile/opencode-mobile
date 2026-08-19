@@ -480,6 +480,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         while !Task.isCancelled, observationStillCurrent(key: key) {
             staging.drain()
             staging.beginAuthorityWindow()
+            let previousFingerprint = fingerprint(for: key.storeSlot)
             let result = await fullReloadResult(key: key, reason: "overflow-recovery")
             switch result {
             case .success(let messages):
@@ -487,7 +488,11 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 setHealth(staging.currentHealth, for: key)
                 let published = connectionEpoch.current() == observationEpoch.current
                 if published {
-                    publishMessages(messages)
+                    let nextFingerprint = messageFingerprint(messages)
+                    if previousFingerprint != nextFingerprint {
+                        publishMessages(messages)
+                    }
+                    setFingerprint(nextFingerprint, for: key.storeSlot)
                 }
                 if becameHealthy {
                     if published {

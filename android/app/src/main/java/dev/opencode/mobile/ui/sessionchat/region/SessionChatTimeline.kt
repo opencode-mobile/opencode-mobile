@@ -559,9 +559,21 @@ class SessionChatTimeline(
         val isRequired = !(fromQuietRefresh && onPublished == null)
         val stamped = projected.withRequired(isRequired)
         val apply = TimelineApply.classify(stamped)
-        lastTimelineFrame = stamped
         val previousMessageCount = previousById.size
         val merged = TimelineProjector.mergeMessageItems(stamped, previousById)
+        val reusedAllRows =
+            merged.size == previousById.size &&
+                merged.all { item -> previousById[item.id] === item }
+        if (!apply.hasVisibleRowChanges && reusedAllRows && previousFrame != null) {
+            logI(
+                "applyLoadedDisplayMessages skip no-op session=$sourceSessionId source=$source " +
+                    "messages=${merged.size} required=$isRequired",
+            )
+            lastTimelineFrame = previousFrame
+            onPublished?.invoke()
+            return
+        }
+        lastTimelineFrame = stamped
         val rebuiltCount =
             merged.count { item ->
                 val previous = previousById[item.id]

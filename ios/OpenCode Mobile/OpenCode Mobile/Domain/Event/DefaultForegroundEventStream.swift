@@ -220,7 +220,11 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
         final class RetryBox: @unchecked Sendable {
             var attempt = 0
         }
+        final class RecycleBox: @unchecked Sendable {
+            var quietIdle = false
+        }
         let retry = RetryBox()
+        let recycle = RecycleBox()
         while !Task.isCancelled {
             guard let owner else { return }
             await deviceNetworkPath.waitUntilReady()
@@ -229,7 +233,12 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
                 owner.applyConnectionState(.idle, generation: generation)
                 return
             }
-            let wasConnected = owner.beginConnectAttempt(generation: generation)
+            let keepLiveChrome = recycle.quietIdle
+            recycle.quietIdle = false
+            let wasConnected = owner.beginConnectAttempt(
+                generation: generation,
+                keepLiveChrome: keepLiveChrome
+            )
             let activity = ActivityBox()
             let readTask = Task {
                 let directories = await instanceDirectories()
@@ -269,6 +278,7 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
                     let remaining = idleTimeout - activity.elapsed()
                     if remaining <= .zero {
                         DiagnosticLog.warning(.sse, "foreground SSE idle timeout; reconnecting")
+                        recycle.quietIdle = true
                         readTask.cancel()
                         return
                     }
@@ -288,6 +298,10 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
                     owner.clearStreamTaskIfCurrent(generation: generation)
                     owner.applyConnectionState(.idle, generation: generation)
                     return
+                }
+                if recycle.quietIdle {
+                    retry.attempt = 0
+                    continue
                 }
                 owner.applyConnectionState(
                     wasConnected ? .reconnecting : .connecting,
@@ -320,17 +334,19 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
         "/\(api.eventSubscribePath)"
     }
 
-    private func beginConnectAttempt(generation: UInt64) -> Bool {
+    private func beginConnectAttempt(generation: UInt64, keepLiveChrome: Bool) -> Bool {
         lock.lock()
         currentStreamWasConnected = false
         emittedReconnectForCurrentStream = false
         emittedConnectedForCurrentAttempt = false
         let previouslyConnected = wasConnected
         lock.unlock()
-        applyConnectionState(
-            previouslyConnected ? .reconnecting : .connecting,
-            generation: generation
-        )
+        if !(keepLiveChrome && previouslyConnected) {
+            applyConnectionState(
+                previouslyConnected ? .reconnecting : .connecting,
+                generation: generation
+            )
+        }
         return previouslyConnected
     }
 

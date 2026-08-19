@@ -32,6 +32,15 @@ data class TimelineApply(
     val growBottomRevision: Long
         get() = frame.growBottomRevision()
 
+    val hasVisibleRowChanges: Boolean
+        get() =
+            frame.insertedRowIDs.isNotEmpty() ||
+                frame.removedRowIDs.isNotEmpty() ||
+                frame.changedRowIDs.isNotEmpty() ||
+                frame.layoutChangedRowIDs.isNotEmpty() ||
+                frame.decorateRowIDs.isNotEmpty() ||
+                frame.grewBottomRowIDs.isNotEmpty()
+
     val structureRowIDs: Set<String>
         get() =
             frame.insertedRowIDs +

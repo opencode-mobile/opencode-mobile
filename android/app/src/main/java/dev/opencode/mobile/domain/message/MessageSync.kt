@@ -394,17 +394,25 @@ class MessageSync(
                 while (isActive && isCurrentEpoch() && observationStillCurrent()) {
                     drainStaging()
                     beginAuthorityWindow()
+                    val previousFingerprint = lastFingerprints[storeSlot]
                     when (val result = fullReloadResult(key, reason = "overflow-recovery")) {
                         is ReloadResult.Success -> {
                             val becameHealthy = completeAuthorityWindow(reloadSucceeded = true)
-                            logI(
-                                "observeMessages emit session=${key.sessionId} count=${result.messages.size} " +
-                                    "source=overflow-recovery highWater=${highWater.get()}",
-                            )
                             if (isCurrentEpoch()) {
                                 rememberPublishedFrame(storeSlot, result.messages)
-                                emitMessages(result.messages)
-                                MessagePipelineProbe.emit(MessagePipelineProbe.Marker.DisplayFramePublished)
+                                if (previousFingerprint != messageFingerprint(result.messages)) {
+                                    logI(
+                                        "observeMessages emit session=${key.sessionId} count=${result.messages.size} " +
+                                            "source=overflow-recovery highWater=${highWater.get()}",
+                                    )
+                                    emitMessages(result.messages)
+                                    MessagePipelineProbe.emit(MessagePipelineProbe.Marker.DisplayFramePublished)
+                                } else {
+                                    logI(
+                                        "observeMessages skip session=${key.sessionId} count=${result.messages.size} " +
+                                            "source=overflow-recovery fingerprint-unchanged",
+                                    )
+                                }
                             }
                             if (becameHealthy) return
                         }

@@ -86,6 +86,7 @@ class DefaultForegroundEventStream
             streamJob =
                 scope.launch {
                     var retryAttempt = 0
+                    val quietIdleReconnect = AtomicBoolean(false)
                     try {
                         while (true) {
                             if (generation != streamGeneration.get()) return@launch
@@ -94,14 +95,20 @@ class DefaultForegroundEventStream
                             currentStreamWasConnected = false
                             emittedReconnectForCurrentStream = false
                             val previouslyConnected = wasConnected
-                            setConnectionState(
-                                if (previouslyConnected) {
-                                    EventStreamConnectionState.Reconnecting
-                                } else {
-                                    EventStreamConnectionState.Connecting
-                                },
-                                generation,
-                            )
+                            // Idle-watchdog recycle is a health check, not a drop. Keep
+                            // chrome Live so Session Chat does not flash Connecting and
+                            // relayout the reverse timeline every 45s of silence.
+                            val keepLiveChrome = quietIdleReconnect.getAndSet(false) && previouslyConnected
+                            if (!keepLiveChrome) {
+                                setConnectionState(
+                                    if (previouslyConnected) {
+                                        EventStreamConnectionState.Reconnecting
+                                    } else {
+                                        EventStreamConnectionState.Connecting
+                                    },
+                                    generation,
+                                )
+                            }
                             val lastActivityMs = AtomicLong(System.currentTimeMillis())
                             lateinit var readJob: Job
                             readJob =
@@ -220,6 +227,7 @@ class DefaultForegroundEventStream
                                                 DiagnosticLogArea.Sse,
                                                 "foreground SSE idle timeout; reconnecting",
                                             )
+                                            quietIdleReconnect.set(true)
                                             readJob.cancel()
                                             return@launch
                                         }
@@ -241,6 +249,11 @@ class DefaultForegroundEventStream
                                     },
                                     generation,
                                 )
+                                continue
+                            }
+
+                            if (quietIdleReconnect.get()) {
+                                retryAttempt = 0
                                 continue
                             }
 

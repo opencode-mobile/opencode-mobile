@@ -26,6 +26,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicInteger
@@ -211,11 +212,19 @@ class DefaultForegroundEventStreamTest {
                     connectionProfileStore = store,
                     idleTimeoutMs = 150,
                 )
+            val states = java.util.concurrent.CopyOnWriteArrayList<EventStreamConnectionState>()
+            val collectJob =
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+                    stream.connectionState.collect { states.add(it) }
+                }
             try {
                 stream.start()
                 withTimeout(2_000) { secondOpen.await() }
                 assertTrue(opens.get() >= 2)
+                assertTrue(states.contains(EventStreamConnectionState.Connected))
+                assertFalse(states.contains(EventStreamConnectionState.Reconnecting))
             } finally {
+                collectJob.cancel()
                 stream.stop()
                 client.close()
             }
