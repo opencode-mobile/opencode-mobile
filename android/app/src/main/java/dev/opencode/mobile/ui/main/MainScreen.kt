@@ -881,7 +881,13 @@ private fun HomeProjectsContent(
             },
             onAddProject = onBrowseProjectsClick,
             onNewSession = {
-                when (val action = SessionListHomeChrome.newSessionAction(chromeProjects)) {
+                when (
+                    val action =
+                        SessionListHomeChrome.newSessionAction(
+                            projects = chromeProjects,
+                            selectedFilterId = resolvedFilterId,
+                        )
+                ) {
                     SessionListHomeChrome.NewSessionAction.None -> Unit
                     SessionListHomeChrome.NewSessionAction.PresentPicker ->
                         onRequestNewSessionProjectPicker()

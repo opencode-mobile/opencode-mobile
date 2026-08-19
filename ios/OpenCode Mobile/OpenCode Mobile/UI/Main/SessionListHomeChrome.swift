@@ -36,14 +36,17 @@ enum SessionListHomeChrome {
         return tabs.first?.id ?? SessionListFilterTab.allId
     }
 
-    static func newSessionAction(projects: [Project]) -> NewSessionAction {
-        switch projects.count {
-        case 0:
-            .none
-        case 1:
-            .create(worktree: projects[0].worktree)
-        default:
-            .presentPicker
+    static func newSessionAction(projects: [Project], selectedFilterId: String) -> NewSessionAction {
+        if projects.isEmpty {
+            return .none
         }
+        if selectedFilterId != SessionListFilterTab.allId,
+           projects.contains(where: { $0.worktree == selectedFilterId }) {
+            return .create(worktree: selectedFilterId)
+        }
+        if projects.count == 1 {
+            return .create(worktree: projects[0].worktree)
+        }
+        return .presentPicker
     }
 }

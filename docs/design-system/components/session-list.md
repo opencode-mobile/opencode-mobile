@@ -63,7 +63,8 @@ settings) is owned by the home shell, not this component.
 The component is stateless for session payloads. Callers own captions and
 Idle/Running/Ready mapping (Running outranks Ready; Ready uses pill text
 **Ready** with `success` tone), filter models/selection, add-project and
-new-session flows, and page chrome.
+new-session flows, and page chrome. **New session** opens the project picker
+only when the selected filter is **All**; a selected project creates there.
 
 Session List applies the selected project filter, then groups via
 `HomeSessionLadder` using `updatedAtEpochMs`, Running/Ready attention, and

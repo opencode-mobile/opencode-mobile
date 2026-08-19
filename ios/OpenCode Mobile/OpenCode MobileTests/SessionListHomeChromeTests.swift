@@ -62,16 +62,38 @@ struct SessionListHomeChromeTests {
     }
 
     @Test func newSessionAction_zeroProjectsDoesNothing() {
-        #expect(SessionListHomeChrome.newSessionAction(projects: []) == .none)
+        #expect(
+            SessionListHomeChrome.newSessionAction(
+                projects: [],
+                selectedFilterId: SessionListFilterTab.allId
+            ) == .none
+        )
     }
 
     @Test func newSessionAction_oneProjectCreatesInThatWorktree() {
-        #expect(SessionListHomeChrome.newSessionAction(projects: [mobile]) == .create(worktree: "/repo"))
+        #expect(
+            SessionListHomeChrome.newSessionAction(
+                projects: [mobile],
+                selectedFilterId: "/repo"
+            ) == .create(worktree: "/repo")
+        )
     }
 
-    @Test func newSessionAction_twoPlusPresentsPicker() {
+    @Test func newSessionAction_allSelectedPresentsPicker() {
         #expect(
-            SessionListHomeChrome.newSessionAction(projects: [mobile, playground]) == .presentPicker
+            SessionListHomeChrome.newSessionAction(
+                projects: [mobile, playground],
+                selectedFilterId: SessionListFilterTab.allId
+            ) == .presentPicker
+        )
+    }
+
+    @Test func newSessionAction_scopedProjectCreatesThere() {
+        #expect(
+            SessionListHomeChrome.newSessionAction(
+                projects: [mobile, playground],
+                selectedFilterId: "/play"
+            ) == .create(worktree: "/play")
         )
     }
 
