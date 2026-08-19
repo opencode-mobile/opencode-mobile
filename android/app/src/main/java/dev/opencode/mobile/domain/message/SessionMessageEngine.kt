@@ -29,6 +29,12 @@ class SessionMessageEngine
             expectedRevision: Long,
         ): Boolean = store.replaceAllIfRevision(sessionId, messages, expectedRevision)
 
+        fun mergeAuthoritativeIfRevision(
+            sessionId: String,
+            messages: List<Message>,
+            expectedRevision: Long,
+        ): Boolean = store.mergeAuthoritativeIfRevision(sessionId, messages, expectedRevision)
+
         fun messages(sessionId: String): List<Message> = store.messages(sessionId)
 
         fun message(

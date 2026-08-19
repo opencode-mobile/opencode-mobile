@@ -225,9 +225,16 @@ class SessionDomainAdapter {
         questions
             .mapIndexed { index, question ->
                 val key = question.fieldKey ?: "q$index"
-                key to (answers.getOrNull(index)?.firstOrNull() ?: "")
+                key to wireAnswer(question, answers.getOrNull(index)?.firstOrNull().orEmpty())
             }.toMap()
             .ifEmpty { formAnswer(answers) }
+
+    private fun wireAnswer(
+        question: QuestionInfo,
+        selected: String,
+    ): String =
+        question.options.firstOrNull { it.label == selected || it.value == selected }?.value
+            ?: selected
 
     fun formAnswer(answers: List<List<String>>): Map<String, String> =
         answers.mapIndexed { index, values ->
@@ -246,6 +253,7 @@ class SessionDomainAdapter {
                     QuestionOption(
                         label = option.label ?: option.value ?: "",
                         description = option.description ?: "",
+                        value = option.value ?: option.label ?: "",
                     )
                 },
             multiple = field.multiple == true,

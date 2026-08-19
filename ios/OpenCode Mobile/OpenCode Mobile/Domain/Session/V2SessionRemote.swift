@@ -137,14 +137,24 @@ struct V2SessionRemote: SessionRemote, Sendable {
     func replyToQuestion(
         questionID: String,
         answers: [[String]],
-        directory _: String?,
+        directory: String?,
         sessionID: String?
+    ) async throws -> Bool {
+        try await replyToQuestion(questionID: questionID, answers: answers, directory: directory, sessionID: sessionID, questions: [])
+    }
+
+    func replyToQuestion(
+        questionID: String,
+        answers: [[String]],
+        directory _: String?,
+        sessionID: String?,
+        questions: [QuestionInfo]
     ) async throws -> Bool {
         if questionID.hasPrefix("frm_") {
             return try await api.replyToFormV2(
                 sessionID: sessionID ?? "",
                 formID: questionID,
-                body: V2FormReplyRequestDTO(answer: adapter.formAnswer(from: answers))
+                body: V2FormReplyRequestDTO(answer: adapter.formAnswer(questions: questions, answers: answers))
             )
         }
         return try await api.replyToQuestionV2(

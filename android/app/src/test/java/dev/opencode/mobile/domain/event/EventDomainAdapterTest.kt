@@ -26,6 +26,20 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvent_readsEnvelopeIdFromPayloadAndRaw() {
+        val wrapped =
+            adapter.parseEvent(
+                """{"directory":"/tmp","payload":{"id":"evt_1","type":"message.part.delta","properties":{"sessionID":"ses-1"}}}""",
+            )
+        assertEquals("evt_1", wrapped?.id)
+        val instance =
+            adapter.parseEvent(
+                """{"id":"evt_2","type":"message.part.delta","properties":{"sessionID":"ses-1"}}""",
+            )
+        assertEquals("evt_2", instance?.id)
+    }
+
+    @Test
     fun parseEvent_readsSessionIdFromMessageInfo() {
         val event =
             adapter.parseEvent(
@@ -275,6 +289,26 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvent_parsesToolInputJsonString() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.tool.called","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","callID":"prt-1","name":"task","input":"{\"agent\":\"explore\",\"description\":\"Find auth\"}"}}""",
+            )
+
+        val input =
+            event
+                ?.rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("state")
+                ?.jsonObject
+                ?.get("input")
+                ?.jsonObject
+        assertEquals("explore", input?.get("agent")?.jsonPrimitive?.content)
+        assertEquals("Find auth", input?.get("description")?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun parseEvent_projectsInboxCancelledIntoMessageRemoved() {
         val event =
             adapter.parseEvent(
@@ -341,6 +375,47 @@ class EventDomainAdapterTest {
         assertEquals("ses-1", events[0].sessionId)
         assertEquals("assistant", events[0].rawProperties?.get("info")?.jsonObject?.get("role")?.jsonPrimitive?.content)
         assertTrue(events[1].triggersStatusRefresh)
+    }
+
+    @Test
+    fun parseEvents_promptedTextPartSurvivesDeduper() {
+        val events =
+            adapter.parseEvents(
+                """{"id":"evt_prompt","type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"What are you up to?"}}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
+        assertEquals(listOf("evt_prompt:0", "evt_prompt:1"), events.map { it.id })
+        val deduper = SseEventDeduper()
+        assertTrue(events.all { deduper.accept(it.id) })
+        assertEquals(
+            "What are you up to?",
+            events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content,
+        )
+    }
+
+    @Test
+    fun parseEvents_stampsDistinctIdsOnProjectedSiblings() {
+        val events =
+            adapter.parseEvents(
+                """{"id":"evt_step","type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
+            )
+
+        assertEquals(listOf("evt_step:0", "evt_step:1"), events.map { it.id })
+        val deduper = SseEventDeduper()
+        assertTrue(events.all { deduper.accept(it.id) })
+    }
+
+    @Test
+    fun parseEvents_projectsReasoningEndedWithEndOnly() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.reasoning.ended","created":2000,"data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"r-1","text":"hmm"}}""",
+            )
+
+        val time = events.single().rawProperties?.get("part")?.jsonObject?.get("time")?.jsonObject
+        assertNull(time?.get("start"))
+        assertEquals(2000L, time?.get("end")?.jsonPrimitive?.longOrNull)
     }
 
     @Test
@@ -471,6 +546,16 @@ class EventDomainAdapterTest {
         assertEquals("msg-2", info?.get("id")?.jsonPrimitive?.content)
         assertEquals(120, info?.get("tokens")?.jsonObject?.get("input")?.jsonPrimitive?.intOrNull)
         assertTrue(event!!.triggersMessageRefresh)
+    }
+
+    @Test
+    fun parseEvent_dropsUsageUpdatedWithoutAssistantId() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.usage.updated","data":{"sessionID":"ses-1","tokens":{"input":120,"output":4}}}""",
+            )
+
+        assertNull(event)
     }
 
     @Test

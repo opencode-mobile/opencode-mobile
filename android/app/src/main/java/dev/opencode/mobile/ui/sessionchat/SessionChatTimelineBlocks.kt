@@ -74,6 +74,7 @@ sealed class SessionChatTimelineBlock {
         override val blockID: String,
         val text: String,
         val isStreaming: Boolean,
+        val durationMs: Long? = null,
     ) : SessionChatTimelineBlock()
 }
 
@@ -173,6 +174,7 @@ object SessionChatTimelineBlocks {
                                 blockID = PresentationBlockId.direct(partId),
                                 text = trimmed,
                                 isStreaming = part.isStreaming,
+                                durationMs = thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs),
                             )
                     }
                     index += 1
@@ -292,6 +294,34 @@ object SessionChatTimelineBlocks {
         }
     }
 
+    fun thoughtDurationLabel(durationMs: Long?): String? {
+        val duration = durationMs ?: return null
+        if (duration < 0) return null
+        return when {
+            duration < 1_000 -> "${duration}ms"
+            duration < 60_000 -> "${"%.1f".format(duration / 1000.0)}s"
+            duration < 3_600_000 -> {
+                val minutes = duration / 60_000
+                val seconds = (duration % 60_000) / 1_000
+                "${minutes}m ${seconds}s"
+            }
+            else -> {
+                val hours = duration / 3_600_000
+                val minutes = (duration % 3_600_000) / 60_000
+                "${hours}h ${minutes}m"
+            }
+        }
+    }
+
+    private fun thoughtDurationMs(
+        start: Long?,
+        end: Long?,
+    ): Long? {
+        if (start == null || end == null) return null
+        val duration = end - start
+        return duration.takeIf { it >= 0 }
+    }
+
     private fun isVisibleTool(tool: MessagePart.Tool): Boolean {
         val name = tool.toolName.lowercase()
         if (name == "todowrite") return false
@@ -382,7 +412,10 @@ object SessionChatTimelineBlocks {
             "read" -> if (count == 1) "Read" else "$count reads"
             "grep" -> if (count == 1) "Grep" else "$count greps"
             "glob" -> if (count == 1) "Glob" else "$count globs"
-            "bash" -> if (count == 1) "Shell" else "$count shells"
+            "bash", "shell" -> if (count == 1) "Shell" else "$count shells"
+            "execute" -> if (count == 1) "Execute" else "$count executes"
+            "lsp" -> if (count == 1) "LSP" else "$count LSPs"
+            "plan_exit" -> if (count == 1) "Plan" else "$count plans"
             "edit" -> if (count == 1) "Edit" else "$count edits"
             "write" -> if (count == 1) "Write" else "$count writes"
             "webfetch" -> if (count == 1) "Fetch" else "$count fetches"
@@ -414,9 +447,8 @@ object SessionChatTimelineBlocks {
         val partId = tool.id ?: return null
         val agentName = taskAgentName(tool)
         val secondLine =
-            tool.title
-                ?.takeIf { it.isNotEmpty() && !it.equals(tool.toolName, ignoreCase = true) }
-                ?: inputString(tool.input, "description", "prompt")
+            inputString(tool.input, "description", "prompt")
+                ?: childSessionTitle(tool)
         return SessionChatTimelineBlock.ChildSessionRow(
             blockID = PresentationBlockId.direct(partId),
             agentName = agentName,
@@ -471,11 +503,14 @@ object SessionChatTimelineBlocks {
 
     private fun genericChrome(tool: MessagePart.Tool): Chrome {
         val subtitle =
-            when (tool.status) {
-                ToolStatus.Running -> tool.title?.takeIf { it.isNotEmpty() }
-                else -> null
-            }
-        return Chrome(title = "Called ${tool.toolName}", subtitle = subtitle)
+            inputPreview(tool.input)
+                ?: tool.title?.takeIf { it.isNotEmpty() && !it.equals(tool.toolName, ignoreCase = true) }
+                ?: runningTitleOverride(tool)
+        return Chrome(
+            title = "Called ${tool.toolName}",
+            subtitle = subtitle,
+            detailText = settledDetail(tool),
+        )
     }
 
     private fun specializedChrome(
@@ -496,16 +531,13 @@ object SessionChatTimelineBlocks {
                     displayTitle = "Grep",
                     subtitle = patternPathSubtitle(tool.input),
                 )
-            "bash" -> shellChrome(tool)
+            "bash", "shell" -> shellChrome(tool)
+            "execute" -> executeChrome(tool)
+            "lsp" -> lspChrome(tool)
+            "plan_exit" -> planExitChrome(tool)
             "webfetch" -> networkChrome(tool, displayTitle = "Fetch", subtitleKey = "url")
             "websearch" -> networkChrome(tool, displayTitle = "Search", subtitleKey = "query")
-            "question" ->
-                Chrome(
-                    title = "Question",
-                    subtitle =
-                        inputString(tool.input, "prompt", "text", "question")
-                            ?: runningTitleOverride(tool),
-                )
+            "question" -> questionChrome(tool)
             "skill" ->
                 Chrome(
                     title = "Skill",
@@ -642,9 +674,23 @@ object SessionChatTimelineBlocks {
     }
 
     private fun taskAgentName(tool: MessagePart.Tool): String =
-        inputString(tool.input, "agent", "name")
+        inputString(tool.input, "agent", "subagent_type")
             ?: metadataString(tool.metadata, "agent")
-            ?: "Task"
+            ?: if (tool.toolName.equals("subagent", ignoreCase = true)) "General" else "Task"
+
+    private fun childSessionTitle(tool: MessagePart.Tool): String? {
+        val title = tool.title?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        if (title.equals(tool.toolName, ignoreCase = true)) return null
+        if (isCompositeChildTitle(title)) return null
+        return title
+    }
+
+    private fun isCompositeChildTitle(title: String): Boolean {
+        val lower = title.lowercase()
+        return lower.contains(" subagent") ||
+            title.contains(" — ") ||
+            title.contains(" – ")
+    }
 
     private fun isChildSessionTool(toolName: String): Boolean {
         val name = toolName.lowercase()
@@ -675,14 +721,110 @@ object SessionChatTimelineBlocks {
         val command =
             inputString(tool.input, "command")
                 ?: runningTitleOverride(tool)
-        val detail =
-            tool.output?.takeIf { it.isNotEmpty() }
-                ?: tool.error?.takeIf { it.isNotEmpty() }
         return Chrome(
             title = "Shell",
             subtitle = command,
-            detailText = detail,
+            detailText = settledDetail(tool),
         )
+    }
+
+    private fun executeChrome(tool: MessagePart.Tool): Chrome {
+        val calls = executeCallPreviews(tool.metadata)
+        val subtitle =
+            when {
+                calls.isEmpty() ->
+                    runningTitleOverride(tool)
+                        ?: tool.title?.takeIf { it.isNotEmpty() }
+                calls.size == 1 -> calls.first()
+                else -> "${calls.size} tools"
+            }
+        val detail =
+            buildString {
+                if (calls.isNotEmpty()) append(calls.joinToString("\n"))
+                val extra = settledDetail(tool)
+                if (extra != null) {
+                    if (isNotEmpty()) append("\n\n")
+                    append(extra)
+                }
+            }.takeIf { it.isNotEmpty() }
+        return Chrome(title = "Execute", subtitle = subtitle, detailText = detail)
+    }
+
+    private fun executeCallPreviews(metadata: JsonObject?): List<String> {
+        val array = metadata?.get("toolCalls") as? JsonArray ?: return emptyList()
+        return array.mapNotNull { element ->
+            val obj = element as? JsonObject ?: return@mapNotNull null
+            val name = (obj["tool"] as? JsonPrimitive)?.content?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val preview = inputPreview(obj["input"] as? JsonObject)
+            if (preview != null) "$name $preview" else name
+        }
+    }
+
+    private fun lspChrome(tool: MessagePart.Tool): Chrome {
+        val operation = inputString(tool.input, "operation")
+        val path = pathSubtitle(tool.input)
+        val line = inputString(tool.input, "line")
+        val query = inputString(tool.input, "query")
+        val location =
+            when {
+                path != null && line != null -> "$path:$line"
+                path != null -> path
+                query != null -> query
+                else -> null
+            }
+        val subtitle =
+            when {
+                operation != null && location != null -> "$operation · $location"
+                operation != null -> operation
+                location != null -> location
+                else ->
+                    runningTitleOverride(tool)
+                        ?: tool.title?.takeIf { it.isNotEmpty() }
+            }
+        return Chrome(title = "LSP", subtitle = subtitle, detailText = settledDetail(tool))
+    }
+
+    private fun planExitChrome(tool: MessagePart.Tool): Chrome =
+        Chrome(
+            title = "Plan",
+            subtitle =
+                tool.title?.takeIf { it.isNotEmpty() }
+                    ?: "Ready to implement?",
+            detailText = settledDetail(tool),
+        )
+
+    private fun settledDetail(tool: MessagePart.Tool): String? =
+        when (tool.status) {
+            ToolStatus.Completed, ToolStatus.Error ->
+                tool.output?.takeIf { it.isNotEmpty() }
+                    ?: tool.error?.takeIf { it.isNotEmpty() }
+            ToolStatus.Pending, ToolStatus.Running -> null
+        }
+
+    private fun inputPreview(input: JsonObject?): String? {
+        if (input == null) return null
+        inputString(
+            input,
+            "command",
+            "filePath",
+            "path",
+            "file",
+            "url",
+            "query",
+            "pattern",
+            "name",
+            "description",
+            "prompt",
+            "text",
+            "id",
+        )?.let { return it }
+        val parts =
+            input.mapNotNull { (key, value) ->
+                val primitive = value as? JsonPrimitive ?: return@mapNotNull null
+                val text = primitive.content.takeIf { it.isNotEmpty() && it.length <= 80 } ?: return@mapNotNull null
+                "$key=$text"
+            }
+        return parts.takeIf { it.isNotEmpty() }?.joinToString(", ")?.let { "[$it]" }
     }
 
     private fun networkChrome(
@@ -725,6 +867,71 @@ object SessionChatTimelineBlocks {
             path != null -> path
             else -> null
         }
+    }
+
+    private fun questionChrome(tool: MessagePart.Tool): Chrome {
+        val questions = questionTexts(tool.input)
+        val answers = answerTexts(tool.metadata)
+        val firstQuestion =
+            questions.firstOrNull()
+                ?: inputString(tool.input, "prompt", "text", "question")
+                ?: runningTitleOverride(tool)
+        val firstAnswer = answers.firstOrNull()
+        val dismissed = if (tool.status == ToolStatus.Error) tool.error?.takeIf { it.isNotEmpty() } else null
+        return Chrome(
+            title = firstQuestion ?: "Question",
+            subtitle = firstAnswer,
+            detailText =
+                questionDetail(
+                    questions = questions.ifEmpty { listOfNotNull(firstQuestion) },
+                    answers = answers,
+                    error = dismissed,
+                ),
+        )
+    }
+
+    private fun questionTexts(input: JsonObject?): List<String> {
+        val array = input?.get("questions") as? JsonArray ?: return emptyList()
+        return array.mapNotNull { element ->
+            val obj = element as? JsonObject ?: return@mapNotNull null
+            (obj["question"] as? JsonPrimitive)?.content?.takeIf { it.isNotEmpty() }
+        }
+    }
+
+    private fun answerTexts(metadata: JsonObject?): List<String> {
+        val array = metadata?.get("answers") as? JsonArray ?: return emptyList()
+        return array.mapNotNull { element ->
+            when (element) {
+                is JsonArray ->
+                    element
+                        .mapNotNull { (it as? JsonPrimitive)?.content?.takeIf { text -> text.isNotEmpty() } }
+                        .joinToString(", ")
+                        .takeIf { it.isNotEmpty() }
+                is JsonPrimitive -> element.content.takeIf { it.isNotEmpty() }
+                else -> null
+            }
+        }
+    }
+
+    private fun questionDetail(
+        questions: List<String>,
+        answers: List<String>,
+        error: String? = null,
+    ): String? {
+        val count = maxOf(questions.size, answers.size)
+        val pairs =
+            (0 until count).map { index ->
+                val question = questions.getOrNull(index).orEmpty()
+                val answer = answers.getOrNull(index).orEmpty()
+                when {
+                    question.isNotEmpty() && answer.isNotEmpty() -> "$question\n$answer"
+                    question.isNotEmpty() -> question
+                    else -> answer
+                }
+            }
+        return (pairs.filter { it.isNotEmpty() } + listOfNotNull(error))
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n\n")
     }
 
     private fun inputString(

@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -71,6 +72,7 @@ import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.TimelineApply
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
@@ -610,6 +612,18 @@ private fun AssistantMessageContent(
                         ReasoningBlock(
                             text = block.text,
                             isStreaming = block.isStreaming,
+                            durationMs = block.durationMs,
+                            onClick =
+                                block.text.takeIf { it.isNotBlank() }?.let { body ->
+                                    {
+                                        onToolDetailTap(
+                                            SessionChatToolDetailTarget(
+                                                title = if (block.isStreaming) "Thinking" else "Thought",
+                                                body = body,
+                                            ),
+                                        )
+                                    }
+                                },
                         )
                 }
             }
@@ -735,28 +749,40 @@ private fun SessionChatWorkingIndicatorRow(label: String) {
 private fun ReasoningBlock(
     text: String,
     isStreaming: Boolean,
+    durationMs: Long?,
+    onClick: (() -> Unit)?,
 ) {
-    val label = if (isStreaming) "Thinking" else "Thought"
-    val body = text.ifBlank { "…" }
-    Column(
+    val duration = SessionChatTimelineBlocks.thoughtDurationLabel(durationMs)
+    val label =
+        when {
+            isStreaming -> "Thinking"
+            duration != null -> "Thought · $duration"
+            else -> "Thought"
+        }
+    Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .semantics { contentDescription = "$label. $body" },
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+                .padding(start = 4.dp, top = 12.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
+            modifier =
+                Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .then(
+                        if (onClick != null) {
+                            Modifier
+                                .clickable(role = Role.Button, onClick = onClick)
+                                .semantics { contentDescription = label }
+                        } else {
+                            Modifier.semantics { contentDescription = label }
+                        },
+                    ),
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        if (text.isNotBlank()) {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
 }
 

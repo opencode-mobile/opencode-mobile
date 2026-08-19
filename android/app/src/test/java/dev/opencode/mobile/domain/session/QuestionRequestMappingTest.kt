@@ -120,6 +120,48 @@ class QuestionRequestMappingTest {
         assertEquals("SSE2 goal", request.questions.single().header)
         assertEquals("q0", request.questions.single().fieldKey)
         assertEquals("Check CPU support", request.questions.single().options.single().label)
+        assertEquals("Check CPU support", request.questions.single().options.single().value)
         assertEquals(mapOf("q0" to "Wait for instructions"), adapter.formAnswer(listOf(listOf("Wait for instructions"))))
+    }
+
+    @Test
+    fun `form reply uses field keys and option values`() {
+        val request =
+            adapter.toQuestionRequest(
+                V2FormInfoDto(
+                    id = "frm_1",
+                    sessionId = "ses_1",
+                    title = "Web Search",
+                    fields =
+                        listOf(
+                            V2FormFieldDto(
+                                key = "choice",
+                                title = "Web Search",
+                                description = "Allow OpenCode to search the web for up-to-date information?",
+                                options =
+                                    listOf(
+                                        V2FormFieldOptionDto(
+                                            value = "allow",
+                                            label = "Allow search via Exa, Firecrawl, Parallel, Tavily",
+                                        ),
+                                        V2FormFieldOptionDto(value = "choose", label = "Choose another provider"),
+                                        V2FormFieldOptionDto(value = "disable", label = "Disable web search"),
+                                    ),
+                                custom = false,
+                            ),
+                        ),
+                ),
+            )
+
+        val question = request.questions.single()
+        assertEquals("choice", question.fieldKey)
+        assertEquals("allow", question.options.first().value)
+        assertEquals(
+            mapOf("choice" to "allow"),
+            adapter.formAnswer(
+                request.questions,
+                listOf(listOf("Allow search via Exa, Firecrawl, Parallel, Tavily")),
+            ),
+        )
     }
 }

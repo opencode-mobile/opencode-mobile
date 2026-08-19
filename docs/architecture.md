@@ -4,9 +4,10 @@ Two native apps: SwiftUI on iOS, Kotlin + Jetpack Compose + Material 3 on
 Android. Same product language, feature boundaries, design-system meaning,
 and server integration. Separate implementations.
 
-Live Session Chat tracks official TUI v2. That TUI and the v2-only server
-live on the **opencode `beta` branch**, not `dev`/`main`. Dual-stack HTTP
-talks to classic unprefixed APIs and `/api/*`.
+Both server protocols stay supported: classic unprefixed **v1** and `/api/*`
+**v2**. Detect on connect; remotes hide the split. Live Session Chat *UX*
+tracks official TUI v2 on opencode **`beta`**, not `dev`/`main`. That does
+not drop v1 servers.
 
 ## Layout
 
@@ -31,7 +32,10 @@ flowchart TB
 ## Server API
 
 Detect `v1` | `v2` on connect (`/global/health` then `/api/health`). Route
-under remotes. Feature code uses domain types, not wire schemas.
+under remotes. Feature code uses domain types, not wire schemas. Changing
+one protocol must leave the other working (same Screen Models, both remotes,
+both health/event paths). Both protocols must carry relevant live events
+over SSE; do not ship a heartbeat-only or REST-only live path.
 
 OpenAPI (`/doc` or v2 `/openapi.json`) is the contract. Generated clients
 are optional; if used they stay behind the adapter.
@@ -97,15 +101,20 @@ store stays in-memory (`InMemoryMessageStore`).
 
 ## Foreground events
 
-One app-wide stream while foregrounded. Path is `/global/event` or
-`/api/event` by protocol. Stop after a short background grace. 45s idle
-timeout then reconnect. Refresh from REST after reconnect.
+One app-wide stream while foregrounded. Keep both protocols and both v1
+event paths: `GET /global/event` and instance `GET /event`, plus v2
+`GET /api/event`. Official desktop uses `/global/event` for v1; instance
+`/event` is the directory-scoped bus that carries `session.created`,
+`message.*`, status, permissions, and questions. Both protocols must
+deliver those events over SSE — heartbeat-only is not acceptable. Stop
+after a short background grace. 45s idle timeout then reconnect. Refresh
+from REST after reconnect; REST is history / reconnect authority, not a
+substitute for missing SSE.
 
 `EventDomainAdapter` projects v2 `session.*` / `session.next.*` (including
 inbox and reasoning) into the v1 product vocabulary. `MessageSync` merges
-message/part events incrementally. REST is authoritative for history,
-idle, and reconnect. In-flight REST must not overwrite a newer store
-revision.
+message/part events incrementally. In-flight REST must not overwrite a
+newer store revision.
 
 ## Logging
 

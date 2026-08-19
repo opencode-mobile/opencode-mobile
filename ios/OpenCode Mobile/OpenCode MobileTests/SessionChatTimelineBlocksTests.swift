@@ -41,6 +41,35 @@ struct SessionChatTimelineBlocksTests {
         ])
     }
 
+    @Test func thoughtDurationLabel_matchesTuiBuckets() {
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(438) == "438ms")
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(6400) == "6.4s")
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(127_000) == "2m 7s")
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(nil) == nil)
+    }
+
+    @Test func build_reasoningPart_includesDuration() {
+        let blocks = okBlocks(
+            parts: [
+                .reasoning(
+                    ReasoningPart(
+                        id: "r1",
+                        text: "Need to greet the user.",
+                        timeStartEpochMs: 1_000,
+                        timeEndEpochMs: 7_400
+                    )
+                ),
+            ]
+        )
+        guard case .reasoning(_, let text, let isStreaming, let durationMs) = blocks.first else {
+            Issue.record("expected reasoning")
+            return
+        }
+        #expect(text == "Need to greet the user.")
+        #expect(isStreaming == false)
+        #expect(durationMs == 6_400)
+    }
+
     @Test func build_interleavesTextAndToolCards() {
         let blocks = okBlocks(
             parts: [
@@ -109,9 +138,73 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(blockID == PresentationBlockId.direct("q3"))
-        #expect(tool.title == "Question")
-        #expect(tool.subtitle == "Which option?")
-        #expect(tool.detailText == nil)
+        #expect(tool.title == "Which option?")
+        #expect(tool.subtitle == nil)
+        #expect(tool.detailText == "Which option?")
+    }
+
+    @Test func build_dismissedQuestionIsTappable() {
+        let shown = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "q-dismissed",
+                        toolName: "question",
+                        status: .error,
+                        error: "The user dismissed this question",
+                        input: [
+                            "questions": .array([
+                                .dictionary(["question": .string("What would you like to do in this session?")]),
+                            ]),
+                        ]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(_, let tool) = shown.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "What would you like to do in this session?")
+        #expect(tool.errorText == "The user dismissed this question")
+        #expect(
+            tool.detailText ==
+                "What would you like to do in this session?\n\nThe user dismissed this question"
+        )
+    }
+
+    @Test func build_answeredQuestionShowsQuestionAndReply() {
+        let shown = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "q-answered",
+                        toolName: "question",
+                        status: .completed,
+                        input: [
+                            "questions": .array([
+                                .dictionary(["question": .string("What should we do with these two projects this session?")]),
+                            ]),
+                        ],
+                        metadata: [
+                            "answers": .array([
+                                .array([.string("Build a third sibling")]),
+                            ]),
+                        ]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(_, let tool) = shown.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "What should we do with these two projects this session?")
+        #expect(tool.subtitle == "Build a third sibling")
+        #expect(
+            tool.detailText ==
+                "What should we do with these two projects this session?\nBuild a third sibling"
+        )
     }
 
     @Test func build_nonAssistantRolesAreTextOnly() {
@@ -326,6 +419,28 @@ struct SessionChatTimelineBlocksTests {
         #expect(tool.detailText == "exit 1")
     }
 
+    @Test func build_v2ShellUsesCommandAsSubtitle() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "shell-1",
+                        toolName: "shell",
+                        status: .running,
+                        title: "shell",
+                        input: ["command": .string("git status")]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(_, let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Shell")
+        #expect(tool.subtitle == "git status")
+    }
+
     @Test func build_networkFetchAndSearchChrome() {
         let fetchBlocks = okBlocks(
             parts: [
@@ -491,10 +606,73 @@ struct SessionChatTimelineBlocksTests {
         }
         #expect(row.agentName == "Task")
         #expect(row.letter == "T")
-        #expect(row.secondLine == "Working…")
+        #expect(row.secondLine == "Investigate flaky tests")
         #expect(row.childSessionId == nil)
         #expect(row.isBackground == false)
         #expect(row.timeStartEpochMs == nil)
+    }
+
+    @Test func build_taskStaysTaskUntilInputAgentLands() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "task-1",
+                        toolName: "task",
+                        status: .running,
+                        title: "explore"
+                    )
+                ),
+            ]
+        )
+        guard case .childSessionRow(_, let row) = blocks.first else {
+            Issue.record("Expected child session row")
+            return
+        }
+        #expect(row.agentName == "Task")
+    }
+
+    @Test func build_subagentDefaultsToGeneralAndPrefersDescriptionOverCompositeTitle() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "prt-1",
+                        toolName: "subagent",
+                        status: .running,
+                        title: "General Subagent – First 7 days of October 2026",
+                        input: ["description": .string("First 7 days of October 2026")]
+                    )
+                ),
+            ]
+        )
+        guard case .childSessionRow(_, let row) = blocks.first else {
+            Issue.record("Expected child session row")
+            return
+        }
+        #expect(row.agentName == "General")
+        #expect(row.letter == "G")
+        #expect(row.secondLine == "First 7 days of October 2026")
+    }
+
+    @Test func build_subagentUsesSubagentTypeBeforeDefault() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "prt-1",
+                        toolName: "subagent",
+                        status: .running,
+                        input: ["subagent_type": .string("explore")]
+                    )
+                ),
+            ]
+        )
+        guard case .childSessionRow(_, let row) = blocks.first else {
+            Issue.record("Expected child session row")
+            return
+        }
+        #expect(row.agentName == "explore")
     }
 
     @Test func build_pendingTaskQuietRowUsesPromptWhenTitleMissing() {
@@ -548,8 +726,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected child session row")
             return
         }
-        #expect(row.agentName == "coder")
-        #expect(row.letter == "C")
+        #expect(row.agentName == "Task")
+        #expect(row.letter == "T")
         #expect(row.secondLine == nil)
         #expect(row.isBackground == true)
         #expect(row.childSessionId == nil)

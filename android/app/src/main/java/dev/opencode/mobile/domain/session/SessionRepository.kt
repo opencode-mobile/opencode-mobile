@@ -128,6 +128,14 @@ interface SessionRepository {
         directory: String? = null,
     ): Boolean = replyToQuestion(requestId, answers, directory)
 
+    suspend fun replyToQuestion(
+        sessionId: String,
+        requestId: String,
+        answers: List<List<String>>,
+        questions: List<QuestionInfo>,
+        directory: String? = null,
+    ): Boolean = replyToQuestion(sessionId, requestId, answers, directory)
+
     suspend fun rejectQuestion(
         requestId: String,
         directory: String? = null,

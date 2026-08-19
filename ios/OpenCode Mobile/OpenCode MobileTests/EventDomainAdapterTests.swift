@@ -11,6 +11,18 @@ struct EventDomainAdapterTests {
         #expect(event?.sessionID == "ses-1")
     }
 
+    @Test func parseEvent_readsEnvelopeIdFromPayloadAndRaw() {
+        let adapter = EventDomainAdapter()
+        let wrapped = adapter.parseEvent(
+            dataLine: #"{"directory":"/tmp","payload":{"id":"evt_1","type":"message.part.delta","properties":{"sessionID":"ses-1"}}}"#
+        )
+        #expect(wrapped?.id == "evt_1")
+        let instance = adapter.parseEvent(
+            dataLine: #"{"id":"evt_2","type":"message.part.delta","properties":{"sessionID":"ses-1"}}"#
+        )
+        #expect(instance?.id == "evt_2")
+    }
+
     @Test func parseEvent_readsSessionIDFromMessageInfo() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(
@@ -231,6 +243,16 @@ struct EventDomainAdapterTests {
         #expect(state?["time"]?.dictionaryValue?["start"]?.int64Value == 1_710_000_000_000)
     }
 
+    @Test func parseEvent_parsesToolInputJsonString() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.tool.called","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","callID":"prt-1","name":"task","input":"{\"agent\":\"explore\",\"description\":\"Find auth\"}"}}"#
+        )
+        let input = event?.rawProperties?["part"]?.dictionaryValue?["state"]?.dictionaryValue?["input"]?.dictionaryValue
+        #expect(input?["agent"]?.stringValue == "explore")
+        #expect(input?["description"]?.stringValue == "Find auth")
+    }
+
     @Test func parseEvent_projectsInboxCancelledIntoMessageRemoved() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(
@@ -370,6 +392,38 @@ struct EventDomainAdapterTests {
         #expect(events[1].triggersStatusRefresh == true)
     }
 
+    @Test func parseEvents_promptedTextPartSurvivesDeduper() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"id":"evt_prompt","type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"What are you up to?"}}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
+        #expect(events.map(\.id) == ["evt_prompt:0", "evt_prompt:1"])
+        let deduper = SseEventDeduper()
+        #expect(events.allSatisfy { deduper.accept($0.id) })
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["text"]?.stringValue == "What are you up to?")
+    }
+
+    @Test func parseEvents_stampsDistinctIdsOnProjectedSiblings() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"id":"evt_step","type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
+        )
+        #expect(events.map(\.id) == ["evt_step:0", "evt_step:1"])
+        let deduper = SseEventDeduper()
+        #expect(events.allSatisfy { deduper.accept($0.id) })
+    }
+
+    @Test func parseEvents_projectsReasoningEndedWithEndOnly() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.reasoning.ended","created":2000,"data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"r-1","text":"hmm"}}"#
+        )
+        let time = events.first?.rawProperties?["part"]?.dictionaryValue?["time"]?.dictionaryValue
+        #expect(time?["start"] == nil)
+        #expect(time?["end"]?.int64Value == 2000)
+    }
+
     @Test func parseEvent_readsOfficialSSEEnvelopeWithEventAndJSONStringData() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(
@@ -404,6 +458,14 @@ struct EventDomainAdapterTests {
         #expect(event?.rawProperties?["info"]?.dictionaryValue?["id"]?.stringValue == "msg-2")
         #expect(event?.rawProperties?["info"]?.dictionaryValue?["tokens"]?.dictionaryValue?["input"]?.int64Value == 120)
         #expect(event?.triggersMessageRefresh == true)
+    }
+
+    @Test func parseEvent_dropsUsageUpdatedWithoutAssistantId() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.usage.updated","data":{"sessionID":"ses-1","tokens":{"input":120,"output":4}}}"#
+        )
+        #expect(event == nil)
     }
 
     @Test func parseEvent_projectsLiveRenamedIntoSessionUpdated() {

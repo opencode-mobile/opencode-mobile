@@ -11,6 +11,10 @@ classic TUI v1 on `dev`/`main`.
 ## In Scope
 
 - Dual-stack behind existing repository interfaces on **both** iOS and Android.
+  Required forever: a v1-only server and a v2-only server must both work.
+  Do not remove, skip, or “v2-only” a remote, event path, or test matrix.
+- Full v1 SSE stays in scope: `GET /global/event` and instance `GET /event`
+  must carry relevant live events. REST reconnect is not a live-event fallback.
 - Protocol detection on connection test / home probe; cache on active connection.
 - Domain adapters / projectors that map v1 or v2 wire shapes into today’s domain
   models (`Session`, `Message`, `PermissionRequest`, …).

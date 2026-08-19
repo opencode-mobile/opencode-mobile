@@ -809,7 +809,13 @@ class SessionChatViewModel
             publishUiState()
             viewModelScope.launch(ioDispatcher) {
                 runCatching {
-                    sessionRepository.replyToQuestion(request.sessionId, request.id, answers, boundWorktree)
+                    sessionRepository.replyToQuestion(
+                        request.sessionId,
+                        request.id,
+                        answers,
+                        request.questions,
+                        boundWorktree,
+                    )
                 }.onFailure { handleQuestionMutationFailure(request.id, it, dismiss = false) }
             }
         }

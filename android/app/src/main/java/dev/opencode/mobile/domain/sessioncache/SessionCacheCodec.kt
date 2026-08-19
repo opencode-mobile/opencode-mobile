@@ -156,6 +156,7 @@ internal data class CachedMessagePartPayload(
     val attachmentKind: String? = null,
     val dataUrl: String? = null,
     val timeStartEpochMs: Long? = null,
+    val timeEndEpochMs: Long? = null,
 )
 
 @Serializable
@@ -334,6 +335,8 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 id = id,
                 text = text,
                 isStreaming = isStreaming,
+                timeStartEpochMs = timeStartEpochMs,
+                timeEndEpochMs = timeEndEpochMs,
             )
     }
 
@@ -379,6 +382,8 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                 text = text.orEmpty(),
                 isStreaming = isStreaming,
                 id = id,
+                timeStartEpochMs = timeStartEpochMs,
+                timeEndEpochMs = timeEndEpochMs,
             )
         else -> null
     }

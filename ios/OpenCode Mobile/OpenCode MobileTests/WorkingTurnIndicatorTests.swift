@@ -21,12 +21,12 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
-    @Test func labelForActiveTurn_hidesWhenAssistantHasText() {
+    @Test func labelForActiveTurn_showsThinkingWhenAssistantHasSettledText() {
         #expect(
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel: "Working",
                 messages: [user("u1"), assistant("a1", text: "Hello")]
-            ) == nil
+            ) == "Thinking"
         )
     }
 
@@ -65,7 +65,7 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
-    @Test func labelForActiveTurn_showsWorkingAfterCompletedToolCard() {
+    @Test func labelForActiveTurn_showsThinkingAfterCompletedToolCard() {
         let toolCard: SessionChatTimelineBlock = .toolCard(
             blockID: "tool-1",
             card: SessionChatToolCardBlock(
@@ -78,7 +78,31 @@ struct WorkingTurnIndicatorTests {
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel: "Working",
                 messages: [user("u1"), assistant("a1", text: "", blocks: [toolCard])]
-            ) == "Working"
+            ) == "Thinking"
+        )
+    }
+
+    @Test func labelForActiveTurn_keepsRetryingAfterSettledContent() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Retrying",
+                messages: [user("u1"), assistant("a1", text: "Hello")]
+            ) == "Retrying"
+        )
+    }
+
+    @Test func labelForActiveTurn_hidesWhenReasoningIsStreaming() {
+        let reasoning: SessionChatTimelineBlock = .reasoning(
+            blockID: "r1",
+            text: "hmm",
+            isStreaming: true,
+            durationMs: nil
+        )
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                messages: [user("u1"), assistant("a1", text: "", blocks: [reasoning])]
+            ) == nil
         )
     }
 
@@ -89,6 +113,23 @@ struct WorkingTurnIndicatorTests {
                 messages: [user("u1"), assistant("a1", text: "Hello")],
                 isCompacting: true
             ) == SessionCompactChrome.statusLabel
+        )
+    }
+
+    @Test func labelForActiveTurn_ignoresCompletedCompactionSnapshot() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                messages: [
+                    user("u1"),
+                    SessionChatRow(
+                        id: "c1",
+                        role: .assistant,
+                        text: "summary",
+                        metadataLabel: "compaction · m"
+                    ),
+                ]
+            ) == "Working"
         )
     }
 

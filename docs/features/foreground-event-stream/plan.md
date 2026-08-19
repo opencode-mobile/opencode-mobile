@@ -7,7 +7,10 @@ After reconnect, state is refreshed from the server.
 
 ## In Scope
 
-- `ForegroundEventStream` domain service wrapping `GET /global/event` SSE.
+- `ForegroundEventStream` wrapping v1 `GET /global/event` **and** instance
+  `GET /event`, plus v2 `GET /api/event`. All stay. Both protocols must
+  carry relevant live events (session lifecycle, message/part, status,
+  permissions, questions), not heartbeats only.
 - Foreground lifecycle: connect on app foreground, disconnect on background.
 - Reconnect with refresh of session list, statuses, and open chat messages.
 - Session Chat incrementally merges relevant message events for the bound
@@ -30,7 +33,10 @@ After reconnect, state is refreshed from the server.
 
 ## Server APIs Involved
 
-- `GET /global/event` — SSE (`{ payload: { type, properties } }` envelopes).
+- `GET /global/event` — v1 SSE (desktop default). Must carry relevant events.
+- `GET /event` — v1 instance SSE (directory-scoped). Carries `session.created`,
+  `message.*`, status, permissions, questions. Keep it; do not treat as optional.
+- `GET /api/event` — v2 SSE (live Session Chat shape). Same relevant-event bar.
 - `GET /session/status` — baseline and reconnect status refresh.
 - Existing `GET /session/:id/message` for initial history, selective
   reconciliation, reconnect, and the changed-message watchdog.

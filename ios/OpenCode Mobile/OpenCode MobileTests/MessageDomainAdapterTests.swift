@@ -707,6 +707,69 @@ struct MessageDomainAdapterTests {
         #expect(tool.output == "src")
     }
 
+    @Test func projectV2MapsReasoningContentIntoThoughtPart() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_asst",
+                    "type":"assistant",
+                    "content":[
+                      {"type":"reasoning","id":"r1","text":"Need to greet the user."},
+                      {"type":"text","id":"t1","text":"Hello!"}
+                    ],
+                    "time":{"created":3}
+                  }
+                ]
+                """.utf8
+            )
+        )
+
+        let parts = adapter.messages(fromV2: dtos)[0].parts
+        guard case let .reasoning(reasoning) = parts.first(where: { if case .reasoning = $0 { true } else { false } }) else {
+            Issue.record("expected reasoning part")
+            return
+        }
+        #expect(reasoning.text == "Need to greet the user.")
+        #expect(reasoning.id == "r1")
+    }
+
+    @Test func projectV2ThinkingAliasGetsReasoningPartAndId() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_asst",
+                    "type":"assistant",
+                    "content":[
+                      {"type":"thinking","text":"Need to greet the user."},
+                      {"type":"text","text":"Hello!"}
+                    ],
+                    "time":{"created":3}
+                  }
+                ]
+                """.utf8
+            )
+        )
+
+        let parts = adapter.messages(fromV2: dtos)[0].parts
+        guard case let .reasoning(reasoning) = parts.first(where: { if case .reasoning = $0 { true } else { false } }) else {
+            Issue.record("expected reasoning part")
+            return
+        }
+        #expect(reasoning.text == "Need to greet the user.")
+        #expect(reasoning.id == "msg_asst:thinking:0")
+        guard case let .text(text) = parts.first(where: { if case .text = $0 { true } else { false } }) else {
+            Issue.record("expected text part")
+            return
+        }
+        #expect(text.id == "msg_asst:text:1")
+    }
+
     @Test func projectV2AssistantInheritsCarriedAgentAndModel() throws {
         let dtos = try decoder.decode(
             [V2SessionMessageDTO].self,

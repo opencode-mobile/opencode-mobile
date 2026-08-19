@@ -62,6 +62,26 @@ class MessageDomainAdapterTest {
         assertEquals("", message.text)
         val tool = message.parts.single() as MessagePart.Tool
         assertEquals(ToolStatus.Pending, tool.status)
+        assertEquals("glob", tool.toolName)
+    }
+
+    @Test
+    fun toMessage_mapsV2ToolNameWhenToolFieldAbsent() {
+        val raw =
+            """
+            {
+              "info": { "id": "msg-2", "role": "assistant" },
+              "parts": [
+                { "type": "tool", "name": "websearch", "state": { "status": "completed" } }
+              ]
+            }
+            """.trimIndent()
+
+        val dto = json.decodeFromString<MessageDto>(raw)
+        val message = adapter.toMessage(dto)
+        val tool = message.parts.single() as MessagePart.Tool
+        assertEquals("websearch", tool.toolName)
+        assertEquals(ToolStatus.Completed, tool.status)
     }
 
     @Test
@@ -888,6 +908,58 @@ class MessageDomainAdapterTest {
         assertEquals("bash", tool.toolName)
         assertEquals(ToolStatus.Completed, tool.status)
         assertEquals("src", tool.output)
+    }
+
+    @Test
+    fun projectV2_mapsReasoningContentIntoThoughtPart() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {
+                    "id":"msg_asst",
+                    "type":"assistant",
+                    "content":[
+                      {"type":"reasoning","id":"r1","text":"Need to greet the user."},
+                      {"type":"text","id":"t1","text":"Hello!"}
+                    ],
+                    "time":{"created":3}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val parts = adapter.projectV2(dtos).single().parts
+        val reasoning = parts.filterIsInstance<MessagePart.Reasoning>().single()
+        assertEquals("Need to greet the user.", reasoning.text)
+        assertEquals("r1", reasoning.id)
+        assertEquals("Hello!", parts.filterIsInstance<MessagePart.Text>().single().text)
+    }
+
+    @Test
+    fun projectV2_thinkingAliasGetsReasoningPartAndId() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {
+                    "id":"msg_asst",
+                    "type":"assistant",
+                    "content":[
+                      {"type":"thinking","text":"Need to greet the user."},
+                      {"type":"text","text":"Hello!"}
+                    ],
+                    "time":{"created":3}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val parts = adapter.projectV2(dtos).single().parts
+        val reasoning = parts.filterIsInstance<MessagePart.Reasoning>().single()
+        assertEquals("Need to greet the user.", reasoning.text)
+        assertEquals("msg_asst:thinking:0", reasoning.id)
+        assertEquals("msg_asst:text:1", parts.filterIsInstance<MessagePart.Text>().single().id)
     }
 
     @Test

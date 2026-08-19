@@ -163,12 +163,20 @@ internal class V2SessionRemote(
         requestId: String,
         answers: List<List<String>>,
         directory: String?,
+    ): Boolean = replyToQuestion(sessionId, requestId, answers, emptyList(), directory)
+
+    override suspend fun replyToQuestion(
+        sessionId: String,
+        requestId: String,
+        answers: List<List<String>>,
+        questions: List<QuestionInfo>,
+        directory: String?,
     ): Boolean =
         if (requestId.startsWith("frm_")) {
             api.replyToFormV2(
                 sessionId,
                 requestId,
-                V2FormReplyRequestDto(answer = adapter.formAnswer(answers)),
+                V2FormReplyRequestDto(answer = adapter.formAnswer(questions, answers)),
             )
         } else {
             api.replyToQuestionV2(sessionId, requestId, QuestionReplyRequestDto(answers = answers))

@@ -139,7 +139,15 @@ internal class ProtocolSelectedSessionRemote(
         requestId: String,
         answers: List<List<String>>,
         directory: String?,
-    ): Boolean = selected().replyToQuestion(sessionId, requestId, answers, directory)
+    ): Boolean = replyToQuestion(sessionId, requestId, answers, emptyList(), directory)
+
+    override suspend fun replyToQuestion(
+        sessionId: String,
+        requestId: String,
+        answers: List<List<String>>,
+        questions: List<QuestionInfo>,
+        directory: String?,
+    ): Boolean = selected().replyToQuestion(sessionId, requestId, answers, questions, directory)
 
     override suspend fun rejectQuestion(
         requestId: String,

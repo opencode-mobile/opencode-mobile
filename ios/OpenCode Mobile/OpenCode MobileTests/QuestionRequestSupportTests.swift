@@ -66,6 +66,30 @@ struct QuestionRequestSupportTests {
         )
     }
 
+    @Test func formAnswer_usesFieldKeysAndOptionValues() {
+        let questions = [
+            QuestionInfo(
+                question: "Allow OpenCode to search the web for up-to-date information?",
+                header: "Web Search",
+                options: [
+                    QuestionOption(
+                        label: "Allow search via Exa, Firecrawl, Parallel, Tavily",
+                        description: "",
+                        value: "allow"
+                    ),
+                ],
+                multiple: false,
+                custom: false,
+                fieldKey: "choice"
+            ),
+        ]
+        let answer = SessionDomainAdapter().formAnswer(
+            questions: questions,
+            answers: [["Allow search via Exa, Firecrawl, Parallel, Tavily"]]
+        )
+        #expect(answer == ["choice": "allow"])
+    }
+
     private func questionRequest(
         id: String,
         sessionID: String,

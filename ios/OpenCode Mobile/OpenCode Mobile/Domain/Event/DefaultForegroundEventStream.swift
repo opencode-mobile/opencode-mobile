@@ -15,12 +15,15 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
     private let api: EventsAPIClient
     private let adapter: EventDomainAdapter
     private let deviceNetworkPath: any DeviceNetworkPath
+    private let instanceDirectories: @Sendable () async -> [String]
     private var streamTask: Task<Void, Never>?
     /// Invalidates in-flight cancel/error handlers after `stop()` or a newer `start()`.
     private var streamGeneration: UInt64 = 0
     private var wasConnected = false
     private var currentStreamWasConnected = false
     private var emittedReconnectForCurrentStream = false
+    private var emittedConnectedForCurrentAttempt = false
+    private let eventDeduper = SseEventDeduper()
     private var subscriberContinuations: [UUID: AsyncStream<OpencodeEvent>.Continuation] = [:]
     private var connectionStateContinuations: [UUID: AsyncStream<EventStreamConnectionState>.Continuation] = [:]
 
@@ -30,12 +33,14 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
         api: EventsAPIClient,
         adapter: EventDomainAdapter,
         deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath(),
-        idleTimeout: Duration = .seconds(45)
+        idleTimeout: Duration = .seconds(45),
+        instanceDirectories: @escaping @Sendable () async -> [String] = { [] }
     ) {
         self.api = api
         self.adapter = adapter
         self.deviceNetworkPath = deviceNetworkPath
         self.idleTimeout = idleTimeout
+        self.instanceDirectories = instanceDirectories
     }
 
     func events() -> AsyncStream<OpencodeEvent> {
@@ -87,6 +92,7 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
         let adapter = adapter
         let deviceNetworkPath = deviceNetworkPath
         let idleTimeout = idleTimeout
+        let instanceDirectories = instanceDirectories
         // Byte read + line parse + event publish must not occupy MainActor.
         lock.lock()
         streamTask = Task(priority: .userInitiated) { [weak self] in
@@ -96,7 +102,8 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
                 deviceNetworkPath: deviceNetworkPath,
                 owner: self,
                 generation: generation,
-                idleTimeout: idleTimeout
+                idleTimeout: idleTimeout,
+                instanceDirectories: instanceDirectories
             )
         }
         lock.unlock()
@@ -109,6 +116,7 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
         streamGeneration += 1
         streamTask?.cancel()
         streamTask = nil
+        eventDeduper.clear()
         wasConnected = false
         currentStreamWasConnected = false
         emittedReconnectForCurrentStream = false
@@ -184,11 +192,16 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
         switch event.type {
         case "server.connected":
             markStreamConnected()
-            publish(event)
+            lock.lock()
+            let shouldPublish = !emittedConnectedForCurrentAttempt
+            if shouldPublish { emittedConnectedForCurrentAttempt = true }
+            lock.unlock()
+            if shouldPublish { publish(event) }
             return true
         case "server.heartbeat":
             return false
         default:
+            guard eventDeduper.accept(event.id) else { return false }
             markStreamConnected()
             publish(event)
             return false
@@ -201,7 +214,8 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
         deviceNetworkPath: any DeviceNetworkPath,
         owner: DefaultForegroundEventStream?,
         generation: UInt64,
-        idleTimeout: Duration
+        idleTimeout: Duration,
+        instanceDirectories: @escaping @Sendable () async -> [String]
     ) async {
         final class RetryBox: @unchecked Sendable {
             var attempt = 0
@@ -218,7 +232,9 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
             let wasConnected = owner.beginConnectAttempt(generation: generation)
             let activity = ActivityBox()
             let readTask = Task {
-                try await api.streamGlobalEvents(
+                let directories = await instanceDirectories()
+                try await api.streamSubscriptions(
+                    directories: directories,
                     onHTTPResponse: { statusCode in
                         activity.touch()
                         DiagnosticLog.info(.sse, "GET \(Self.eventPath(for: api)) opened status=\(statusCode) protocol=\(api.eventProtocolWireValue)")
@@ -308,6 +324,7 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
         lock.lock()
         currentStreamWasConnected = false
         emittedReconnectForCurrentStream = false
+        emittedConnectedForCurrentAttempt = false
         let previouslyConnected = wasConnected
         lock.unlock()
         applyConnectionState(

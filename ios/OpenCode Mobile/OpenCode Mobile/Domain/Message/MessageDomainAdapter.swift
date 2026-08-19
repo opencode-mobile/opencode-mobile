@@ -62,12 +62,20 @@ nonisolated struct MessageDomainAdapter: Sendable {
         case "file":
             return filePart(from: dto)
         case "tool":
-            guard let toolName = dto.tool else { return nil }
+            guard let toolName = dto.tool ?? dto.name else { return nil }
             return .tool(toolPart(id: dto.id, toolName: toolName, callID: dto.callID, state: dto.state))
         case "compaction":
             return .compaction(CompactionPart(id: dto.id, auto: dto.auto == true, completed: dto.completed == true))
         case "reasoning":
-            return .reasoning(ReasoningPart(id: dto.id, text: dto.text ?? "", isStreaming: false))
+            return .reasoning(
+                ReasoningPart(
+                    id: dto.id,
+                    text: dto.text ?? "",
+                    isStreaming: false,
+                    timeStartEpochMs: dto.time?.start,
+                    timeEndEpochMs: dto.time?.end
+                )
+            )
         default:
             return nil
         }
@@ -332,7 +340,9 @@ nonisolated struct MessageDomainAdapter: Sendable {
     }
 
     private func projectV2Assistant(_ dto: V2SessionMessageDTO, agent: String, model: V2ModelRefDTO?) -> Message {
-        let parts = dto.content.compactMap(v2AssistantPart)
+        let parts = dto.content.enumerated().compactMap { index, content in
+            v2AssistantPart(content, fallbackID: "\(dto.id):\(content.type):\(index)")
+        }
         return messageFromV2(
             id: dto.id,
             role: .assistant,
@@ -404,19 +414,27 @@ nonisolated struct MessageDomainAdapter: Sendable {
         )
     }
 
-    private func v2AssistantPart(_ content: V2AssistantContentDTO) -> MessagePart? {
+    private func v2AssistantPart(_ content: V2AssistantContentDTO, fallbackID: String) -> MessagePart? {
         switch content.type {
         case "text":
             guard let text = content.text else { return nil }
-            return .text(TextPart(id: content.id, text: text, isStreaming: false))
-        case "reasoning":
-            return .reasoning(ReasoningPart(id: content.id, text: content.text ?? "", isStreaming: false))
+            return .text(TextPart(id: content.id ?? fallbackID, text: text, isStreaming: false))
+        case "reasoning", "thinking":
+            return .reasoning(
+                ReasoningPart(
+                    id: content.id ?? fallbackID,
+                    text: content.text ?? "",
+                    isStreaming: false,
+                    timeStartEpochMs: content.time?.created,
+                    timeEndEpochMs: content.time?.completed
+                )
+            )
         case "tool":
             guard let name = content.name else { return nil }
             let state = content.state
             return .tool(
                 ToolPart(
-                    id: content.id,
+                    id: content.id ?? fallbackID,
                     toolName: name,
                     status: toolStatus(from: state?.status),
                     error: state?.error?.message.flatMap { $0.isEmpty ? nil : $0 },

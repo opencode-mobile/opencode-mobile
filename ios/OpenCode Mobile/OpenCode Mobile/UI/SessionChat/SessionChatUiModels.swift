@@ -167,7 +167,7 @@ struct SessionChatUiState: Equatable {
     var isRefreshing: Bool = false
     var isAborting: Bool = false
     var sessionStatusLabel: String?
-    /// In-chat Working/Retrying label when busy with no assistant content yet.
+    /// In-chat Working/Thinking/Retrying label for an active turn.
     var workingIndicatorLabel: String? = nil
     /// Top Syncing pill label while cached messages wait for network confirmation.
     var syncingIndicatorLabel: String? = nil

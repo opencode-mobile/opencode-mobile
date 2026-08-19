@@ -1101,6 +1101,148 @@ class TimelineProjectorTest {
         assertEquals("New", merged[2].text)
     }
 
+    @Test
+    fun project_streamingMarkdownSourceHashChange_isGrowBottomNotLayout() {
+        val firstMessage =
+            Message(
+                id = "msg-1",
+                role = MessageRole.Assistant,
+                text = "Hi",
+                parts = listOf(MessagePart.Text("Hi", id = "prt-1", isStreaming = true)),
+            )
+        val first =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages =
+                            listOf(
+                                DisplayMessageBody(
+                                    firstMessage,
+                                    listOf(
+                                        SessionChatTimelineBlock.Text(
+                                            blockID = PresentationBlockId.direct("prt-1"),
+                                            text = "Hi",
+                                            renderedMarkdown =
+                                                MarkdownDocument(sourceHash = 1, blocks = emptyList()),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                    ),
+            )
+        val second =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 2L,
+                        sourceRevision = 0L,
+                        messages =
+                            listOf(
+                                DisplayMessageBody(
+                                    firstMessage.copy(
+                                        text = "Hi there",
+                                        parts =
+                                            listOf(
+                                                MessagePart.Text("Hi there", id = "prt-1", isStreaming = true),
+                                            ),
+                                    ),
+                                    listOf(
+                                        SessionChatTimelineBlock.Text(
+                                            blockID = PresentationBlockId.direct("prt-1"),
+                                            text = "Hi there",
+                                            renderedMarkdown =
+                                                MarkdownDocument(sourceHash = 2, blocks = emptyList()),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                    ),
+                previous = first,
+            )
+
+        assertEquals(setOf("msg-1"), second.changedRowIDs)
+        assertTrue(second.layoutChangedRowIDs.isEmpty())
+        assertEquals(setOf("msg-1"), second.grewBottomRowIDs)
+        assertEquals(0L, second.layoutAffectingRevision())
+        assertEquals(first.rows.single().layoutRevision, second.rows.single().layoutRevision)
+        val apply = TimelineApply.classify(second)
+        assertTrue(apply.kinds.contains(TimelineApplyKind.GrowBottom))
+        assertFalse(apply.kinds.contains(TimelineApplyKind.Structure))
+    }
+
+    @Test
+    fun project_streamingReasoningGrowth_isContentNotLayout() {
+        val first =
+            projectAssistant(
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(text = "Think", isStreaming = true, id = "prt-r"),
+                    ),
+                frameRevision = 1L,
+            )
+        val second =
+            projectAssistant(
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(text = "Think harder", isStreaming = true, id = "prt-r"),
+                    ),
+                frameRevision = 2L,
+                previous = first,
+            )
+
+        assertEquals(setOf("msg-1"), second.changedRowIDs)
+        assertTrue(second.layoutChangedRowIDs.isEmpty())
+        assertTrue(second.layoutAffectingRowIDs().isEmpty())
+        assertEquals(first.rows.single().layoutRevision, second.rows.single().layoutRevision)
+        val apply = TimelineApply.classify(second)
+        assertTrue(apply.kinds.contains(TimelineApplyKind.Content))
+        assertFalse(apply.kinds.contains(TimelineApplyKind.Structure))
+    }
+
+    @Test
+    fun project_toolTitleChange_isContentNotLayout() {
+        val first =
+            projectAssistant(
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "task",
+                            status = ToolStatus.Running,
+                            id = "prt-1",
+                            title = "Working…",
+                        ),
+                    ),
+                frameRevision = 1L,
+            )
+        val second =
+            projectAssistant(
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "task",
+                            status = ToolStatus.Running,
+                            id = "prt-1",
+                            title = "explore",
+                            input =
+                                kotlinx.serialization.json.buildJsonObject {
+                                    put("agent", kotlinx.serialization.json.JsonPrimitive("explore"))
+                                },
+                        ),
+                    ),
+                frameRevision = 2L,
+                previous = first,
+            )
+        assertEquals(setOf("msg-1"), second.changedRowIDs)
+        assertTrue(second.layoutChangedRowIDs.isEmpty())
+        assertTrue(second.layoutAffectingRowIDs().isEmpty())
+        assertEquals(0L, second.layoutAffectingRevision())
+        assertEquals(first.rows.single().layoutRevision, second.rows.single().layoutRevision)
+    }
+
     private fun projectAssistant(
         parts: List<MessagePart>,
         frameRevision: Long,

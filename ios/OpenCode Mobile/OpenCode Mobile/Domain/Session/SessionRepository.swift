@@ -26,6 +26,7 @@ protocol SessionRepository: Sendable {
     func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?) async throws -> Bool
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?, sessionID: String?) async throws -> Bool
+    func replyToQuestion(questionID: String, answers: [[String]], directory: String?, sessionID: String?, questions: [QuestionInfo]) async throws -> Bool
     func rejectQuestion(questionID: String, directory: String?) async throws -> Bool
     func rejectQuestion(questionID: String, directory: String?, sessionID: String?) async throws -> Bool
 }
@@ -36,6 +37,9 @@ extension SessionRepository {
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool { false }
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?, sessionID: String?) async throws -> Bool {
         try await replyToQuestion(questionID: questionID, answers: answers, directory: directory)
+    }
+    func replyToQuestion(questionID: String, answers: [[String]], directory: String?, sessionID: String?, questions: [QuestionInfo]) async throws -> Bool {
+        try await replyToQuestion(questionID: questionID, answers: answers, directory: directory, sessionID: sessionID)
     }
     func rejectQuestion(questionID: String, directory: String?) async throws -> Bool { false }
     func rejectQuestion(questionID: String, directory: String?, sessionID: String?) async throws -> Bool {
@@ -236,12 +240,23 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         directory: String?,
         sessionID: String?
     ) async throws -> Bool {
+        try await replyToQuestion(questionID: questionID, answers: answers, directory: directory, sessionID: sessionID, questions: [])
+    }
+
+    func replyToQuestion(
+        questionID: String,
+        answers: [[String]],
+        directory: String?,
+        sessionID: String?,
+        questions: [QuestionInfo]
+    ) async throws -> Bool {
         try await run {
             try await remote.replyToQuestion(
                 questionID: questionID,
                 answers: answers,
                 directory: directory,
-                sessionID: sessionID
+                sessionID: sessionID,
+                questions: questions
             )
         }
     }

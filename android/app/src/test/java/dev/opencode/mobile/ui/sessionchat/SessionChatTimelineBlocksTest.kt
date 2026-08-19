@@ -7,6 +7,10 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -33,6 +37,52 @@ class SessionChatTimelineBlocksTest {
             ),
             blocks,
         )
+    }
+
+    @Test
+    fun build_reasoningPart_becomesThoughtBlock() {
+        val result =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(text = "Need to greet the user.", id = "r1"),
+                        MessagePart.Text("Hello!", id = "t1"),
+                    ),
+            )
+        val blocks = (result as SessionChatTimelineBlocksResult.Ok).blocks
+        val thought = blocks[0] as SessionChatTimelineBlock.Reasoning
+        assertEquals("Need to greet the user.", thought.text)
+        assertFalse(thought.isStreaming)
+        assertNull(thought.durationMs)
+        assertEquals("Hello!", (blocks[1] as SessionChatTimelineBlock.Text).text)
+    }
+
+    @Test
+    fun thoughtDurationLabel_matchesTuiBuckets() {
+        assertEquals("438ms", SessionChatTimelineBlocks.thoughtDurationLabel(438))
+        assertEquals("6.4s", SessionChatTimelineBlocks.thoughtDurationLabel(6400))
+        assertEquals("2m 7s", SessionChatTimelineBlocks.thoughtDurationLabel(127_000))
+        assertNull(SessionChatTimelineBlocks.thoughtDurationLabel(null))
+    }
+
+    @Test
+    fun build_reasoningPart_includesDuration() {
+        val result =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(
+                            text = "Need to greet the user.",
+                            id = "r1",
+                            timeStartEpochMs = 1_000,
+                            timeEndEpochMs = 7_400,
+                        ),
+                    ),
+            )
+        val thought = (result as SessionChatTimelineBlocksResult.Ok).blocks.single() as SessionChatTimelineBlock.Reasoning
+        assertEquals(6_400L, thought.durationMs)
     }
 
     @Test
@@ -242,9 +292,83 @@ class SessionChatTimelineBlocksTest {
             )
         val tool = shown.single() as SessionChatTimelineBlock.ToolCard
         assertEquals(PresentationBlockId.direct("prt-3"), tool.blockID)
-        assertEquals("Question", tool.title)
-        assertEquals("Which option?", tool.subtitle)
-        assertNull(tool.detailText)
+        assertEquals("Which option?", tool.title)
+        assertNull(tool.subtitle)
+        assertEquals("Which option?", tool.detailText)
+    }
+
+    @Test
+    fun build_dismissedQuestionIsTappable() {
+        val questions =
+            buildJsonArray {
+                add(
+                    buildJsonObject {
+                        put("question", "What would you like to do in this session?")
+                    },
+                )
+            }
+        val shown =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "question",
+                            status = ToolStatus.Error,
+                            id = "prt-d",
+                            input = JsonObject(mapOf("questions" to questions)),
+                            error = "The user dismissed this question",
+                        ),
+                    ),
+            )
+        val tool = shown.single() as SessionChatTimelineBlock.ToolCard
+        assertEquals("What would you like to do in this session?", tool.title)
+        assertEquals("The user dismissed this question", tool.errorText)
+        assertEquals(
+            "What would you like to do in this session?\n\nThe user dismissed this question",
+            tool.detailText,
+        )
+    }
+
+    @Test
+    fun build_answeredQuestionShowsQuestionAndReply() {
+        val questions =
+            buildJsonArray {
+                add(
+                    buildJsonObject {
+                        put("question", "What should we do with these two projects this session?")
+                    },
+                )
+            }
+        val answers =
+            buildJsonArray {
+                add(
+                    buildJsonArray {
+                        add(JsonPrimitive("Build a third sibling"))
+                    },
+                )
+            }
+        val shown =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "question",
+                            status = ToolStatus.Completed,
+                            id = "prt-q",
+                            input = JsonObject(mapOf("questions" to questions)),
+                            metadata = JsonObject(mapOf("answers" to answers)),
+                        ),
+                    ),
+            )
+        val tool = shown.single() as SessionChatTimelineBlock.ToolCard
+        assertEquals("What should we do with these two projects this session?", tool.title)
+        assertEquals("Build a third sibling", tool.subtitle)
+        assertEquals(
+            "What should we do with these two projects this session?\nBuild a third sibling",
+            tool.detailText,
+        )
     }
 
     @Test
@@ -552,6 +676,27 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
+    fun build_v2ShellUsesCommandAsSubtitle() {
+        val tool =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "shell",
+                            status = ToolStatus.Running,
+                            id = "prt-1",
+                            title = "shell",
+                            input = json("command" to "git status"),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("Shell", tool.title)
+        assertEquals("git status", tool.subtitle)
+    }
+
+    @Test
     fun build_networkFetchAndSearchChrome() {
         val fetch =
             buildBlocks(
@@ -746,10 +891,70 @@ class SessionChatTimelineBlocksTest {
 
         assertEquals("Task", row.agentName)
         assertEquals("T", row.letter)
-        assertEquals("Working…", row.secondLine)
+        assertEquals("Investigate flaky tests", row.secondLine)
         assertNull(row.childSessionId)
         assertFalse(row.isBackground)
         assertNull(row.timeStartEpochMs)
+    }
+
+    @Test
+    fun build_taskStaysTaskUntilInputAgentLands() {
+        val row =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "task",
+                            status = ToolStatus.Running,
+                            id = "prt-1",
+                            title = "explore",
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ChildSessionRow
+
+        assertEquals("Task", row.agentName)
+    }
+
+    @Test
+    fun build_subagentDefaultsToGeneralAndPrefersDescriptionOverCompositeTitle() {
+        val row =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "subagent",
+                            status = ToolStatus.Running,
+                            id = "prt-1",
+                            title = "General Subagent – First 7 days of October 2026",
+                            input = json("description" to "First 7 days of October 2026"),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ChildSessionRow
+
+        assertEquals("General", row.agentName)
+        assertEquals("G", row.letter)
+        assertEquals("First 7 days of October 2026", row.secondLine)
+    }
+
+    @Test
+    fun build_subagentUsesSubagentTypeBeforeDefault() {
+        val row =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "subagent",
+                            status = ToolStatus.Running,
+                            id = "prt-1",
+                            input = json("subagent_type" to "explore"),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ChildSessionRow
+
+        assertEquals("explore", row.agentName)
     }
 
     @Test
@@ -804,8 +1009,8 @@ class SessionChatTimelineBlocksTest {
                     ),
             ).single() as SessionChatTimelineBlock.ChildSessionRow
 
-        assertEquals("coder", row.agentName)
-        assertEquals("C", row.letter)
+        assertEquals("Task", row.agentName)
+        assertEquals("T", row.letter)
         assertNull(row.secondLine)
         assertTrue(row.isBackground)
         assertNull(row.childSessionId)

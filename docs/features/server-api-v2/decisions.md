@@ -4,10 +4,17 @@ Still binding:
 
 - Detect `v1` | `v2` on connect. Route under remotes. Screen Models stay on
   domain types.
-- Dual-stack HTTP stays (still talk to v1 servers).
-- Live Session Chat tracks official TUI v2 on opencode **`origin/beta`**
-  (`packages/tui` `stream-v2.transport.ts`, `GET /api/event`). Do not treat
-  `dev`/`main` TUI (`/global/event`, `message.updated`) as the live spec.
+- Dual-stack HTTP **and** SSE is required, not transitional. v1 unprefixed
+  remotes and v2 `/api/*` remotes both stay. Do not delete or skip a v1 path
+  to “finish” v2, or the reverse.
+- Live Session Chat **UX** tracks official TUI v2 on opencode **`origin/beta`**
+  (`packages/tui` `stream-v2.transport.ts`, `GET /api/event`). That is the
+  live event *shape*. Do not treat `dev`/`main` TUI as the v2 spec — and do
+  not treat that as license to drop v1.
+- Keep v1 `GET /global/event`, v1 instance `GET /event`, and v1 REST. Both
+  protocols must deliver session lifecycle, message/part, status, permission,
+  and question events over SSE. REST is reconnect / history, not a substitute
+  for missing SSE. Heartbeat-only is not acceptable.
   Project `session.reasoning.*` /
   `session.next.reasoning.*` into a distinct reasoning part. Render thinking.
 - `session.inbox.enqueued` / `.delivered` / `session.next.prompted` project

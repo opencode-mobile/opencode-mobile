@@ -276,23 +276,19 @@ object TimelineProjector {
 
     private fun blockLayoutFingerprint(block: SessionChatTimelineBlock): String =
         when (block) {
-            // Include sourceHash + renderTreeVersion so streaming structure growth
-            // and TextMate paint bumps layoutRevision like iOS — not only GrowBottom.
+            // Presence only. Streaming text/markdown growth is GrowBottom or Content.
             is SessionChatTimelineBlock.Text ->
-                "t:${block.blockID}:${block.renderedMarkdown != null}:" +
-                    "${block.renderedMarkdown?.sourceHash ?: 0}:" +
-                    "${block.renderedMarkdown?.renderTreeVersion ?: 0}"
+                "t:${block.blockID}:${block.renderedMarkdown != null}"
             is SessionChatTimelineBlock.Attachment ->
                 "a:${block.blockID}:${block.attachment.filename}"
             is SessionChatTimelineBlock.ToolCard ->
-                "c:${block.blockID}:${block.title}:${block.subtitle}:${block.status}:" +
-                    "${block.errorText}:${block.additions}:${block.deletions}"
+                "c:${block.blockID}:${block.errorText != null}:${block.additions}:${block.deletions}"
             is SessionChatTimelineBlock.ToolGroup ->
-                "g:${block.blockID}:${block.count}:${block.title}:${block.subtitle}:${block.status}:${block.errorText}"
+                "g:${block.blockID}:${block.count}:${block.errorText != null}"
             is SessionChatTimelineBlock.ChildSessionRow ->
-                "r:${block.blockID}:${block.agentName}:${block.secondLine}:${block.childSessionId}"
+                "r:${block.blockID}:${block.childSessionId != null}"
             is SessionChatTimelineBlock.Reasoning ->
-                "n:${block.blockID}:${block.text.length}:${block.isStreaming}"
+                "n:${block.blockID}:${block.isStreaming}"
         }
 
     private data class LayoutKey(
@@ -490,12 +486,11 @@ object TimelineProjector {
             is SessionChatTimelineBlock.Attachment ->
                 "a:${block.blockID}:${block.attachment.filename}"
             is SessionChatTimelineBlock.ToolCard ->
-                "c:${block.blockID}:${block.title}:${block.subtitle}:${block.status}:" +
-                    "${block.errorText}:${block.additions}:${block.deletions}"
+                "c:${block.blockID}:${block.errorText != null}:${block.additions}:${block.deletions}"
             is SessionChatTimelineBlock.ToolGroup ->
-                "g:${block.blockID}:${block.count}:${block.title}:${block.subtitle}:${block.status}:${block.errorText}"
+                "g:${block.blockID}:${block.count}:${block.errorText != null}"
             is SessionChatTimelineBlock.ChildSessionRow ->
-                "r:${block.blockID}:${block.agentName}:${block.secondLine}:${block.childSessionId}"
+                "r:${block.blockID}:${block.childSessionId != null}"
             is SessionChatTimelineBlock.Reasoning ->
                 "n:${block.blockID}:${block.isStreaming}"
         }

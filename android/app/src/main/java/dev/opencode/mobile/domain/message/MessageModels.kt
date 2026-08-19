@@ -106,6 +106,8 @@ sealed class MessagePart {
         val text: String,
         val isStreaming: Boolean = false,
         val id: String? = null,
+        val timeStartEpochMs: Long? = null,
+        val timeEndEpochMs: Long? = null,
     ) : MessagePart()
 }
 
