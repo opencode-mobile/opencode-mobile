@@ -203,7 +203,13 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                         || hasChunks(sessionID: sessionID, messageID: messageID, partID: reasoning.id)
                     guard wasStreaming || flattened != reasoning.text else { continue }
                     messageParts[partID] = .reasoning(
-                        ReasoningPart(id: reasoning.id, text: flattened, isStreaming: false)
+                        ReasoningPart(
+                            id: reasoning.id,
+                            text: flattened,
+                            isStreaming: false,
+                            timeStartEpochMs: reasoning.timeStartEpochMs,
+                            timeEndEpochMs: reasoning.timeEndEpochMs
+                        )
                     )
                     clearChunks(sessionID: sessionID, messageID: messageID, partID: reasoning.id)
                     changed = true
@@ -426,7 +432,15 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                     )
             case .reasoning(let reasoning):
                 partsCache[sessionID]?[messageID]?[partID] =
-                    .reasoning(ReasoningPart(id: reasoning.id, text: reasoning.text, isStreaming: true))
+                    .reasoning(
+                        ReasoningPart(
+                            id: reasoning.id,
+                            text: reasoning.text,
+                            isStreaming: true,
+                            timeStartEpochMs: reasoning.timeStartEpochMs,
+                            timeEndEpochMs: reasoning.timeEndEpochMs
+                        )
+                    )
             default:
                 break
             }
@@ -635,9 +649,43 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                     delta: delta
                 )
             }
-            return .reasoning(ReasoningPart(id: partID, text: existingText, isStreaming: true))
+            let existingTimes: (Int64?, Int64?)
+            if case .reasoning(let reasoning) = existingPart {
+                existingTimes = (reasoning.timeStartEpochMs, reasoning.timeEndEpochMs)
+            } else {
+                existingTimes = (nil, nil)
+            }
+            return .reasoning(
+                ReasoningPart(
+                    id: partID,
+                    text: existingText,
+                    isStreaming: true,
+                    timeStartEpochMs: existingTimes.0 ?? partDTO.time?.start,
+                    timeEndEpochMs: existingTimes.1 ?? partDTO.time?.end
+                )
+            )
         }
-        return resolveToolStart(adapter.messagePart(from: partDTO), existing: existingPart)
+        return resolveReasoningTimes(
+            resolveToolStart(adapter.messagePart(from: partDTO), existing: existingPart),
+            existing: existingPart
+        )
+    }
+
+    private func resolveReasoningTimes(_ part: MessagePart?, existing: MessagePart?) -> MessagePart? {
+        guard case .reasoning(let incoming) = part else { return part }
+        guard case .reasoning(let prior) = existing else { return part }
+        let start = incoming.timeStartEpochMs ?? prior.timeStartEpochMs
+        let end = incoming.timeEndEpochMs ?? prior.timeEndEpochMs
+        guard start != incoming.timeStartEpochMs || end != incoming.timeEndEpochMs else { return part }
+        return .reasoning(
+            ReasoningPart(
+                id: incoming.id,
+                text: incoming.text,
+                isStreaming: incoming.isStreaming,
+                timeStartEpochMs: start,
+                timeEndEpochMs: end
+            )
+        )
     }
 
     private func resolveToolStart(_ part: MessagePart?, existing: MessagePart?) -> MessagePart? {
@@ -699,7 +747,15 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             )
             return flattened == reasoning.text
                 ? part
-                : .reasoning(ReasoningPart(id: reasoning.id, text: flattened, isStreaming: reasoning.isStreaming))
+                : .reasoning(
+                    ReasoningPart(
+                        id: reasoning.id,
+                        text: flattened,
+                        isStreaming: reasoning.isStreaming,
+                        timeStartEpochMs: reasoning.timeStartEpochMs,
+                        timeEndEpochMs: reasoning.timeEndEpochMs
+                    )
+                )
         default:
             return part
         }

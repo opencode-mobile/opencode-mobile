@@ -474,6 +474,16 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvent_dropsUsageUpdatedWithoutAssistantId() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.usage.updated","data":{"sessionID":"ses-1","tokens":{"input":120,"output":4}}}""",
+            )
+
+        assertNull(event)
+    }
+
+    @Test
     fun parseEvent_projectsLiveRenamedIntoSessionUpdated() {
         val event =
             adapter.parseEvent(

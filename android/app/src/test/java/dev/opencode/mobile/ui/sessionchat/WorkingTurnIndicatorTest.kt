@@ -29,8 +29,9 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
-    fun labelForActiveTurn_hidesWhenAssistantHasText() {
-        assertNull(
+    fun labelForActiveTurn_showsThinkingWhenAssistantHasSettledText() {
+        assertEquals(
+            "Thinking",
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel = "Working",
                 messages = listOf(user("u1"), assistant("a1", "Hello")),
@@ -87,9 +88,9 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
-    fun labelForActiveTurn_showsWorkingAfterCompletedToolCard() {
+    fun labelForActiveTurn_showsThinkingAfterCompletedToolCard() {
         assertEquals(
-            "Working",
+            "Thinking",
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel = "Working",
                 messages =
@@ -105,6 +106,42 @@ class WorkingTurnIndicatorTest {
                                         toolName = "bash",
                                         status = ToolStatus.Completed,
                                         title = "bash",
+                                    ),
+                                ),
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun labelForActiveTurn_keepsRetryingAfterSettledContent() {
+        assertEquals(
+            "Retrying",
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Retrying",
+                messages = listOf(user("u1"), assistant("a1", "Hello")),
+            ),
+        )
+    }
+
+    @Test
+    fun labelForActiveTurn_hidesWhenReasoningIsStreaming() {
+        assertNull(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Working",
+                messages =
+                    listOf(
+                        user("u1"),
+                        assistant(
+                            id = "a1",
+                            text = "",
+                            blocks =
+                                listOf(
+                                    SessionChatTimelineBlock.Reasoning(
+                                        blockID = "r1",
+                                        text = "hmm",
+                                        isStreaming = true,
                                     ),
                                 ),
                         ),

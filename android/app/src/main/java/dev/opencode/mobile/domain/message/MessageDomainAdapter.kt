@@ -109,6 +109,8 @@ class MessageDomainAdapter {
                     text = dto.text.orEmpty(),
                     isStreaming = false,
                     id = dto.id,
+                    timeStartEpochMs = dto.time?.start,
+                    timeEndEpochMs = dto.time?.end,
                 )
             else -> null
         }
@@ -429,7 +431,10 @@ class MessageDomainAdapter {
         agent: String,
         model: V2ModelRefDto?,
     ): Message {
-        val parts = dto.content.mapNotNull(::toV2AssistantPart)
+        val parts =
+            dto.content.mapIndexedNotNull { index, content ->
+                toV2AssistantPart(content, fallbackId = "${dto.id}:${content.type}:$index")
+            }
         val errorText = dto.error?.message?.trim().orEmpty()
         return messageFromV2(
             id = dto.id,
@@ -501,16 +506,23 @@ class MessageDomainAdapter {
         )
     }
 
-    private fun toV2AssistantPart(content: V2AssistantContentDto): MessagePart? =
+    private fun toV2AssistantPart(
+        content: V2AssistantContentDto,
+        fallbackId: String,
+    ): MessagePart? =
         when (content.type) {
             "text" -> {
                 val text = content.text ?: return null
-                MessagePart.Text(text = text, id = content.id)
+                MessagePart.Text(text = text, id = content.id ?: fallbackId)
             }
-            "reasoning" ->
+            "reasoning",
+            "thinking",
+            ->
                 MessagePart.Reasoning(
                     text = content.text.orEmpty(),
-                    id = content.id,
+                    id = content.id ?: fallbackId,
+                    timeStartEpochMs = content.time?.created,
+                    timeEndEpochMs = content.time?.completed,
                 )
             "tool" -> {
                 val name = content.name ?: return null
@@ -524,7 +536,7 @@ class MessageDomainAdapter {
                     input = jsonObjectFromInput(state?.input),
                     output = toolOutput(state),
                     metadata = state?.metadata ?: state?.structured,
-                    id = content.id,
+                    id = content.id ?: fallbackId,
                     timeStartEpochMs = content.time?.created,
                 )
             }

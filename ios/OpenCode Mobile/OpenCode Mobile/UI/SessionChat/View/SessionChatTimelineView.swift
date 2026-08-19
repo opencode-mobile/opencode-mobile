@@ -560,8 +560,21 @@ private struct AssistantMessageContent: View {
                             { onChildSessionTap(id, row.agentName) }
                         }
                     )
-                case .reasoning(_, let text, let isStreaming):
-                    ReasoningBlock(text: text, isStreaming: isStreaming)
+                case .reasoning(_, let text, let isStreaming, let durationMs):
+                    ReasoningBlock(
+                        text: text,
+                        isStreaming: isStreaming,
+                        durationMs: durationMs,
+                        onTap: {
+                            guard !text.isEmpty else { return }
+                            onToolDetailTap(
+                                SessionChatToolDetailTarget(
+                                    title: isStreaming ? "Thinking" : "Thought",
+                                    body: text
+                                )
+                            )
+                        }
+                    )
                 }
             }
         }
@@ -656,22 +669,29 @@ private extension ToolStatus {
 private struct ReasoningBlock: View {
     let text: String
     let isStreaming: Bool
+    let durationMs: Int64?
+    let onTap: () -> Void
 
     var body: some View {
-        let label = isStreaming ? "Thinking" : "Thought"
-        VStack(alignment: .leading, spacing: 4) {
+        let label = thoughtLabel
+        Button(action: onTap) {
             Text(label)
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textBase)
-            if !text.isEmpty {
-                Text(text)
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textBase)
-            }
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label). \(text.isEmpty ? "…" : text)")
+        .buttonStyle(.plain)
+        .disabled(text.isEmpty)
+        .accessibilityLabel(label)
+        .accessibilityHint(text.isEmpty ? "" : "Shows the full thought")
+    }
+
+    private var thoughtLabel: String {
+        if isStreaming { return "Thinking" }
+        if let duration = SessionChatTimelineBlocks.thoughtDurationLabel(durationMs) {
+            return "Thought · \(duration)"
+        }
+        return "Thought"
     }
 }
 

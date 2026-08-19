@@ -7,6 +7,10 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -33,6 +37,52 @@ class SessionChatTimelineBlocksTest {
             ),
             blocks,
         )
+    }
+
+    @Test
+    fun build_reasoningPart_becomesThoughtBlock() {
+        val result =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(text = "Need to greet the user.", id = "r1"),
+                        MessagePart.Text("Hello!", id = "t1"),
+                    ),
+            )
+        val blocks = (result as SessionChatTimelineBlocksResult.Ok).blocks
+        val thought = blocks[0] as SessionChatTimelineBlock.Reasoning
+        assertEquals("Need to greet the user.", thought.text)
+        assertFalse(thought.isStreaming)
+        assertNull(thought.durationMs)
+        assertEquals("Hello!", (blocks[1] as SessionChatTimelineBlock.Text).text)
+    }
+
+    @Test
+    fun thoughtDurationLabel_matchesTuiBuckets() {
+        assertEquals("438ms", SessionChatTimelineBlocks.thoughtDurationLabel(438))
+        assertEquals("6.4s", SessionChatTimelineBlocks.thoughtDurationLabel(6400))
+        assertEquals("2m 7s", SessionChatTimelineBlocks.thoughtDurationLabel(127_000))
+        assertNull(SessionChatTimelineBlocks.thoughtDurationLabel(null))
+    }
+
+    @Test
+    fun build_reasoningPart_includesDuration() {
+        val result =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(
+                            text = "Need to greet the user.",
+                            id = "r1",
+                            timeStartEpochMs = 1_000,
+                            timeEndEpochMs = 7_400,
+                        ),
+                    ),
+            )
+        val thought = (result as SessionChatTimelineBlocksResult.Ok).blocks.single() as SessionChatTimelineBlock.Reasoning
+        assertEquals(6_400L, thought.durationMs)
     }
 
     @Test
@@ -242,9 +292,50 @@ class SessionChatTimelineBlocksTest {
             )
         val tool = shown.single() as SessionChatTimelineBlock.ToolCard
         assertEquals(PresentationBlockId.direct("prt-3"), tool.blockID)
-        assertEquals("Question", tool.title)
-        assertEquals("Which option?", tool.subtitle)
+        assertEquals("Which option?", tool.title)
+        assertNull(tool.subtitle)
         assertNull(tool.detailText)
+    }
+
+    @Test
+    fun build_answeredQuestionShowsQuestionAndReply() {
+        val questions =
+            buildJsonArray {
+                add(
+                    buildJsonObject {
+                        put("question", "What should we do with these two projects this session?")
+                    },
+                )
+            }
+        val answers =
+            buildJsonArray {
+                add(
+                    buildJsonArray {
+                        add(JsonPrimitive("Build a third sibling"))
+                    },
+                )
+            }
+        val shown =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "question",
+                            status = ToolStatus.Completed,
+                            id = "prt-q",
+                            input = JsonObject(mapOf("questions" to questions)),
+                            metadata = JsonObject(mapOf("answers" to answers)),
+                        ),
+                    ),
+            )
+        val tool = shown.single() as SessionChatTimelineBlock.ToolCard
+        assertEquals("What should we do with these two projects this session?", tool.title)
+        assertEquals("Build a third sibling", tool.subtitle)
+        assertEquals(
+            "What should we do with these two projects this session?\nBuild a third sibling",
+            tool.detailText,
+        )
     }
 
     @Test

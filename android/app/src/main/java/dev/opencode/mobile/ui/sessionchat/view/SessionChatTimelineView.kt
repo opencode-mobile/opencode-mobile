@@ -71,6 +71,7 @@ import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.TimelineApply
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
@@ -610,6 +611,18 @@ private fun AssistantMessageContent(
                         ReasoningBlock(
                             text = block.text,
                             isStreaming = block.isStreaming,
+                            durationMs = block.durationMs,
+                            onClick =
+                                block.text.takeIf { it.isNotBlank() }?.let { body ->
+                                    {
+                                        onToolDetailTap(
+                                            SessionChatToolDetailTarget(
+                                                title = if (block.isStreaming) "Thinking" else "Thought",
+                                                body = body,
+                                            ),
+                                        )
+                                    }
+                                },
                         )
                 }
             }
@@ -735,29 +748,31 @@ private fun SessionChatWorkingIndicatorRow(label: String) {
 private fun ReasoningBlock(
     text: String,
     isStreaming: Boolean,
+    durationMs: Long?,
+    onClick: (() -> Unit)?,
 ) {
-    val label = if (isStreaming) "Thinking" else "Thought"
-    val body = text.ifBlank { "…" }
-    Column(
+    val duration = SessionChatTimelineBlocks.thoughtDurationLabel(durationMs)
+    val label =
+        when {
+            isStreaming -> "Thinking"
+            duration != null -> "Thought · $duration"
+            else -> "Thought"
+        }
+    Text(
+        text = label,
         modifier =
             Modifier
                 .fillMaxWidth()
-                .semantics { contentDescription = "$label. $body" },
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (text.isNotBlank()) {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+                .then(
+                    if (onClick != null) {
+                        Modifier.clickable(onClick = onClick)
+                    } else {
+                        Modifier
+                    },
+                ).semantics { contentDescription = label },
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable

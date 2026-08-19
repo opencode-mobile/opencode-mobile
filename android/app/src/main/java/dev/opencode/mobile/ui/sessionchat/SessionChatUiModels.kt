@@ -90,7 +90,7 @@ data class SessionChatUiState(
     val isRefreshing: Boolean = false,
     val isAborting: Boolean = false,
     val sessionStatusLabel: String? = null,
-    /** In-chat Working/Retrying label when busy with no assistant content yet. */
+    /** In-chat Working/Thinking/Retrying label for an active turn. */
     val workingIndicatorLabel: String? = null,
     /** Top Syncing pill label while cached messages wait for network confirmation. */
     val syncingIndicatorLabel: String? = null,

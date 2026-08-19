@@ -219,7 +219,7 @@ class InMemoryMessageStore
             sessionId: String,
             infoJson: JsonObject,
         ): SessionChangeSet? {
-            val info = json.decodeFromJsonElement<MessageInfoDto>(infoJson)
+            val info = runCatching { json.decodeFromJsonElement<MessageInfoDto>(infoJson) }.getOrNull() ?: return null
             val messageId = info.id
 
             ensureCaches(sessionId)
@@ -569,18 +569,33 @@ class InMemoryMessageStore
                         else -> partDto.text.orEmpty()
                     }
                 val partId = partDto.id
+                val existing = existingPart as? MessagePart.Reasoning
                 val reasoningPart =
                     MessagePart.Reasoning(
                         text = baseText,
                         isStreaming = true,
                         id = partId,
+                        timeStartEpochMs = existing?.timeStartEpochMs ?: partDto.time?.start,
+                        timeEndEpochMs = existing?.timeEndEpochMs ?: partDto.time?.end,
                     )
                 if (partId != null) {
                     appendChunk(sessionId, messageId, partId, baseText, delta)
                 }
                 return reasoningPart
             }
-            return resolveToolStart(adapter.toMessagePart(partDto), existingPart)
+            return resolveReasoningTimes(resolveToolStart(adapter.toMessagePart(partDto), existingPart), existingPart)
+        }
+
+        private fun resolveReasoningTimes(
+            part: MessagePart?,
+            existing: MessagePart?,
+        ): MessagePart? {
+            val incoming = part as? MessagePart.Reasoning ?: return part
+            val prior = existing as? MessagePart.Reasoning ?: return part
+            val start = incoming.timeStartEpochMs ?: prior.timeStartEpochMs
+            val end = incoming.timeEndEpochMs ?: prior.timeEndEpochMs
+            if (start == incoming.timeStartEpochMs && end == incoming.timeEndEpochMs) return incoming
+            return incoming.copy(timeStartEpochMs = start, timeEndEpochMs = end)
         }
 
         private fun resolveToolStart(

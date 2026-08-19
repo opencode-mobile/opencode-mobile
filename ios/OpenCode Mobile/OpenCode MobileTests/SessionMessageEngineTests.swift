@@ -44,6 +44,23 @@ import Testing
         #expect(engine.revision(sessionID: "ses-1") == before)
     }
 
+    @Test func infoUpdated_withoutId_isNoChange() {
+        let engine = makeEngine()
+        seedStreamingAssistant(engine)
+        let before = engine.revision(sessionID: "ses-1")
+        #expect(
+            engine.apply(
+                sessionID: "ses-1",
+                patch: .infoUpdated([
+                    "role": .string("assistant"),
+                    "sessionID": .string("ses-1"),
+                ])
+            ) == .noChange
+        )
+        #expect(engine.revision(sessionID: "ses-1") == before)
+        #expect(engine.messages(sessionID: "ses-1").map(\.id) == ["msg-1"])
+    }
+
     @Test func partOrder_preservedAcrossDelta() {
         let engine = makeEngine()
         engine.replaceAll(

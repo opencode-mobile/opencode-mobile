@@ -410,8 +410,8 @@ nonisolated enum SessionChatTimelineProjector {
                 "g:\(id):\(group.count):\(group.status.rawValue):\(group.title):\(group.subtitle ?? ""):\(group.errorText ?? "")"
             case .childSessionRow(let id, let row):
                 "r:\(id):\(row.agentName):\(row.secondLine ?? ""):\(row.childSessionId ?? "")"
-            case .reasoning(let id, let text, let isStreaming):
-                "n:\(id):\(text.count):\(isStreaming)"
+            case .reasoning(let id, let text, let isStreaming, let durationMs):
+                "n:\(id):\(text.count):\(isStreaming):\(durationMs ?? -1)"
             }
         }.joined(separator: "|")
         return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(blockKey)"
@@ -442,8 +442,8 @@ nonisolated enum SessionChatTimelineProjector {
                 "g:\(id):\(group.count):\(group.status.rawValue):\(group.title):\(group.subtitle ?? ""):\(group.errorText ?? "")"
             case .childSessionRow(let id, let row):
                 "r:\(id):\(row.agentName):\(row.secondLine ?? ""):\(row.childSessionId ?? "")"
-            case .reasoning(let id, _, let isStreaming):
-                "n:\(id):\(isStreaming)"
+            case .reasoning(let id, _, let isStreaming, let durationMs):
+                "n:\(id):\(isStreaming):\(durationMs ?? -1)"
             }
         }.joined(separator: "|")
         return "\(row.blocks.count)|\(attachments)|\(blocks)"

@@ -214,6 +214,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
     let attachmentKind: String?
     let dataUrl: String?
     let timeStartEpochMs: Int64?
+    let timeEndEpochMs: Int64?
 
     init(
         kind: String,
@@ -234,7 +235,8 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         mime: String? = nil,
         attachmentKind: String? = nil,
         dataUrl: String? = nil,
-        timeStartEpochMs: Int64? = nil
+        timeStartEpochMs: Int64? = nil,
+        timeEndEpochMs: Int64? = nil
     ) {
         self.kind = kind
         self.id = id
@@ -255,6 +257,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         self.attachmentKind = attachmentKind
         self.dataUrl = dataUrl
         self.timeStartEpochMs = timeStartEpochMs
+        self.timeEndEpochMs = timeEndEpochMs
     }
 
     init(from decoder: Decoder) throws {
@@ -278,6 +281,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         attachmentKind = try container.decodeIfPresent(String.self, forKey: .attachmentKind)
         dataUrl = try container.decodeIfPresent(String.self, forKey: .dataUrl)
         timeStartEpochMs = try container.decodeIfPresent(Int64.self, forKey: .timeStartEpochMs)
+        timeEndEpochMs = try container.decodeIfPresent(Int64.self, forKey: .timeEndEpochMs)
     }
 }
 
@@ -509,7 +513,9 @@ private extension MessagePart {
                 kind: "reasoning",
                 id: part.id,
                 text: part.text,
-                isStreaming: part.isStreaming
+                isStreaming: part.isStreaming,
+                timeStartEpochMs: part.timeStartEpochMs,
+                timeEndEpochMs: part.timeEndEpochMs
             )
         }
     }
@@ -555,7 +561,15 @@ private extension CachedMessagePartPayload {
                 )
             )
         case "reasoning":
-            return .reasoning(ReasoningPart(id: id, text: text ?? "", isStreaming: isStreaming))
+            return .reasoning(
+                ReasoningPart(
+                    id: id,
+                    text: text ?? "",
+                    isStreaming: isStreaming,
+                    timeStartEpochMs: timeStartEpochMs,
+                    timeEndEpochMs: timeEndEpochMs
+                )
+            )
         default:
             return nil
         }

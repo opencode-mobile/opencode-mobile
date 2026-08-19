@@ -109,6 +109,25 @@ class SessionMessageEngineTest {
     }
 
     @Test
+    fun infoUpdated_withoutId_isNoChange() {
+        seedStreamingAssistant()
+        val before = engine.revision("ses-1")
+        val result =
+            engine.apply(
+                "ses-1",
+                MessagePatch.InfoUpdated(
+                    buildJsonObject {
+                        put("role", "assistant")
+                        put("sessionID", "ses-1")
+                    },
+                ),
+            )
+        assertEquals(MessageStoreApplyResult.NoChange, result)
+        assertEquals(before, engine.revision("ses-1"))
+        assertEquals(listOf("msg-1"), engine.messages("ses-1").map { it.id })
+    }
+
+    @Test
     fun removeUnknownMessage_isNoChange() {
         seedStreamingAssistant()
         val before = engine.revision("ses-1")

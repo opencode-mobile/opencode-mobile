@@ -9,7 +9,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     case toolCard(blockID: String, card: SessionChatToolCardBlock)
     case toolGroup(blockID: String, group: SessionChatToolGroupBlock)
     case childSessionRow(blockID: String, row: SessionChatChildSessionRowBlock)
-    case reasoning(blockID: String, text: String, isStreaming: Bool)
+    case reasoning(blockID: String, text: String, isStreaming: Bool, durationMs: Int64?)
 
     var blockID: String {
         switch self {
@@ -23,7 +23,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             blockID
         case .childSessionRow(let blockID, _):
             blockID
-        case .reasoning(let blockID, _, _):
+        case .reasoning(let blockID, _, _, _):
             blockID
         }
     }
@@ -43,8 +43,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             lID == rID && lGroup == rGroup
         case let (.childSessionRow(lID, lRow), .childSessionRow(rID, rRow)):
             lID == rID && lRow == rRow
-        case let (.reasoning(lID, lText, lStreaming), .reasoning(rID, rText, rStreaming)):
-            lID == rID && lText == rText && lStreaming == rStreaming
+        case let (.reasoning(lID, lText, lStreaming, lDuration), .reasoning(rID, rText, rStreaming, rDuration)):
+            lID == rID && lText == rText && lStreaming == rStreaming && lDuration == rDuration
         default:
             false
         }
@@ -174,7 +174,11 @@ nonisolated enum SessionChatTimelineBlocks {
                         .reasoning(
                             blockID: PresentationBlockId.direct(partId),
                             text: trimmed,
-                            isStreaming: reasoning.isStreaming
+                            isStreaming: reasoning.isStreaming,
+                            durationMs: Self.thoughtDurationMs(
+                                start: reasoning.timeStartEpochMs,
+                                end: reasoning.timeEndEpochMs
+                            )
                         )
                     )
                 }
@@ -334,6 +338,28 @@ nonisolated enum SessionChatTimelineBlocks {
                 renderedMarkdown: nil
             )
         }
+    }
+
+    static func thoughtDurationLabel(_ durationMs: Int64?) -> String? {
+        guard let duration = durationMs, duration >= 0 else { return nil }
+        if duration < 1_000 { return "\(duration)ms" }
+        if duration < 60_000 {
+            return String(format: "%.1fs", Double(duration) / 1000.0)
+        }
+        if duration < 3_600_000 {
+            let minutes = duration / 60_000
+            let seconds = (duration % 60_000) / 1_000
+            return "\(minutes)m \(seconds)s"
+        }
+        let hours = duration / 3_600_000
+        let minutes = (duration % 3_600_000) / 60_000
+        return "\(hours)h \(minutes)m"
+    }
+
+    private static func thoughtDurationMs(start: Int64?, end: Int64?) -> Int64? {
+        guard let start, let end else { return nil }
+        let duration = end - start
+        return duration >= 0 ? duration : nil
     }
 
     private static func isVisibleTool(_ tool: ToolPart) -> Bool {
@@ -571,11 +597,7 @@ nonisolated enum SessionChatTimelineBlocks {
         case "websearch":
             return networkChrome(tool: tool, displayTitle: "Search", subtitleKey: "query")
         case "question":
-            return Chrome(
-                title: "Question",
-                subtitle: inputString(tool.input, keys: "prompt", "text", "question")
-                    ?? runningTitleOverride(tool)
-            )
+            return questionChrome(tool)
         case "skill":
             return Chrome(
                 title: "Skill",
@@ -789,6 +811,54 @@ nonisolated enum SessionChatTimelineBlocks {
         case (nil, nil):
             return nil
         }
+    }
+
+    private static func questionChrome(_ tool: ToolPart) -> Chrome {
+        let questions = questionTexts(tool.input)
+        let answers = answerTexts(tool.metadata)
+        let firstQuestion = questions.first
+            ?? inputString(tool.input, keys: "prompt", "text", "question")
+            ?? runningTitleOverride(tool)
+        return Chrome(
+            title: firstQuestion ?? "Question",
+            subtitle: answers.first,
+            detailText: questionDetail(questions: questions, answers: answers)
+        )
+    }
+
+    private static func questionTexts(_ input: [String: AnyCodable]?) -> [String] {
+        guard case let .array(array)? = input?["questions"] else { return [] }
+        return array.compactMap { element in
+            guard case let .dictionary(obj) = element else { return nil }
+            return stringFromObject(obj, keys: "question")
+        }
+    }
+
+    private static func answerTexts(_ metadata: [String: AnyCodable]?) -> [String] {
+        guard case let .array(array)? = metadata?["answers"] else { return [] }
+        return array.compactMap { element in
+            switch element {
+            case let .array(values):
+                let joined = values.compactMap(\.stringValue).filter { !$0.isEmpty }.joined(separator: ", ")
+                return joined.isEmpty ? nil : joined
+            case let .string(text) where !text.isEmpty:
+                return text
+            default:
+                return nil
+            }
+        }
+    }
+
+    private static func questionDetail(questions: [String], answers: [String]) -> String? {
+        if questions.isEmpty, answers.isEmpty { return nil }
+        let count = max(questions.count, answers.count)
+        if count == 1, answers.isEmpty { return nil }
+        return (0..<count).map { index in
+            let question = questions.indices.contains(index) ? questions[index] : ""
+            let answer = answers.indices.contains(index) ? answers[index] : ""
+            if !question.isEmpty, !answer.isEmpty { return "\(question)\n\(answer)" }
+            return question.isEmpty ? answer : question
+        }.joined(separator: "\n\n")
     }
 
     private static func inputString(_ input: [String: AnyCodable]?, keys: String...) -> String? {

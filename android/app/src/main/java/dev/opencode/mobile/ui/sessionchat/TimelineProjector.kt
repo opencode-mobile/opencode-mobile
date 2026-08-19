@@ -292,7 +292,7 @@ object TimelineProjector {
             is SessionChatTimelineBlock.ChildSessionRow ->
                 "r:${block.blockID}:${block.agentName}:${block.secondLine}:${block.childSessionId}"
             is SessionChatTimelineBlock.Reasoning ->
-                "n:${block.blockID}:${block.text.length}:${block.isStreaming}"
+                "n:${block.blockID}:${block.text.length}:${block.isStreaming}:${block.durationMs}"
         }
 
     private data class LayoutKey(

@@ -41,6 +41,35 @@ struct SessionChatTimelineBlocksTests {
         ])
     }
 
+    @Test func thoughtDurationLabel_matchesTuiBuckets() {
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(438) == "438ms")
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(6400) == "6.4s")
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(127_000) == "2m 7s")
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(nil) == nil)
+    }
+
+    @Test func build_reasoningPart_includesDuration() {
+        let blocks = okBlocks(
+            parts: [
+                .reasoning(
+                    ReasoningPart(
+                        id: "r1",
+                        text: "Need to greet the user.",
+                        timeStartEpochMs: 1_000,
+                        timeEndEpochMs: 7_400
+                    )
+                ),
+            ]
+        )
+        guard case .reasoning(_, let text, let isStreaming, let durationMs) = blocks.first else {
+            Issue.record("expected reasoning")
+            return
+        }
+        #expect(text == "Need to greet the user.")
+        #expect(isStreaming == false)
+        #expect(durationMs == 6_400)
+    }
+
     @Test func build_interleavesTextAndToolCards() {
         let blocks = okBlocks(
             parts: [
@@ -109,9 +138,43 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(blockID == PresentationBlockId.direct("q3"))
-        #expect(tool.title == "Question")
-        #expect(tool.subtitle == "Which option?")
+        #expect(tool.title == "Which option?")
+        #expect(tool.subtitle == nil)
         #expect(tool.detailText == nil)
+    }
+
+    @Test func build_answeredQuestionShowsQuestionAndReply() {
+        let shown = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "q-answered",
+                        toolName: "question",
+                        status: .completed,
+                        input: [
+                            "questions": .array([
+                                .dictionary(["question": .string("What should we do with these two projects this session?")]),
+                            ]),
+                        ],
+                        metadata: [
+                            "answers": .array([
+                                .array([.string("Build a third sibling")]),
+                            ]),
+                        ]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(_, let tool) = shown.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "What should we do with these two projects this session?")
+        #expect(tool.subtitle == "Build a third sibling")
+        #expect(
+            tool.detailText ==
+                "What should we do with these two projects this session?\nBuild a third sibling"
+        )
     }
 
     @Test func build_nonAssistantRolesAreTextOnly() {

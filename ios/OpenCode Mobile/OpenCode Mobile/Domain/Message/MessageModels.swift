@@ -195,11 +195,21 @@ nonisolated struct ReasoningPart: Equatable, Sendable {
     let id: String?
     let text: String
     var isStreaming: Bool
+    let timeStartEpochMs: Int64?
+    let timeEndEpochMs: Int64?
 
-    init(id: String? = nil, text: String, isStreaming: Bool = false) {
+    init(
+        id: String? = nil,
+        text: String,
+        isStreaming: Bool = false,
+        timeStartEpochMs: Int64? = nil,
+        timeEndEpochMs: Int64? = nil
+    ) {
         self.id = id
         self.text = text
         self.isStreaming = isStreaming
+        self.timeStartEpochMs = timeStartEpochMs
+        self.timeEndEpochMs = timeEndEpochMs
     }
 }
 

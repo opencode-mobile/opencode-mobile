@@ -123,7 +123,7 @@ nonisolated struct EventDomainAdapter: Sendable {
             [
                 assistantMessageUpdated(properties),
                 event(type: "session.active.snapshot", properties: properties),
-            ]
+            ].compactMap { $0 }
         case "session.execution.succeeded",
              "session.execution.interrupted":
             [event(type: "session.idle", properties: properties)]
@@ -136,7 +136,7 @@ nonisolated struct EventDomainAdapter: Sendable {
             [
                 event(type: "session.error", properties: properties),
                 assistantMessageUpdated(properties),
-            ]
+            ].compactMap { $0 }
         case "session.next.retried", "session.retry.scheduled":
             [statusEvent(properties, statusType: "retry")]
         case "session.next.tool.input.started", "session.tool.input.started",
@@ -181,7 +181,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         case "session.next.reasoning.delta", "session.reasoning.delta":
             [reasoningDelta(properties)]
         case "session.next.reasoning.ended", "session.reasoning.ended":
-            [reasoningPartUpdated(properties)]
+            [reasoningPartUpdated(properties, completed: true)]
         case "session.next.text.started", "session.text.started":
             textStarted(properties)
         case "session.next.text.delta", "session.text.delta":
@@ -194,7 +194,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         case "session.renamed":
             [renamedToUpdated(properties)]
         case "session.usage.updated", "session.next.usage.updated":
-            [usageUpdated(properties)]
+            [usageUpdated(properties)].compactMap { $0 }
         default:
             [event(type: type, properties: properties)]
         }
@@ -208,11 +208,11 @@ nonisolated struct EventDomainAdapter: Sendable {
         )
     }
 
-    private func usageUpdated(_ properties: [String: Any]) -> OpencodeEvent {
-        var info: [String: Any] = ["role": "assistant"]
-        if let assistantID = string(in: properties, key: "assistantMessageID") ?? string(in: properties, key: "messageID") {
-            info["id"] = assistantID
+    private func usageUpdated(_ properties: [String: Any]) -> OpencodeEvent? {
+        guard let assistantID = string(in: properties, key: "assistantMessageID") ?? string(in: properties, key: "messageID") else {
+            return nil
         }
+        var info: [String: Any] = ["id": assistantID, "role": "assistant"]
         if let sessionID = sessionID(from: properties) {
             info["sessionID"] = sessionID
         }
@@ -365,16 +365,15 @@ nonisolated struct EventDomainAdapter: Sendable {
         [
             assistantMessageUpdated(properties),
             statusEvent(properties, statusType: "busy"),
-        ]
+        ].compactMap { $0 }
     }
 
-    private func assistantMessageUpdated(_ properties: [String: Any]) -> OpencodeEvent {
-        let sessionID = sessionID(from: properties)
-        var info: [String: Any] = ["role": "assistant"]
-        if let assistantID = string(in: properties, key: "assistantMessageID") ?? string(in: properties, key: "messageID") {
-            info["id"] = assistantID
+    private func assistantMessageUpdated(_ properties: [String: Any]) -> OpencodeEvent? {
+        guard let assistantID = string(in: properties, key: "assistantMessageID") ?? string(in: properties, key: "messageID") else {
+            return nil
         }
-        if let sessionID {
+        var info: [String: Any] = ["id": assistantID, "role": "assistant"]
+        if let sessionID = sessionID(from: properties) {
             info["sessionID"] = sessionID
         }
         return event(type: "message.updated", properties: ["info": info])
@@ -511,17 +510,20 @@ nonisolated struct EventDomainAdapter: Sendable {
 
     private func reasoningStarted(_ properties: [String: Any]) -> [OpencodeEvent] {
         let sessionID = sessionID(from: properties)
-        var info: [String: Any] = ["role": "assistant"]
+        let updated: OpencodeEvent?
         if let assistantID = string(in: properties, key: "assistantMessageID") {
-            info["id"] = assistantID
-        }
-        if let sessionID {
-            info["sessionID"] = sessionID
+            var info: [String: Any] = ["id": assistantID, "role": "assistant"]
+            if let sessionID {
+                info["sessionID"] = sessionID
+            }
+            updated = event(type: "message.updated", properties: ["info": info])
+        } else {
+            updated = nil
         }
         return [
-            event(type: "message.updated", properties: ["info": info]),
+            updated,
             reasoningPartUpdated(properties, text: ""),
-        ]
+        ].compactMap { $0 }
     }
 
     private func reasoningDelta(_ properties: [String: Any]) -> OpencodeEvent {
@@ -541,7 +543,11 @@ nonisolated struct EventDomainAdapter: Sendable {
         return event(type: "message.part.delta", properties: projected)
     }
 
-    private func reasoningPartUpdated(_ properties: [String: Any], text: String? = nil) -> OpencodeEvent {
+    private func reasoningPartUpdated(
+        _ properties: [String: Any],
+        text: String? = nil,
+        completed: Bool = false
+    ) -> OpencodeEvent {
         var part: [String: Any] = ["type": "reasoning", "text": text ?? string(in: properties, key: "text") ?? ""]
         if let partID = reasoningPartID(in: properties) {
             part["id"] = partID
@@ -552,22 +558,32 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let messageID = string(in: properties, key: "assistantMessageID") {
             part["messageID"] = messageID
         }
+        if let created = int64(in: properties, key: "created") {
+            var time: [String: Any] = ["start": created]
+            if completed {
+                time["end"] = created
+            }
+            part["time"] = time
+        }
         return event(type: "message.part.updated", properties: ["part": part])
     }
 
     private func textStarted(_ properties: [String: Any]) -> [OpencodeEvent] {
         let sessionID = sessionID(from: properties)
-        var info: [String: Any] = ["role": "assistant"]
+        let updated: OpencodeEvent?
         if let assistantID = string(in: properties, key: "assistantMessageID") {
-            info["id"] = assistantID
-        }
-        if let sessionID {
-            info["sessionID"] = sessionID
+            var info: [String: Any] = ["id": assistantID, "role": "assistant"]
+            if let sessionID {
+                info["sessionID"] = sessionID
+            }
+            updated = event(type: "message.updated", properties: ["info": info])
+        } else {
+            updated = nil
         }
         return [
-            event(type: "message.updated", properties: ["info": info]),
+            updated,
             textPartUpdated(properties, text: ""),
-        ]
+        ].compactMap { $0 }
     }
 
     private func textDelta(_ properties: [String: Any]) -> OpencodeEvent {

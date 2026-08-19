@@ -74,6 +74,7 @@ sealed class SessionChatTimelineBlock {
         override val blockID: String,
         val text: String,
         val isStreaming: Boolean,
+        val durationMs: Long? = null,
     ) : SessionChatTimelineBlock()
 }
 
@@ -173,6 +174,7 @@ object SessionChatTimelineBlocks {
                                 blockID = PresentationBlockId.direct(partId),
                                 text = trimmed,
                                 isStreaming = part.isStreaming,
+                                durationMs = thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs),
                             )
                     }
                     index += 1
@@ -290,6 +292,34 @@ object SessionChatTimelineBlocks {
             val collapsed = CommandInvocationCollapser.collapse(block.text, commands) ?: return@map block
             block.copy(text = collapsed.text, renderedMarkdown = null)
         }
+    }
+
+    fun thoughtDurationLabel(durationMs: Long?): String? {
+        val duration = durationMs ?: return null
+        if (duration < 0) return null
+        return when {
+            duration < 1_000 -> "${duration}ms"
+            duration < 60_000 -> "${"%.1f".format(duration / 1000.0)}s"
+            duration < 3_600_000 -> {
+                val minutes = duration / 60_000
+                val seconds = (duration % 60_000) / 1_000
+                "${minutes}m ${seconds}s"
+            }
+            else -> {
+                val hours = duration / 3_600_000
+                val minutes = (duration % 3_600_000) / 60_000
+                "${hours}h ${minutes}m"
+            }
+        }
+    }
+
+    private fun thoughtDurationMs(
+        start: Long?,
+        end: Long?,
+    ): Long? {
+        if (start == null || end == null) return null
+        val duration = end - start
+        return duration.takeIf { it >= 0 }
     }
 
     private fun isVisibleTool(tool: MessagePart.Tool): Boolean {
@@ -499,13 +529,7 @@ object SessionChatTimelineBlocks {
             "bash" -> shellChrome(tool)
             "webfetch" -> networkChrome(tool, displayTitle = "Fetch", subtitleKey = "url")
             "websearch" -> networkChrome(tool, displayTitle = "Search", subtitleKey = "query")
-            "question" ->
-                Chrome(
-                    title = "Question",
-                    subtitle =
-                        inputString(tool.input, "prompt", "text", "question")
-                            ?: runningTitleOverride(tool),
-                )
+            "question" -> questionChrome(tool)
             "skill" ->
                 Chrome(
                     title = "Skill",
@@ -724,6 +748,62 @@ object SessionChatTimelineBlocks {
             pattern != null -> pattern
             path != null -> path
             else -> null
+        }
+    }
+
+    private fun questionChrome(tool: MessagePart.Tool): Chrome {
+        val questions = questionTexts(tool.input)
+        val answers = answerTexts(tool.metadata)
+        val firstQuestion =
+            questions.firstOrNull()
+                ?: inputString(tool.input, "prompt", "text", "question")
+                ?: runningTitleOverride(tool)
+        val firstAnswer = answers.firstOrNull()
+        return Chrome(
+            title = firstQuestion ?: "Question",
+            subtitle = firstAnswer,
+            detailText = questionDetail(questions, answers),
+        )
+    }
+
+    private fun questionTexts(input: JsonObject?): List<String> {
+        val array = input?.get("questions") as? JsonArray ?: return emptyList()
+        return array.mapNotNull { element ->
+            val obj = element as? JsonObject ?: return@mapNotNull null
+            (obj["question"] as? JsonPrimitive)?.content?.takeIf { it.isNotEmpty() }
+        }
+    }
+
+    private fun answerTexts(metadata: JsonObject?): List<String> {
+        val array = metadata?.get("answers") as? JsonArray ?: return emptyList()
+        return array.mapNotNull { element ->
+            when (element) {
+                is JsonArray ->
+                    element
+                        .mapNotNull { (it as? JsonPrimitive)?.content?.takeIf { text -> text.isNotEmpty() } }
+                        .joinToString(", ")
+                        .takeIf { it.isNotEmpty() }
+                is JsonPrimitive -> element.content.takeIf { it.isNotEmpty() }
+                else -> null
+            }
+        }
+    }
+
+    private fun questionDetail(
+        questions: List<String>,
+        answers: List<String>,
+    ): String? {
+        if (questions.isEmpty() && answers.isEmpty()) return null
+        val count = maxOf(questions.size, answers.size)
+        if (count == 1 && answers.isEmpty()) return null
+        return (0 until count).joinToString("\n\n") { index ->
+            val question = questions.getOrNull(index).orEmpty()
+            val answer = answers.getOrNull(index).orEmpty()
+            when {
+                question.isNotEmpty() && answer.isNotEmpty() -> "$question\n$answer"
+                question.isNotEmpty() -> question
+                else -> answer
+            }
         }
     }
 

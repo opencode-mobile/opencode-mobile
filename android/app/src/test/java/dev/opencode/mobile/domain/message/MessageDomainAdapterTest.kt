@@ -891,6 +891,58 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun projectV2_mapsReasoningContentIntoThoughtPart() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {
+                    "id":"msg_asst",
+                    "type":"assistant",
+                    "content":[
+                      {"type":"reasoning","id":"r1","text":"Need to greet the user."},
+                      {"type":"text","id":"t1","text":"Hello!"}
+                    ],
+                    "time":{"created":3}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val parts = adapter.projectV2(dtos).single().parts
+        val reasoning = parts.filterIsInstance<MessagePart.Reasoning>().single()
+        assertEquals("Need to greet the user.", reasoning.text)
+        assertEquals("r1", reasoning.id)
+        assertEquals("Hello!", parts.filterIsInstance<MessagePart.Text>().single().text)
+    }
+
+    @Test
+    fun projectV2_thinkingAliasGetsReasoningPartAndId() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {
+                    "id":"msg_asst",
+                    "type":"assistant",
+                    "content":[
+                      {"type":"thinking","text":"Need to greet the user."},
+                      {"type":"text","text":"Hello!"}
+                    ],
+                    "time":{"created":3}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val parts = adapter.projectV2(dtos).single().parts
+        val reasoning = parts.filterIsInstance<MessagePart.Reasoning>().single()
+        assertEquals("Need to greet the user.", reasoning.text)
+        assertEquals("msg_asst:thinking:0", reasoning.id)
+        assertEquals("msg_asst:text:1", parts.filterIsInstance<MessagePart.Text>().single().id)
+    }
+
+    @Test
     fun projectV2_assistantInheritsCarriedAgentAndModel() {
         val dtos =
             json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
