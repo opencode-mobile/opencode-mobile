@@ -38,16 +38,59 @@ nonisolated final class EventsAPIClient: Sendable {
         onHTTPResponse: (@Sendable (Int) async -> Void)? = nil,
         onDataLine: @escaping @Sendable (String) async -> Void
     ) async throws {
+        try await streamSubscriptions(
+            directories: [],
+            onHTTPResponse: onHTTPResponse,
+            onDataLine: onDataLine
+        )
+    }
+
+    func streamSubscriptions(
+        directories: [String],
+        onHTTPResponse: (@Sendable (Int) async -> Void)? = nil,
+        onDataLine: @escaping @Sendable (String) async -> Void
+    ) async throws {
         guard let connection = connectionProvider() else {
             throw EventsAPIError.noActiveConnection
         }
-
         if let protocolResolver {
             Task { _ = await protocolResolver() }
         }
         let resolvedProtocol = connection.serverProtocol ?? .v1
-        let normalizedPath = Self.subscribePath(for: resolvedProtocol)
-        let url = connection.apiBaseURL.appendingPathComponent(normalizedPath)
+        let targets = SseSubscribeTargets.targets(protocol: resolvedProtocol, directories: directories)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for target in targets {
+                group.addTask {
+                    try await self.streamEvents(
+                        connection: connection,
+                        path: target.path,
+                        directory: target.directory,
+                        onHTTPResponse: onHTTPResponse,
+                        onDataLine: onDataLine
+                    )
+                }
+            }
+            try await group.waitForAll()
+        }
+    }
+
+    private func streamEvents(
+        connection: ServerConnection,
+        path: String,
+        directory: String?,
+        onHTTPResponse: (@Sendable (Int) async -> Void)?,
+        onDataLine: @escaping @Sendable (String) async -> Void
+    ) async throws {
+        var url = connection.apiBaseURL.appendingPathComponent(path)
+        if let directory, !directory.isEmpty {
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            var items = components?.queryItems ?? []
+            items.append(URLQueryItem(name: "directory", value: directory))
+            components?.queryItems = items
+            if let withQuery = components?.url {
+                url = withQuery
+            }
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.cachePolicy = .reloadIgnoringLocalCacheData

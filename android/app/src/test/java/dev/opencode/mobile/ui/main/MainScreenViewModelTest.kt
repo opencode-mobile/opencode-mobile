@@ -511,6 +511,48 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun pullToRefresh_replacesStaleLiveStoreSnapshot() =
+        runTest(testDispatcher) {
+            val sessionsByWorktree =
+                mutableMapOf(
+                    "/repo" to listOf(Session(id = "1", title = "Session 1", updatedAtEpochMs = 1L)),
+                )
+            val sessionRepository = FakeSessionRepository(sessionsByWorktree)
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree = sessionsByWorktree,
+                    sessionRepository = sessionRepository,
+                )
+            advanceUntilIdle()
+            assertEquals(
+                listOf("Session 1"),
+                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                    .sections
+                    .single()
+                    .allSessions
+                    .map { it.title },
+            )
+
+            sessionsByWorktree["/repo"] =
+                listOf(
+                    Session(id = "2", title = "New Session Greeting", updatedAtEpochMs = 2L),
+                    Session(id = "1", title = "Session 1", updatedAtEpochMs = 1L),
+                )
+            viewModel.pullToRefresh()
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("New Session Greeting", "Session 1"),
+                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                    .sections
+                    .single()
+                    .allSessions
+                    .map { it.title },
+            )
+        }
+
+    @Test
     fun refreshOnSessionCreatedEvent() =
         runTest(testDispatcher) {
             val eventStream = FakeForegroundEventStream()

@@ -2,6 +2,7 @@ package dev.opencode.mobile.data.remote
 
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.network.OpencodeSseHttpClient
+import dev.opencode.mobile.network.applyDirectory
 import io.ktor.client.HttpClient
 import io.ktor.client.request.accept
 import io.ktor.client.request.header
@@ -29,13 +30,22 @@ class EventsApi private constructor(
         onDataLine: suspend (String) -> Unit,
     ) {
         val path = if (protocol == ServerProtocol.V2) "api/event" else "global/event"
+        streamEvents(path = path, directory = null, onHTTPResponse = onHTTPResponse, onDataLine = onDataLine)
+    }
+
+    suspend fun streamEvents(
+        path: String,
+        directory: String? = null,
+        onHTTPResponse: suspend (Int) -> Unit = {},
+        onDataLine: suspend (String) -> Unit,
+    ) {
         httpClient
             .get()
             .prepareGet(path) {
                 accept(ContentType.Text.EventStream)
                 header(HttpHeaders.CacheControl, "no-cache")
-                // Match iOS: keep SSE uncompressed so framing stays line-oriented under burst.
                 header(HttpHeaders.AcceptEncoding, "identity")
+                applyDirectory(directory)
             }.execute { response ->
                 if (response.status.value !in 200..299) {
                     throw IllegalStateException("SSE HTTP ${response.status.value}")

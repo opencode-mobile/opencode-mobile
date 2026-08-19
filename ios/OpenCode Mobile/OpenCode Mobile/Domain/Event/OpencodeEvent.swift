@@ -4,11 +4,13 @@ nonisolated struct OpencodeEvent: Sendable, Equatable {
     let type: String
     let sessionID: String?
     let rawProperties: [String: AnySendable]?
+    let id: String?
 
-    init(type: String, sessionID: String?, rawProperties: [String: AnySendable]? = nil) {
+    init(type: String, sessionID: String?, rawProperties: [String: AnySendable]? = nil, id: String? = nil) {
         self.type = type
         self.sessionID = sessionID
         self.rawProperties = rawProperties
+        self.id = id
     }
 
     var triggersMessageRefresh: Bool {

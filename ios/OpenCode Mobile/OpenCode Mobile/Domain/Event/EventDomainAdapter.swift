@@ -29,9 +29,29 @@ nonisolated struct EventDomainAdapter: Sendable {
             let innerType = syncEvent.flatMap { string(in: $0, key: "type") }
             let data = properties(fromData: syncEvent?["data"]) ?? [:]
             guard let innerType else { return [] }
-            return project(type: canonicalEventType(innerType), properties: data)
+            return stampEnvelopeId(
+                project(type: canonicalEventType(innerType), properties: data),
+                id: string(in: syncEvent, key: "id") ?? string(in: payload, key: "id") ?? json["id"] as? String
+            )
         }
-        return project(type: canonicalEventType(type), properties: eventProperties)
+        return stampEnvelopeId(
+            project(type: canonicalEventType(type), properties: eventProperties),
+            id: string(in: payload, key: "id") ?? json["id"] as? String
+        )
+    }
+
+    private func stampEnvelopeId(_ events: [OpencodeEvent], id: String?) -> [OpencodeEvent] {
+        guard let id, !id.isEmpty else { return events }
+        return events.map { event in
+            event.id == nil
+                ? OpencodeEvent(
+                    type: event.type,
+                    sessionID: event.sessionID,
+                    rawProperties: event.rawProperties,
+                    id: id
+                )
+                : event
+        }
     }
 
     private func resolveProperties(

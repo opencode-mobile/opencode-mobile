@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SSE subscriber</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #121212;
+    color: #ededed;
+    padding: 24px;
+    line-height: 1.45;
+    font-size: 15px;
+  }
+  .page { max-width: 56rem; margin: 0 auto; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px; }
+  .lede { color: #9a9a9a; margin: 0 0 20px; font-size: 0.92rem; }
+  .bar {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: 1fr 1fr;
+    margin-bottom: 12px;
+  }
+  @media (max-width: 700px) { .bar { grid-template-columns: 1fr; } }
+  label { display: block; font-size: 11px; color: #9a9a9a; margin-bottom: 4px; }
+  input, select, button {
+    font: inherit;
+    width: 100%;
+    background: #1c1c1c;
+    color: #ededed;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; margin: 10px 0 16px; }
+  .row > * { flex: 1 1 140px; }
+  .row button { flex: 0 0 auto; width: auto; min-width: 96px; cursor: pointer; }
+  button.primary { background: #2a6; border-color: #2a6; color: #041; font-weight: 600; }
+  button.danger { background: #522; border-color: #833; }
+  button:disabled { opacity: 0.45; cursor: default; }
+  .stats { display: flex; gap: 16px; flex-wrap: wrap; color: #9a9a9a; font-size: 13px; margin-bottom: 10px; }
+  .stats b { color: #ededed; font-weight: 600; }
+  .log {
+    background: #0c0c0c;
+    border: 1px solid #2a2a2a;
+    border-radius: 10px;
+    min-height: 360px;
+    max-height: 70vh;
+    overflow: auto;
+    padding: 8px 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+  }
+  .ev { padding: 5px 12px; border-bottom: 1px solid #1a1a1a; white-space: pre-wrap; word-break: break-word; }
+  .ev:hover { background: #181818; }
+  .t { color: #8cf; }
+  .s { color: #9d8; }
+  .p { color: #bbb; }
+  .meta { color: #666; }
+  .hb { color: #555; }
+  .err { color: #f88; padding: 8px 12px; }
+  .ok { color: #8d8; }
+</style>
+</head>
+<body>
+<main class="page">
+  <h1>SSE subscriber</h1>
+  <p class="lede">Subscribe to opencode v1 (<code>/global/event</code>, <code>/event</code>) or v2 (<code>/api/event</code>). Uses fetch (Basic Auth). CORS must allow this origin.</p>
+
+  <div class="bar">
+    <div>
+      <label>Server</label>
+      <input id="url" value="http://127.0.0.1:4096" spellcheck="false">
+    </div>
+    <div>
+      <label>Directory (v1 <code>/event</code>)</label>
+      <input id="dir" value="/Users/ivan/Projects/permission-test" spellcheck="false">
+    </div>
+    <div>
+      <label>Username</label>
+      <input id="user" value="opencode" autocomplete="username">
+    </div>
+    <div>
+      <label>Password</label>
+      <input id="pass" type="password" autocomplete="current-password">
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label>Stream</label>
+      <select id="stream">
+        <option value="auto">auto (probe)</option>
+        <option value="v1-both" selected>v1 both (global + /event)</option>
+        <option value="v1-global">v1 /global/event</option>
+        <option value="v1-event">v1 /event?directory=</option>
+        <option value="v2">v2 /api/event</option>
+      </select>
+    </div>
+    <div>
+      <label>Session filter</label>
+      <input id="session" placeholder="ses_… (optional)" spellcheck="false">
+    </div>
+    <div>
+      <label>Heartbeats</label>
+      <select id="hb">
+        <option value="hide">hide</option>
+        <option value="show">show</option>
+      </select>
+    </div>
+    <button class="primary" id="go" type="button">Connect</button>
+    <button class="danger" id="stop" type="button" disabled>Stop</button>
+  </div>
+  <div class="stats">
+    <span>status <b id="st">idle</b></span>
+    <span>kept <b id="kept">0</b></span>
+    <span>heartbeats <b id="hbc">0</b></span>
+    <span>other session <b id="skip">0</b></span>
+    <span>parse fail <b id="fail">0</b></span>
+  </div>
+  <div class="log" id="log"></div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const controllers = [];
+let kept = 0, hbc = 0, skip = 0, fail = 0;
+
+function setStatus(text, cls) {
+  $("st").textContent = text;
+  $("st").className = cls || "";
+}
+function bump() {
+  $("kept").textContent = kept;
+  $("hbc").textContent = hbc;
+  $("skip").textContent = skip;
+  $("fail").textContent = fail;
+}
+function line(html, cls) {
+  const el = document.createElement("div");
+  el.className = "ev " + (cls || "");
+  el.innerHTML = html;
+  $("log").prepend(el);
+}
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+function normalizeBase(url) {
+  const raw = (url || "").trim();
+  if (!raw) return location.origin;
+  return raw.replace(/\/+$/, "");
+}
+function authHeader() {
+  const user = $("user").value;
+  const pass = $("pass").value;
+  if (!pass) return {};
+  return { Authorization: "Basic " + btoa(`${user}:${pass}`) };
+}
+function extractType(parsed) {
+  if (!parsed || typeof parsed !== "object") return null;
+  return parsed.payload?.type ?? parsed.type ?? parsed.event ?? parsed.data?.type ?? parsed.payload?.syncEvent?.type ?? null;
+}
+function extractSessions(value, out = new Set()) {
+  if (typeof value === "string" && value.startsWith("ses_")) out.add(value);
+  else if (Array.isArray(value)) value.forEach((v) => extractSessions(v, out));
+  else if (value && typeof value === "object") {
+    for (const [k, v] of Object.entries(value)) {
+      if (typeof v === "string" && /session/i.test(k) && v) out.add(v);
+      extractSessions(v, out);
+    }
+  }
+  return [...out];
+}
+function preview(parsed, type) {
+  const data = parsed?.data ?? parsed?.payload?.properties ?? parsed?.properties ?? parsed;
+  if (!data || typeof data !== "object") return "";
+  const bits = [];
+  for (const key of ["title", "messageID", "messageId", "partID", "partId", "status", "command", "filePath"]) {
+    const v = data[key] ?? data.info?.[key];
+    if (typeof v === "string" && v) bits.push(`${key}=${v.length > 60 ? v.slice(0, 57) + "…" : v}`);
+  }
+  if (type?.includes("delta") && typeof data.delta === "string") {
+    bits.push("delta=" + JSON.stringify(data.delta).slice(0, 50));
+  }
+  return bits.slice(0, 3).join(" ");
+}
+function isCompleteJson(s) {
+  try { JSON.parse(s); return true; } catch { return false; }
+}
+class Parser {
+  constructor() { this.buf = ""; }
+  ingest(line) {
+    const t = line.trim();
+    if (!t) return this.flush();
+    if (t.startsWith(":")) return [];
+    if (t.startsWith("data:")) {
+      const p = t.slice(5).trimStart();
+      this.buf = this.buf ? this.buf + "\n" + p : p;
+      return isCompleteJson(this.buf) ? this.flush() : [];
+    }
+    if (t.startsWith("{")) {
+      const out = this.flush();
+      out.push(t);
+      return out;
+    }
+    return [];
+  }
+  flush() {
+    if (!this.buf) return [];
+    const d = this.buf;
+    this.buf = "";
+    return [d];
+  }
+}
+async function probe(base) {
+  const headers = { ...authHeader(), Accept: "application/json" };
+  const [g, a] = await Promise.allSettled([
+    fetch(base + "/global/health", { headers }),
+    fetch(base + "/api/health", { headers }),
+  ]);
+  const gOk = g.status === "fulfilled" && g.value.ok;
+  const aOk = a.status === "fulfilled" && a.value.ok;
+  if (gOk) return "v1";
+  if (aOk) {
+    const body = await a.value.json().catch(() => ({}));
+    return body?.pid != null ? "v2" : "v1";
+  }
+  throw new Error("probe failed");
+}
+function handleRaw(path, raw) {
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch { fail += 1; bump(); line(esc(new Date().toISOString()) + " PARSE " + esc(raw.slice(0, 160)), "err"); return; }
+  const type = extractType(parsed);
+  const sessions = extractSessions(parsed);
+  if (type === "server.heartbeat" && $("hb").value === "hide") {
+    hbc += 1; bump(); return;
+  }
+  const filter = $("session").value.trim();
+  if (filter && sessions.length && !sessions.includes(filter)) {
+    skip += 1; bump(); return;
+  }
+  kept += 1; bump();
+  const ts = new Date().toISOString().slice(11, 23);
+  const cls = type === "server.heartbeat" ? "hb" : "";
+  line(
+    `<span class="meta">${esc(ts)} ${esc(path)}</span> ` +
+    `<span class="t">${esc(type || "?")}</span> ` +
+    `<span class="s">${esc(sessions[0] || "-")}</span> ` +
+    `<span class="p">${esc(preview(parsed, type))}</span>`,
+    cls
+  );
+}
+async function readStream(url, pathLabel, signal) {
+  const res = await fetch(url, {
+    headers: {
+      ...authHeader(),
+      Accept: "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Accept-Encoding": "identity",
+    },
+    signal,
+  });
+  if (!res.ok || !res.body) throw new Error(`${pathLabel} HTTP ${res.status}`);
+  line(`<span class="ok">opened ${esc(pathLabel)} status=${res.status}</span>`);
+  const parser = new Parser();
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const parts = buf.split(/\r?\n/);
+    buf = parts.pop() ?? "";
+    for (const ln of parts) {
+      for (const data of parser.ingest(ln)) handleRaw(pathLabel, data);
+    }
+  }
+}
+async function connect() {
+  stop();
+  kept = hbc = skip = fail = 0;
+  bump();
+  $("log").innerHTML = "";
+  $("go").disabled = true;
+  $("stop").disabled = false;
+  setStatus("connecting");
+  const base = normalizeBase($("url").value);
+  const dir = $("dir").value.trim();
+  let mode = $("stream").value;
+  try {
+    if (mode === "auto") {
+      const proto = await probe(base);
+      mode = proto === "v2" ? "v2" : "v1-both";
+      line(`<span class="ok">probe → ${esc(proto)} → ${esc(mode)}</span>`);
+    }
+    const paths = [];
+    if (mode === "v2") paths.push({ url: base + "/api/event", label: "/api/event" });
+    if (mode === "v1-global" || mode === "v1-both") paths.push({ url: base + "/global/event", label: "/global/event" });
+    if (mode === "v1-event" || mode === "v1-both") {
+      const q = dir ? "?directory=" + encodeURIComponent(dir) : "";
+      paths.push({ url: base + "/event" + q, label: "/event" + q });
+    }
+    setStatus("live", "ok");
+    await Promise.all(paths.map(({ url, label }) => {
+      const c = new AbortController();
+      controllers.push(c);
+      return readStream(url, label, c.signal).catch((err) => {
+        if (err.name === "AbortError") return;
+        line(esc(String(err.message || err)), "err");
+        setStatus("error", "err");
+      });
+    }));
+  } catch (err) {
+    line(esc(String(err.message || err)), "err");
+    setStatus("error", "err");
+  } finally {
+    if (!controllers.length) {
+      $("go").disabled = false;
+      $("stop").disabled = true;
+    }
+  }
+}
+function stop() {
+  while (controllers.length) controllers.pop().abort();
+  $("go").disabled = false;
+  $("stop").disabled = true;
+  if ($("st").textContent === "live") setStatus("idle");
+}
+$("go").onclick = connect;
+$("stop").onclick = stop;
+</script>
+</body>
+</html>

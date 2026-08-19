@@ -198,6 +198,9 @@ class MainScreenViewModel
                         if (_isRefreshing.value) return@launch
                         _isRefreshing.value = true
                         try {
+                            stopLiveObservations()
+                            sessionLiveStore.clearCache()
+                            sessionStatusLiveStore.clearCache()
                             runHomeLoad(skipProbe = true, preserveContent = true)
                         } finally {
                             _isRefreshing.value = false

@@ -26,6 +26,20 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvent_readsEnvelopeIdFromPayloadAndRaw() {
+        val wrapped =
+            adapter.parseEvent(
+                """{"directory":"/tmp","payload":{"id":"evt_1","type":"message.part.delta","properties":{"sessionID":"ses-1"}}}""",
+            )
+        assertEquals("evt_1", wrapped?.id)
+        val instance =
+            adapter.parseEvent(
+                """{"id":"evt_2","type":"message.part.delta","properties":{"sessionID":"ses-1"}}""",
+            )
+        assertEquals("evt_2", instance?.id)
+    }
+
+    @Test
     fun parseEvent_readsSessionIdFromMessageInfo() {
         val event =
             adapter.parseEvent(

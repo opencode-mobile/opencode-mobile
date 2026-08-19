@@ -6,6 +6,7 @@ data class OpencodeEvent(
     val type: String,
     val sessionId: String? = null,
     val rawProperties: JsonObject? = null,
+    val id: String? = null,
 ) {
     val triggersMessageRefresh: Boolean
         get() =

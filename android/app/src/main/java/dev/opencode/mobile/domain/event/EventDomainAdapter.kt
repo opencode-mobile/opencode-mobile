@@ -38,9 +38,23 @@ class EventDomainAdapter(
                     ?: return emptyList()
             val innerType = stringIn(syncEvent, "type") ?: return emptyList()
             val data = propertiesFromData(syncEvent["data"]) ?: JsonObject(emptyMap())
-            return project(canonicalEventType(innerType), data)
+            return stampEnvelopeId(
+                project(canonicalEventType(innerType), data),
+                stringIn(syncEvent, "id") ?: stringIn(payload, "id") ?: stringIn(raw, "id"),
+            )
         }
-        return project(canonicalEventType(type), properties)
+        return stampEnvelopeId(
+            project(canonicalEventType(type), properties),
+            stringIn(payload, "id") ?: stringIn(raw, "id"),
+        )
+    }
+
+    private fun stampEnvelopeId(
+        events: List<OpencodeEvent>,
+        id: String?,
+    ): List<OpencodeEvent> {
+        if (id.isNullOrBlank()) return events
+        return events.map { event -> if (event.id == null) event.copy(id = id) else event }
     }
 
     private fun propertiesFromData(data: JsonElement?): JsonObject? =

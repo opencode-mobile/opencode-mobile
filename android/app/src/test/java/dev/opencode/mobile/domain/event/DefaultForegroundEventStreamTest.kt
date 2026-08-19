@@ -48,9 +48,10 @@ class DefaultForegroundEventStreamTest {
                         )
                     },
                 )
+            val store = FakeProfileStore()
             val manager =
                 ActiveConnectionManager(
-                    FakeProfileStore(),
+                    store,
                     ConnectionProbing {
                         delay(5_000)
                         ServerProtocol.V2
@@ -65,6 +66,7 @@ class DefaultForegroundEventStreamTest {
                     eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
                     diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
                     activeConnectionManager = manager,
+                    connectionProfileStore = store,
                 )
             try {
                 stream.start()
@@ -93,9 +95,10 @@ class DefaultForegroundEventStreamTest {
                         )
                     },
                 )
+            val store = FakeProfileStore()
             val manager =
                 ActiveConnectionManager(
-                    FakeProfileStore(),
+                    store,
                     ConnectionProbing { ServerProtocol.V1 },
                 )
             manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
@@ -106,6 +109,7 @@ class DefaultForegroundEventStreamTest {
                     eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
                     diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
                     activeConnectionManager = manager,
+                    connectionProfileStore = store,
                 )
             try {
                 stream.start()
@@ -134,9 +138,10 @@ class DefaultForegroundEventStreamTest {
                         )
                     },
                 )
+            val store = FakeProfileStore()
             val manager =
                 ActiveConnectionManager(
-                    FakeProfileStore(),
+                    store,
                     ConnectionProbing { ServerProtocol.V1 },
                 )
             manager.applyProfile(sampleProfile)
@@ -147,6 +152,7 @@ class DefaultForegroundEventStreamTest {
                     eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
                     diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
                     activeConnectionManager = manager,
+                    connectionProfileStore = store,
                     deviceNetworkPath = path,
                 )
             try {
@@ -189,18 +195,20 @@ class DefaultForegroundEventStreamTest {
                         }
                     },
                 )
+            val store = FakeProfileStore()
             val manager =
                 ActiveConnectionManager(
-                    FakeProfileStore(),
+                    store,
                     ConnectionProbing { ServerProtocol.V2 },
                 )
-            manager.applyProfile(sampleProfile)
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
             val stream =
                 DefaultForegroundEventStream(
                     eventsApi = EventsApi(client),
                     eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
                     diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
                     activeConnectionManager = manager,
+                    connectionProfileStore = store,
                     idleTimeoutMs = 150,
                 )
             try {
@@ -228,9 +236,10 @@ class DefaultForegroundEventStreamTest {
                         )
                     },
                 )
+            val store = FakeProfileStore()
             val manager =
                 ActiveConnectionManager(
-                    FakeProfileStore(),
+                    store,
                     ConnectionProbing { ServerProtocol.V2 },
                 )
             manager.applyProfile(sampleProfile)
@@ -240,6 +249,7 @@ class DefaultForegroundEventStreamTest {
                     eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
                     diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
                     activeConnectionManager = manager,
+                    connectionProfileStore = store,
                 )
             try {
                 stream.start()
@@ -272,9 +282,10 @@ class DefaultForegroundEventStreamTest {
                         )
                     },
                 )
+            val store = FakeProfileStore()
             val manager =
                 ActiveConnectionManager(
-                    FakeProfileStore(),
+                    store,
                     ConnectionProbing { ServerProtocol.V2 },
                 )
             manager.applyProfile(sampleProfile)
@@ -284,6 +295,7 @@ class DefaultForegroundEventStreamTest {
                     eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
                     diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
                     activeConnectionManager = manager,
+                    connectionProfileStore = store,
                 )
             val states = mutableListOf<EventStreamConnectionState>()
             val collectJob =
@@ -308,10 +320,111 @@ class DefaultForegroundEventStreamTest {
             }
         }
 
+    @Test
+    fun v1WithWorktrees_opensGlobalAndInstanceEvent() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val openedBoth = CompletableDeferred<Unit>()
+            val client =
+                HttpClient(
+                    MockEngine { request ->
+                        requests += request
+                        if (requests.any { it.url.encodedPath.contains("/global/event") } &&
+                            requests.any { it.url.encodedPath.endsWith("/event") && !it.url.encodedPath.contains("global") }
+                        ) {
+                            openedBoth.complete(Unit)
+                        }
+                        respond(
+                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = FakeProfileStore(worktrees = listOf("/Users/ivan/Projects/permission-test"))
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V1 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V1)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(2_000) { openedBoth.await() }
+                val paths = requests.map { it.url.encodedPath }
+                assertTrue(paths.any { it.contains("/global/event") })
+                assertTrue(paths.any { it.endsWith("/event") && !it.contains("global") })
+                assertTrue(
+                    requests.any {
+                        it.url.parameters["directory"] == "/Users/ivan/Projects/permission-test"
+                    },
+                )
+                assertTrue(requests.none { it.url.encodedPath.contains("/api/event") })
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun v2WithWorktrees_opensOnlyApiEvent() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val opened = CompletableDeferred<Unit>()
+            val client =
+                HttpClient(
+                    MockEngine { request ->
+                        requests += request
+                        opened.complete(Unit)
+                        respond(
+                            content = "data: {\"type\":\"server.connected\",\"data\":{}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = FakeProfileStore(worktrees = listOf("/Users/ivan/Projects/permission-test"))
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(2_000) { opened.await() }
+                delay(50)
+                assertEquals(1, requests.size)
+                assertTrue(requests.single().url.encodedPath.contains("/api/event"))
+                assertEquals(null, requests.single().url.parameters["directory"])
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
     private val sampleProfile =
         ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", password = "x")
 
-    private class FakeProfileStore : ConnectionProfileStore {
+    private class FakeProfileStore(
+        private val worktrees: List<String> = emptyList(),
+    ) : ConnectionProfileStore {
         private var profile: ConnectionProfile? = null
 
         override suspend fun activeProfile(): ConnectionProfile? = profile
@@ -320,7 +433,7 @@ class DefaultForegroundEventStreamTest {
             this.profile = profile
         }
 
-        override suspend fun addedWorktrees(serverBaseUrl: String): List<String> = emptyList()
+        override suspend fun addedWorktrees(serverBaseUrl: String): List<String> = worktrees
 
         override suspend fun addWorktree(
             serverBaseUrl: String,

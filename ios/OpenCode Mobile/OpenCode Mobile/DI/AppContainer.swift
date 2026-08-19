@@ -304,10 +304,16 @@ extension Container {
 
     var foregroundEventStream: Factory<DefaultForegroundEventStream> {
         self { @MainActor in
-            DefaultForegroundEventStream(
+            let store = self.connectionProfileStore()
+            let manager = self.activeConnectionManager()
+            return DefaultForegroundEventStream(
                 api: self.eventsAPIClient(),
                 adapter: self.eventDomainAdapter(),
-                deviceNetworkPath: self.deviceNetworkPath()
+                deviceNetworkPath: self.deviceNetworkPath(),
+                instanceDirectories: {
+                    guard let url = manager.connection?.baseURL.absoluteString else { return [] }
+                    return await store.addedWorktrees(serverBaseURL: url)
+                }
             )
         }.singleton
     }

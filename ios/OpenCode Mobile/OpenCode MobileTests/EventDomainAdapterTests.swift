@@ -11,6 +11,18 @@ struct EventDomainAdapterTests {
         #expect(event?.sessionID == "ses-1")
     }
 
+    @Test func parseEvent_readsEnvelopeIdFromPayloadAndRaw() {
+        let adapter = EventDomainAdapter()
+        let wrapped = adapter.parseEvent(
+            dataLine: #"{"directory":"/tmp","payload":{"id":"evt_1","type":"message.part.delta","properties":{"sessionID":"ses-1"}}}"#
+        )
+        #expect(wrapped?.id == "evt_1")
+        let instance = adapter.parseEvent(
+            dataLine: #"{"id":"evt_2","type":"message.part.delta","properties":{"sessionID":"ses-1"}}"#
+        )
+        #expect(instance?.id == "evt_2")
+    }
+
     @Test func parseEvent_readsSessionIDFromMessageInfo() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(
