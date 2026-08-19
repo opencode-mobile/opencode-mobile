@@ -149,9 +149,10 @@ testing. Do not promote the release to closed, open, or production tracks.
 Play Console graphics for the draft listing live in
 [`play-listing/`](../../../play-listing/) (icon + feature graphic) and
 [`test-screenshots/`](../../../test-screenshots/) (`android_1_*.jpg` phone
-shots). The high-res listing icon is the interlocking store mark from
-`app-icon/interlock.svg` — regenerate with `npm run app-icon:sync-store`.
-On-device launcher icons stay on `app-icon/source.svg`.
+shots). The high-res listing icon is the flattened “d” at
+`app-icon/store/google-play-512.png` (copied to `play-listing/icon-512.png`) —
+regenerate with `npm run app-icon:sync-store`.
+On-device launcher icons stay on `npm run app-icon:sync`.
 
 The first physical acceptance used `ivanfenenko@gmail.com` and confirmed that
 `0.1.0-internal.4` / `versionCode` 4 installed and opened successfully on a

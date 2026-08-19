@@ -1,175 +1,55 @@
 #!/usr/bin/env node
 // Generates the app launcher icon set for both platforms from
-// app-icon/source.svg. Emits the Android adaptive-icon vector drawables and
-// the iOS AppIcon.appiconset PNGs (any/dark/tinted). See
-// docs/design-system/app-icon.md.
+// app-icon/source.svg. Emits Android adaptive-icon vectors, iOS AppIcon
+// PNGs (any/dark/tinted), and the iOS 26 AppIcon.icon Liquid Glass package.
+// See docs/design-system/app-icon.md.
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { tmpdir } from "node:os";
+import { randomBytes } from "node:crypto";
+import {
+  GLASS_FILL,
+  SOURCE_SVG,
+  buildFlattenedSvg,
+  buildSilhouetteSvg,
+  buildSquareSvg,
+  deriveSquareTransform,
+  ensureRsvg,
+  parseSource,
+  renderPng,
+  svgTransformToAndroid,
+} from "./lib/app-icon-source.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const SOURCE_SVG = join(REPO_ROOT, "app-icon/source.svg");
 const IOS_APPICONSET = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Assets.xcassets/AppIcon.appiconset");
+const IOS_ICON_COMPOSER = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/AppIcon.icon");
 const ANDROID_RES = join(REPO_ROOT, "android/app/src/main/res");
-
-const PNG_SIZE = 1024;
 
 function fail(msg) {
   console.error(`app-icon: ${msg}`);
   process.exit(1);
 }
 
-function ensureRsvg() {
-  try {
-    execFileSync("rsvg-convert", ["--version"], { stdio: "ignore" });
-  } catch {
-    fail(
-      "rsvg-convert not found. Install librsvg: `brew install librsvg` (macOS) or `apt install librsvg2-bin` (Linux).",
-    );
+function hexToExtendedSrgb(hex) {
+  const h = hex.trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) {
+    fail(`unsupported fill "${hex}" (need #RRGGBB)`);
   }
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  return `extended-srgb:${r.toFixed(5)},${g.toFixed(5)},${b.toFixed(5)},1.00000`;
 }
 
-// Parse the controlled source SVG. We rely on the @opencode/background and
-// @opencode/glyph marker comments documented in app-icon/source.svg.
-function parseSource(src) {
-  const viewBoxMatch = src.match(/<svg[^>]*\sviewBox="0\s+0\s+(\d+)\s+(\d+)"/);
-  if (!viewBoxMatch) fail("source.svg: missing <svg viewBox=\"0 0 W H\">");
-  const viewBoxWidth = parseInt(viewBoxMatch[1], 10);
-  const viewBoxHeight = parseInt(viewBoxMatch[2], 10);
-  if (viewBoxWidth <= 0 || viewBoxHeight <= 0) fail("source.svg: invalid viewBox");
-
-  const bgMatch = src.match(
-    /<!--\s*@opencode\/background\s*-->\s*<rect\s+([^>]*)\/>/,
-  );
-  if (!bgMatch) fail("source.svg: missing <!-- @opencode/background --> <rect .../>");
-  const bgAttr = bgMatch[1];
-  const fillMatch = bgAttr.match(/fill="([^"]+)"/);
-  if (!fillMatch) fail("source.svg: background <rect> must declare fill=\"...\"");
-  const backgroundFill = fillMatch[1];
-
-  const glyphMatch = src.match(
-    /<!--\s*@opencode\/glyph\s*-->\s*(<g[\s\S]*?<\/g>)/,
-  );
-  if (!glyphMatch) fail("source.svg: missing <!-- @opencode/glyph --> <g>...</g>");
-  const glyphGroup = glyphMatch[1];
-
-  const transformMatch = glyphGroup.match(/transform="([^"]*)"/);
-  if (!transformMatch) fail("source.svg: glyph <g> must declare transform=\"...\"");
-  const transform = transformMatch[1];
-
-  const paths = [...glyphGroup.matchAll(/<path\s+d="([^"]+)"\s+fill="([^"]+)"/g)].map(
-    (m) => ({ d: m[1], fill: m[2] }),
-  );
-  if (paths.length === 0) fail("source.svg: glyph group has no <path> children");
-
-  return { viewBoxWidth, viewBoxHeight, backgroundFill, transform, paths };
-}
-
-// Android group transform "translate(tx,ty) scale(sx,sy)" -> {translateX,...}
-function svgTransformToAndroid(transform) {
-  const t = transform.match(/translate\(([^,]+),([^)]+)\)/);
-  const s = transform.match(/scale\(([^,]+),([^)]+)\)/);
-  if (!t || !s) fail(`source.svg: unsupported glyph transform "${transform}"`);
-  return {
-    translateX: parseFloat(t[1]),
-    translateY: parseFloat(t[2]),
-    scaleX: parseFloat(s[1]),
-    scaleY: parseFloat(s[2]),
-  };
-}
-
-// The source SVG viewBox (240x300, portrait) is non-square, but the glyph
-// group transform is designed so that once mapped to the Android 108dp square
-// adaptive canvas the effective scale becomes uniform (Android compensates for
-// the 4:5 viewport by pairing scaleX/scaleY in a 0.8 ratio). iOS has no such
-// compensation pass, so if we rasterized the 240x300 viewBox into a 1024x1024
-// PNG directly rsvg would stretch it non-uniformly and the glyph would look
-// squished. We instead derive the equivalent uniform transform for a square
-// 108x108 target viewBox and render that at 1024x1024 (square->square = no
-// non-uniform scaling). The math:
-//   uniformScale = scaleX * S / viewBoxWidth   (== scaleY * S / viewBoxHeight
-//                                              when the source is aspect-compensated)
-//   targetTx     = translateX * S / viewBoxWidth
-//   targetTy     = translateY * S / viewBoxHeight
-// where S is the square target side (we use 108 to mirror Android's dp canvas).
-const IOS_SQUARE_SIDE = 108;
-
-// iOS glyph scale multiplier relative to the Android-derived size. Android's
-// adaptive-icon safe zone (~66% of 108dp) leaves the glyph small inside an iOS
-// squircle (~24% of canvas height at 1.0x). Bump this to give the glyph more
-// presence on iOS; the transform is recentered on the canvas center so the
-// glyph stays centered at any scale. 1.5x ~36% of canvas height.
-const IOS_GLYPH_SCALE = 1.5;
-
-function deriveSquareTransform(parsed) {
-  const { viewBoxWidth, viewBoxHeight, transform } = parsed;
-  const android = svgTransformToAndroid(transform);
-  const scaleX = android.scaleX * (IOS_SQUARE_SIDE / viewBoxWidth);
-  const scaleY = android.scaleY * (IOS_SQUARE_SIDE / viewBoxHeight);
-  if (Math.abs(scaleX - scaleY) > 1e-4) {
-    fail(
-      `source.svg: glyph group scale is not aspect-compensated for the ${viewBoxWidth}x${viewBoxHeight} viewBox (sx=${scaleX}, sy=${scaleY}). iOS square render would still distort.`,
-    );
-  }
-  const baseScale = scaleX;
-  const baseTx = android.translateX * (IOS_SQUARE_SIDE / viewBoxWidth);
-  const baseTy = android.translateY * (IOS_SQUARE_SIDE / viewBoxHeight);
-  // Scale the glyph around the canvas center (54,54). Derivation:
-  //   current center maps to (baseTx + baseScale*c) = 54  =>  baseScale*c = 54-baseTx
-  //   scaled:  newTx + (baseScale*k)*c = 54  =>  newTx = 54 - k*(54-baseTx)
-  const k = IOS_GLYPH_SCALE;
-  const c = IOS_SQUARE_SIDE / 2;
-  return {
-    scale: baseScale * k,
-    translateX: c - k * (c - baseTx),
-    translateY: c - k * (c - baseTy),
-  };
-}
-
-function buildSquareSvg({ backgroundFill, square, paths, fillOverride }) {
-  const pathsXml = paths
-    .map(
-      (p) =>
-        `    <path d="${p.d}" fill="${fillOverride ?? p.fill}"/>`,
-    )
-    .join("\n");
-  return `<?xml version="1.0" encoding="utf-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${PNG_SIZE}" height="${PNG_SIZE}" viewBox="0 0 ${IOS_SQUARE_SIDE} ${IOS_SQUARE_SIDE}">
-  <rect x="0" y="0" width="${IOS_SQUARE_SIDE}" height="${IOS_SQUARE_SIDE}" fill="${backgroundFill ?? "none"}"/>
-  <g transform="translate(${square.translateX},${square.translateY}) scale(${square.scale},${square.scale})">
-${pathsXml}
-  </g>
-</svg>`;
-}
-
-function buildFlattenedSvg(parsed, square) {
-  return buildSquareSvg({ backgroundFill: parsed.backgroundFill, square, paths: parsed.paths });
-}
-
-// Tinted/monochrome silhouette: transparent background + all glyph fills white.
-// iOS 18 uses the alpha channel; the white fill is just a carrier for opacity.
-function buildSilhouetteSvg(parsed, square) {
-  return buildSquareSvg({ backgroundFill: "none", square, paths: parsed.paths, fillOverride: "#FFFFFF" });
-}
-
-import { tmpdir } from "node:os";
-import { randomBytes } from "node:crypto";
-
-function renderPng(svg, outPath) {
-  const tmp = join(tmpdir(), `opencode-app-icon-${randomBytes(4).toString("hex")}.svg`);
-  writeFileSync(tmp, svg, "utf8");
-  try {
-    execFileSync("rsvg-convert", ["-w", PNG_SIZE, "-h", PNG_SIZE, tmp, "-o", outPath], {
-      stdio: "pipe",
-    });
-  } catch (err) {
-    fail(`rsvg-convert failed: ${err.stderr?.toString() ?? err.message}`);
-  } finally {
-    try {
-      rmSync(tmp);
-    } catch {}
-  }
+function splitLayers(paths) {
+  const norm = (f) => f.trim().toUpperCase();
+  const glass = paths.filter((p) => norm(p.fill) === GLASS_FILL);
+  const body = paths.filter((p) => norm(p.fill) !== GLASS_FILL);
+  if (body.length === 0) fail("source.svg: glyph has no body paths (non-#F1ECEC fills)");
+  if (glass.length === 0) fail("source.svg: glyph has no glass cap (fill #F1ECEC)");
+  return { body, glass };
 }
 
 function writeIosContentsJson() {
@@ -208,12 +88,122 @@ function writeIosContentsJson() {
   );
 }
 
-function writeAndroidForeground({ transform, paths }) {
+function writeIconComposer(parsed, square) {
+  const { body, glass } = splitLayers(parsed.paths);
+  const assetsDir = join(IOS_ICON_COMPOSER, "Assets");
+  mkdirSync(assetsDir, { recursive: true });
+
+  const bodySvg = buildSquareSvg({
+    backgroundFill: "none",
+    square,
+    paths: body,
+    fillOverride: "#FFFFFF",
+  });
+  const glassSvg = buildSquareSvg({
+    backgroundFill: "none",
+    square,
+    paths: glass,
+    fillOverride: "#FFFFFF",
+  });
+  renderPng(bodySvg, join(assetsDir, "body.png"));
+  renderPng(glassSvg, join(assetsDir, "glass.png"));
+
+  const background = hexToExtendedSrgb(parsed.backgroundFill);
+  const bodyFill = hexToExtendedSrgb(body[0].fill);
+  const glassFill = hexToExtendedSrgb(glass[0].fill);
+  const json = {
+    "fill-specializations": [
+      { value: { solid: background } },
+      { appearance: "dark", value: { solid: background } },
+    ],
+    groups: [
+      {
+        name: "D Mark",
+        layers: [
+          {
+            name: "Body",
+            "image-name": "body.png",
+            glass: true,
+            "fill-specializations": [
+              { value: { solid: bodyFill } },
+              { appearance: "dark", value: { solid: bodyFill } },
+            ],
+          },
+          {
+            name: "Glass",
+            "image-name": "glass.png",
+            glass: true,
+            "fill-specializations": [
+              { value: { solid: glassFill } },
+              { appearance: "dark", value: { solid: glassFill } },
+            ],
+            translucency: { enabled: true, value: 0.28 },
+          },
+        ],
+        shadow: { kind: "neutral", opacity: 0.4 },
+        specular: true,
+        translucency: { enabled: true, value: 0.16 },
+        lighting: "combined",
+      },
+    ],
+    "supported-platforms": { squares: ["iOS"] },
+  };
+  writeFileSync(join(IOS_ICON_COMPOSER, "icon.json"), JSON.stringify(json, null, 2) + "\n", "utf8");
+}
+
+function maybeValidateIconComposer() {
+  let ictool;
+  try {
+    const xcode = execFileSync("xcode-select", ["-p"], { encoding: "utf8" }).trim();
+    ictool = join(dirname(xcode), "Applications/Icon Composer.app/Contents/Executables/ictool");
+  } catch {
+    console.log("app-icon: Icon Composer ictool not found; skipped .icon render check");
+    return;
+  }
+  if (!existsSync(ictool)) {
+    console.log("app-icon: Icon Composer ictool not found; skipped .icon render check");
+    return;
+  }
+  const out = join(tmpdir(), `opencode-app-icon-ictool-${randomBytes(4).toString("hex")}.png`);
+  try {
+    execFileSync(
+      ictool,
+      [
+        IOS_ICON_COMPOSER,
+        "--export-image",
+        "--output-file",
+        out,
+        "--platform",
+        "iOS",
+        "--rendition",
+        "Default",
+        "--width",
+        "64",
+        "--height",
+        "64",
+        "--scale",
+        "1",
+      ],
+      { stdio: "pipe" },
+    );
+  } catch (err) {
+    fail(`ictool rejected AppIcon.icon: ${err.stdout?.toString() || err.stderr?.toString() || err.message}`);
+  } finally {
+    try {
+      rmSync(out);
+    } catch {}
+  }
+}
+
+function androidVectorXml({ transform, paths, fillFor }) {
   const { translateX, translateY, scaleX, scaleY } = svgTransformToAndroid(transform);
   const pathsXml = paths
-    .map((p) => `    <path\n        android:pathData="${p.d}"\n        android:fillColor="${p.fill}" />`)
+    .map((p) => {
+      const fill = fillFor ? fillFor(p) : p.fill;
+      return `    <path\n        android:pathData="${p.d}"\n        android:fillColor="${fill}" />`;
+    })
     .join("\n");
-  const xml = `<?xml version="1.0" encoding="utf-8"?>
+  return `<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -227,23 +217,79 @@ ${pathsXml}
   </group>
 </vector>
 `;
-  const outDir = join(ANDROID_RES, "drawable");
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, "ic_launcher_foreground.xml"), xml, "utf8");
+}
+
+function writeAndroidRes(relativePath, contents) {
+  const out = join(ANDROID_RES, relativePath);
+  mkdirSync(dirname(out), { recursive: true });
+  writeFileSync(out, contents, "utf8");
+}
+
+function writeAndroidForeground(parsed) {
+  writeAndroidRes("drawable/ic_launcher_foreground.xml", androidVectorXml(parsed));
 }
 
 function writeAndroidBackgroundColor({ backgroundFill }) {
-  const xml = `<?xml version="1.0" encoding="utf-8"?>
+  writeAndroidRes(
+    "values/ic_launcher_background.xml",
+    `<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">${backgroundFill}</color>
 </resources>
-`;
-  const outDir = join(ANDROID_RES, "values");
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(
-    join(outDir, "ic_launcher_background.xml"),
-    xml,
-    "utf8",
+`,
+  );
+}
+
+function writeAndroidMonochrome(parsed) {
+  writeAndroidRes(
+    "drawable/ic_launcher_monochrome.xml",
+    androidVectorXml({
+      ...parsed,
+      fillFor: () => "#FFFFFF",
+    }),
+  );
+}
+
+// Splash uses app chrome (`background-base` / light ink), not the launcher
+// tile `#070707`. Light mode darkens the glass cap so it still reads on
+// `#F8F8F8`; dark mode keeps the source two-tone.
+const SPLASH_BACKGROUND_LIGHT = "#F8F8F8";
+const SPLASH_BACKGROUND_DARK = "#1C1C1C";
+const SPLASH_GLASS_LIGHT = "#171311";
+
+function writeAndroidSplash(parsed) {
+  const { body, glass } = splitLayers(parsed.paths);
+  const bodyFill = body[0].fill;
+  const glassFill = glass[0].fill;
+  writeAndroidRes(
+    "values/splash_colors.xml",
+    `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="splash_background">${SPLASH_BACKGROUND_LIGHT}</color>
+    <color name="splash_glyph_body">${bodyFill}</color>
+    <color name="splash_glyph_glass">${SPLASH_GLASS_LIGHT}</color>
+</resources>
+`,
+  );
+  writeAndroidRes(
+    "values-night/splash_colors.xml",
+    `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="splash_background">${SPLASH_BACKGROUND_DARK}</color>
+    <color name="splash_glyph_body">${bodyFill}</color>
+    <color name="splash_glyph_glass">${glassFill}</color>
+</resources>
+`,
+  );
+  writeAndroidRes(
+    "drawable/ic_splash.xml",
+    androidVectorXml({
+      ...parsed,
+      fillFor: (p) =>
+        p.fill.trim().toUpperCase() === GLASS_FILL.toUpperCase()
+          ? "@color/splash_glyph_glass"
+          : "@color/splash_glyph_body",
+    }),
   );
 }
 
@@ -252,7 +298,7 @@ function writeAndroidAdaptive() {
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background"/>
     <foreground android:drawable="@drawable/ic_launcher_foreground"/>
-    <monochrome android:drawable="@drawable/ic_launcher_foreground"/>
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>
 </adaptive-icon>
 `;
   const outDir = join(ANDROID_RES, "mipmap-anydpi-v26");
@@ -261,7 +307,35 @@ function writeAndroidAdaptive() {
   writeFileSync(join(outDir, "ic_launcher_round.xml"), adaptive, "utf8");
 }
 
+function writeAndroidLegacyMipmaps(flattenedSvg) {
+  const densities = [
+    ["mipmap-mdpi", 48],
+    ["mipmap-hdpi", 72],
+    ["mipmap-xhdpi", 96],
+    ["mipmap-xxhdpi", 144],
+    ["mipmap-xxxhdpi", 192],
+  ];
+  for (const [folder, size] of densities) {
+    const dir = join(ANDROID_RES, folder);
+    mkdirSync(dir, { recursive: true });
+    for (const name of ["ic_launcher", "ic_launcher_round"]) {
+      const png = join(dir, `${name}.png`);
+      const webp = join(dir, `${name}.webp`);
+      renderPng(flattenedSvg, png, size);
+      if (existsSync(webp)) unlinkSync(webp);
+    }
+  }
+}
+
 function main() {
+  try {
+    run();
+  } catch (err) {
+    fail(err.message);
+  }
+}
+
+function run() {
   if (!existsSync(SOURCE_SVG)) fail(`source SVG not found: ${SOURCE_SVG}`);
   ensureRsvg();
 
@@ -280,12 +354,22 @@ function main() {
 
   writeIosContentsJson();
 
+  // iOS 26+: layered Liquid Glass package. Xcode generates pre-26 fallbacks
+  // from this file; the appiconset PNGs stay as an explicit catalog copy.
+  writeIconComposer(parsed, square);
+  maybeValidateIconComposer();
+
   // Android: emit adaptive-icon layers from the same source.
   writeAndroidForeground(parsed);
+  writeAndroidMonochrome(parsed);
   writeAndroidBackgroundColor(parsed);
   writeAndroidAdaptive();
+  writeAndroidSplash(parsed);
+  writeAndroidLegacyMipmaps(flattened);
 
-  console.log("app-icon: synced iOS AppIcon + Android adaptive icon from app-icon/source.svg");
+  console.log("app-icon: synced iOS AppIcon + AppIcon.icon + Android adaptive icon + splash from app-icon/source.svg");
 }
 
-main();
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}

@@ -12,13 +12,15 @@ App Store screenshots (final): [`../test-screenshots/ios_1_*.jpg`](../test-scree
 
 ## Store icon
 
-The listing icon is the interlocking-frames store mark from
-[`app-icon/interlock.svg`](../app-icon/interlock.svg). Regenerate it (and the
-Android `ic_launcher-playstore.png`) with:
+The listing icon is the flattened “d” from
+[`app-icon/source.svg`](../app-icon/source.svg). Upload
+[`../app-icon/store/google-play-512.png`](../app-icon/store/google-play-512.png)
+(this folder’s `icon-512.png` is a copy). Regenerate with:
 
 ```bash
 npm run app-icon:sync-store
 ```
 
-On-device launcher icons stay on [`app-icon/source.svg`](../app-icon/source.svg)
-— see [`docs/design-system/app-icon.md`](../docs/design-system/app-icon.md).
+On-device launcher icons stay on `npm run app-icon:sync` — see
+[`docs/design-system/app-icon.md`](../docs/design-system/app-icon.md) and
+[`app-icon/store/README.md`](../app-icon/store/README.md).

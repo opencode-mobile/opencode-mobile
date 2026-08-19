@@ -243,3 +243,38 @@ implementation belong in the feature's `parity-gaps.md`.
   aligned while materials remain platform-native.
 - Review trigger: if Android gains a system glass material API or product asks
   for a shared custom blur stack, revisit the Android mapping.
+
+## Launcher icon depth (Liquid Glass vs adaptive parallax)
+
+- Status: intentional
+- Area: other
+- Shared intent: On-device launcher is a flat two-layer “d” (dark body, light
+  glass cap) on `#070707`. Depth comes from the OS, not baked lighting.
+- iOS behavior: `AppIcon.icon` (Icon Composer). Body and glass cap are separate
+  layers with Liquid Glass, specular, and translucency; the system renders
+  Default / Dark / Clear / Tinted.
+- Android behavior: Adaptive icon with color background, two-tone vector
+  foreground, and a white monochrome silhouette for themed icons. Launchers may
+  parallax foreground against background. No system glass material.
+- Reason: iOS 26 supplies live glass lighting; Android does not. The same SVG
+  paths feed both. A pre-rendered 3D PNG would fight iOS glass and collapse
+  under Android theming.
+- Review trigger: revisit if Android adds a system glass icon material.
+  Store listings use a flattened raster of the same “d”; they cannot carry
+  iOS glass or Android parallax.
+
+## Launch screen branding
+
+- Status: intentional
+- Area: other
+- Shared intent: Cold start follows system light/dark using app chrome
+  (`background-base`), not a stuck light frame.
+- iOS behavior: Generated `UILaunchScreen` (no branded glyph). System
+  background already tracks appearance.
+- Android behavior: `Theme.SplashScreen` + `ic_splash` with day/night
+  `splash_colors.xml`. Light mode darkens the glass cap; dark mode keeps the
+  source two-tone. Home-screen launcher stays the dark `#070707` tile.
+- Reason: Android 12+ splash is a themed window plus a foreground icon; iOS
+  generated launch screens do not take a custom glyph without a storyboard.
+- Review trigger: if iOS adds a branded Launch Screen storyboard, or Android
+  splash should match the launcher tile instead of `background-base`.

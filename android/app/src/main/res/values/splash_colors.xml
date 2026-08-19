@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="splash_background">#F8F8F8</color>
+    <color name="splash_glyph_body">#4B4646</color>
+    <color name="splash_glyph_glass">#171311</color>
+</resources>

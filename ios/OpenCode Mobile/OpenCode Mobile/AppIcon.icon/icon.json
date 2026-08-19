@@ -1,0 +1,77 @@
+{
+  "fill-specializations": [
+    {
+      "value": {
+        "solid": "extended-srgb:0.02745,0.02745,0.02745,1.00000"
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "solid": "extended-srgb:0.02745,0.02745,0.02745,1.00000"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "name": "D Mark",
+      "layers": [
+        {
+          "name": "Body",
+          "image-name": "body.png",
+          "glass": true,
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "extended-srgb:0.29412,0.27451,0.27451,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "extended-srgb:0.29412,0.27451,0.27451,1.00000"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Glass",
+          "image-name": "glass.png",
+          "glass": true,
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "extended-srgb:0.94510,0.92549,0.92549,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "extended-srgb:0.94510,0.92549,0.92549,1.00000"
+              }
+            }
+          ],
+          "translucency": {
+            "enabled": true,
+            "value": 0.28
+          }
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.4
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.16
+      },
+      "lighting": "combined"
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "iOS"
+    ]
+  }
+}
