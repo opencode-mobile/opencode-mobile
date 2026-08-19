@@ -412,7 +412,10 @@ object SessionChatTimelineBlocks {
             "read" -> if (count == 1) "Read" else "$count reads"
             "grep" -> if (count == 1) "Grep" else "$count greps"
             "glob" -> if (count == 1) "Glob" else "$count globs"
-            "bash" -> if (count == 1) "Shell" else "$count shells"
+            "bash", "shell" -> if (count == 1) "Shell" else "$count shells"
+            "execute" -> if (count == 1) "Execute" else "$count executes"
+            "lsp" -> if (count == 1) "LSP" else "$count LSPs"
+            "plan_exit" -> if (count == 1) "Plan" else "$count plans"
             "edit" -> if (count == 1) "Edit" else "$count edits"
             "write" -> if (count == 1) "Write" else "$count writes"
             "webfetch" -> if (count == 1) "Fetch" else "$count fetches"
@@ -501,11 +504,14 @@ object SessionChatTimelineBlocks {
 
     private fun genericChrome(tool: MessagePart.Tool): Chrome {
         val subtitle =
-            when (tool.status) {
-                ToolStatus.Running -> tool.title?.takeIf { it.isNotEmpty() }
-                else -> null
-            }
-        return Chrome(title = "Called ${tool.toolName}", subtitle = subtitle)
+            inputPreview(tool.input)
+                ?: tool.title?.takeIf { it.isNotEmpty() && !it.equals(tool.toolName, ignoreCase = true) }
+                ?: runningTitleOverride(tool)
+        return Chrome(
+            title = "Called ${tool.toolName}",
+            subtitle = subtitle,
+            detailText = settledDetail(tool),
+        )
     }
 
     private fun specializedChrome(
@@ -526,7 +532,10 @@ object SessionChatTimelineBlocks {
                     displayTitle = "Grep",
                     subtitle = patternPathSubtitle(tool.input),
                 )
-            "bash" -> shellChrome(tool)
+            "bash", "shell" -> shellChrome(tool)
+            "execute" -> executeChrome(tool)
+            "lsp" -> lspChrome(tool)
+            "plan_exit" -> planExitChrome(tool)
             "webfetch" -> networkChrome(tool, displayTitle = "Fetch", subtitleKey = "url")
             "websearch" -> networkChrome(tool, displayTitle = "Search", subtitleKey = "query")
             "question" -> questionChrome(tool)
@@ -699,14 +708,110 @@ object SessionChatTimelineBlocks {
         val command =
             inputString(tool.input, "command")
                 ?: runningTitleOverride(tool)
-        val detail =
-            tool.output?.takeIf { it.isNotEmpty() }
-                ?: tool.error?.takeIf { it.isNotEmpty() }
         return Chrome(
             title = "Shell",
             subtitle = command,
-            detailText = detail,
+            detailText = settledDetail(tool),
         )
+    }
+
+    private fun executeChrome(tool: MessagePart.Tool): Chrome {
+        val calls = executeCallPreviews(tool.metadata)
+        val subtitle =
+            when {
+                calls.isEmpty() ->
+                    runningTitleOverride(tool)
+                        ?: tool.title?.takeIf { it.isNotEmpty() }
+                calls.size == 1 -> calls.first()
+                else -> "${calls.size} tools"
+            }
+        val detail =
+            buildString {
+                if (calls.isNotEmpty()) append(calls.joinToString("\n"))
+                val extra = settledDetail(tool)
+                if (extra != null) {
+                    if (isNotEmpty()) append("\n\n")
+                    append(extra)
+                }
+            }.takeIf { it.isNotEmpty() }
+        return Chrome(title = "Execute", subtitle = subtitle, detailText = detail)
+    }
+
+    private fun executeCallPreviews(metadata: JsonObject?): List<String> {
+        val array = metadata?.get("toolCalls") as? JsonArray ?: return emptyList()
+        return array.mapNotNull { element ->
+            val obj = element as? JsonObject ?: return@mapNotNull null
+            val name = (obj["tool"] as? JsonPrimitive)?.content?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val preview = inputPreview(obj["input"] as? JsonObject)
+            if (preview != null) "$name $preview" else name
+        }
+    }
+
+    private fun lspChrome(tool: MessagePart.Tool): Chrome {
+        val operation = inputString(tool.input, "operation")
+        val path = pathSubtitle(tool.input)
+        val line = inputString(tool.input, "line")
+        val query = inputString(tool.input, "query")
+        val location =
+            when {
+                path != null && line != null -> "$path:$line"
+                path != null -> path
+                query != null -> query
+                else -> null
+            }
+        val subtitle =
+            when {
+                operation != null && location != null -> "$operation · $location"
+                operation != null -> operation
+                location != null -> location
+                else ->
+                    runningTitleOverride(tool)
+                        ?: tool.title?.takeIf { it.isNotEmpty() }
+            }
+        return Chrome(title = "LSP", subtitle = subtitle, detailText = settledDetail(tool))
+    }
+
+    private fun planExitChrome(tool: MessagePart.Tool): Chrome =
+        Chrome(
+            title = "Plan",
+            subtitle =
+                tool.title?.takeIf { it.isNotEmpty() }
+                    ?: "Ready to implement?",
+            detailText = settledDetail(tool),
+        )
+
+    private fun settledDetail(tool: MessagePart.Tool): String? =
+        when (tool.status) {
+            ToolStatus.Completed, ToolStatus.Error ->
+                tool.output?.takeIf { it.isNotEmpty() }
+                    ?: tool.error?.takeIf { it.isNotEmpty() }
+            ToolStatus.Pending, ToolStatus.Running -> null
+        }
+
+    private fun inputPreview(input: JsonObject?): String? {
+        if (input == null) return null
+        inputString(
+            input,
+            "command",
+            "filePath",
+            "path",
+            "file",
+            "url",
+            "query",
+            "pattern",
+            "name",
+            "description",
+            "prompt",
+            "text",
+            "id",
+        )?.let { return it }
+        val parts =
+            input.mapNotNull { (key, value) ->
+                val primitive = value as? JsonPrimitive ?: return@mapNotNull null
+                val text = primitive.content.takeIf { it.isNotEmpty() && it.length <= 80 } ?: return@mapNotNull null
+                "$key=$text"
+            }
+        return parts.takeIf { it.isNotEmpty() }?.joinToString(", ")?.let { "[$it]" }
     }
 
     private fun networkChrome(
@@ -759,10 +864,16 @@ object SessionChatTimelineBlocks {
                 ?: inputString(tool.input, "prompt", "text", "question")
                 ?: runningTitleOverride(tool)
         val firstAnswer = answers.firstOrNull()
+        val dismissed = if (tool.status == ToolStatus.Error) tool.error?.takeIf { it.isNotEmpty() } else null
         return Chrome(
             title = firstQuestion ?: "Question",
             subtitle = firstAnswer,
-            detailText = questionDetail(questions, answers),
+            detailText =
+                questionDetail(
+                    questions = questions.ifEmpty { listOfNotNull(firstQuestion) },
+                    answers = answers,
+                    error = dismissed,
+                ),
         )
     }
 
@@ -792,19 +903,22 @@ object SessionChatTimelineBlocks {
     private fun questionDetail(
         questions: List<String>,
         answers: List<String>,
+        error: String? = null,
     ): String? {
-        if (questions.isEmpty() && answers.isEmpty()) return null
         val count = maxOf(questions.size, answers.size)
-        if (count == 1 && answers.isEmpty()) return null
-        return (0 until count).joinToString("\n\n") { index ->
-            val question = questions.getOrNull(index).orEmpty()
-            val answer = answers.getOrNull(index).orEmpty()
-            when {
-                question.isNotEmpty() && answer.isNotEmpty() -> "$question\n$answer"
-                question.isNotEmpty() -> question
-                else -> answer
+        val pairs =
+            (0 until count).map { index ->
+                val question = questions.getOrNull(index).orEmpty()
+                val answer = answers.getOrNull(index).orEmpty()
+                when {
+                    question.isNotEmpty() && answer.isNotEmpty() -> "$question\n$answer"
+                    question.isNotEmpty() -> question
+                    else -> answer
+                }
             }
-        }
+        return (pairs.filter { it.isNotEmpty() } + listOfNotNull(error))
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n\n")
     }
 
     private fun inputString(

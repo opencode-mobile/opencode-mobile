@@ -458,7 +458,10 @@ nonisolated enum SessionChatTimelineBlocks {
         case "read": return count == 1 ? "Read" : "\(count) reads"
         case "grep": return count == 1 ? "Grep" : "\(count) greps"
         case "glob": return count == 1 ? "Glob" : "\(count) globs"
-        case "bash": return count == 1 ? "Shell" : "\(count) shells"
+        case "bash", "shell": return count == 1 ? "Shell" : "\(count) shells"
+        case "execute": return count == 1 ? "Execute" : "\(count) executes"
+        case "lsp": return count == 1 ? "LSP" : "\(count) LSPs"
+        case "plan_exit": return count == 1 ? "Plan" : "\(count) plans"
         case "edit": return count == 1 ? "Edit" : "\(count) edits"
         case "write": return count == 1 ? "Write" : "\(count) writes"
         case "webfetch": return count == 1 ? "Fetch" : "\(count) fetches"
@@ -572,14 +575,18 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func genericChrome(_ tool: ToolPart) -> Chrome {
-        let subtitle: String? =
-            switch tool.status {
-            case .running:
-                tool.title.flatMap { $0.isEmpty ? nil : $0 }
-            case .pending, .completed, .error:
-                nil
+        let subtitle = inputPreview(tool.input)
+            ?? tool.title.flatMap { title in
+                title.isEmpty || title.compare(tool.toolName, options: .caseInsensitive) == .orderedSame
+                    ? nil
+                    : title
             }
-        return Chrome(title: "Called \(tool.toolName)", subtitle: subtitle)
+            ?? runningTitleOverride(tool)
+        return Chrome(
+            title: "Called \(tool.toolName)",
+            subtitle: subtitle,
+            detailText: settledDetail(tool)
+        )
     }
 
     private static func specializedChrome(name: String, tool: ToolPart) -> Chrome? {
@@ -590,8 +597,14 @@ nonisolated enum SessionChatTimelineBlocks {
             return contextChrome(tool: tool, displayTitle: "Glob", subtitle: patternPathSubtitle(tool.input))
         case "grep":
             return contextChrome(tool: tool, displayTitle: "Grep", subtitle: patternPathSubtitle(tool.input))
-        case "bash":
+        case "bash", "shell":
             return shellChrome(tool)
+        case "execute":
+            return executeChrome(tool)
+        case "lsp":
+            return lspChrome(tool)
+        case "plan_exit":
+            return planExitChrome(tool)
         case "webfetch":
             return networkChrome(tool: tool, displayTitle: "Fetch", subtitleKey: "url")
         case "websearch":
@@ -769,8 +782,117 @@ nonisolated enum SessionChatTimelineBlocks {
 
     private static func shellChrome(_ tool: ToolPart) -> Chrome {
         let command = inputString(tool.input, keys: "command") ?? runningTitleOverride(tool)
-        let detail = nonEmpty(tool.output) ?? nonEmpty(tool.error)
-        return Chrome(title: "Shell", subtitle: command, detailText: detail)
+        return Chrome(title: "Shell", subtitle: command, detailText: settledDetail(tool))
+    }
+
+    private static func executeChrome(_ tool: ToolPart) -> Chrome {
+        let calls = executeCallPreviews(tool.metadata)
+        let subtitle: String? =
+            if calls.isEmpty {
+                runningTitleOverride(tool) ?? nonEmpty(tool.title)
+            } else if calls.count == 1 {
+                calls[0]
+            } else {
+                "\(calls.count) tools"
+            }
+        var detailParts = calls
+        if let extra = settledDetail(tool) {
+            detailParts.append(extra)
+        }
+        return Chrome(
+            title: "Execute",
+            subtitle: subtitle,
+            detailText: detailParts.isEmpty ? nil : detailParts.joined(separator: calls.isEmpty || settledDetail(tool) == nil ? "\n" : "\n\n")
+        )
+    }
+
+    private static func executeCallPreviews(_ metadata: [String: AnyCodable]?) -> [String] {
+        guard case let .array(array)? = metadata?["toolCalls"] else { return [] }
+        return array.compactMap { element in
+            guard case let .dictionary(obj) = element else { return nil }
+            guard let name = scalarString(obj["tool"]), !name.isEmpty else { return nil }
+            let input: [String: AnyCodable]? =
+                if case let .dictionary(dict)? = obj["input"] { dict } else { nil }
+            if let preview = inputPreview(input) { return "\(name) \(preview)" }
+            return name
+        }
+    }
+
+    private static func lspChrome(_ tool: ToolPart) -> Chrome {
+        let operation = inputString(tool.input, keys: "operation")
+        let path = pathSubtitle(tool.input)
+        let line = inputScalar(tool.input, keys: "line")
+        let query = inputString(tool.input, keys: "query")
+        let location: String? =
+            if let path, let line {
+                "\(path):\(line)"
+            } else {
+                path ?? query
+            }
+        let subtitle: String? =
+            if let operation, let location {
+                "\(operation) · \(location)"
+            } else {
+                operation ?? location ?? runningTitleOverride(tool) ?? nonEmpty(tool.title)
+            }
+        return Chrome(title: "LSP", subtitle: subtitle, detailText: settledDetail(tool))
+    }
+
+    private static func planExitChrome(_ tool: ToolPart) -> Chrome {
+        Chrome(
+            title: "Plan",
+            subtitle: nonEmpty(tool.title) ?? "Ready to implement?",
+            detailText: settledDetail(tool)
+        )
+    }
+
+    private static func settledDetail(_ tool: ToolPart) -> String? {
+        switch tool.status {
+        case .completed, .error:
+            nonEmpty(tool.output) ?? nonEmpty(tool.error)
+        case .pending, .running:
+            nil
+        }
+    }
+
+    private static func inputPreview(_ input: [String: AnyCodable]?) -> String? {
+        if let preferred = inputString(
+            input,
+            keys: "command", "filePath", "path", "file", "url", "query", "pattern", "name", "description", "prompt", "text", "id"
+        ) {
+            return preferred
+        }
+        guard let input else { return nil }
+        let parts = input.compactMap { key, value -> String? in
+            guard let text = scalarString(value), !text.isEmpty, text.count <= 80 else { return nil }
+            return "\(key)=\(text)"
+        }
+        return parts.isEmpty ? nil : "[\(parts.joined(separator: ", "))]"
+    }
+
+    private static func inputScalar(_ input: [String: AnyCodable]?, keys: String...) -> String? {
+        guard let input else { return nil }
+        for key in keys {
+            if let value = scalarString(input[key]), !value.isEmpty {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func scalarString(_ value: AnyCodable?) -> String? {
+        switch value {
+        case let .string(text) where !text.isEmpty:
+            text
+        case let .int(number):
+            String(number)
+        case let .double(number):
+            String(number)
+        case let .bool(flag):
+            String(flag)
+        default:
+            nil
+        }
     }
 
     private static func networkChrome(tool: ToolPart, displayTitle: String, subtitleKey: String) -> Chrome {
@@ -819,10 +941,15 @@ nonisolated enum SessionChatTimelineBlocks {
         let firstQuestion = questions.first
             ?? inputString(tool.input, keys: "prompt", "text", "question")
             ?? runningTitleOverride(tool)
+        let dismissed = tool.status == .error ? nonEmpty(tool.error) : nil
         return Chrome(
             title: firstQuestion ?? "Question",
             subtitle: answers.first,
-            detailText: questionDetail(questions: questions, answers: answers)
+            detailText: questionDetail(
+                questions: questions.isEmpty ? [firstQuestion].compactMap { $0 } : questions,
+                answers: answers,
+                error: dismissed
+            )
         )
     }
 
@@ -849,16 +976,16 @@ nonisolated enum SessionChatTimelineBlocks {
         }
     }
 
-    private static func questionDetail(questions: [String], answers: [String]) -> String? {
-        if questions.isEmpty, answers.isEmpty { return nil }
+    private static func questionDetail(questions: [String], answers: [String], error: String? = nil) -> String? {
         let count = max(questions.count, answers.count)
-        if count == 1, answers.isEmpty { return nil }
-        return (0..<count).map { index in
+        let pairs = (0..<count).map { index in
             let question = questions.indices.contains(index) ? questions[index] : ""
             let answer = answers.indices.contains(index) ? answers[index] : ""
             if !question.isEmpty, !answer.isEmpty { return "\(question)\n\(answer)" }
             return question.isEmpty ? answer : question
-        }.joined(separator: "\n\n")
+        }.filter { !$0.isEmpty }
+        let parts = pairs + [error].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
     }
 
     private static func inputString(_ input: [String: AnyCodable]?, keys: String...) -> String? {

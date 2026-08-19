@@ -294,7 +294,40 @@ class SessionChatTimelineBlocksTest {
         assertEquals(PresentationBlockId.direct("prt-3"), tool.blockID)
         assertEquals("Which option?", tool.title)
         assertNull(tool.subtitle)
-        assertNull(tool.detailText)
+        assertEquals("Which option?", tool.detailText)
+    }
+
+    @Test
+    fun build_dismissedQuestionIsTappable() {
+        val questions =
+            buildJsonArray {
+                add(
+                    buildJsonObject {
+                        put("question", "What would you like to do in this session?")
+                    },
+                )
+            }
+        val shown =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "question",
+                            status = ToolStatus.Error,
+                            id = "prt-d",
+                            input = JsonObject(mapOf("questions" to questions)),
+                            error = "The user dismissed this question",
+                        ),
+                    ),
+            )
+        val tool = shown.single() as SessionChatTimelineBlock.ToolCard
+        assertEquals("What would you like to do in this session?", tool.title)
+        assertEquals("The user dismissed this question", tool.errorText)
+        assertEquals(
+            "What would you like to do in this session?\n\nThe user dismissed this question",
+            tool.detailText,
+        )
     }
 
     @Test
@@ -640,6 +673,27 @@ class SessionChatTimelineBlocksTest {
         assertEquals("false", tool.subtitle)
         assertEquals("exit 1", tool.errorText)
         assertEquals("exit 1", tool.detailText)
+    }
+
+    @Test
+    fun build_v2ShellUsesCommandAsSubtitle() {
+        val tool =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "shell",
+                            status = ToolStatus.Running,
+                            id = "prt-1",
+                            title = "shell",
+                            input = json("command" to "git status"),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("Shell", tool.title)
+        assertEquals("git status", tool.subtitle)
     }
 
     @Test

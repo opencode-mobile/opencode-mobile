@@ -140,7 +140,37 @@ struct SessionChatTimelineBlocksTests {
         #expect(blockID == PresentationBlockId.direct("q3"))
         #expect(tool.title == "Which option?")
         #expect(tool.subtitle == nil)
-        #expect(tool.detailText == nil)
+        #expect(tool.detailText == "Which option?")
+    }
+
+    @Test func build_dismissedQuestionIsTappable() {
+        let shown = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "q-dismissed",
+                        toolName: "question",
+                        status: .error,
+                        error: "The user dismissed this question",
+                        input: [
+                            "questions": .array([
+                                .dictionary(["question": .string("What would you like to do in this session?")]),
+                            ]),
+                        ]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(_, let tool) = shown.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "What would you like to do in this session?")
+        #expect(tool.errorText == "The user dismissed this question")
+        #expect(
+            tool.detailText ==
+                "What would you like to do in this session?\n\nThe user dismissed this question"
+        )
     }
 
     @Test func build_answeredQuestionShowsQuestionAndReply() {
@@ -387,6 +417,28 @@ struct SessionChatTimelineBlocksTests {
         #expect(tool.subtitle == "false")
         #expect(tool.errorText == "exit 1")
         #expect(tool.detailText == "exit 1")
+    }
+
+    @Test func build_v2ShellUsesCommandAsSubtitle() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "shell-1",
+                        toolName: "shell",
+                        status: .running,
+                        title: "shell",
+                        input: ["command": .string("git status")]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(_, let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Shell")
+        #expect(tool.subtitle == "git status")
     }
 
     @Test func build_networkFetchAndSearchChrome() {
