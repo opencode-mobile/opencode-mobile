@@ -14,6 +14,8 @@ import dev.opencode.mobile.domain.connection.DeviceNetworkPath
 import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.ForegroundHomeCatchUpRegistry
+import dev.opencode.mobile.domain.event.ForegroundRestore
 import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
@@ -76,6 +78,8 @@ class MainScreenViewModel
         private val sessionStatusLiveStore: SessionStatusLiveStore,
         private val sessionReadyStore: SessionReadyStore,
         private val foregroundEventStream: ForegroundEventStream,
+        private val foregroundRestore: ForegroundRestore,
+        private val foregroundHomeCatchUpRegistry: ForegroundHomeCatchUpRegistry,
         private val activeConnectionManager: ActiveConnectionManager,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
         private val newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
@@ -122,6 +126,9 @@ class MainScreenViewModel
         private var forkDraftEditReported = false
 
         init {
+            foregroundHomeCatchUpRegistry.setHandler {
+                refreshSuspending()
+            }
             refresh()
             viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
@@ -153,9 +160,13 @@ class MainScreenViewModel
 
         fun refresh() {
             viewModelScope.launch {
-                refreshServersChrome()
-                runHomeLoad()
+                refreshSuspending()
             }
+        }
+
+        private suspend fun refreshSuspending() {
+            refreshServersChrome()
+            runHomeLoad()
         }
 
         fun showServersSheet() {
@@ -353,6 +364,7 @@ class MainScreenViewModel
             if (lastHomeHiddenAtEpochMs != null) return
             lastHomeHiddenAtEpochMs = nowEpochMs
             HomeDisplayPreferences.setLastHomeHiddenAtEpochMs(nowEpochMs)
+            foregroundRestore.setHomeVisible(false)
         }
 
         fun onHomeRevealed(nowEpochMs: Long = System.currentTimeMillis()) {
@@ -365,6 +377,7 @@ class MainScreenViewModel
             }
             lastHomeHiddenAtEpochMs = null
             HomeDisplayPreferences.setLastHomeHiddenAtEpochMs(null)
+            foregroundRestore.setHomeVisible(true)
         }
 
         fun requestRemoveProject(worktree: String) {
@@ -1156,6 +1169,7 @@ class MainScreenViewModel
 
         private fun startLiveObservations(worktrees: List<String>) {
             stopLiveObservations()
+            foregroundRestore.setHomeVisible(true)
             liveObservationJobs =
                 worktrees.map { worktree ->
                     viewModelScope.launch {
@@ -1181,6 +1195,7 @@ class MainScreenViewModel
         private fun stopLiveObservations() {
             liveObservationJobs.forEach { it.cancel() }
             liveObservationJobs = emptyList()
+            foregroundRestore.setHomeVisible(false)
         }
 
         private fun updateSectionFromLiveData(

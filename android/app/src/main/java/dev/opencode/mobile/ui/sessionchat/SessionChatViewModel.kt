@@ -18,6 +18,7 @@ import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.ForegroundRestore
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.EmptySessionTodoLiveStore
 import dev.opencode.mobile.domain.live.PermissionLiveStore
@@ -79,6 +80,7 @@ class SessionChatViewModel
         private val sessionReadyStore: SessionReadyStore = EmptySessionReadyStore,
         sessionStatusLiveStore: SessionStatusLiveStore,
         foregroundEventStream: ForegroundEventStream,
+        private val foregroundRestore: ForegroundRestore,
         eventDomainAdapter: EventDomainAdapter,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         sessionModelSelectionStore: SessionModelSelectionStore,
@@ -241,6 +243,7 @@ class SessionChatViewModel
             // Always re-assert Ready focus: nav can dispose/clear focus then re-enter the same
             // bound ViewModel without a full reset, and Ready must clear on open.
             sessionReadyStore.setFocusedSession(sessionId, worktree)
+            foregroundRestore.setOpenSession(sessionId, worktree)
             if (boundSessionId == sessionId && boundWorktree == worktree) {
                 bindTitleIfChanged(sessionId, sessionTitle, worktree)
                 // Peers may have changed while the screen was away; re-resolve smart label.
@@ -1343,6 +1346,7 @@ class SessionChatViewModel
         override fun onCleared() {
             composer.flushDraft()
             clearSessionReadyFocus()
+            foregroundRestore.setOpenSession(null, null)
             super.onCleared()
         }
 

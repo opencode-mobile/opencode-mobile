@@ -69,6 +69,9 @@ class DefaultForegroundEventStream
         private var currentStreamWasConnected = false
         private var emittedReconnectForCurrentStream = false
 
+        /** Survives stop() so cold resume still emits stream.reconnected. */
+        private var pendingResumeBarrier = false
+
         private val _connectionState = MutableStateFlow(EventStreamConnectionState.Idle)
         override val connectionState: StateFlow<EventStreamConnectionState> = _connectionState.asStateFlow()
 
@@ -263,6 +266,9 @@ class DefaultForegroundEventStream
 
         override fun stop() {
             diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream stopping")
+            if (wasConnected || currentStreamWasConnected) {
+                pendingResumeBarrier = true
+            }
             streamGeneration.incrementAndGet()
             streamJob?.cancel()
             streamJob = null
@@ -274,7 +280,11 @@ class DefaultForegroundEventStream
         }
 
         private suspend fun markStreamConnected() {
-            val shouldPublishReconnect = wasConnected && !currentStreamWasConnected && !emittedReconnectForCurrentStream
+            val warmReconnect =
+                wasConnected && !currentStreamWasConnected && !emittedReconnectForCurrentStream
+            val coldResume =
+                pendingResumeBarrier && !currentStreamWasConnected && !emittedReconnectForCurrentStream
+            val shouldPublishReconnect = warmReconnect || coldResume
             if (_connectionState.value != EventStreamConnectionState.Connected) {
                 setConnectionState(EventStreamConnectionState.Connected)
             }
@@ -283,6 +293,7 @@ class DefaultForegroundEventStream
                 ConnectionEpoch.shared.bump()
                 _events.emit(OpencodeEvent(type = "stream.reconnected"))
                 emittedReconnectForCurrentStream = true
+                pendingResumeBarrier = false
             }
             currentStreamWasConnected = true
             wasConnected = true

@@ -23,6 +23,9 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
     private var currentStreamWasConnected = false
     private var emittedReconnectForCurrentStream = false
     private var emittedConnectedForCurrentAttempt = false
+    /// Set on stop() after a live occupancy so cold resume still emits
+    /// `stream.reconnected` (stop clears wasConnected for chrome, not catch-up).
+    private var pendingResumeBarrier = false
     private let eventDeduper = SseEventDeduper()
     private var subscriberContinuations: [UUID: AsyncStream<OpencodeEvent>.Continuation] = [:]
     private var connectionStateContinuations: [UUID: AsyncStream<EventStreamConnectionState>.Continuation] = [:]
@@ -113,6 +116,9 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
         lock.lock()
         let hadTask = streamTask != nil
         let state = _connectionState
+        if wasConnected || currentStreamWasConnected {
+            pendingResumeBarrier = true
+        }
         streamGeneration += 1
         streamTask?.cancel()
         streamTask = nil
@@ -159,13 +165,17 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
 
     private func markStreamConnected() {
         lock.lock()
-        let shouldPublishReconnect =
+        let warmReconnect =
             wasConnected && !currentStreamWasConnected && !emittedReconnectForCurrentStream
+        let coldResume =
+            pendingResumeBarrier && !currentStreamWasConnected && !emittedReconnectForCurrentStream
+        let shouldPublishReconnect = warmReconnect || coldResume
         let needsConnectedState = _connectionState != .connected
         currentStreamWasConnected = true
         wasConnected = true
         if shouldPublishReconnect {
             emittedReconnectForCurrentStream = true
+            pendingResumeBarrier = false
         }
         lock.unlock()
 

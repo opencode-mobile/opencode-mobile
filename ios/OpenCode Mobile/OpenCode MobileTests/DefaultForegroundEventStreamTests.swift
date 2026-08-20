@@ -140,6 +140,35 @@ struct DefaultForegroundEventStreamTests {
         #expect(!states.contains(.disconnected))
     }
 
+    @Test func stopThenStartPublishesStreamReconnectedForColdResume() async {
+        let connected = #"data: {"payload":{"type":"server.connected","properties":{}}}"# + "\n\n"
+        let stream = makeStream(responses: [connected, connected])
+        var events: [OpencodeEvent] = []
+        let eventTask = Task { @MainActor in
+            for await event in stream.events() {
+                events.append(event)
+            }
+        }
+
+        await Task.yield()
+        stream.start()
+        let firstLive = await waitUntil(timeoutMs: 2_000) {
+            events.contains { $0.type == "server.connected" }
+        }
+        #expect(firstLive)
+        stream.stop()
+        try? await Task.sleep(for: .milliseconds(50))
+        let beforeResume = events.filter { $0.type == "stream.reconnected" }.count
+        stream.start()
+        let coldResume = await waitUntil(timeoutMs: 3_500) {
+            events.filter { $0.type == "stream.reconnected" }.count == beforeResume + 1
+        }
+        stream.stop()
+        eventTask.cancel()
+
+        #expect(coldResume)
+    }
+
     @Test func stopThenStartDoesNotLeaveCancelledTaskIdleOverConnecting() async {
         let stream = makeStream(
             responses: [

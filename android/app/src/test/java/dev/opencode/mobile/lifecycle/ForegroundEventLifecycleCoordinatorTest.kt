@@ -2,8 +2,7 @@ package dev.opencode.mobile.lifecycle
 
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
-import dev.opencode.mobile.domain.event.EventStreamConnectionState
-import dev.opencode.mobile.domain.event.FakeForegroundEventStream
+import dev.opencode.mobile.domain.event.FakeForegroundRestore
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -24,36 +23,38 @@ class ForegroundEventLifecycleCoordinatorTest {
     @Test
     fun briefOnStopDoesNotStopStreamWhenOnStartCancelsGrace() =
         runTest(testDispatcher) {
-            val stream = FakeForegroundEventStream()
+            val restore = FakeForegroundRestore()
             val coordinator =
                 ForegroundEventLifecycleCoordinator(
-                    foregroundEventStream = stream,
+                    foregroundRestore = restore,
                     hasActiveConnection = { true },
                     scope = this,
                     stopGraceMs = 5_000L,
                 )
 
             coordinator.onStart(owner)
-            assertEquals(EventStreamConnectionState.Connected, stream.connectionState.value)
+            assertEquals(1, restore.restoreCount)
+            assertEquals(0, restore.backgroundStopCount)
 
             coordinator.onStop(owner)
             runCurrent()
             advanceTimeBy(1_000L)
-            assertEquals(EventStreamConnectionState.Connected, stream.connectionState.value)
+            assertEquals(0, restore.backgroundStopCount)
 
             coordinator.onStart(owner)
             runCurrent()
             advanceTimeBy(10_000L)
-            assertEquals(EventStreamConnectionState.Connected, stream.connectionState.value)
+            assertEquals(2, restore.restoreCount)
+            assertEquals(0, restore.backgroundStopCount)
         }
 
     @Test
     fun sustainedOnStopStopsStreamAfterGrace() =
         runTest(testDispatcher) {
-            val stream = FakeForegroundEventStream()
+            val restore = FakeForegroundRestore()
             val coordinator =
                 ForegroundEventLifecycleCoordinator(
-                    foregroundEventStream = stream,
+                    foregroundRestore = restore,
                     hasActiveConnection = { true },
                     scope = this,
                     stopGraceMs = 5_000L,
@@ -63,10 +64,10 @@ class ForegroundEventLifecycleCoordinatorTest {
             coordinator.onStop(owner)
             runCurrent()
             advanceTimeBy(4_999L)
-            assertEquals(EventStreamConnectionState.Connected, stream.connectionState.value)
+            assertEquals(0, restore.backgroundStopCount)
 
             advanceTimeBy(1L)
             runCurrent()
-            assertEquals(EventStreamConnectionState.Idle, stream.connectionState.value)
+            assertEquals(1, restore.backgroundStopCount)
         }
 }

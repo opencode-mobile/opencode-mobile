@@ -12,8 +12,12 @@ import dev.opencode.mobile.data.remote.ProjectsApi
 import dev.opencode.mobile.domain.connection.ConnectivityDeviceNetworkPath
 import dev.opencode.mobile.domain.connection.DeviceNetworkPath
 import dev.opencode.mobile.domain.event.DefaultForegroundEventStream
+import dev.opencode.mobile.domain.event.DefaultForegroundRestore
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.ForegroundHomeCatchUp
+import dev.opencode.mobile.domain.event.ForegroundHomeCatchUpRegistry
+import dev.opencode.mobile.domain.event.ForegroundRestore
 import dev.opencode.mobile.domain.filesystem.DefaultFilesystemRepository
 import dev.opencode.mobile.domain.filesystem.FilesystemDomainAdapter
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
@@ -73,6 +77,14 @@ abstract class EventStreamModule {
 
     @Binds
     @Singleton
+    abstract fun bindForegroundRestore(impl: DefaultForegroundRestore): ForegroundRestore
+
+    @Binds
+    @Singleton
+    abstract fun bindForegroundHomeCatchUp(impl: ForegroundHomeCatchUpRegistry): ForegroundHomeCatchUp
+
+    @Binds
+    @Singleton
     abstract fun bindDeviceNetworkPath(impl: ConnectivityDeviceNetworkPath): DeviceNetworkPath
 
     companion object {
@@ -87,11 +99,11 @@ abstract class EventStreamModule {
         @Provides
         @Singleton
         fun provideForegroundEventLifecycleCoordinator(
-            foregroundEventStream: ForegroundEventStream,
+            foregroundRestore: ForegroundRestore,
             activeConnectionManager: ActiveConnectionManager,
         ): ForegroundEventLifecycleCoordinator =
             ForegroundEventLifecycleCoordinator(
-                foregroundEventStream = foregroundEventStream,
+                foregroundRestore = foregroundRestore,
                 hasActiveConnection = { activeConnectionManager.current() != null },
                 scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
             )

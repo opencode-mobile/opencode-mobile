@@ -17,20 +17,20 @@ final class AppRootViewModel {
     private let connectionProfileStore: any ConnectionProfileStore
     private let activeConnectionManager: ActiveConnectionManager
     private let connectionSessionCoordinator: ConnectionSessionCoordinator
-    private let foregroundEventStream: any ForegroundEventStream
+    private let foregroundRestore: any ForegroundRestore
     private let appOnboardingPreferences: AppOnboardingPreferences
 
     init(
         connectionProfileStore: any ConnectionProfileStore,
         activeConnectionManager: ActiveConnectionManager,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
-        foregroundEventStream: any ForegroundEventStream,
+        foregroundRestore: any ForegroundRestore,
         appOnboardingPreferences: AppOnboardingPreferences
     ) {
         self.connectionProfileStore = connectionProfileStore
         self.activeConnectionManager = activeConnectionManager
         self.connectionSessionCoordinator = connectionSessionCoordinator
-        self.foregroundEventStream = foregroundEventStream
+        self.foregroundRestore = foregroundRestore
         self.appOnboardingPreferences = appOnboardingPreferences
 
         connectionSessionCoordinator.onProfileSaved { [weak self] in
@@ -64,8 +64,7 @@ final class AppRootViewModel {
 
     func enterHome() {
         state = .home
-        foregroundEventStream.stop()
-        foregroundEventStream.start()
+        foregroundRestore.restore()
     }
 }
 
@@ -107,7 +106,7 @@ struct AppRootView: View {
         }
         .onChange(of: scenePhase) { previousPhase, phase in
             guard rootViewModel.state == .home else { return }
-            let stream = Container.shared.foregroundEventStream()
+            let restore = Container.shared.foregroundRestore()
             switch phase {
             case .active:
                 stopTask?.cancel()
@@ -119,13 +118,13 @@ struct AppRootView: View {
                         trigger: ProductAnalytics.Trigger.resume
                     )
                 }
-                stream.start()
+                restore.restore()
             case .background:
                 stopTask?.cancel()
                 stopTask = Task {
                     try? await Task.sleep(for: .seconds(5))
                     guard !Task.isCancelled else { return }
-                    stream.stop()
+                    restore.noteBackgroundStop()
                 }
             case .inactive:
                 break

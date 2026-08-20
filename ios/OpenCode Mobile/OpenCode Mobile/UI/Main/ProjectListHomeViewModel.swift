@@ -122,6 +122,8 @@ final class ProjectListHomeViewModel {
     private let sessionStatusLiveStore: any SessionStatusLiveStore
     private let sessionReadyStore: any SessionReadyStore
     private let foregroundEventStream: any ForegroundEventStream
+    private let foregroundRestore: any ForegroundRestore
+    private let foregroundHomeCatchUpRegistry: ForegroundHomeCatchUpRegistry
     private let deviceNetworkPath: any DeviceNetworkPath
     private let sessionCache: any SessionCache
     private let eventAdapter = EventDomainAdapter()
@@ -153,6 +155,8 @@ final class ProjectListHomeViewModel {
         sessionStatusLiveStore: any SessionStatusLiveStore,
         sessionReadyStore: any SessionReadyStore,
         foregroundEventStream: any ForegroundEventStream,
+        foregroundRestore: (any ForegroundRestore)? = nil,
+        foregroundHomeCatchUpRegistry: ForegroundHomeCatchUpRegistry? = nil,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver? = nil,
         sessionCache: any SessionCache = NoOpSessionCache.shared,
@@ -168,11 +172,21 @@ final class ProjectListHomeViewModel {
         self.sessionStatusLiveStore = sessionStatusLiveStore
         self.sessionReadyStore = sessionReadyStore
         self.foregroundEventStream = foregroundEventStream
+        let homeRegistry = foregroundHomeCatchUpRegistry ?? ForegroundHomeCatchUpRegistry()
+        self.foregroundHomeCatchUpRegistry = homeRegistry
+        self.foregroundRestore = foregroundRestore ?? DefaultForegroundRestore(
+            stream: foregroundEventStream,
+            messageRepository: messageRepository,
+            homeCatchUpRegistry: homeRegistry
+        )
         self.deviceNetworkPath = deviceNetworkPath
         self.connectionSessionCoordinator = connectionSessionCoordinator
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.sessionCache = sessionCache
         lastHomeHiddenAtEpochMs = HomeDisplayPreferences.shared.lastHomeHiddenAtEpochMs()
+        homeRegistry.setHandler { [weak self] in
+            await self?.refresh()
+        }
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
                 self?.stopLiveObservations()
@@ -421,6 +435,7 @@ final class ProjectListHomeViewModel {
         guard lastHomeHiddenAtEpochMs == nil else { return }
         lastHomeHiddenAtEpochMs = nowEpochMs
         HomeDisplayPreferences.shared.setLastHomeHiddenAtEpochMs(nowEpochMs)
+        foregroundRestore.setHomeVisible(false)
     }
 
     func onHomeRevealed(nowEpochMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000)) {
@@ -432,6 +447,7 @@ final class ProjectListHomeViewModel {
         }
         lastHomeHiddenAtEpochMs = nil
         HomeDisplayPreferences.shared.setLastHomeHiddenAtEpochMs(nil)
+        foregroundRestore.setHomeVisible(true)
     }
 
     func requestRemoveProject(worktree: String) {
@@ -1171,6 +1187,7 @@ final class ProjectListHomeViewModel {
 
     private func startLiveObservations(worktrees: [String]) {
         stopLiveObservations()
+        foregroundRestore.setHomeVisible(true)
         liveObservationTasks =
             worktrees.map { worktree in
                 Task {
@@ -1185,6 +1202,7 @@ final class ProjectListHomeViewModel {
         liveSessionsByWorktree = [:]
         liveStatusesByWorktree = [:]
         liveReadyIdsByWorktree = [:]
+        foregroundRestore.setHomeVisible(false)
     }
 
     private func observeWorktree(_ worktree: String) async {
