@@ -47,7 +47,6 @@ struct OpenCodeSessionListDock: View {
                     SessionListScopeControl(
                         tabs: filterTabs,
                         selectedId: selectedFilterId,
-                        onSelect: onFilterSelected,
                         onOpen: onOpenProjectPicker
                     )
                 } else if !filterTabs.isEmpty {
@@ -143,87 +142,45 @@ struct OpenCodeSessionListDock: View {
 struct SessionListScopeControl: View {
     let tabs: [SessionListFilterTab]
     let selectedId: String
-    let onSelect: (String) -> Void
     let onOpen: () -> Void
 
-    @State private var dragTranslation: CGFloat = 0
-    @State private var pageWidth: CGFloat = 0
-    @State private var commitTick = 0
+    @State private var clusterSlide: CGFloat = 0
+    @State private var isDragging = false
+    @State private var gestureOrigin: CGFloat = 0
+    @State private var settleTask: Task<Void, Never>?
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
 
     var body: some View {
         HStack(spacing: 10) {
-            pagingCluster
+            identityClusterSlot
             OpenCodeIconImage(icon: .keyboardArrowDown, size: 16)
                 .foregroundStyle(OpenCodeColors.textWeak)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(minHeight: 44)
-        .background(
-            OpenCodeColors.textStrong.opacity(0.08),
-            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(OpenCodeColors.textStrong.opacity(0.08), in: controlShape)
+        .clipShape(controlShape)
+        .contentShape(controlShape)
         .gesture(drag)
         .onTapGesture(perform: onOpen)
-        .sensoryFeedback(.impact(flexibility: .solid, intensity: 0.55), trigger: commitTick)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint("Opens the project filter. Swipe to switch projects.")
+        .accessibilityHint("Opens the project filter.")
         .accessibilityAddTraits(.isButton)
-        .accessibilityAdjustableAction(adjustSelection)
         .accessibilityAction(named: "Open project filter", onOpen)
     }
 
     @ViewBuilder
-    private var pagingCluster: some View {
-        ZStack(alignment: .leading) {
-            if let selectedTab {
-                identityCluster(selectedTab)
-                    .hidden()
-            }
-            GeometryReader { geometry in
-                let width = geometry.size.width
-                let displayed = SessionListScopePaging.displayedTranslation(
-                    translation: dragTranslation,
-                    pageWidth: width,
-                    canGoPrevious: previousTab != nil,
-                    canGoNext: nextTab != nil
-                )
-                HStack(spacing: 0) {
-                    if let previousTab {
-                        identityCluster(previousTab)
-                            .frame(width: width)
-                    }
-                    if let selectedTab {
-                        identityCluster(selectedTab)
-                            .frame(width: width)
-                    }
-                    if let nextTab {
-                        identityCluster(nextTab)
-                            .frame(width: width)
-                    }
-                }
-                .offset(x: pageBaseOffset(width: width) + displayed)
-                .onAppear { pageWidth = width }
-                .onChange(of: width) { _, newWidth in
-                    pageWidth = newWidth
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .clipped()
-        .mask {
-            LinearGradient(
-                stops: [
-                    .init(color: .black, location: 0),
-                    .init(color: .black, location: 0.86),
-                    .init(color: .clear, location: 1),
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
+    private var identityClusterSlot: some View {
+        if let selectedTab {
+            identityCluster(selectedTab)
+                .geometryGroup()
+                .compositingGroup()
+                .transaction { $0.animation = nil }
+                .modifier(SessionListScopeClusterSlide(x: clusterSlide))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .clipped()
         }
     }
 
@@ -244,8 +201,13 @@ struct SessionListScopeControl: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .geometryGroup()
             SessionListScopeCountBadge(count: tab.count)
         }
+    }
+
+    private var controlShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
     }
 
     private var selectedIndex: Int {
@@ -256,64 +218,45 @@ struct SessionListScopeControl: View {
         tabs.indices.contains(selectedIndex) ? tabs[selectedIndex] : tabs.first
     }
 
-    private var previousTab: SessionListFilterTab? {
-        neighbor(direction: .previous)
-    }
-
-    private var nextTab: SessionListFilterTab? {
-        neighbor(direction: .next)
-    }
-
-    private func neighbor(direction: SessionListScopePaging.Direction) -> SessionListFilterTab? {
-        guard let index = SessionListScopePaging.neighborIndex(
-            selectedIndex: selectedIndex,
-            count: tabs.count,
-            direction: direction
-        ) else { return nil }
-        return tabs[index]
-    }
-
-    private func pageBaseOffset(width: CGFloat) -> CGFloat {
-        previousTab == nil ? 0 : -width
-    }
-
     private var drag: some Gesture {
         DragGesture(minimumDistance: 10, coordinateSpace: .local)
             .onChanged { value in
-                dragTranslation = value.translation.width
+                settleTask?.cancel()
+                if !isDragging {
+                    isDragging = true
+                    gestureOrigin = clusterSlide
+                }
+                let translation = gestureOrigin + value.translation.width
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    clusterSlide = SessionListScopePaging.rubberBandOffset(translation)
+                }
             }
             .onEnded { value in
-                finishDrag(translation: value.translation.width, velocity: value.velocity.width)
+                finishDrag(translation: gestureOrigin + value.translation.width)
             }
     }
 
-    private func finishDrag(translation: CGFloat, velocity: CGFloat) {
-        let direction = SessionListScopePaging.commitDirection(
-            translation: translation,
-            velocity: velocity,
-            canGoPrevious: previousTab != nil,
-            canGoNext: nextTab != nil
-        )
-        if let direction, let neighbor = neighbor(direction: direction) {
-            commitTick &+= 1
-            let width = max(pageWidth, 1)
-            dragTranslation = translation + (direction == .next ? width : -width)
-            onSelect(neighbor.id)
-            withAnimation(.smooth(duration: SessionListScopePaging.settleDuration)) {
-                dragTranslation = 0
-            }
-        } else {
-            withAnimation(.smooth(duration: SessionListScopePaging.settleDuration)) {
-                dragTranslation = 0
-            }
+    private static var rubberBandReturnAnimation: Animation {
+        .timingCurve(0.45, 0.0, 0.12, 1.0, duration: SessionListScopePaging.rubberBandReturnDuration)
+    }
+
+    private func finishDrag(translation: CGFloat) {
+        let visual = SessionListScopePaging.rubberBandOffset(translation)
+        settleTask?.cancel()
+        var snap = Transaction()
+        snap.disablesAnimations = true
+        withTransaction(snap) {
+            clusterSlide = visual
+            isDragging = false
         }
-    }
-
-    private func adjustSelection(_ direction: AccessibilityAdjustmentDirection) {
-        let pagingDirection: SessionListScopePaging.Direction =
-            direction == .increment ? .next : .previous
-        if let neighbor = neighbor(direction: pagingDirection) {
-            onSelect(neighbor.id)
+        settleTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(16))
+            guard !Task.isCancelled, !isDragging else { return }
+            withAnimation(Self.rubberBandReturnAnimation) {
+                clusterSlide = 0
+            }
         }
     }
 
@@ -368,6 +311,20 @@ struct SessionListScopeCountBadge: View {
             .padding(.vertical, 2)
             .background(OpenCodeColors.textStrong.opacity(0.10), in: Capsule())
             .accessibilityHidden(true)
+    }
+}
+
+private struct SessionListScopeClusterSlide: ViewModifier, Animatable {
+    var x: CGFloat
+
+    var animatableData: CGFloat {
+        get { x }
+        set { x = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .offset(x: x)
     }
 }
 

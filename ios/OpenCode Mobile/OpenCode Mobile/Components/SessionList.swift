@@ -238,6 +238,7 @@ struct SessionList<EmptyContent: View>: View {
                     Color.clear
                         .onAppear { dockHeight = geometry.size.height }
                         .onChange(of: geometry.size.height) { _, height in
+                            guard abs(dockHeight - height) > 0.5 else { return }
                             dockHeight = height
                         }
                 }

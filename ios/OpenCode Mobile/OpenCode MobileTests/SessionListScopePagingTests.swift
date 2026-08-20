@@ -79,13 +79,23 @@ struct SessionListScopePagingTests {
         )
     }
 
+    @Test func rubberBandOffset_resistsBothDirections() {
+        let pull = SessionListScopePaging.rubberBandOffset(100)
+        #expect(pull > 0)
+        #expect(pull < SessionListScopePaging.rubberBandLimit)
+        #expect(pull < 100)
+        #expect(SessionListScopePaging.rubberBandOffset(-100) == -pull)
+        #expect(SessionListScopePaging.rubberBandOffset(0) == 0)
+    }
+
     @Test func displayedTranslation_midListTracksFinger() {
         #expect(
             SessionListScopePaging.displayedTranslation(
                 translation: -40,
                 pageWidth: 200,
                 canGoPrevious: true,
-                canGoNext: true
+                canGoNext: true,
+                resistOverscroll: true
             ) == -40
         )
     }
@@ -95,9 +105,50 @@ struct SessionListScopePagingTests {
             translation: 100,
             pageWidth: 200,
             canGoPrevious: false,
-            canGoNext: true
+            canGoNext: true,
+            resistOverscroll: true
         )
         #expect(displayed > 0)
+        #expect(displayed < SessionListScopePaging.rubberBandLimit)
         #expect(displayed < 100)
+    }
+
+    @Test func displayedTranslation_singleTabResistsAndDiminishes() {
+        let shortPull = SessionListScopePaging.displayedTranslation(
+            translation: 50,
+            pageWidth: 200,
+            canGoPrevious: false,
+            canGoNext: false,
+            resistOverscroll: true
+        )
+        let longPull = SessionListScopePaging.displayedTranslation(
+            translation: 150,
+            pageWidth: 200,
+            canGoPrevious: false,
+            canGoNext: false,
+            resistOverscroll: true
+        )
+        #expect(shortPull > 0)
+        #expect(longPull > shortPull)
+        #expect(longPull - shortPull < shortPull)
+        #expect(longPull < SessionListScopePaging.rubberBandLimit)
+    }
+
+    @Test func displayedTranslation_releaseUsesRawOffset() {
+        #expect(
+            SessionListScopePaging.displayedTranslation(
+                translation: 12,
+                pageWidth: 200,
+                canGoPrevious: false,
+                canGoNext: false,
+                resistOverscroll: false
+            ) == 12
+        )
+    }
+
+    @Test func settleTranslation_commitsAFullPageThenSnaps() {
+        #expect(SessionListScopePaging.settleTranslation(direction: .next, pageWidth: 200) == -200)
+        #expect(SessionListScopePaging.settleTranslation(direction: .previous, pageWidth: 200) == 200)
+        #expect(SessionListScopePaging.settleTranslation(direction: nil, pageWidth: 200) == 0)
     }
 }

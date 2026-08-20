@@ -4,8 +4,12 @@ import Foundation
 enum SessionListScopePaging {
     static let commitDistance: CGFloat = 36
     static let flickVelocity: CGFloat = 800
-    static let settleDuration: TimeInterval = 0.22
+    static let settleDuration: TimeInterval = 0.40
     static let listCrossfadeDuration: TimeInterval = 0.16
+    /// Max visual travel when there is nothing to page to.
+    static let rubberBandLimit: CGFloat = 52
+    static let rubberBandConstant: CGFloat = 0.50
+    static let rubberBandReturnDuration: TimeInterval = 0.18
 
     enum Direction: Equatable {
         case previous
@@ -23,17 +27,27 @@ enum SessionListScopePaging {
         }
     }
 
+    /// Visual offset while dragging: resists in both directions, never pages.
+    static func rubberBandOffset(_ translation: CGFloat) -> CGFloat {
+        if translation > 0 { return rubberBand(translation) }
+        if translation < 0 { return -rubberBand(-translation) }
+        return 0
+    }
+
     static func displayedTranslation(
         translation: CGFloat,
         pageWidth: CGFloat,
         canGoPrevious: Bool,
-        canGoNext: Bool
+        canGoNext: Bool,
+        resistOverscroll: Bool
     ) -> CGFloat {
-        if translation > 0, !canGoPrevious {
-            return rubberBand(translation, dimension: max(pageWidth, 1))
-        }
-        if translation < 0, !canGoNext {
-            return -rubberBand(-translation, dimension: max(pageWidth, 1))
+        if resistOverscroll {
+            if translation > 0, !canGoPrevious {
+                return rubberBand(translation)
+            }
+            if translation < 0, !canGoNext {
+                return -rubberBand(-translation)
+            }
         }
         if canGoPrevious || canGoNext {
             return min(max(translation, -pageWidth), pageWidth)
@@ -56,8 +70,19 @@ enum SessionListScopePaging {
         return nil
     }
 
-    private static func rubberBand(_ offset: CGFloat, dimension: CGFloat) -> CGFloat {
-        let constant: CGFloat = 0.55
+    /// Offset that places the committed neighbor fully in the slot, before selection swaps.
+    static func settleTranslation(direction: Direction?, pageWidth: CGFloat) -> CGFloat {
+        let width = max(pageWidth, 1)
+        switch direction {
+        case .next: return -width
+        case .previous: return width
+        case nil: return 0
+        }
+    }
+
+    private static func rubberBand(_ offset: CGFloat) -> CGFloat {
+        let dimension = rubberBandLimit
+        let constant = rubberBandConstant
         return (1 - 1 / (offset * constant / dimension + 1)) * dimension
     }
 }
