@@ -16,88 +16,65 @@ struct SessionListScopePagingTests {
         #expect(SessionListScopePaging.neighborIndex(selectedIndex: 1, count: 3, direction: .previous) == 0)
     }
 
-    @Test func commitDirection_distanceSelectsNext() {
+    @Test func commitDirection_visualThresholdSelectsNext() {
         #expect(
             SessionListScopePaging.commitDirection(
-                translation: -36,
-                velocity: 0,
+                visualOffset: -28,
                 canGoPrevious: true,
                 canGoNext: true
             ) == .next
         )
     }
 
-    @Test func commitDirection_distanceSelectsPrevious() {
+    @Test func commitDirection_visualThresholdSelectsPrevious() {
         #expect(
             SessionListScopePaging.commitDirection(
-                translation: 36,
-                velocity: 0,
+                visualOffset: 28,
                 canGoPrevious: true,
                 canGoNext: true
             ) == .previous
         )
     }
 
-    @Test func commitDirection_shortDragWithoutFlickSnapsBack() {
+    @Test func commitDirection_shortPullSnapsBack() {
         #expect(
             SessionListScopePaging.commitDirection(
-                translation: -35,
-                velocity: 0,
+                visualOffset: -27,
                 canGoPrevious: true,
                 canGoNext: true
             ) == nil
-        )
-    }
-
-    @Test func commitDirection_flickSelectsNext() {
-        #expect(
-            SessionListScopePaging.commitDirection(
-                translation: -8,
-                velocity: -800,
-                canGoPrevious: true,
-                canGoNext: true
-            ) == .next
         )
     }
 
     @Test func commitDirection_blockedEndDoesNotCommit() {
         #expect(
             SessionListScopePaging.commitDirection(
-                translation: -80,
-                velocity: -1200,
+                visualOffset: -40,
                 canGoPrevious: true,
                 canGoNext: false
             ) == nil
         )
         #expect(
             SessionListScopePaging.commitDirection(
-                translation: 80,
-                velocity: 1200,
+                visualOffset: 40,
                 canGoPrevious: false,
                 canGoNext: true
             ) == nil
         )
     }
 
-    @Test func displayedTranslation_midListTracksFinger() {
-        #expect(
-            SessionListScopePaging.displayedTranslation(
-                translation: -40,
-                pageWidth: 200,
-                canGoPrevious: true,
-                canGoNext: true
-            ) == -40
-        )
+    @Test func rubberBandOffset_resistsBothDirections() {
+        let pull = SessionListScopePaging.rubberBandOffset(100)
+        #expect(pull > 0)
+        #expect(pull < SessionListScopePaging.rubberBandLimit)
+        #expect(pull < 100)
+        #expect(SessionListScopePaging.rubberBandOffset(-100) == -pull)
+        #expect(SessionListScopePaging.rubberBandOffset(0) == 0)
     }
 
-    @Test func displayedTranslation_startRubberBands() {
-        let displayed = SessionListScopePaging.displayedTranslation(
-            translation: 100,
-            pageWidth: 200,
-            canGoPrevious: false,
-            canGoNext: true
-        )
-        #expect(displayed > 0)
-        #expect(displayed < 100)
+    @Test func settleTranslation_exitsAFullSlot() {
+        #expect(SessionListScopePaging.settleTranslation(direction: .next, pageWidth: 200) == -200)
+        #expect(SessionListScopePaging.settleTranslation(direction: .previous, pageWidth: 200) == 200)
+        #expect(SessionListScopePaging.settleTranslation(direction: nil, pageWidth: 200) == 0)
     }
 }

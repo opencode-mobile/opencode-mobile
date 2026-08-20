@@ -26,7 +26,8 @@ settings) is owned by the home shell, not this component.
 - Required filter state: `selectedFilterId`. Default chrome is chips via
   `onFilterSelected(id)` and optional `onRemoveProject(id)`. When
   `useProjectPicker` is on, `onOpenProjectPicker()` opens the caller-owned
-  Filter by project sheet.
+  Filter by project sheet, and `onFilterSelected(id)` still applies when the
+  scope control commits a neighbor.
 - Optional content:
   - `createError` string shown at the top of the dock when session create fails.
   - `emptyContent` composable / view shown centered above the dock when the
@@ -38,8 +39,8 @@ settings) is owned by the home shell, not this component.
   - `onSessionSelected(session)`.
   - `onAddProject()`.
   - `onNewSession()`.
-  - `onFilterSelected(id)` when using chips; `onOpenProjectPicker()` when using
-    the picker.
+  - `onFilterSelected(id)` for chip taps and picker-chrome threshold switches;
+    `onOpenProjectPicker()` when using the picker.
 - Optional callbacks:
   - `onSessionLongPress(session)` on both platforms.
 - States: default and empty filtered list (dock and filters remain; optional
@@ -85,17 +86,20 @@ Layout:
 
 When `selectedFilterId` is `all`, all sessions are shown. Otherwise only
 sessions whose `worktree` equals the selected filter id are shown. In picker
-chrome, a committed scope-control swipe does not page the home list sideways.
+chrome, tap opens the filter sheet; crossing the switch threshold selects
+the previous or next tab without waiting for finger-up. Picker-chrome filter
+changes opacity-crossfade the feed over **400ms** (old and new overlap; incoming
+is at the top). Chip chrome replaces rows instantly and does not scroll to
+top.
 
 ## Platform Notes
 
 - iOS: dense list + Liquid Glass dock/key controls on iOS 26+ with material
   fallbacks below iOS 26. Pull-to-refresh is available when `onRefresh` is
-  provided. A committed scope-control swipe identity-fades the filtered list
-  in **0.16s**.
+  provided. Picker-chrome filter changes use the shared opacity crossfade.
 - Android: same hierarchy with Material raised glass-like dock; no system Liquid
   Glass. Android `SessionList` does not expose pull-to-refresh in this version.
-  A committed swipe updates the same list instance and scrolls to top.
+  Picker-chrome filter changes use the shared opacity crossfade.
 
 ## Review Surfaces
 

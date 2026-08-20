@@ -47,8 +47,8 @@ struct OpenCodeSessionListDock: View {
                     SessionListScopeControl(
                         tabs: filterTabs,
                         selectedId: selectedFilterId,
-                        onSelect: onFilterSelected,
-                        onOpen: onOpenProjectPicker
+                        onOpen: onOpenProjectPicker,
+                        onSelect: onFilterSelected
                     )
                 } else if !filterTabs.isEmpty {
                     ScrollViewReader { proxy in
@@ -143,88 +143,120 @@ struct OpenCodeSessionListDock: View {
 struct SessionListScopeControl: View {
     let tabs: [SessionListFilterTab]
     let selectedId: String
-    let onSelect: (String) -> Void
     let onOpen: () -> Void
+    let onSelect: (String) -> Void
 
-    @State private var dragTranslation: CGFloat = 0
-    @State private var pageWidth: CGFloat = 0
-    @State private var commitTick = 0
+    @State private var clusterSlide: CGFloat = 0
+    @State private var isDragging = false
+    @State private var isSwitching = false
+    @State private var gestureCommitted = false
+    @State private var gestureOrigin: CGFloat = 0
+    @State private var settleTask: Task<Void, Never>?
+    @State private var slotWidth: CGFloat = 1
+    @State private var shownTabId: String?
+    @State private var outgoingTab: SessionListFilterTab?
+    @State private var outgoingSlide: CGFloat = 0
+    @State private var incomingSlide: CGFloat = 0
+    @State private var switchHapticTick = 0
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
 
     var body: some View {
-        HStack(spacing: 10) {
-            pagingCluster
+        ZStack(alignment: .trailing) {
+            identityClusterSlot
             OpenCodeIconImage(icon: .keyboardArrowDown, size: 16)
                 .foregroundStyle(OpenCodeColors.textWeak)
+                .allowsHitTesting(false)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(minHeight: 44)
-        .background(
-            OpenCodeColors.textStrong.opacity(0.08),
-            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(OpenCodeColors.textStrong.opacity(0.08), in: controlShape)
+        .clipShape(controlShape)
+        .contentShape(controlShape)
         .gesture(drag)
         .onTapGesture(perform: onOpen)
-        .sensoryFeedback(.impact(flexibility: .solid, intensity: 0.55), trigger: commitTick)
+        .sensoryFeedback(.selection, trigger: switchHapticTick)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint("Opens the project filter. Swipe to switch projects.")
+        .accessibilityHint(accessibilityHint)
         .accessibilityAddTraits(.isButton)
-        .accessibilityAdjustableAction(adjustSelection)
+        .accessibilityAdjustableAction(adjustProject)
         .accessibilityAction(named: "Open project filter", onOpen)
+        .onAppear {
+            if shownTabId == nil {
+                shownTabId = selectedId
+            }
+        }
+        .onChange(of: selectedId) { _, id in
+            guard !isSwitching else { return }
+            shownTabId = id
+            clusterSlide = 0
+            outgoingTab = nil
+        }
     }
 
     @ViewBuilder
-    private var pagingCluster: some View {
+    private var identityClusterSlot: some View {
         ZStack(alignment: .leading) {
-            if let selectedTab {
-                identityCluster(selectedTab)
-                    .hidden()
+            if let outgoingTab {
+                identityCluster(outgoingTab)
+                    .geometryGroup()
+                    .compositingGroup()
+                    .transaction { $0.animation = nil }
+                    .modifier(SessionListScopeClusterSlide(x: outgoingSlide))
             }
-            GeometryReader { geometry in
-                let width = geometry.size.width
-                let displayed = SessionListScopePaging.displayedTranslation(
-                    translation: dragTranslation,
-                    pageWidth: width,
-                    canGoPrevious: previousTab != nil,
-                    canGoNext: nextTab != nil
-                )
-                HStack(spacing: 0) {
-                    if let previousTab {
-                        identityCluster(previousTab)
-                            .frame(width: width)
-                    }
-                    if let selectedTab {
-                        identityCluster(selectedTab)
-                            .frame(width: width)
-                    }
-                    if let nextTab {
-                        identityCluster(nextTab)
-                            .frame(width: width)
-                    }
-                }
-                .offset(x: pageBaseOffset(width: width) + displayed)
-                .onAppear { pageWidth = width }
-                .onChange(of: width) { _, newWidth in
-                    pageWidth = newWidth
-                }
+            if let visibleTab {
+                identityCluster(visibleTab)
+                    .geometryGroup()
+                    .compositingGroup()
+                    .transaction { $0.animation = nil }
+                    .modifier(
+                        SessionListScopeClusterSlide(x: isSwitching ? incomingSlide : clusterSlide)
+                    )
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .clipped()
+        .compositingGroup()
         .mask {
-            LinearGradient(
-                stops: [
-                    .init(color: .black, location: 0),
-                    .init(color: .black, location: 0.86),
-                    .init(color: .clear, location: 1),
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
+            HStack(spacing: 0) {
+                LinearGradient(
+                    colors: [.clear, .white],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: motionFadeWidth)
+                Rectangle().fill(.white)
+                LinearGradient(
+                    colors: [.white, .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: motionFadeWidth)
+            }
+            .animation(
+                .easeOut(duration: SessionListScopePaging.edgeFadeDuration),
+                value: motionFadeWidth
             )
         }
+        .background {
+            GeometryReader { geometry in
+                Color.clear
+                    .onAppear { slotWidth = max(geometry.size.width, 1) }
+                    .onChange(of: geometry.size.width) { _, width in
+                        guard abs(slotWidth - width) > 0.5 else { return }
+                        slotWidth = max(width, 1)
+                    }
+            }
+        }
+    }
+
+    private var showsMotionFade: Bool {
+        isDragging || isSwitching || outgoingTab != nil || abs(clusterSlide) > 0.5
+    }
+
+    private var motionFadeWidth: CGFloat {
+        showsMotionFade ? SessionListScopePaging.edgeFadeWidth : 0
     }
 
     private func identityCluster(_ tab: SessionListFilterTab) -> some View {
@@ -244,27 +276,138 @@ struct SessionListScopeControl: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .geometryGroup()
             SessionListScopeCountBadge(count: tab.count)
         }
+        .padding(.trailing, 26)
+    }
+
+    private var controlShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
     }
 
     private var selectedIndex: Int {
-        tabs.firstIndex(where: { $0.id == selectedId }) ?? 0
+        tabs.firstIndex(where: { $0.id == (shownTabId ?? selectedId) }) ?? 0
     }
 
     private var selectedTab: SessionListFilterTab? {
-        tabs.indices.contains(selectedIndex) ? tabs[selectedIndex] : tabs.first
+        tabs.first { $0.id == selectedId } ?? tabs.first
     }
 
-    private var previousTab: SessionListFilterTab? {
-        neighbor(direction: .previous)
+    private var visibleTab: SessionListFilterTab? {
+        tabs.first { $0.id == (shownTabId ?? selectedId) } ?? selectedTab
     }
 
-    private var nextTab: SessionListFilterTab? {
-        neighbor(direction: .next)
+    private var canGoPrevious: Bool {
+        SessionListScopePaging.neighborIndex(
+            selectedIndex: selectedIndex,
+            count: tabs.count,
+            direction: .previous
+        ) != nil
     }
 
-    private func neighbor(direction: SessionListScopePaging.Direction) -> SessionListFilterTab? {
+    private var canGoNext: Bool {
+        SessionListScopePaging.neighborIndex(
+            selectedIndex: selectedIndex,
+            count: tabs.count,
+            direction: .next
+        ) != nil
+    }
+
+    private var drag: some Gesture {
+        DragGesture(minimumDistance: 10, coordinateSpace: .local)
+            .onChanged { value in
+                guard !gestureCommitted, !isSwitching else { return }
+                settleTask?.cancel()
+                if !isDragging {
+                    isDragging = true
+                    gestureOrigin = clusterSlide
+                }
+                let translation = gestureOrigin + value.translation.width
+                let visual = SessionListScopePaging.rubberBandOffset(translation)
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    clusterSlide = visual
+                }
+                if let direction = SessionListScopePaging.commitDirection(
+                    visualOffset: visual,
+                    canGoPrevious: canGoPrevious,
+                    canGoNext: canGoNext
+                ) {
+                    gestureCommitted = true
+                    startSwitch(direction, from: visual)
+                }
+            }
+            .onEnded { value in
+                let consumed = gestureCommitted || isSwitching
+                isDragging = false
+                gestureCommitted = false
+                guard !consumed else { return }
+                finishDrag(translation: gestureOrigin + value.translation.width)
+            }
+    }
+
+    private static var rubberBandReturnAnimation: Animation {
+        .timingCurve(0.45, 0.0, 0.12, 1.0, duration: SessionListScopePaging.rubberBandReturnDuration)
+    }
+
+    private static var switchAnimation: Animation {
+        .timingCurve(0.45, 0.0, 0.12, 1.0, duration: SessionListScopePaging.switchDuration)
+    }
+
+    private func finishDrag(translation: CGFloat) {
+        let visual = SessionListScopePaging.rubberBandOffset(translation)
+        settleTask?.cancel()
+        var snap = Transaction()
+        snap.disablesAnimations = true
+        withTransaction(snap) {
+            clusterSlide = visual
+            isDragging = false
+        }
+        settleTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(16))
+            guard !Task.isCancelled, !isDragging, !isSwitching else { return }
+            withAnimation(Self.rubberBandReturnAnimation) {
+                clusterSlide = 0
+            }
+        }
+    }
+
+    private func startSwitch(_ direction: SessionListScopePaging.Direction, from visual: CGFloat) {
+        guard let neighbor = neighborTab(direction) else { return }
+        settleTask?.cancel()
+        isDragging = false
+        isSwitching = true
+        let exit = SessionListScopePaging.settleTranslation(direction: direction, pageWidth: slotWidth)
+        var snap = Transaction()
+        snap.disablesAnimations = true
+        withTransaction(snap) {
+            outgoingTab = visibleTab
+            outgoingSlide = visual
+            incomingSlide = -exit
+            shownTabId = neighbor.id
+            clusterSlide = 0
+        }
+        switchHapticTick += 1
+        onSelect(neighbor.id)
+        settleTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(16))
+            guard !Task.isCancelled else { return }
+            withAnimation(Self.switchAnimation) {
+                outgoingSlide = exit
+                incomingSlide = 0
+            }
+            try? await Task.sleep(for: .seconds(SessionListScopePaging.switchDuration))
+            guard !Task.isCancelled else { return }
+            outgoingTab = nil
+            outgoingSlide = 0
+            incomingSlide = 0
+            isSwitching = false
+        }
+    }
+
+    private func neighborTab(_ direction: SessionListScopePaging.Direction) -> SessionListFilterTab? {
         guard let index = SessionListScopePaging.neighborIndex(
             selectedIndex: selectedIndex,
             count: tabs.count,
@@ -273,47 +416,15 @@ struct SessionListScopeControl: View {
         return tabs[index]
     }
 
-    private func pageBaseOffset(width: CGFloat) -> CGFloat {
-        previousTab == nil ? 0 : -width
-    }
-
-    private var drag: some Gesture {
-        DragGesture(minimumDistance: 10, coordinateSpace: .local)
-            .onChanged { value in
-                dragTranslation = value.translation.width
-            }
-            .onEnded { value in
-                finishDrag(translation: value.translation.width, velocity: value.velocity.width)
-            }
-    }
-
-    private func finishDrag(translation: CGFloat, velocity: CGFloat) {
-        let direction = SessionListScopePaging.commitDirection(
-            translation: translation,
-            velocity: velocity,
-            canGoPrevious: previousTab != nil,
-            canGoNext: nextTab != nil
-        )
-        if let direction, let neighbor = neighbor(direction: direction) {
-            commitTick &+= 1
-            let width = max(pageWidth, 1)
-            dragTranslation = translation + (direction == .next ? width : -width)
-            onSelect(neighbor.id)
-            withAnimation(.smooth(duration: SessionListScopePaging.settleDuration)) {
-                dragTranslation = 0
-            }
-        } else {
-            withAnimation(.smooth(duration: SessionListScopePaging.settleDuration)) {
-                dragTranslation = 0
-            }
-        }
-    }
-
-    private func adjustSelection(_ direction: AccessibilityAdjustmentDirection) {
-        let pagingDirection: SessionListScopePaging.Direction =
-            direction == .increment ? .next : .previous
-        if let neighbor = neighbor(direction: pagingDirection) {
-            onSelect(neighbor.id)
+    private func adjustProject(_ direction: AccessibilityAdjustmentDirection) {
+        guard !isSwitching else { return }
+        switch direction {
+        case .increment:
+            startSwitch(.next, from: 0)
+        case .decrement:
+            startSwitch(.previous, from: 0)
+        @unknown default:
+            break
         }
     }
 
@@ -326,12 +437,19 @@ struct SessionListScopeControl: View {
     }
 
     private var accessibilityLabel: String {
-        guard let tab = selectedTab else { return "Project filter" }
+        guard let tab = visibleTab else { return "Project filter" }
         let subtitle = displayedSubtitle(tab)
         if subtitle.isEmpty {
             return "\(tab.pickerTitle), \(tab.count) sessions"
         }
         return "\(tab.pickerTitle), \(subtitle), \(tab.count) sessions"
+    }
+
+    private var accessibilityHint: String {
+        if canGoPrevious || canGoNext {
+            return "Opens the project filter. Swipe to switch projects."
+        }
+        return "Opens the project filter."
     }
 }
 
@@ -368,6 +486,20 @@ struct SessionListScopeCountBadge: View {
             .padding(.vertical, 2)
             .background(OpenCodeColors.textStrong.opacity(0.10), in: Capsule())
             .accessibilityHidden(true)
+    }
+}
+
+private struct SessionListScopeClusterSlide: ViewModifier, Animatable {
+    var x: CGFloat
+
+    var animatableData: CGFloat {
+        get { x }
+        set { x = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .offset(x: x)
     }
 }
 

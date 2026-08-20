@@ -2,10 +2,15 @@ import CoreGraphics
 import Foundation
 
 enum SessionListScopePaging {
-    static let commitDistance: CGFloat = 36
-    static let flickVelocity: CGFloat = 800
-    static let settleDuration: TimeInterval = 0.22
-    static let listCrossfadeDuration: TimeInterval = 0.16
+    static let switchThreshold: CGFloat = 28
+    static let switchDuration: TimeInterval = 0.45
+    static let listCrossfadeDuration: TimeInterval = 0.40
+    /// Max visual travel when rubber-banding.
+    static let rubberBandLimit: CGFloat = 52
+    static let rubberBandConstant: CGFloat = 0.50
+    static let rubberBandReturnDuration: TimeInterval = 0.18
+    static let edgeFadeWidth: CGFloat = 16
+    static let edgeFadeDuration: TimeInterval = 0.20
 
     enum Direction: Equatable {
         case previous
@@ -23,41 +28,41 @@ enum SessionListScopePaging {
         }
     }
 
-    static func displayedTranslation(
-        translation: CGFloat,
-        pageWidth: CGFloat,
-        canGoPrevious: Bool,
-        canGoNext: Bool
-    ) -> CGFloat {
-        if translation > 0, !canGoPrevious {
-            return rubberBand(translation, dimension: max(pageWidth, 1))
-        }
-        if translation < 0, !canGoNext {
-            return -rubberBand(-translation, dimension: max(pageWidth, 1))
-        }
-        if canGoPrevious || canGoNext {
-            return min(max(translation, -pageWidth), pageWidth)
-        }
-        return translation
+    /// Visual offset while dragging: resists in both directions, never pages.
+    static func rubberBandOffset(_ translation: CGFloat) -> CGFloat {
+        if translation > 0 { return rubberBand(translation) }
+        if translation < 0 { return -rubberBand(-translation) }
+        return 0
     }
 
+    /// Finger-up commit from rubber-band visual offset. No flick; no wrap.
     static func commitDirection(
-        translation: CGFloat,
-        velocity: CGFloat,
+        visualOffset: CGFloat,
         canGoPrevious: Bool,
         canGoNext: Bool
     ) -> Direction? {
-        if canGoNext, translation <= -commitDistance || velocity <= -flickVelocity {
+        if canGoNext, visualOffset <= -switchThreshold {
             return .next
         }
-        if canGoPrevious, translation >= commitDistance || velocity >= flickVelocity {
+        if canGoPrevious, visualOffset >= switchThreshold {
             return .previous
         }
         return nil
     }
 
-    private static func rubberBand(_ offset: CGFloat, dimension: CGFloat) -> CGFloat {
-        let constant: CGFloat = 0.55
+    /// Offset that places a cluster fully out of the slot for the canned switch.
+    static func settleTranslation(direction: Direction?, pageWidth: CGFloat) -> CGFloat {
+        let width = max(pageWidth, 1)
+        switch direction {
+        case .next: return -width
+        case .previous: return width
+        case nil: return 0
+        }
+    }
+
+    private static func rubberBand(_ offset: CGFloat) -> CGFloat {
+        let dimension = rubberBandLimit
+        let constant = rubberBandConstant
         return (1 - 1 / (offset * constant / dimension + 1)) * dimension
     }
 }

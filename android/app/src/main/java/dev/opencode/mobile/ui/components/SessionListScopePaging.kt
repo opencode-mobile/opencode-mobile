@@ -1,13 +1,16 @@
 package dev.opencode.mobile.ui.components
 
 import kotlin.math.max
-import kotlin.math.min
 
 object SessionListScopePaging {
-    const val COMMIT_DISTANCE = 36f
-    const val FLICK_VELOCITY = 800f
-    const val SETTLE_DURATION_MS = 220
-    const val LIST_CROSSFADE_DURATION_MS = 160
+    const val SWITCH_THRESHOLD_DP = 28f
+    const val SWITCH_DURATION_MS = 450
+    const val LIST_CROSSFADE_DURATION_MS = 400
+    const val RUBBER_BAND_LIMIT_DP = 52f
+    const val RUBBER_BAND_CONSTANT = 0.50f
+    const val RUBBER_BAND_RETURN_DURATION_MS = 180
+    const val EDGE_FADE_WIDTH_DP = 16f
+    const val EDGE_FADE_DURATION_MS = 200
 
     enum class Direction {
         Previous,
@@ -24,45 +27,48 @@ object SessionListScopePaging {
             Direction.Next -> (selectedIndex + 1).takeIf { it < count }
         }
 
-    fun displayedTranslation(
+    fun rubberBandOffset(
         translation: Float,
-        pageWidth: Float,
-        canGoPrevious: Boolean,
-        canGoNext: Boolean,
-    ): Float {
-        val width = max(pageWidth, 1f)
-        if (translation > 0f && !canGoPrevious) {
-            return rubberBand(translation, width)
+        rubberBandLimit: Float = RUBBER_BAND_LIMIT_DP,
+    ): Float =
+        when {
+            translation > 0f -> rubberBand(translation, rubberBandLimit)
+            translation < 0f -> -rubberBand(-translation, rubberBandLimit)
+            else -> 0f
         }
-        if (translation < 0f && !canGoNext) {
-            return -rubberBand(-translation, width)
-        }
-        if (canGoPrevious || canGoNext) {
-            return min(max(translation, -width), width)
-        }
-        return translation
-    }
 
     fun commitDirection(
-        translation: Float,
-        velocity: Float,
+        visualOffset: Float,
         canGoPrevious: Boolean,
         canGoNext: Boolean,
+        switchThreshold: Float = SWITCH_THRESHOLD_DP,
     ): Direction? {
-        if (canGoNext && (translation <= -COMMIT_DISTANCE || velocity <= -FLICK_VELOCITY)) {
+        if (canGoNext && visualOffset <= -switchThreshold) {
             return Direction.Next
         }
-        if (canGoPrevious && (translation >= COMMIT_DISTANCE || velocity >= FLICK_VELOCITY)) {
+        if (canGoPrevious && visualOffset >= switchThreshold) {
             return Direction.Previous
         }
         return null
+    }
+
+    fun settleTranslation(
+        direction: Direction?,
+        pageWidth: Float,
+    ): Float {
+        val width = max(pageWidth, 1f)
+        return when (direction) {
+            Direction.Next -> -width
+            Direction.Previous -> width
+            null -> 0f
+        }
     }
 
     private fun rubberBand(
         offset: Float,
         dimension: Float,
     ): Float {
-        val constant = 0.55f
-        return (1f - 1f / (offset * constant / dimension + 1f)) * dimension
+        val width = max(dimension, 1f)
+        return (1f - 1f / (offset * RUBBER_BAND_CONSTANT / width + 1f)) * width
     }
 }

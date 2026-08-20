@@ -123,6 +123,11 @@ struct SessionList<EmptyContent: View>: View {
     @State private var dockHeight: CGFloat = 0
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var followingTop = true
+    @State private var incomingFilterId: String
+    @State private var feedLayers: [SessionListFeedLayer]
+    @State private var incomingOpacity: CGFloat = 1
+    @State private var outgoingOpacity: CGFloat = 0
+    @State private var listCrossfadeTask: Task<Void, Never>?
 
     init(
         sessions: [SessionListSession],
@@ -158,60 +163,29 @@ struct SessionList<EmptyContent: View>: View {
         self.revealNewestToken = revealNewestToken
         self.showsEmptyContent = showsEmptyContent
         self.emptyContent = emptyContent()
-    }
-
-    private var visibleSessions: [SessionListSession] {
-        sessions.visibleForFilter(selectedFilterId)
-    }
-
-    private var ladderSections: [HomeSessionLadderSection<SessionListSession>] {
-        HomeSessionLadder.group(
-            sessions: visibleSessions,
-            updatedAtEpochMs: \.updatedAtEpochMs,
-            isAttention: \.status.isAttention,
-            recentWindowHours: homeDisplayPreferences.recentWindowHours,
-            nowEpochMs: Int64(Date().timeIntervalSince1970 * 1000)
-        )
+        _incomingFilterId = State(initialValue: selectedFilterId)
+        _feedLayers = State(initialValue: [SessionListFeedLayer(id: selectedFilterId, isOutgoing: false)])
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Group {
-                if visibleSessions.isEmpty, showsEmptyContent {
-                    ScrollView {
-                        emptyContent
-                            .frame(maxWidth: .infinity, minHeight: 420)
-                            .padding(.bottom, max(dockHeight, sessionListFallbackBottomSpacer))
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(OpenCodeColors.backgroundBase)
-                    .modifier(SessionListRefreshableModifier(onRefresh: onRefresh))
-                } else {
-                    SessionListScrollView(
-                        ladderSections: ladderSections,
-                        newestSessionId: visibleSessions.first?.id,
-                        revealNewestToken: revealNewestToken,
-                        followingTop: $followingTop,
-                        onRefresh: onRefresh
-                    ) { section in
-                        switch section.kind {
-                        case .recent:
-                            recentStack(section)
-                        case .day, .week:
-                            dayOrWeekSection(section)
-                        }
-                    }
+            ZStack {
+                ForEach(feedLayers) { layer in
+                    listBody(filterId: layer.id, isCurrent: !layer.isOutgoing)
+                        .background(OpenCodeColors.backgroundBase)
+                        .opacity(layer.isOutgoing ? outgoingOpacity : incomingOpacity)
+                        .allowsHitTesting(!layer.isOutgoing)
+                        .zIndex(layer.isOutgoing ? 1 : 0)
                 }
             }
-            .id(useProjectPicker ? selectedFilterId : "chips-list")
-            .transition(.opacity)
-            .animation(
-                .smooth(duration: SessionListScopePaging.listCrossfadeDuration),
-                value: useProjectPicker ? selectedFilterId : "chips-list"
-            )
-            .onChange(of: selectedFilterId) { _, _ in
-                if useProjectPicker {
-                    followingTop = true
+            .onChange(of: selectedFilterId) { _, newId in
+                scheduleListCrossfade(to: newId)
+            }
+            .onChange(of: useProjectPicker) { _, isPicker in
+                if isPicker {
+                    scheduleListCrossfade(to: selectedFilterId)
+                } else {
+                    flattenList(to: selectedFilterId)
                 }
             }
 
@@ -238,6 +212,7 @@ struct SessionList<EmptyContent: View>: View {
                     Color.clear
                         .onAppear { dockHeight = geometry.size.height }
                         .onChange(of: geometry.size.height) { _, height in
+                            guard abs(dockHeight - height) > 0.5 else { return }
                             dockHeight = height
                         }
                 }
@@ -252,6 +227,45 @@ struct SessionList<EmptyContent: View>: View {
                     .onChange(of: geometry.safeAreaInsets.bottom) { _, inset in
                         bottomSafeAreaInset = inset
                     }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func listBody(filterId: String, isCurrent: Bool) -> some View {
+        let visible = sessions.visibleForFilter(filterId)
+        let sections = HomeSessionLadder.group(
+            sessions: visible,
+            updatedAtEpochMs: \.updatedAtEpochMs,
+            isAttention: \.status.isAttention,
+            recentWindowHours: homeDisplayPreferences.recentWindowHours,
+            nowEpochMs: Int64(Date().timeIntervalSince1970 * 1000)
+        )
+        Group {
+            if visible.isEmpty, showsEmptyContent {
+                ScrollView {
+                    emptyContent
+                        .frame(maxWidth: .infinity, minHeight: 420)
+                        .padding(.bottom, max(dockHeight, sessionListFallbackBottomSpacer))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(OpenCodeColors.backgroundBase)
+                .modifier(SessionListRefreshableModifier(onRefresh: isCurrent ? onRefresh : nil))
+            } else {
+                SessionListScrollView(
+                    ladderSections: sections,
+                    newestSessionId: visible.first?.id,
+                    revealNewestToken: isCurrent ? revealNewestToken : 0,
+                    followingTop: isCurrent ? $followingTop : .constant(true),
+                    onRefresh: isCurrent ? onRefresh : nil
+                ) { section in
+                    switch section.kind {
+                    case .recent:
+                        recentStack(section)
+                    case .day, .week:
+                        dayOrWeekSection(section)
+                    }
+                }
             }
         }
     }
@@ -327,6 +341,62 @@ struct SessionList<EmptyContent: View>: View {
             OpenCodeListItemStatus(text: "Ready", tone: .success)
         }
     }
+
+    private func flattenList(to filterId: String) {
+        listCrossfadeTask?.cancel()
+        incomingFilterId = filterId
+        feedLayers = [SessionListFeedLayer(id: filterId, isOutgoing: false)]
+        incomingOpacity = 1
+        outgoingOpacity = 0
+    }
+
+    private func scheduleListCrossfade(to newId: String) {
+        guard useProjectPicker else {
+            flattenList(to: newId)
+            return
+        }
+        guard incomingFilterId != newId else { return }
+        followingTop = true
+        listCrossfadeTask?.cancel()
+        var snap = Transaction()
+        snap.disablesAnimations = true
+        withTransaction(snap) {
+            outgoingOpacity = max(incomingOpacity, 0.001)
+            incomingOpacity = 0
+            feedLayers = [
+                SessionListFeedLayer(id: newId, isOutgoing: false),
+                SessionListFeedLayer(id: incomingFilterId, isOutgoing: true),
+            ]
+            incomingFilterId = newId
+        }
+        listCrossfadeTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(16))
+            guard !Task.isCancelled else { return }
+            var fade = Transaction(
+                animation: .timingCurve(
+                    0.42,
+                    0.0,
+                    0.58,
+                    1.0,
+                    duration: SessionListScopePaging.listCrossfadeDuration
+                )
+            )
+            fade.disablesAnimations = false
+            withTransaction(fade) {
+                incomingOpacity = 1
+                outgoingOpacity = 0
+            }
+            try? await Task.sleep(for: .seconds(SessionListScopePaging.listCrossfadeDuration))
+            guard !Task.isCancelled else { return }
+            feedLayers = [SessionListFeedLayer(id: newId, isOutgoing: false)]
+            outgoingOpacity = 0
+        }
+    }
+}
+
+private struct SessionListFeedLayer: Identifiable, Equatable {
+    let id: String
+    let isOutgoing: Bool
 }
 
 private let sessionListTopAnchorID = "session-list-top"
