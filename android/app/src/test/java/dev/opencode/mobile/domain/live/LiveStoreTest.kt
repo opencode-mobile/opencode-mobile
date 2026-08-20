@@ -21,6 +21,7 @@ import dev.opencode.mobile.domain.message.MessageSync
 import dev.opencode.mobile.domain.message.MessageSyncHealth
 import dev.opencode.mobile.domain.message.MessageSyncRecoveryReason
 import dev.opencode.mobile.domain.message.PromptSendOptions
+import dev.opencode.mobile.domain.message.STREAMING_PREPARE_DEBOUNCE_MS
 import dev.opencode.mobile.domain.message.SessionMessageEngine
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.FileDiff
@@ -1453,12 +1454,12 @@ class MessageSyncTest {
             eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
             eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
             eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Hello"))
-            advanceTimeBy(50)
+            advanceTimeBy(STREAMING_PREPARE_DEBOUNCE_MS + 1)
             assertTrue(emissions.last().isStreaming)
             assertEquals("Hello", emissions.last().text)
 
             eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = "Hello"))
-            advanceTimeBy(50)
+            advanceTimeBy(STREAMING_PREPARE_DEBOUNCE_MS + 1)
             assertFalse(emissions.last().isStreaming)
             collectJob.cancel()
         }

@@ -8,7 +8,8 @@ import org.junit.Test
 class DisplayMessagePipelinePacingTest {
     @Test
     fun streamingMaxBatchUsesConfiguredDuration() {
-        assertEquals(48L, STREAMING_PREPARE_MAX_BATCH_MS)
+        assertEquals(80L, STREAMING_PREPARE_DEBOUNCE_MS)
+        assertEquals(160L, STREAMING_PREPARE_MAX_BATCH_MS)
     }
 
     @Test

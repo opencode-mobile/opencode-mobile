@@ -137,6 +137,10 @@ class SettingsViewModel
             SessionChatDisplayPreferences.updateCollapseConsecutiveToolCalls(enabled)
         }
 
+        fun setSmoothStreamingUpdates(enabled: Boolean) {
+            SessionChatDisplayPreferences.updateSmoothStreamingUpdates(enabled)
+        }
+
         fun setTextMateEnabled(enabled: Boolean) {
             MarkdownHighlightPreferences.updateTextMateEnabled(enabled)
             messageContentPreparer.clearDocumentCache()

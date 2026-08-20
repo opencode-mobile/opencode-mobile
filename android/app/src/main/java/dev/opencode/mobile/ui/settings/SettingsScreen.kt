@@ -67,6 +67,8 @@ fun SettingsScreen(
     onSessionListProjectPickerEnabledChange: (Boolean) -> Unit,
     collapseConsecutiveToolCalls: Boolean,
     onCollapseConsecutiveToolCallsChange: (Boolean) -> Unit,
+    smoothStreamingUpdates: Boolean,
+    onSmoothStreamingUpdatesChange: (Boolean) -> Unit,
     textMateEnabled: Boolean,
     onTextMateEnabledChange: (Boolean) -> Unit,
     productAnalyticsConsented: Boolean,
@@ -247,6 +249,27 @@ fun SettingsScreen(
                                 enabled,
                             )
                             onCollapseConsecutiveToolCallsChange(enabled)
+                        },
+                    )
+                },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+
+            OpenCodeListItem(
+                title = "Smooth Streaming",
+                subtitle = "Paint assistant text in short chunks instead of every token",
+                style = OpenCodeListItemStyle.Card,
+                startDecorator =
+                    StartDecorator.Icon(OpenCodeIcons.ExpandContent, "Smooth Streaming"),
+                trailing = {
+                    Switch(
+                        checked = smoothStreamingUpdates,
+                        onCheckedChange = { enabled ->
+                            logSettingsToggle(
+                                ProductAnalytics.Action.SETTINGS_TOGGLE_SMOOTH_STREAMING,
+                                enabled,
+                            )
+                            onSmoothStreamingUpdatesChange(enabled)
                         },
                     )
                 },
@@ -585,6 +608,9 @@ private fun SettingsScreenLightPreview() {
             collapseConsecutiveToolCalls =
                 SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
             onCollapseConsecutiveToolCallsChange = {},
+            smoothStreamingUpdates =
+                SessionChatDisplayPreferences.smoothStreamingUpdates,
+            onSmoothStreamingUpdatesChange = {},
             textMateEnabled = false,
             onTextMateEnabledChange = {},
             productAnalyticsConsented = false,
@@ -619,6 +645,9 @@ private fun SettingsScreenDarkPreview() {
             collapseConsecutiveToolCalls =
                 SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
             onCollapseConsecutiveToolCallsChange = {},
+            smoothStreamingUpdates =
+                SessionChatDisplayPreferences.smoothStreamingUpdates,
+            onSmoothStreamingUpdatesChange = {},
             textMateEnabled = false,
             onTextMateEnabledChange = {},
             productAnalyticsConsented = false,

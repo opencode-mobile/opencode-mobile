@@ -266,6 +266,10 @@ fun MainNavigation() {
                                                     SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
                                                 onCollapseConsecutiveToolCallsChange =
                                                     settingsViewModel::setCollapseConsecutiveToolCalls,
+                                                smoothStreamingUpdates =
+                                                    SessionChatDisplayPreferences.smoothStreamingUpdates,
+                                                onSmoothStreamingUpdatesChange =
+                                                    settingsViewModel::setSmoothStreamingUpdates,
                                                 textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
                                                 onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
                                                 productAnalyticsConsented =

@@ -22,9 +22,9 @@ PUBLISH_RE = re.compile(
 )
 APPLY_RE = re.compile(r"\[DEBUG-ios-stream\] timelineApply ms=(\d+).*streamingChars=(\d+)")
 
-# Late-stream publish gap must stay near the 48ms max-batch target.
+# Late-stream publish gap must stay near the 160ms max-batch target.
 LATE_CHAR_THRESHOLD = 15_000
-P90_MS_THRESHOLD = 120
+P90_MS_THRESHOLD = 240
 
 
 def load_text(path: str) -> str:

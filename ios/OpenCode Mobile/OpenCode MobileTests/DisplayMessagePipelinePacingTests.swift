@@ -5,7 +5,8 @@ import Testing
 @MainActor
 struct DisplayMessagePipelinePacingTests {
     @Test func streamingMaxBatchUsesConfiguredDuration() {
-        #expect(streamingPrepareMaxBatchDuration == .milliseconds(48))
+        #expect(streamingPrepareDebounceNs == 80_000_000)
+        #expect(streamingPrepareMaxBatchDuration == .milliseconds(160))
     }
 
     @Test func largeStreamingMessagesSkipMarkdownPreparation() async {
