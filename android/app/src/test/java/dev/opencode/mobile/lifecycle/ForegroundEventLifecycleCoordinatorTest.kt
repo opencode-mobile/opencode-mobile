@@ -39,6 +39,7 @@ class ForegroundEventLifecycleCoordinatorTest {
             coordinator.onStop(owner)
             runCurrent()
             advanceTimeBy(1_000L)
+            assertEquals(1, restore.backgroundCount)
             assertEquals(0, restore.backgroundStopCount)
 
             coordinator.onStart(owner)
@@ -63,6 +64,7 @@ class ForegroundEventLifecycleCoordinatorTest {
             coordinator.onStart(owner)
             coordinator.onStop(owner)
             runCurrent()
+            assertEquals(1, restore.backgroundCount)
             advanceTimeBy(4_999L)
             assertEquals(0, restore.backgroundStopCount)
 
