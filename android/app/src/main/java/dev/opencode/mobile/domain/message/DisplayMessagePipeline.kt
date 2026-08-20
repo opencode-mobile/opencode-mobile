@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.stableMarkdownSourceHash
 import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
@@ -17,12 +18,12 @@ import kotlinx.coroutines.yield
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.TimeSource
 
-/** Quiet window before publishing the latest streaming snapshot. */
-internal const val STREAMING_PREPARE_DEBOUNCE_MS = 16L
+/** Open window that coalesces a burst of streaming tokens into one UI frame. */
+internal const val STREAMING_PREPARE_DEBOUNCE_MS = 80L
 
 /** Cap how long dense SSE bursts can delay a UI publish. Keep flat so long replies
  * do not intentionally slow down as they grow. */
-internal const val STREAMING_PREPARE_MAX_BATCH_MS = 48L
+internal const val STREAMING_PREPARE_MAX_BATCH_MS = 160L
 
 class DisplayMessagePipeline(
     private val snapshotSource: DisplayMessageSnapshotSource,
@@ -30,6 +31,9 @@ class DisplayMessagePipeline(
     private val timeSource: TimeSource = TimeSource.Monotonic,
     private val delayMillis: suspend (Long) -> Unit = { delay(it) },
     private val messageSync: MessageSync? = null,
+    private val smoothStreamingUpdates: () -> Boolean = {
+        SessionChatDisplayPreferences.smoothStreamingUpdates
+    },
 ) {
     constructor(
         messageSync: MessageSync,
@@ -278,8 +282,17 @@ class DisplayMessagePipeline(
                 scheduleStreamingDecoration(generation, messages)
             }
 
+            fun isDueForMaxBatch(): Boolean {
+                if (!smoothStreamingUpdates()) return true
+                return lastPublishedAt
+                    ?.elapsedNow()
+                    ?.inWholeMilliseconds
+                    ?.let { it >= STREAMING_PREPARE_MAX_BATCH_MS }
+                    ?: true
+            }
+
             fun scheduleStreamingPublish(generation: Long) {
-                debounceJob?.cancel()
+                if (debounceJob?.isActive == true) return
                 debounceJob =
                     launch {
                         delayMillis(STREAMING_PREPARE_DEBOUNCE_MS)
@@ -290,13 +303,7 @@ class DisplayMessagePipeline(
                         // Catch up if denser tokens arrived during this plain publish.
                         val catchUp = pendingMessages
                         if (catchUp != null && hasStreamingDelta(catchUp)) {
-                            val dueForMaxBatch =
-                                lastPublishedAt
-                                    ?.elapsedNow()
-                                    ?.inWholeMilliseconds
-                                    ?.let { it >= STREAMING_PREPARE_MAX_BATCH_MS }
-                                    ?: true
-                            if (dueForMaxBatch) {
+                            if (isDueForMaxBatch()) {
                                 pendingMessages = null
                                 publishPlainStreamingFrame(currentGeneration, catchUp)
                             } else {
@@ -559,17 +566,12 @@ class DisplayMessagePipeline(
                                 } else {
                                     enrichmentJob?.cancel()
                                     enrichmentJob = null
-                                    debounceJob?.cancel()
-                                    debounceJob = null
+                                    // Keep the open coalesce window. Later deltas replace
+                                    // pendingMessages instead of restarting the quiet timer.
                                 }
                                 pendingMessages = update.messages
-                                val dueForMaxBatch =
-                                    lastPublishedAt
-                                        ?.elapsedNow()
-                                        ?.inWholeMilliseconds
-                                        ?.let { it >= STREAMING_PREPARE_MAX_BATCH_MS }
-                                        ?: true
-                                if (dueForMaxBatch) {
+                                if (isDueForMaxBatch()) {
+                                    debounceJob?.cancel()
                                     debounceJob = null
                                     val latest = pendingMessages ?: update.messages
                                     pendingMessages = null

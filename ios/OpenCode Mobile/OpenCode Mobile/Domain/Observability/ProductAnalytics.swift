@@ -230,6 +230,7 @@ enum ProductAnalytics {
         static let settingsToggleHideUserDirectory = "settings_toggle_hide_user_directory"
         static let settingsOpenRecentWindowPicker = "settings_open_recent_window_picker"
         static let settingsToggleCollapseConsecutiveToolCalls = "settings_toggle_collapse_consecutive_tool_calls"
+        static let settingsToggleSmoothStreaming = "settings_toggle_smooth_streaming"
         static let settingsToggleSessionListProjectPicker = "settings_toggle_session_list_project_picker"
         static let settingsImportTheme = "settings_import_theme"
         static let settingsClearSessionCache = "settings_clear_session_cache"

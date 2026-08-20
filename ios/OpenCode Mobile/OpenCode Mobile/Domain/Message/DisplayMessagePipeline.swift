@@ -2,11 +2,11 @@ import Foundation
 import OSLog
 import UIKit
 
-/// Quiet window before publishing the latest streaming snapshot.
-nonisolated let streamingPrepareDebounceNs: UInt64 = 16_000_000
+/// Open window that coalesces a burst of streaming tokens into one UI frame.
+nonisolated let streamingPrepareDebounceNs: UInt64 = 80_000_000
 /// Cap how long dense SSE bursts can delay a UI publish. Keep this flat so
 /// long replies do not intentionally slow down as they grow.
-nonisolated let streamingPrepareMaxBatchDuration: Duration = .milliseconds(48)
+nonisolated let streamingPrepareMaxBatchDuration: Duration = .milliseconds(160)
 
 nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
     private let snapshotSource: any DisplayMessageSnapshotSource
@@ -16,6 +16,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
     private let connectionProfileIDProvider: @Sendable () -> String
     private let preparedHistoryCache: PreparedHistoryCache
     private let decorationCache: BlockDecorationCache
+    private let smoothStreamingUpdates: @Sendable () -> Bool
     private var memoryPressureObserver: NSObjectProtocol?
 
     init(
@@ -24,7 +25,10 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
         clock: (any DisplayMessagePipelineClock)? = nil,
         connectionProfileIDProvider: @escaping @Sendable () -> String = { "local" },
         preparedHistoryCache: PreparedHistoryCache? = nil,
-        decorationCache: BlockDecorationCache = .shared
+        decorationCache: BlockDecorationCache = .shared,
+        smoothStreamingUpdates: @escaping @Sendable () -> Bool = {
+            SessionChatDisplayPreferences.currentSmoothStreamingUpdates()
+        }
     ) {
         self.snapshotSource = messageSync
         self.contentPreparer = contentPreparer
@@ -33,6 +37,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
         self.connectionProfileIDProvider = connectionProfileIDProvider
         self.preparedHistoryCache = preparedHistoryCache ?? PreparedHistoryCache()
         self.decorationCache = decorationCache
+        self.smoothStreamingUpdates = smoothStreamingUpdates
         observeMemoryPressure()
     }
 
@@ -43,7 +48,10 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
         messageSync: MessageSync? = nil,
         connectionProfileIDProvider: @escaping @Sendable () -> String = { "local" },
         preparedHistoryCache: PreparedHistoryCache? = nil,
-        decorationCache: BlockDecorationCache = .shared
+        decorationCache: BlockDecorationCache = .shared,
+        smoothStreamingUpdates: @escaping @Sendable () -> Bool = {
+            SessionChatDisplayPreferences.currentSmoothStreamingUpdates()
+        }
     ) {
         self.snapshotSource = snapshotSource
         self.contentPreparer = contentPreparer
@@ -52,6 +60,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
         self.connectionProfileIDProvider = connectionProfileIDProvider
         self.preparedHistoryCache = preparedHistoryCache ?? PreparedHistoryCache()
         self.decorationCache = decorationCache
+        self.smoothStreamingUpdates = smoothStreamingUpdates
     }
 
     deinit {
@@ -155,6 +164,13 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                 var isStreamingSession = false
                 var sourceIsFromCache = false
                 let decorationBacklog = DecorationBacklog()
+
+                func isDueForMaxBatch() -> Bool {
+                    if !smoothStreamingUpdates() { return true }
+                    guard let lastPublishedAt else { return true }
+                    return clock.now - lastPublishedAt >= streamingPrepareMaxBatchDuration
+                }
+
                 if !previousByID.isEmpty {
                     OpenCodeLog.messageContent.info(
                         "displayCache hit session=\(sessionID, privacy: .public) count=\(previousByID.count)"
@@ -386,25 +402,29 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
 
                 func scheduleStreamingPublish(generation: UInt64) {
                     synced {
-                        debounceTask?.cancel()
+                        guard debounceTask == nil else { return }
                         debounceTask = Task {
                             await clock.sleep(for: .nanoseconds(Int64(streamingPrepareDebounceNs)))
-                            guard !Task.isCancelled, isCurrent(generation) else { return }
+                            guard !Task.isCancelled, isCurrent(generation) else {
+                                synced { debounceTask = nil }
+                                return
+                            }
                             let latest = synced { () -> [Message]? in
                                 let value = pendingMessages
                                 pendingMessages = nil
                                 return value
                             }
-                            guard let latest else { return }
+                            guard let latest else {
+                                synced { debounceTask = nil }
+                                return
+                            }
                             await publishPlainStreamingFrame(generation: generation, messages: latest)
                             let catchUpState = synced { () -> (messages: [Message], generation: UInt64, due: Bool)? in
+                                debounceTask = nil
                                 guard let catchUp = pendingMessages, messagesContainStreamingText(catchUp) else {
                                     return nil
                                 }
-                                let dueForMaxBatch: Bool = {
-                                    guard let lastPublishedAt else { return true }
-                                    return clock.now - lastPublishedAt >= streamingPrepareMaxBatchDuration
-                                }()
+                                let dueForMaxBatch = isDueForMaxBatch()
                                 if dueForMaxBatch {
                                     pendingMessages = nil
                                 }
@@ -735,16 +755,15 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                                 } else {
                                     enrichmentTask?.cancel()
                                     enrichmentTask = nil
-                                    debounceTask?.cancel()
-                                    debounceTask = nil
+                                    // Keep the open coalesce window. Later deltas replace
+                                    // pendingMessages instead of restarting the quiet timer.
                                 }
                                 pendingMessages = messages
-                                let dueForMaxBatch: Bool = {
-                                    guard let lastPublishedAt else { return true }
-                                    return clock.now - lastPublishedAt >= streamingPrepareMaxBatchDuration
-                                }()
+                                let dueForMaxBatch = isDueForMaxBatch()
                                 let latest: [Message]?
                                 if dueForMaxBatch {
+                                    debounceTask?.cancel()
+                                    debounceTask = nil
                                     latest = pendingMessages ?? messages
                                     pendingMessages = nil
                                 } else {

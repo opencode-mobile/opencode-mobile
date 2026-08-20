@@ -24,7 +24,12 @@ Still binding:
   so later nameless `session.tool.*` events still surface Explored rows.
 - Reasoning is a distinct part. Never apply a reasoning delta onto `TextPart`.
 - Markdown is prepared in `DisplayMessagePipeline`, not in UI or the raw store.
-  16/48 coalesce is for markdown decoration, not for hiding the raw stream.
+  Live streaming tokens coalesce into display frames (80ms open window, 160ms
+  max age) so the timeline paints word-sized chunks instead of every SSE
+  delta. Session Chat Appearance **Smooth Streaming** (default on) gates this;
+  off paints every streaming snapshot immediately. Stream end and structural
+  snapshots still flush immediately. Do not animate row height while streaming
+  (GrowBottom).
 - Views own native paint and scroll. Screen Model does not own viewport
   geometry.
 - SSE transport (foreground-only, 45s silence watchdog) is

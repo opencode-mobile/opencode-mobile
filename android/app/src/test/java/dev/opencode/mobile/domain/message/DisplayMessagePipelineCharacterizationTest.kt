@@ -147,6 +147,63 @@ class DisplayMessagePipelineCharacterizationTest {
         }
 
     @Test
+    fun streamingCoalescesDeltasInsideOpenWindow() =
+        runTest(testDispatcher) {
+            val harness = startHarness(holdDelays = true)
+
+            harness.source.emit(MessageListUpdate.Messages(listOf(plainAssistant("seed"))))
+            advanceUntilIdle()
+            harness.emissions.clear()
+            harness.delay.resetCallCount()
+
+            harness.source.emit(
+                MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", "Hel"))),
+            )
+            assertEquals(STREAMING_PREPARE_DEBOUNCE_MS, harness.delay.pendingMs())
+            assertTrue(harness.emissions.isEmpty())
+
+            harness.source.emit(
+                MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", "Hello"))),
+            )
+            harness.source.emit(
+                MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", "Hello world"))),
+            )
+            assertTrue(harness.emissions.isEmpty())
+            assertEquals(1, harness.delay.callCount)
+            assertEquals(STREAMING_PREPARE_DEBOUNCE_MS, harness.delay.pendingMs())
+
+            harness.delay.release()
+            advanceUntilIdle()
+
+            assertEquals(1, harness.emissions.size)
+            val frame = harness.emissions.single() as DisplayMessageListUpdate.Messages
+            assertEquals("Hello world", frame.messages.single().text)
+            assertTrue(frame.messages.single().isStreaming)
+        }
+
+    @Test
+    fun streamingPublishesImmediatelyWhenSmoothStreamingOff() =
+        runTest(testDispatcher) {
+            val harness = startHarness(holdDelays = true, smoothStreamingUpdates = { false })
+
+            harness.source.emit(MessageListUpdate.Messages(listOf(plainAssistant("seed"))))
+            advanceUntilIdle()
+            harness.emissions.clear()
+            harness.delay.resetCallCount()
+
+            harness.source.emit(
+                MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", "Hello"))),
+            )
+            advanceUntilIdle()
+
+            assertEquals(0, harness.delay.callCount)
+            assertEquals(1, harness.emissions.size)
+            val frame = harness.emissions.single() as DisplayMessageListUpdate.Messages
+            assertEquals("Hello", frame.messages.single().text)
+            assertTrue(frame.messages.single().isStreaming)
+        }
+
+    @Test
     fun streamingFlushesWhenMaxBatchAgeExceeded() =
         runTest(testDispatcher) {
             val harness = startHarness(holdDelays = true)
@@ -666,8 +723,11 @@ class DisplayMessagePipelineCharacterizationTest {
             assertEquals("cached", messages.single().messages.single().text)
         }
 
-    private fun TestScope.startHarness(holdDelays: Boolean = false): Harness {
-        val harness = Harness(holdDelays = holdDelays)
+    private fun TestScope.startHarness(
+        holdDelays: Boolean = false,
+        smoothStreamingUpdates: () -> Boolean = { true },
+    ): Harness {
+        val harness = Harness(holdDelays = holdDelays, smoothStreamingUpdates = smoothStreamingUpdates)
         harness.collectJob =
             backgroundScope.launch {
                 harness.pipeline.observeDisplayMessages("ses-1", null).collect {
@@ -679,6 +739,7 @@ class DisplayMessagePipelineCharacterizationTest {
 
     private class Harness(
         holdDelays: Boolean,
+        smoothStreamingUpdates: () -> Boolean = { true },
     ) {
         val source = ControllableSnapshotSource()
         val preparer = ControllableDisplayMessagePreparing()
@@ -692,6 +753,7 @@ class DisplayMessagePipelineCharacterizationTest {
                 contentPreparer = preparer,
                 timeSource = timeSource,
                 delayMillis = delay::delay,
+                smoothStreamingUpdates = smoothStreamingUpdates,
             )
     }
 
@@ -702,15 +764,23 @@ class DisplayMessagePipelineCharacterizationTest {
         private var pending: CompletableDeferred<Unit>? = null
         private var pendingDurationMs: Long? = null
 
+        var callCount: Int = 0
+            private set
+
         fun pendingMs(): Long? = pendingDurationMs
 
         fun hasPending(): Boolean = pending?.isCompleted == false
+
+        fun resetCallCount() {
+            callCount = 0
+        }
 
         fun release() {
             pending?.complete(Unit)
         }
 
         suspend fun delay(ms: Long) {
+            callCount += 1
             timeSource += ms.milliseconds
             if (!hold) return
             pendingDurationMs = ms

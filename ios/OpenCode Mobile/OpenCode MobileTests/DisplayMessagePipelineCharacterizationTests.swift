@@ -125,6 +125,62 @@ struct DisplayMessagePipelineCharacterizationTests {
         _ = await waitUntil { collector.isFinished }
     }
 
+    @Test func streamingCoalescesDeltasInsideOpenWindow() async {
+        let harness = Harness(holdSleep: true)
+        let collector = CharacterizationDisplayCollector()
+        let task = Task {
+            await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
+        }
+
+        await harness.source.emit(.messages([plainAssistant("seed")], isFromCache: false))
+        _ = await waitUntil { collector.emissions.count == 1 }
+        collector.emissions.removeAll()
+        harness.clock.resetSleepCallCount()
+
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "Hel")], isFromCache: false))
+        _ = await waitUntil { harness.clock.pendingSleep != nil }
+        #expect(collector.emissions.isEmpty)
+
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "Hello")], isFromCache: false))
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "Hello world")], isFromCache: false))
+        #expect(collector.emissions.isEmpty)
+        #expect(harness.clock.sleepCallCount == 1)
+        #expect(harness.clock.pendingSleep == .nanoseconds(Int64(streamingPrepareDebounceNs)))
+
+        harness.clock.releaseSleep()
+        let published = await waitUntil { collector.emissions.count == 1 }
+        #expect(published)
+        #expect(collector.emissions[0].first?.text == "Hello world")
+        #expect(collector.emissions[0].first?.isStreaming == true)
+
+        task.cancel()
+        _ = await waitUntil { collector.isFinished }
+    }
+
+    @Test func streamingPublishesImmediatelyWhenSmoothStreamingOff() async {
+        let harness = Harness(holdSleep: true, smoothStreamingUpdates: { false })
+        let collector = CharacterizationDisplayCollector()
+        let task = Task {
+            await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
+        }
+
+        await harness.source.emit(.messages([plainAssistant("seed")], isFromCache: false))
+        _ = await waitUntil { collector.emissions.count == 1 }
+        collector.emissions.removeAll()
+        harness.clock.resetSleepCallCount()
+
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "Hello")], isFromCache: false))
+        let published = await waitUntil { collector.emissions.count == 1 }
+        #expect(published)
+        #expect(harness.clock.pendingSleep == nil)
+        #expect(harness.clock.sleepCallCount == 0)
+        #expect(collector.emissions[0].first?.text == "Hello")
+        #expect(collector.emissions[0].first?.isStreaming == true)
+
+        task.cancel()
+        _ = await waitUntil { collector.isFinished }
+    }
+
     @Test func streamingFlushesWhenMaxBatchAgeExceeded() async {
         let harness = Harness(holdSleep: true)
         let collector = CharacterizationDisplayCollector()
@@ -311,6 +367,11 @@ struct DisplayMessagePipelineCharacterizationTests {
         #expect(held)
 
         await harness.source.emit(.messages([streamingAssistant(id: "live", text: "token")], isFromCache: false))
+        let streamingParked = await waitUntil {
+            harness.clock.pendingSleep == .nanoseconds(Int64(streamingPrepareDebounceNs))
+        }
+        #expect(streamingParked)
+        harness.clock.releaseSleep()
         let livePublished = await waitUntil { collector.emissions.count >= 3 }
         #expect(livePublished)
         let emissionsBeforeRelease = collector.emissions.count
@@ -534,9 +595,11 @@ struct DisplayMessagePipelineCharacterizationTests {
         await harness.source.emit(
             .messages(history + [streamingAssistant(id: "stream-1", text: fenced)], isFromCache: false)
         )
-        if harness.clock.pendingSleep != nil {
-            harness.clock.releaseSleep()
+        let streamingParked = await waitUntil {
+            harness.clock.pendingSleep == .nanoseconds(Int64(streamingPrepareDebounceNs))
         }
+        #expect(streamingParked)
+        harness.clock.releaseSleep()
         let preserved = await waitUntil {
             guard let frame = collector.emissions.last else { return false }
             let siblings = frame.filter { $0.id.hasPrefix("hist-") }
@@ -682,7 +745,10 @@ private final class Harness {
     let clock: ControllablePipelineClock
     let pipeline: DisplayMessagePipeline
 
-    init(holdSleep: Bool = false) {
+    init(
+        holdSleep: Bool = false,
+        smoothStreamingUpdates: @escaping @Sendable () -> Bool = { true }
+    ) {
         // Enrichment frames only publish when plain-first left rows awaiting TextMate.
         MarkdownHighlightPreferences.shared.setTextMateEnabled(true)
         let clock = ControllablePipelineClock(holdSleep: holdSleep)
@@ -690,7 +756,8 @@ private final class Harness {
         self.pipeline = DisplayMessagePipeline(
             snapshotSource: source,
             contentPreparer: preparer,
-            clock: clock
+            clock: clock,
+            smoothStreamingUpdates: smoothStreamingUpdates
         )
     }
 }
@@ -976,6 +1043,7 @@ private final class ControllablePipelineClock: DisplayMessagePipelineClock, @unc
     private let holdSleep: Bool
     private var _pendingSleep: Duration?
     private var sleepContinuation: CheckedContinuation<Void, Never>?
+    private var _sleepCallCount = 0
 
     var now: Duration {
         lock.lock()
@@ -989,6 +1057,12 @@ private final class ControllablePipelineClock: DisplayMessagePipelineClock, @unc
         return _pendingSleep
     }
 
+    var sleepCallCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _sleepCallCount
+    }
+
     init(holdSleep: Bool) {
         self.holdSleep = holdSleep
     }
@@ -996,6 +1070,12 @@ private final class ControllablePipelineClock: DisplayMessagePipelineClock, @unc
     func advance(by duration: Duration) {
         lock.lock()
         _now += duration
+        lock.unlock()
+    }
+
+    func resetSleepCallCount() {
+        lock.lock()
+        _sleepCallCount = 0
         lock.unlock()
     }
 
@@ -1010,6 +1090,7 @@ private final class ControllablePipelineClock: DisplayMessagePipelineClock, @unc
 
     func sleep(for duration: Duration) async {
         lock.lock()
+        _sleepCallCount += 1
         _now += duration
         lock.unlock()
         guard holdSleep else { return }
