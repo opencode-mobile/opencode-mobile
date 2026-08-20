@@ -124,7 +124,7 @@ struct SessionList<EmptyContent: View>: View {
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var followingTop = true
     @State private var incomingFilterId: String
-    @State private var outgoingFilterId: String?
+    @State private var feedLayers: [SessionListFeedLayer]
     @State private var incomingOpacity: CGFloat = 1
     @State private var outgoingOpacity: CGFloat = 0
     @State private var listCrossfadeTask: Task<Void, Never>?
@@ -164,21 +164,18 @@ struct SessionList<EmptyContent: View>: View {
         self.showsEmptyContent = showsEmptyContent
         self.emptyContent = emptyContent()
         _incomingFilterId = State(initialValue: selectedFilterId)
+        _feedLayers = State(initialValue: [SessionListFeedLayer(id: selectedFilterId, isOutgoing: false)])
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             ZStack {
-                listBody(filterId: incomingFilterId, isCurrent: true)
-                    .background(OpenCodeColors.backgroundBase)
-                    .opacity(incomingOpacity)
-                    .zIndex(0)
-                if let outgoingFilterId {
-                    listBody(filterId: outgoingFilterId, isCurrent: false)
+                ForEach(feedLayers) { layer in
+                    listBody(filterId: layer.id, isCurrent: !layer.isOutgoing)
                         .background(OpenCodeColors.backgroundBase)
-                        .opacity(outgoingOpacity)
-                        .allowsHitTesting(false)
-                        .zIndex(1)
+                        .opacity(layer.isOutgoing ? outgoingOpacity : incomingOpacity)
+                        .allowsHitTesting(!layer.isOutgoing)
+                        .zIndex(layer.isOutgoing ? 1 : 0)
                 }
             }
             .onChange(of: selectedFilterId) { _, newId in
@@ -348,8 +345,8 @@ struct SessionList<EmptyContent: View>: View {
     private func flattenList(to filterId: String) {
         listCrossfadeTask?.cancel()
         incomingFilterId = filterId
+        feedLayers = [SessionListFeedLayer(id: filterId, isOutgoing: false)]
         incomingOpacity = 1
-        outgoingFilterId = nil
         outgoingOpacity = 0
     }
 
@@ -364,10 +361,13 @@ struct SessionList<EmptyContent: View>: View {
         var snap = Transaction()
         snap.disablesAnimations = true
         withTransaction(snap) {
-            outgoingFilterId = incomingFilterId
             outgoingOpacity = max(incomingOpacity, 0.001)
-            incomingFilterId = newId
             incomingOpacity = 0
+            feedLayers = [
+                SessionListFeedLayer(id: newId, isOutgoing: false),
+                SessionListFeedLayer(id: incomingFilterId, isOutgoing: true),
+            ]
+            incomingFilterId = newId
         }
         listCrossfadeTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(16))
@@ -388,10 +388,15 @@ struct SessionList<EmptyContent: View>: View {
             }
             try? await Task.sleep(for: .seconds(SessionListScopePaging.listCrossfadeDuration))
             guard !Task.isCancelled else { return }
-            outgoingFilterId = nil
+            feedLayers = [SessionListFeedLayer(id: newId, isOutgoing: false)]
             outgoingOpacity = 0
         }
     }
+}
+
+private struct SessionListFeedLayer: Identifiable, Equatable {
+    let id: String
+    let isOutgoing: Bool
 }
 
 private let sessionListTopAnchorID = "session-list-top"

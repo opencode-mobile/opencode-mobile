@@ -269,6 +269,9 @@ fun SessionListScopeControl(
     val scope = rememberCoroutineScope()
     val latestOnOpen by rememberUpdatedState(onOpen)
     val latestOnSelect by rememberUpdatedState(onSelect)
+    val latestTabs by rememberUpdatedState(tabs)
+    val latestSelectedIndex by rememberUpdatedState(selectedIndex)
+    val latestVisibleTab by rememberUpdatedState(visibleTab)
     val rubberBandLimitPx =
         with(density) { SessionListScopePaging.RUBBER_BAND_LIMIT_DP.dp.toPx() }
     val switchThresholdPx =
@@ -285,16 +288,19 @@ fun SessionListScopeControl(
             count = tabs.size,
             direction = SessionListScopePaging.Direction.Next,
         ) != null
+    val latestCanGoPrevious by rememberUpdatedState(canGoPrevious)
+    val latestCanGoNext by rememberUpdatedState(canGoNext)
     val switchEasing = CubicBezierEasing(0.45f, 0.0f, 0.12f, 1.0f)
 
     fun neighborTab(direction: SessionListScopePaging.Direction): SessionListFilterTab? {
+        val currentTabs = latestTabs
         val index =
             SessionListScopePaging.neighborIndex(
-                selectedIndex = selectedIndex,
-                count = tabs.size,
+                selectedIndex = latestSelectedIndex,
+                count = currentTabs.size,
                 direction = direction,
             ) ?: return null
-        return tabs.getOrNull(index)
+        return currentTabs.getOrNull(index)
     }
 
     fun startSwitch(
@@ -310,7 +316,7 @@ fun SessionListScopeControl(
                         direction = direction,
                         pageWidth = slotWidthPx,
                     )
-                outgoingTab = visibleTab
+                outgoingTab = latestVisibleTab
                 outgoingOffset.snapTo(from)
                 incomingOffset.snapTo(-exit)
                 shownTabId = neighbor.id
@@ -393,8 +399,8 @@ fun SessionListScopeControl(
                             val direction =
                                 SessionListScopePaging.commitDirection(
                                     visualOffset = visual,
-                                    canGoPrevious = canGoPrevious,
-                                    canGoNext = canGoNext,
+                                    canGoPrevious = latestCanGoPrevious,
+                                    canGoNext = latestCanGoNext,
                                     switchThreshold = switchThresholdPx,
                                 )
                             if (direction != null) {
