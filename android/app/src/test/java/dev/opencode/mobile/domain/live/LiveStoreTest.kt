@@ -1342,7 +1342,7 @@ class MessageSyncTest {
         }
 
     @Test
-    fun observeMessages_sessionIdleReloadsAndClearsStreaming() =
+    fun observeMessages_sessionIdleFinalizesStreamingWithoutReload() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
@@ -1375,9 +1375,11 @@ class MessageSyncTest {
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
 
-            val final = emissions.last().single()
-            assertEquals("Hello", final.text)
-            assertFalse((final.parts.single() as MessagePart.Text).isStreaming)
+            val final = emissions.last()
+            assertEquals("Hello", final.first { it.id == "msg-1" }.text)
+            val assistant = final.first { it.id == "msg-2" }
+            assertEquals("Hello", assistant.text)
+            assertFalse((assistant.parts.single() as MessagePart.Text).isStreaming)
             assertEquals(1, repository.listMessagesCallCount)
         }
 
