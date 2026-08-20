@@ -329,7 +329,7 @@ fun SessionListScopeControl(
         }
     }
 
-    Row(
+    Box(
         modifier =
             modifier
                 .fillMaxWidth()
@@ -438,14 +438,13 @@ fun SessionListScopeControl(
                 }
                 .padding(horizontal = 10.dp, vertical = 8.dp)
                 .heightIn(min = 44.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(
             modifier =
                 Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
                     .heightIn(min = 36.dp)
+                    .align(Alignment.CenterStart)
                     .clipToBounds()
                     .onSizeChanged { slotWidthPx = max(it.width.toFloat(), 1f) },
             contentAlignment = Alignment.CenterStart,
@@ -465,7 +464,10 @@ fun SessionListScopeControl(
             imageVector = OpenCodeIcons.KeyboardArrowDown,
             contentDescription = null,
             tint = textWeak,
-            modifier = Modifier.size(16.dp),
+            modifier =
+                Modifier
+                    .size(16.dp)
+                    .align(Alignment.CenterEnd),
         )
     }
 }
@@ -479,7 +481,7 @@ private fun SessionListScopeIdentity(
     val textWeak = openCodeColor("text-weak")
     val subtitle = displayedScopeSubtitle(tab)
     Row(
-        modifier = modifier,
+        modifier = modifier.padding(end = 26.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {

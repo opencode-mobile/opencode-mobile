@@ -160,10 +160,11 @@ struct SessionListScopeControl: View {
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
 
     var body: some View {
-        HStack(spacing: 10) {
+        ZStack(alignment: .trailing) {
             identityClusterSlot
             OpenCodeIconImage(icon: .keyboardArrowDown, size: 16)
                 .foregroundStyle(OpenCodeColors.textWeak)
+                .allowsHitTesting(false)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -247,6 +248,7 @@ struct SessionListScopeControl: View {
             .geometryGroup()
             SessionListScopeCountBadge(count: tab.count)
         }
+        .padding(.trailing, 26)
     }
 
     private var controlShape: RoundedRectangle {

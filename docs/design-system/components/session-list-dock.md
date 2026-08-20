@@ -54,7 +54,10 @@ immediately — the finger does not need to lift, and it does not scrub the
 transition. Once the switch starts, it runs to completion.
 
 Swipe motion lives only in the identity cluster (mark + title/subtitle +
-count). The control background, chevron, and dock CTAs stay pinned.
+count). The control background, chevron, and dock CTAs stay pinned. The
+chevron overlays the trailing edge of the identity slot so a stretch or
+switch slides behind it; at rest the cluster keeps a trailing inset so the
+count is not under the icon.
 
 - Drag: the cluster is tethered. It can be pulled left or right, but it lags
   the finger like rubber — glued to rest, and the farther the pull the less
@@ -69,8 +72,8 @@ count). The control background, chevron, and dock CTAs stay pinned.
   **180ms** with a slow takeoff and no bounce. Selection does not change.
 - Interrupt: a new drag cancels an in-flight rubber-band return and continues
   from the current offset. A switch in flight is not interruptible.
-- Viewport: clip to the cluster slot so a rubber-band pull cannot draw over
-  the chevron. Do not paint an edge fade — at rest it dirties the letter mark.
+- Viewport: clip to the identity slot, including the area under the chevron.
+  Do not paint an edge fade — at rest it dirties the letter mark.
 
 VoiceOver / TalkBack treat the control as a button that opens the project
 filter, and expose increment/decrement to switch projects when a neighbor
