@@ -8,7 +8,7 @@ class ThoughtPartChromeTest {
     @Test
     fun paintLabel_matchesStreamingSettledAndHidden() {
         assertEquals(
-            "thinking",
+            "hidden",
             ThoughtPartChrome.paintLabel(
                 MessagePart.Reasoning(text = "", isStreaming = true),
             ),
@@ -26,15 +26,21 @@ class ThoughtPartChromeTest {
             ),
         )
         assertEquals(
-            "thinking",
+            "hidden",
             ThoughtPartChrome.paintLabel(
                 MessagePart.Reasoning(text = "", isStreaming = false, timeEndEpochMs = 2),
+            ),
+        )
+        assertEquals(
+            "thinking",
+            ThoughtPartChrome.paintLabel(
+                MessagePart.Reasoning(text = "working", isStreaming = true),
             ),
         )
     }
 
     @Test
-    fun summarize_marksEmptyAssistantOmittedAndLastThinking() {
+    fun summarize_marksBlankStreamingReasoningHidden() {
         val summary =
             ThoughtPartChrome.summarize(
                 messages =
@@ -58,14 +64,15 @@ class ThoughtPartChromeTest {
             )
         assertTrue(summary.contains("store=2"))
         assertTrue(summary.contains("painted=1"))
-        assertTrue(summary.contains("omitted=0"))
-        assertTrue(summary.contains("thinking=1"))
-        assertTrue(summary.contains("last=thinking"))
+        assertTrue(summary.contains("omitted=1"))
+        assertTrue(summary.contains("thinking=0"))
+        assertTrue(summary.contains("hidden=1"))
+        assertTrue(summary.contains("last=hidden"))
         assertTrue(summary.contains("streaming=1"))
     }
 
     @Test
-    fun summarize_keepsBlankCompletedReasoningAsThinking() {
+    fun summarize_hidesBlankCompletedReasoning() {
         val summary =
             ThoughtPartChrome.summarize(
                 messages =
@@ -86,11 +93,12 @@ class ThoughtPartChromeTest {
                                 ),
                         ),
                     ),
-                paintedCount = 1,
+                paintedCount = 0,
             )
-        assertTrue(summary.contains("thinking=1"))
-        assertTrue(summary.contains("omitted=0"))
-        assertTrue(summary.contains("last=thinking"))
+        assertTrue(summary.contains("thinking=0"))
+        assertTrue(summary.contains("hidden=1"))
+        assertTrue(summary.contains("omitted=1"))
+        assertTrue(summary.contains("last=hidden"))
         assertTrue(summary.contains("end=1"))
     }
 }

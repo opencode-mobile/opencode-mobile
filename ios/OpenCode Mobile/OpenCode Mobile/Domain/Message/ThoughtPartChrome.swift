@@ -1,22 +1,22 @@
 import Foundation
 
 /// Compact thought-row diagnostics. Labels match Session Chat chrome
-/// (`thinking` / `thought`) plus `hidden` when a completed blank reasoning
-/// part is dropped from the timeline.
+/// (`thinking` / `thought`) plus `hidden` when TUI would drop the part
+/// (blank or `[REDACTED]`-only reasoning).
 nonisolated enum ThoughtPartChrome {
-    static func paintLabel(_ part: ReasoningPart) -> String {
-        let blank = part.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if part.isStreaming || blank {
-            return isLive(part) ? "thinking" : "hidden"
-        }
-        return "thought"
+    static func displayText(_ part: ReasoningPart) -> String {
+        part.text
+            .replacingOccurrences(of: "[REDACTED]", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func isLive(_ part: ReasoningPart) -> Bool {
-        part.isStreaming
-            || !part.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || part.timeStartEpochMs != nil
-            || part.timeEndEpochMs != nil
+    static func isVisible(_ part: ReasoningPart) -> Bool {
+        !displayText(part).isEmpty
+    }
+
+    static func paintLabel(_ part: ReasoningPart) -> String {
+        if !isVisible(part) { return "hidden" }
+        return part.isStreaming ? "thinking" : "thought"
     }
 
     static func summarize(messages: [Message], paintedCount: Int? = nil) -> String {

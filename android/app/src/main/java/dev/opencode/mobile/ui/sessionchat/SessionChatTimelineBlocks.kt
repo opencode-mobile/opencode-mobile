@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.ThoughtPartChrome
 import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
@@ -168,17 +169,16 @@ object SessionChatTimelineBlocks {
                 }
                 is MessagePart.Reasoning -> {
                     if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    val trimmed = part.text.trim()
-                    if (isLiveReasoning(part)) {
+                    if (ThoughtPartChrome.isVisible(part)) {
                         val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                        val thinking = part.isStreaming || trimmed.isEmpty()
+                        val text = ThoughtPartChrome.displayText(part)
                         blocks +=
                             SessionChatTimelineBlock.Reasoning(
                                 blockID = PresentationBlockId.direct(partId),
-                                text = trimmed,
-                                isStreaming = thinking,
+                                text = text,
+                                isStreaming = part.isStreaming,
                                 durationMs =
-                                    if (thinking) {
+                                    if (part.isStreaming) {
                                         null
                                     } else {
                                         thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs)
@@ -350,12 +350,7 @@ object SessionChatTimelineBlocks {
         return duration.takeIf { it >= 0 }
     }
 
-    /** TUI keeps one thought row once the part exists. Do not drop it between Thinking and Thought. */
-    private fun isLiveReasoning(part: MessagePart.Reasoning): Boolean =
-        part.isStreaming ||
-            part.text.isNotBlank() ||
-            part.timeStartEpochMs != null ||
-            part.timeEndEpochMs != null
+    private fun isLiveReasoning(part: MessagePart.Reasoning): Boolean = ThoughtPartChrome.isVisible(part)
 
     private fun isVisibleTool(tool: MessagePart.Tool): Boolean = ToolPartIdentity.isVisibleOnTimeline(tool)
 
