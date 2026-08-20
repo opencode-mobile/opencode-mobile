@@ -709,7 +709,10 @@ struct ProjectListHomeView: View {
             },
             onAddProject: { Task { await viewModel.showAddProjectSheet() } },
             onNewSession: {
-                switch SessionListHomeChrome.newSessionAction(projects: chromeProjects) {
+                switch SessionListHomeChrome.newSessionAction(
+                    projects: chromeProjects,
+                    selectedFilterId: selectedFilterId
+                ) {
                 case .none:
                     break
                 case .presentPicker:

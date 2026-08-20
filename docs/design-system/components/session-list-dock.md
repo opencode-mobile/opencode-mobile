@@ -16,7 +16,9 @@ content.
   letter + accent), `selectedFilterId`, `onAddProject()`, `onNewSession()`.
 - Filter chrome: `useProjectPicker` (default off). Off uses Filter Chip
   `onFilterSelected(id)` plus optional selected-project `onRemoveProject(id)`.
-  On uses `onOpenProjectPicker()` for the scope control.
+  On uses `onOpenProjectPicker()` for tap on the scope control, and
+  `onFilterSelected(id)` when a horizontal swipe commits the previous or next
+  tab.
 - Optional: `createError` string above the filter chrome.
 - States: default. Disabled/loading are not applicable; callers gate actions.
   Empty `filterTabs` collapses the filter chrome and still shows the action row.
@@ -45,11 +47,22 @@ whether that tab is present; the dock does not insert it.
 Stateless. Default filter chrome is a horizontal Filter Chip scroller: tap
 selects; selected project chips may expose remove. When `useProjectPicker` is
 on, a single scope control shows the selected tab (letter or All mark, name,
-compact path or project-count subtitle, session count, chevron) and tap opens
-the caller-owned **Filter by project** sheet. Empty `filterTabs` omits the
-filter chrome (no empty strip). Add project is a compact leading control; New
-session is the full-width primary control beside it. Create error appears above
-the filter chrome when set.
+compact path or project-count subtitle, session count, chevron). Tap opens the
+caller-owned **Filter by project** sheet. Horizontal swipe pages the previous
+or next tab in `filterTabs` order without opening the sheet.
+
+Swipe motion lives only in the identity cluster (mark + title/subtitle +
+count). The control background, chevron, and dock CTAs stay pinned. The cluster
+tracks the finger with light resistance; swipe left reveals the next tab from
+the right. Commit at **36pt** or a flick of **800pt/s**; otherwise snap back.
+Settle with the same **0.22s** smooth used for chip scroll-to-selected. Ends
+rubber-band and do not wrap. Rapid swipes interrupt; they do not queue. Light
+haptic on commit only. One tab still rubber-bands and never commits. VoiceOver
+/ TalkBack expose increment and decrement on the control.
+
+Empty `filterTabs` omits the filter chrome (no empty strip). Add project is a
+compact leading control; New session is the full-width primary control beside
+it. Create error appears above the filter chrome when set.
 
 Chip-mode removal uses the selected chip’s remove control. Picker-mode removal
 is hold-to-remove on project rows in the sheet, not on the dock.
@@ -65,8 +78,9 @@ is hold-to-remove on project rows in the sheet, not on the dock.
 
 Both Component Galleries include a **Session List Dock** entry with a **Picker**
 preview switch (chips vs scope control), a **1 project** sample (All absent),
-and an optional create-error toggle. Session List gallery also shows the dock
-in full home context.
+and an optional create-error toggle. With Picker on and more than one tab,
+swipe the scope control to page projects. Session List gallery also shows the
+dock in full home context.
 
 ## Parity And Divergence
 

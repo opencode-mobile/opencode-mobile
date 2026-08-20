@@ -100,7 +100,10 @@ class SessionListHomeChromeTest {
     fun newSessionAction_zeroProjectsDoesNothing() {
         assertEquals(
             SessionListHomeChrome.NewSessionAction.None,
-            SessionListHomeChrome.newSessionAction(emptyList()),
+            SessionListHomeChrome.newSessionAction(
+                projects = emptyList(),
+                selectedFilterId = SessionListFilterTab.ALL_ID,
+            ),
         )
     }
 
@@ -108,15 +111,32 @@ class SessionListHomeChromeTest {
     fun newSessionAction_oneProjectCreatesInThatWorktree() {
         assertEquals(
             SessionListHomeChrome.NewSessionAction.Create("/repo"),
-            SessionListHomeChrome.newSessionAction(listOf(mobile)),
+            SessionListHomeChrome.newSessionAction(
+                projects = listOf(mobile),
+                selectedFilterId = "/repo",
+            ),
         )
     }
 
     @Test
-    fun newSessionAction_twoPlusPresentsPicker() {
+    fun newSessionAction_allSelectedPresentsPicker() {
         assertEquals(
             SessionListHomeChrome.NewSessionAction.PresentPicker,
-            SessionListHomeChrome.newSessionAction(listOf(mobile, playground)),
+            SessionListHomeChrome.newSessionAction(
+                projects = listOf(mobile, playground),
+                selectedFilterId = SessionListFilterTab.ALL_ID,
+            ),
+        )
+    }
+
+    @Test
+    fun newSessionAction_scopedProjectCreatesThere() {
+        assertEquals(
+            SessionListHomeChrome.NewSessionAction.Create("/play"),
+            SessionListHomeChrome.newSessionAction(
+                projects = listOf(mobile, playground),
+                selectedFilterId = "/play",
+            ),
         )
     }
 

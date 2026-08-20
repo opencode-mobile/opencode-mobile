@@ -63,7 +63,8 @@ settings) is owned by the home shell, not this component.
 The component is stateless for session payloads. Callers own captions and
 Idle/Running/Ready mapping (Running outranks Ready; Ready uses pill text
 **Ready** with `success` tone), filter models/selection, add-project and
-new-session flows, and page chrome.
+new-session flows, and page chrome. **New session** opens the project picker
+only when the selected filter is **All**; a selected project creates there.
 
 Session List applies the selected project filter, then groups via
 `HomeSessionLadder` using `updatedAtEpochMs`, Running/Ready attention, and
@@ -83,15 +84,18 @@ Layout:
   Add project + New session.
 
 When `selectedFilterId` is `all`, all sessions are shown. Otherwise only
-sessions whose `worktree` equals the selected filter id are shown.
+sessions whose `worktree` equals the selected filter id are shown. In picker
+chrome, a committed scope-control swipe does not page the home list sideways.
 
 ## Platform Notes
 
 - iOS: dense list + Liquid Glass dock/key controls on iOS 26+ with material
   fallbacks below iOS 26. Pull-to-refresh is available when `onRefresh` is
-  provided.
+  provided. A committed scope-control swipe identity-fades the filtered list
+  in **0.16s**.
 - Android: same hierarchy with Material raised glass-like dock; no system Liquid
   Glass. Android `SessionList` does not expose pull-to-refresh in this version.
+  A committed swipe updates the same list instance and scrolls to top.
 
 ## Review Surfaces
 

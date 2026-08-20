@@ -43,10 +43,13 @@ struct OpenCodeSessionListDock: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                if useProjectPicker {
-                    if let selectedTab {
-                        SessionListScopeControl(tab: selectedTab, action: onOpenProjectPicker)
-                    }
+                if useProjectPicker, !filterTabs.isEmpty {
+                    SessionListScopeControl(
+                        tabs: filterTabs,
+                        selectedId: selectedFilterId,
+                        onSelect: onFilterSelected,
+                        onOpen: onOpenProjectPicker
+                    )
                 } else if !filterTabs.isEmpty {
                     ScrollViewReader { proxy in
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -138,47 +141,183 @@ struct OpenCodeSessionListDock: View {
 }
 
 struct SessionListScopeControl: View {
-    let tab: SessionListFilterTab
-    let action: () -> Void
+    let tabs: [SessionListFilterTab]
+    let selectedId: String
+    let onSelect: (String) -> Void
+    let onOpen: () -> Void
 
+    @State private var dragTranslation: CGFloat = 0
+    @State private var pageWidth: CGFloat = 0
+    @State private var commitTick = 0
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                SessionListScopeMark(tab: tab)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(tab.pickerTitle)
-                        .font(OpenCodeTypography.bodySecondary.weight(.semibold))
-                        .foregroundStyle(OpenCodeColors.textStrong)
-                        .lineLimit(1)
-                    if !displayedSubtitle.isEmpty {
-                        Text(displayedSubtitle)
-                            .font(OpenCodeTypography.caption)
-                            .foregroundStyle(OpenCodeColors.textWeak)
-                            .lineLimit(1)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                SessionListScopeCountBadge(count: tab.count)
-                OpenCodeIconImage(icon: .keyboardArrowDown, size: 16)
-                    .foregroundStyle(OpenCodeColors.textWeak)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(minHeight: 44)
-            .background(
-                OpenCodeColors.textStrong.opacity(0.08),
-                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        HStack(spacing: 10) {
+            pagingCluster
+            OpenCodeIconImage(icon: .keyboardArrowDown, size: 16)
+                .foregroundStyle(OpenCodeColors.textWeak)
         }
-        .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(minHeight: 44)
+        .background(
+            OpenCodeColors.textStrong.opacity(0.08),
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .gesture(drag)
+        .onTapGesture(perform: onOpen)
+        .sensoryFeedback(.impact(flexibility: .solid, intensity: 0.55), trigger: commitTick)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint("Opens the project filter")
+        .accessibilityHint("Opens the project filter. Swipe to switch projects.")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAdjustableAction(adjustSelection)
+        .accessibilityAction(named: "Open project filter", onOpen)
     }
 
-    private var displayedSubtitle: String {
+    @ViewBuilder
+    private var pagingCluster: some View {
+        ZStack(alignment: .leading) {
+            if let selectedTab {
+                identityCluster(selectedTab)
+                    .hidden()
+            }
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                let displayed = SessionListScopePaging.displayedTranslation(
+                    translation: dragTranslation,
+                    pageWidth: width,
+                    canGoPrevious: previousTab != nil,
+                    canGoNext: nextTab != nil
+                )
+                HStack(spacing: 0) {
+                    if let previousTab {
+                        identityCluster(previousTab)
+                            .frame(width: width)
+                    }
+                    if let selectedTab {
+                        identityCluster(selectedTab)
+                            .frame(width: width)
+                    }
+                    if let nextTab {
+                        identityCluster(nextTab)
+                            .frame(width: width)
+                    }
+                }
+                .offset(x: pageBaseOffset(width: width) + displayed)
+                .onAppear { pageWidth = width }
+                .onChange(of: width) { _, newWidth in
+                    pageWidth = newWidth
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
+        .mask {
+            LinearGradient(
+                stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black, location: 0.86),
+                    .init(color: .clear, location: 1),
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        }
+    }
+
+    private func identityCluster(_ tab: SessionListFilterTab) -> some View {
+        HStack(spacing: 10) {
+            SessionListScopeMark(tab: tab)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(tab.pickerTitle)
+                    .font(OpenCodeTypography.bodySecondary.weight(.semibold))
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                    .lineLimit(1)
+                let subtitle = displayedSubtitle(tab)
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(OpenCodeTypography.caption)
+                        .foregroundStyle(OpenCodeColors.textWeak)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            SessionListScopeCountBadge(count: tab.count)
+        }
+    }
+
+    private var selectedIndex: Int {
+        tabs.firstIndex(where: { $0.id == selectedId }) ?? 0
+    }
+
+    private var selectedTab: SessionListFilterTab? {
+        tabs.indices.contains(selectedIndex) ? tabs[selectedIndex] : tabs.first
+    }
+
+    private var previousTab: SessionListFilterTab? {
+        neighbor(direction: .previous)
+    }
+
+    private var nextTab: SessionListFilterTab? {
+        neighbor(direction: .next)
+    }
+
+    private func neighbor(direction: SessionListScopePaging.Direction) -> SessionListFilterTab? {
+        guard let index = SessionListScopePaging.neighborIndex(
+            selectedIndex: selectedIndex,
+            count: tabs.count,
+            direction: direction
+        ) else { return nil }
+        return tabs[index]
+    }
+
+    private func pageBaseOffset(width: CGFloat) -> CGFloat {
+        previousTab == nil ? 0 : -width
+    }
+
+    private var drag: some Gesture {
+        DragGesture(minimumDistance: 10, coordinateSpace: .local)
+            .onChanged { value in
+                dragTranslation = value.translation.width
+            }
+            .onEnded { value in
+                finishDrag(translation: value.translation.width, velocity: value.velocity.width)
+            }
+    }
+
+    private func finishDrag(translation: CGFloat, velocity: CGFloat) {
+        let direction = SessionListScopePaging.commitDirection(
+            translation: translation,
+            velocity: velocity,
+            canGoPrevious: previousTab != nil,
+            canGoNext: nextTab != nil
+        )
+        if let direction, let neighbor = neighbor(direction: direction) {
+            commitTick &+= 1
+            let width = max(pageWidth, 1)
+            dragTranslation = translation + (direction == .next ? width : -width)
+            onSelect(neighbor.id)
+            withAnimation(.smooth(duration: SessionListScopePaging.settleDuration)) {
+                dragTranslation = 0
+            }
+        } else {
+            withAnimation(.smooth(duration: SessionListScopePaging.settleDuration)) {
+                dragTranslation = 0
+            }
+        }
+    }
+
+    private func adjustSelection(_ direction: AccessibilityAdjustmentDirection) {
+        let pagingDirection: SessionListScopePaging.Direction =
+            direction == .increment ? .next : .previous
+        if let neighbor = neighbor(direction: pagingDirection) {
+            onSelect(neighbor.id)
+        }
+    }
+
+    private func displayedSubtitle(_ tab: SessionListFilterTab) -> String {
         if tab.isAll { return tab.subtitle }
         return compactHomePath(
             tab.subtitle,
@@ -187,7 +326,8 @@ struct SessionListScopeControl: View {
     }
 
     private var accessibilityLabel: String {
-        let subtitle = displayedSubtitle
+        guard let tab = selectedTab else { return "Project filter" }
+        let subtitle = displayedSubtitle(tab)
         if subtitle.isEmpty {
             return "\(tab.pickerTitle), \(tab.count) sessions"
         }

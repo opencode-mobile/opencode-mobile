@@ -50,10 +50,21 @@ object SessionListHomeChrome {
             ?: tabs.firstOrNull()?.id
             ?: SessionListFilterTab.ALL_ID
 
-    fun newSessionAction(projects: List<Project>): NewSessionAction =
-        when (projects.size) {
-            0 -> NewSessionAction.None
-            1 -> NewSessionAction.Create(projects.first().worktree)
-            else -> NewSessionAction.PresentPicker
+    fun newSessionAction(
+        projects: List<Project>,
+        selectedFilterId: String,
+    ): NewSessionAction {
+        if (projects.isEmpty()) {
+            return NewSessionAction.None
         }
+        if (selectedFilterId != SessionListFilterTab.ALL_ID &&
+            projects.any { it.worktree == selectedFilterId }
+        ) {
+            return NewSessionAction.Create(selectedFilterId)
+        }
+        if (projects.size == 1) {
+            return NewSessionAction.Create(projects.first().worktree)
+        }
+        return NewSessionAction.PresentPicker
+    }
 }
