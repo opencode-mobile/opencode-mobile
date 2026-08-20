@@ -234,8 +234,7 @@ object SessionChatTimelineBlocks {
         blocks: List<SessionChatTimelineBlock>,
     ): List<SessionChatTimelineBlock> {
         if (blocks.isNotEmpty()) return blocks
-        val hasTextPart = message.parts.any { it is MessagePart.Text }
-        if (!isStreaming && !hasTextPart) return emptyList()
+        if (!isStreaming) return emptyList()
         return listOf(
             SessionChatTimelineBlock.Text(
                 blockID = PresentationBlockId.messageFallback(message.id),

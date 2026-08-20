@@ -79,6 +79,26 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
+    fun ensureLiveRow_omitsEmptyTextAfterStreamEnds() {
+        val message =
+            Message(
+                id = "msg-2",
+                role = MessageRole.Assistant,
+                text = "",
+                parts =
+                    listOf(
+                        MessagePart.Text(text = "", isStreaming = false, id = "prt-1"),
+                        MessagePart.Tool(toolName = "todowrite", status = ToolStatus.Completed, id = "prt-2"),
+                    ),
+            )
+        assertTrue(
+            SessionChatTimelineBlocks
+                .ensureLiveRow(message = message, isStreaming = false, blocks = emptyList())
+                .isEmpty(),
+        )
+    }
+
+    @Test
     fun build_keepsBlankCompletedReasoningAsThinking() {
         val result =
             SessionChatTimelineBlocks.build(

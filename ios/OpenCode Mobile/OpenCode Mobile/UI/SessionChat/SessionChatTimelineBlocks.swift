@@ -266,11 +266,7 @@ nonisolated enum SessionChatTimelineBlocks {
         blocks: [SessionChatTimelineBlock]
     ) -> [SessionChatTimelineBlock] {
         if !blocks.isEmpty { return blocks }
-        let hasTextPart = message.parts.contains { part in
-            if case .text = part { return true }
-            return false
-        }
-        guard isStreaming || hasTextPart else { return [] }
+        guard isStreaming else { return [] }
         return [
             .text(
                 blockID: PresentationBlockId.messageFallback(message.id),

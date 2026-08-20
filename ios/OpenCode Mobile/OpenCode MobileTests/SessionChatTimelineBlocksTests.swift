@@ -83,6 +83,27 @@ struct SessionChatTimelineBlocksTests {
         #expect(blocks.isEmpty)
     }
 
+    @Test func ensureLiveRow_omitsEmptyTextAfterStreamEnds() {
+        let message = Message(
+            id: "msg-2",
+            role: .assistant,
+            text: "",
+            parts: [
+                .text(TextPart(id: "prt-1", text: "", isStreaming: false)),
+                .tool(ToolPart(id: "prt-2", toolName: "todowrite", status: .completed)),
+            ],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        let blocks = SessionChatTimelineBlocks.ensureLiveRow(
+            message: message,
+            isStreaming: false,
+            blocks: []
+        )
+        #expect(blocks.isEmpty)
+    }
+
     @Test func thoughtDurationLabel_matchesTuiBuckets() {
         #expect(SessionChatTimelineBlocks.thoughtDurationLabel(438) == "438ms")
         #expect(SessionChatTimelineBlocks.thoughtDurationLabel(6400) == "6.4s")

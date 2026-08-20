@@ -28,7 +28,12 @@ enum ToolPartIdentity {
     }
 
     static func resolvedName(explicit: String?, input: [String: AnyCodable]?) -> String {
-        resolvedName(explicit: explicit, input: dictionary(from: input))
+        let fromWire = canonical(explicit)
+        if !fromWire.isEmpty { return fromWire }
+        if hasQuestions(input) { return "question" }
+        if hasNonBlank(input, "query") { return "websearch" }
+        if hasFilePath(input) { return "read" }
+        return ""
     }
 
     static func isQuestion(name: String, input: [String: AnyCodable]?) -> Bool {
@@ -57,7 +62,16 @@ enum ToolPartIdentity {
         return !questions.isEmpty
     }
 
+    private static func hasQuestions(_ input: [String: AnyCodable]?) -> Bool {
+        guard case let .array(array)? = input?["questions"] else { return false }
+        return !array.isEmpty
+    }
+
     private static func hasFilePath(_ input: [String: Any]?) -> Bool {
+        hasNonBlank(input, "filePath") || hasNonBlank(input, "file")
+    }
+
+    private static func hasFilePath(_ input: [String: AnyCodable]?) -> Bool {
         hasNonBlank(input, "filePath") || hasNonBlank(input, "file")
     }
 
@@ -66,19 +80,8 @@ enum ToolPartIdentity {
         return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private static func dictionary(from input: [String: AnyCodable]?) -> [String: Any]? {
-        guard let input else { return nil }
-        var raw: [String: Any] = [:]
-        for (key, value) in input {
-            switch value {
-            case let .string(string):
-                raw[key] = string
-            case let .array(array):
-                raw[key] = array
-            default:
-                continue
-            }
-        }
-        return raw
+    private static func hasNonBlank(_ input: [String: AnyCodable]?, _ key: String) -> Bool {
+        guard case let .string(value)? = input?[key] else { return false }
+        return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }

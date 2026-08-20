@@ -30,6 +30,19 @@ struct ToolPartIdentityTests {
         #expect(ToolPartIdentity.resolvedName(explicit: nil, input: ["path": "/home/ivan/Projects/session-test"]) == "")
     }
 
+    @Test func resolvedNameInfersQuestionFromStoredAnyCodableInput() {
+        let input: [String: AnyCodable] = [
+            "questions": .array([.dictionary(["header": .string("A")])]),
+        ]
+        #expect(ToolPartIdentity.resolvedName(explicit: nil, input: input) == "question")
+        #expect(ToolPartIdentity.resolvedName(explicit: "tool", input: input) == "question")
+        #expect(ToolPartIdentity.resolvedName(explicit: "read", input: input) == "read")
+        let query: [String: AnyCodable] = ["query": .string("opencode mobile")]
+        #expect(ToolPartIdentity.resolvedName(explicit: nil, input: query) == "websearch")
+        let file: [String: AnyCodable] = ["filePath": .string("src/Main.kt")]
+        #expect(ToolPartIdentity.resolvedName(explicit: nil, input: file) == "read")
+    }
+
     @Test func calledTitleDoesNotInventCalledTool() {
         #expect(ToolPartIdentity.calledTitle("tool") == "Tool")
         #expect(ToolPartIdentity.calledTitle("") == "Tool")
