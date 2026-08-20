@@ -111,8 +111,8 @@ struct SessionChatTimelineBlocksTests {
         #expect(SessionChatTimelineBlocks.thoughtDurationLabel(nil) == nil)
     }
 
-    @Test func build_keepsBlankCompletedReasoningAsThinking() {
-        let blocks = okBlocks(
+    @Test func build_hidesBlankReasoning() {
+        let blankCompleted = okBlocks(
             parts: [
                 .reasoning(
                     ReasoningPart(
@@ -125,13 +125,39 @@ struct SessionChatTimelineBlocksTests {
                 ),
             ]
         )
-        guard case .reasoning(_, let text, let isStreaming, let durationMs) = blocks.first else {
-            Issue.record("expected reasoning")
+        #expect(blankCompleted.isEmpty)
+
+        let blankStreaming = okBlocks(
+            parts: [.reasoning(ReasoningPart(id: "r2", text: "", isStreaming: true))]
+        )
+        #expect(blankStreaming.isEmpty)
+
+        let redactedOnly = okBlocks(
+            parts: [.reasoning(ReasoningPart(id: "r3", text: "[REDACTED]", isStreaming: false))]
+        )
+        #expect(redactedOnly.isEmpty)
+    }
+
+    @Test func build_hidesStackedEmptyReasoningBeforeTool() {
+        var parts: [MessagePart] = (1 ... 12).map { index in
+            .reasoning(
+                ReasoningPart(
+                    id: "r\(index)",
+                    text: "",
+                    isStreaming: false,
+                    timeStartEpochMs: Int64(index),
+                    timeEndEpochMs: Int64(index + 1)
+                )
+            )
+        }
+        parts.append(.tool(ToolPart(id: "shell-1", toolName: "bash", status: .completed)))
+        let blocks = okBlocks(parts: parts)
+        #expect(blocks.count == 1)
+        guard case .toolCard(_, let tool) = blocks[0] else {
+            Issue.record("expected tool card")
             return
         }
-        #expect(text.isEmpty)
-        #expect(isStreaming)
-        #expect(durationMs == nil)
+        #expect(tool.toolName == "bash")
     }
 
     @Test func build_reasoningPart_includesDuration() {

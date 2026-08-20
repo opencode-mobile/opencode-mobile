@@ -99,8 +99,8 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
-    fun build_keepsBlankCompletedReasoningAsThinking() {
-        val result =
+    fun build_hidesBlankReasoning() {
+        val blankCompleted =
             SessionChatTimelineBlocks.build(
                 role = MessageRole.Assistant,
                 parts =
@@ -114,11 +114,53 @@ class SessionChatTimelineBlocksTest {
                         ),
                     ),
             )
-        val thought = (result as SessionChatTimelineBlocksResult.Ok).blocks.single()
-            as SessionChatTimelineBlock.Reasoning
-        assertTrue(thought.isStreaming)
-        assertEquals("", thought.text)
-        assertNull(thought.durationMs)
+        assertTrue((blankCompleted as SessionChatTimelineBlocksResult.Ok).blocks.isEmpty())
+
+        val blankStreaming =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(text = "", isStreaming = true, id = "r2"),
+                    ),
+            )
+        assertTrue((blankStreaming as SessionChatTimelineBlocksResult.Ok).blocks.isEmpty())
+
+        val redactedOnly =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(text = "[REDACTED]", isStreaming = false, id = "r3"),
+                    ),
+            )
+        assertTrue((redactedOnly as SessionChatTimelineBlocksResult.Ok).blocks.isEmpty())
+    }
+
+    @Test
+    fun build_hidesStackedEmptyReasoningBeforeTool() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    (1..12).map { index ->
+                        MessagePart.Reasoning(
+                            text = "",
+                            isStreaming = false,
+                            id = "r$index",
+                            timeStartEpochMs = index.toLong(),
+                            timeEndEpochMs = index.toLong() + 1,
+                        )
+                    } +
+                        MessagePart.Tool(
+                            toolName = "bash",
+                            status = ToolStatus.Completed,
+                            id = "shell-1",
+                        ),
+            )
+        assertEquals(1, blocks.size)
+        val shell = blocks.single() as SessionChatTimelineBlock.ToolCard
+        assertEquals("bash", shell.toolName)
     }
 
     @Test

@@ -167,16 +167,15 @@ nonisolated enum SessionChatTimelineBlocks {
                 index += 1
             case .reasoning(let reasoning):
                 flushText()
-                let trimmed = reasoning.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if isLiveReasoning(reasoning) {
+                if ThoughtPartChrome.isVisible(reasoning) {
                     guard let partId = reasoning.id else { return .missingPartIds }
-                    let thinking = reasoning.isStreaming || trimmed.isEmpty
+                    let text = ThoughtPartChrome.displayText(reasoning)
                     blocks.append(
                         .reasoning(
                             blockID: PresentationBlockId.direct(partId),
-                            text: trimmed,
-                            isStreaming: thinking,
-                            durationMs: thinking
+                            text: text,
+                            isStreaming: reasoning.isStreaming,
+                            durationMs: reasoning.isStreaming
                                 ? nil
                                 : Self.thoughtDurationMs(
                                     start: reasoning.timeStartEpochMs,
@@ -384,12 +383,8 @@ nonisolated enum SessionChatTimelineBlocks {
         return duration >= 0 ? duration : nil
     }
 
-    /// TUI keeps one thought row once the part exists. Do not drop it between Thinking and Thought.
     private static func isLiveReasoning(_ part: ReasoningPart) -> Bool {
-        part.isStreaming
-            || !part.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || part.timeStartEpochMs != nil
-            || part.timeEndEpochMs != nil
+        ThoughtPartChrome.isVisible(part)
     }
 
     private static func isVisibleTool(_ tool: ToolPart) -> Bool {

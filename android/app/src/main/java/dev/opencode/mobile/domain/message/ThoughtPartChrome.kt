@@ -2,22 +2,20 @@ package dev.opencode.mobile.domain.message
 
 /**
  * Compact thought-row diagnostics. Labels match Session Chat chrome
- * (`thinking` / `thought`) plus `hidden` when a completed blank reasoning
- * part is dropped from the timeline.
+ * (`thinking` / `thought`) plus `hidden` when TUI would drop the part
+ * (blank or `[REDACTED]`-only reasoning).
  */
 object ThoughtPartChrome {
+    fun displayText(part: MessagePart.Reasoning): String = part.text.replace("[REDACTED]", "").trim()
+
+    fun isVisible(part: MessagePart.Reasoning): Boolean = displayText(part).isNotEmpty()
+
     fun paintLabel(part: MessagePart.Reasoning): String =
         when {
-            part.isStreaming || part.text.isBlank() ->
-                if (isLive(part)) "thinking" else "hidden"
+            !isVisible(part) -> "hidden"
+            part.isStreaming -> "thinking"
             else -> "thought"
         }
-
-    private fun isLive(part: MessagePart.Reasoning): Boolean =
-        part.isStreaming ||
-            part.text.isNotBlank() ||
-            part.timeStartEpochMs != null ||
-            part.timeEndEpochMs != null
 
     fun summarize(
         messages: List<Message>,
