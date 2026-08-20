@@ -87,18 +87,19 @@ Layout:
 When `selectedFilterId` is `all`, all sessions are shown. Otherwise only
 sessions whose `worktree` equals the selected filter id are shown. In picker
 chrome, tap opens the filter sheet; crossing the switch threshold selects
-the previous or next tab without waiting for finger-up.
+the previous or next tab without waiting for finger-up. Picker-chrome filter
+changes opacity-crossfade the feed over **400ms** (old and new overlap; incoming
+is at the top). Chip chrome replaces rows instantly and does not scroll to
+top.
 
 ## Platform Notes
 
 - iOS: dense list + Liquid Glass dock/key controls on iOS 26+ with material
   fallbacks below iOS 26. Pull-to-refresh is available when `onRefresh` is
-  provided. Changing the selected project from the filter sheet identity-fades
-  the list in **0.16s**.
+  provided. Picker-chrome filter changes use the shared opacity crossfade.
 - Android: same hierarchy with Material raised glass-like dock; no system Liquid
   Glass. Android `SessionList` does not expose pull-to-refresh in this version.
-  Changing the selected project updates the same list instance and scrolls to
-  top.
+  Picker-chrome filter changes use the shared opacity crossfade.
 
 ## Review Surfaces
 

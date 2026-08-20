@@ -4,7 +4,7 @@ import Foundation
 enum SessionListScopePaging {
     static let switchThreshold: CGFloat = 28
     static let switchDuration: TimeInterval = 0.45
-    static let listCrossfadeDuration: TimeInterval = 0.16
+    static let listCrossfadeDuration: TimeInterval = 0.40
     /// Max visual travel when rubber-banding.
     static let rubberBandLimit: CGFloat = 52
     static let rubberBandConstant: CGFloat = 0.50

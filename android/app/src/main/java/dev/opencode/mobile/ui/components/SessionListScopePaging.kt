@@ -5,7 +5,7 @@ import kotlin.math.max
 object SessionListScopePaging {
     const val SWITCH_THRESHOLD_DP = 28f
     const val SWITCH_DURATION_MS = 450
-    const val LIST_CROSSFADE_DURATION_MS = 160
+    const val LIST_CROSSFADE_DURATION_MS = 400
     const val RUBBER_BAND_LIMIT_DP = 52f
     const val RUBBER_BAND_CONSTANT = 0.50f
     const val RUBBER_BAND_RETURN_DURATION_MS = 180

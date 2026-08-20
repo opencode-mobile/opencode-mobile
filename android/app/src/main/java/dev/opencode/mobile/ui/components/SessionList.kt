@@ -1,5 +1,8 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.EaseInOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -120,10 +123,108 @@ fun SessionList(
     onSessionLongPress: ((SessionListSession) -> Unit)? = null,
     revealNewestToken: Int = 0,
 ) {
+    val background = openCodeColor("background-base")
+    val borderWeaker = openCodeColor("border-weaker-base")
+    val density = LocalDensity.current
+
+    var dockBlockHeight by remember { mutableStateOf(0.dp) }
+    val listBottomFadeHeight =
+        if (dockBlockHeight > 0.dp) {
+            dockBlockHeight + OpenCodeBottomFadeOverhang
+        } else {
+            SessionListFallbackBottomSpacer
+        }
+
+    Box(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(background),
+    ) {
+        if (useProjectPicker) {
+            Crossfade(
+                targetState = selectedFilterId,
+                animationSpec =
+                    tween(
+                        durationMillis = SessionListScopePaging.LIST_CROSSFADE_DURATION_MS,
+                        easing = EaseInOut,
+                    ),
+                modifier = Modifier.fillMaxSize(),
+                label = "sessionListFilter",
+            ) { filterId ->
+                SessionListFeedPage(
+                    sessions = sessions,
+                    filterId = filterId,
+                    listBottomFadeHeight = listBottomFadeHeight,
+                    borderWeaker = borderWeaker,
+                    background = background,
+                    emptyContent = emptyContent,
+                    revealNewestToken = revealNewestToken,
+                    onSessionSelected = onSessionSelected,
+                    onSessionLongPress = onSessionLongPress,
+                )
+            }
+        } else {
+            SessionListFeedPage(
+                sessions = sessions,
+                filterId = selectedFilterId,
+                listBottomFadeHeight = listBottomFadeHeight,
+                borderWeaker = borderWeaker,
+                background = background,
+                emptyContent = emptyContent,
+                revealNewestToken = revealNewestToken,
+                onSessionSelected = onSessionSelected,
+                onSessionLongPress = onSessionLongPress,
+            )
+        }
+
+        OpenCodeBottomFade(
+            height = listBottomFadeHeight,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+
+        OpenCodeSessionListDock(
+            filterTabs = filterTabs,
+            selectedFilterId = selectedFilterId,
+            createError = createError,
+            useProjectPicker = useProjectPicker,
+            onOpenProjectPicker = onOpenProjectPicker,
+            onFilterSelected = onFilterSelected,
+            onRemoveProject = onRemoveProject,
+            onAddProject = onAddProject,
+            onNewSession = onNewSession,
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .onGloballyPositioned { coordinates ->
+                        val height: Dp = with(density) { coordinates.size.height.toDp() }
+                        if (height != dockBlockHeight) {
+                            dockBlockHeight = height
+                        }
+                    }
+                    .navigationBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun SessionListFeedPage(
+    sessions: List<SessionListSession>,
+    filterId: String,
+    listBottomFadeHeight: Dp,
+    borderWeaker: androidx.compose.ui.graphics.Color,
+    background: androidx.compose.ui.graphics.Color,
+    emptyContent: (@Composable () -> Unit)?,
+    revealNewestToken: Int,
+    onSessionSelected: (SessionListSession) -> Unit,
+    onSessionLongPress: ((SessionListSession) -> Unit)?,
+) {
     val recentWindowHours = HomeDisplayPreferences.recentWindowHours
     val visibleSessions =
-        remember(sessions, selectedFilterId) {
-            sessions.visibleForFilter(selectedFilterId)
+        remember(sessions, filterId) {
+            sessions.visibleForFilter(filterId)
         }
     val ladderSections =
         remember(visibleSessions, recentWindowHours) {
@@ -135,11 +236,6 @@ fun SessionList(
                 nowEpochMs = System.currentTimeMillis(),
             )
         }
-
-    val background = openCodeColor("background-base")
-    val borderWeaker = openCodeColor("border-weaker-base")
-    val density = LocalDensity.current
-
     val listState = rememberLazyListState()
     var followingTop by remember { mutableStateOf(true) }
     val newestSessionId = visibleSessions.firstOrNull()?.id
@@ -186,67 +282,21 @@ fun SessionList(
             listState.scrollToItem(0)
         }
     }
-    LaunchedEffect(selectedFilterId, useProjectPicker) {
-        if (useProjectPicker) {
-            followingTop = true
-            listState.scrollToItem(0)
-        }
-    }
 
-    var dockBlockHeight by remember { mutableStateOf(0.dp) }
-    val listBottomFadeHeight =
-        if (dockBlockHeight > 0.dp) {
-            dockBlockHeight + OpenCodeBottomFadeOverhang
-        } else {
-            SessionListFallbackBottomSpacer
-        }
-
-    Box(
+    SessionListFeed(
+        visibleSessions = visibleSessions,
+        ladderSections = ladderSections,
+        listState = listState,
+        listBottomFadeHeight = listBottomFadeHeight,
+        borderWeaker = borderWeaker,
+        emptyContent = emptyContent,
+        onSessionSelected = onSessionSelected,
+        onSessionLongPress = onSessionLongPress,
         modifier =
-            modifier
+            Modifier
                 .fillMaxSize()
                 .background(background),
-    ) {
-        SessionListFeed(
-            visibleSessions = visibleSessions,
-            ladderSections = ladderSections,
-            listState = listState,
-            listBottomFadeHeight = listBottomFadeHeight,
-            borderWeaker = borderWeaker,
-            emptyContent = emptyContent,
-            onSessionSelected = onSessionSelected,
-            onSessionLongPress = onSessionLongPress,
-        )
-
-        OpenCodeBottomFade(
-            height = listBottomFadeHeight,
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
-
-        OpenCodeSessionListDock(
-            filterTabs = filterTabs,
-            selectedFilterId = selectedFilterId,
-            createError = createError,
-            useProjectPicker = useProjectPicker,
-            onOpenProjectPicker = onOpenProjectPicker,
-            onFilterSelected = onFilterSelected,
-            onRemoveProject = onRemoveProject,
-            onAddProject = onAddProject,
-            onNewSession = onNewSession,
-            modifier =
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .onGloballyPositioned { coordinates ->
-                        val height: Dp = with(density) { coordinates.size.height.toDp() }
-                        if (height != dockBlockHeight) {
-                            dockBlockHeight = height
-                        }
-                    }
-                    .navigationBarsPadding()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-        )
-    }
+    )
 }
 
 @Composable
@@ -259,11 +309,12 @@ private fun SessionListFeed(
     emptyContent: (@Composable () -> Unit)?,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
+    modifier: Modifier = Modifier,
 ) {
     if (visibleSessions.isEmpty() && emptyContent != null) {
         Box(
             modifier =
-                Modifier
+                modifier
                     .fillMaxSize()
                     .padding(bottom = listBottomFadeHeight),
             contentAlignment = Alignment.Center,
@@ -272,7 +323,7 @@ private fun SessionListFeed(
         }
     } else {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = modifier.fillMaxSize(),
             state = listState,
             contentPadding = PaddingValues(bottom = listBottomFadeHeight),
         ) {
