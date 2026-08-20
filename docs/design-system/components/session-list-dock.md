@@ -66,8 +66,9 @@ count is not under the icon.
 - Cross **28pt** of visual travel with a neighbor: light haptic, select that
   tab, and play a **450ms** switch without waiting for finger-up. The current
   cluster continues off in the pull direction; the next cluster enters from
-  the opposite side. Remaining drag is ignored. Pull left selects the next
-  tab; pull right selects the previous. Ends do not wrap.
+  the opposite side. Remaining motion on that finger-down is ignored until
+  lift; switch again only after a new drag. Pull left selects the next tab;
+  pull right selects the previous. Ends do not wrap.
 - Lift under threshold, or no neighbor in that direction: ease home over
   **180ms** with a slow takeoff and no bounce. Selection does not change.
 - Interrupt: a new drag cancels an in-flight rubber-band return and continues

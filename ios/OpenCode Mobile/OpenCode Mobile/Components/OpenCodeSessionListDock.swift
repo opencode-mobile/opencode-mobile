@@ -149,6 +149,7 @@ struct SessionListScopeControl: View {
     @State private var clusterSlide: CGFloat = 0
     @State private var isDragging = false
     @State private var isSwitching = false
+    @State private var gestureCommitted = false
     @State private var gestureOrigin: CGFloat = 0
     @State private var settleTask: Task<Void, Never>?
     @State private var slotWidth: CGFloat = 1
@@ -316,7 +317,7 @@ struct SessionListScopeControl: View {
     private var drag: some Gesture {
         DragGesture(minimumDistance: 10, coordinateSpace: .local)
             .onChanged { value in
-                guard !isSwitching else { return }
+                guard !gestureCommitted, !isSwitching else { return }
                 settleTask?.cancel()
                 if !isDragging {
                     isDragging = true
@@ -334,11 +335,15 @@ struct SessionListScopeControl: View {
                     canGoPrevious: canGoPrevious,
                     canGoNext: canGoNext
                 ) {
+                    gestureCommitted = true
                     startSwitch(direction, from: visual)
                 }
             }
             .onEnded { value in
-                guard !isSwitching else { return }
+                let consumed = gestureCommitted || isSwitching
+                isDragging = false
+                gestureCommitted = false
+                guard !consumed else { return }
                 finishDrag(translation: gestureOrigin + value.translation.width)
             }
     }
