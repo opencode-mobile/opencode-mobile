@@ -216,6 +216,28 @@ struct SessionListScopeControl: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .clipped()
+        .compositingGroup()
+        .mask {
+            HStack(spacing: 0) {
+                LinearGradient(
+                    colors: [.clear, .white],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: motionFadeWidth)
+                Rectangle().fill(.white)
+                LinearGradient(
+                    colors: [.white, .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: motionFadeWidth)
+            }
+            .animation(
+                .easeOut(duration: SessionListScopePaging.edgeFadeDuration),
+                value: motionFadeWidth
+            )
+        }
         .background {
             GeometryReader { geometry in
                 Color.clear
@@ -226,6 +248,14 @@ struct SessionListScopeControl: View {
                     }
             }
         }
+    }
+
+    private var showsMotionFade: Bool {
+        isDragging || isSwitching || outgoingTab != nil || abs(clusterSlide) > 0.5
+    }
+
+    private var motionFadeWidth: CGFloat {
+        showsMotionFade ? SessionListScopePaging.edgeFadeWidth : 0
     }
 
     private func identityCluster(_ tab: SessionListFilterTab) -> some View {

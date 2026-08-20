@@ -9,6 +9,8 @@ object SessionListScopePaging {
     const val RUBBER_BAND_LIMIT_DP = 52f
     const val RUBBER_BAND_CONSTANT = 0.50f
     const val RUBBER_BAND_RETURN_DURATION_MS = 180
+    const val EDGE_FADE_WIDTH_DP = 16f
+    const val EDGE_FADE_DURATION_MS = 200
 
     enum class Direction {
         Previous,

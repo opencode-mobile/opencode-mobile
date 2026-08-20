@@ -73,7 +73,10 @@ count is not under the icon.
 - Interrupt: a new drag cancels an in-flight rubber-band return and continues
   from the current offset. A switch in flight is not interruptible.
 - Viewport: clip to the identity slot, including the area under the chevron.
-  Do not paint an edge fade — at rest it dirties the letter mark.
+  While dragging, returning, or switching, alpha-fade the identity **16pt**
+  on both leading and trailing corners so sliding content dissolves. Fade
+  width eases **0 ↔ 16pt** over **200ms**. Do not paint a color overlay.
+  Idle has no fade so the letter mark stays clean.
 
 VoiceOver / TalkBack treat the control as a button that opens the project
 filter, and expose increment/decrement to switch projects when a neighbor

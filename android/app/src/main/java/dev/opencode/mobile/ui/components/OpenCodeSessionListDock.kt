@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.components
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -41,8 +42,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -241,8 +247,24 @@ fun SessionListScopeControl(
             isSettling -> settleValue
             else -> clusterSlide
         }
+    val showMotionFade =
+        isSwitching || isSettling || abs(displayed) > 0.5f || abs(clusterSlide) > 0.5f
     val settleJob = remember { arrayOfNulls<Job>(1) }
     val density = LocalDensity.current
+    val fadeWidthPx by animateFloatAsState(
+        targetValue =
+            if (showMotionFade) {
+                with(density) { SessionListScopePaging.EDGE_FADE_WIDTH_DP.dp.toPx() }
+            } else {
+                0f
+            },
+        animationSpec =
+            tween(
+                durationMillis = SessionListScopePaging.EDGE_FADE_DURATION_MS,
+                easing = CubicBezierEasing(0f, 0f, 0.58f, 1f),
+            ),
+        label = "scopeEdgeFade",
+    )
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val latestOnOpen by rememberUpdatedState(onOpen)
@@ -446,6 +468,7 @@ fun SessionListScopeControl(
                     .heightIn(min = 36.dp)
                     .align(Alignment.CenterStart)
                     .clipToBounds()
+                    .horizontalEdgeAlphaFade(fadeWidthPx)
                     .onSizeChanged { slotWidthPx = max(it.width.toFloat(), 1f) },
             contentAlignment = Alignment.CenterStart,
         ) {
@@ -594,6 +617,24 @@ fun SessionListProjectPickerRows(
 }
 
 private fun displayedScopeSubtitle(tab: SessionListFilterTab): String = if (tab.isAll) tab.subtitle else compactHomePath(tab.subtitle)
+
+private fun Modifier.horizontalEdgeAlphaFade(fadeWidthPx: Float): Modifier =
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithContent {
+            drawContent()
+            if (fadeWidthPx <= 0.5f || size.width <= 0f) return@drawWithContent
+            val t = (fadeWidthPx / size.width).coerceIn(0f, 0.49f)
+            drawRect(
+                brush =
+                    Brush.horizontalGradient(
+                        0f to Color.Transparent,
+                        t to Color.White,
+                        1f - t to Color.White,
+                        1f to Color.Transparent,
+                    ),
+                blendMode = BlendMode.DstIn,
+            )
+        }
 
 private fun pickerStartDecorator(tab: SessionListFilterTab): StartDecorator {
     val letter = tab.letter

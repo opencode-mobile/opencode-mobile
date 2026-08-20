@@ -9,6 +9,8 @@ enum SessionListScopePaging {
     static let rubberBandLimit: CGFloat = 52
     static let rubberBandConstant: CGFloat = 0.50
     static let rubberBandReturnDuration: TimeInterval = 0.18
+    static let edgeFadeWidth: CGFloat = 16
+    static let edgeFadeDuration: TimeInterval = 0.20
 
     enum Direction: Equatable {
         case previous
