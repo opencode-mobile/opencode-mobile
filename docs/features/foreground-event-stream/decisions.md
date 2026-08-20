@@ -65,17 +65,20 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
 
 ## Lifecycle
 
-- **App foreground:** Android `ProcessLifecycleOwner` start/stop with a **5s
-  stop grace** so photo/document pickers (system activities that briefly stop
-  the process) do not tear down SSE; iOS `scenePhase` `.active` / `.background`
-  on `AppRootView` with the same **5s stop grace**, while `.inactive` keeps
-  the stream (pickers). Both
-  platforms treat `start()` as idempotent while a stream job is active.
-  Cancelled SSE tasks must not publish Idle/Disconnected over a newer
-  generation's Connecting state. While a foreground retry is in flight, chrome
-  stays **connecting** (Connecting/Reconnecting) rather than **offline**
-  (Disconnected).
-- **Session Chat (iOS):** `startObserving()` on appear; `stopObserving()` on explicit back or after a short delayed disappear (avoids killing SSE when the home Screen Model refresh re-renders the navigation parent). Android relies on scoped `ViewModel` cancellation on navigate back.
+- **App foreground:** Android `ProcessLifecycleOwner` and iOS `scenePhase` call
+  `ForegroundRestore` (not bare stream start/stop). **5s stop grace** so
+  pickers do not tear down SSE; `.inactive` keeps the stream. `start()` stays
+  idempotent while a stream job is active. Cancelled SSE tasks must not publish
+  Idle/Disconnected over a newer generation's Connecting state. While a
+  foreground retry is in flight, chrome stays **connecting**.
+- **ForegroundRestore (OPE-197):** On true return after grace, one restore
+  generation starts SSE and REST-authorizes registered scopes (open Session
+  Chat messages via `refreshDisplayMessages`; home list when home is visible).
+  Cold resume after `stop()` arms `pendingResumeBarrier` so the next successful
+  open still emits `stream.reconnected` even though `wasConnected` was cleared
+  for chrome. Catch-up is not gated on lucky event delivery alone. Pull-to-
+  refresh uses the same message REST path.
+- **Session Chat (iOS):** `startObserving()` on appear; `stopObserving()` on explicit back or after a short delayed disappear (avoids killing SSE when the home Screen Model refresh re-renders the navigation parent). Android relies on scoped `ViewModel` cancellation on navigate back. Open chat registers with `ForegroundRestore`.
 
 ## Device path is a second signal
 

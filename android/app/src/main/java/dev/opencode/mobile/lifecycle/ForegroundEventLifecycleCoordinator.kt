@@ -3,14 +3,14 @@ package dev.opencode.mobile.lifecycle
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
-import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.ForegroundRestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Starts/stops the foreground SSE stream with process lifecycle.
+ * Starts/stops foreground SSE + restore with process lifecycle.
  *
  * Android photo/document pickers briefly move the process to stopped while the
  * system picker activity is up. Stopping SSE immediately forces a reconnect
@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
  * `.background` and ignores `.inactive`.
  */
 class ForegroundEventLifecycleCoordinator(
-    private val foregroundEventStream: ForegroundEventStream,
+    private val foregroundRestore: ForegroundRestore,
     private val hasActiveConnection: () -> Boolean,
     private val scope: CoroutineScope,
     private val stopGraceMs: Long = STOP_GRACE_MS,
@@ -34,7 +34,7 @@ class ForegroundEventLifecycleCoordinator(
         stopJob?.cancel()
         stopJob = null
         if (hasActiveConnection()) {
-            foregroundEventStream.start()
+            foregroundRestore.restore()
         }
     }
 
@@ -43,7 +43,7 @@ class ForegroundEventLifecycleCoordinator(
         stopJob =
             scope.launch {
                 delay(stopGraceMs)
-                foregroundEventStream.stop()
+                foregroundRestore.noteBackgroundStop()
             }
     }
 

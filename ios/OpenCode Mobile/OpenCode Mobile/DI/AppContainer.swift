@@ -318,6 +318,20 @@ extension Container {
         }.singleton
     }
 
+    var foregroundHomeCatchUpRegistry: Factory<ForegroundHomeCatchUpRegistry> {
+        self { ForegroundHomeCatchUpRegistry() }.singleton
+    }
+
+    var foregroundRestore: Factory<any ForegroundRestore> {
+        self {
+            DefaultForegroundRestore(
+                stream: self.foregroundEventStream(),
+                messageRepository: self.messageRepository(),
+                homeCatchUpRegistry: self.foregroundHomeCatchUpRegistry()
+            )
+        }.singleton
+    }
+
     var sessionStatusLiveStore: Factory<DefaultSessionStatusLiveStore> {
         self { @MainActor in
             DefaultSessionStatusLiveStore(
@@ -391,7 +405,7 @@ extension Container {
                 connectionProfileStore: self.connectionProfileStore(),
                 activeConnectionManager: self.activeConnectionManager(),
                 connectionSessionCoordinator: self.connectionSessionCoordinator(),
-                foregroundEventStream: self.foregroundEventStream(),
+                foregroundRestore: self.foregroundRestore(),
                 appOnboardingPreferences: AppOnboardingPreferences.shared
             )
         }
@@ -419,6 +433,8 @@ extension Container {
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
                 sessionReadyStore: self.sessionReadyStore(),
                 foregroundEventStream: self.foregroundEventStream(),
+                foregroundRestore: self.foregroundRestore(),
+                foregroundHomeCatchUpRegistry: self.foregroundHomeCatchUpRegistry(),
                 connectionSessionCoordinator: self.connectionSessionCoordinator(),
                 newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
                     store: self.sessionModelSelectionStore(),
@@ -447,6 +463,7 @@ extension Container {
                 sessionReadyStore: self.sessionReadyStore(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
                 foregroundEventStream: self.foregroundEventStream(),
+                foregroundRestore: self.foregroundRestore(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),
                 composerDraftStore: self.composerDraftStore(),
                 activeConnectionManager: self.activeConnectionManager(),
@@ -508,7 +525,7 @@ extension Container {
     @MainActor
     static func clearAllData() {
         Task { @MainActor in
-            shared.foregroundEventStream().stop()
+            shared.foregroundRestore().noteBackgroundStop()
             await shared.connectionSessionCoordinator().clearConnectionData()
             shared.sessionLiveStore().clearCache()
             shared.sessionStatusLiveStore().clearCache()

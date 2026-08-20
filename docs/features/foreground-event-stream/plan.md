@@ -3,7 +3,8 @@
 ## User Goal
 
 While the app is open, Session Chat and home reflect server activity in near real time.
-After reconnect, state is refreshed from the server.
+After reconnect or return from background, state is refreshed from the server
+(`ForegroundRestore` + REST for registered scopes; SSE for live deltas).
 
 ## In Scope
 
