@@ -78,7 +78,8 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
   Chat via `refreshDisplayMessages`; home list when home is visible). A
   start-only restore (stream already live, catch-up not armed) must not cancel
   an in-flight REST catch-up. If restore ran with no open session,
-  `setOpenSession` triggers catch-up for that session. Cold resume after
+  `setOpenSession` triggers catch-up for that session and must keep an in-flight
+  home catch-up even if home is no longer visible. Cold resume after
   `stop()` arms `pendingResumeBarrier` so the next successful open still emits
   `stream.reconnected` even though `wasConnected` was cleared for chrome.
   Catch-up is not gated on lucky event delivery alone. Pull-to-refresh uses

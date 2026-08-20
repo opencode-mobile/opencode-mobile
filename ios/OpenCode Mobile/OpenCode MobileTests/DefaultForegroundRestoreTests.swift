@@ -90,6 +90,39 @@ struct DefaultForegroundRestoreTests {
         #expect(messages.refreshedSessions == ["ses-1"])
     }
 
+    @Test func setOpenSession_duringHomeCatchUp_stillCompletesHome() async {
+        let stream = FakeForegroundEventStream()
+        let messages = RestoreFakeMessageRepository()
+        let home = ForegroundHomeCatchUpRegistry()
+        let lock = NSLock()
+        var completedCount = 0
+        home.setHandler {
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            if Task.isCancelled { return }
+            lock.lock()
+            completedCount += 1
+            lock.unlock()
+        }
+        let restore = DefaultForegroundRestore(
+            stream: stream,
+            messageRepository: messages,
+            homeCatchUpRegistry: home
+        )
+        restore.setHomeVisible(true)
+        restore.restore()
+        try? await Task.sleep(for: .milliseconds(20))
+        restore.setHomeVisible(false)
+        restore.setOpenSession(sessionID: "ses-1", directory: "/tmp")
+        let done = await waitUntil(timeoutMs: 2_000) {
+            lock.lock()
+            let homeDone = completedCount >= 1
+            lock.unlock()
+            return homeDone && !messages.completedSessions.isEmpty && restore.phase == .live
+        }
+        #expect(done)
+        #expect(messages.completedSessions == ["ses-1"])
+    }
+
     private func waitUntil(
         timeoutMs: Int = 2_000,
         predicate: () -> Bool

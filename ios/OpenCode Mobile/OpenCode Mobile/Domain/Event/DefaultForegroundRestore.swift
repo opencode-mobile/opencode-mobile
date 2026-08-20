@@ -11,6 +11,7 @@ nonisolated final class DefaultForegroundRestore: ForegroundRestore, @unchecked 
     private var homeVisible = false
     private var needsCatchUp = true
     private var missedSessionCatchUp = false
+    private var pendingHomeCatchUp = false
     private var restoreTask: Task<Void, Never>?
     private var generation: UInt64 = 0
     private(set) var phase: ForegroundRestorePhase = .idle
@@ -59,6 +60,7 @@ nonisolated final class DefaultForegroundRestore: ForegroundRestore, @unchecked 
         restoreTask = nil
         needsCatchUp = true
         missedSessionCatchUp = false
+        pendingHomeCatchUp = false
         phase = .idle
         lock.unlock()
         stream.stop()
@@ -78,9 +80,10 @@ nonisolated final class DefaultForegroundRestore: ForegroundRestore, @unchecked 
         restoreTask?.cancel()
         let sessionID = openSessionID
         let directory = openDirectory
-        let refreshHome = homeVisible
+        let refreshHome = homeVisible || pendingHomeCatchUp
         needsCatchUp = false
         missedSessionCatchUp = sessionID == nil || sessionID?.isEmpty == true
+        pendingHomeCatchUp = refreshHome
         phase = .restoring
         lock.unlock()
 
@@ -110,6 +113,12 @@ nonisolated final class DefaultForegroundRestore: ForegroundRestore, @unchecked 
             }
             if refreshHome {
                 await self.homeCatchUpRegistry.catchUp()
+                if Task.isCancelled { return }
+                self.lock.lock()
+                if self.generation == gen {
+                    self.pendingHomeCatchUp = false
+                }
+                self.lock.unlock()
                 DiagnosticLog.info(.sse, "foreground restore home catch-up")
             }
             let finishedPhase: ForegroundRestorePhase = failed ? .failed : .live

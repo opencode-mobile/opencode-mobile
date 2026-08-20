@@ -30,6 +30,7 @@ class DefaultForegroundRestore
         private val homeVisible = AtomicReference(false)
         private var needsCatchUp = true
         private var missedSessionCatchUp = false
+        private var pendingHomeCatchUp = false
 
         @Volatile
         var phase: ForegroundRestorePhase = ForegroundRestorePhase.Idle
@@ -77,6 +78,7 @@ class DefaultForegroundRestore
             synchronized(lock) {
                 needsCatchUp = true
                 missedSessionCatchUp = false
+                pendingHomeCatchUp = false
             }
             phase = ForegroundRestorePhase.Idle
             stream.stop()
@@ -95,12 +97,14 @@ class DefaultForegroundRestore
                         restoreJob.getAndSet(null)?.cancel()
                         phase = ForegroundRestorePhase.Restoring
                         val session = openSession.get()
+                        val refreshHome = homeVisible.get() || pendingHomeCatchUp
                         needsCatchUp = false
                         missedSessionCatchUp = session == null
+                        pendingHomeCatchUp = refreshHome
                         RestoreStart(
                             generation = gen,
                             session = session,
-                            refreshHome = homeVisible.get(),
+                            refreshHome = refreshHome,
                         )
                     }
                 }
@@ -139,6 +143,11 @@ class DefaultForegroundRestore
                     }
                     if (started.refreshHome) {
                         homeCatchUp.catchUp()
+                        synchronized(lock) {
+                            if (started.generation == generation.get()) {
+                                pendingHomeCatchUp = false
+                            }
+                        }
                         diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground restore home catch-up")
                     }
                     if (started.generation != generation.get()) return@launch

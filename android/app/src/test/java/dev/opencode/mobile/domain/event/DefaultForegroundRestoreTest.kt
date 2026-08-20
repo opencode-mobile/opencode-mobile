@@ -199,12 +199,51 @@ class DefaultForegroundRestoreTest {
             assertEquals(listOf("ses-1"), messages.refreshedSessions)
         }
 
-    private class RecordingHomeCatchUp : ForegroundHomeCatchUp {
+    @Test
+    fun setOpenSession_duringHomeCatchUp_stillCompletesHome() =
+        runBlocking {
+            val stream = FakeForegroundEventStream()
+            val messages = FakeMessageRepository()
+            val home = RecordingHomeCatchUp(catchUpDelayMs = 150)
+            val restore =
+                DefaultForegroundRestore(
+                    stream = stream,
+                    messageRepository = messages,
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    homeCatchUp = home,
+                )
+            restore.setHomeVisible(true)
+            restore.restore()
+            delay(20)
+            restore.setHomeVisible(false)
+            restore.setOpenSession("ses-1", "/tmp")
+            withTimeout(2_000) {
+                while (
+                    messages.completedSessions.isEmpty() ||
+                        home.completedCount == 0 ||
+                        restore.phase != ForegroundRestorePhase.Live
+                ) {
+                    delay(10)
+                }
+            }
+            assertEquals(listOf("ses-1"), messages.completedSessions)
+            assertEquals(1, home.completedCount)
+        }
+
+    private class RecordingHomeCatchUp(
+        private val catchUpDelayMs: Long = 0,
+    ) : ForegroundHomeCatchUp {
         var catchUpCount = 0
+            private set
+        var completedCount = 0
             private set
 
         override suspend fun catchUp() {
             catchUpCount += 1
+            if (catchUpDelayMs > 0) {
+                delay(catchUpDelayMs)
+            }
+            completedCount += 1
         }
     }
 
