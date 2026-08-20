@@ -9,6 +9,9 @@ interface ForegroundRestore {
     /** Foreground edge after the background stop grace (or home enter). */
     fun restore()
 
+    /** App left foreground: arm REST catch-up on next restore. Does not stop SSE. */
+    fun noteBackground()
+
     /** Background grace fired: tear down SSE and arm cold-resume catch-up. */
     fun noteBackgroundStop()
 

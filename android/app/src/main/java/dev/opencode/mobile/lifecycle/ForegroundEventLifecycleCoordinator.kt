@@ -40,6 +40,7 @@ class ForegroundEventLifecycleCoordinator(
 
     override fun onStop(owner: LifecycleOwner) {
         stopJob?.cancel()
+        foregroundRestore.noteBackground()
         stopJob =
             scope.launch {
                 delay(stopGraceMs)

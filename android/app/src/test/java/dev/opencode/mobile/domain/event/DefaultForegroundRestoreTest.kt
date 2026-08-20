@@ -113,17 +113,145 @@ class DefaultForegroundRestoreTest {
         assertTrue(messages.refreshedSessions.isEmpty())
     }
 
-    private class RecordingHomeCatchUp : ForegroundHomeCatchUp {
+    @Test
+    fun noteBackground_thenRestore_refreshesEvenIfStreamStillLive() =
+        runBlocking {
+            val stream = FakeForegroundEventStream()
+            val messages = FakeMessageRepository()
+            val restore =
+                DefaultForegroundRestore(
+                    stream = stream,
+                    messageRepository = messages,
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    homeCatchUp = RecordingHomeCatchUp(),
+                )
+            restore.setOpenSession("ses-1", "/tmp")
+            restore.restore()
+            withTimeout(2_000) {
+                while (restore.phase != ForegroundRestorePhase.Live) {
+                    delay(10)
+                }
+            }
+            messages.refreshedSessions.clear()
+            restore.noteBackground()
+            assertEquals(EventStreamConnectionState.Connected, stream.connectionState.value)
+
+            restore.restore()
+            withTimeout(2_000) {
+                while (messages.refreshedSessions.isEmpty()) {
+                    delay(10)
+                }
+            }
+            assertEquals(listOf("ses-1"), messages.refreshedSessions)
+            assertEquals(EventStreamConnectionState.Connected, stream.connectionState.value)
+        }
+
+    @Test
+    fun restore_startOnlyDoesNotCancelInFlightCatchUp() =
+        runBlocking {
+            val stream = FakeForegroundEventStream()
+            val messages = FakeMessageRepository(refreshDelayMs = 150)
+            val restore =
+                DefaultForegroundRestore(
+                    stream = stream,
+                    messageRepository = messages,
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    homeCatchUp = RecordingHomeCatchUp(),
+                )
+            restore.setOpenSession("ses-1", "/tmp")
+            restore.restore()
+            delay(20)
+            restore.restore()
+            withTimeout(2_000) {
+                while (messages.completedSessions.isEmpty() || restore.phase != ForegroundRestorePhase.Live) {
+                    delay(10)
+                }
+            }
+            assertEquals(listOf("ses-1"), messages.completedSessions)
+        }
+
+    @Test
+    fun setOpenSession_afterRestoreWithoutSession_refreshesThatSession() =
+        runBlocking {
+            val stream = FakeForegroundEventStream()
+            val messages = FakeMessageRepository()
+            val restore =
+                DefaultForegroundRestore(
+                    stream = stream,
+                    messageRepository = messages,
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    homeCatchUp = RecordingHomeCatchUp(),
+                )
+            restore.restore()
+            withTimeout(2_000) {
+                while (restore.phase != ForegroundRestorePhase.Live) {
+                    delay(10)
+                }
+            }
+            assertTrue(messages.refreshedSessions.isEmpty())
+
+            restore.setOpenSession("ses-1", "/tmp")
+            withTimeout(2_000) {
+                while (messages.refreshedSessions.isEmpty()) {
+                    delay(10)
+                }
+            }
+            assertEquals(listOf("ses-1"), messages.refreshedSessions)
+        }
+
+    @Test
+    fun setOpenSession_duringHomeCatchUp_stillCompletesHome() =
+        runBlocking {
+            val stream = FakeForegroundEventStream()
+            val messages = FakeMessageRepository()
+            val home = RecordingHomeCatchUp(catchUpDelayMs = 150)
+            val restore =
+                DefaultForegroundRestore(
+                    stream = stream,
+                    messageRepository = messages,
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    homeCatchUp = home,
+                )
+            restore.setHomeVisible(true)
+            restore.restore()
+            delay(20)
+            restore.setHomeVisible(false)
+            restore.setOpenSession("ses-1", "/tmp")
+            withTimeout(2_000) {
+                while (
+                    messages.completedSessions.isEmpty() ||
+                        home.completedCount == 0 ||
+                        restore.phase != ForegroundRestorePhase.Live
+                ) {
+                    delay(10)
+                }
+            }
+            assertEquals(listOf("ses-1"), messages.completedSessions)
+            assertEquals(1, home.completedCount)
+        }
+
+    private class RecordingHomeCatchUp(
+        private val catchUpDelayMs: Long = 0,
+    ) : ForegroundHomeCatchUp {
         var catchUpCount = 0
+            private set
+        var completedCount = 0
             private set
 
         override suspend fun catchUp() {
             catchUpCount += 1
+            if (catchUpDelayMs > 0) {
+                delay(catchUpDelayMs)
+            }
+            completedCount += 1
         }
     }
 
-    private class FakeMessageRepository : MessageRepository {
+    private class FakeMessageRepository(
+        private val refreshDelayMs: Long = 0,
+    ) : MessageRepository {
         val refreshedSessions = mutableListOf<String>()
+        val completedSessions = mutableListOf<String>()
 
         override fun observeMessages(
             sessionId: String,
@@ -145,6 +273,10 @@ class DefaultForegroundRestoreTest {
             directory: String?,
         ): List<DisplayMessage> {
             refreshedSessions += sessionId
+            if (refreshDelayMs > 0) {
+                delay(refreshDelayMs)
+            }
+            completedSessions += sessionId
             return emptyList()
         }
 

@@ -7,6 +7,9 @@ nonisolated protocol ForegroundRestore: AnyObject, Sendable {
     /// Foreground edge after the background stop grace (or home enter).
     func restore()
 
+    /// App left foreground: arm REST catch-up on next restore. Does not stop SSE.
+    func noteBackground()
+
     /// Background grace fired: tear down SSE and arm cold-resume catch-up.
     func noteBackgroundStop()
 

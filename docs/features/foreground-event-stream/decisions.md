@@ -71,13 +71,19 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
   idempotent while a stream job is active. Cancelled SSE tasks must not publish
   Idle/Disconnected over a newer generation's Connecting state. While a
   foreground retry is in flight, chrome stays **connecting**.
-- **ForegroundRestore (OPE-197):** On true return after grace, one restore
-  generation starts SSE and REST-authorizes registered scopes (open Session
-  Chat messages via `refreshDisplayMessages`; home list when home is visible).
-  Cold resume after `stop()` arms `pendingResumeBarrier` so the next successful
-  open still emits `stream.reconnected` even though `wasConnected` was cleared
-  for chrome. Catch-up is not gated on lucky event delivery alone. Pull-to-
-  refresh uses the same message REST path.
+- **ForegroundRestore (OPE-197):** Leave-active (`scenePhase.background` /
+  Android `onStop`) arms REST catch-up immediately via `noteBackground()`.
+  The 5s grace still delays SSE teardown (`noteBackgroundStop`). On restore,
+  one generation starts SSE and REST-authorizes registered scopes (open Session
+  Chat via `refreshDisplayMessages`; home list when home is visible). A
+  start-only restore (stream already live, catch-up not armed) must not cancel
+  an in-flight REST catch-up. If restore ran with no open session,
+  `setOpenSession` triggers catch-up for that session and must keep an in-flight
+  home catch-up even if home is no longer visible. Cold resume after
+  `stop()` arms `pendingResumeBarrier` so the next successful open still emits
+  `stream.reconnected` even though `wasConnected` was cleared for chrome.
+  Catch-up is not gated on lucky event delivery alone. Pull-to-refresh uses
+  the same message REST path.
 - **Session Chat (iOS):** `startObserving()` on appear; `stopObserving()` on explicit back or after a short delayed disappear (avoids killing SSE when the home Screen Model refresh re-renders the navigation parent). Android relies on scoped `ViewModel` cancellation on navigate back. Open chat registers with `ForegroundRestore`.
 
 ## Device path is a second signal

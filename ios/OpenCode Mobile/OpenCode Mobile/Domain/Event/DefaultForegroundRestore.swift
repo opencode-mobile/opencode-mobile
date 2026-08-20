@@ -10,6 +10,8 @@ nonisolated final class DefaultForegroundRestore: ForegroundRestore, @unchecked 
     private var openDirectory: String?
     private var homeVisible = false
     private var needsCatchUp = true
+    private var missedSessionCatchUp = false
+    private var pendingHomeCatchUp = false
     private var restoreTask: Task<Void, Never>?
     private var generation: UInt64 = 0
     private(set) var phase: ForegroundRestorePhase = .idle
@@ -28,12 +30,26 @@ nonisolated final class DefaultForegroundRestore: ForegroundRestore, @unchecked 
         lock.lock()
         openSessionID = sessionID
         openDirectory = directory
+        let shouldRestore = !(sessionID ?? "").isEmpty && missedSessionCatchUp
+        if shouldRestore {
+            missedSessionCatchUp = false
+            needsCatchUp = true
+        }
         lock.unlock()
+        if shouldRestore {
+            restore()
+        }
     }
 
     func setHomeVisible(_ visible: Bool) {
         lock.lock()
         homeVisible = visible
+        lock.unlock()
+    }
+
+    func noteBackground() {
+        lock.lock()
+        needsCatchUp = true
         lock.unlock()
     }
 
@@ -43,6 +59,8 @@ nonisolated final class DefaultForegroundRestore: ForegroundRestore, @unchecked 
         restoreTask?.cancel()
         restoreTask = nil
         needsCatchUp = true
+        missedSessionCatchUp = false
+        pendingHomeCatchUp = false
         phase = .idle
         lock.unlock()
         stream.stop()
@@ -50,26 +68,27 @@ nonisolated final class DefaultForegroundRestore: ForegroundRestore, @unchecked 
 
     func restore() {
         lock.lock()
+        let catchUp = needsCatchUp || stream.connectionState == .idle
+        guard catchUp else {
+            lock.unlock()
+            DiagnosticLog.info(.sse, "foreground restore start-only catchUp=false")
+            stream.start()
+            return
+        }
         generation += 1
         let gen = generation
         restoreTask?.cancel()
         let sessionID = openSessionID
         let directory = openDirectory
-        let refreshHome = homeVisible
-        let catchUp = needsCatchUp || stream.connectionState == .idle
+        let refreshHome = homeVisible || pendingHomeCatchUp
         needsCatchUp = false
+        missedSessionCatchUp = sessionID == nil || sessionID?.isEmpty == true
+        pendingHomeCatchUp = refreshHome
         phase = .restoring
         lock.unlock()
 
         DiagnosticLog.info(.sse, "foreground restore starting generation=\(gen) catchUp=\(catchUp)")
         stream.start()
-
-        guard catchUp else {
-            lock.lock()
-            if gen == generation { phase = .live }
-            lock.unlock()
-            return
-        }
 
         restoreTask = Task(priority: .userInitiated) { [weak self] in
             guard let self else { return }
@@ -94,6 +113,12 @@ nonisolated final class DefaultForegroundRestore: ForegroundRestore, @unchecked 
             }
             if refreshHome {
                 await self.homeCatchUpRegistry.catchUp()
+                if Task.isCancelled { return }
+                self.lock.lock()
+                if self.generation == gen {
+                    self.pendingHomeCatchUp = false
+                }
+                self.lock.unlock()
                 DiagnosticLog.info(.sse, "foreground restore home catch-up")
             }
             let finishedPhase: ForegroundRestorePhase = failed ? .failed : .live
