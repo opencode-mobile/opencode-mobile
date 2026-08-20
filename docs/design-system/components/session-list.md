@@ -26,7 +26,8 @@ settings) is owned by the home shell, not this component.
 - Required filter state: `selectedFilterId`. Default chrome is chips via
   `onFilterSelected(id)` and optional `onRemoveProject(id)`. When
   `useProjectPicker` is on, `onOpenProjectPicker()` opens the caller-owned
-  Filter by project sheet.
+  Filter by project sheet, and `onFilterSelected(id)` still applies when the
+  scope control commits a neighbor.
 - Optional content:
   - `createError` string shown at the top of the dock when session create fails.
   - `emptyContent` composable / view shown centered above the dock when the
@@ -38,8 +39,8 @@ settings) is owned by the home shell, not this component.
   - `onSessionSelected(session)`.
   - `onAddProject()`.
   - `onNewSession()`.
-  - `onFilterSelected(id)` when using chips; `onOpenProjectPicker()` when using
-    the picker.
+  - `onFilterSelected(id)` for chip taps and picker-chrome threshold switches;
+    `onOpenProjectPicker()` when using the picker.
 - Optional callbacks:
   - `onSessionLongPress(session)` on both platforms.
 - States: default and empty filtered list (dock and filters remain; optional
@@ -85,7 +86,8 @@ Layout:
 
 When `selectedFilterId` is `all`, all sessions are shown. Otherwise only
 sessions whose `worktree` equals the selected filter id are shown. In picker
-chrome, the scope control does not switch projects; tap opens the filter sheet.
+chrome, tap opens the filter sheet; crossing the switch threshold selects
+the previous or next tab without waiting for finger-up.
 
 ## Platform Notes
 

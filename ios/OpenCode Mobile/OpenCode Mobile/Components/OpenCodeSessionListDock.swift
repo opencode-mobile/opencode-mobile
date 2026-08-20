@@ -47,7 +47,8 @@ struct OpenCodeSessionListDock: View {
                     SessionListScopeControl(
                         tabs: filterTabs,
                         selectedId: selectedFilterId,
-                        onOpen: onOpenProjectPicker
+                        onOpen: onOpenProjectPicker,
+                        onSelect: onFilterSelected
                     )
                 } else if !filterTabs.isEmpty {
                     ScrollViewReader { proxy in
@@ -143,11 +144,19 @@ struct SessionListScopeControl: View {
     let tabs: [SessionListFilterTab]
     let selectedId: String
     let onOpen: () -> Void
+    let onSelect: (String) -> Void
 
     @State private var clusterSlide: CGFloat = 0
     @State private var isDragging = false
+    @State private var isSwitching = false
     @State private var gestureOrigin: CGFloat = 0
     @State private var settleTask: Task<Void, Never>?
+    @State private var slotWidth: CGFloat = 1
+    @State private var shownTabId: String?
+    @State private var outgoingTab: SessionListFilterTab?
+    @State private var outgoingSlide: CGFloat = 0
+    @State private var incomingSlide: CGFloat = 0
+    @State private var switchHapticTick = 0
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
 
     var body: some View {
@@ -164,23 +173,57 @@ struct SessionListScopeControl: View {
         .contentShape(controlShape)
         .gesture(drag)
         .onTapGesture(perform: onOpen)
+        .sensoryFeedback(.selection, trigger: switchHapticTick)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint("Opens the project filter.")
+        .accessibilityHint(accessibilityHint)
         .accessibilityAddTraits(.isButton)
+        .accessibilityAdjustableAction(adjustProject)
         .accessibilityAction(named: "Open project filter", onOpen)
+        .onAppear {
+            if shownTabId == nil {
+                shownTabId = selectedId
+            }
+        }
+        .onChange(of: selectedId) { _, id in
+            guard !isSwitching else { return }
+            shownTabId = id
+            clusterSlide = 0
+            outgoingTab = nil
+        }
     }
 
     @ViewBuilder
     private var identityClusterSlot: some View {
-        if let selectedTab {
-            identityCluster(selectedTab)
-                .geometryGroup()
-                .compositingGroup()
-                .transaction { $0.animation = nil }
-                .modifier(SessionListScopeClusterSlide(x: clusterSlide))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .clipped()
+        ZStack(alignment: .leading) {
+            if let outgoingTab {
+                identityCluster(outgoingTab)
+                    .geometryGroup()
+                    .compositingGroup()
+                    .transaction { $0.animation = nil }
+                    .modifier(SessionListScopeClusterSlide(x: outgoingSlide))
+            }
+            if let visibleTab {
+                identityCluster(visibleTab)
+                    .geometryGroup()
+                    .compositingGroup()
+                    .transaction { $0.animation = nil }
+                    .modifier(
+                        SessionListScopeClusterSlide(x: isSwitching ? incomingSlide : clusterSlide)
+                    )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
+        .background {
+            GeometryReader { geometry in
+                Color.clear
+                    .onAppear { slotWidth = max(geometry.size.width, 1) }
+                    .onChange(of: geometry.size.width) { _, width in
+                        guard abs(slotWidth - width) > 0.5 else { return }
+                        slotWidth = max(width, 1)
+                    }
+            }
         }
     }
 
@@ -211,35 +254,69 @@ struct SessionListScopeControl: View {
     }
 
     private var selectedIndex: Int {
-        tabs.firstIndex(where: { $0.id == selectedId }) ?? 0
+        tabs.firstIndex(where: { $0.id == (shownTabId ?? selectedId) }) ?? 0
     }
 
     private var selectedTab: SessionListFilterTab? {
-        tabs.indices.contains(selectedIndex) ? tabs[selectedIndex] : tabs.first
+        tabs.first { $0.id == selectedId } ?? tabs.first
+    }
+
+    private var visibleTab: SessionListFilterTab? {
+        tabs.first { $0.id == (shownTabId ?? selectedId) } ?? selectedTab
+    }
+
+    private var canGoPrevious: Bool {
+        SessionListScopePaging.neighborIndex(
+            selectedIndex: selectedIndex,
+            count: tabs.count,
+            direction: .previous
+        ) != nil
+    }
+
+    private var canGoNext: Bool {
+        SessionListScopePaging.neighborIndex(
+            selectedIndex: selectedIndex,
+            count: tabs.count,
+            direction: .next
+        ) != nil
     }
 
     private var drag: some Gesture {
         DragGesture(minimumDistance: 10, coordinateSpace: .local)
             .onChanged { value in
+                guard !isSwitching else { return }
                 settleTask?.cancel()
                 if !isDragging {
                     isDragging = true
                     gestureOrigin = clusterSlide
                 }
                 let translation = gestureOrigin + value.translation.width
+                let visual = SessionListScopePaging.rubberBandOffset(translation)
                 var transaction = Transaction()
                 transaction.disablesAnimations = true
                 withTransaction(transaction) {
-                    clusterSlide = SessionListScopePaging.rubberBandOffset(translation)
+                    clusterSlide = visual
+                }
+                if let direction = SessionListScopePaging.commitDirection(
+                    visualOffset: visual,
+                    canGoPrevious: canGoPrevious,
+                    canGoNext: canGoNext
+                ) {
+                    startSwitch(direction, from: visual)
                 }
             }
             .onEnded { value in
+                guard !isSwitching else { return }
                 finishDrag(translation: gestureOrigin + value.translation.width)
             }
     }
 
     private static var rubberBandReturnAnimation: Animation {
         .timingCurve(0.45, 0.0, 0.12, 1.0, duration: SessionListScopePaging.rubberBandReturnDuration)
+    }
+
+    private static var switchAnimation: Animation {
+        .timingCurve(0.45, 0.0, 0.12, 1.0, duration: SessionListScopePaging.switchDuration)
     }
 
     private func finishDrag(translation: CGFloat) {
@@ -253,10 +330,64 @@ struct SessionListScopeControl: View {
         }
         settleTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(16))
-            guard !Task.isCancelled, !isDragging else { return }
+            guard !Task.isCancelled, !isDragging, !isSwitching else { return }
             withAnimation(Self.rubberBandReturnAnimation) {
                 clusterSlide = 0
             }
+        }
+    }
+
+    private func startSwitch(_ direction: SessionListScopePaging.Direction, from visual: CGFloat) {
+        guard let neighbor = neighborTab(direction) else { return }
+        settleTask?.cancel()
+        isDragging = false
+        isSwitching = true
+        let exit = SessionListScopePaging.settleTranslation(direction: direction, pageWidth: slotWidth)
+        var snap = Transaction()
+        snap.disablesAnimations = true
+        withTransaction(snap) {
+            outgoingTab = visibleTab
+            outgoingSlide = visual
+            incomingSlide = -exit
+            shownTabId = neighbor.id
+            clusterSlide = 0
+        }
+        switchHapticTick += 1
+        onSelect(neighbor.id)
+        settleTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(16))
+            guard !Task.isCancelled else { return }
+            withAnimation(Self.switchAnimation) {
+                outgoingSlide = exit
+                incomingSlide = 0
+            }
+            try? await Task.sleep(for: .seconds(SessionListScopePaging.switchDuration))
+            guard !Task.isCancelled else { return }
+            outgoingTab = nil
+            outgoingSlide = 0
+            incomingSlide = 0
+            isSwitching = false
+        }
+    }
+
+    private func neighborTab(_ direction: SessionListScopePaging.Direction) -> SessionListFilterTab? {
+        guard let index = SessionListScopePaging.neighborIndex(
+            selectedIndex: selectedIndex,
+            count: tabs.count,
+            direction: direction
+        ) else { return nil }
+        return tabs[index]
+    }
+
+    private func adjustProject(_ direction: AccessibilityAdjustmentDirection) {
+        guard !isSwitching else { return }
+        switch direction {
+        case .increment:
+            startSwitch(.next, from: 0)
+        case .decrement:
+            startSwitch(.previous, from: 0)
+        @unknown default:
+            break
         }
     }
 
@@ -269,12 +400,19 @@ struct SessionListScopeControl: View {
     }
 
     private var accessibilityLabel: String {
-        guard let tab = selectedTab else { return "Project filter" }
+        guard let tab = visibleTab else { return "Project filter" }
         let subtitle = displayedSubtitle(tab)
         if subtitle.isEmpty {
             return "\(tab.pickerTitle), \(tab.count) sessions"
         }
         return "\(tab.pickerTitle), \(subtitle), \(tab.count) sessions"
+    }
+
+    private var accessibilityHint: String {
+        if canGoPrevious || canGoNext {
+            return "Opens the project filter. Swipe to switch projects."
+        }
+        return "Opens the project filter."
     }
 }
 

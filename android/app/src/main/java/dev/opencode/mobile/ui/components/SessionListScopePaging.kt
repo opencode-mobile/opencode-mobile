@@ -1,12 +1,10 @@
 package dev.opencode.mobile.ui.components
 
 import kotlin.math.max
-import kotlin.math.min
 
 object SessionListScopePaging {
-    const val COMMIT_DISTANCE = 36f
-    const val FLICK_VELOCITY = 800f
-    const val SETTLE_DURATION_MS = 400
+    const val SWITCH_THRESHOLD_DP = 28f
+    const val SWITCH_DURATION_MS = 450
     const val LIST_CROSSFADE_DURATION_MS = 160
     const val RUBBER_BAND_LIMIT_DP = 52f
     const val RUBBER_BAND_CONSTANT = 0.50f
@@ -37,39 +35,16 @@ object SessionListScopePaging {
             else -> 0f
         }
 
-    fun displayedTranslation(
-        translation: Float,
-        pageWidth: Float,
-        canGoPrevious: Boolean,
-        canGoNext: Boolean,
-        resistOverscroll: Boolean,
-        rubberBandLimit: Float = RUBBER_BAND_LIMIT_DP,
-    ): Float {
-        val width = max(pageWidth, 1f)
-        if (resistOverscroll) {
-            if (translation > 0f && !canGoPrevious) {
-                return rubberBand(translation, rubberBandLimit)
-            }
-            if (translation < 0f && !canGoNext) {
-                return -rubberBand(-translation, rubberBandLimit)
-            }
-        }
-        if (canGoPrevious || canGoNext) {
-            return min(max(translation, -width), width)
-        }
-        return translation
-    }
-
     fun commitDirection(
-        translation: Float,
-        velocity: Float,
+        visualOffset: Float,
         canGoPrevious: Boolean,
         canGoNext: Boolean,
+        switchThreshold: Float = SWITCH_THRESHOLD_DP,
     ): Direction? {
-        if (canGoNext && (translation <= -COMMIT_DISTANCE || velocity <= -FLICK_VELOCITY)) {
+        if (canGoNext && visualOffset <= -switchThreshold) {
             return Direction.Next
         }
-        if (canGoPrevious && (translation >= COMMIT_DISTANCE || velocity >= FLICK_VELOCITY)) {
+        if (canGoPrevious && visualOffset >= switchThreshold) {
             return Direction.Previous
         }
         return null

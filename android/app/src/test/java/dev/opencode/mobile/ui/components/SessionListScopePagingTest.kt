@@ -49,12 +49,11 @@ class SessionListScopePagingTest {
     }
 
     @Test
-    fun commitDirection_distanceSelectsNext() {
+    fun commitDirection_visualThresholdSelectsNext() {
         assertEquals(
             SessionListScopePaging.Direction.Next,
             SessionListScopePaging.commitDirection(
-                translation = -36f,
-                velocity = 0f,
+                visualOffset = -28f,
                 canGoPrevious = true,
                 canGoNext = true,
             ),
@@ -62,12 +61,11 @@ class SessionListScopePagingTest {
     }
 
     @Test
-    fun commitDirection_distanceSelectsPrevious() {
+    fun commitDirection_visualThresholdSelectsPrevious() {
         assertEquals(
             SessionListScopePaging.Direction.Previous,
             SessionListScopePaging.commitDirection(
-                translation = 36f,
-                velocity = 0f,
+                visualOffset = 28f,
                 canGoPrevious = true,
                 canGoNext = true,
             ),
@@ -75,24 +73,10 @@ class SessionListScopePagingTest {
     }
 
     @Test
-    fun commitDirection_shortDragWithoutFlickSnapsBack() {
+    fun commitDirection_shortPullSnapsBack() {
         assertNull(
             SessionListScopePaging.commitDirection(
-                translation = -35f,
-                velocity = 0f,
-                canGoPrevious = true,
-                canGoNext = true,
-            ),
-        )
-    }
-
-    @Test
-    fun commitDirection_flickSelectsNext() {
-        assertEquals(
-            SessionListScopePaging.Direction.Next,
-            SessionListScopePaging.commitDirection(
-                translation = -8f,
-                velocity = -800f,
+                visualOffset = -27f,
                 canGoPrevious = true,
                 canGoNext = true,
             ),
@@ -103,16 +87,14 @@ class SessionListScopePagingTest {
     fun commitDirection_blockedEndDoesNotCommit() {
         assertNull(
             SessionListScopePaging.commitDirection(
-                translation = -80f,
-                velocity = -1200f,
+                visualOffset = -40f,
                 canGoPrevious = true,
                 canGoNext = false,
             ),
         )
         assertNull(
             SessionListScopePaging.commitDirection(
-                translation = 80f,
-                velocity = 1200f,
+                visualOffset = 40f,
                 canGoPrevious = false,
                 canGoNext = true,
             ),
@@ -130,74 +112,7 @@ class SessionListScopePagingTest {
     }
 
     @Test
-    fun displayedTranslation_midListTracksFinger() {
-        assertEquals(
-            -40f,
-            SessionListScopePaging.displayedTranslation(
-                translation = -40f,
-                pageWidth = 200f,
-                canGoPrevious = true,
-                canGoNext = true,
-                resistOverscroll = true,
-            ),
-        )
-    }
-
-    @Test
-    fun displayedTranslation_startRubberBands() {
-        val displayed =
-            SessionListScopePaging.displayedTranslation(
-                translation = 100f,
-                pageWidth = 200f,
-                canGoPrevious = false,
-                canGoNext = true,
-                resistOverscroll = true,
-            )
-        assertTrue(displayed > 0f)
-        assertTrue(displayed < SessionListScopePaging.RUBBER_BAND_LIMIT_DP)
-        assertTrue(displayed < 100f)
-    }
-
-    @Test
-    fun displayedTranslation_singleTabResistsAndDiminishes() {
-        val shortPull =
-            SessionListScopePaging.displayedTranslation(
-                translation = 50f,
-                pageWidth = 200f,
-                canGoPrevious = false,
-                canGoNext = false,
-                resistOverscroll = true,
-            )
-        val longPull =
-            SessionListScopePaging.displayedTranslation(
-                translation = 150f,
-                pageWidth = 200f,
-                canGoPrevious = false,
-                canGoNext = false,
-                resistOverscroll = true,
-            )
-        assertTrue(shortPull > 0f)
-        assertTrue(longPull > shortPull)
-        assertTrue(longPull - shortPull < shortPull)
-        assertTrue(longPull < SessionListScopePaging.RUBBER_BAND_LIMIT_DP)
-    }
-
-    @Test
-    fun displayedTranslation_releaseUsesRawOffset() {
-        assertEquals(
-            12f,
-            SessionListScopePaging.displayedTranslation(
-                translation = 12f,
-                pageWidth = 200f,
-                canGoPrevious = false,
-                canGoNext = false,
-                resistOverscroll = false,
-            ),
-        )
-    }
-
-    @Test
-    fun settleTranslation_commitsAFullPageThenSnaps() {
+    fun settleTranslation_exitsAFullSlot() {
         assertEquals(
             -200f,
             SessionListScopePaging.settleTranslation(

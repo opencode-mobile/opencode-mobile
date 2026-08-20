@@ -43,11 +43,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -64,6 +69,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 private val NewSessionButtonShape = RoundedCornerShape(percent = 50)
@@ -106,6 +112,7 @@ fun OpenCodeSessionListDock(
                     tabs = filterTabs,
                     selectedId = selectedFilterId,
                     onOpen = onOpenProjectPicker,
+                    onSelect = onFilterSelected,
                 )
             } else if (filterTabs.isNotEmpty()) {
                 SessionListFilterChipRow(
@@ -202,35 +209,123 @@ fun SessionListScopeControl(
     tabs: List<SessionListFilterTab>,
     selectedId: String,
     onOpen: () -> Unit,
+    onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val textStrong = openCodeColor("text-strong")
     val textWeak = openCodeColor("text-weak")
-    val selectedIndex = tabs.indexOfFirst { it.id == selectedId }.let { if (it >= 0) it else 0 }
-    val selectedTab = tabs.getOrNull(selectedIndex) ?: return
-    val subtitle = displayedScopeSubtitle(selectedTab)
+    var shownTabId by remember { mutableStateOf(selectedId) }
+    val selectedIndex = tabs.indexOfFirst { it.id == shownTabId }.let { if (it >= 0) it else 0 }
+    val visibleTab = tabs.getOrNull(selectedIndex) ?: return
+    val subtitle = displayedScopeSubtitle(visibleTab)
     val description =
         if (subtitle.isEmpty()) {
-            "${selectedTab.pickerTitle}, ${selectedTab.count} sessions"
+            "${visibleTab.pickerTitle}, ${visibleTab.count} sessions"
         } else {
-            "${selectedTab.pickerTitle}, $subtitle, ${selectedTab.count} sessions"
+            "${visibleTab.pickerTitle}, $subtitle, ${visibleTab.count} sessions"
         }
     val settleOffset = remember { Animatable(0f) }
+    val outgoingOffset = remember { Animatable(0f) }
+    val incomingOffset = remember { Animatable(0f) }
     val settleValue by settleOffset.asState()
+    val outgoingValue by outgoingOffset.asState()
+    val incomingValue by incomingOffset.asState()
     var clusterSlide by remember { mutableFloatStateOf(0f) }
     var isSettling by remember { mutableStateOf(false) }
-    val displayed = if (isSettling) settleValue else clusterSlide
+    var isSwitching by remember { mutableStateOf(false) }
+    var outgoingTab by remember { mutableStateOf<SessionListFilterTab?>(null) }
+    var slotWidthPx by remember { mutableFloatStateOf(1f) }
+    val displayed =
+        when {
+            isSwitching -> incomingValue
+            isSettling -> settleValue
+            else -> clusterSlide
+        }
     val settleJob = remember { arrayOfNulls<Job>(1) }
     val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val latestOnOpen by rememberUpdatedState(onOpen)
+    val latestOnSelect by rememberUpdatedState(onSelect)
     val rubberBandLimitPx =
         with(density) { SessionListScopePaging.RUBBER_BAND_LIMIT_DP.dp.toPx() }
+    val switchThresholdPx =
+        with(density) { SessionListScopePaging.SWITCH_THRESHOLD_DP.dp.toPx() }
+    val canGoPrevious =
+        SessionListScopePaging.neighborIndex(
+            selectedIndex = selectedIndex,
+            count = tabs.size,
+            direction = SessionListScopePaging.Direction.Previous,
+        ) != null
+    val canGoNext =
+        SessionListScopePaging.neighborIndex(
+            selectedIndex = selectedIndex,
+            count = tabs.size,
+            direction = SessionListScopePaging.Direction.Next,
+        ) != null
+    val switchEasing = CubicBezierEasing(0.45f, 0.0f, 0.12f, 1.0f)
+
+    fun neighborTab(direction: SessionListScopePaging.Direction): SessionListFilterTab? {
+        val index =
+            SessionListScopePaging.neighborIndex(
+                selectedIndex = selectedIndex,
+                count = tabs.size,
+                direction = direction,
+            ) ?: return null
+        return tabs.getOrNull(index)
+    }
+
+    fun startSwitch(
+        direction: SessionListScopePaging.Direction,
+        from: Float,
+    ) {
+        val neighbor = neighborTab(direction) ?: return
+        settleJob[0]?.cancel()
+        settleJob[0] =
+            scope.launch {
+                val exit =
+                    SessionListScopePaging.settleTranslation(
+                        direction = direction,
+                        pageWidth = slotWidthPx,
+                    )
+                outgoingTab = visibleTab
+                outgoingOffset.snapTo(from)
+                incomingOffset.snapTo(-exit)
+                shownTabId = neighbor.id
+                isSwitching = true
+                isSettling = false
+                clusterSlide = 0f
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                latestOnSelect(neighbor.id)
+                kotlinx.coroutines.coroutineScope {
+                    launch {
+                        outgoingOffset.animateTo(
+                            exit,
+                            tween(SessionListScopePaging.SWITCH_DURATION_MS, easing = switchEasing),
+                        )
+                    }
+                    launch {
+                        incomingOffset.animateTo(
+                            0f,
+                            tween(SessionListScopePaging.SWITCH_DURATION_MS, easing = switchEasing),
+                        )
+                    }
+                }
+                ensureActive()
+                outgoingTab = null
+                outgoingOffset.snapTo(0f)
+                incomingOffset.snapTo(0f)
+                settleOffset.snapTo(0f)
+                isSwitching = false
+            }
+    }
 
     LaunchedEffect(selectedId) {
-        if (!isSettling) {
+        if (!isSwitching) {
+            shownTabId = selectedId
             clusterSlide = 0f
             settleOffset.snapTo(0f)
+            outgoingTab = null
         }
     }
 
@@ -240,9 +335,12 @@ fun SessionListScopeControl(
                 .fillMaxWidth()
                 .clip(ScopeControlShape)
                 .background(textStrong.copy(alpha = 0.08f))
-                .pointerInput(Unit) {
+                .pointerInput(shownTabId, isSwitching) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        if (isSwitching) {
+                            return@awaitEachGesture
+                        }
                         settleJob[0]?.cancel()
                         settleJob[0] = null
                         if (isSettling) {
@@ -250,40 +348,60 @@ fun SessionListScopeControl(
                             isSettling = false
                         }
                         var dragged = false
+                        var committed = false
                         var total = clusterSlide
                         val slop = viewConfiguration.touchSlop
                         drag(down.id) { change ->
+                            if (committed || isSwitching) {
+                                change.consume()
+                                return@drag
+                            }
                             val delta = change.positionChange().x
                             total += delta
                             if (abs(total) > slop) {
                                 dragged = true
                             }
                             change.consume()
-                            clusterSlide =
+                            val visual =
                                 SessionListScopePaging.rubberBandOffset(
                                     translation = total,
                                     rubberBandLimit = rubberBandLimitPx,
                                 )
+                            clusterSlide = visual
+                            val direction =
+                                SessionListScopePaging.commitDirection(
+                                    visualOffset = visual,
+                                    canGoPrevious = canGoPrevious,
+                                    canGoNext = canGoNext,
+                                    switchThreshold = switchThresholdPx,
+                                )
+                            if (direction != null) {
+                                committed = true
+                                startSwitch(direction, from = visual)
+                            }
+                        }
+                        if (committed || isSwitching) {
+                            return@awaitEachGesture
                         }
                         if (!dragged) {
                             latestOnOpen()
                             return@awaitEachGesture
                         }
+                        val visual =
+                            SessionListScopePaging.rubberBandOffset(
+                                translation = total,
+                                rubberBandLimit = rubberBandLimitPx,
+                            )
+                        clusterSlide = visual
                         settleJob[0] =
                             scope.launch {
-                                val visual =
-                                    SessionListScopePaging.rubberBandOffset(
-                                        translation = total,
-                                        rubberBandLimit = rubberBandLimitPx,
-                                    )
-                                clusterSlide = visual
                                 settleOffset.snapTo(visual)
                                 isSettling = true
                                 settleOffset.animateTo(
                                     0f,
                                     tween(
                                         SessionListScopePaging.RUBBER_BAND_RETURN_DURATION_MS,
-                                        easing = CubicBezierEasing(0.45f, 0.0f, 0.12f, 1.0f),
+                                        easing = switchEasing,
                                     ),
                                 )
                                 ensureActive()
@@ -299,6 +417,24 @@ fun SessionListScopeControl(
                         onOpen()
                         true
                     }
+                    val actions = mutableListOf<CustomAccessibilityAction>()
+                    if (canGoPrevious) {
+                        actions +=
+                            CustomAccessibilityAction("Previous project") {
+                                startSwitch(SessionListScopePaging.Direction.Previous, from = 0f)
+                                true
+                            }
+                    }
+                    if (canGoNext) {
+                        actions +=
+                            CustomAccessibilityAction("Next project") {
+                                startSwitch(SessionListScopePaging.Direction.Next, from = 0f)
+                                true
+                            }
+                    }
+                    if (actions.isNotEmpty()) {
+                        customActions = actions
+                    }
                 }
                 .padding(horizontal = 10.dp, vertical = 8.dp)
                 .heightIn(min = 44.dp),
@@ -310,11 +446,18 @@ fun SessionListScopeControl(
                 Modifier
                     .weight(1f)
                     .heightIn(min = 36.dp)
-                    .clipToBounds(),
+                    .clipToBounds()
+                    .onSizeChanged { slotWidthPx = max(it.width.toFloat(), 1f) },
             contentAlignment = Alignment.CenterStart,
         ) {
+            outgoingTab?.let { tab ->
+                SessionListScopeIdentity(
+                    tab = tab,
+                    modifier = Modifier.offset { IntOffset(outgoingValue.roundToInt(), 0) },
+                )
+            }
             SessionListScopeIdentity(
-                tab = selectedTab,
+                tab = visibleTab,
                 modifier = Modifier.offset { IntOffset(displayed.roundToInt(), 0) },
             )
         }

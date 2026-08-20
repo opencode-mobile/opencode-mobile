@@ -2,11 +2,10 @@ import CoreGraphics
 import Foundation
 
 enum SessionListScopePaging {
-    static let commitDistance: CGFloat = 36
-    static let flickVelocity: CGFloat = 800
-    static let settleDuration: TimeInterval = 0.40
+    static let switchThreshold: CGFloat = 28
+    static let switchDuration: TimeInterval = 0.45
     static let listCrossfadeDuration: TimeInterval = 0.16
-    /// Max visual travel when there is nothing to page to.
+    /// Max visual travel when rubber-banding.
     static let rubberBandLimit: CGFloat = 52
     static let rubberBandConstant: CGFloat = 0.50
     static let rubberBandReturnDuration: TimeInterval = 0.18
@@ -34,43 +33,22 @@ enum SessionListScopePaging {
         return 0
     }
 
-    static func displayedTranslation(
-        translation: CGFloat,
-        pageWidth: CGFloat,
-        canGoPrevious: Bool,
-        canGoNext: Bool,
-        resistOverscroll: Bool
-    ) -> CGFloat {
-        if resistOverscroll {
-            if translation > 0, !canGoPrevious {
-                return rubberBand(translation)
-            }
-            if translation < 0, !canGoNext {
-                return -rubberBand(-translation)
-            }
-        }
-        if canGoPrevious || canGoNext {
-            return min(max(translation, -pageWidth), pageWidth)
-        }
-        return translation
-    }
-
+    /// Finger-up commit from rubber-band visual offset. No flick; no wrap.
     static func commitDirection(
-        translation: CGFloat,
-        velocity: CGFloat,
+        visualOffset: CGFloat,
         canGoPrevious: Bool,
         canGoNext: Bool
     ) -> Direction? {
-        if canGoNext, translation <= -commitDistance || velocity <= -flickVelocity {
+        if canGoNext, visualOffset <= -switchThreshold {
             return .next
         }
-        if canGoPrevious, translation >= commitDistance || velocity >= flickVelocity {
+        if canGoPrevious, visualOffset >= switchThreshold {
             return .previous
         }
         return nil
     }
 
-    /// Offset that places the committed neighbor fully in the slot, before selection swaps.
+    /// Offset that places a cluster fully out of the slot for the canned switch.
     static func settleTranslation(direction: Direction?, pageWidth: CGFloat) -> CGFloat {
         let width = max(pageWidth, 1)
         switch direction {

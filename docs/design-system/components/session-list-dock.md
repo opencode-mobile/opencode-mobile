@@ -16,8 +16,8 @@ content.
   letter + accent), `selectedFilterId`, `onAddProject()`, `onNewSession()`.
 - Filter chrome: `useProjectPicker` (default off). Off uses Filter Chip
   `onFilterSelected(id)` plus optional selected-project `onRemoveProject(id)`.
-  On uses `onOpenProjectPicker()` for tap on the scope control. Horizontal
-  drag on the control does not change the selected project.
+  On uses `onOpenProjectPicker()` for tap on the scope control, and
+  `onFilterSelected(id)` when a horizontal drag crosses the switch threshold.
 - Optional: `createError` string above the filter chrome.
 - States: default. Disabled/loading are not applicable; callers gate actions.
   Empty `filterTabs` collapses the filter chrome and still shows the action row.
@@ -47,23 +47,34 @@ Stateless. Default filter chrome is a horizontal Filter Chip scroller: tap
 selects; selected project chips may expose remove. When `useProjectPicker` is
 on, a single scope control shows the selected tab (letter or All mark, name,
 compact path or project-count subtitle, session count, chevron). Tap opens the
-caller-owned **Filter by project** sheet. Horizontal drag does not switch
-projects; it only rubber-bands the current identity cluster.
+caller-owned **Filter by project** sheet. Horizontal drag rubber-bands the
+current identity cluster. If a neighbor exists in that direction and the
+visual pull crosses the switch threshold, the control fires a canned switch
+immediately — the finger does not need to lift, and it does not scrub the
+transition. Once the switch starts, it runs to completion.
 
 Swipe motion lives only in the identity cluster (mark + title/subtitle +
 count). The control background, chevron, and dock CTAs stay pinned.
 
 - Drag: the cluster is tethered. It can be pulled left or right, but it lags
   the finger like rubber — glued to rest, and the farther the pull the less
-  extra travel you get, capping around **52pt**. Finger-up eases home over
-  **180ms** with a slow takeoff and no bounce. Selection never changes.
-- Interrupt: a new drag cancels an in-flight return and continues from the
-  current offset.
+  extra travel you get, capping around **52pt**. Neighbor pages do not peek
+  during the drag.
+- Cross **28pt** of visual travel with a neighbor: light haptic, select that
+  tab, and play a **450ms** switch without waiting for finger-up. The current
+  cluster continues off in the pull direction; the next cluster enters from
+  the opposite side. Remaining drag is ignored. Pull left selects the next
+  tab; pull right selects the previous. Ends do not wrap.
+- Lift under threshold, or no neighbor in that direction: ease home over
+  **180ms** with a slow takeoff and no bounce. Selection does not change.
+- Interrupt: a new drag cancels an in-flight rubber-band return and continues
+  from the current offset. A switch in flight is not interruptible.
 - Viewport: clip to the cluster slot so a rubber-band pull cannot draw over
   the chevron. Do not paint an edge fade — at rest it dirties the letter mark.
 
 VoiceOver / TalkBack treat the control as a button that opens the project
-filter. They do not expose increment/decrement to switch projects.
+filter, and expose increment/decrement to switch projects when a neighbor
+exists.
 
 Empty `filterTabs` omits the filter chrome (no empty strip). Add project is a
 compact leading control; New session is the full-width primary control beside
@@ -84,8 +95,8 @@ is hold-to-remove on project rows in the sheet, not on the dock.
 Both Component Galleries include a **Session List Dock** entry with a **Picker**
 preview switch (chips vs scope control), a **1 project** sample (All absent),
 and an optional create-error toggle. With Picker on, drag the scope control to
-feel the rubber-band tether; it does not change the selected project. Session
-List gallery also shows the dock in full home context.
+feel the rubber-band tether; pull past the threshold and the switch fires
+without lifting. Session List gallery also shows the dock in full home context.
 
 ## Parity And Divergence
 
