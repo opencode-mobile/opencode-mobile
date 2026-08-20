@@ -3197,7 +3197,7 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals("Working", viewModel.uiState.value.sessionStatusLabel)
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertNull(viewModel.uiState.value.workingIndicatorLabel)
         }
 
     private fun createViewModel(

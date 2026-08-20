@@ -12,12 +12,12 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
-    @Test func labelForActiveTurn_showsWorkingAfterUserWithNoAssistant() {
+    @Test func labelForActiveTurn_hidesWorkingAfterUserWithNoAssistant() {
         #expect(
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel: "Working",
                 messages: [user("u1")]
-            ) == "Working"
+            ) == nil
         )
     }
 
@@ -37,12 +37,12 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
-    @Test func labelForActiveTurn_showsThinkingWhenAssistantHasSettledText() {
+    @Test func labelForActiveTurn_hidesThinkingWhenAssistantHasSettledText() {
         #expect(
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel: "Working",
                 messages: [user("u1"), assistant("a1", text: "Hello")]
-            ) == "Thinking"
+            ) == nil
         )
     }
 
@@ -91,7 +91,7 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
-    @Test func labelForActiveTurn_showsThinkingAfterCompletedToolCard() {
+    @Test func labelForActiveTurn_hidesThinkingAfterCompletedToolCard() {
         let toolCard: SessionChatTimelineBlock = .toolCard(
             blockID: "tool-1",
             card: SessionChatToolCardBlock(
@@ -104,7 +104,7 @@ struct WorkingTurnIndicatorTests {
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel: "Working",
                 messages: [user("u1"), assistant("a1", text: "", blocks: [toolCard])]
-            ) == "Thinking"
+            ) == nil
         )
     }
 
@@ -155,7 +155,7 @@ struct WorkingTurnIndicatorTests {
                         metadataLabel: "compaction · m"
                     ),
                 ]
-            ) == "Working"
+            ) == nil
         )
     }
 

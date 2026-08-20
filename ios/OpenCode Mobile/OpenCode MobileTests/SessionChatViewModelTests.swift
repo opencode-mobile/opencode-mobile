@@ -2214,7 +2214,7 @@ struct SessionChatViewModelTests {
         defer { viewModel.stopObserving() }
         await viewModel.loadMessages()
         await waitUntil { viewModel.uiState.sessionStatusLabel == "Working" }
-        #expect(viewModel.uiState.workingIndicatorLabel == "Working")
+        #expect(viewModel.uiState.workingIndicatorLabel == nil)
     }
 
     private func makeViewModel(

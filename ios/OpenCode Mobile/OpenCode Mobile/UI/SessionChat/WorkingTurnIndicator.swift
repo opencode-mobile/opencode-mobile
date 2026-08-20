@@ -3,15 +3,11 @@ import Foundation
 /// In-chat Working/Thinking/Retrying/Compacting chrome for an active turn.
 /// Reuses product labels from `EventDomainAdapter` (`Working` / `Retrying`),
 /// plus `SessionCompactChrome.statusLabel` while compact is in flight.
-/// After settled assistant content, a still-busy turn shows `thinkingLabel`
-/// unless Retrying. Working is only for “no assistant turn yet.” An empty
-/// or still-hidden assistant slot is the wait — do not paint Working over
-/// it or it blinks off as soon as the first part lands.
-/// In-flight questions are hidden from the timeline and shown in the dock —
-/// that dock is the wait state, so do not add a second Thinking line.
+/// Custom Working / Thinking footer lamps are off for now — TUI has no
+/// transcript equivalent and they blink when parts settle. Retrying and
+/// Compacting… still show. Hide this chrome while a question or permission
+/// is waiting on the user — the dock is the wait state.
 enum WorkingTurnIndicator {
-    static let thinkingLabel = "Thinking"
-
     static func labelForActiveTurn(
         statusLabel: String?,
         messages: [SessionChatRow],
@@ -23,14 +19,7 @@ enum WorkingTurnIndicator {
         if isAwaitingUser { return nil }
         guard let statusLabel else { return nil }
         if hasInProgressAssistantContentAfterLastUser(messages) { return nil }
-        if statusLabel == "Working", hasSettledAssistantContentAfterLastUser(messages) {
-            return thinkingLabel
-        }
-        if statusLabel == "Working",
-           assistantTurnExists || !assistantsAfterLastUser(messages).isEmpty
-        {
-            return nil
-        }
+        if statusLabel == "Working" { return nil }
         return statusLabel
     }
 
@@ -70,10 +59,6 @@ enum WorkingTurnIndicator {
         assistantsAfterLastUser(messages).contains(where: hasInProgressContent)
     }
 
-    private static func hasSettledAssistantContentAfterLastUser(_ messages: [SessionChatRow]) -> Bool {
-        assistantsAfterLastUser(messages).contains(where: hasSettledContent)
-    }
-
     private static func hasInProgressContent(_ message: SessionChatRow) -> Bool {
         if message.isStreaming { return true }
         return message.blocks.contains { block in
@@ -86,26 +71,6 @@ enum WorkingTurnIndicator {
                 group.status.isInProgress || group.members.contains { $0.status.isInProgress }
             case .text, .attachment, .childSessionRow:
                 false
-            }
-        }
-    }
-
-    private static func hasSettledContent(_ message: SessionChatRow) -> Bool {
-        if !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return true
-        }
-        return message.blocks.contains { block in
-            switch block {
-            case let .text(_, text, _):
-                !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case let .reasoning(_, text, isStreaming, _):
-                !isStreaming && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case .attachment, .childSessionRow:
-                true
-            case let .toolCard(_, card):
-                !card.status.isInProgress
-            case let .toolGroup(_, group):
-                !group.status.isInProgress && group.members.allSatisfy { !$0.status.isInProgress }
             }
         }
     }

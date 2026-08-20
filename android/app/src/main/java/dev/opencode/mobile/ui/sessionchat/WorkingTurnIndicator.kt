@@ -8,35 +8,24 @@ import dev.opencode.mobile.domain.message.ToolStatus
  * In-chat Working/Thinking/Retrying/Compacting chrome for an active turn.
  * Reuses product labels from [EventDomainAdapter] (`Working` / `Retrying`),
  * plus [SessionCompactChrome.STATUS_LABEL] while compact is in flight.
- * After settled assistant content, a still-busy turn shows [THINKING_LABEL]
- * unless Retrying. Working is only for “no assistant turn yet.” An empty
- * or still-hidden assistant slot is the wait — do not paint Working over
- * it or it blinks off as soon as the first part lands.
- * In-flight questions are hidden from the timeline and shown in the dock —
- * that dock is the wait state, so do not add a second Thinking line.
+ * Custom Working / Thinking footer lamps are off for now — TUI has no
+ * transcript equivalent and they blink when parts settle. Retrying and
+ * Compacting… still show. Hide this chrome while a question or permission
+ * is waiting on the user — the dock is the wait state.
  */
 object WorkingTurnIndicator {
-    const val THINKING_LABEL = "Thinking"
-
     fun labelForActiveTurn(
         statusLabel: String?,
         messages: List<SessionChatMessageItem>,
         isCompacting: Boolean = false,
         isAwaitingUser: Boolean = false,
-        assistantTurnExists: Boolean = false,
+        @Suppress("UNUSED_PARAMETER") assistantTurnExists: Boolean = false,
     ): String? {
         if (isCompacting) return SessionCompactChrome.STATUS_LABEL
         if (isAwaitingUser) return null
         if (statusLabel == null) return null
         if (hasInProgressAssistantContentAfterLastUser(messages)) return null
-        if (statusLabel == "Working" && hasSettledAssistantContentAfterLastUser(messages)) {
-            return THINKING_LABEL
-        }
-        if (statusLabel == "Working" &&
-            (assistantTurnExists || assistantsAfterLastUser(messages).isNotEmpty())
-        ) {
-            return null
-        }
+        if (statusLabel == "Working") return null
         return statusLabel
     }
 
@@ -74,9 +63,6 @@ object WorkingTurnIndicator {
     private fun hasInProgressAssistantContentAfterLastUser(messages: List<SessionChatMessageItem>): Boolean =
         assistantsAfterLastUser(messages).any(::hasInProgressContent)
 
-    private fun hasSettledAssistantContentAfterLastUser(messages: List<SessionChatMessageItem>): Boolean =
-        assistantsAfterLastUser(messages).any(::hasSettledContent)
-
     private fun hasInProgressContent(message: SessionChatMessageItem): Boolean {
         if (message.isStreaming) return true
         return message.blocks.any { block ->
@@ -89,22 +75,6 @@ object WorkingTurnIndicator {
                 is SessionChatTimelineBlock.Attachment,
                 is SessionChatTimelineBlock.ChildSessionRow,
                 -> false
-            }
-        }
-    }
-
-    private fun hasSettledContent(message: SessionChatMessageItem): Boolean {
-        if (message.text.isNotBlank()) return true
-        return message.blocks.any { block ->
-            when (block) {
-                is SessionChatTimelineBlock.Text -> block.text.isNotBlank()
-                is SessionChatTimelineBlock.Reasoning -> !block.isStreaming && block.text.isNotBlank()
-                is SessionChatTimelineBlock.Attachment,
-                is SessionChatTimelineBlock.ChildSessionRow,
-                -> true
-                is SessionChatTimelineBlock.ToolCard -> !block.status.isInProgress
-                is SessionChatTimelineBlock.ToolGroup ->
-                    !block.status.isInProgress && block.members.none { it.status.isInProgress }
             }
         }
     }
