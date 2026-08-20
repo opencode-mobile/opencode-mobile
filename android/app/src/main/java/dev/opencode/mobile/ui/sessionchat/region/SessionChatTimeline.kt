@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.ThoughtPartChrome
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.sessionchat.ContentRevision
 import dev.opencode.mobile.ui.sessionchat.DisplayFrame
@@ -25,6 +26,7 @@ import dev.opencode.mobile.ui.sessionchat.TimelineDisplayOrder
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
 import dev.opencode.mobile.ui.sessionchat.TimelineProjector
 import dev.opencode.mobile.ui.sessionchat.TimelineRow
+import dev.opencode.mobile.ui.sessionchat.WorkingTurnIndicator
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -587,7 +589,11 @@ class SessionChatTimeline(
                 "layoutChanged=${stamped.layoutChangedRowIDs.size} " +
                 "decorate=${stamped.decorateRowIDs.size} grewBottom=${stamped.grewBottomRowIDs.size} " +
                 "layoutAffectingRev=${stamped.layoutAffectingRevision()} " +
-                "growBottomRev=${stamped.growBottomRevision()}",
+                "growBottomRev=${stamped.growBottomRevision()} " +
+                ThoughtPartChrome.summarize(
+                    messages = lastLoadedMessages,
+                    paintedCount = merged.size,
+                ),
         )
         _state.update { state ->
             state.copy(
@@ -597,6 +603,7 @@ class SessionChatTimeline(
                 isRefreshing = isRefreshing,
                 messagesFromCache = pending.messagesFromCache && !networkCacheSyncConfirmed,
                 isSyncingMessages = pending.messagesFromCache && !networkCacheSyncConfirmed,
+                assistantTurnExists = WorkingTurnIndicator.assistantTurnExists(lastLoadedMessages),
                 errorMessage =
                     if (fromQuietRefresh) {
                         if (merged.isNotEmpty() && state.timeline == SessionChatTimelineState.Error) {
@@ -671,17 +678,22 @@ class SessionChatTimeline(
     ): DisplayMessageBody? {
         val message = display.message
         val resolvedBlocks =
-            SessionChatTimelineBlocks.collapseCommandInvocations(
-                role = message.role,
+            SessionChatTimelineBlocks.ensureLiveRow(
+                message = message,
+                isStreaming = display.isStreaming,
                 blocks =
-                    SessionChatTimelineBlocks.buildOrFallback(
+                    SessionChatTimelineBlocks.collapseCommandInvocations(
                         role = message.role,
-                        parts = message.parts,
-                        messageId = message.id,
-                        fallbackText = message.text,
-                        collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
+                        blocks =
+                            SessionChatTimelineBlocks.buildOrFallback(
+                                role = message.role,
+                                parts = message.parts,
+                                messageId = message.id,
+                                fallbackText = message.text,
+                                collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
+                            ),
+                        commands = serverCommands,
                     ),
-                commands = serverCommands,
             )
         if (resolvedBlocks.isEmpty()) return null
 

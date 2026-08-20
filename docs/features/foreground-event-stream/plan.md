@@ -26,9 +26,8 @@ After reconnect, state is refreshed from the server.
 - Permission request UI (events consumed; UI in a follow-on slice).
 - Abort button UX.
 - Diff viewer UI.
-- Background delivery, push, or replacing SSE with broad polling. The chat
-  timeline keeps a narrow changed-message watchdog poll as a temporary safety
-  net.
+- Background delivery, push, or replacing SSE with broad polling. Message
+  poll policy is [message-store](../message-store/decisions.md).
 - Connection Profile UI.
 
 ## Server APIs Involved
@@ -39,7 +38,8 @@ After reconnect, state is refreshed from the server.
 - `GET /api/event` — v2 SSE (live Session Chat shape). Same relevant-event bar.
 - `GET /session/status` — baseline and reconnect status refresh.
 - Existing `GET /session/:id/message` for initial history, selective
-  reconciliation, reconnect, and the changed-message watchdog.
+  reconciliation, and reconnect. Message poll policy is
+  [message-store](../message-store/decisions.md).
 
 ## Expected Logs
 

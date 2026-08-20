@@ -675,6 +675,9 @@ private struct ReasoningBlock: View {
     var body: some View {
         let label = thoughtLabel
         HStack(alignment: .center, spacing: 8) {
+            if isStreaming {
+                SessionChatWorkingStatusDot()
+            }
             Text(label)
                 .font(OpenCodeTypography.body)
                 .foregroundStyle(OpenCodeColors.textWeak)

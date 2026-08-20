@@ -32,7 +32,7 @@ interface MessageStore {
     ): Boolean
 
     /**
-     * Idle REST overlay: patch existing parts in place. Does not rematerialize
+     * Reconnect REST overlay: patch existing parts in place. Does not rematerialize
      * unchanged tools. No-op when [expectedRevision] is stale.
      */
     fun mergeAuthoritativeIfRevision(

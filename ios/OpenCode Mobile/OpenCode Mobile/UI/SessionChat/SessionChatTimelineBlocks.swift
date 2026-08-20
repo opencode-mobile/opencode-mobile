@@ -113,7 +113,7 @@ nonisolated struct SessionChatChildSessionRowBlock: Equatable, Sendable {
 }
 
 nonisolated enum SessionChatTimelineBlocks {
-    private static let contextToolNames: Set<String> = ["read", "glob", "grep"]
+    private static let contextToolNames: Set<String> = ["read", "glob", "grep", "websearch"]
 
     static func build(
         role: MessageRole,
@@ -168,17 +168,20 @@ nonisolated enum SessionChatTimelineBlocks {
             case .reasoning(let reasoning):
                 flushText()
                 let trimmed = reasoning.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty || reasoning.isStreaming {
+                if isLiveReasoning(reasoning) {
                     guard let partId = reasoning.id else { return .missingPartIds }
+                    let thinking = reasoning.isStreaming || trimmed.isEmpty
                     blocks.append(
                         .reasoning(
                             blockID: PresentationBlockId.direct(partId),
                             text: trimmed,
-                            isStreaming: reasoning.isStreaming,
-                            durationMs: Self.thoughtDurationMs(
-                                start: reasoning.timeStartEpochMs,
-                                end: reasoning.timeEndEpochMs
-                            )
+                            isStreaming: thinking,
+                            durationMs: thinking
+                                ? nil
+                                : Self.thoughtDurationMs(
+                                    start: reasoning.timeStartEpochMs,
+                                    end: reasoning.timeEndEpochMs
+                                )
                         )
                     )
                 }
@@ -252,6 +255,25 @@ nonisolated enum SessionChatTimelineBlocks {
         case .missingPartIds:
             return fallbackBlocks()
         }
+    }
+
+    /// TUI starts a fragment on `session.text.started` before any delta. Keep a
+    /// stable row so an empty streaming assistant does not vanish from the timeline.
+    /// Hidden-tool-only messages stay omitted.
+    static func ensureLiveRow(
+        message: Message,
+        isStreaming: Bool,
+        blocks: [SessionChatTimelineBlock]
+    ) -> [SessionChatTimelineBlock] {
+        if !blocks.isEmpty { return blocks }
+        guard isStreaming else { return [] }
+        return [
+            .text(
+                blockID: PresentationBlockId.messageFallback(message.id),
+                text: message.text,
+                renderedMarkdown: nil
+            ),
+        ]
     }
 
     /// When collapse is on, consecutive assistant messages whose visible blocks
@@ -362,13 +384,16 @@ nonisolated enum SessionChatTimelineBlocks {
         return duration >= 0 ? duration : nil
     }
 
+    /// TUI keeps one thought row once the part exists. Do not drop it between Thinking and Thought.
+    private static func isLiveReasoning(_ part: ReasoningPart) -> Bool {
+        part.isStreaming
+            || !part.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || part.timeStartEpochMs != nil
+            || part.timeEndEpochMs != nil
+    }
+
     private static func isVisibleTool(_ tool: ToolPart) -> Bool {
-        let name = tool.toolName.lowercased()
-        if name == "todowrite" { return false }
-        if name == "question", tool.status == .pending || tool.status == .running {
-            return false
-        }
-        return true
+        ToolPartIdentity.isVisibleOnTimeline(tool)
     }
 
     /// Parts that never become timeline blocks. Grouping looks through them so
@@ -386,8 +411,7 @@ nonisolated enum SessionChatTimelineBlocks {
         case .file:
             false
         case .reasoning(let reasoning):
-            !reasoning.isStreaming
-                && reasoning.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            !isLiveReasoning(reasoning)
         }
     }
 
@@ -423,7 +447,7 @@ nonisolated enum SessionChatTimelineBlocks {
             group: SessionChatToolGroupBlock(
                 count: tools.count,
                 status: status,
-                title: groupTitle(tools.count),
+                title: groupTitle(tools),
                 subtitle: groupSubtitle(tools),
                 errorText: errorText,
                 members: members
@@ -431,14 +455,20 @@ nonisolated enum SessionChatTimelineBlocks {
         )
     }
 
-    /// Count headline for the Tool Call Card (`7 tools`).
-    private static func groupTitle(_ count: Int) -> String {
-        "\(count) tools"
+    /// Context-only groups match TUI (`Explored — 1 read`). Mixed groups stay `N tools`.
+    private static func groupTitle(_ tools: [ToolPart]) -> String {
+        if !tools.isEmpty, tools.allSatisfy({ isContextTool($0.toolName) }) {
+            return exploredTitle(tools)
+        }
+        return "\(tools.count) tools"
     }
 
     /// Family one-liner in encounter order (`Edit · Write · 5 shells`).
-    /// A single member of a family is just the verb; multiples get a count.
-    private static func groupSubtitle(_ tools: [ToolPart]) -> String {
+    /// Context-only groups keep the first path as subtitle.
+    private static func groupSubtitle(_ tools: [ToolPart]) -> String? {
+        if !tools.isEmpty, tools.allSatisfy({ isContextTool($0.toolName) }) {
+            return tools.lazy.compactMap(contextSubtitle).first
+        }
         var order: [String] = []
         var counts: [String: Int] = [:]
         for tool in tools {
@@ -451,6 +481,41 @@ nonisolated enum SessionChatTimelineBlocks {
         return order.map { name in
             familyPhrase(name, count: counts[name, default: 0])
         }.joined(separator: " · ")
+    }
+
+    private static func exploredTitle(_ tools: [ToolPart]) -> String {
+        var order: [String] = []
+        var counts: [String: Int] = [:]
+        for tool in tools {
+            let key = tool.toolName.lowercased()
+            if counts[key] == nil {
+                order.append(key)
+            }
+            counts[key, default: 0] += 1
+        }
+        let summary = order.map { name in
+            exploredFamilyPhrase(name, count: counts[name, default: 0])
+        }.joined(separator: " · ")
+        return "Explored — \(summary)"
+    }
+
+    private static func exploredFamilyPhrase(_ name: String, count: Int) -> String {
+        switch name {
+        case "read": return count == 1 ? "1 read" : "\(count) reads"
+        case "grep": return count == 1 ? "1 grep" : "\(count) greps"
+        case "glob": return count == 1 ? "1 glob" : "\(count) globs"
+        case "websearch": return count == 1 ? "1 search" : "\(count) searches"
+        default: return familyPhrase(name, count: count)
+        }
+    }
+
+    private static func contextSubtitle(_ tool: ToolPart) -> String? {
+        switch tool.toolName.lowercased() {
+        case "read": return readPathSubtitle(tool.input)
+        case "glob", "grep": return patternPathSubtitle(tool.input)
+        case "websearch": return inputString(tool.input, keys: "query")
+        default: return nil
+        }
     }
 
     private static func familyPhrase(_ name: String, count: Int) -> String {
@@ -466,7 +531,7 @@ nonisolated enum SessionChatTimelineBlocks {
         case "write": return count == 1 ? "Write" : "\(count) writes"
         case "webfetch": return count == 1 ? "Fetch" : "\(count) fetches"
         case "websearch": return count == 1 ? "Search" : "\(count) searches"
-        case "question": return count == 1 ? "Question" : "\(count) questions"
+        case "question": return askedQuestionsTitle(count)
         case "skill": return count == 1 ? "Skill" : "\(count) skills"
         case "apply_patch": return count == 1 ? "Patch" : "\(count) patches"
         case "linear_get_issue": return count == 1 ? "Get issue" : "\(count) Get issues"
@@ -581,20 +646,21 @@ nonisolated enum SessionChatTimelineBlocks {
             }
             ?? runningTitleOverride(tool)
         return Chrome(
-            title: "Called \(tool.toolName)",
+            title: ToolPartIdentity.calledTitle(tool.toolName),
             subtitle: subtitle,
             detailText: settledDetail(tool)
         )
     }
 
     private static func specializedChrome(name: String, tool: ToolPart) -> Chrome? {
+        if isQuestionTool(tool) { return questionChrome(tool) }
         switch name {
         case "read":
-            return contextChrome(tool: tool, displayTitle: "Read", subtitle: pathSubtitle(tool.input))
+            return contextChrome(tool: tool, subtitle: readPathSubtitle(tool.input))
         case "glob":
-            return contextChrome(tool: tool, displayTitle: "Glob", subtitle: patternPathSubtitle(tool.input))
+            return contextChrome(tool: tool, subtitle: patternPathSubtitle(tool.input))
         case "grep":
-            return contextChrome(tool: tool, displayTitle: "Grep", subtitle: patternPathSubtitle(tool.input))
+            return contextChrome(tool: tool, subtitle: patternPathSubtitle(tool.input))
         case "bash", "shell":
             return shellChrome(tool)
         case "execute":
@@ -606,9 +672,7 @@ nonisolated enum SessionChatTimelineBlocks {
         case "webfetch":
             return networkChrome(tool: tool, displayTitle: "Fetch", subtitleKey: "url")
         case "websearch":
-            return networkChrome(tool: tool, displayTitle: "Search", subtitleKey: "query")
-        case "question":
-            return questionChrome(tool)
+            return contextChrome(tool: tool, subtitle: inputString(tool.input, keys: "query"))
         case "skill":
             return Chrome(
                 title: "Skill",
@@ -779,15 +843,9 @@ nonisolated enum SessionChatTimelineBlocks {
         metadataString(tool.metadata, keys: "sessionId", "sessionID")
     }
 
-    private static func contextChrome(tool: ToolPart, displayTitle: String, subtitle: String?) -> Chrome {
-        guard let subtitle else {
-            return Chrome(
-                title: "Called \(tool.toolName)",
-                subtitle: runningTitleOverride(tool)
-            )
-        }
-        return Chrome(
-            title: displayTitle,
+    private static func contextChrome(tool: ToolPart, subtitle: String?) -> Chrome {
+        Chrome(
+            title: exploredTitle([tool]),
             subtitle: runningTitleOverride(tool) ?? subtitle
         )
     }
@@ -932,6 +990,11 @@ nonisolated enum SessionChatTimelineBlocks {
         inputString(input, keys: "filePath", "path", "file")
     }
 
+    /// Read chrome is the file, not explore/cwd `path` (often the project root).
+    private static func readPathSubtitle(_ input: [String: AnyCodable]?) -> String? {
+        inputString(input, keys: "filePath", "file")
+    }
+
     private static func patternPathSubtitle(_ input: [String: AnyCodable]?) -> String? {
         let pattern = inputString(input, keys: "pattern")
         let path = inputString(input, keys: "path", "directory")
@@ -947,6 +1010,14 @@ nonisolated enum SessionChatTimelineBlocks {
         }
     }
 
+    private static func isQuestionTool(_ tool: ToolPart) -> Bool {
+        ToolPartIdentity.isQuestion(name: tool.toolName, input: tool.input)
+    }
+
+    private static func askedQuestionsTitle(_ count: Int) -> String {
+        count == 1 ? "Asked 1 question" : "Asked \(count) questions"
+    }
+
     private static func questionChrome(_ tool: ToolPart) -> Chrome {
         let questions = questionTexts(tool.input)
         let answers = answerTexts(tool.metadata)
@@ -954,8 +1025,9 @@ nonisolated enum SessionChatTimelineBlocks {
             ?? inputString(tool.input, keys: "prompt", "text", "question")
             ?? runningTitleOverride(tool)
         let dismissed = tool.status == .error ? nonEmpty(tool.error) : nil
+        let count = max(questions.count, firstQuestion == nil ? 0 : 1)
         return Chrome(
-            title: firstQuestion ?? "Question",
+            title: askedQuestionsTitle(count),
             subtitle: answers.first,
             detailText: questionDetail(
                 questions: questions.isEmpty ? [firstQuestion].compactMap { $0 } : questions,

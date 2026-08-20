@@ -170,6 +170,8 @@ class SessionChatViewModel
         private var sessionTodos: List<SessionTodo> = emptyList()
         private var lastTodoLive: Boolean? = null
         private var lastSnackbarKey: String? = null
+        private var loggedWorkingLamp = false
+        private var lastWorkingLamp: String? = null
         private var suppressedSnackbarKey: String? = null
         private var snackbarSequence: Long = 0L
 
@@ -1203,7 +1205,19 @@ class SessionChatViewModel
                     statusLabel = sessionStatusLabel,
                     messages = messages,
                     isCompacting = isCompacting,
+                    isAwaitingUser = permissionRequests.isNotEmpty() || questionRequests.isNotEmpty(),
+                    assistantTurnExists = timelineState.assistantTurnExists,
                 )
+            if (!loggedWorkingLamp || lastWorkingLamp != workingIndicatorLabel) {
+                loggedWorkingLamp = true
+                lastWorkingLamp = workingIndicatorLabel
+                logI(
+                    "workingLamp label=${workingIndicatorLabel ?: "none"} " +
+                        "status=${sessionStatusLabel ?: "none"} " +
+                        "assistantTurn=${if (timelineState.assistantTurnExists) 1 else 0} " +
+                        "awaitingUser=${if (permissionRequests.isNotEmpty() || questionRequests.isNotEmpty()) 1 else 0}",
+                )
+            }
             val syncingIndicatorLabel =
                 if (timelineState.isSyncingMessages) {
                     SessionMessageSyncChrome.STATUS_LABEL

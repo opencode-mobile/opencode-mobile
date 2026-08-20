@@ -37,6 +37,23 @@ struct EventsAPIClientTests {
         #expect(second == [heartbeat])
     }
 
+    @Test func streamGlobalEvents_commentLinesCountAsActivityWithoutPublishingEvents() async throws {
+        final class Counter: @unchecked Sendable {
+            var value = 0
+        }
+        let body = ": keep-alive\ndata: {\"payload\":{\"type\":\"server.connected\",\"properties\":{}}}\n\n"
+        let client = makeClient(responseBody: body)
+        let activity = Counter()
+        var lines: [String] = []
+        try await client.streamGlobalEvents(
+            onActivity: { activity.value += 1 },
+            onDataLine: { line in lines.append(line) }
+        )
+        #expect(activity.value >= 1)
+        #expect(lines.count == 1)
+        #expect(lines[0].contains("server.connected"))
+    }
+
     @Test func streamGlobalEvents_usesV2PathWhenProtocolIsV2() async throws {
         let body = "data: {\"type\":\"server.connected\",\"data\":{}}\n\n"
         let client = makeClient(responseBody: body, serverProtocol: .v2)

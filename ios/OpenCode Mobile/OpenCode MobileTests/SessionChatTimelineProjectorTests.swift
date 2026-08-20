@@ -350,6 +350,17 @@ struct SessionChatTimelineProjectorTests {
         #expect(frame.messages[0].renderedMarkdown == nil)
     }
 
+    @Test func displayFrameBuilder_keepsEmptyStreamingAssistant() {
+        let message = makeMessage(
+            id: "msg-2",
+            parts: [text("prt-1", "", isStreaming: true)],
+            text: ""
+        )
+        let frame = displayFrame(messages: [DisplayMessage(message: message)])
+        #expect(frame.messages.map(\.id) == ["msg-2"])
+        #expect(frame.messages[0].blocks.map(\.blockID) == [PresentationBlockId.messageFallback("msg-2")])
+    }
+
     @Test func contentRevision_usesTextHashAndLength() {
         let revision = ContentRevision.of("abc")
         #expect(revision.textLength == 3)
@@ -647,6 +658,40 @@ struct SessionChatTimelineProjectorTests {
         #expect(second.changedRowIDs == ["msg-1"])
         #expect(second.layoutChangedRowIDs.isEmpty)
         #expect(second.layoutAffectingRowIDs.isEmpty)
+        #expect(second.rows[0].layoutRevision == first.rows[0].layoutRevision)
+        let kinds = TimelineApply.classify(second).kinds
+        #expect(kinds.contains(.content))
+        #expect(!kinds.contains(.structure))
+    }
+
+    @Test func reasoningComplete_isContentNotLayout() {
+        let firstMessage = makeMessage(
+            id: "msg-1",
+            parts: [.reasoning(ReasoningPart(id: "prt-r", text: "Think", isStreaming: true))],
+            text: ""
+        )
+        let first = project(displayFrame(messages: [DisplayMessage(message: firstMessage)]))
+        let secondMessage = makeMessage(
+            id: "msg-1",
+            parts: [
+                .reasoning(
+                    ReasoningPart(
+                        id: "prt-r",
+                        text: "Think",
+                        isStreaming: false,
+                        timeStartEpochMs: 1,
+                        timeEndEpochMs: 2
+                    )
+                ),
+            ],
+            text: ""
+        )
+        let second = project(
+            displayFrame(revision: 2, messages: [DisplayMessage(message: secondMessage)]),
+            previous: first
+        )
+        #expect(second.changedRowIDs == ["msg-1"])
+        #expect(second.layoutChangedRowIDs.isEmpty)
         #expect(second.rows[0].layoutRevision == first.rows[0].layoutRevision)
         let kinds = TimelineApply.classify(second).kinds
         #expect(kinds.contains(.content))

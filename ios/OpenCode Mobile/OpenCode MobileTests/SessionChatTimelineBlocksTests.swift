@@ -41,11 +41,97 @@ struct SessionChatTimelineBlocksTests {
         ])
     }
 
+    @Test func ensureLiveRow_keepsEmptyStreamingAssistant() {
+        let message = Message(
+            id: "msg-2",
+            role: .assistant,
+            text: "",
+            parts: [.text(TextPart(id: "prt-1", text: "", isStreaming: true))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        let blocks = SessionChatTimelineBlocks.ensureLiveRow(
+            message: message,
+            isStreaming: true,
+            blocks: []
+        )
+        #expect(blocks.count == 1)
+        guard case .text(let blockID, let text, _) = blocks[0] else {
+            Issue.record("expected text block")
+            return
+        }
+        #expect(blockID == PresentationBlockId.messageFallback("msg-2"))
+        #expect(text.isEmpty)
+    }
+
+    @Test func ensureLiveRow_omitsHiddenToolOnlyAssistant() {
+        let message = Message(
+            id: "msg-2",
+            role: .assistant,
+            text: "",
+            parts: [.tool(ToolPart(id: "prt-1", toolName: "todowrite", status: .running))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        let blocks = SessionChatTimelineBlocks.ensureLiveRow(
+            message: message,
+            isStreaming: false,
+            blocks: []
+        )
+        #expect(blocks.isEmpty)
+    }
+
+    @Test func ensureLiveRow_omitsEmptyTextAfterStreamEnds() {
+        let message = Message(
+            id: "msg-2",
+            role: .assistant,
+            text: "",
+            parts: [
+                .text(TextPart(id: "prt-1", text: "", isStreaming: false)),
+                .tool(ToolPart(id: "prt-2", toolName: "todowrite", status: .completed)),
+            ],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        let blocks = SessionChatTimelineBlocks.ensureLiveRow(
+            message: message,
+            isStreaming: false,
+            blocks: []
+        )
+        #expect(blocks.isEmpty)
+    }
+
     @Test func thoughtDurationLabel_matchesTuiBuckets() {
         #expect(SessionChatTimelineBlocks.thoughtDurationLabel(438) == "438ms")
         #expect(SessionChatTimelineBlocks.thoughtDurationLabel(6400) == "6.4s")
         #expect(SessionChatTimelineBlocks.thoughtDurationLabel(127_000) == "2m 7s")
         #expect(SessionChatTimelineBlocks.thoughtDurationLabel(nil) == nil)
+    }
+
+    @Test func build_keepsBlankCompletedReasoningAsThinking() {
+        let blocks = okBlocks(
+            parts: [
+                .reasoning(
+                    ReasoningPart(
+                        id: "r1",
+                        text: "",
+                        isStreaming: false,
+                        timeStartEpochMs: 1,
+                        timeEndEpochMs: 2
+                    )
+                ),
+            ]
+        )
+        guard case .reasoning(_, let text, let isStreaming, let durationMs) = blocks.first else {
+            Issue.record("expected reasoning")
+            return
+        }
+        #expect(text.isEmpty)
+        #expect(isStreaming)
+        #expect(durationMs == nil)
     }
 
     @Test func build_reasoningPart_includesDuration() {
@@ -138,7 +224,7 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(blockID == PresentationBlockId.direct("q3"))
-        #expect(tool.title == "Which option?")
+        #expect(tool.title == "Asked 1 question")
         #expect(tool.subtitle == nil)
         #expect(tool.detailText == "Which option?")
     }
@@ -165,7 +251,7 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "What would you like to do in this session?")
+        #expect(tool.title == "Asked 1 question")
         #expect(tool.errorText == "The user dismissed this question")
         #expect(
             tool.detailText ==
@@ -199,12 +285,66 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "What should we do with these two projects this session?")
+        #expect(tool.title == "Asked 1 question")
         #expect(tool.subtitle == "Build a third sibling")
         #expect(
             tool.detailText ==
                 "What should we do with these two projects this session?\nBuild a third sibling"
         )
+    }
+
+    @Test func build_questionToolUsesAskedCountTitleEvenWhenNameIsPlaceholder() {
+        let questions: AnyCodable = .array([
+            .dictionary(["question": .string("Q0")]),
+            .dictionary(["question": .string("Q1")]),
+            .dictionary(["question": .string("Q2")]),
+        ])
+        let hidden = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "prt-q",
+                        toolName: "tool",
+                        status: .running,
+                        input: ["questions": questions]
+                    )
+                ),
+            ]
+        )
+        #expect(hidden.isEmpty)
+
+        let shown = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "prt-q",
+                        toolName: "tool",
+                        status: .completed,
+                        input: ["questions": questions]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(_, let tool) = shown.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Asked 3 questions")
+    }
+
+    @Test func build_hidesPlaceholderToolNameWithoutQuestions() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "prt-unknown",
+                        toolName: "tool",
+                        status: .running
+                    )
+                ),
+            ]
+        )
+        #expect(blocks.isEmpty)
     }
 
     @Test func build_nonAssistantRolesAreTextOnly() {
@@ -248,9 +388,30 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(blockID == PresentationBlockId.direct("read-1"))
-        #expect(tool.title == "Read")
+        #expect(tool.title == "Explored — 1 read")
         #expect(tool.subtitle == "src/Main.kt")
         #expect(tool.detailText == nil)
+    }
+
+    @Test func build_readDoesNotUseDirectoryPathAsSubtitle() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "read-1",
+                        toolName: "read",
+                        status: .completed,
+                        input: ["path": .string("/home/ivan/Projects/session-test")]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(_, let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Explored — 1 read")
+        #expect(tool.subtitle == nil)
     }
 
     @Test func build_contextFallsBackToGenericTitleWhenInputMissing() {
@@ -261,7 +422,7 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Called glob")
+        #expect(tool.title == "Explored — 1 glob")
         #expect(tool.subtitle == nil)
     }
 
@@ -283,14 +444,14 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Grep")
+        #expect(tool.title == "Explored — 1 grep")
         #expect(tool.subtitle == "Searching…")
     }
 
     @Test func build_consecutiveContextToolsBecomeToolGroup() {
         let blocks = okBlocks(
             parts: [
-                .tool(ToolPart(id: "r1", toolName: "read", status: .completed, input: ["path": .string("a.kt")])),
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed, input: ["filePath": .string("a.kt")])),
                 .tool(ToolPart(id: "g1", toolName: "grep", status: .running, input: ["pattern": .string("foo")])),
                 .tool(ToolPart(id: "l1", toolName: "glob", status: .pending, input: ["pattern": .string("*.kt")])),
             ]
@@ -302,8 +463,23 @@ struct SessionChatTimelineBlocksTests {
         #expect(blockID == PresentationBlockId.toolGroup(["r1", "g1", "l1"]))
         #expect(group.count == 3)
         #expect(group.status == .running)
-        #expect(group.title == "3 tools")
-        #expect(group.subtitle == "Read · Grep · Glob")
+        #expect(group.title == "Explored — 1 read · 1 grep · 1 glob")
+        #expect(group.subtitle == "a.kt")
+    }
+
+    @Test func build_consecutiveWebsearchesUseExploredSearchChrome() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "s1", toolName: "websearch", status: .completed, input: ["query": .string("one")])),
+                .tool(ToolPart(id: "s2", toolName: "websearch", status: .completed, input: ["query": .string("two")])),
+            ]
+        )
+        guard case .toolGroup(_, let group) = blocks.first else {
+            Issue.record("Expected tool group")
+            return
+        }
+        #expect(group.title == "Explored — 2 searches")
+        #expect(group.subtitle == "one")
     }
 
     @Test func build_textBreaksContextGroup() {
@@ -480,9 +656,9 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected search card")
             return
         }
-        #expect(search.title == "Search")
+        #expect(search.title == "Explored — 1 search")
         #expect(search.subtitle == "opencode mobile")
-        #expect(search.detailText == "https://a.example\nhttps://b.example")
+        #expect(search.detailText == nil)
     }
 
     @Test func build_runningNetworkHasNoSheetDetailEvenWithOutput() {
@@ -1268,8 +1444,8 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(group.count == 2)
-        #expect(group.title == "2 tools")
-        #expect(group.subtitle == "2 reads")
+        #expect(group.title == "Explored — 2 reads")
+        #expect(group.subtitle == nil)
         #expect(blockID == PresentationBlockId.toolGroup(["r1", "r2"]))
     }
 
@@ -1421,8 +1597,8 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(blockID == PresentationBlockId.toolGroup(["r1", "r2"]))
-        #expect(group.title == "2 tools")
-        #expect(group.subtitle == "2 reads")
+        #expect(group.title == "Explored — 2 reads")
+        #expect(group.subtitle == nil)
         guard case .toolCard = blocks[1] else {
             Issue.record("Expected bash card")
             return

@@ -40,6 +40,88 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
+    fun ensureLiveRow_keepsEmptyStreamingAssistant() {
+        val message =
+            Message(
+                id = "msg-2",
+                role = MessageRole.Assistant,
+                text = "",
+                parts = listOf(MessagePart.Text(text = "", isStreaming = true, id = "prt-1")),
+            )
+        val blocks =
+            SessionChatTimelineBlocks.ensureLiveRow(
+                message = message,
+                isStreaming = true,
+                blocks = emptyList(),
+            )
+        val text = blocks.single() as SessionChatTimelineBlock.Text
+        assertEquals(PresentationBlockId.messageFallback("msg-2"), text.blockID)
+        assertEquals("", text.text)
+    }
+
+    @Test
+    fun ensureLiveRow_omitsHiddenToolOnlyAssistant() {
+        val message =
+            Message(
+                id = "msg-2",
+                role = MessageRole.Assistant,
+                text = "",
+                parts =
+                    listOf(
+                        MessagePart.Tool(toolName = "todowrite", status = ToolStatus.Running, id = "prt-1"),
+                    ),
+            )
+        assertTrue(
+            SessionChatTimelineBlocks
+                .ensureLiveRow(message = message, isStreaming = false, blocks = emptyList())
+                .isEmpty(),
+        )
+    }
+
+    @Test
+    fun ensureLiveRow_omitsEmptyTextAfterStreamEnds() {
+        val message =
+            Message(
+                id = "msg-2",
+                role = MessageRole.Assistant,
+                text = "",
+                parts =
+                    listOf(
+                        MessagePart.Text(text = "", isStreaming = false, id = "prt-1"),
+                        MessagePart.Tool(toolName = "todowrite", status = ToolStatus.Completed, id = "prt-2"),
+                    ),
+            )
+        assertTrue(
+            SessionChatTimelineBlocks
+                .ensureLiveRow(message = message, isStreaming = false, blocks = emptyList())
+                .isEmpty(),
+        )
+    }
+
+    @Test
+    fun build_keepsBlankCompletedReasoningAsThinking() {
+        val result =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(
+                            text = "",
+                            isStreaming = false,
+                            id = "r1",
+                            timeStartEpochMs = 1,
+                            timeEndEpochMs = 2,
+                        ),
+                    ),
+            )
+        val thought = (result as SessionChatTimelineBlocksResult.Ok).blocks.single()
+            as SessionChatTimelineBlock.Reasoning
+        assertTrue(thought.isStreaming)
+        assertEquals("", thought.text)
+        assertNull(thought.durationMs)
+    }
+
+    @Test
     fun build_reasoningPart_becomesThoughtBlock() {
         val result =
             SessionChatTimelineBlocks.build(
@@ -292,7 +374,7 @@ class SessionChatTimelineBlocksTest {
             )
         val tool = shown.single() as SessionChatTimelineBlock.ToolCard
         assertEquals(PresentationBlockId.direct("prt-3"), tool.blockID)
-        assertEquals("Which option?", tool.title)
+        assertEquals("Asked 1 question", tool.title)
         assertNull(tool.subtitle)
         assertEquals("Which option?", tool.detailText)
     }
@@ -322,7 +404,7 @@ class SessionChatTimelineBlocksTest {
                     ),
             )
         val tool = shown.single() as SessionChatTimelineBlock.ToolCard
-        assertEquals("What would you like to do in this session?", tool.title)
+        assertEquals("Asked 1 question", tool.title)
         assertEquals("The user dismissed this question", tool.errorText)
         assertEquals(
             "What would you like to do in this session?\n\nThe user dismissed this question",
@@ -363,12 +445,69 @@ class SessionChatTimelineBlocksTest {
                     ),
             )
         val tool = shown.single() as SessionChatTimelineBlock.ToolCard
-        assertEquals("What should we do with these two projects this session?", tool.title)
+        assertEquals("Asked 1 question", tool.title)
         assertEquals("Build a third sibling", tool.subtitle)
         assertEquals(
             "What should we do with these two projects this session?\nBuild a third sibling",
             tool.detailText,
         )
+    }
+
+    @Test
+    fun build_questionToolUsesAskedCountTitleEvenWhenNameIsPlaceholder() {
+        val questions =
+            buildJsonArray {
+                repeat(3) { index ->
+                    add(buildJsonObject { put("question", "Q$index") })
+                }
+            }
+        val hidden =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "tool",
+                            status = ToolStatus.Running,
+                            id = "prt-q",
+                            input = JsonObject(mapOf("questions" to questions)),
+                        ),
+                    ),
+            )
+        assertTrue(hidden.isEmpty())
+
+        val shown =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "tool",
+                            status = ToolStatus.Completed,
+                            id = "prt-q",
+                            input = JsonObject(mapOf("questions" to questions)),
+                        ),
+                    ),
+            )
+        val tool = shown.single() as SessionChatTimelineBlock.ToolCard
+        assertEquals("Asked 3 questions", tool.title)
+    }
+
+    @Test
+    fun build_hidesPlaceholderToolNameWithoutQuestions() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "tool",
+                            status = ToolStatus.Running,
+                            id = "prt-unknown",
+                        ),
+                    ),
+            )
+        assertTrue(blocks.isEmpty())
     }
 
     @Test
@@ -464,9 +603,29 @@ class SessionChatTimelineBlocksTest {
             ).single() as SessionChatTimelineBlock.ToolCard
 
         assertEquals(PresentationBlockId.direct("prt-1"), tool.blockID)
-        assertEquals("Read", tool.title)
+        assertEquals("Explored — 1 read", tool.title)
         assertEquals("src/Main.kt", tool.subtitle)
         assertNull(tool.detailText)
+    }
+
+    @Test
+    fun build_readDoesNotUseDirectoryPathAsSubtitle() {
+        val tool =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "read",
+                            status = ToolStatus.Completed,
+                            id = "prt-1",
+                            input = json("path" to "/home/ivan/Projects/session-test"),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("Explored — 1 read", tool.title)
+        assertNull(tool.subtitle)
     }
 
     @Test
@@ -478,7 +637,7 @@ class SessionChatTimelineBlocksTest {
             ).single() as SessionChatTimelineBlock.ToolCard
 
         assertEquals(PresentationBlockId.direct("prt-1"), tool.blockID)
-        assertEquals("Called glob", tool.title)
+        assertEquals("Explored — 1 glob", tool.title)
         assertNull(tool.subtitle)
     }
 
@@ -499,7 +658,7 @@ class SessionChatTimelineBlocksTest {
                     ),
             ).single() as SessionChatTimelineBlock.ToolCard
 
-        assertEquals("Grep", tool.title)
+        assertEquals("Explored — 1 grep", tool.title)
         assertEquals("Searching…", tool.subtitle)
     }
 
@@ -514,7 +673,7 @@ class SessionChatTimelineBlocksTest {
                             toolName = "read",
                             status = ToolStatus.Completed,
                             id = "prt-1",
-                            input = json("path" to "a.kt"),
+                            input = json("filePath" to "a.kt"),
                         ),
                         MessagePart.Tool(
                             toolName = "grep",
@@ -535,8 +694,34 @@ class SessionChatTimelineBlocksTest {
         assertEquals(PresentationBlockId.toolGroup(listOf("prt-1", "prt-2", "prt-3")), group.blockID)
         assertEquals(3, group.count)
         assertEquals(ToolStatus.Running, group.status)
-        assertEquals("3 tools", group.title)
-        assertEquals("Read · Grep · Glob", group.subtitle)
+        assertEquals("Explored — 1 read · 1 grep · 1 glob", group.title)
+        assertEquals("a.kt", group.subtitle)
+    }
+
+    @Test
+    fun build_consecutiveWebsearchesUseExploredSearchChrome() {
+        val group =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "websearch",
+                            status = ToolStatus.Completed,
+                            id = "prt-1",
+                            input = json("query" to "one"),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "websearch",
+                            status = ToolStatus.Completed,
+                            id = "prt-2",
+                            input = json("query" to "two"),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolGroup
+
+        assertEquals("Explored — 2 searches", group.title)
+        assertEquals("one", group.subtitle)
     }
 
     @Test
@@ -730,9 +915,9 @@ class SessionChatTimelineBlocksTest {
                         ),
                     ),
             ).single() as SessionChatTimelineBlock.ToolCard
-        assertEquals("Search", search.title)
+        assertEquals("Explored — 1 search", search.title)
         assertEquals("opencode mobile", search.subtitle)
-        assertEquals("https://a.example\nhttps://b.example", search.detailText)
+        assertNull(search.detailText)
     }
 
     @Test
@@ -1453,8 +1638,8 @@ class SessionChatTimelineBlocksTest {
         assertEquals(2, blocks.size)
         val group = blocks[0] as SessionChatTimelineBlock.ToolGroup
         assertEquals(PresentationBlockId.toolGroup(listOf("prt-1", "prt-2")), group.blockID)
-        assertEquals("2 tools", group.title)
-        assertEquals("2 reads", group.subtitle)
+        assertEquals("Explored — 2 reads", group.title)
+        assertNull(group.subtitle)
         assertTrue(blocks[1] is SessionChatTimelineBlock.ToolCard)
     }
 
@@ -1491,8 +1676,8 @@ class SessionChatTimelineBlocksTest {
             ).single() as SessionChatTimelineBlock.ToolGroup
         assertEquals(PresentationBlockId.toolGroup(listOf("prt-1", "prt-3")), group.blockID)
         assertEquals(2, group.count)
-        assertEquals("2 tools", group.title)
-        assertEquals("2 reads", group.subtitle)
+        assertEquals("Explored — 2 reads", group.title)
+        assertNull(group.subtitle)
     }
 
     @Test

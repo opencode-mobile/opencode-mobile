@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.domain.message.AttachmentDataUrl
+import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -431,7 +432,7 @@ class EventDomainAdapter(
                 type.endsWith("tool.failed") -> "error"
                 else -> "running"
             }
-        val name = properties.string("tool") ?: properties.string("name") ?: "tool"
+        val name = resolvedToolName(properties)
         val callId = properties.string("callID")
         val partId = properties.string("id") ?: callId
         val error =
@@ -682,6 +683,12 @@ class EventDomainAdapter(
             }
         return event("session.status", projected)
     }
+
+    private fun resolvedToolName(properties: JsonObject): String =
+        ToolPartIdentity.resolvedName(
+            explicit = properties.string("tool") ?: properties.string("name"),
+            input = jsonObjectInput(properties["input"]),
+        )
 
     private fun jsonObjectInput(value: JsonElement?): JsonObject? =
         when (value) {

@@ -468,6 +468,75 @@ class SessionMessageEngineTest {
     }
 
     @Test
+    fun partUpdated_overlaysToolFieldsInsteadOfReplacing() {
+        engine.replaceAll(
+            "ses-1",
+            listOf(
+                Message(
+                    id = "msg-1",
+                    role = MessageRole.Assistant,
+                    text = "",
+                    parts =
+                        listOf(
+                            MessagePart.Tool(
+                                toolName = "websearch",
+                                status = ToolStatus.Pending,
+                                id = "prt-s",
+                                input = buildJsonObject { put("query", "opencode mobile") },
+                            ),
+                        ),
+                ),
+            ),
+        )
+        engine.apply(
+            "ses-1",
+            MessagePatch.PartUpdated(
+                buildJsonObject {
+                    put("id", "prt-s")
+                    put("messageID", "msg-1")
+                    put("sessionID", "ses-1")
+                    put("type", "tool")
+                    put("tool", "")
+                    put(
+                        "state",
+                        buildJsonObject {
+                            put("status", "completed")
+                            put("input", buildJsonObject { })
+                        },
+                    )
+                },
+                delta = null,
+            ),
+        )
+        val tool = engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Tool>().single()
+        assertEquals("websearch", tool.toolName)
+        assertEquals(ToolStatus.Completed, tool.status)
+        assertEquals("opencode mobile", tool.input?.get("query")?.jsonPrimitive?.contentOrNull)
+    }
+
+    @Test
+    fun partUpdated_emptyTextDoesNotReplaceStreamingText() {
+        seedStreamingAssistant()
+        engine.apply(
+            "ses-1",
+            MessagePatch.PartUpdated(
+                buildJsonObject {
+                    put("id", "prt-1")
+                    put("messageID", "msg-1")
+                    put("sessionID", "ses-1")
+                    put("type", "text")
+                    put("text", "")
+                },
+                delta = null,
+            ),
+        )
+        engine.apply("ses-1", MessagePatch.PartDelta("msg-1", "prt-1", " world"))
+        val text = engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Text>().single()
+        assertEquals("Hello world", text.text)
+        assertTrue(text.isStreaming)
+    }
+
+    @Test
     fun mergeAuthoritative_finishesStreamingWhenRestPartsLackIds() {
         seedStreamingAssistant()
         val revision = engine.revision("ses-1")

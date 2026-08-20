@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
     private let lock = NSLock()
@@ -364,12 +365,21 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             partOrder[sessionID]?[messageID]?.append(partID)
         }
         let previous = partsCache[sessionID]?[messageID]?[partID]
-        partsCache[sessionID]?[messageID]?[partID] = resolvedPart
-        if delta == nil {
+        let stored = mergePart(existing: previous, incoming: resolvedPart)
+        partsCache[sessionID]?[messageID]?[partID] = stored
+        logReasoningOverlay(
+            sessionID: sessionID,
+            messageID: messageID,
+            partID: partID,
+            previous: previous,
+            stored: stored,
+            inserted: insertedPart
+        )
+        if delta == nil, replacesStreamSnapshot(resolvedPart) {
             clearChunks(sessionID: sessionID, messageID: messageID, partID: partID)
         }
         let previousStreaming = isStreamingPart(previous)
-        let resolvedStreaming = isStreamingPart(resolvedPart)
+        let resolvedStreaming = isStreamingPart(stored)
         let streamingChanged = previousStreaming != resolvedStreaming
         return SessionChangeSet(
             sessionRevision: 0,
@@ -910,42 +920,93 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
     }
 
     private func mergePart(existing: MessagePart?, incoming: MessagePart) -> MessagePart {
+        if existing == nil {
+            if case .tool(let tool) = incoming {
+                return .tool(
+                    ToolPart(
+                        id: tool.id,
+                        toolName: ToolPartIdentity.resolvedName(explicit: tool.toolName, input: tool.input),
+                        status: tool.status,
+                        title: tool.title,
+                        error: tool.error,
+                        callID: tool.callID,
+                        input: tool.input,
+                        output: tool.output,
+                        metadata: tool.metadata,
+                        timeStartEpochMs: tool.timeStartEpochMs
+                    )
+                )
+            }
+            return incoming
+        }
         guard let existing else { return incoming }
         let merged: MessagePart
         switch (existing, incoming) {
         case (.tool(let prior), .tool(let next)):
+            let mergedInput = mergeDict(prior.input, next.input)
             merged = .tool(
                 ToolPart(
                     id: prior.id,
-                    toolName: next.toolName.isEmpty ? prior.toolName : next.toolName,
+                    toolName: ToolPartIdentity.resolvedName(
+                        explicit: ToolPartIdentity.coalesce(incoming: next.toolName, existing: prior.toolName),
+                        input: mergedInput
+                    ),
                     status: next.status,
-                    title: next.title ?? prior.title,
+                    title: nonBlank(next.title) ?? prior.title,
                     error: next.error ?? prior.error,
                     callID: next.callID ?? prior.callID,
-                    input: mergeDict(prior.input, next.input),
-                    output: next.output ?? prior.output,
+                    input: mergedInput,
+                    output: nonEmpty(next.output) ?? prior.output,
                     metadata: mergeDict(prior.metadata, next.metadata),
                     timeStartEpochMs: next.timeStartEpochMs ?? prior.timeStartEpochMs
                 )
             )
         case (.text(let prior), .text(let next)):
+            let hasSnapshot = !next.text.isEmpty
             merged = .text(
                 TextPart(
                     id: next.id ?? prior.id,
-                    text: next.text.isEmpty ? prior.text : next.text,
-                    isStreaming: false,
-                    isSynthetic: next.isSynthetic,
-                    isIgnored: next.isIgnored
+                    text: hasSnapshot ? next.text : prior.text,
+                    isStreaming: hasSnapshot ? next.isStreaming : prior.isStreaming,
+                    isSynthetic: hasSnapshot ? next.isSynthetic : prior.isSynthetic,
+                    isIgnored: hasSnapshot ? next.isIgnored : prior.isIgnored
                 )
             )
         case (.reasoning(let prior), .reasoning(let next)):
+            let hasSnapshot = !next.text.isEmpty
+            let streaming: Bool
+            if hasSnapshot {
+                streaming = next.isStreaming
+            } else if next.timeEndEpochMs != nil {
+                streaming = false
+            } else {
+                streaming = prior.isStreaming
+            }
             merged = .reasoning(
                 ReasoningPart(
                     id: next.id ?? prior.id,
-                    text: next.text.isEmpty ? prior.text : next.text,
-                    isStreaming: false,
+                    text: hasSnapshot ? next.text : prior.text,
+                    isStreaming: streaming,
                     timeStartEpochMs: next.timeStartEpochMs ?? prior.timeStartEpochMs,
                     timeEndEpochMs: next.timeEndEpochMs ?? prior.timeEndEpochMs
+                )
+            )
+        case (.file(let prior), .file(let next)):
+            merged = .file(
+                FilePart(
+                    id: prior.id,
+                    filename: next.filename.isEmpty ? prior.filename : next.filename,
+                    mime: next.mime.isEmpty ? prior.mime : next.mime,
+                    kind: next.kind,
+                    dataURL: next.dataURL.isEmpty ? prior.dataURL : next.dataURL
+                )
+            )
+        case (.compaction(let prior), .compaction(let next)):
+            merged = .compaction(
+                CompactionPart(
+                    id: prior.id,
+                    auto: prior.auto || next.auto,
+                    completed: prior.completed || next.completed
                 )
             )
         default:
@@ -958,13 +1019,35 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         _ existing: [String: AnyCodable]?,
         _ incoming: [String: AnyCodable]?
     ) -> [String: AnyCodable]? {
-        guard let incoming else { return existing }
-        guard let existing else { return incoming }
+        guard let incoming, !incoming.isEmpty else { return existing }
+        guard let existing, !existing.isEmpty else { return incoming }
         var merged = existing
         for (key, value) in incoming {
             merged[key] = value
         }
         return merged
+    }
+
+    private func nonBlank(_ value: String?) -> String? {
+        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return value
+    }
+
+    private func nonEmpty(_ value: String?) -> String? {
+        guard let value, !value.isEmpty else { return nil }
+        return value
+    }
+
+    /// Sparse overlays must not drop live text/reasoning deltas.
+    private func replacesStreamSnapshot(_ incoming: MessagePart) -> Bool {
+        switch incoming {
+        case .text(let text):
+            return !text.text.isEmpty
+        case .reasoning(let reasoning):
+            return !reasoning.text.isEmpty
+        default:
+            return true
+        }
     }
 
     private func seedPartIdentities(
@@ -1034,5 +1117,27 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         default:
             false
         }
+    }
+
+    private func logReasoningOverlay(
+        sessionID: String,
+        messageID: String,
+        partID: String,
+        previous: MessagePart?,
+        stored: MessagePart,
+        inserted: Bool
+    ) {
+        guard case let .reasoning(storedReasoning) = stored else { return }
+        let from: String
+        if case let .reasoning(previousReasoning)? = previous {
+            from = ThoughtPartChrome.paintLabel(previousReasoning)
+        } else {
+            from = "none"
+        }
+        let to = ThoughtPartChrome.paintLabel(storedReasoning)
+        guard inserted || from != to else { return }
+        OpenCodeLog.messageStore.info(
+            "reasoning overlay session=\(sessionID, privacy: .public) message=\(messageID, privacy: .public) part=\(partID, privacy: .public) from=\(from, privacy: .public) to=\(to, privacy: .public) inserted=\(inserted ? 1 : 0) chars=\(storedReasoning.text.count) streaming=\(storedReasoning.isStreaming ? 1 : 0) end=\(storedReasoning.timeEndEpochMs == nil ? 0 : 1)"
+        )
     }
 }

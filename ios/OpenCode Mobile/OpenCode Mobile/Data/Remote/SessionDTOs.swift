@@ -204,7 +204,7 @@ nonisolated struct V2FormFieldOptionDTO: Codable, Sendable {
 }
 
 nonisolated struct V2FormReplyRequestDTO: Codable, Sendable {
-    let answer: [String: String]
+    let answer: [String: JSONValueDTO]
 }
 
 nonisolated struct QuestionToolDTO: Codable, Sendable {

@@ -140,6 +140,9 @@ class DefaultForegroundEventStream
                                                             markStreamConnected()
                                                             retryAttempt = 0
                                                         },
+                                                        onActivity = {
+                                                            lastActivityMs.set(System.currentTimeMillis())
+                                                        },
                                                     ) { dataLine ->
                                                         lastActivityMs.set(System.currentTimeMillis())
                                                         val parsed = eventDomainAdapter.parseEvents(dataLine)

@@ -20,6 +20,9 @@ import io.ktor.http.headersOf
 import io.ktor.utils.io.ByteChannel
 import io.ktor.utils.io.writeStringUtf8
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -216,6 +219,59 @@ class DefaultForegroundEventStreamTest {
                 withTimeout(2_000) { secondOpen.await() }
                 assertTrue(opens.get() >= 2)
             } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun idleTimeout_doesNotReconnectWhenSseCommentsArrive() =
+        runBlocking {
+            val opens = AtomicInteger(0)
+            val commentsSent = CompletableDeferred<Unit>()
+            val writerJob = Job()
+            val client =
+                HttpClient(
+                    MockEngine {
+                        opens.incrementAndGet()
+                        val channel = ByteChannel(autoFlush = true)
+                        CoroutineScope(Dispatchers.Unconfined + writerJob).launch {
+                            channel.writeStringUtf8("data: {\"type\":\"server.connected\",\"data\":{}}\n\n")
+                            repeat(8) {
+                                delay(40)
+                                channel.writeStringUtf8(": keep-alive\n")
+                            }
+                            commentsSent.complete(Unit)
+                        }
+                        respond(
+                            content = channel,
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                    idleTimeoutMs = 150,
+                )
+            try {
+                stream.start()
+                withTimeout(2_000) { commentsSent.await() }
+                assertEquals(1, opens.get())
+            } finally {
+                writerJob.cancel()
                 stream.stop()
                 client.close()
             }

@@ -2,8 +2,10 @@ package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.command.CommandInvocationCollapser
 import dev.opencode.mobile.domain.command.ServerCommand
+import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import kotlinx.serialization.json.JsonArray
@@ -79,7 +81,7 @@ sealed class SessionChatTimelineBlock {
 }
 
 object SessionChatTimelineBlocks {
-    private val contextToolNames = setOf("read", "glob", "grep")
+    private val contextToolNames = setOf("read", "glob", "grep", "websearch")
 
     fun build(
         role: MessageRole,
@@ -167,14 +169,20 @@ object SessionChatTimelineBlocks {
                 is MessagePart.Reasoning -> {
                     if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
                     val trimmed = part.text.trim()
-                    if (trimmed.isNotEmpty() || part.isStreaming) {
+                    if (isLiveReasoning(part)) {
                         val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                        val thinking = part.isStreaming || trimmed.isEmpty()
                         blocks +=
                             SessionChatTimelineBlock.Reasoning(
                                 blockID = PresentationBlockId.direct(partId),
                                 text = trimmed,
-                                isStreaming = part.isStreaming,
-                                durationMs = thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs),
+                                isStreaming = thinking,
+                                durationMs =
+                                    if (thinking) {
+                                        null
+                                    } else {
+                                        thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs)
+                                    },
                             )
                     }
                     index += 1
@@ -213,6 +221,26 @@ object SessionChatTimelineBlocks {
                 result.blocks.ifEmpty { fallbackBlocks() }
             SessionChatTimelineBlocksResult.MissingPartIds -> fallbackBlocks()
         }
+    }
+
+    /**
+     * TUI starts a fragment on `session.text.started` before any delta. Keep a
+     * stable row so an empty streaming assistant does not vanish from the timeline.
+     * Hidden-tool-only messages stay omitted.
+     */
+    fun ensureLiveRow(
+        message: Message,
+        isStreaming: Boolean,
+        blocks: List<SessionChatTimelineBlock>,
+    ): List<SessionChatTimelineBlock> {
+        if (blocks.isNotEmpty()) return blocks
+        if (!isStreaming) return emptyList()
+        return listOf(
+            SessionChatTimelineBlock.Text(
+                blockID = PresentationBlockId.messageFallback(message.id),
+                text = message.text,
+            ),
+        )
     }
 
     /**
@@ -322,16 +350,14 @@ object SessionChatTimelineBlocks {
         return duration.takeIf { it >= 0 }
     }
 
-    private fun isVisibleTool(tool: MessagePart.Tool): Boolean {
-        val name = tool.toolName.lowercase()
-        if (name == "todowrite") return false
-        if (name == "question" &&
-            (tool.status == ToolStatus.Pending || tool.status == ToolStatus.Running)
-        ) {
-            return false
-        }
-        return true
-    }
+    /** TUI keeps one thought row once the part exists. Do not drop it between Thinking and Thought. */
+    private fun isLiveReasoning(part: MessagePart.Reasoning): Boolean =
+        part.isStreaming ||
+            part.text.isNotBlank() ||
+            part.timeStartEpochMs != null ||
+            part.timeEndEpochMs != null
+
+    private fun isVisibleTool(tool: MessagePart.Tool): Boolean = ToolPartIdentity.isVisibleOnTimeline(tool)
 
     /**
      * Parts that never become timeline blocks. Grouping looks through them so
@@ -344,7 +370,7 @@ object SessionChatTimelineBlocks {
             is MessagePart.Text -> !part.isDisplayable || part.text.isBlank()
             is MessagePart.Tool -> !isVisibleTool(part)
             is MessagePart.File -> false
-            is MessagePart.Reasoning -> !part.isStreaming && part.text.isBlank()
+            is MessagePart.Reasoning -> !isLiveReasoning(part)
         }
 
     private fun isContextTool(toolName: String): Boolean = toolName.lowercase() in contextToolNames
@@ -377,21 +403,29 @@ object SessionChatTimelineBlocks {
             blockID = PresentationBlockId.toolGroup(memberIds),
             count = tools.size,
             status = status,
-            title = groupTitle(tools.size),
+            title = groupTitle(tools),
             subtitle = groupSubtitle(tools),
             errorText = errorText,
             members = members,
         )
     }
 
-    /** Count headline for the Tool Call Card (`7 tools`). */
-    private fun groupTitle(count: Int): String = "$count tools"
+    /** Context-only groups match TUI (`Explored — 1 read`). Mixed groups stay `N tools`. */
+    private fun groupTitle(tools: List<MessagePart.Tool>): String =
+        if (tools.isNotEmpty() && tools.all { isContextTool(it.toolName) }) {
+            exploredTitle(tools)
+        } else {
+            "${tools.size} tools"
+        }
 
     /**
      * Family one-liner in encounter order (`Edit · Write · 5 shells`).
      * A single member of a family is just the verb; multiples get a count.
      */
-    private fun groupSubtitle(tools: List<MessagePart.Tool>): String {
+    private fun groupSubtitle(tools: List<MessagePart.Tool>): String? {
+        if (tools.isNotEmpty() && tools.all { isContextTool(it.toolName) }) {
+            return tools.firstNotNullOfOrNull(::contextSubtitle)
+        }
         val order = mutableListOf<String>()
         val counts = mutableMapOf<String, Int>()
         for (tool in tools) {
@@ -403,6 +437,41 @@ object SessionChatTimelineBlocks {
             familyPhrase(name, counts.getValue(name))
         }
     }
+
+    private fun exploredTitle(tools: List<MessagePart.Tool>): String {
+        val order = mutableListOf<String>()
+        val counts = mutableMapOf<String, Int>()
+        for (tool in tools) {
+            val key = tool.toolName.lowercase()
+            if (key !in counts) order += key
+            counts[key] = (counts[key] ?: 0) + 1
+        }
+        val summary =
+            order.joinToString(" · ") { name ->
+                exploredFamilyPhrase(name, counts.getValue(name))
+            }
+        return "Explored — $summary"
+    }
+
+    private fun exploredFamilyPhrase(
+        name: String,
+        count: Int,
+    ): String =
+        when (name) {
+            "read" -> if (count == 1) "1 read" else "$count reads"
+            "grep" -> if (count == 1) "1 grep" else "$count greps"
+            "glob" -> if (count == 1) "1 glob" else "$count globs"
+            "websearch" -> if (count == 1) "1 search" else "$count searches"
+            else -> familyPhrase(name, count)
+        }
+
+    private fun contextSubtitle(tool: MessagePart.Tool): String? =
+        when (tool.toolName.lowercase()) {
+            "read" -> readPathSubtitle(tool.input)
+            "glob", "grep" -> patternPathSubtitle(tool.input)
+            "websearch" -> inputString(tool.input, "query")
+            else -> null
+        }
 
     private fun familyPhrase(
         name: String,
@@ -420,7 +489,7 @@ object SessionChatTimelineBlocks {
             "write" -> if (count == 1) "Write" else "$count writes"
             "webfetch" -> if (count == 1) "Fetch" else "$count fetches"
             "websearch" -> if (count == 1) "Search" else "$count searches"
-            "question" -> if (count == 1) "Question" else "$count questions"
+            "question" -> askedQuestionsTitle(count)
             "skill" -> if (count == 1) "Skill" else "$count skills"
             "apply_patch" -> if (count == 1) "Patch" else "$count patches"
             "linear_get_issue" -> if (count == 1) "Get issue" else "$count Get issues"
@@ -507,7 +576,7 @@ object SessionChatTimelineBlocks {
                 ?: tool.title?.takeIf { it.isNotEmpty() && !it.equals(tool.toolName, ignoreCase = true) }
                 ?: runningTitleOverride(tool)
         return Chrome(
-            title = "Called ${tool.toolName}",
+            title = ToolPartIdentity.calledTitle(tool.toolName),
             subtitle = subtitle,
             detailText = settledDetail(tool),
         )
@@ -516,28 +585,18 @@ object SessionChatTimelineBlocks {
     private fun specializedChrome(
         name: String,
         tool: MessagePart.Tool,
-    ): Chrome? =
-        when (name) {
-            "read" -> contextChrome(tool, displayTitle = "Read", subtitle = pathSubtitle(tool.input))
-            "glob" ->
-                contextChrome(
-                    tool,
-                    displayTitle = "Glob",
-                    subtitle = patternPathSubtitle(tool.input),
-                )
-            "grep" ->
-                contextChrome(
-                    tool,
-                    displayTitle = "Grep",
-                    subtitle = patternPathSubtitle(tool.input),
-                )
+    ): Chrome? {
+        if (isQuestionTool(tool)) return questionChrome(tool)
+        return when (name) {
+            "read" -> contextChrome(tool, subtitle = readPathSubtitle(tool.input))
+            "glob" -> contextChrome(tool, subtitle = patternPathSubtitle(tool.input))
+            "grep" -> contextChrome(tool, subtitle = patternPathSubtitle(tool.input))
             "bash", "shell" -> shellChrome(tool)
             "execute" -> executeChrome(tool)
             "lsp" -> lspChrome(tool)
             "plan_exit" -> planExitChrome(tool)
             "webfetch" -> networkChrome(tool, displayTitle = "Fetch", subtitleKey = "url")
-            "websearch" -> networkChrome(tool, displayTitle = "Search", subtitleKey = "query")
-            "question" -> questionChrome(tool)
+            "websearch" -> contextChrome(tool, subtitle = inputString(tool.input, "query"))
             "skill" ->
                 Chrome(
                     title = "Skill",
@@ -551,6 +610,7 @@ object SessionChatTimelineBlocks {
             "apply_patch" -> fileChangeChrome(tool, displayTitle = "Patch")
             else -> null
         }
+    }
 
     private fun fileChangeChrome(
         tool: MessagePart.Tool,
@@ -702,20 +762,12 @@ object SessionChatTimelineBlocks {
 
     private fun contextChrome(
         tool: MessagePart.Tool,
-        displayTitle: String,
         subtitle: String?,
-    ): Chrome {
-        if (subtitle == null) {
-            return Chrome(
-                title = "Called ${tool.toolName}",
-                subtitle = runningTitleOverride(tool),
-            )
-        }
-        return Chrome(
-            title = displayTitle,
+    ): Chrome =
+        Chrome(
+            title = exploredTitle(listOf(tool)),
             subtitle = runningTitleOverride(tool) ?: subtitle,
         )
-    }
 
     private fun shellChrome(tool: MessagePart.Tool): Chrome {
         val command =
@@ -858,6 +910,10 @@ object SessionChatTimelineBlocks {
     private fun pathSubtitle(input: JsonObject?): String? =
         inputString(input, "filePath", "path", "file")
 
+    /** Read chrome is the file, not explore/cwd `path` (often the project root). */
+    private fun readPathSubtitle(input: JsonObject?): String? =
+        inputString(input, "filePath", "file")
+
     private fun patternPathSubtitle(input: JsonObject?): String? {
         val pattern = inputString(input, "pattern")
         val path = inputString(input, "path", "directory")
@@ -869,6 +925,12 @@ object SessionChatTimelineBlocks {
         }
     }
 
+    private fun isQuestionTool(tool: MessagePart.Tool): Boolean =
+        ToolPartIdentity.isQuestion(tool.toolName, tool.input)
+
+    private fun askedQuestionsTitle(count: Int): String =
+        if (count == 1) "Asked 1 question" else "Asked $count questions"
+
     private fun questionChrome(tool: MessagePart.Tool): Chrome {
         val questions = questionTexts(tool.input)
         val answers = answerTexts(tool.metadata)
@@ -878,8 +940,9 @@ object SessionChatTimelineBlocks {
                 ?: runningTitleOverride(tool)
         val firstAnswer = answers.firstOrNull()
         val dismissed = if (tool.status == ToolStatus.Error) tool.error?.takeIf { it.isNotEmpty() } else null
+        val count = questions.size.coerceAtLeast(if (firstQuestion != null) 1 else 0)
         return Chrome(
-            title = firstQuestion ?: "Question",
+            title = askedQuestionsTitle(count),
             subtitle = firstAnswer,
             detailText =
                 questionDetail(

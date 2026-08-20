@@ -435,6 +435,30 @@ struct EventDomainAdapterTests {
         #expect(event?.rawProperties?["part"]?.dictionaryValue?["state"]?.dictionaryValue?["status"]?.stringValue == "running")
     }
 
+    @Test func parseEvent_toolCalledWithoutNameDoesNotInventPlaceholderTool() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.next.tool.called","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","input":{}}}"#
+        )
+        #expect(event?.rawProperties?["part"]?.dictionaryValue?["tool"]?.stringValue == "")
+    }
+
+    @Test func parseEvent_infersQuestionToolFromInputQuestions() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.next.tool.success","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","input":{"questions":[{"question":"One"},{"question":"Two"},{"question":"Three"}]}}}"#
+        )
+        #expect(event?.rawProperties?["part"]?.dictionaryValue?["tool"]?.stringValue == "question")
+    }
+
+    @Test func parseEvent_infersWebsearchToolFromInputQuery() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.next.tool.success","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","input":{"query":"opencode mobile"}}}"#
+        )
+        #expect(event?.rawProperties?["part"]?.dictionaryValue?["tool"]?.stringValue == "websearch")
+    }
+
     @Test func parseEvent_projectsLiveTextDeltaUsingOrdinalPartID() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(

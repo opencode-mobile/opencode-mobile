@@ -486,12 +486,17 @@ struct MessageDomainAdapterTests {
         #expect(adapter.messagePart(from: dto) == nil)
     }
 
-    @Test func messagePart_toolTypeMissingTool_returnsNil() throws {
+    @Test func messagePart_toolTypeMissingTool_returnsNamelessTool() throws {
         let dto = try decoder.decode(
             MessagePartDTO.self,
             from: #"{"id":"prt-1","type":"tool"}"#.data(using: .utf8)!
         )
-        #expect(adapter.messagePart(from: dto) == nil)
+        guard case let .tool(tool) = adapter.messagePart(from: dto) else {
+            Issue.record("expected a nameless tool part")
+            return
+        }
+        #expect(tool.toolName.isEmpty)
+        #expect(tool.id == "prt-1")
     }
 
     @Test func flattenedText_singleTextPart() {

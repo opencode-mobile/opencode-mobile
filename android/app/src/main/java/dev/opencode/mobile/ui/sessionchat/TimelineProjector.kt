@@ -288,7 +288,7 @@ object TimelineProjector {
             is SessionChatTimelineBlock.ChildSessionRow ->
                 "r:${block.blockID}:${block.childSessionId != null}"
             is SessionChatTimelineBlock.Reasoning ->
-                "n:${block.blockID}:${block.isStreaming}"
+                "n:${block.blockID}"
         }
 
     private data class LayoutKey(
@@ -492,7 +492,7 @@ object TimelineProjector {
             is SessionChatTimelineBlock.ChildSessionRow ->
                 "r:${block.blockID}:${block.childSessionId != null}"
             is SessionChatTimelineBlock.Reasoning ->
-                "n:${block.blockID}:${block.isStreaming}"
+                "n:${block.blockID}"
         }
 
     private fun markdownFingerprint(row: TimelineRow): String =

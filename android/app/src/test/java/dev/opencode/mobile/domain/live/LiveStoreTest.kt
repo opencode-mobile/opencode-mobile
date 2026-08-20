@@ -46,6 +46,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
@@ -889,6 +890,57 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_reconnectUnchangedFingerprintDoesNotRepaint() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = "ses-1"))
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            assertEquals(1, emissions.size)
+            assertEquals("Hello", emissions.single().single().text)
+        }
+
+    @Test
+    fun observeMessages_doesNotPollWhileEventStreamConnected() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            repository.messages = listOf(Message(id = "msg-2", role = MessageRole.Assistant, text = "Polled"))
+            advanceTimeBy(
+                LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS + LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS,
+            )
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            assertEquals(1, emissions.size)
+            assertEquals("Hello", emissions.single().single().text)
+        }
+
+    @Test
     fun observeMessages_ignoresEventsForOtherSessions() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
@@ -1290,7 +1342,7 @@ class MessageSyncTest {
         }
 
     @Test
-    fun observeMessages_sessionIdleReloadsAndClearsStreaming() =
+    fun observeMessages_sessionIdleFinalizesStreamingWithoutReload() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
@@ -1323,10 +1375,12 @@ class MessageSyncTest {
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
 
-            val final = emissions.last().single()
-            assertEquals("Hello", final.text)
-            assertFalse((final.parts.single() as MessagePart.Text).isStreaming)
-            assertEquals(2, repository.listMessagesCallCount)
+            val final = emissions.last()
+            assertEquals("Hello", final.first { it.id == "msg-1" }.text)
+            val assistant = final.first { it.id == "msg-2" }
+            assertEquals("Hello", assistant.text)
+            assertFalse((assistant.parts.single() as MessagePart.Text).isStreaming)
+            assertEquals(1, repository.listMessagesCallCount)
         }
 
     @Test
@@ -1624,6 +1678,78 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_placeholderToolNameDoesNotOverwriteQuestion() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            eventStream.emit(toolPartEvent(partId = "prt-q", messageId = "msg-2", tool = "question", status = "pending"))
+            eventStream.emit(toolPartEvent(partId = "prt-q", messageId = "msg-2", tool = "tool", status = "completed"))
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val tool =
+                emissions
+                    .last()
+                    .first { it.id == "msg-2" }
+                    .parts
+                    .single() as MessagePart.Tool
+            assertEquals("question", tool.toolName)
+            assertEquals(ToolStatus.Completed, tool.status)
+        }
+
+    @Test
+    fun observeMessages_namelessToolInfersWebsearchFromMergedQuery() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            eventStream.emit(toolPartEvent(partId = "prt-s", messageId = "msg-2", tool = "", status = "pending"))
+            eventStream.emit(
+                toolPartEvent(
+                    partId = "prt-s",
+                    messageId = "msg-2",
+                    tool = "",
+                    status = "completed",
+                    input = buildJsonObject { put("query", "opencode mobile") },
+                ),
+            )
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val tool =
+                emissions
+                    .last()
+                    .first { it.id == "msg-2" }
+                    .parts
+                    .single() as MessagePart.Tool
+            assertEquals("websearch", tool.toolName)
+            assertEquals(ToolStatus.Completed, tool.status)
+        }
+
+    @Test
     fun observeMessages_partUpdateForRestSeededMessageReloadsTimeline() =
         runTest(testDispatcher) {
             val repository =
@@ -1835,8 +1961,13 @@ class MessageSyncTest {
         messageId: String,
         tool: String,
         status: String,
+        input: JsonObject? = null,
     ): OpencodeEvent {
-        val stateJson = buildJsonObject { put("status", status) }
+        val stateJson =
+            buildJsonObject {
+                put("status", status)
+                input?.let { put("input", it) }
+            }
         val partJson =
             buildJsonObject {
                 put("id", partId)

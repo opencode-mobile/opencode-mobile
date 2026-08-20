@@ -3,23 +3,38 @@ import Foundation
 /// In-chat Working/Thinking/Retrying/Compacting chrome for an active turn.
 /// Reuses product labels from `EventDomainAdapter` (`Working` / `Retrying`),
 /// plus `SessionCompactChrome.statusLabel` while compact is in flight.
-/// After settled assistant content, a still-busy turn shows `thinkingLabel`
-/// unless Retrying. Working stays first when nothing has landed yet.
+/// Custom Working / Thinking footer lamps are off for now — TUI has no
+/// transcript equivalent and they blink when parts settle. Retrying and
+/// Compacting… still show. Hide this chrome while a question or permission
+/// is waiting on the user — the dock is the wait state.
 enum WorkingTurnIndicator {
-    static let thinkingLabel = "Thinking"
-
     static func labelForActiveTurn(
         statusLabel: String?,
         messages: [SessionChatRow],
-        isCompacting: Bool = false
+        isCompacting: Bool = false,
+        isAwaitingUser: Bool = false,
+        assistantTurnExists: Bool = false
     ) -> String? {
         if isCompacting { return SessionCompactChrome.statusLabel }
+        if isAwaitingUser { return nil }
         guard let statusLabel else { return nil }
         if hasInProgressAssistantContentAfterLastUser(messages) { return nil }
-        if statusLabel == "Working", hasSettledAssistantContentAfterLastUser(messages) {
-            return thinkingLabel
-        }
+        if statusLabel == "Working" { return nil }
         return statusLabel
+    }
+
+    static func assistantTurnExists(_ messages: [Message]) -> Bool {
+        let lastUserIndex = messages.lastIndex(where: { $0.role == .user })
+        let after: ArraySlice<Message>
+        if let lastUserIndex {
+            after = messages[(lastUserIndex + 1)...]
+        } else {
+            after = messages[...]
+        }
+        return after.contains { message in
+            message.role == .assistant
+                && !(message.mode?.compare("compaction", options: [.caseInsensitive]) == .orderedSame)
+        }
     }
 
     private static func assistantsAfterLastUser(_ messages: [SessionChatRow]) -> [SessionChatRow] {
@@ -44,10 +59,6 @@ enum WorkingTurnIndicator {
         assistantsAfterLastUser(messages).contains(where: hasInProgressContent)
     }
 
-    private static func hasSettledAssistantContentAfterLastUser(_ messages: [SessionChatRow]) -> Bool {
-        assistantsAfterLastUser(messages).contains(where: hasSettledContent)
-    }
-
     private static func hasInProgressContent(_ message: SessionChatRow) -> Bool {
         if message.isStreaming { return true }
         return message.blocks.contains { block in
@@ -60,26 +71,6 @@ enum WorkingTurnIndicator {
                 group.status.isInProgress || group.members.contains { $0.status.isInProgress }
             case .text, .attachment, .childSessionRow:
                 false
-            }
-        }
-    }
-
-    private static func hasSettledContent(_ message: SessionChatRow) -> Bool {
-        if !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return true
-        }
-        return message.blocks.contains { block in
-            switch block {
-            case let .text(_, text, _):
-                !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case let .reasoning(_, text, isStreaming, _):
-                !isStreaming && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case .attachment, .childSessionRow:
-                true
-            case let .toolCard(_, card):
-                !card.status.isInProgress
-            case let .toolGroup(_, group):
-                !group.status.isInProgress && group.members.allSatisfy { !$0.status.isInProgress }
             }
         }
     }

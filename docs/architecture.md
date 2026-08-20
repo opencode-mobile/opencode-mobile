@@ -107,9 +107,9 @@ event paths: `GET /global/event` and instance `GET /event`, plus v2
 `/event` is the directory-scoped bus that carries `session.created`,
 `message.*`, status, permissions, and questions. Both protocols must
 deliver those events over SSE — heartbeat-only is not acceptable. Stop
-after a short background grace. 45s idle timeout then reconnect. Refresh
-from REST after reconnect; REST is history / reconnect authority, not a
-substitute for missing SSE.
+after a short background grace. 45s idle timeout then reconnect. REST is
+history / reconnect authority, not a substitute for missing SSE. Live
+Session Chat UX tracks TUI v2.
 
 `EventDomainAdapter` projects v2 `session.*` / `session.next.*` (including
 inbox and reasoning) into the v1 product vocabulary. `MessageSync` merges

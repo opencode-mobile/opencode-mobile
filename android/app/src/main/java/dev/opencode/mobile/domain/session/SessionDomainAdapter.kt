@@ -21,7 +21,10 @@ import io.ktor.serialization.JsonConvertException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -221,13 +224,32 @@ class SessionDomainAdapter {
     fun formAnswer(
         questions: List<QuestionInfo>,
         answers: List<List<String>>,
-    ): Map<String, String> =
-        questions
-            .mapIndexed { index, question ->
-                val key = question.fieldKey ?: "q$index"
-                key to wireAnswer(question, answers.getOrNull(index)?.firstOrNull().orEmpty())
-            }.toMap()
-            .ifEmpty { formAnswer(answers) }
+    ): JsonObject {
+        if (questions.isEmpty()) return formAnswer(answers)
+        return buildJsonObject {
+            questions.forEachIndexed { index, question ->
+                put(question.fieldKey ?: "q$index", wireAnswerValue(question, answers.getOrNull(index).orEmpty()))
+            }
+        }
+    }
+
+    fun formAnswer(answers: List<List<String>>): JsonObject =
+        buildJsonObject {
+            answers.forEachIndexed { index, values ->
+                put("q$index", JsonPrimitive(values.firstOrNull().orEmpty()))
+            }
+        }
+
+    private fun wireAnswerValue(
+        question: QuestionInfo,
+        selected: List<String>,
+    ): JsonElement {
+        val values = selected.map { wireAnswer(question, it) }.filter { it.isNotEmpty() }
+        if (question.multiple) {
+            return JsonArray(values.map { JsonPrimitive(it) })
+        }
+        return JsonPrimitive(values.firstOrNull().orEmpty())
+    }
 
     private fun wireAnswer(
         question: QuestionInfo,
@@ -235,11 +257,6 @@ class SessionDomainAdapter {
     ): String =
         question.options.firstOrNull { it.label == selected || it.value == selected }?.value
             ?: selected
-
-    fun formAnswer(answers: List<List<String>>): Map<String, String> =
-        answers.mapIndexed { index, values ->
-            "q$index" to (values.firstOrNull() ?: "")
-        }.toMap()
 
     private fun toQuestionInfo(
         field: V2FormFieldDto,
@@ -256,7 +273,7 @@ class SessionDomainAdapter {
                         value = option.value ?: option.label ?: "",
                     )
                 },
-            multiple = field.multiple == true,
+            multiple = field.multiple == true || field.type.equals("multiselect", ignoreCase = true),
             custom = field.custom != false,
             fieldKey = field.key,
         )

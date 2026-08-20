@@ -10,8 +10,8 @@ tokenize run in a content-preparation layer so UI receives almost-ready rows.
 
 - `MessageStore` / `InMemoryMessageStore` — per-session message state and SSE patches.
 - `MessageSync` — event subscription before initial load, incremental SSE merge,
-  selective reconciliation, reconnect reload, and revision-gated fingerprint
-  polling.
+  selective reconciliation, reconnect catch-up, and revision-gated fingerprint
+  polling. Policy: [decisions.md](decisions.md).
 - `MessageContentPreparer` + `DisplayMessagePipeline` — parse, highlight, cache → `DisplayMessage`.
 - `MessageRepository.observeDisplayMessages` / `refreshDisplayMessages` / `prepareOptimisticUserMessage`.
 - Session Chat timeline depends on display-message APIs only (no UI-layer markdown mapper).
@@ -160,8 +160,8 @@ bridge on iOS).
 - Initial history failure produces a load-failed update.
 - Explicit refresh failure is returned to the caller.
 - SSE or reconciliation failure keeps the last good snapshot.
-- If authoritative `session.idle` reconciliation fails, streaming flags are
-  cleared and the watchdog poll resumes so a later REST response can recover.
+- SSE or reconnect failure keeps the last good snapshot. Catch-up policy is
+  in [decisions.md](decisions.md).
 
 ## Permission Behavior
 

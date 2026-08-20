@@ -8,6 +8,10 @@ import dev.opencode.mobile.data.remote.dto.V2FormFieldDto
 import dev.opencode.mobile.data.remote.dto.V2FormFieldOptionDto
 import dev.opencode.mobile.data.remote.dto.V2FormInfoDto
 import dev.opencode.mobile.data.remote.dto.V2FormMetadataDto
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -121,7 +125,10 @@ class QuestionRequestMappingTest {
         assertEquals("q0", request.questions.single().fieldKey)
         assertEquals("Check CPU support", request.questions.single().options.single().label)
         assertEquals("Check CPU support", request.questions.single().options.single().value)
-        assertEquals(mapOf("q0" to "Wait for instructions"), adapter.formAnswer(listOf(listOf("Wait for instructions"))))
+        assertEquals(
+            "Wait for instructions",
+            adapter.formAnswer(listOf(listOf("Wait for instructions"))).getValue("q0").jsonPrimitive.content,
+        )
     }
 
     @Test
@@ -157,11 +164,47 @@ class QuestionRequestMappingTest {
         assertEquals("choice", question.fieldKey)
         assertEquals("allow", question.options.first().value)
         assertEquals(
-            mapOf("choice" to "allow"),
+            "allow",
             adapter.formAnswer(
                 request.questions,
                 listOf(listOf("Allow search via Exa, Firecrawl, Parallel, Tavily")),
-            ),
+            ).getValue("choice").jsonPrimitive.content,
+        )
+    }
+
+    @Test
+    fun `form reply uses arrays for multiselect fields`() {
+        val request =
+            adapter.toQuestionRequest(
+                V2FormInfoDto(
+                    id = "frm_1",
+                    sessionId = "ses_1",
+                    title = "Trip",
+                    fields =
+                        listOf(
+                            V2FormFieldDto(
+                                key = "interests",
+                                title = "Interests",
+                                type = "multiselect",
+                                options =
+                                    listOf(
+                                        V2FormFieldOptionDto(value = "nature", label = "Scenery & nature"),
+                                        V2FormFieldOptionDto(value = "wildlife", label = "Wildlife"),
+                                    ),
+                            ),
+                        ),
+                ),
+            )
+
+        assertTrue(request.questions.single().multiple)
+        val answer =
+            adapter.formAnswer(
+                request.questions,
+                listOf(listOf("Scenery & nature", "Wildlife")),
+            )
+        assertEquals(
+            JsonArray(listOf(JsonPrimitive("nature"), JsonPrimitive("wildlife"))),
+            answer.getValue("interests").jsonArray,
         )
     }
 }

@@ -434,10 +434,16 @@ final class SessionChatTimeline {
 
         let applyMs = Int((ContinuousClock.now - applyStartedAt) / .milliseconds(1))
         let layoutAffectingCount = stamped.layoutAffectingRowIDs.count
+        let thoughtChrome = ThoughtPartChrome.summarize(
+            messages: lastLoadedMessages,
+            paintedCount: rows.count
+        )
         if applyMs >= 50 || rows.count >= 20 || layoutAffectingCount > 0 || !stamped.grewBottomRowIDs.isEmpty {
             OpenCodeLog.sessionChat.info(
-                "timelineApply rows=\(rows.count) rebuilt=\(rebuiltCount) kinds=\(TimelineApply.kindsLabel(apply.kinds), privacy: .public) required=\(isRequired) changed=\(stamped.changedRowIDs.count) layout=\(stamped.layoutChangedRowIDs.count) layoutAffecting=\(layoutAffectingCount) decorate=\(stamped.decorateRowIDs.count) grewBottom=\(stamped.grewBottomRowIDs.count) inserted=\(stamped.insertedRowIDs.count) rev=\(stamped.frameRevision) ms=\(applyMs)"
+                "timelineApply rows=\(rows.count) rebuilt=\(rebuiltCount) kinds=\(TimelineApply.kindsLabel(apply.kinds), privacy: .public) required=\(isRequired) changed=\(stamped.changedRowIDs.count) layout=\(stamped.layoutChangedRowIDs.count) layoutAffecting=\(layoutAffectingCount) decorate=\(stamped.decorateRowIDs.count) grewBottom=\(stamped.grewBottomRowIDs.count) inserted=\(stamped.insertedRowIDs.count) rev=\(stamped.frameRevision) ms=\(applyMs) \(thoughtChrome, privacy: .public)"
             )
+        } else {
+            OpenCodeLog.sessionChat.info("\(thoughtChrome, privacy: .public)")
         }
         guard !Task.isCancelled else { return }
 
@@ -462,6 +468,7 @@ final class SessionChatTimeline {
 
         state.timeline = resolvedTimeline
         state.messages = rows
+        state.assistantTurnExists = WorkingTurnIndicator.assistantTurnExists(lastLoadedMessages)
         state.isRefreshing = isRefreshing
         let fromCache = messagesFromCache && !networkCacheSyncConfirmed
         state.messagesFromCache = fromCache

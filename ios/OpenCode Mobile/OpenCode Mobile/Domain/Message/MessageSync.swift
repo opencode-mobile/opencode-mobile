@@ -480,14 +480,17 @@ nonisolated final class MessageSync: @unchecked Sendable {
         while !Task.isCancelled, observationStillCurrent(key: key) {
             staging.drain()
             staging.beginAuthorityWindow()
-            let result = await fullReloadResult(key: key, reason: "overflow-recovery")
+            let fingerprintBefore = fingerprint(for: key.storeSlot)
+            let result = await fullReloadResult(key: key, reason: "overflow-recovery", mergeExisting: true)
             switch result {
             case .success(let messages):
                 let becameHealthy = staging.completeAuthorityWindow(reloadSucceeded: true)
                 setHealth(staging.currentHealth, for: key)
                 let published = connectionEpoch.current() == observationEpoch.current
                 if published {
-                    publishMessages(messages)
+                    if fingerprintBefore != messageFingerprint(messages) {
+                        publishMessages(messages)
+                    }
                 }
                 if becameHealthy {
                     if published {
@@ -781,16 +784,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
             }
             handleMessagePartRemoved(event: event, key: key, publishMessages: publishMessages)
         case "session.idle":
-            switch await fullReloadResult(key: key, reason: "session.idle", mergeExisting: true) {
-            case .success(let messages):
-                publishMessages(messages)
-                setHealth(.healthy, for: key)
-            case .failure:
-                store.finishStreamingText(sessionID: key.storeSlot)
-                let recovered = store.messages(sessionID: key.storeSlot)
-                guard markChanged(key: key, messages: recovered) else { return }
-                publishMessages(recovered)
-            }
+            // TUI v2 only flips footer idle on execution.* — it does not
+            // REST-reload the transcript. Finalize local streaming parts.
+            store.finishStreamingText(sessionID: key.storeSlot)
+            let recovered = store.messages(sessionID: key.storeSlot)
+            setHealth(.healthy, for: key)
+            guard markChanged(key: key, messages: recovered) else { return }
+            publishMessages(recovered)
         default:
             return
         }
@@ -922,7 +922,11 @@ nonisolated final class MessageSync: @unchecked Sendable {
             // Polling REST mid-stream publishes a behind snapshot and looks like the
             // assistant message clearing then reprinting from the start.
             let streaming = store.hasStreamingText(sessionID: key.storeSlot)
-            if streaming && !isStreamingStalled(storeSlot: key.storeSlot) { continue }
+            let stalled = streaming && isStreamingStalled(storeSlot: key.storeSlot)
+            if streaming && !stalled { continue }
+            // TUI does not poll GET …/message while the event iterator is live.
+            // Keep the watchdog for transport drop and stalled streaming only.
+            if eventStream.connectionState == .connected && !stalled { continue }
             let expectedRevision = store.revision(sessionID: key.storeSlot)
             let directory = key.directory.isEmpty ? nil : key.directory
             do {

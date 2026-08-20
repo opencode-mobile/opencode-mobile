@@ -240,11 +240,6 @@ nonisolated enum StreamingTextBlockIdentity {
 
     /// Mirrors SessionChatTimelineBlocks visibility used when flushing text runs.
     private static func isVisibleToolForDecoration(_ tool: ToolPart) -> Bool {
-        let name = tool.toolName.lowercased()
-        if name == "todowrite" { return false }
-        if name == "question", tool.status == .pending || tool.status == .running {
-            return false
-        }
-        return true
+        ToolPartIdentity.isVisibleOnTimeline(tool)
     }
 }

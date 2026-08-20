@@ -557,9 +557,11 @@ class MessageDomainAdapterTest {
     }
 
     @Test
-    fun toMessagePart_toolTypeMissingTool_returnsNull() {
+    fun toMessagePart_toolTypeMissingTool_returnsNamelessTool() {
         val dto = MessagePartDto(id = "prt-1", type = "tool")
-        assertNull(adapter.toMessagePart(dto))
+        val tool = adapter.toMessagePart(dto) as MessagePart.Tool
+        assertEquals("", tool.toolName)
+        assertEquals("prt-1", tool.id)
     }
 
     @Test

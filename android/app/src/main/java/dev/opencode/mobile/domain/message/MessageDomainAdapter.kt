@@ -93,8 +93,8 @@ class MessageDomainAdapter {
                 )
             }
             "tool" -> {
-                val toolName = dto.tool ?: dto.name ?: return null
                 val stateDto = parseToolState(dto.state)
+                val toolName = ToolPartIdentity.resolvedName(dto.tool ?: dto.name, stateDto?.input)
                 toToolPart(toolName = toolName, callId = dto.callId, state = stateDto, id = dto.id)
             }
             "file" -> toFilePart(dto)

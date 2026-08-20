@@ -18,9 +18,8 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
-    fun labelForActiveTurn_showsWorkingAfterUserWithNoAssistant() {
-        assertEquals(
-            "Working",
+    fun labelForActiveTurn_hidesWorkingAfterUserWithNoAssistant() {
+        assertNull(
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel = "Working",
                 messages = listOf(user("u1")),
@@ -29,9 +28,35 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
-    fun labelForActiveTurn_showsThinkingWhenAssistantHasSettledText() {
-        assertEquals(
-            "Thinking",
+    fun labelForActiveTurn_hidesWhenAwaitingUserAfterSettledThought() {
+        assertNull(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Working",
+                messages =
+                    listOf(
+                        user("u1"),
+                        assistant(
+                            id = "a1",
+                            text = "",
+                            blocks =
+                                listOf(
+                                    SessionChatTimelineBlock.Reasoning(
+                                        blockID = "r1",
+                                        text = "plan",
+                                        isStreaming = false,
+                                        durationMs = 2000,
+                                    ),
+                                ),
+                        ),
+                    ),
+                isAwaitingUser = true,
+            ),
+        )
+    }
+
+    @Test
+    fun labelForActiveTurn_hidesThinkingWhenAssistantHasSettledText() {
+        assertNull(
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel = "Working",
                 messages = listOf(user("u1"), assistant("a1", "Hello")),
@@ -51,12 +76,22 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
-    fun labelForActiveTurn_showsWhenAssistantHasBlankTextOnly() {
-        assertEquals(
-            "Working",
+    fun labelForActiveTurn_hidesWorkingWhenAssistantSlotExists() {
+        assertNull(
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel = "Working",
                 messages = listOf(user("u1"), assistant("a1", "   ")),
+            ),
+        )
+    }
+
+    @Test
+    fun labelForActiveTurn_hidesWorkingWhenUnprojectedAssistantTurnExists() {
+        assertNull(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Working",
+                messages = listOf(user("u1")),
+                assistantTurnExists = true,
             ),
         )
     }
@@ -88,9 +123,8 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
-    fun labelForActiveTurn_showsThinkingAfterCompletedToolCard() {
-        assertEquals(
-            "Thinking",
+    fun labelForActiveTurn_hidesThinkingAfterCompletedToolCard() {
+        assertNull(
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel = "Working",
                 messages =
@@ -152,8 +186,7 @@ class WorkingTurnIndicatorTest {
 
     @Test
     fun labelForActiveTurn_ignoresCompletedCompactionSnapshot() {
-        assertEquals(
-            "Working",
+        assertNull(
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel = "Working",
                 messages =

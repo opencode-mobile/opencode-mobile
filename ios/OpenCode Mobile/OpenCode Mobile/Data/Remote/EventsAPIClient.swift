@@ -36,11 +36,13 @@ nonisolated final class EventsAPIClient: Sendable {
 
     func streamGlobalEvents(
         onHTTPResponse: (@Sendable (Int) async -> Void)? = nil,
+        onActivity: (@Sendable () async -> Void)? = nil,
         onDataLine: @escaping @Sendable (String) async -> Void
     ) async throws {
         try await streamSubscriptions(
             directories: [],
             onHTTPResponse: onHTTPResponse,
+            onActivity: onActivity,
             onDataLine: onDataLine
         )
     }
@@ -48,6 +50,7 @@ nonisolated final class EventsAPIClient: Sendable {
     func streamSubscriptions(
         directories: [String],
         onHTTPResponse: (@Sendable (Int) async -> Void)? = nil,
+        onActivity: (@Sendable () async -> Void)? = nil,
         onDataLine: @escaping @Sendable (String) async -> Void
     ) async throws {
         guard let connection = connectionProvider() else {
@@ -66,6 +69,7 @@ nonisolated final class EventsAPIClient: Sendable {
                         path: target.path,
                         directory: target.directory,
                         onHTTPResponse: onHTTPResponse,
+                        onActivity: onActivity,
                         onDataLine: onDataLine
                     )
                 }
@@ -79,6 +83,7 @@ nonisolated final class EventsAPIClient: Sendable {
         path: String,
         directory: String?,
         onHTTPResponse: (@Sendable (Int) async -> Void)?,
+        onActivity: (@Sendable () async -> Void)?,
         onDataLine: @escaping @Sendable (String) async -> Void
     ) async throws {
         var url = connection.apiBaseURL.appendingPathComponent(path)
@@ -124,6 +129,9 @@ nonisolated final class EventsAPIClient: Sendable {
 
         var parser = SSEDataLineParser()
         for try await line in bytes.lines {
+            // Comments, id/event fields, and incomplete data still prove the
+            // socket is alive. TUI keeps the iterator open on those frames.
+            await onActivity?()
             for payload in parser.ingest(line) {
                 await onDataLine(payload)
             }
@@ -155,6 +163,8 @@ nonisolated struct SSEDataLineParser {
             return finish()
         }
         if trimmed.hasPrefix(":") {
+            // Keep-alive comments are not events. The stream loop still counts
+            // the received line as activity so a quiet socket is not torn down.
             return []
         }
         if trimmed.hasPrefix("data:") {

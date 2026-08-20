@@ -176,7 +176,7 @@ data class V2FormFieldOptionDto(
 
 @Serializable
 data class V2FormReplyRequestDto(
-    val answer: Map<String, String>,
+    val answer: JsonObject,
 )
 
 @Serializable

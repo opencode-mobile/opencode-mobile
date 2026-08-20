@@ -686,4 +686,34 @@ class EventDomainAdapterTest {
         assertEquals("bash", event?.rawProperties?.get("part")?.jsonObject?.get("tool")?.jsonPrimitive?.content)
         assertEquals("running", event?.rawProperties?.get("part")?.jsonObject?.get("state")?.jsonObject?.get("status")?.jsonPrimitive?.content)
     }
+
+    @Test
+    fun parseEvent_toolCalledWithoutNameDoesNotInventPlaceholderTool() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.next.tool.called","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","input":{}}}""",
+            )
+
+        assertEquals("", event?.rawProperties?.get("part")?.jsonObject?.get("tool")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvent_infersQuestionToolFromInputQuestions() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.next.tool.success","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","input":{"questions":[{"question":"One"},{"question":"Two"},{"question":"Three"}]}}}""",
+            )
+
+        assertEquals("question", event?.rawProperties?.get("part")?.jsonObject?.get("tool")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvent_infersWebsearchToolFromInputQuery() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.next.tool.success","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","input":{"query":"opencode mobile"}}}""",
+            )
+
+        assertEquals("websearch", event?.rawProperties?.get("part")?.jsonObject?.get("tool")?.jsonPrimitive?.content)
+    }
 }

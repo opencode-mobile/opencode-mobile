@@ -68,6 +68,11 @@ nonisolated enum DisplayFrameBuilder {
                 blocks: blocks,
                 commands: serverCommands
             )
+            blocks = SessionChatTimelineBlocks.ensureLiveRow(
+                message: message,
+                isStreaming: display.isStreaming,
+                blocks: blocks
+            )
             guard !blocks.isEmpty else { continue }
             blocks = attachCachedBlockMarkdown(
                 blocks,

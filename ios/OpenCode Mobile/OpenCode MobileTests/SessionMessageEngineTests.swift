@@ -732,6 +732,85 @@ import Testing
         #expect(text.isStreaming == false)
     }
 
+    @Test func partUpdated_overlaysToolFieldsInsteadOfReplacing() {
+        let engine = makeEngine()
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "msg-1",
+                    role: .assistant,
+                    text: "",
+                    parts: [
+                        .tool(
+                            ToolPart(
+                                id: "prt-s",
+                                toolName: "websearch",
+                                status: .pending,
+                                input: ["query": .string("opencode mobile")]
+                            )
+                        ),
+                    ],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+        )
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .partUpdated(
+                part: [
+                    "id": .string("prt-s"),
+                    "messageID": .string("msg-1"),
+                    "sessionID": .string("ses-1"),
+                    "type": .string("tool"),
+                    "tool": .string(""),
+                    "state": .dictionary([
+                        "status": .string("completed"),
+                        "input": .dictionary([:]),
+                    ]),
+                ],
+                delta: nil
+            )
+        )
+        guard case .tool(let tool) = engine.messages(sessionID: "ses-1").first?.parts.first else {
+            Issue.record("expected tool part")
+            return
+        }
+        #expect(tool.toolName == "websearch")
+        #expect(tool.status == .completed)
+        #expect(tool.input?["query"]?.stringValue == "opencode mobile")
+    }
+
+    @Test func partUpdated_emptyTextDoesNotReplaceStreamingText() {
+        let engine = makeEngine()
+        seedStreamingAssistant(engine)
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .partUpdated(
+                part: [
+                    "id": .string("prt-1"),
+                    "messageID": .string("msg-1"),
+                    "sessionID": .string("ses-1"),
+                    "type": .string("text"),
+                    "text": .string(""),
+                ],
+                delta: nil
+            )
+        )
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .partDelta(messageID: "msg-1", partID: "prt-1", delta: " world")
+        )
+        guard case .text(let text) = engine.messages(sessionID: "ses-1").first?.parts.first else {
+            Issue.record("expected text part")
+            return
+        }
+        #expect(text.text == "Hello world")
+        #expect(text.isStreaming)
+    }
+
     private func makeEngine() -> SessionMessageEngine {
         SessionMessageEngine(store: InMemoryMessageStore())
     }

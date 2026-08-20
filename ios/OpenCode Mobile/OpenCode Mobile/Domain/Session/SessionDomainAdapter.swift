@@ -197,20 +197,30 @@ nonisolated struct SessionDomainAdapter: Sendable {
         )
     }
 
-    func formAnswer(from answers: [[String]]) -> [String: String] {
+    func formAnswer(from answers: [[String]]) -> [String: JSONValueDTO] {
         Dictionary(uniqueKeysWithValues: answers.enumerated().map { index, values in
-            ("q\(index)", values.first ?? "")
+            ("q\(index)", .string(values.first ?? ""))
         })
     }
 
-    func formAnswer(questions: [QuestionInfo], answers: [[String]]) -> [String: String] {
+    func formAnswer(questions: [QuestionInfo], answers: [[String]]) -> [String: JSONValueDTO] {
         guard !questions.isEmpty else { return formAnswer(from: answers) }
         return Dictionary(uniqueKeysWithValues: questions.enumerated().map { index, question in
-            let selected = answers.indices.contains(index) ? (answers[index].first ?? "") : ""
+            let selected = answers.indices.contains(index) ? answers[index] : []
             let key = question.fieldKey ?? "q\(index)"
-            let value = question.options.first { $0.label == selected || $0.value == selected }?.value ?? selected
-            return (key, value)
+            return (key, wireAnswerValue(question: question, selected: selected))
         })
+    }
+
+    private func wireAnswerValue(question: QuestionInfo, selected: [String]) -> JSONValueDTO {
+        let values = selected.compactMap { item -> String? in
+            let value = question.options.first { $0.label == item || $0.value == item }?.value ?? item
+            return value.isEmpty ? nil : value
+        }
+        if question.multiple {
+            return .array(values.map(JSONValueDTO.string))
+        }
+        return .string(values.first ?? "")
     }
 
     private func questionInfo(from field: V2FormFieldDTO, formTitle: String?) -> QuestionInfo {
@@ -224,7 +234,7 @@ nonisolated struct SessionDomainAdapter: Sendable {
                     value: option.value ?? option.label
                 )
             },
-            multiple: field.multiple ?? false,
+            multiple: field.multiple == true || field.type?.lowercased() == "multiselect",
             custom: field.custom != false,
             fieldKey: field.key
         )
