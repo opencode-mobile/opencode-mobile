@@ -3007,6 +3007,7 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
             assertEquals("Working", viewModel.uiState.value.sessionStatusLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
 
             viewModel.abort()
             advanceUntilIdle()
@@ -3197,7 +3198,7 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals("Working", viewModel.uiState.value.sessionStatusLabel)
-            assertNull(viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
         }
 
     private fun createViewModel(

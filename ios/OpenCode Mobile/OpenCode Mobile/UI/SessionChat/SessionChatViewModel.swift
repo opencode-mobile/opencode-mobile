@@ -1122,16 +1122,14 @@ final class SessionChatViewModel {
         let awaitingUser = !permissionRequests.isEmpty || !questionRequests.isEmpty
         let workingIndicatorLabel = WorkingTurnIndicator.labelForActiveTurn(
             statusLabel: sessionStatusLabel,
-            messages: timelineState.messages,
             isCompacting: isCompacting,
-            isAwaitingUser: awaitingUser,
-            assistantTurnExists: timelineState.assistantTurnExists
+            isAwaitingUser: awaitingUser
         )
         if !loggedWorkingLamp || lastWorkingLamp != workingIndicatorLabel {
             loggedWorkingLamp = true
             lastWorkingLamp = workingIndicatorLabel
             OpenCodeLog.sessionChat.info(
-                "workingLamp label=\(workingIndicatorLabel ?? "none", privacy: .public) status=\(sessionStatusLabel ?? "none", privacy: .public) assistantTurn=\(timelineState.assistantTurnExists ? 1 : 0) awaitingUser=\(awaitingUser ? 1 : 0)"
+                "workingLamp label=\(workingIndicatorLabel ?? "none", privacy: .public) status=\(sessionStatusLabel ?? "none", privacy: .public) awaitingUser=\(awaitingUser ? 1 : 0)"
             )
         }
         uiState = SessionChatUiState(

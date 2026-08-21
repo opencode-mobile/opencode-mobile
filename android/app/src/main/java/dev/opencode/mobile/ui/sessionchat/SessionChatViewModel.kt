@@ -1200,13 +1200,12 @@ class SessionChatViewModel
                 } else {
                     infoState.sessionStatusLabel
                 }
+            val awaitingUser = permissionRequests.isNotEmpty() || questionRequests.isNotEmpty()
             val workingIndicatorLabel =
                 WorkingTurnIndicator.labelForActiveTurn(
                     statusLabel = sessionStatusLabel,
-                    messages = messages,
                     isCompacting = isCompacting,
-                    isAwaitingUser = permissionRequests.isNotEmpty() || questionRequests.isNotEmpty(),
-                    assistantTurnExists = timelineState.assistantTurnExists,
+                    isAwaitingUser = awaitingUser,
                 )
             if (!loggedWorkingLamp || lastWorkingLamp != workingIndicatorLabel) {
                 loggedWorkingLamp = true
@@ -1214,8 +1213,7 @@ class SessionChatViewModel
                 logI(
                     "workingLamp label=${workingIndicatorLabel ?: "none"} " +
                         "status=${sessionStatusLabel ?: "none"} " +
-                        "assistantTurn=${if (timelineState.assistantTurnExists) 1 else 0} " +
-                        "awaitingUser=${if (permissionRequests.isNotEmpty() || questionRequests.isNotEmpty()) 1 else 0}",
+                        "awaitingUser=${if (awaitingUser) 1 else 0}",
                 )
             }
             val syncingIndicatorLabel =

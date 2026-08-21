@@ -67,6 +67,8 @@ is a thin facade. Any change to the facade is an architectural decision — see
 - Composer selector changes for model, mode, and Variant.
 - Session status bar showing session id copy, SSE state (`live`, `connecting`,
   `offline`), and context usage when token and model-limit data are available.
+- Session Running accessory above the composer when session status is not idle
+  (`Working`, `Retrying`, `Compacting…`).
 
 ## Error States
 
@@ -95,6 +97,56 @@ is a thin facade. Any change to the facade is an architectural decision — see
 - The attachment `+` opens native Photos and Files/document entry points through
   the delivered [File Attachments](../file-attachments/plan.md) slice. It uses
   **Add attachment** rather than the legacy **Attach context** label.
+- When this session’s status is not idle, a Session Running accessory sits
+  above the composer. See [Session Running accessory](#session-running-accessory).
+
+## Session Running accessory
+
+Composer-adjacent busy chrome for the open session. Same left-aligned caption
+plus pulsing 6pt/dp status dot as thought-row Working/Thinking chrome.
+Feature-local: not a Component Collection primitive. It is Session Chat
+composer-adjacent status only, the same visual as the thought-row streaming
+dot, and is not used on other screens.
+
+Show iff this session’s status is not idle. Optimistic busy on send counts as
+the same status. Do not inspect messages, streaming, tools, or thought rows.
+
+`SessionInfo` owns session status. `SessionChatComposer` owns accessory layout.
+`WorkingTurnIndicator` collapses to status + compacting + awaiting-user. The
+timeline status-indicator slot is retired.
+
+### Labels (one slot, status only)
+
+- `Working` — busy, including optimistic busy after send, before SSE busy
+- `Retrying` — retry
+- `Compacting…` — compact in flight
+
+Not `Thinking`. That word stays on the thought row while reasoning is open.
+
+### Expected results (iOS and Android)
+
+- [x] After Send, `Working` appears immediately (optimistic busy), above the
+  composer, left-aligned, and does not scroll with the timeline.
+- [x] While SSE reports busy, `Working` stays visible, including while tools
+  run and after a thought row settles to `Thought` / `Thought · Nms`.
+- [x] Retry shows `Retrying`. Compact in flight shows `Compacting…`.
+- [x] The accessory hides when session status is idle.
+- [x] The accessory hides while the permission or question dock is up. Child
+  lockout does not hide it if that session is still busy.
+- [x] Timeline bottom inset includes the accessory height so the last bubbles
+  are not covered.
+- [x] Top-bar SSE chrome (`live` / `connecting` / `offline`) is unchanged.
+- [x] Thought-row chrome is unchanged (`Thinking` with pulsing dot while
+  reasoning streams; `Thought` / `Thought · Nms` with no dot when finished).
+
+### Out of scope
+
+- TUI interrupt wording; abort already lives on the composer.
+- Cycling Working vs Thinking from parts.
+- Elapsed timer.
+- Merging with top-bar connection chrome or with Review / Todos / Syncing
+  floating pills.
+- Full-screen spinner.
 
 ## Session Status Bar
 
@@ -121,3 +173,6 @@ is a thin facade. Any change to the facade is an architectural decision — see
   Variant).
 - Use **`OpenCodeOutgoingMessage`** for sent prompts and
   **`OpenCodeAssistantMessage`** for assistant text blocks.
+- Session Running accessory is feature-local (pulsing 6pt/dp status dot already
+  used on thought-row chrome). Do not add it to Component Collection: it is
+  Session Chat composer-adjacent status only and is not used on other screens.
