@@ -8,6 +8,7 @@ import dagger.hilt.components.SingletonComponent
 import dev.opencode.mobile.data.local.DataStoreConnectionProfileStore
 import dev.opencode.mobile.data.local.EncryptedSecureCredentialStore
 import dev.opencode.mobile.domain.connection.ConnectionProbeService
+import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
@@ -28,20 +29,20 @@ abstract class ConnectionModule {
     companion object {
         @Provides
         @Singleton
-        fun provideConnectionProbeService(
+        fun provideConnectionProbing(
             json: kotlinx.serialization.json.Json,
             adapter: ProjectDomainAdapter,
-        ): ConnectionProbeService = ConnectionProbeService(json, adapter)
+        ): ConnectionProbing = ConnectionProbeService(json, adapter)
 
         @Provides
         @Singleton
         fun provideActiveConnectionManager(
             connectionProfileStore: ConnectionProfileStore,
-            connectionProbeService: ConnectionProbeService,
+            connectionProbing: ConnectionProbing,
         ): ActiveConnectionManager =
             ActiveConnectionManager(
                 connectionProfileStore = connectionProfileStore,
-                connectionProbing = connectionProbeService,
+                connectionProbing = connectionProbing,
             )
     }
 }

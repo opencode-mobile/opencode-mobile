@@ -4,45 +4,118 @@ import Testing
 
 @MainActor
 struct ConnectionSetupViewModelTests {
-    @Test func save_disabledUntilTestSucceeds() async {
+    @Test func newForm_startsWithEmptyHostAndCollapsedCredentials() {
         let viewModel = ConnectionSetupViewModel(
             connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
             connectionSessionCoordinator: ConnectionSessionCoordinator(
                 activeConnectionManager: ActiveConnectionManager(),
                 connectionProfileStore: FakeSetupConnectionProfileStore()
-            )
+            ),
+            mode: .add
         )
-        #expect(viewModel.canSave == false)
-        let saved = await viewModel.saveConnection()
+        #expect(viewModel.baseURL.isEmpty)
+        #expect(viewModel.primaryActionLabel == "Connect")
+        #expect(viewModel.credentialsExpanded == false)
+        #expect(ConnectionSetupViewModel.hostIsBlank(viewModel.baseURL))
+    }
+
+    @Test func submit_emptyHost_showsSnackbar() async {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            mode: .add
+        )
+        let saved = await viewModel.submit()
         #expect(saved == false)
+        #expect(viewModel.snackbar?.text == "Enter a host")
     }
 
-    @Test func fieldChange_resetsSuccessfulTest() async {
-        let viewModel = ConnectionSetupViewModel(
-            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
-            connectionSessionCoordinator: ConnectionSessionCoordinator(
-                activeConnectionManager: ActiveConnectionManager(),
-                connectionProfileStore: FakeSetupConnectionProfileStore()
-            )
-        )
-        await viewModel.testConnection()
-        #expect(viewModel.canSave == true)
-        #expect(viewModel.testResultMessage == "Server reachable · API v1")
-        viewModel.baseURL = "http://127.0.0.1:5000/"
-        viewModel.onFieldChanged()
-        #expect(viewModel.canSave == false)
-    }
-
-    @Test func testConnection_successMessageIncludesProtocol() async {
+    @Test func submit_create_probesThenSaves() async {
+        let store = RecordingConnectionProfileStore()
         let viewModel = ConnectionSetupViewModel(
             connectionProbeService: FakeConnectionProbeService(result: .success(.v2)),
             connectionSessionCoordinator: ConnectionSessionCoordinator(
                 activeConnectionManager: ActiveConnectionManager(),
-                connectionProfileStore: FakeSetupConnectionProfileStore()
-            )
+                connectionProfileStore: store
+            ),
+            mode: .add
         )
-        await viewModel.testConnection()
-        #expect(viewModel.testResultMessage == "Server reachable · API v2")
+        viewModel.baseURL = "http://10.0.0.1:4096/"
+        viewModel.password = "secret"
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        #expect(store.saved.count == 1)
+        #expect(store.saved.last?.serverProtocol == .v2)
+    }
+
+    @Test func submit_authFailure_expandsCredentialsAndSnackbars() async {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(
+                result: .failure(ServerProbeError.http(statusCode: 401, message: "Unauthorized"))
+            ),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            mode: .add
+        )
+        viewModel.baseURL = "http://10.0.0.1:4096/"
+        viewModel.password = "wrong"
+        let saved = await viewModel.submit()
+        #expect(saved == false)
+        #expect(viewModel.credentialsExpanded == true)
+        #expect(viewModel.requestPasswordFocus == true)
+        #expect(viewModel.snackbar?.text == "Authentication failed")
+    }
+
+    @Test func submit_transportFailure_staysCollapsed() async {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(
+                result: .failure(ServerProbeError.transport("down"))
+            ),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            mode: .add
+        )
+        viewModel.baseURL = "http://10.0.0.1:4096/"
+        let saved = await viewModel.submit()
+        #expect(saved == false)
+        #expect(viewModel.credentialsExpanded == false)
+        #expect(viewModel.snackbar?.text == "Unable to reach the server")
+    }
+
+    @Test func fieldChange_clearsDetectedProtocolUntilReprobe() async {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            mode: .add
+        )
+        viewModel.baseURL = "http://10.0.0.1:4096/"
+        _ = await viewModel.submit()
+        // After successful submit we dismiss in UI; here stay and dirty host
+        viewModel.configure(
+            initialProfile: ConnectionProfile(
+                baseURL: "http://10.0.0.1:4096/",
+                username: "opencode",
+                password: "secret",
+                serverProtocol: .v1,
+                id: "p1",
+                name: "P"
+            ),
+            mode: .edit
+        )
+        #expect(viewModel.canSubmitWithoutProbe == true)
+        viewModel.baseURL = "http://10.0.0.9:4096/"
+        viewModel.onFieldChanged()
+        #expect(viewModel.canSubmitWithoutProbe == false)
     }
 
     @Test func revertedEdit_keepsSavedProtocol() async {
@@ -65,19 +138,27 @@ struct ConnectionSetupViewModelTests {
             ),
             mode: .edit
         )
-        #expect(viewModel.canSave == true)
+        #expect(viewModel.primaryActionLabel == "Save")
+        #expect(viewModel.canSubmitWithoutProbe == true)
 
         viewModel.baseURL = "http://10.0.0.9:4096/"
         viewModel.onFieldChanged()
-        #expect(viewModel.canSave == false)
+        #expect(viewModel.canSubmitWithoutProbe == false)
 
         viewModel.baseURL = "http://10.0.0.1:4096/"
         viewModel.onFieldChanged()
-        #expect(viewModel.canSave == true)
+        #expect(viewModel.canSubmitWithoutProbe == true)
 
-        let saved = await viewModel.saveConnection()
+        let saved = await viewModel.submit()
         #expect(saved == true)
         #expect(store.saved.last?.serverProtocol == .v2)
+    }
+
+    @Test func hostIsBlank_detectsSchemeOnly() {
+        #expect(ConnectionSetupViewModel.hostIsBlank(""))
+        #expect(ConnectionSetupViewModel.hostIsBlank("http://"))
+        #expect(ConnectionSetupViewModel.hostIsBlank("https://"))
+        #expect(ConnectionSetupViewModel.hostIsBlank("http://10.0.0.1:4096/") == false)
     }
 }
 

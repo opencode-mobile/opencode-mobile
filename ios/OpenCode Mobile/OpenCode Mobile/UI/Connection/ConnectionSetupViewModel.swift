@@ -3,9 +3,7 @@ import Observation
 
 enum ConnectionSetupState: Equatable {
     case idle
-    case testing
-    case testSucceeded
-    case testFailed(String)
+    case connecting
     case saving
 }
 
@@ -19,12 +17,15 @@ enum ConnectionSetupMode: Equatable {
 @Observable
 final class ConnectionSetupViewModel {
     var name = ""
-    var baseURL = ConnectionProfile.formDefaults.baseURL
+    var baseURL = ""
     var username = ConnectionProfile.formDefaults.username
     var password = ConnectionProfile.formDefaults.password
     private(set) var state: ConnectionSetupState = .idle
     private(set) var mode: ConnectionSetupMode = .first
     private(set) var profileId = ""
+    private(set) var credentialsExpanded = false
+    private(set) var requestPasswordFocus = false
+    private(set) var snackbar: OpenCodeSnackbarMessage?
 
     private let connectionProbeService: ConnectionProbing
     private let connectionSessionCoordinator: ConnectionSessionCoordinator
@@ -33,6 +34,7 @@ final class ConnectionSetupViewModel {
     private var savedUsername = ""
     private var savedPassword = ""
     private var savedProtocol: ServerProtocol?
+    private var isEditingExistingProfile = false
 
     init(
         connectionProbeService: ConnectionProbing,
@@ -47,8 +49,12 @@ final class ConnectionSetupViewModel {
 
     func configure(initialProfile: ConnectionProfile?, mode: ConnectionSetupMode = .first) {
         self.mode = mode
+        isEditingExistingProfile = initialProfile != nil && mode == .edit
         detectedProtocol = nil
         state = .idle
+        credentialsExpanded = false
+        requestPasswordFocus = false
+        snackbar = nil
         if let initialProfile, mode == .edit {
             name = initialProfile.name
             baseURL = initialProfile.baseURL
@@ -81,16 +87,23 @@ final class ConnectionSetupViewModel {
         }
     }
 
+    var primaryActionLabel: String {
+        switch state {
+        case .connecting:
+            mode == .edit ? "Saving…" : "Connecting…"
+        case .saving:
+            "Saving…"
+        case .idle:
+            mode == .edit ? "Save" : "Connect"
+        }
+    }
+
     var canRemove: Bool {
         mode == .edit && !profileId.isEmpty
     }
 
-    var canSave: Bool {
-        state == .testSucceeded || connectionUnchanged
-    }
-
-    private var connectionUnchanged: Bool {
-        mode == .edit &&
+    var connectionUnchanged: Bool {
+        isEditingExistingProfile &&
             ConnectionProfileIdentity.normalizeBaseURL(baseURL) ==
             ConnectionProfileIdentity.normalizeBaseURL(savedBaseURL) &&
             ConnectionProfileIdentity.normalizeUsername(username) ==
@@ -98,83 +111,126 @@ final class ConnectionSetupViewModel {
             password == savedPassword
     }
 
-    var testResultMessage: String? {
-        switch state {
-        case .testSucceeded:
-            return detectedProtocol?.reachableMessage ?? ProbeStatus.reachable.label
-        case let .testFailed(message):
-            return message
-        default:
-            return nil
-        }
+    var canSubmitWithoutProbe: Bool {
+        connectionUnchanged
     }
 
-    var isTesting: Bool {
-        state == .testing
+    var isBusy: Bool {
+        state == .connecting || state == .saving
     }
 
-    var isSaving: Bool {
-        state == .saving
+    var primaryEnabled: Bool {
+        !isBusy
     }
 
     func onFieldChanged() {
-        switch state {
-        case .testSucceeded, .testFailed:
-            state = .idle
-        default:
-            break
-        }
         detectedProtocol = connectionUnchanged ? savedProtocol : nil
     }
 
-    func testConnection() async {
-        state = .testing
+    func setCredentialsExpanded(_ expanded: Bool) {
+        credentialsExpanded = expanded
+    }
+
+    func consumePasswordFocusRequest() {
+        requestPasswordFocus = false
+    }
+
+    func consumeSnackbar() {
+        snackbar = nil
+    }
+
+    /// Primary CTA: rename-only Save skips probe; otherwise probe then save.
+    @discardableResult
+    func submit() async -> Bool {
+        guard !isBusy else { return false }
+        if Self.hostIsBlank(baseURL) {
+            snackbar = OpenCodeSnackbarMessage(text: "Enter a host", variant: .error)
+            return false
+        }
+        if canSubmitWithoutProbe {
+            return await persist()
+        }
+        return await probeThenSave()
+    }
+
+    private func probeThenSave() async -> Bool {
+        state = .connecting
+        snackbar = nil
         do {
             detectedProtocol = try await connectionProbeService.probe(connection: draftConnection())
-            state = .testSucceeded
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
                 outcome: ProductAnalytics.Outcome.success
             )
+            return await persist()
         } catch let error as ServerProbeError {
             detectedProtocol = nil
-            state = .testFailed(error.probeUserMessage)
+            handleProbeFailure(error)
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
                 outcome: ProductAnalytics.Outcome.failure
             )
+            return false
         } catch {
             detectedProtocol = nil
-            state = .testFailed(error.localizedDescription)
+            state = .idle
+            snackbar = OpenCodeSnackbarMessage(
+                text: error.localizedDescription,
+                variant: .error
+            )
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
                 outcome: ProductAnalytics.Outcome.failure
-            )
-        }
-    }
-
-    func saveConnection() async -> Bool {
-        guard canSave else {
-            logConnectionAction(
-                ProductAnalytics.Action.connectionSave,
-                outcome: ProductAnalytics.Outcome.blocked
             )
             return false
         }
+    }
+
+    private func handleProbeFailure(_ error: ServerProbeError) {
+        let authFailed = error.probeStatus == .authFailed
+        state = .idle
+        if authFailed {
+            credentialsExpanded = true
+            requestPasswordFocus = true
+        }
+        snackbar = OpenCodeSnackbarMessage(text: error.probeUserMessage, variant: .error)
+    }
+
+    private func persist() async -> Bool {
         state = .saving
+        snackbar = nil
         do {
-            try await connectionSessionCoordinator.saveProfile(draftProfile(), serverProtocol: detectedProtocol)
-            state = .testSucceeded
+            try await connectionSessionCoordinator.saveProfile(
+                draftProfile(),
+                serverProtocol: detectedProtocol
+            )
+            state = .idle
             logConnectionAction(
                 ProductAnalytics.Action.connectionSave,
                 outcome: ProductAnalytics.Outcome.success
             )
             return true
         } catch is DuplicateConnectionProfileException {
-            state = .testFailed("A server with this host and username is already saved")
+            state = .idle
+            snackbar = OpenCodeSnackbarMessage(
+                text: "A server with this host and username is already saved",
+                variant: .error
+            )
+            logConnectionAction(
+                ProductAnalytics.Action.connectionSave,
+                outcome: ProductAnalytics.Outcome.failure
+            )
             return false
         } catch {
-            state = .testFailed(error.localizedDescription)
+            state = .idle
+            snackbar = OpenCodeSnackbarMessage(
+                text: error.localizedDescription,
+                variant: .error
+            )
+            logConnectionAction(
+                ProductAnalytics.Action.connectionSave,
+                outcome: ProductAnalytics.Outcome.failure
+            )
             return false
         }
     }
@@ -205,5 +261,17 @@ final class ConnectionSetupViewModel {
 
     private func draftConnection() -> ServerConnection {
         ServerConnection(profile: draftProfile())
+    }
+
+    static func hostIsBlank(_ baseURL: String) -> Bool {
+        let trimmed = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return true }
+        var rest = trimmed
+        if rest.lowercased().hasPrefix("https://") {
+            rest = String(rest.dropFirst("https://".count))
+        } else if rest.lowercased().hasPrefix("http://") {
+            rest = String(rest.dropFirst("http://".count))
+        }
+        return rest.trimmingCharacters(in: CharacterSet(charactersIn: "/")).isEmpty
     }
 }

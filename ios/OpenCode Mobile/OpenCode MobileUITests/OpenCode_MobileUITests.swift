@@ -195,17 +195,15 @@ final class OpenCode_MobileUITests: XCTestCase {
 
         openConnectionSetup(in: app)
         replaceText(in: app.textFields["Host"], with: configuration.serverURL, app: app)
+        let credentialsToggle = app.buttons["Expand username and password"]
+        if credentialsToggle.waitForExistence(timeout: 2) {
+            credentialsToggle.tap()
+        }
         replaceText(in: app.textFields["Username"], with: configuration.username, app: app)
         replaceText(in: app.secureTextFields["Password"], with: configuration.password, app: app)
 
-        app.buttons["Test connection"].tap()
-        let reachable = app.staticTexts.matching(
-            NSPredicate(format: "label BEGINSWITH 'Server reachable'")
-        ).firstMatch
-        XCTAssertTrue(reachable.waitForExistence(timeout: 15))
-
-        app.buttons["Save"].tap()
-        XCTAssertTrue(app.buttons["New session"].waitForExistence(timeout: 15))
+        app.buttons["Connect"].tap()
+        XCTAssertTrue(app.buttons["New session"].waitForExistence(timeout: 20))
 
         let session = sessionButton(named: "Big Session", in: app)
         XCTAssertTrue(session.waitForExistence(timeout: 10), "The live server did not return the Big Session session.")

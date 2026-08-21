@@ -317,14 +317,18 @@ fun MainNavigation() {
                                                 onBaseUrlChanged = setupViewModel::onBaseUrlChanged,
                                                 onUsernameChanged = setupViewModel::onUsernameChanged,
                                                 onPasswordChanged = setupViewModel::onPasswordChanged,
-                                                onTestConnection = setupViewModel::testConnection,
-                                                onSave = {
-                                                    setupViewModel.saveConnection {
+                                                onCredentialsExpandedChanged =
+                                                    setupViewModel::onCredentialsExpandedChanged,
+                                                onPasswordFocusConsumed =
+                                                    setupViewModel::consumePasswordFocusRequest,
+                                                onSubmit = {
+                                                    setupViewModel.submit {
                                                         serversViewModel.refresh()
                                                         settingsViewModel.refreshServersSummary()
                                                         backStack.removeLastOrNull()
                                                     }
                                                 },
+                                                onSnackbarDismissed = setupViewModel::consumeSnackbar,
                                                 onRemove = {
                                                     setupViewModel.removeConnection {
                                                         serversViewModel.refresh()

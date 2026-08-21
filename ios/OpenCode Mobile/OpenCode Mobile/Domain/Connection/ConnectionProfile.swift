@@ -23,8 +23,9 @@ nonisolated enum ServerConnectionDefaults {
 }
 
 extension ConnectionProfile {
+    /// Empty host for new Connection Profiles — placeholder hint lives in the form UI.
     static var formDefaults: ConnectionProfile {
-        ConnectionProfile(baseURL: defaultBaseURL, username: defaultUsername, password: "")
+        ConnectionProfile(baseURL: "", username: defaultUsername, password: "")
     }
 }
 
