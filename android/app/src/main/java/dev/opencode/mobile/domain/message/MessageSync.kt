@@ -462,7 +462,11 @@ class MessageSync(
                     when (val result = fullReloadResult(key, reason = fetchReason, mergeExisting = true)) {
                         is ReloadResult.Success -> {
                             val becameHealthy = completeAuthorityWindow(reloadSucceeded = true)
-                            if (isCurrentEpoch()) {
+                            // Publish even if SSE start / dual v1 reconnect bumped
+                            // ConnectionEpoch mid-GET. Gating on isCurrentEpoch() left
+                            // the REST snapshot in the store and never pushed a frame
+                            // (Pixel 9: fullReload reason=background-return, no emit).
+                            if (observationStillCurrent()) {
                                 rememberPublishedFrame(storeSlot, result.messages)
                                 if (fingerprintBefore != messageFingerprint(result.messages)) {
                                     logI(
@@ -477,6 +481,7 @@ class MessageSync(
                                             "source=overflow-recovery fingerprint-unchanged",
                                     )
                                 }
+                                adoptCurrentEpoch()
                             }
                             if (becameHealthy) return
                         }

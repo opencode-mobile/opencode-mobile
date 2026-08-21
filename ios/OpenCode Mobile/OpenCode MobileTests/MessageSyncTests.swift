@@ -108,6 +108,71 @@ struct MessageSyncTests {
         #expect(repo.listMessagesCallCount == afterInitial)
     }
 
+    @Test func observeMessages_backgroundReturn_emitsWhenEpochBumpsDuringCatchUp() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let world = FakeWorldSignals()
+        let epoch = ConnectionEpoch()
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            worldSignals: world,
+            pollIntervalMs: LiveStoreRefreshPolicy.workingPollIntervalMs,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            connectionEpoch: epoch
+        )
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+
+        eventStream.setConnectionState(.connected)
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
+        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Partial", sessionID: "ses-1"))
+        let streaming = await waitUntil {
+            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Partial"
+        }
+        #expect(streaming)
+
+        world.emit(.background)
+        eventStream.setConnectionState(.idle)
+        try? await Task.sleep(for: .milliseconds(20))
+
+        repo.messages = [
+            Message(id: "msg-1", role: .user, text: "Hello", parts: [], model: nil, mode: nil, sentAtEpochMs: nil),
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "Finished while away",
+                parts: [.text(TextPart(text: "Finished while away", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+
+        repo.holdNextListMessages()
+        world.emit(.foreground)
+        let blocked = await waitUntil { repo.isListBlocked }
+        #expect(blocked)
+
+        _ = epoch.bump()
+        _ = epoch.bump()
+        eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: nil, rawProperties: nil))
+        repo.resumeListMessages()
+
+        let refreshed = await waitUntil {
+            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Finished while away"
+        }
+        task.cancel()
+        #expect(refreshed)
+    }
+
     @Test func initialLoad_messageLoopDoesNotRunOnMainThread() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()

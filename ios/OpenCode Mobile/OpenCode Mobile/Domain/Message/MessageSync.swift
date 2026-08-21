@@ -557,11 +557,15 @@ nonisolated final class MessageSync: @unchecked Sendable {
             case .success(let messages):
                 let becameHealthy = staging.completeAuthorityWindow(reloadSucceeded: true)
                 setHealth(staging.currentHealth, for: key)
-                let published = connectionEpoch.current() == observationEpoch.current
+                // Publish even if SSE start / dual v1 reconnect bumped
+                // ConnectionEpoch mid-GET. Gating on epoch match left the REST
+                // snapshot in the store and never pushed a frame.
+                let published = observationStillCurrent(key: key)
                 if published {
                     if fingerprintBefore != messageFingerprint(messages) {
                         publishMessages(messages)
                     }
+                    observationEpoch.adopt(connectionEpoch.current())
                 }
                 if becameHealthy {
                     if published {
