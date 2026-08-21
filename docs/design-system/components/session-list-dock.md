@@ -91,8 +91,8 @@ it. Create error appears above the filter chrome when set.
 Tap New session fires `onNewSession()`. When `onNewSessionLongPress` is set,
 hold New session fires that callback and does not fire `onNewSession`. Callers
 omit the hold callback in chip chrome and when there are fewer than two
-projects. VoiceOver / TalkBack expose **Choose project** when the hold path is
-present.
+projects. VoiceOver / TalkBack keep the default **New session** action and
+expose **Choose project** when the hold path is present.
 
 Chip-mode removal uses the selected chip’s remove control. Picker-mode removal
 is hold-to-remove on project rows in the sheet, not on the dock.

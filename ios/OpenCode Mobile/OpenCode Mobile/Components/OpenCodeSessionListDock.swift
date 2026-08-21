@@ -536,8 +536,11 @@ private struct NewSessionDockButton: View {
                             }
                         )
                 }
+                .accessibilityElement(children: .ignore)
                 .accessibilityAddTraits(.isButton)
-                .accessibilityHint("Creates a session in the selected project. Long press to choose a project.")
+                .accessibilityLabel("New session")
+                .accessibilityHint("Use Choose project to start in a different project.")
+                .accessibilityAction(.default, onNewSession)
                 .accessibilityAction(named: "Choose project", onLongPress)
                 .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.9), trigger: longPressHapticTick)
         } else {
