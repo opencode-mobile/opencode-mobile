@@ -5,15 +5,19 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.data.local.ServerConnectionDefaults
-import dev.opencode.mobile.domain.connection.ConnectionProbeService
+import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.DuplicateConnectionProfileException
+import dev.opencode.mobile.domain.connection.ProbeStatus
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.connection.toProbeStatus
 import dev.opencode.mobile.domain.connection.userMessage
 import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.network.ServerConnection
+import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
+import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,9 +26,7 @@ import javax.inject.Inject
 
 enum class ConnectionSetupState {
     Idle,
-    Testing,
-    TestSucceeded,
-    TestFailed,
+    Connecting,
     Saving,
 }
 
@@ -36,14 +38,16 @@ enum class ConnectionSetupMode {
 
 data class ConnectionSetupUiState(
     val name: String = "",
-    val baseUrl: String = ServerConnectionDefaults.DEFAULT_BASE_URL,
+    val baseUrl: String = "",
     val username: String = ServerConnectionDefaults.USERNAME,
     val password: String = "",
     val state: ConnectionSetupState = ConnectionSetupState.Idle,
-    val testResultMessage: String? = null,
     val mode: ConnectionSetupMode = ConnectionSetupMode.First,
     val profileId: String = "",
     val connectionUnchanged: Boolean = false,
+    val credentialsExpanded: Boolean = false,
+    val requestPasswordFocus: Boolean = false,
+    val snackbar: OpenCodeSnackbarMessage? = null,
 ) {
     val screenTitle: String
         get() =
@@ -53,23 +57,35 @@ data class ConnectionSetupUiState(
                 ConnectionSetupMode.Edit -> "Edit server"
             }
 
+    val primaryActionLabel: String
+        get() =
+            when {
+                state == ConnectionSetupState.Connecting ->
+                    if (mode == ConnectionSetupMode.Edit) "Saving…" else "Connecting…"
+                state == ConnectionSetupState.Saving -> "Saving…"
+                mode == ConnectionSetupMode.Edit -> "Save"
+                else -> "Connect"
+            }
+
     val canRemove: Boolean
         get() = mode == ConnectionSetupMode.Edit && profileId.isNotBlank()
-    val canSave: Boolean
-        get() = state == ConnectionSetupState.TestSucceeded || connectionUnchanged
 
-    val isTesting: Boolean
-        get() = state == ConnectionSetupState.Testing
+    /** Rename-only edit can save without a probe. Create/dirty always use primary. */
+    val canSubmitWithoutProbe: Boolean
+        get() = connectionUnchanged
 
-    val isSaving: Boolean
-        get() = state == ConnectionSetupState.Saving
+    val isBusy: Boolean
+        get() = state == ConnectionSetupState.Connecting || state == ConnectionSetupState.Saving
+
+    val primaryEnabled: Boolean
+        get() = !isBusy
 }
 
 @HiltViewModel
 class ConnectionSetupViewModel
     @Inject
     constructor(
-        private val connectionProbeService: ConnectionProbeService,
+        private val connectionProbeService: ConnectionProbing,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(ConnectionSetupUiState())
@@ -140,6 +156,22 @@ class ConnectionSetupViewModel
             updateFields(password = value)
         }
 
+        fun onCredentialsExpandedChanged(expanded: Boolean) {
+            _uiState.value = _uiState.value.copy(credentialsExpanded = expanded)
+        }
+
+        fun consumePasswordFocusRequest() {
+            if (_uiState.value.requestPasswordFocus) {
+                _uiState.value = _uiState.value.copy(requestPasswordFocus = false)
+            }
+        }
+
+        fun consumeSnackbar() {
+            if (_uiState.value.snackbar != null) {
+                _uiState.value = _uiState.value.copy(snackbar = null)
+            }
+        }
+
         private fun reportFieldEdit(actionId: String) {
             if (!reportedFieldEdits.add(actionId)) return
             logAction(actionId)
@@ -163,11 +195,6 @@ class ConnectionSetupViewModel
             password: String = _uiState.value.password,
         ) {
             val current = _uiState.value
-            val resetState =
-                when (current.state) {
-                    ConnectionSetupState.TestSucceeded, ConnectionSetupState.TestFailed -> ConnectionSetupState.Idle
-                    else -> current.state
-                }
             val unchanged =
                 isEditingExistingProfile &&
                     ConnectionProfileIdentity.sameConnectionIdentity(
@@ -177,7 +204,7 @@ class ConnectionSetupViewModel
                         savedUsername,
                     ) &&
                     password == savedPassword
-            if (resetState == ConnectionSetupState.Idle) {
+            if (current.state == ConnectionSetupState.Idle || current.state == ConnectionSetupState.Connecting) {
                 detectedProtocol = if (unchanged) savedProtocol else null
             }
             _uiState.value =
@@ -186,62 +213,129 @@ class ConnectionSetupViewModel
                     baseUrl = baseUrl,
                     username = username,
                     password = password,
-                    state = resetState,
-                    testResultMessage = null,
                     connectionUnchanged = unchanged,
                 )
         }
 
-        fun testConnection() {
+        /**
+         * Primary CTA: rename-only Save skips probe; otherwise probe then save (Connect / dirty Save).
+         */
+        fun submit(onSaved: () -> Unit) {
+            if (_uiState.value.isBusy) return
+            val hostBlank = hostIsBlank(_uiState.value.baseUrl)
+            if (hostBlank) {
+                showError("Enter a host")
+                return
+            }
+            if (_uiState.value.canSubmitWithoutProbe) {
+                persist(onSaved)
+                return
+            }
+            probeThenSave(onSaved)
+        }
+
+        private fun probeThenSave(onSaved: () -> Unit) {
             logAction(ProductAnalytics.Action.CONNECTION_TEST)
             viewModelScope.launch {
-                _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Testing, testResultMessage = null)
+                _uiState.value =
+                    _uiState.value.copy(
+                        state = ConnectionSetupState.Connecting,
+                        snackbar = null,
+                    )
                 try {
                     val protocol = connectionProbeService.probe(draftConnection())
                     detectedProtocol = protocol
-                    _uiState.value =
-                        _uiState.value.copy(
-                            state = ConnectionSetupState.TestSucceeded,
-                            testResultMessage = protocol.reachableMessage,
-                        )
+                    persistAfterProbe(onSaved)
                 } catch (error: ServerProbeError) {
                     detectedProtocol = null
-                    _uiState.value =
-                        _uiState.value.copy(
-                            state = ConnectionSetupState.TestFailed,
-                            testResultMessage = error.userMessage(),
-                        )
+                    handleProbeFailure(error)
                 } catch (error: Throwable) {
                     detectedProtocol = null
                     _uiState.value =
                         _uiState.value.copy(
-                            state = ConnectionSetupState.TestFailed,
-                            testResultMessage = error.message ?: "Unable to reach the server",
+                            state = ConnectionSetupState.Idle,
+                            snackbar =
+                                OpenCodeSnackbarMessage(
+                                    text = error.message ?: "Unable to reach the server",
+                                    variant = OpenCodeSnackbarVariant.Error,
+                                ),
                         )
                 }
             }
         }
 
-        fun saveConnection(onSaved: () -> Unit) {
-            if (!_uiState.value.canSave) return
+        private fun handleProbeFailure(error: ServerProbeError) {
+            val authFailed = error.toProbeStatus() == ProbeStatus.AuthFailed
+            _uiState.value =
+                _uiState.value.copy(
+                    state = ConnectionSetupState.Idle,
+                    credentialsExpanded = if (authFailed) true else _uiState.value.credentialsExpanded,
+                    requestPasswordFocus = authFailed,
+                    snackbar =
+                        OpenCodeSnackbarMessage(
+                            text = error.userMessage(),
+                            variant = OpenCodeSnackbarVariant.Error,
+                        ),
+                )
+        }
+
+        private fun persist(onSaved: () -> Unit) {
             logAction(
                 actionId = ProductAnalytics.Action.CONNECTION_SAVE,
                 parameters = mapOf(ProductAnalytics.Param.IS_EDIT to isEditingExistingProfile.toString()),
             )
             viewModelScope.launch {
-                _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Saving)
+                _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Saving, snackbar = null)
                 try {
                     connectionSessionCoordinator.saveProfile(draftProfile(), detectedProtocol)
-                    _uiState.value = _uiState.value.copy(state = ConnectionSetupState.TestSucceeded)
+                    _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Idle)
                     onSaved()
-                } catch (error: DuplicateConnectionProfileException) {
+                } catch (_: DuplicateConnectionProfileException) {
                     _uiState.value =
                         _uiState.value.copy(
-                            state = ConnectionSetupState.TestFailed,
-                            testResultMessage = "A server with this host and username is already saved",
+                            state = ConnectionSetupState.Idle,
+                            snackbar =
+                                OpenCodeSnackbarMessage(
+                                    text = "A server with this host and username is already saved",
+                                    variant = OpenCodeSnackbarVariant.Error,
+                                ),
                         )
                 }
             }
+        }
+
+        private suspend fun persistAfterProbe(onSaved: () -> Unit) {
+            logAction(
+                actionId = ProductAnalytics.Action.CONNECTION_SAVE,
+                parameters = mapOf(ProductAnalytics.Param.IS_EDIT to isEditingExistingProfile.toString()),
+            )
+            _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Saving)
+            try {
+                connectionSessionCoordinator.saveProfile(draftProfile(), detectedProtocol)
+                _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Idle)
+                onSaved()
+            } catch (_: DuplicateConnectionProfileException) {
+                _uiState.value =
+                    _uiState.value.copy(
+                        state = ConnectionSetupState.Idle,
+                        snackbar =
+                            OpenCodeSnackbarMessage(
+                                text = "A server with this host and username is already saved",
+                                variant = OpenCodeSnackbarVariant.Error,
+                            ),
+                    )
+            }
+        }
+
+        private fun showError(text: String) {
+            _uiState.value =
+                _uiState.value.copy(
+                    snackbar =
+                        OpenCodeSnackbarMessage(
+                            text = text,
+                            variant = OpenCodeSnackbarVariant.Error,
+                        ),
+                )
         }
 
         fun removeConnection(onRemoved: () -> Unit) {
@@ -266,4 +360,18 @@ class ConnectionSetupViewModel
             )
 
         private fun draftConnection(): ServerConnection = ServerConnection.fromProfile(draftProfile())
+
+        companion object {
+            fun hostIsBlank(baseUrl: String): Boolean {
+                val trimmed = baseUrl.trim()
+                if (trimmed.isEmpty()) return true
+                // Scheme-only values from the address input (e.g. "http://")
+                val withoutScheme =
+                    trimmed
+                        .removePrefix("https://")
+                        .removePrefix("http://")
+                        .trim('/')
+                return withoutScheme.isEmpty()
+            }
+        }
     }

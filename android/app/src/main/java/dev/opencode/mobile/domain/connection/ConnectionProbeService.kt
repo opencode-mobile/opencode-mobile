@@ -72,6 +72,11 @@ fun ServerProbeError.toProbeStatus(): ProbeStatus =
 fun ServerProbeError.userMessage(): String =
     when (this) {
         is ServerProbeError.Transport -> "Unable to reach the server"
-        is ServerProbeError.Http -> message ?: "Authentication failed"
+        is ServerProbeError.Http ->
+            if (statusCode == 401 || statusCode == 403) {
+                "Authentication failed"
+            } else {
+                message?.takeIf { it.isNotBlank() } ?: "Unable to reach the server"
+            }
         is ServerProbeError.Unhealthy -> "Server reported unhealthy"
     }

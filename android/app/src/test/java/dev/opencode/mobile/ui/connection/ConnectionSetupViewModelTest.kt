@@ -1,7 +1,7 @@
 package dev.opencode.mobile.ui.connection
 
 import dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore
-import dev.opencode.mobile.domain.connection.ConnectionProbeService
+import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
@@ -10,10 +10,11 @@ import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
-import dev.opencode.mobile.domain.project.ProjectDomainAdapter
+import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
+import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -32,6 +33,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class ConnectionSetupViewModelTest {
     private val dispatcher = StandardTestDispatcher()
+    private val json = Json { ignoreUnknownKeys = true }
 
     @Before
     fun setUp() = Dispatchers.setMain(dispatcher)
@@ -40,29 +42,100 @@ class ConnectionSetupViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     @Test
+    fun newForm_startsWithEmptyHostAndCollapsedCredentials() {
+        val viewModel = viewModel(probe = neverProbe())
+        viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+        val state = viewModel.uiState.value
+        assertEquals("", state.baseUrl)
+        assertEquals("Connect", state.primaryActionLabel)
+        assertFalse(state.credentialsExpanded)
+        assertTrue(ConnectionSetupViewModel.hostIsBlank(state.baseUrl))
+    }
+
+    @Test
+    fun submit_emptyHost_showsSnackbar() =
+        runTest(dispatcher) {
+            val viewModel = viewModel(probe = neverProbe())
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertFalse(saved)
+            assertEquals("Enter a host", viewModel.uiState.value.snackbar?.text)
+        }
+
+    @Test
+    fun submit_create_probesThenSaves() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val viewModel =
+                viewModel(
+                    store = store,
+                    probe = ConnectionProbing { ServerProtocol.V1 },
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.onBaseUrlChanged("http://10.0.0.1:4096/")
+            viewModel.onPasswordChanged("secret")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertTrue(saved)
+            assertEquals(1, store.saved.size)
+            assertEquals(ServerProtocol.V1, store.saved.last().serverProtocol)
+        }
+
+    @Test
+    fun submit_authFailure_expandsCredentialsAndSnackbars() =
+        runTest(dispatcher) {
+            val viewModel =
+                viewModel(
+                    probe =
+                        ConnectionProbing {
+                            throw ServerProbeError.Http(401, "Unauthorized")
+                        },
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.onBaseUrlChanged("http://10.0.0.1:4096/")
+            viewModel.onPasswordChanged("wrong")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertFalse(saved)
+            val state = viewModel.uiState.value
+            assertTrue(state.credentialsExpanded)
+            assertTrue(state.requestPasswordFocus)
+            assertEquals("Authentication failed", state.snackbar?.text)
+            assertEquals(OpenCodeSnackbarVariant.Error, state.snackbar?.variant)
+        }
+
+    @Test
+    fun submit_transportFailure_staysCollapsed() =
+        runTest(dispatcher) {
+            val failing =
+                viewModel(
+                    probe =
+                        ConnectionProbing {
+                            throw ServerProbeError.Transport(IllegalStateException("down"))
+                        },
+                )
+            failing.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            failing.onBaseUrlChanged("http://10.0.0.1:4096/")
+            var saved = false
+            failing.submit { saved = true }
+            advanceUntilIdle()
+            assertFalse(saved)
+            assertFalse(failing.uiState.value.credentialsExpanded)
+            assertEquals("Unable to reach the server", failing.uiState.value.snackbar?.text)
+        }
+
+    @Test
     fun revertedEdit_keepsSavedProtocol() =
         runTest(dispatcher) {
             val store = RecordingConnectionProfileStore()
-            val json = Json { ignoreUnknownKeys = true }
-            val activeConnectionManager = ActiveConnectionManager(store)
             val viewModel =
-                ConnectionSetupViewModel(
-                    connectionProbeService =
-                        ConnectionProbeService(
-                            json = json,
-                            adapter = ProjectDomainAdapter(),
-                            clientFactory = { error("probe should not run") },
-                        ),
-                    connectionSessionCoordinator =
-                        ConnectionSessionCoordinator(
-                            activeConnectionManager = activeConnectionManager,
-                            connectionProfileStore = store,
-                            secureCredentialStore = NoOpSecureCredentialStore(),
-                            sessionModelSelectionStore = NoOpSessionModelSelectionStore(),
-                            composerDraftStore = InMemoryComposerDraftStore(),
-                            httpClient = OpencodeHttpClient(json, activeConnectionManager),
-                            sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
-                        ),
+                viewModel(
+                    store = store,
+                    probe = neverProbe(),
                 )
             viewModel.configure(
                 initialProfile =
@@ -76,19 +149,52 @@ class ConnectionSetupViewModelTest {
                     ),
                 mode = ConnectionSetupMode.Edit,
             )
-            assertTrue(viewModel.uiState.value.canSave)
+            assertEquals("Save", viewModel.uiState.value.primaryActionLabel)
+            assertTrue(viewModel.uiState.value.canSubmitWithoutProbe)
 
             viewModel.onBaseUrlChanged("http://10.0.0.9:4096/")
-            assertFalse(viewModel.uiState.value.canSave)
+            assertFalse(viewModel.uiState.value.canSubmitWithoutProbe)
 
             viewModel.onBaseUrlChanged("http://10.0.0.1:4096/")
-            assertTrue(viewModel.uiState.value.canSave)
+            assertTrue(viewModel.uiState.value.canSubmitWithoutProbe)
 
-            viewModel.saveConnection {}
+            viewModel.submit {}
             advanceUntilIdle()
 
             assertEquals(ServerProtocol.V2, store.saved.last().serverProtocol)
         }
+
+    @Test
+    fun hostIsBlank_detectsSchemeOnly() {
+        assertTrue(ConnectionSetupViewModel.hostIsBlank(""))
+        assertTrue(ConnectionSetupViewModel.hostIsBlank("http://"))
+        assertTrue(ConnectionSetupViewModel.hostIsBlank("https://"))
+        assertFalse(ConnectionSetupViewModel.hostIsBlank("http://10.0.0.1:4096/"))
+    }
+
+    private fun neverProbe(): ConnectionProbing = ConnectionProbing { error("probe should not run") }
+
+    private fun viewModel(
+        store: RecordingConnectionProfileStore = RecordingConnectionProfileStore(),
+        probe: ConnectionProbing,
+    ): ConnectionSetupViewModel =
+        ConnectionSetupViewModel(
+            connectionProbeService = probe,
+            connectionSessionCoordinator = coordinator(store),
+        )
+
+    private fun coordinator(store: ConnectionProfileStore): ConnectionSessionCoordinator {
+        val activeConnectionManager = ActiveConnectionManager(store)
+        return ConnectionSessionCoordinator(
+            activeConnectionManager = activeConnectionManager,
+            connectionProfileStore = store,
+            secureCredentialStore = NoOpSecureCredentialStore(),
+            sessionModelSelectionStore = NoOpSessionModelSelectionStore(),
+            composerDraftStore = InMemoryComposerDraftStore(),
+            httpClient = OpencodeHttpClient(json, activeConnectionManager),
+            sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+        )
+    }
 }
 
 private class RecordingConnectionProfileStore : ConnectionProfileStore {

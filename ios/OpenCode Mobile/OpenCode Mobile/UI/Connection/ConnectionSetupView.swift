@@ -15,81 +15,134 @@ struct ConnectionSetupView: View {
     @State private var loggedPasswordEdit = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            OpenCodeTopBar(
-                title: viewModel.screenTitle,
-                leading: .back(action: {
-                    ProductAnalytics.logUserAction(
-                        screenId: ProductAnalytics.Screen.connectionSetup,
-                        actionId: ProductAnalytics.Action.connectionBackCancel
-                    )
-                    onDismiss()
-                }),
-                actions: removeAction,
-                showDivider: true
-            )
+        ZStack(alignment: .bottom) {
+            VStack(spacing: 0) {
+                OpenCodeTopBar(
+                    title: viewModel.screenTitle,
+                    leading: .back(action: {
+                        ProductAnalytics.logUserAction(
+                            screenId: ProductAnalytics.Screen.connectionSetup,
+                            actionId: ProductAnalytics.Action.connectionBackCancel
+                        )
+                        onDismiss()
+                    }),
+                    actions: removeAction,
+                    showDivider: true
+                )
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    OpenCodeTextInput(
-                        text: $viewModel.name,
-                        hint: "Name",
-                        kind: .text,
-                        submitAction: .next,
-                        isFocused: $nameFocused,
-                        onSubmit: { urlFocused = true }
-                    )
-                    OpenCodeServerAddressInput(
-                        value: $viewModel.baseURL,
-                        hint: "Host",
-                        submitAction: .next,
-                        isFocused: $urlFocused,
-                        onSubmit: { usernameFocused = true }
-                    )
-                    OpenCodeTextInput(
-                        text: $viewModel.username,
-                        hint: "Username",
-                        kind: .username,
-                        submitAction: .next,
-                        isFocused: $usernameFocused,
-                        onSubmit: { passwordFocused = true }
-                    )
-                    OpenCodeTextInput(
-                        text: $viewModel.password,
-                        hint: "Password",
-                        kind: .password,
-                        isFocused: $passwordFocused,
-                        onSubmit: { passwordFocused = false }
-                    )
-                    statusMessage
-                    Button(testActionTitle) {
-                        Task { await viewModel.testConnection() }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        OpenCodeServerAddressInput(
+                            value: $viewModel.baseURL,
+                            hint: "macbook.local:4096",
+                            accessibilityLabel: "Host",
+                            enabled: !viewModel.isBusy,
+                            submitAction: .next,
+                            isFocused: $urlFocused,
+                            onSubmit: {
+                                if viewModel.credentialsExpanded {
+                                    usernameFocused = true
+                                } else {
+                                    nameFocused = true
+                                }
+                            }
+                        )
+                        Text("LAN, Tailscale MagicDNS, or tunnel — not localhost on a phone.")
+                            .font(OpenCodeTypography.bodySecondary)
+                            .foregroundStyle(OpenCodeColors.textBase)
+                            .padding(.leading, 2)
+
+                        OpenCodeTextInput(
+                            text: $viewModel.name,
+                            hint: "Optional name",
+                            kind: .text,
+                            enabled: !viewModel.isBusy,
+                            submitAction: .next,
+                            isFocused: $nameFocused,
+                            onSubmit: {
+                                if viewModel.credentialsExpanded {
+                                    usernameFocused = true
+                                } else {
+                                    nameFocused = false
+                                }
+                            }
+                        )
+
+                        Button {
+                            viewModel.setCredentialsExpanded(!viewModel.credentialsExpanded)
+                        } label: {
+                            HStack {
+                                Text("Username & password")
+                                    .font(OpenCodeTypography.body)
+                                    .foregroundStyle(OpenCodeColors.textBase)
+                                Spacer()
+                                OpenCodeIconImage(
+                                    icon: viewModel.credentialsExpanded ? .collapseContent : .expandContent,
+                                    size: 20
+                                )
+                                .foregroundStyle(OpenCodeColors.textBase)
+                            }
+                            .contentShape(Rectangle())
+                            .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(viewModel.isBusy)
+                        .accessibilityLabel(
+                            viewModel.credentialsExpanded
+                                ? "Collapse username and password"
+                                : "Expand username and password"
+                        )
+
+                        if viewModel.credentialsExpanded {
+                            OpenCodeTextInput(
+                                text: $viewModel.username,
+                                hint: "Username",
+                                kind: .username,
+                                enabled: !viewModel.isBusy,
+                                submitAction: .next,
+                                isFocused: $usernameFocused,
+                                onSubmit: { passwordFocused = true }
+                            )
+                            OpenCodeTextInput(
+                                text: $viewModel.password,
+                                hint: "Password",
+                                kind: .password,
+                                enabled: !viewModel.isBusy,
+                                isFocused: $passwordFocused,
+                                onSubmit: { passwordFocused = false }
+                            )
+                            Text("Default user is opencode. Password from OPENCODE_SERVER_PASSWORD.")
+                                .font(OpenCodeTypography.bodySecondary)
+                                .foregroundStyle(OpenCodeColors.textBase)
+                                .padding(.leading, 2)
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .font(OpenCodeTypography.button)
-                    .foregroundStyle(OpenCodeColors.textInteractiveBase)
-                    .disabled(viewModel.isTesting || viewModel.isSaving)
-                    .opacity(viewModel.isTesting || viewModel.isSaving ? 0.4 : 1)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 16)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .scrollDismissesKeyboard(.interactively)
+
+                OpenCodeButton(
+                    variant: .fullWidthText(title: viewModel.primaryActionLabel),
+                    enabled: viewModel.primaryEnabled
+                ) {
+                    Task {
+                        if await viewModel.submit() {
+                            onDismiss()
+                        }
+                    }
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 16)
-                .padding(.bottom, 16)
+                .padding(.bottom, 24)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .scrollDismissesKeyboard(.interactively)
 
-            OpenCodeButton(
-                variant: .fullWidthText(title: "Save"),
-                enabled: viewModel.canSave && !viewModel.isSaving
-            ) {
-                Task {
-                    if await viewModel.saveConnection() {
-                        onDismiss()
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 24)
+            OpenCodeSnackbarHost(
+                message: viewModel.snackbar,
+                onDismissed: { viewModel.consumeSnackbar() }
+            )
+            .padding(.bottom, 88)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
@@ -111,6 +164,11 @@ struct ConnectionSetupView: View {
         .onChange(of: viewModel.password) { _, _ in
             logFieldEditOnce(&loggedPasswordEdit, ProductAnalytics.Action.connectionEditPassword)
             viewModel.onFieldChanged()
+        }
+        .onChange(of: viewModel.requestPasswordFocus) { _, needsFocus in
+            guard needsFocus else { return }
+            passwordFocused = true
+            viewModel.consumePasswordFocusRequest()
         }
         .openCodeDialog(
             isPresented: $showRemoveConfirm,
@@ -135,14 +193,10 @@ struct ConnectionSetupView: View {
             .icon(
                 .delete,
                 accessibilityLabel: "Remove server",
-                enabled: !viewModel.isTesting && !viewModel.isSaving,
+                enabled: !viewModel.isBusy,
                 action: { showRemoveConfirm = true }
             ),
         ]
-    }
-
-    private var testActionTitle: String {
-        viewModel.state == .testSucceeded ? "Test again" : "Test connection"
     }
 
     private func logFieldEditOnce(_ alreadyLogged: inout Bool, _ actionId: String) {
@@ -153,70 +207,50 @@ struct ConnectionSetupView: View {
             actionId: actionId
         )
     }
-
-    private var statusMessage: some View {
-        let message = viewModel.testResultMessage ?? idleHint
-        return Text(message ?? " ")
-            .font(OpenCodeTypography.bodySecondary)
-            .foregroundStyle(
-                viewModel.state == .testSucceeded
-                    ? OpenCodeColors.textStrong
-                    : OpenCodeColors.textBase
-            )
-            .opacity(message == nil ? 0 : 1)
-            .accessibilityHidden(message == nil)
-    }
-
-    private var idleHint: String? {
-        guard viewModel.mode == .edit, viewModel.testResultMessage == nil else { return nil }
-        return "Rename can Save now. Host or password changes need Test."
-    }
 }
 
-#Preview("Connection Setup Idle") {
-    ConnectionSetupPreview(testOnAppear: false)
+#Preview("Connection Setup Create") {
+    ConnectionSetupPreview(mode: .add)
         .openCodeTheme()
 }
 
-#Preview("Connection Setup Reachable") {
-    ConnectionSetupPreview(testOnAppear: true)
+#Preview("Connection Setup Edit") {
+    ConnectionSetupPreview(mode: .edit)
         .openCodeTheme()
 }
 
 private struct ConnectionSetupPreview: View {
     @State private var viewModel: ConnectionSetupViewModel
-    let testOnAppear: Bool
 
     @MainActor
-    init(testOnAppear: Bool) {
-        _viewModel = State(initialValue: ConnectionSetupPreview.makeViewModel())
-        self.testOnAppear = testOnAppear
+    init(mode: ConnectionSetupMode) {
+        _viewModel = State(initialValue: ConnectionSetupPreview.makeViewModel(mode: mode))
     }
 
     var body: some View {
         ConnectionSetupView(viewModel: viewModel, onDismiss: {})
-            .task {
-                guard testOnAppear, !viewModel.canSave else { return }
-                await viewModel.testConnection()
-            }
     }
 
     @MainActor
-    private static func makeViewModel() -> ConnectionSetupViewModel {
-        ConnectionSetupViewModel(
+    private static func makeViewModel(mode: ConnectionSetupMode) -> ConnectionSetupViewModel {
+        let profile =
+            mode == .edit
+                ? ConnectionProfile(
+                    baseURL: "http://192.168.0.99:4096/",
+                    username: "opencode",
+                    password: "",
+                    id: "preview-profile",
+                    name: "Mac Mini V1"
+                )
+                : nil
+        return ConnectionSetupViewModel(
             connectionProbeService: PreviewConnectionProbeService(),
             connectionSessionCoordinator: ConnectionSessionCoordinator(
                 activeConnectionManager: ActiveConnectionManager(),
                 connectionProfileStore: PreviewConnectionProfileStore()
             ),
-            initialProfile: ConnectionProfile(
-                baseURL: "http://192.168.0.99:4096/",
-                username: "opencode",
-                password: "",
-                id: "preview-profile",
-                name: "Mac Mini V1"
-            ),
-            mode: .edit
+            initialProfile: profile,
+            mode: mode
         )
     }
 }
