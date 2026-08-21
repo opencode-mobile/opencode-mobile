@@ -5,8 +5,14 @@ import android.util.Log
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.event.SilentWorldSignals
+import dev.opencode.mobile.domain.event.StoreRefreshReason
+import dev.opencode.mobile.domain.event.WorldSignals
+import dev.opencode.mobile.domain.event.catchUpReason
+import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.LiveStoreScope
+import dev.opencode.mobile.domain.live.StoreInvalidationBus
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sessioncache.SessionMessageCacheHandle
@@ -42,6 +48,7 @@ class MessageSync(
     private val engine: SessionMessageEngine,
     private val eventStream: ForegroundEventStream,
     private val liveStoreScope: LiveStoreScope,
+    private val worldSignals: WorldSignals = SilentWorldSignals,
     private val pollIntervalMs: Long = LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS,
     private val eventStagingCapacity: Int = MESSAGE_EVENT_STAGING_CAPACITY,
     private val eventStagingByteCapacity: Int = MESSAGE_EVENT_STAGING_BYTE_CAPACITY,
@@ -62,6 +69,7 @@ class MessageSync(
     private val observationGeneration = AtomicInteger(0)
     private val terminalSessionKeys = ConcurrentHashMap.newKeySet<MessageSessionKey>()
     private val lastMessageEventAtMs = ConcurrentHashMap<String, Long>()
+    private val invalidationBus = StoreInvalidationBus()
 
     fun observeMessages(
         sessionId: String,
@@ -81,7 +89,19 @@ class MessageSync(
     suspend fun refreshMessages(
         sessionId: String,
         directory: String?,
-    ): List<Message> = fullReloadOrThrow(sessionKey(sessionId, directory), reason = "refresh")
+        reason: String = StoreRefreshReason.PULL_TO_REFRESH,
+    ): List<Message> = fullReloadOrThrow(sessionKey(sessionId, directory), reason = reason)
+
+    fun invalidate(
+        sessionId: String,
+        directory: String?,
+        reason: String = StoreRefreshReason.PULL_TO_REFRESH,
+    ) {
+        invalidationBus.invalidate(
+            key = sessionKey(sessionId, directory).storeSlot,
+            reason = reason,
+        )
+    }
 
     fun clearCache() {
         observationGeneration.incrementAndGet()
@@ -288,17 +308,27 @@ class MessageSync(
                 observationEpoch.set(connectionEpoch.current())
             }
 
-            fun requestResumeCatchUp(): Boolean {
+            fun requestResumeCatchUp(fetchReason: String = StoreRefreshReason.STREAM_RECONNECTED): Boolean {
                 if (!seenConnected.get()) return false
                 val needsCatchUp =
                     health.get() is MessageSyncHealth.Stale || !isCurrentEpoch()
-                if (!needsCatchUp) return false
+                if (!needsCatchUp) {
+                    logI(
+                        "fullReload skip session=${key.sessionId} reason=$fetchReason",
+                    )
+                    return false
+                }
                 val epoch = connectionEpoch.current()
                 while (true) {
                     val previous = resumeCatchUpRequestedEpoch.get()
-                    if (previous == epoch) return false
+                    if (previous == epoch) {
+                        logI(
+                            "fullReload skip session=${key.sessionId} reason=$fetchReason",
+                        )
+                        return false
+                    }
                     if (resumeCatchUpRequestedEpoch.compareAndSet(previous, epoch)) {
-                        staging.trySend(StagedItem.TransportResumed)
+                        staging.trySend(StagedItem.TransportResumed(fetchReason))
                         return true
                     }
                 }
@@ -371,13 +401,47 @@ class MessageSync(
                             EventStreamConnectionState.Connecting -> {
                                 // OPE-165: catch up as soon as cold resume occupies the stream
                                 // (Connecting after stop cleared wasConnected), before live.
-                                requestResumeCatchUp()
+                                requestResumeCatchUp(StoreRefreshReason.STREAM_RECONNECTED)
                             }
                         }
                     }
                 }
 
-            suspend fun performClosedLoopRecovery(reason: MessageSyncRecoveryReason) {
+            val worldWatcher =
+                launch {
+                    worldSignals.signals.collect { signal ->
+                        when {
+                            signal.marksStale() -> {
+                                if (!seenConnected.get()) return@collect
+                                if (lastPublishedFrames[storeSlot] == null) return@collect
+                                if (!health.get().isHealthy) return@collect
+                                publishHealth(
+                                    MessageSyncHealth.Stale(MessageSyncRecoveryReason.TransportUnavailable),
+                                )
+                            }
+                            else -> {
+                                val reason = signal.catchUpReason() ?: return@collect
+                                requestResumeCatchUp(reason)
+                            }
+                        }
+                    }
+                }
+
+            val invalidationWatcher =
+                launch {
+                    invalidationBus.events.collect { invalidation ->
+                        if (invalidation.key != null && invalidation.key != storeSlot) return@collect
+                        publishHealth(
+                            MessageSyncHealth.Stale(MessageSyncRecoveryReason.TransportUnavailable),
+                        )
+                        requestResumeCatchUp(invalidation.reason)
+                    }
+                }
+
+            suspend fun performClosedLoopRecovery(
+                reason: MessageSyncRecoveryReason,
+                fetchReason: String = "overflow-recovery",
+            ) {
                 if (!observationStillCurrent() || !isCurrentEpoch()) {
                     // SSE start/reconnect bumps ConnectionEpoch under an in-flight
                     // observation. Never leave Recovering latched when we cannot
@@ -395,7 +459,7 @@ class MessageSync(
                     drainStaging()
                     beginAuthorityWindow()
                     val fingerprintBefore = lastFingerprints[storeSlot]
-                    when (val result = fullReloadResult(key, reason = "overflow-recovery", mergeExisting = true)) {
+                    when (val result = fullReloadResult(key, reason = fetchReason, mergeExisting = true)) {
                         is ReloadResult.Success -> {
                             val becameHealthy = completeAuthorityWindow(reloadSucceeded = true)
                             if (isCurrentEpoch()) {
@@ -441,10 +505,16 @@ class MessageSync(
                 if (event.type == "stream.reconnected") {
                     serverConnectedReloadJob?.cancel()
                     serverConnectedReloadJob = null
-                    if (!claimReconnectCatchUp()) return
+                    if (!claimReconnectCatchUp()) {
+                        logI("fullReload skip session=${key.sessionId} reason=${StoreRefreshReason.STREAM_RECONNECTED}")
+                        return
+                    }
                     adoptCurrentEpoch()
                     enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
-                    performClosedLoopRecovery(MessageSyncRecoveryReason.Reconnect)
+                    performClosedLoopRecovery(
+                        MessageSyncRecoveryReason.Reconnect,
+                        fetchReason = StoreRefreshReason.STREAM_RECONNECTED,
+                    )
                     return
                 }
                 if (event.type == "server.connected") {
@@ -452,10 +522,20 @@ class MessageSync(
                     serverConnectedReloadJob =
                         launch {
                             delay(LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS)
-                            if (!observationStillCurrent() || !claimReconnectCatchUp()) return@launch
+                            if (!observationStillCurrent()) return@launch
+                            if (!claimReconnectCatchUp()) {
+                                logI(
+                                    "fullReload skip session=${key.sessionId} " +
+                                        "reason=${StoreRefreshReason.SERVER_CONNECTED}",
+                                )
+                                return@launch
+                            }
                             adoptCurrentEpoch()
                             enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
-                            performClosedLoopRecovery(MessageSyncRecoveryReason.Reconnect)
+                            performClosedLoopRecovery(
+                                MessageSyncRecoveryReason.Reconnect,
+                                fetchReason = StoreRefreshReason.SERVER_CONNECTED,
+                            )
                         }
                     return
                 }
@@ -691,10 +771,18 @@ class MessageSync(
                         is StagedItem.TransportResumed -> {
                             serverConnectedReloadJob?.cancel()
                             serverConnectedReloadJob = null
-                            if (!claimReconnectCatchUp()) continue
+                            if (!claimReconnectCatchUp()) {
+                                logI(
+                                    "fullReload skip session=${key.sessionId} reason=${item.reason}",
+                                )
+                                continue
+                            }
                             adoptCurrentEpoch()
                             enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
-                            performClosedLoopRecovery(MessageSyncRecoveryReason.Reconnect)
+                            performClosedLoopRecovery(
+                                MessageSyncRecoveryReason.Reconnect,
+                                fetchReason = item.reason,
+                            )
                         }
                         is StagedItem.Event -> {
                             noteDequeued(item.byteCost)
@@ -715,6 +803,8 @@ class MessageSync(
                 serverConnectedReloadJob?.cancel()
                 producer.cancel()
                 connectionWatcher.cancel()
+                worldWatcher.cancel()
+                invalidationWatcher.cancel()
                 staging.close()
                 closeMessageCacheHandle(key)
             }
@@ -732,7 +822,9 @@ class MessageSync(
         data object RecoveryRequired : StagedItem
 
         /** SSE returned to Connected after Idle/Disconnect without a reconnect event. */
-        data object TransportResumed : StagedItem
+        data class TransportResumed(
+            val reason: String,
+        ) : StagedItem
     }
 
     private fun timelinePollFlow(key: MessageSessionKey): Flow<MessageListUpdate> =

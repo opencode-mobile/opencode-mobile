@@ -7,8 +7,6 @@ import dev.opencode.mobile.domain.connection.SecureCredentialStore
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
-import dev.opencode.mobile.domain.event.FakeForegroundRestore
-import dev.opencode.mobile.domain.event.ForegroundHomeCatchUpRegistry
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
 import dev.opencode.mobile.domain.live.DefaultSessionReadyStore
@@ -886,8 +884,6 @@ class MainScreenViewModelTest {
             sessionStatusLiveStore = sessionStatusLiveStore,
             sessionReadyStore = sessionReadyStore,
             foregroundEventStream = eventStream,
-            foregroundRestore = FakeForegroundRestore(),
-            foregroundHomeCatchUpRegistry = ForegroundHomeCatchUpRegistry(),
             activeConnectionManager = activeConnectionManager,
             connectionSessionCoordinator = coordinator,
             newSessionModelSelectionResolver =

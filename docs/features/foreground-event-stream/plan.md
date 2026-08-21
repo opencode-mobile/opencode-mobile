@@ -3,8 +3,9 @@
 ## User Goal
 
 While the app is open, Session Chat and home reflect server activity in near real time.
-After reconnect or return from background, state is refreshed from the server
-(`ForegroundRestore` + REST for registered scopes; SSE for live deltas).
+SSE supplies live deltas. REST catch-up after a process gap is
+[reactive-data-layer](../reactive-data-layer/plan.md), not a UI registry on
+the stream.
 
 ## In Scope
 
@@ -12,8 +13,12 @@ After reconnect or return from background, state is refreshed from the server
   `GET /event`, plus v2 `GET /api/event`. All stay. Both protocols must
   carry relevant live events (session lifecycle, message/part, status,
   permissions, questions), not heartbeats only.
-- Foreground lifecycle: connect on app foreground, disconnect on background.
-- Reconnect with refresh of session list, statuses, and open chat messages.
+- Foreground lifecycle: connect on app foreground, disconnect on background
+  after the 5s stop grace. The world adapter in reactive-data-layer starts
+  and stops this stream.
+- Reconnect emits `stream.reconnected` / `server.connected`. Store REST
+  catch-up after those events and after background / path restore is
+  [reactive-data-layer](../reactive-data-layer/plan.md).
 - Session Chat incrementally merges relevant message events for the bound
   session and uses selective authoritative reloads for reconciliation.
 - Home reloads session sections on session lifecycle events.
@@ -37,10 +42,9 @@ After reconnect or return from background, state is refreshed from the server
 - `GET /event` — v1 instance SSE (directory-scoped). Carries `session.created`,
   `message.*`, status, permissions, questions. Keep it; do not treat as optional.
 - `GET /api/event` — v2 SSE (live Session Chat shape). Same relevant-event bar.
-- `GET /session/status` — baseline and reconnect status refresh.
-- Existing `GET /session/:id/message` for initial history, selective
-  reconciliation, and reconnect. Message poll policy is
-  [message-store](../message-store/decisions.md).
+- REST history and gap catch-up endpoints stay on
+  [message-store](../message-store/plan.md) and
+  [reactive-data-layer](../reactive-data-layer/plan.md).
 
 ## Expected Logs
 
@@ -80,5 +84,6 @@ Not applicable in this slice.
 
 ## Navigation Entry Points
 
-- Android: app-level lifecycle in `MainActivity`; `MainScreenViewModel`, `SessionChatViewModel`.
-- iOS: `scenePhase` in `OpenCode_MobileApp`; `ProjectListHomeViewModel`, `SessionChatViewModel`.
+- Android: process lifecycle currently `ForegroundEventLifecycleCoordinator`
+  in `MainActivity`; becomes `ProcessWorldSignals` under reactive-data-layer.
+- iOS: `scenePhase` in `AppRootView`; becomes `SceneWorldSignals`.

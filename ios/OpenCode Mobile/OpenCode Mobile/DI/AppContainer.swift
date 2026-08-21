@@ -170,7 +170,7 @@ extension Container {
     }
 
     var messageSync: Factory<MessageSync> {
-        self {
+        self { @MainActor in
             let router = self.messageRemote()
             let adapter = self.messageDomainAdapter()
             let manager = self.activeConnectionManager()
@@ -184,6 +184,7 @@ extension Container {
                 },
                 store: self.sessionMessageEngine(),
                 eventStream: self.foregroundEventStream(),
+                worldSignals: self.worldSignals(),
                 connectionProfileIDProvider: {
                     guard let connection = manager.connection else { return "local" }
                     return PreparedHistoryCacheKey.profileID(
@@ -318,16 +319,16 @@ extension Container {
         }.singleton
     }
 
-    var foregroundHomeCatchUpRegistry: Factory<ForegroundHomeCatchUpRegistry> {
-        self { ForegroundHomeCatchUpRegistry() }.singleton
-    }
-
-    var foregroundRestore: Factory<any ForegroundRestore> {
-        self {
-            DefaultForegroundRestore(
+    var worldSignals: Factory<SceneWorldSignals> {
+        self { @MainActor in
+            let manager = self.activeConnectionManager()
+            return SceneWorldSignals(
                 stream: self.foregroundEventStream(),
-                messageRepository: self.messageRepository(),
-                homeCatchUpRegistry: self.foregroundHomeCatchUpRegistry()
+                deviceNetworkPath: self.deviceNetworkPath(),
+                hasActiveConnection: {
+                    manager.connection != nil || manager.currentProfile() != nil
+                },
+                connectionSessionCoordinator: self.connectionSessionCoordinator()
             )
         }.singleton
     }
@@ -337,7 +338,8 @@ extension Container {
             DefaultSessionStatusLiveStore(
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
-                eventAdapter: self.eventDomainAdapter()
+                eventAdapter: self.eventDomainAdapter(),
+                worldSignals: self.worldSignals()
             )
         }.singleton
     }
@@ -346,7 +348,8 @@ extension Container {
         self { @MainActor in
             DefaultPermissionLiveStore(
                 sessionRepository: self.sessionRepository(),
-                eventStream: self.foregroundEventStream()
+                eventStream: self.foregroundEventStream(),
+                worldSignals: self.worldSignals()
             )
         }.singleton
     }
@@ -355,7 +358,8 @@ extension Container {
         self { @MainActor in
             DefaultQuestionLiveStore(
                 sessionRepository: self.sessionRepository(),
-                eventStream: self.foregroundEventStream()
+                eventStream: self.foregroundEventStream(),
+                worldSignals: self.worldSignals()
             )
         }.singleton
     }
@@ -364,7 +368,8 @@ extension Container {
         self { @MainActor in
             DefaultSessionTodoLiveStore(
                 sessionRepository: self.sessionRepository(),
-                eventStream: self.foregroundEventStream()
+                eventStream: self.foregroundEventStream(),
+                worldSignals: self.worldSignals()
             )
         }.singleton
     }
@@ -384,7 +389,8 @@ extension Container {
             DefaultSessionLiveStore(
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
-                sessionCache: self.sessionCache()
+                sessionCache: self.sessionCache(),
+                worldSignals: self.worldSignals()
             )
         }.singleton
     }
@@ -405,7 +411,7 @@ extension Container {
                 connectionProfileStore: self.connectionProfileStore(),
                 activeConnectionManager: self.activeConnectionManager(),
                 connectionSessionCoordinator: self.connectionSessionCoordinator(),
-                foregroundRestore: self.foregroundRestore(),
+                worldSignals: self.worldSignals(),
                 appOnboardingPreferences: AppOnboardingPreferences.shared
             )
         }
@@ -433,8 +439,6 @@ extension Container {
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
                 sessionReadyStore: self.sessionReadyStore(),
                 foregroundEventStream: self.foregroundEventStream(),
-                foregroundRestore: self.foregroundRestore(),
-                foregroundHomeCatchUpRegistry: self.foregroundHomeCatchUpRegistry(),
                 connectionSessionCoordinator: self.connectionSessionCoordinator(),
                 newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
                     store: self.sessionModelSelectionStore(),
@@ -463,7 +467,6 @@ extension Container {
                 sessionReadyStore: self.sessionReadyStore(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
                 foregroundEventStream: self.foregroundEventStream(),
-                foregroundRestore: self.foregroundRestore(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),
                 composerDraftStore: self.composerDraftStore(),
                 activeConnectionManager: self.activeConnectionManager(),
@@ -525,7 +528,7 @@ extension Container {
     @MainActor
     static func clearAllData() {
         Task { @MainActor in
-            shared.foregroundRestore().noteBackgroundStop()
+            shared.foregroundEventStream().stop()
             await shared.connectionSessionCoordinator().clearConnectionData()
             shared.sessionLiveStore().clearCache()
             shared.sessionStatusLiveStore().clearCache()

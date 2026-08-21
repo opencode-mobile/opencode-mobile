@@ -9,22 +9,21 @@ import dev.opencode.mobile.data.remote.EventsApi
 import dev.opencode.mobile.data.remote.FilesystemApi
 import dev.opencode.mobile.data.remote.HealthApi
 import dev.opencode.mobile.data.remote.ProjectsApi
+import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.ConnectivityDeviceNetworkPath
 import dev.opencode.mobile.domain.connection.DeviceNetworkPath
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.event.DefaultForegroundEventStream
-import dev.opencode.mobile.domain.event.DefaultForegroundRestore
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
-import dev.opencode.mobile.domain.event.ForegroundHomeCatchUp
-import dev.opencode.mobile.domain.event.ForegroundHomeCatchUpRegistry
-import dev.opencode.mobile.domain.event.ForegroundRestore
+import dev.opencode.mobile.domain.event.ProcessWorldSignals
+import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.filesystem.DefaultFilesystemRepository
 import dev.opencode.mobile.domain.filesystem.FilesystemDomainAdapter
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.project.DefaultProjectRepository
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
-import dev.opencode.mobile.lifecycle.ForegroundEventLifecycleCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -77,14 +76,6 @@ abstract class EventStreamModule {
 
     @Binds
     @Singleton
-    abstract fun bindForegroundRestore(impl: DefaultForegroundRestore): ForegroundRestore
-
-    @Binds
-    @Singleton
-    abstract fun bindForegroundHomeCatchUp(impl: ForegroundHomeCatchUpRegistry): ForegroundHomeCatchUp
-
-    @Binds
-    @Singleton
     abstract fun bindDeviceNetworkPath(impl: ConnectivityDeviceNetworkPath): DeviceNetworkPath
 
     companion object {
@@ -98,13 +89,20 @@ abstract class EventStreamModule {
 
         @Provides
         @Singleton
-        fun provideForegroundEventLifecycleCoordinator(
-            foregroundRestore: ForegroundRestore,
+        fun provideWorldSignals(
+            stream: ForegroundEventStream,
+            deviceNetworkPath: DeviceNetworkPath,
+            diagnosticLogger: DiagnosticLogger,
             activeConnectionManager: ActiveConnectionManager,
-        ): ForegroundEventLifecycleCoordinator =
-            ForegroundEventLifecycleCoordinator(
-                foregroundRestore = foregroundRestore,
+            connectionSessionCoordinator: ConnectionSessionCoordinator,
+        ): WorldSignals =
+            ProcessWorldSignals(
+                stream = stream,
+                deviceNetworkPath = deviceNetworkPath,
+                diagnosticLogger = diagnosticLogger,
                 hasActiveConnection = { activeConnectionManager.current() != null },
+                profileSaved = connectionSessionCoordinator.profileSaved,
+                profileCleared = connectionSessionCoordinator.profileCleared,
                 scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
             )
     }

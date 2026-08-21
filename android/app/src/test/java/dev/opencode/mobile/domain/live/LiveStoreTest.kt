@@ -3,7 +3,11 @@ package dev.opencode.mobile.domain.live
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
+import dev.opencode.mobile.domain.event.FakeWorldSignals
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.event.SilentWorldSignals
+import dev.opencode.mobile.domain.event.WorldSignal
+import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.message.ConnectionEpoch
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.DisplayMessagePipeline
@@ -602,6 +606,56 @@ class MessageSyncTest {
                 (health as MessageSyncHealth.Stale).reason,
             )
             assertEquals("Hello", emissions.last().single().text)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_worldBackgroundThenForeground_refreshes() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val world = FakeWorldSignals()
+            val sync = createMessageSync(repository, eventStream, worldSignals = world)
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(1)
+            val afterInitial = repository.listMessagesCallCount
+
+            world.emit(WorldSignal.Background)
+            advanceTimeBy(1)
+            world.emit(WorldSignal.Foreground)
+            advanceTimeBy(1)
+
+            assertTrue(repository.listMessagesCallCount > afterInitial)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_worldForegroundWithoutBackground_doesNotRefresh() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val world = FakeWorldSignals()
+            val sync = createMessageSync(repository, eventStream, worldSignals = world)
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(1)
+            val afterInitial = repository.listMessagesCallCount
+
+            world.emit(WorldSignal.Foreground)
+            advanceTimeBy(1)
+
+            assertEquals(afterInitial, repository.listMessagesCallCount)
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
         }
@@ -1854,6 +1908,7 @@ class MessageSyncTest {
         eventStagingCapacity: Int = MESSAGE_EVENT_STAGING_CAPACITY,
         connectionProfileId: String = "local",
         pollIntervalMs: Long = LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS,
+        worldSignals: WorldSignals = SilentWorldSignals,
     ): MessageSync {
         val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
         return MessageSync(
@@ -1861,6 +1916,7 @@ class MessageSyncTest {
             engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
             eventStream = eventStream,
             liveStoreScope = scope,
+            worldSignals = worldSignals,
             pollIntervalMs = pollIntervalMs,
             eventStagingCapacity = eventStagingCapacity,
             connectionProfileIdProvider = { connectionProfileId },

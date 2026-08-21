@@ -34,6 +34,8 @@ Still binding:
   geometry.
 - SSE transport (foreground-only, 45s silence watchdog) is
   [foreground-event-stream](../foreground-event-stream/decisions.md).
-  Return from background is owned by `ForegroundRestore`: open chat gets
-  authoritative `refreshDisplayMessages`; `stream.reconnected` still runs
-  MessageSync catch-up for warm drops and cold resume after stop.
+  Return from background, path restore, and pull-to-refresh catch-up are
+  [reactive-data-layer](../reactive-data-layer/decisions.md): MessageSync
+  stale bit plus interest, not a `ForegroundRestore` UI registry.
+  `stream.reconnected` still runs MessageSync catch-up for warm drops and
+  cold resume after stop, coalesced with world-signal REST.

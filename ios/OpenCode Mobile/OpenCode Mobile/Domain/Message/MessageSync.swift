@@ -9,6 +9,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private let listMessages: MessageListFetcher
     private let store: SessionMessageEngine
     private let eventStream: any ForegroundEventStream
+    private let worldSignals: any WorldSignals
     private let pollIntervalMs: Int
     private let eventStagingCapacity: Int
     private let eventStagingByteCapacity: Int
@@ -31,11 +32,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private var terminalSessionKeys: Set<MessageSessionKey> = []
     private var startedGenerationByKey: [MessageSessionKey: Int] = [:]
     private var lastMessageEventAtMs: [String: Int64] = [:]
+    private let invalidationBus = StoreInvalidationBus()
 
     init(
         listMessages: @escaping MessageListFetcher,
         store: SessionMessageEngine,
         eventStream: any ForegroundEventStream,
+        worldSignals: any WorldSignals = SilentWorldSignals.shared,
         pollIntervalMs: Int = LiveStoreRefreshPolicy.workingPollIntervalMs,
         eventStagingCapacity: Int = messageEventStagingCapacity,
         eventStagingByteCapacity: Int = messageEventStagingByteCapacity,
@@ -52,6 +55,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         self.listMessages = listMessages
         self.store = store
         self.eventStream = eventStream
+        self.worldSignals = worldSignals
         self.pollIntervalMs = pollIntervalMs
         self.eventStagingCapacity = eventStagingCapacity
         self.eventStagingByteCapacity = eventStagingByteCapacity
@@ -67,6 +71,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         listMessages: @escaping MessageListFetcher,
         store: InMemoryMessageStore,
         eventStream: any ForegroundEventStream,
+        worldSignals: any WorldSignals = SilentWorldSignals.shared,
         pollIntervalMs: Int = LiveStoreRefreshPolicy.workingPollIntervalMs,
         eventStagingCapacity: Int = messageEventStagingCapacity,
         eventStagingByteCapacity: Int = messageEventStagingByteCapacity,
@@ -84,6 +89,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             listMessages: listMessages,
             store: SessionMessageEngine(store: store),
             eventStream: eventStream,
+            worldSignals: worldSignals,
             pollIntervalMs: pollIntervalMs,
             eventStagingCapacity: eventStagingCapacity,
             eventStagingByteCapacity: eventStagingByteCapacity,
@@ -113,9 +119,24 @@ nonisolated final class MessageSync: @unchecked Sendable {
         return observation.stream()
     }
 
-    func refreshMessages(sessionID: String, directory: String?) async throws -> [Message] {
+    func refreshMessages(
+        sessionID: String,
+        directory: String?,
+        reason: String = StoreRefreshReason.pullToRefresh
+    ) async throws -> [Message] {
         let key = sessionKey(sessionID: sessionID, directory: directory)
-        return try await fullReloadOrThrow(key: key, reason: "refresh")
+        return try await fullReloadOrThrow(key: key, reason: reason)
+    }
+
+    func invalidate(
+        sessionID: String,
+        directory: String?,
+        reason: String = StoreRefreshReason.pullToRefresh
+    ) {
+        invalidationBus.invalidate(
+            key: sessionKey(sessionID: sessionID, directory: directory).storeSlot,
+            reason: reason
+        )
     }
 
     func clearCache() {
@@ -256,6 +277,28 @@ nonisolated final class MessageSync: @unchecked Sendable {
             byteCapacity: eventStagingByteCapacity
         )
         let cacheHandle = openMessageCacheHandle(for: key)
+        let resumeState = ObservationResumeState()
+        func requestResumeCatchUp(reason: String = StoreRefreshReason.streamReconnected) -> Bool {
+            guard resumeState.hasSeenConnected else { return false }
+            let health = self.syncHealth(
+                sessionID: key.sessionID,
+                directory: key.directory.isEmpty ? nil : key.directory
+            )
+            let needsCatchUp: Bool = {
+                if case .stale = health { return true }
+                return self.connectionEpoch.current() != observationEpoch.current
+            }()
+            if !needsCatchUp {
+                DiagnosticLog.info(.chat, "fullReload skip session=\(key.sessionID) reason=\(reason)")
+                return false
+            }
+            guard resumeState.claimResume(epoch: connectionEpoch.current()) else {
+                DiagnosticLog.info(.chat, "fullReload skip session=\(key.sessionID) reason=\(reason)")
+                return false
+            }
+            staging.requestTransportResume(reason: reason)
+            return true
+        }
         let producer = Task { [eventStream] in
             for await event in eventStream.events() {
                 staging.enqueue(event, sessionID: key.sessionID, epoch: observationEpoch.current)
@@ -264,25 +307,6 @@ nonisolated final class MessageSync: @unchecked Sendable {
         }
         let connectionWatcher = Task { [eventStream, weak self] in
             guard let self else { return }
-            var seenConnected = false
-            var resumeCatchUpRequestedEpoch: UInt64?
-            func shouldRequestResumeCatchUp() -> Bool {
-                guard seenConnected else { return false }
-                let health = self.syncHealth(
-                    sessionID: key.sessionID,
-                    directory: key.directory.isEmpty ? nil : key.directory
-                )
-                let needsCatchUp: Bool = {
-                    if case .stale = health { return true }
-                    return self.connectionEpoch.current() != observationEpoch.current
-                }()
-                guard needsCatchUp else { return false }
-                let epoch = self.connectionEpoch.current()
-                // One TransportResumed enqueue per ConnectionEpoch (OPE-165).
-                if resumeCatchUpRequestedEpoch == epoch { return false }
-                resumeCatchUpRequestedEpoch = epoch
-                return true
-            }
             for await state in eventStream.connectionStateUpdates() {
                 switch state {
                 case .connected:
@@ -290,34 +314,71 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     // stream.reconnected. If server.connected is missed, still
                     // adopt the bumped epoch and fullReload — otherwise a
                     // latched streaming turn blocks the poll watchdog forever.
-                    let shouldRecover = shouldRequestResumeCatchUp()
-                    seenConnected = true
+                    let shouldRecover = resumeState.hasSeenConnected && {
+                        let health = self.syncHealth(
+                            sessionID: key.sessionID,
+                            directory: key.directory.isEmpty ? nil : key.directory
+                        )
+                        if case .stale = health { return true }
+                        return self.connectionEpoch.current() != observationEpoch.current
+                    }()
+                    resumeState.markSeenConnected()
                     if shouldRecover {
-                        staging.requestTransportResume()
+                        _ = requestResumeCatchUp()
                     }
                 case .disconnected, .reconnecting, .idle:
-                    guard seenConnected else { continue }
-                    guard self.fingerprint(for: key.storeSlot) != nil else { continue }
+                    guard resumeState.hasSeenConnected else { continue }
+                    guard self.publishedFrame(for: key.storeSlot) != nil else { continue }
                     // Unlatch streaming so the poll watchdog can catch up even
                     // before Connected triggers transport-resumed recovery.
                     self.store.finishStreamingText(sessionID: key.storeSlot)
                     guard self.connectionEpoch.current() == observationEpoch.current else { continue }
-                    let current = self.syncHealth(sessionID: key.sessionID, directory: key.directory.isEmpty ? nil : key.directory)
+                    let current = self.syncHealth(
+                        sessionID: key.sessionID,
+                        directory: key.directory.isEmpty ? nil : key.directory
+                    )
                     guard current.isHealthy else { continue }
                     staging.enterStale(.transportUnavailable)
                     self.setHealth(.stale(.transportUnavailable), for: key)
                 case .connecting:
                     // OPE-165: catch up as soon as cold resume occupies the stream
                     // (Connecting after stop cleared wasConnected), before live.
-                    if shouldRequestResumeCatchUp() {
-                        staging.requestTransportResume()
-                    }
+                    _ = requestResumeCatchUp(reason: StoreRefreshReason.streamReconnected)
                 }
+            }
+        }
+        let worldWatcher = Task { [worldSignals, weak self] in
+            guard let self else { return }
+            for await signal in worldSignals.signals() {
+                if signal.marksStale {
+                    guard resumeState.hasSeenConnected else { continue }
+                    guard self.publishedFrame(for: key.storeSlot) != nil else { continue }
+                    let current = self.syncHealth(
+                        sessionID: key.sessionID,
+                        directory: key.directory.isEmpty ? nil : key.directory
+                    )
+                    guard current.isHealthy else { continue }
+                    staging.enterStale(.transportUnavailable)
+                    self.setHealth(.stale(.transportUnavailable), for: key)
+                } else if let reason = signal.catchUpReason {
+                    _ = requestResumeCatchUp(reason: reason)
+                }
+            }
+        }
+        let invalidationWatcher = Task { [invalidationBus, weak self] in
+            guard let self else { return }
+            for await invalidation in invalidationBus.events() {
+                if let slot = invalidation.key, slot != key.storeSlot { continue }
+                staging.enterStale(.transportUnavailable)
+                self.setHealth(.stale(.transportUnavailable), for: key)
+                _ = requestResumeCatchUp(reason: invalidation.reason)
             }
         }
         defer {
             producer.cancel()
             connectionWatcher.cancel()
+            worldWatcher.cancel()
+            invalidationWatcher.cancel()
             staging.finish()
             closeMessageCacheHandle(for: key)
         }
@@ -370,6 +431,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         // DisplayMessagePipeline does not cancel in-flight enrich / plain-first.
         let fingerprintBeforeReload = fingerprint(for: key.storeSlot)
         let expectedRevision = store.revision(sessionID: key.storeSlot)
+        let initialStarted = Date()
         do {
             SessionPerformanceProbe.emit("history_request_started")
             let messages = try await listMessages(key.sessionID, key.directory.isEmpty ? nil : key.directory)
@@ -396,6 +458,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
                 setFingerprint(fingerprint, for: key.storeSlot)
                 setHealth(.healthy, for: key)
+                DiagnosticLog.info(
+                    .chat,
+                    "fullReload session=\(key.sessionID) reason=\(StoreRefreshReason.initialSubscribe) count=\(merged.count) ms=\(elapsedMs(since: initialStarted))"
+                )
                 if fingerprintBeforeReload != fingerprint {
                     publishMessages(merged, false)
                 } else {
@@ -428,6 +494,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 )
             } else {
                 yield(.loadFailed(error))
+                DiagnosticLog.warning(
+                    .chat,
+                    "fullReload failed session=\(key.sessionID) reason=\(StoreRefreshReason.initialSubscribe) ms=\(elapsedMs(since: initialStarted))"
+                )
             }
         }
 
@@ -463,6 +533,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         staging: MessageEventStaging,
         observationEpoch: ObservationEpoch,
         reason: MessageSyncRecoveryReason,
+        fetchReason: String = "overflow-recovery",
         publishMessages: @escaping @Sendable ([Message]) -> Void
     ) async {
         guard observationStillCurrent(key: key),
@@ -481,7 +552,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             staging.drain()
             staging.beginAuthorityWindow()
             let fingerprintBefore = fingerprint(for: key.storeSlot)
-            let result = await fullReloadResult(key: key, reason: "overflow-recovery", mergeExisting: true)
+            let result = await fullReloadResult(key: key, reason: fetchReason, mergeExisting: true)
             switch result {
             case .success(let messages):
                 let becameHealthy = staging.completeAuthorityWindow(reloadSucceeded: true)
@@ -529,6 +600,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         SessionPerformanceProbe.emit("history_request_started")
         let expectedRevision = store.revision(sessionID: key.storeSlot)
         let directory = key.directory.isEmpty ? nil : key.directory
+        let started = Date()
         let messages = try await listMessages(key.sessionID, directory)
         SessionPerformanceProbe.emit("history_request_finished")
         _ = store.replaceAllIfRevision(
@@ -539,6 +611,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
         let merged = store.messages(sessionID: key.storeSlot)
         setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
         setFingerprint(messageFingerprint(merged), for: key.storeSlot)
+        DiagnosticLog.info(
+            .chat,
+            "fullReload session=\(key.sessionID) reason=\(reason) count=\(merged.count) ms=\(elapsedMs(since: started))"
+        )
         return merged
     }
 
@@ -550,6 +626,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         SessionPerformanceProbe.emit("history_request_started")
         let expectedRevision = store.revision(sessionID: key.storeSlot)
         let directory = key.directory.isEmpty ? nil : key.directory
+        let started = Date()
         do {
             let messages = try await listMessages(key.sessionID, directory)
             if mergeExisting {
@@ -570,9 +647,17 @@ nonisolated final class MessageSync: @unchecked Sendable {
             setFingerprint(messageFingerprint(merged), for: key.storeSlot)
             SessionPerformanceProbe.emit("history_request_finished")
             MessagePipelineProbe.emit(.reducerCommitted)
+            DiagnosticLog.info(
+                .chat,
+                "fullReload session=\(key.sessionID) reason=\(reason) count=\(merged.count) ms=\(elapsedMs(since: started))"
+            )
             return .success(merged)
         } catch {
             SessionPerformanceProbe.emit("history_request_finished")
+            DiagnosticLog.warning(
+                .chat,
+                "fullReload failed session=\(key.sessionID) reason=\(reason) ms=\(elapsedMs(since: started))"
+            )
             return .failure(error)
         }
     }
@@ -650,10 +735,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     publishMessages: publishMessages
                 )
                 continue
-            case .transportResumed:
+            case .transportResumed(let reason):
                 debounceTask?.cancel()
                 debounceTask = nil
-                guard catchUpGate.claim(connectionEpoch.current()) else { continue }
+                guard catchUpGate.claim(connectionEpoch.current()) else {
+                    DiagnosticLog.info(.chat, "fullReload skip session=\(key.sessionID) reason=\(reason)")
+                    continue
+                }
                 observationEpoch.adopt(connectionEpoch.current())
                 staging.enterRecovering(.reconnect, wakeConsumer: false)
                 setHealth(staging.currentHealth, for: key)
@@ -662,6 +750,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     staging: staging,
                     observationEpoch: observationEpoch,
                     reason: .reconnect,
+                    fetchReason: reason,
                     publishMessages: publishMessages
                 )
                 continue
@@ -706,7 +795,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
         if event.type == "stream.reconnected" {
             debounceTask?.cancel()
             debounceTask = nil
-            guard catchUpGate.claim(connectionEpoch.current()) else { return }
+            guard catchUpGate.claim(connectionEpoch.current()) else {
+                DiagnosticLog.info(
+                    .chat,
+                    "fullReload skip session=\(key.sessionID) reason=\(StoreRefreshReason.streamReconnected)"
+                )
+                return
+            }
             observationEpoch.adopt(connectionEpoch.current())
             staging.enterRecovering(.reconnect, wakeConsumer: false)
             setHealth(staging.currentHealth, for: key)
@@ -715,6 +810,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 staging: staging,
                 observationEpoch: observationEpoch,
                 reason: .reconnect,
+                fetchReason: StoreRefreshReason.streamReconnected,
                 publishMessages: publishMessages
             )
             return
@@ -725,7 +821,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
             debounceTask = Task { [weak self] in
                 try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.messageDebounceMs))
                 guard !Task.isCancelled, let self else { return }
-                guard catchUpGate.claim(self.connectionEpoch.current()) else { return }
+                guard catchUpGate.claim(self.connectionEpoch.current()) else {
+                    DiagnosticLog.info(
+                        .chat,
+                        "fullReload skip session=\(key.sessionID) reason=\(StoreRefreshReason.serverConnected)"
+                    )
+                    return
+                }
                 observationEpoch.adopt(self.connectionEpoch.current())
                 staging.enterRecovering(.reconnect, wakeConsumer: false)
                 self.setHealth(staging.currentHealth, for: key)
@@ -734,6 +836,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     staging: staging,
                     observationEpoch: observationEpoch,
                     reason: .reconnect,
+                    fetchReason: StoreRefreshReason.serverConnected,
                     publishMessages: publishMessages
                 )
             }
@@ -998,5 +1101,35 @@ nonisolated final class MessageSync: @unchecked Sendable {
         let text = String(describing: error) + " " + error.localizedDescription
         return text.localizedCaseInsensitiveContains("NotFoundError")
             || text.localizedCaseInsensitiveContains("Session not found")
+    }
+
+    private func elapsedMs(since start: Date) -> Int {
+        Int((Date().timeIntervalSince(start) * 1000).rounded())
+    }
+}
+
+private nonisolated final class ObservationResumeState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var seenConnected = false
+    private var resumeCatchUpRequestedEpoch: UInt64?
+
+    var hasSeenConnected: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return seenConnected
+    }
+
+    func markSeenConnected() {
+        lock.lock()
+        seenConnected = true
+        lock.unlock()
+    }
+
+    func claimResume(epoch: UInt64) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if resumeCatchUpRequestedEpoch == epoch { return false }
+        resumeCatchUpRequestedEpoch = epoch
+        return true
     }
 }

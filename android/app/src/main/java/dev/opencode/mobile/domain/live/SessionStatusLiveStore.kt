@@ -7,4 +7,6 @@ interface SessionStatusLiveStore {
     fun observeStatuses(directory: String): Flow<Map<String, SessionStatus>>
 
     fun clearCache()
+
+    fun invalidate(directory: String?) {}
 }

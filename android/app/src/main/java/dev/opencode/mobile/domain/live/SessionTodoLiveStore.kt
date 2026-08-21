@@ -17,6 +17,11 @@ interface SessionTodoLiveStore {
     )
 
     fun clearCache()
+
+    fun invalidate(
+        sessionId: String,
+        directory: String?,
+    ) {}
 }
 
 object EmptySessionTodoLiveStore : SessionTodoLiveStore {

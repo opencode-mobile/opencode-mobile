@@ -41,7 +41,7 @@ struct MessageSyncTests {
         let firstTask = Task { await first.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         _ = await waitUntil { first.latest()?.first?.text == "Hello" }
         firstTask.cancel()
-        try? await Task.sleep(for: .milliseconds(20))
+        try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.subscriberStopTimeoutMs + 50))
 
         // Warm reopen: same store rows, REST unchanged, no disk seed. The
         // unchanged fingerprint must still yield cacheSyncConfirmed.
@@ -66,6 +66,46 @@ struct MessageSyncTests {
         task.cancel()
         #expect(loaded)
         #expect(collector.emissions.count >= 1)
+    }
+
+    @Test func observeMessages_worldBackgroundThenForeground_refreshes() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let world = FakeWorldSignals()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, worldSignals: world)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+        eventStream.setConnectionState(.connected)
+        try? await Task.sleep(for: .milliseconds(40))
+        let afterInitial = repo.listMessagesCallCount
+
+        world.emit(.background)
+        try? await Task.sleep(for: .milliseconds(20))
+        world.emit(.foreground)
+        let refreshed = await waitUntil { repo.listMessagesCallCount > afterInitial }
+        task.cancel()
+        #expect(refreshed)
+    }
+
+    @Test func observeMessages_worldForegroundWithoutBackground_doesNotRefresh() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let world = FakeWorldSignals()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, worldSignals: world)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+        eventStream.setConnectionState(.connected)
+        try? await Task.sleep(for: .milliseconds(40))
+        let afterInitial = repo.listMessagesCallCount
+
+        world.emit(.foreground)
+        try? await Task.sleep(for: .milliseconds(80))
+        task.cancel()
+        #expect(repo.listMessagesCallCount == afterInitial)
     }
 
     @Test func initialLoad_messageLoopDoesNotRunOnMainThread() async {
@@ -1920,7 +1960,8 @@ private func makeMessageSync(
     eventStream: FakeForegroundEventStream,
     pollIntervalMs: Int = LiveStoreRefreshPolicy.workingPollIntervalMs,
     eventStagingCapacity: Int = messageEventStagingCapacity,
-    connectionProfileID: String = "local"
+    connectionProfileID: String = "local",
+    worldSignals: any WorldSignals = SilentWorldSignals.shared
 ) -> MessageSync {
     MessageSync(
         listMessages: { sessionID, directory in
@@ -1928,6 +1969,7 @@ private func makeMessageSync(
         },
         store: SessionMessageEngine(store: InMemoryMessageStore()),
         eventStream: eventStream,
+        worldSignals: worldSignals,
         pollIntervalMs: pollIntervalMs,
         eventStagingCapacity: eventStagingCapacity,
         connectionProfileIDProvider: { connectionProfileID },
