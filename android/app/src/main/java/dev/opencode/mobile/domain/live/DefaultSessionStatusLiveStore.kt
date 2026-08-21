@@ -1,16 +1,27 @@
 package dev.opencode.mobile.domain.live
 
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.event.SilentWorldSignals
+import dev.opencode.mobile.domain.event.StoreRefreshReason
+import dev.opencode.mobile.domain.event.WorldSignals
+import dev.opencode.mobile.domain.event.catchUpReason
+import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
@@ -25,11 +36,29 @@ class DefaultSessionStatusLiveStore
         private val eventStream: ForegroundEventStream,
         private val liveStoreScope: LiveStoreScope,
         private val eventDomainAdapter: EventDomainAdapter,
+        private val worldSignals: WorldSignals = SilentWorldSignals,
     ) : SessionStatusLiveStore {
         private val cache = ConcurrentHashMap<String, SharedFlow<Map<String, SessionStatus>>>()
+        private val invalidationBus = StoreInvalidationBus()
+        private val activeDirectories = ConcurrentHashMap.newKeySet<String>()
 
         override fun clearCache() {
             cache.clear()
+        }
+
+        override suspend fun invalidate(directory: String?) {
+            val keys =
+                if (directory != null) {
+                    listOf(directory).filter { activeDirectories.contains(it) }
+                } else {
+                    activeDirectories.toList()
+                }
+            if (keys.isEmpty()) return
+            coroutineScope {
+                keys.map { key ->
+                    async { invalidationBus.invalidateAndWait(key, StoreRefreshReason.PULL_TO_REFRESH) }
+                }.awaitAll()
+            }
         }
 
         override fun observeStatuses(directory: String): Flow<Map<String, SessionStatus>> =
@@ -47,17 +76,63 @@ class DefaultSessionStatusLiveStore
             channelFlow {
                 var current = emptyMap<String, SessionStatus>()
                 var reconnectRefresh: Job? = null
+                var stale = false
+                activeDirectories.add(directory)
+                try {
+                suspend fun reloadFromServer(
+                    reason: String,
+                    force: Boolean,
+                ): Map<String, SessionStatus>? {
+                    if (!force && !stale) {
+                        DiagnosticLog.info(
+                            DiagnosticLogArea.Session,
+                            "statusLiveStore skip directory=$directory reason=$reason",
+                        )
+                        return null
+                    }
+                    val loaded =
+                        runCatching {
+                            sessionRepository
+                                .getAllSessionStatuses(directory = directory)
+                                .associateBy(SessionStatus::sessionId)
+                        }.getOrNull() ?: return null
+                    stale = false
+                    DiagnosticLog.info(
+                        DiagnosticLogArea.Session,
+                        "statusLiveStore refresh directory=$directory reason=$reason",
+                    )
+                    return loaded
+                }
 
-                suspend fun reloadFromServer(): Map<String, SessionStatus>? =
-                    runCatching {
-                        sessionRepository
-                            .getAllSessionStatuses(directory = directory)
-                            .associateBy(SessionStatus::sessionId)
-                    }.getOrNull()
-
-                reloadFromServer()?.let {
+                reloadFromServer(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)?.let {
                     current = it
                     send(current)
+                }
+
+                launch {
+                    worldSignals.signals.collect { signal ->
+                        if (signal.marksStale()) {
+                            stale = true
+                            return@collect
+                        }
+                        val reason = signal.catchUpReason() ?: return@collect
+                        reloadFromServer(reason, force = false)?.let { statuses ->
+                            current = statuses
+                            send(current)
+                        }
+                    }
+                }
+                launch {
+                    invalidationBus.events
+                        .filter { it.key == null || it.key == directory }
+                        .collect {
+                            stale = true
+                            reloadFromServer(it.reason, force = true)?.let { statuses ->
+                                current = statuses
+                                send(current)
+                            }
+                            it.ack?.complete(Unit)
+                        }
                 }
 
                 try {
@@ -68,7 +143,7 @@ class DefaultSessionStatusLiveStore
                                 reconnectRefresh =
                                     launch {
                                         delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
-                                        reloadFromServer()?.let { statuses ->
+                                        reloadFromServer(event.type, force = true)?.let { statuses ->
                                             current = statuses
                                             send(current)
                                         }
@@ -79,7 +154,7 @@ class DefaultSessionStatusLiveStore
                                 reconnectRefresh =
                                     launch {
                                         delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
-                                        reloadFromServer()?.let { statuses ->
+                                        reloadFromServer(event.type, force = true)?.let { statuses ->
                                             // Empty active maps are a between-step gap on v2,
                                             // not idle. True idle is session.idle / execution.*.
                                             if (statuses.isEmpty() && current.isNotEmpty()) return@let
@@ -99,6 +174,9 @@ class DefaultSessionStatusLiveStore
                     }
                 } finally {
                     reconnectRefresh?.cancel()
+                }
+                } finally {
+                    activeDirectories.remove(directory)
                 }
             }
 

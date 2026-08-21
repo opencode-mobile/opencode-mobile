@@ -12,7 +12,6 @@ import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
-import dev.opencode.mobile.domain.event.FakeForegroundRestore
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
@@ -3008,6 +3007,7 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
             assertEquals("Working", viewModel.uiState.value.sessionStatusLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
 
             viewModel.abort()
             advanceUntilIdle()
@@ -3198,7 +3198,7 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals("Working", viewModel.uiState.value.sessionStatusLabel)
-            assertNull(viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
         }
 
     private fun createViewModel(
@@ -3249,7 +3249,6 @@ class SessionChatViewModelTest {
             sessionReadyStore = sessionReadyStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
             foregroundEventStream = eventStream,
-            foregroundRestore = FakeForegroundRestore(),
             eventDomainAdapter = EventDomainAdapter(json),
             connectionSessionCoordinator = connectionSessionCoordinator,
             sessionModelSelectionStore = sessionModelSelectionStore,

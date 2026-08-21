@@ -4,11 +4,17 @@ nonisolated final class SharedLiveObservation<Value: Sendable>: @unchecked Senda
     private let lock = NSLock()
     private var continuations: [UUID: AsyncStream<Value>.Continuation] = [:]
     private var upstreamTask: Task<Void, Never>?
+    private var stopTask: Task<Void, Never>?
     private var lastValue: Value?
     private let makeUpstream: (@escaping @Sendable (Value) -> Void) -> Task<Void, Never>
 
     init(makeUpstream: @escaping (@escaping @Sendable (Value) -> Void) -> Task<Void, Never>) {
         self.makeUpstream = makeUpstream
+    }
+
+    deinit {
+        stopTask?.cancel()
+        upstreamTask?.cancel()
     }
 
     func stream() -> AsyncStream<Value> {
@@ -19,11 +25,8 @@ nonisolated final class SharedLiveObservation<Value: Sendable>: @unchecked Senda
             if let lastValue {
                 continuation.yield(lastValue)
             }
-            let shouldStart = continuations.count == 1
             lock.unlock()
-            if shouldStart {
-                startUpstreamIfNeeded()
-            }
+            startUpstreamIfNeeded()
             continuation.onTermination = { [weak self] _ in
                 self?.removeContinuation(id: id)
             }
@@ -34,21 +37,46 @@ nonisolated final class SharedLiveObservation<Value: Sendable>: @unchecked Senda
         lock.lock()
         continuations.removeValue(forKey: id)
         let empty = continuations.isEmpty
-        let task = upstreamTask
-        if empty {
-            upstreamTask = nil
-        }
         lock.unlock()
         if empty {
-            task?.cancel()
+            scheduleStop()
         }
+    }
+
+    private func scheduleStop() {
+        let timeoutMs = LiveStoreRefreshPolicy.subscriberStopTimeoutMs
+        lock.lock()
+        stopTask?.cancel()
+        stopTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(timeoutMs))
+            guard !Task.isCancelled else { return }
+            self?.stopUpstreamIfEmpty()
+        }
+        lock.unlock()
+    }
+
+    private func stopUpstreamIfEmpty() {
+        lock.lock()
+        guard continuations.isEmpty else {
+            lock.unlock()
+            return
+        }
+        let task = upstreamTask
+        upstreamTask = nil
+        stopTask = nil
+        lock.unlock()
+        task?.cancel()
     }
 
     private func startUpstreamIfNeeded() {
         lock.lock()
-        upstreamTask?.cancel()
-        upstreamTask = makeUpstream { [weak self] value in
-            self?.publish(value)
+        stopTask?.cancel()
+        stopTask = nil
+        let needsStart = upstreamTask == nil
+        if needsStart {
+            upstreamTask = makeUpstream { [weak self] value in
+                self?.publish(value)
+            }
         }
         lock.unlock()
     }

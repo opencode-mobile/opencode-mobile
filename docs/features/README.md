@@ -19,6 +19,7 @@ Do not add `progress.md`, ticket plans, or research dumps.
 | [session-chat](session-chat/plan.md) | Session screen contract |
 | [message-store](message-store/plan.md) | REST/SSE merge + display pipeline |
 | [foreground-event-stream](foreground-event-stream/plan.md) | App-wide SSE |
+| [reactive-data-layer](reactive-data-layer/plan.md) | World signals, interest, store catch-up |
 | [server-api-v2](server-api-v2/plan.md) | Dual-stack + TUI v2 projection |
 | [native-rendered-markdown](native-rendered-markdown/plan.md) | Shared highlighter |
 | [ci-pr-gating](ci-pr-gating/plan.md) | Checks / `ruleset.md` |

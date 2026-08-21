@@ -1,6 +1,10 @@
 package dev.opencode.mobile.domain.live
 
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.SilentWorldSignals
+import dev.opencode.mobile.domain.event.WorldSignals
+import dev.opencode.mobile.domain.event.catchUpReason
+import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionTodo
@@ -23,6 +27,7 @@ class DefaultSessionTodoLiveStore
         private val sessionRepository: SessionRepository,
         private val eventStream: ForegroundEventStream,
         private val liveStoreScope: LiveStoreScope,
+        private val worldSignals: WorldSignals = SilentWorldSignals,
     ) : SessionTodoLiveStore {
         private val adapter = SessionDomainAdapter()
 
@@ -93,6 +98,17 @@ class DefaultSessionTodoLiveStore
             sessions.clear()
         }
 
+        override fun invalidate(
+            sessionId: String,
+            directory: String?,
+        ) {
+            val key = SessionKey(sessionId, directory.orEmpty())
+            val state = sessions[key] ?: return
+            liveStoreScope.coroutineScope.launch {
+                fetch(key, state, force = true)
+            }
+        }
+
         private fun ensureEventLoop(
             key: SessionKey,
             state: SessionState,
@@ -100,6 +116,21 @@ class DefaultSessionTodoLiveStore
             if (state.eventJob?.isActive == true) return
             state.eventJob =
                 liveStoreScope.coroutineScope.launch {
+                    var stale = false
+                    launch {
+                        worldSignals.signals.collect { signal ->
+                            if (state.observerCount <= 0) return@collect
+                            if (signal.marksStale()) {
+                                stale = true
+                                return@collect
+                            }
+                            val reason = signal.catchUpReason() ?: return@collect
+                            if (!stale) return@collect
+                            if (fetch(key, state, force = true)) {
+                                stale = false
+                            }
+                        }
+                    }
                     eventStream.events.collect { event ->
                         if (state.observerCount <= 0) return@collect
                         when {
@@ -109,7 +140,9 @@ class DefaultSessionTodoLiveStore
                                 }
                             }
                             event.type == "stream.reconnected" || event.type == "server.connected" -> {
-                                fetch(key, state, force = true)
+                                if (fetch(key, state, force = true)) {
+                                    stale = false
+                                }
                             }
                         }
                     }
@@ -120,14 +153,15 @@ class DefaultSessionTodoLiveStore
             key: SessionKey,
             state: SessionState,
             force: Boolean,
-        ) {
-            if (state.hasCache && !force) return
+        ): Boolean {
+            if (state.hasCache && !force) return true
             val directory = key.directory.ifEmpty { null }
             val todos =
                 runCatching {
                     sessionRepository.listSessionTodos(key.sessionId, directory)
-                }.getOrNull() ?: return
+                }.getOrNull() ?: return false
             replace(state, todos, markCache = true)
+            return true
         }
 
         private suspend fun replace(

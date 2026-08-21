@@ -35,12 +35,13 @@ stream** is active:
   transport drop (`Idle` / `Disconnected` / `Reconnecting`), returning to
   `Connecting` (cold resume after `stop()` clears `wasConnected`) or
   `Connected` triggers the same reconnect fullReload when `server.connected`
-  is missed (OPE-119 / OPE-165). TransportResumed, `server.connected`, and
-  `stream.reconnected` share one catch-up per ConnectionEpoch so overlapping
-  signals do not double-fetch. Home does not run a broad section
-  reload per SSE event. Explicit project additions can reload with
-  `skipProbe = true`; saved profile changes run the normal probe-backed
-  refresh path.
+  is missed (OPE-119 / OPE-165). TransportResumed, `server.connected`,
+  `stream.reconnected`, and reactive-data-layer world-signal REST share one
+  catch-up per ConnectionEpoch so overlapping signals do not double-fetch.
+  Home does not run a broad section reload per SSE event. Process-gap
+  catch-up is [reactive-data-layer](../reactive-data-layer/decisions.md).
+  Explicit project additions can reload with `skipProbe = true`; saved
+  profile changes run the normal probe-backed refresh path.
 - **Quiet refresh:** MessageSync/display-pipeline updates in Session Chat
   preserve in-flight send state (pending optimistic bubble and `isSending`).
   See [Message Repository decisions](../message-repository/decisions.md#post-send-ux).
@@ -65,26 +66,24 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
 
 ## Lifecycle
 
-- **App foreground:** Android `ProcessLifecycleOwner` and iOS `scenePhase` call
-  `ForegroundRestore` (not bare stream start/stop). **5s stop grace** so
-  pickers do not tear down SSE; `.inactive` keeps the stream. `start()` stays
-  idempotent while a stream job is active. Cancelled SSE tasks must not publish
-  Idle/Disconnected over a newer generation's Connecting state. While a
-  foreground retry is in flight, chrome stays **connecting**.
-- **ForegroundRestore (OPE-197):** Leave-active (`scenePhase.background` /
-  Android `onStop`) arms REST catch-up immediately via `noteBackground()`.
-  The 5s grace still delays SSE teardown (`noteBackgroundStop`). On restore,
-  one generation starts SSE and REST-authorizes registered scopes (open Session
-  Chat via `refreshDisplayMessages`; home list when home is visible). A
-  start-only restore (stream already live, catch-up not armed) must not cancel
-  an in-flight REST catch-up. If restore ran with no open session,
-  `setOpenSession` triggers catch-up for that session and must keep an in-flight
-  home catch-up even if home is no longer visible. Cold resume after
-  `stop()` arms `pendingResumeBarrier` so the next successful open still emits
-  `stream.reconnected` even though `wasConnected` was cleared for chrome.
-  Catch-up is not gated on lucky event delivery alone. Pull-to-refresh uses
-  the same message REST path.
-- **Session Chat (iOS):** `startObserving()` on appear; `stopObserving()` on explicit back or after a short delayed disappear (avoids killing SSE when the home Screen Model refresh re-renders the navigation parent). Android relies on scoped `ViewModel` cancellation on navigate back. Open chat registers with `ForegroundRestore`.
+- **App foreground:** Android `ProcessLifecycleOwner` and iOS `scenePhase`
+  publish world signals and start/stop this stream. See
+  [reactive-data-layer](../reactive-data-layer/decisions.md). **5s stop grace**
+  so pickers do not tear down SSE; `.inactive` keeps the stream. `start()`
+  stays idempotent while a stream job is active. Cancelled SSE tasks must
+  not publish Idle/Disconnected over a newer generation's Connecting state.
+  While a foreground retry is in flight, chrome stays **connecting**. Cold
+  resume after `stop()` still arms `pendingResumeBarrier` so the next
+  successful open emits `stream.reconnected` even though `wasConnected` was
+  cleared for chrome.
+- **REST after a gap:** not this module. Store stale-bit catch-up is
+  reactive-data-layer. Do not register open sessions or home visibility on
+  the stream.
+- **Session Chat (iOS):** `startObserving()` on appear; `stopObserving()` on
+  explicit back or after a short delayed disappear (avoids dropping the
+  observe subscription when the home Screen Model refresh re-renders the
+  navigation parent). Android relies on scoped `ViewModel` cancellation on
+  navigate back. That is collect lifetime, not a restore registry.
 
 ## Device path is a second signal
 

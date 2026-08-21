@@ -31,8 +31,10 @@ Feature screens own **when** the pill appears (`syncingIndicatorLabel` /
 ## Behavior
 
 Presentational only. Does not accept taps. Callers overlay it centered near the
-top of the scrolling timeline and keep Working / Compacting as in-chat status
-rows at the end.
+top of the scrolling timeline. Session busy chrome (`Working` / `Retrying` /
+`Compacting…`) is the composer-adjacent Session Running accessory, not this
+pill and not a timeline row. See
+[`session-chat` Session Running accessory](../../features/session-chat/plan.md#session-running-accessory).
 
 Accessibility: expose the label as a status announcement (for example
 **Syncing…**), not as a button.

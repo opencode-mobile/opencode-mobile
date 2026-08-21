@@ -1,7 +1,5 @@
 package dev.opencode.mobile.ui.sessionchat
 
-import dev.opencode.mobile.domain.message.MessageRole
-import dev.opencode.mobile.domain.message.ToolStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -10,206 +8,53 @@ class WorkingTurnIndicatorTest {
     @Test
     fun labelForActiveTurn_nullWhenIdle() {
         assertNull(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = null,
-                messages = listOf(user("u1")),
-            ),
+            WorkingTurnIndicator.labelForActiveTurn(statusLabel = null),
         )
     }
 
     @Test
-    fun labelForActiveTurn_hidesWorkingAfterUserWithNoAssistant() {
-        assertNull(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
-                messages = listOf(user("u1")),
-            ),
+    fun labelForActiveTurn_showsWorkingWhenBusy() {
+        assertEquals(
+            "Working",
+            WorkingTurnIndicator.labelForActiveTurn(statusLabel = "Working"),
         )
     }
 
     @Test
-    fun labelForActiveTurn_hidesWhenAwaitingUserAfterSettledThought() {
+    fun labelForActiveTurn_showsRetrying() {
+        assertEquals(
+            "Retrying",
+            WorkingTurnIndicator.labelForActiveTurn(statusLabel = "Retrying"),
+        )
+    }
+
+    @Test
+    fun labelForActiveTurn_hidesWhenAwaitingUser() {
         assertNull(
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel = "Working",
-                messages =
-                    listOf(
-                        user("u1"),
-                        assistant(
-                            id = "a1",
-                            text = "",
-                            blocks =
-                                listOf(
-                                    SessionChatTimelineBlock.Reasoning(
-                                        blockID = "r1",
-                                        text = "plan",
-                                        isStreaming = false,
-                                        durationMs = 2000,
-                                    ),
-                                ),
-                        ),
-                    ),
                 isAwaitingUser = true,
             ),
         )
     }
 
     @Test
-    fun labelForActiveTurn_hidesThinkingWhenAssistantHasSettledText() {
+    fun labelForActiveTurn_hidesCompactingWhenAwaitingUser() {
         assertNull(
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel = "Working",
-                messages = listOf(user("u1"), assistant("a1", "Hello")),
+                isCompacting = true,
+                isAwaitingUser = true,
             ),
         )
     }
 
     @Test
-    fun labelForActiveTurn_showsRetryingAfterUserWithNoAssistant() {
-        assertEquals(
-            "Retrying",
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Retrying",
-                messages = listOf(user("u1")),
-            ),
-        )
-    }
-
-    @Test
-    fun labelForActiveTurn_hidesWorkingWhenAssistantSlotExists() {
-        assertNull(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
-                messages = listOf(user("u1"), assistant("a1", "   ")),
-            ),
-        )
-    }
-
-    @Test
-    fun labelForActiveTurn_hidesWorkingWhenUnprojectedAssistantTurnExists() {
-        assertNull(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
-                messages = listOf(user("u1")),
-                assistantTurnExists = true,
-            ),
-        )
-    }
-
-    @Test
-    fun labelForActiveTurn_hidesWhenAssistantHasRunningToolCard() {
-        assertNull(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
-                messages =
-                    listOf(
-                        user("u1"),
-                        assistant(
-                            id = "a1",
-                            text = "",
-                            blocks =
-                                listOf(
-                                    SessionChatTimelineBlock.ToolCard(
-                                        blockID = "tool-1",
-                                        toolName = "bash",
-                                        status = ToolStatus.Running,
-                                        title = "bash",
-                                    ),
-                                ),
-                        ),
-                    ),
-            ),
-        )
-    }
-
-    @Test
-    fun labelForActiveTurn_hidesThinkingAfterCompletedToolCard() {
-        assertNull(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
-                messages =
-                    listOf(
-                        user("u1"),
-                        assistant(
-                            id = "a1",
-                            text = "",
-                            blocks =
-                                listOf(
-                                    SessionChatTimelineBlock.ToolCard(
-                                        blockID = "tool-1",
-                                        toolName = "bash",
-                                        status = ToolStatus.Completed,
-                                        title = "bash",
-                                    ),
-                                ),
-                        ),
-                    ),
-            ),
-        )
-    }
-
-    @Test
-    fun labelForActiveTurn_keepsRetryingAfterSettledContent() {
-        assertEquals(
-            "Retrying",
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Retrying",
-                messages = listOf(user("u1"), assistant("a1", "Hello")),
-            ),
-        )
-    }
-
-    @Test
-    fun labelForActiveTurn_hidesWhenReasoningIsStreaming() {
-        assertNull(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
-                messages =
-                    listOf(
-                        user("u1"),
-                        assistant(
-                            id = "a1",
-                            text = "",
-                            blocks =
-                                listOf(
-                                    SessionChatTimelineBlock.Reasoning(
-                                        blockID = "r1",
-                                        text = "hmm",
-                                        isStreaming = true,
-                                    ),
-                                ),
-                        ),
-                    ),
-            ),
-        )
-    }
-
-    @Test
-    fun labelForActiveTurn_ignoresCompletedCompactionSnapshot() {
-        assertNull(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
-                messages =
-                    listOf(
-                        user("u1"),
-                        SessionChatMessageItem(
-                            id = "c1",
-                            role = MessageRole.Assistant,
-                            text = "summary",
-                            metadataLabel = "compaction · m",
-                        ),
-                    ),
-            ),
-        )
-    }
-
-    @Test
-    fun labelForActiveTurn_showsCompactingEvenWithAssistantContent() {
+    fun labelForActiveTurn_showsCompactingEvenWhenStatusIsWorking() {
         assertEquals(
             SessionCompactChrome.STATUS_LABEL,
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel = "Working",
-                messages = listOf(user("u1"), assistant("a1", "Hello")),
                 isCompacting = true,
             ),
         )
@@ -221,29 +66,8 @@ class WorkingTurnIndicatorTest {
             SessionCompactChrome.STATUS_LABEL,
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel = null,
-                messages = listOf(user("u1")),
                 isCompacting = true,
             ),
         )
     }
-
-    private fun user(id: String) =
-        SessionChatMessageItem(
-            id = id,
-            role = MessageRole.User,
-            text = "Hi",
-            metadataLabel = "",
-        )
-
-    private fun assistant(
-        id: String,
-        text: String,
-        blocks: List<SessionChatTimelineBlock> = emptyList(),
-    ) = SessionChatMessageItem(
-        id = id,
-        role = MessageRole.Assistant,
-        text = text,
-        metadataLabel = "",
-        blocks = blocks,
-    )
 }

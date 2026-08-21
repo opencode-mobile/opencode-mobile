@@ -230,17 +230,21 @@ Attachment.
 
 ### Live Store
 
-A reactive observation layer above CRUD repositories that keeps screen data fresh
-while the **foreground event stream** is active.
+A reactive observation layer above CRUD repositories.
 
-A Live Store listens for relevant server-sent events, applies refresh policy,
-and exposes ongoing updates through platform streams (for example Kotlin `Flow`
-or Swift `AsyncStream`). Screen Models collect Live Store streams for session
-lists, status labels, permissions, and questions. The message timeline uses the
-equivalent synchronization boundary behind **Message Repository** rather than a
-type named `MessageLiveStore`. Mutations such as send, create, and delete still
-go through repositories directly. Optimistic send and quiet refresh merge stay
-in the Screen Model.
+A Live Store exposes ongoing updates through a platform stream (Kotlin `Flow`,
+Swift `AsyncStream`). The Screen Model's collect is interest. While interested,
+the store applies SSE patches when the **foreground event stream** is live, and
+REST catch-up when it is dirty after a process gap or an explicit invalidate
+such as pull-to-refresh. Screen Models collect Live Store streams for session
+lists, status labels, permissions, and questions. They do not own catch-up
+policy. The message timeline uses the equivalent synchronization boundary
+behind **Message Repository** rather than a type named `MessageLiveStore`.
+Mutations such as send, create, and delete still go through repositories
+directly. Optimistic send and quiet refresh merge stay in the Screen Model.
+
+Catch-up after background, path restore, and pull-to-refresh is
+[reactive-data-layer](docs/features/reactive-data-layer/plan.md).
 
 ### Session Cache
 

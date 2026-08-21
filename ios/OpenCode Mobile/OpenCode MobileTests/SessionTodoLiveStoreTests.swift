@@ -91,6 +91,37 @@ struct SessionTodoLiveStoreTests {
         #expect(todos.first?.content == "From SSE")
     }
 
+    @Test func worldForeground_failedCatchUp_keepsStaleForNextForeground() async throws {
+        let repository = TodoLiveStoreFakeSessionRepository(
+            todos: [SessionTodo(position: 0, content: "A", status: .pending, priority: "low")]
+        )
+        let world = FakeWorldSignals()
+        let store = DefaultSessionTodoLiveStore(
+            sessionRepository: repository,
+            eventStream: FakeForegroundEventStream(),
+            worldSignals: world
+        )
+        let collector = TodoCollector(store: store)
+        _ = try await collector.awaitEmission { !$0.isEmpty }
+
+        world.emit(.background)
+        try await Task.sleep(for: .milliseconds(40))
+        repository.listTodosError = URLError(.cannotConnectToHost)
+        world.emit(.foreground)
+        let failed = await waitUntil { repository.listTodosCallCount >= 2 }
+        #expect(failed)
+        let afterFail = repository.listTodosCallCount
+
+        repository.listTodosError = nil
+        repository.todos = [SessionTodo(position: 0, content: "B", status: .pending, priority: "low")]
+        world.emit(.foreground)
+        let todos = try await collector.awaitEmission { $0.first?.content == "B" }
+        collector.cancel()
+
+        #expect(repository.listTodosCallCount > afterFail)
+        #expect(todos.first?.content == "B")
+    }
+
     @Test func reconnect_doesNotFetchAfterObservationEnds() async throws {
         let repository = TodoLiveStoreFakeSessionRepository(
             todos: [SessionTodo(position: 0, content: "A", status: .pending, priority: "low")]
@@ -148,9 +179,23 @@ private final class TodoCollector {
 
 private struct TimeoutError: Error {}
 
+@MainActor
+private func waitUntil(
+    timeoutMs: Int = 2_000,
+    predicate: @MainActor () -> Bool
+) async -> Bool {
+    let deadline = Date().addingTimeInterval(TimeInterval(timeoutMs) / 1_000)
+    while Date() < deadline {
+        if predicate() { return true }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return predicate()
+}
+
 private final class TodoLiveStoreFakeSessionRepository: SessionRepository, @unchecked Sendable {
     var todos: [SessionTodo]
     var listTodosCallCount = 0
+    var listTodosError: Error?
 
     init(todos: [SessionTodo]) {
         self.todos = todos
@@ -166,6 +211,7 @@ private final class TodoLiveStoreFakeSessionRepository: SessionRepository, @unch
     func listChildSessions(id: String) async throws -> [Session] { [] }
     func listSessionTodos(id: String, directory: String?) async throws -> [SessionTodo] {
         listTodosCallCount += 1
+        if let listTodosError { throw listTodosError }
         return todos
     }
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }

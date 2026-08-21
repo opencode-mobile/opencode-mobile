@@ -468,7 +468,6 @@ final class SessionChatTimeline {
 
         state.timeline = resolvedTimeline
         state.messages = rows
-        state.assistantTurnExists = WorkingTurnIndicator.assistantTurnExists(lastLoadedMessages)
         state.isRefreshing = isRefreshing
         let fromCache = messagesFromCache && !networkCacheSyncConfirmed
         state.messagesFromCache = fromCache

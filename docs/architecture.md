@@ -99,6 +99,16 @@ App-owned data: SwiftData / Room when needed. Session Cache is
 stale-while-revalidate for home lists and chat reopen. The live message
 store stays in-memory (`InMemoryMessageStore`).
 
+## Data layer
+
+Screen Models observe Live Stores and Message Repository, mutate through
+repositories, and mark a store dirty for pull-to-refresh. Process
+lifecycle and Device network path adapters publish world signals. Those
+signals start and stop the foreground event stream and mark stores stale.
+REST catch-up after a gap lives inside `MessageSync` and the Live Stores.
+Contract:
+[reactive-data-layer](features/reactive-data-layer/plan.md).
+
 ## Foreground events
 
 One app-wide stream while foregrounded. Keep both protocols and both v1
@@ -114,7 +124,8 @@ Session Chat UX tracks TUI v2.
 `EventDomainAdapter` projects v2 `session.*` / `session.next.*` (including
 inbox and reasoning) into the v1 product vocabulary. `MessageSync` merges
 message/part events incrementally. In-flight REST must not overwrite a
-newer store revision.
+newer store revision. Which REST runs after background or path restore is
+the store's job; see [reactive-data-layer](features/reactive-data-layer/).
 
 ## Logging
 

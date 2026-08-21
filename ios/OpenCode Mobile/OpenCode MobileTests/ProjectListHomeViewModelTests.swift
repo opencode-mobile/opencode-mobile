@@ -4,6 +4,36 @@ import Testing
 
 @MainActor
 struct ProjectListHomeViewModelTests {
+    @Test func pullToRefresh_keepsRefreshingUntilLiveStoreCatchUpFinishes() async {
+        let sessions = [
+            Session(id: "1", title: "Alpha", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
+        ]
+        let sessionRepository = FakeSessionRepository(sessions: sessions)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        let loaded = await waitUntil {
+            if case let .loaded(sections, _, _, _) = viewModel.state {
+                return sections.first?.allSessions.isEmpty == false
+            }
+            return false
+        }
+        #expect(loaded)
+
+        sessionRepository.holdNextListSessions()
+        let refreshTask = Task { await viewModel.pullToRefresh() }
+        let blocked = await waitUntil(timeoutMs: 5_000) {
+            viewModel.isRefreshing && sessionRepository.isListBlocked
+        }
+        #expect(blocked)
+        sessionRepository.resumeListSessions()
+        await refreshTask.value
+        #expect(!viewModel.isRefreshing)
+    }
+
     @Test func refresh_probeFailed() async {
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(shouldFailProbe: true)
@@ -926,6 +956,27 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
     let deleteError: Error?
     let forkError: Error?
     private(set) var createdDirectories: [String?] = []
+    private var holdNextList = false
+    private var blockedListContinuation: CheckedContinuation<Void, Never>?
+    private let listLock = NSLock()
+
+    var isListBlocked: Bool {
+        listLock.lock()
+        defer { listLock.unlock() }
+        return blockedListContinuation != nil
+    }
+
+    func holdNextListSessions() {
+        holdNextList = true
+    }
+
+    func resumeListSessions() {
+        listLock.lock()
+        let continuation = blockedListContinuation
+        blockedListContinuation = nil
+        listLock.unlock()
+        continuation?.resume()
+    }
     private(set) var updatedTitles: [(id: String, title: String?)] = []
     private(set) var archivedIDs: [String] = []
     private(set) var deletedIDs: [String] = []
@@ -947,7 +998,17 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
         self.forkError = forkError
     }
 
-    func listSessions(directory: String?) async throws -> [Session] { sessions }
+    func listSessions(directory: String?) async throws -> [Session] {
+        if holdNextList {
+            holdNextList = false
+            await withCheckedContinuation { continuation in
+                listLock.lock()
+                blockedListContinuation = continuation
+                listLock.unlock()
+            }
+        }
+        return sessions
+    }
 
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {
         createdDirectories.append(directory)

@@ -57,6 +57,7 @@ abstract class MessageModule {
             liveStoreScope: LiveStoreScope,
             activeConnectionManager: dev.opencode.mobile.network.ActiveConnectionManager,
             sessionCache: SessionCache,
+            worldSignals: dev.opencode.mobile.domain.event.WorldSignals,
         ): MessageSync =
             MessageSync(
                 listMessages = { sessionId, directory ->
@@ -66,6 +67,7 @@ abstract class MessageModule {
                 engine = engine,
                 eventStream = eventStream,
                 liveStoreScope = liveStoreScope,
+                worldSignals = worldSignals,
                 connectionProfileIdProvider = {
                     val connection = activeConnectionManager.current()
                     if (connection == null) {

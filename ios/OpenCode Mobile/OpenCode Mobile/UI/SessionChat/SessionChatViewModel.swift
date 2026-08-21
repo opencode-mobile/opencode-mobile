@@ -22,7 +22,6 @@ final class SessionChatViewModel {
     private let sessionTodoLiveStore: any SessionTodoLiveStore
     private let sessionReadyStore: any SessionReadyStore
     private let foregroundEventStream: any ForegroundEventStream
-    private let foregroundRestore: any ForegroundRestore
     private var permissionTask: Task<Void, Never>?
     private var questionTask: Task<Void, Never>?
     private var todoTask: Task<Void, Never>?
@@ -78,7 +77,6 @@ final class SessionChatViewModel {
         sessionReadyStore: (any SessionReadyStore)? = nil,
         sessionStatusLiveStore: any SessionStatusLiveStore,
         foregroundEventStream: any ForegroundEventStream,
-        foregroundRestore: (any ForegroundRestore)? = nil,
         sessionModelSelectionStore: any SessionModelSelectionStore,
         composerDraftStore: any ComposerDraftStore,
         activeConnectionManager: ActiveConnectionManager,
@@ -93,10 +91,6 @@ final class SessionChatViewModel {
         self.activeConnectionManager = activeConnectionManager
         self.connectionProfileStore = connectionProfileStore
         self.deviceNetworkPath = deviceNetworkPath
-        self.foregroundRestore = foregroundRestore ?? DefaultForegroundRestore(
-            stream: foregroundEventStream,
-            messageRepository: messageRepository
-        )
         self.uiState = .initial(
             sessionID: sessionID,
             sessionTitle: sessionTitle,
@@ -171,7 +165,6 @@ final class SessionChatViewModel {
         }
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID, privacy: .public)")
         sessionReadyStore.setFocusedSession(sessionID: sessionID, directory: worktree)
-        foregroundRestore.setOpenSession(sessionID: sessionID, directory: worktree)
         // Peers may have changed while the screen was away; re-resolve smart label.
         refreshProjectIdentity()
         composer.startCatalogLoads()
@@ -946,7 +939,6 @@ final class SessionChatViewModel {
         collapsePreferenceGeneration += 1
         sessionTodoLiveStore.setLive(false, sessionID: sessionID, directory: worktree)
         sessionReadyStore.setFocusedSession(sessionID: nil, directory: nil)
-        foregroundRestore.setOpenSession(sessionID: nil, directory: nil)
         reviewChanges.stop()
     }
 
@@ -1130,16 +1122,14 @@ final class SessionChatViewModel {
         let awaitingUser = !permissionRequests.isEmpty || !questionRequests.isEmpty
         let workingIndicatorLabel = WorkingTurnIndicator.labelForActiveTurn(
             statusLabel: sessionStatusLabel,
-            messages: timelineState.messages,
             isCompacting: isCompacting,
-            isAwaitingUser: awaitingUser,
-            assistantTurnExists: timelineState.assistantTurnExists
+            isAwaitingUser: awaitingUser
         )
         if !loggedWorkingLamp || lastWorkingLamp != workingIndicatorLabel {
             loggedWorkingLamp = true
             lastWorkingLamp = workingIndicatorLabel
             OpenCodeLog.sessionChat.info(
-                "workingLamp label=\(workingIndicatorLabel ?? "none", privacy: .public) status=\(sessionStatusLabel ?? "none", privacy: .public) assistantTurn=\(timelineState.assistantTurnExists ? 1 : 0) awaitingUser=\(awaitingUser ? 1 : 0)"
+                "workingLamp label=\(workingIndicatorLabel ?? "none", privacy: .public) status=\(sessionStatusLabel ?? "none", privacy: .public) awaitingUser=\(awaitingUser ? 1 : 0)"
             )
         }
         uiState = SessionChatUiState(

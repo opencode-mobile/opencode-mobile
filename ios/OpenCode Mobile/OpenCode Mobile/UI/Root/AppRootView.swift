@@ -17,20 +17,20 @@ final class AppRootViewModel {
     private let connectionProfileStore: any ConnectionProfileStore
     private let activeConnectionManager: ActiveConnectionManager
     private let connectionSessionCoordinator: ConnectionSessionCoordinator
-    private let foregroundRestore: any ForegroundRestore
+    private let worldSignals: SceneWorldSignals
     private let appOnboardingPreferences: AppOnboardingPreferences
 
     init(
         connectionProfileStore: any ConnectionProfileStore,
         activeConnectionManager: ActiveConnectionManager,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
-        foregroundRestore: any ForegroundRestore,
+        worldSignals: SceneWorldSignals,
         appOnboardingPreferences: AppOnboardingPreferences
     ) {
         self.connectionProfileStore = connectionProfileStore
         self.activeConnectionManager = activeConnectionManager
         self.connectionSessionCoordinator = connectionSessionCoordinator
-        self.foregroundRestore = foregroundRestore
+        self.worldSignals = worldSignals
         self.appOnboardingPreferences = appOnboardingPreferences
 
         connectionSessionCoordinator.onProfileSaved { [weak self] in
@@ -64,14 +64,13 @@ final class AppRootViewModel {
 
     func enterHome() {
         state = .home
-        foregroundRestore.restore()
+        worldSignals.onForeground()
     }
 }
 
 struct AppRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var rootViewModel = Container.makeAppRootViewModel()
-    @State private var stopTask: Task<Void, Never>?
 
     var body: some View {
         Group {
@@ -102,15 +101,14 @@ struct AppRootView: View {
                     trigger: ProductAnalytics.Trigger.present
                 )
             }
+            Container.shared.worldSignals().register()
             await rootViewModel.load()
         }
         .onChange(of: scenePhase) { previousPhase, phase in
             guard rootViewModel.state == .home else { return }
-            let restore = Container.shared.foregroundRestore()
+            let world = Container.shared.worldSignals()
             switch phase {
             case .active:
-                stopTask?.cancel()
-                stopTask = nil
                 if previousPhase == .background {
                     ProductAnalytics.logScreenView(
                         screenId: ProductAnalytics.Screen.home,
@@ -118,15 +116,9 @@ struct AppRootView: View {
                         trigger: ProductAnalytics.Trigger.resume
                     )
                 }
-                restore.restore()
+                world.onForeground()
             case .background:
-                stopTask?.cancel()
-                restore.noteBackground()
-                stopTask = Task {
-                    try? await Task.sleep(for: .seconds(5))
-                    guard !Task.isCancelled else { return }
-                    restore.noteBackgroundStop()
-                }
+                world.onBackground()
             case .inactive:
                 break
             @unknown default:

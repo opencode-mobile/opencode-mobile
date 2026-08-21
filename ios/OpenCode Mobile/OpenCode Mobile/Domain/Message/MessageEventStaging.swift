@@ -15,7 +15,7 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
         case overflow
         case recoveryRequired
         /// SSE returned to Connected after Idle/Disconnect without a reconnect event.
-        case transportResumed
+        case transportResumed(String)
     }
 
     private let lock = NSLock()
@@ -128,13 +128,13 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
         }
     }
 
-    func requestTransportResume() {
+    func requestTransportResume(reason: String = StoreRefreshReason.streamReconnected) {
         lock.lock()
         guard !isFinished else {
             lock.unlock()
             return
         }
-        let resume = deliverLocked(.transportResumed)
+        let resume = deliverLocked(.transportResumed(reason))
         lock.unlock()
         resumeWaiter(resume)
     }

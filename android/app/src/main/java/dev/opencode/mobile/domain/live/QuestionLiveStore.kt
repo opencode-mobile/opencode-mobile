@@ -7,4 +7,6 @@ interface QuestionLiveStore {
     fun observeQuestions(directory: String): Flow<List<QuestionRequest>>
 
     fun clearCache()
+
+    fun invalidate(directory: String?) {}
 }

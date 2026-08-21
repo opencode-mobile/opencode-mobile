@@ -6,4 +6,6 @@ interface SessionLiveStore {
     fun observeSessions(directory: String): Flow<SessionListSnapshot>
 
     fun clearCache()
+
+    suspend fun invalidate(directory: String?) {}
 }
