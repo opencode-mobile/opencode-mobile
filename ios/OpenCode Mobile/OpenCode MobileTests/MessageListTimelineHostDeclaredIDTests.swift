@@ -102,63 +102,6 @@ struct MessageListTimelineHostDeclaredIDTests {
         #expect(controller.lastReconfiguredIDs.isEmpty)
     }
 
-    @Test func statusChromeLabelChange_reconfiguresStableStatusRow() {
-        let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
-            itemContent: { Text($0.label) },
-            horizontalContentPadding: 0,
-            topContentPadding: 0,
-            bottomContentPadding: 0,
-            bottomOverlayInset: 0,
-            interItemSpacing: 0
-        )
-        controller.loadViewIfNeeded()
-        controller.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
-
-        // Empty declared sets: only status-chrome folding should drive reconfigure
-        // when the Working label changes under a stable timeline revision.
-        let frame = TimelineFrame(
-            frameRevision: 3,
-            rows: [],
-            insertedRowIDs: [],
-            changedRowIDs: [],
-            removedRowIDs: [],
-            layoutChangedRowIDs: [],
-            grewBottomRowIDs: [],
-            decorateRowIDs: [],
-            isRequired: false
-        )
-        let workingID = SessionChatStatusChrome.workingRowID
-        let initialItems = [
-            EqualityCountingItem(id: "a", label: "A"),
-            EqualityCountingItem(id: workingID, label: "Working"),
-        ]
-        let initialPacket = MessageListTimelineApplyPacket.from(
-            frame,
-            workingIndicatorLabel: "Working"
-        )
-        controller.apply(items: initialItems, packet: initialPacket, animatingDifferences: false)
-        #expect(controller.diffableSnapshotApplyCount == 1)
-
-        let updatedItems = [
-            EqualityCountingItem(id: "a", label: "A"),
-            EqualityCountingItem(id: workingID, label: "Compacting"),
-        ]
-        let updatedPacket = MessageListTimelineApplyPacket.from(
-            frame,
-            workingIndicatorLabel: "Compacting"
-        )
-        #expect(updatedPacket.frameRevision != initialPacket.frameRevision)
-        #expect(updatedPacket.changedRowIDs.contains(workingID))
-
-        controller.apply(items: updatedItems, packet: updatedPacket, animatingDifferences: false)
-        #expect(controller.diffableSnapshotApplyCount == 2)
-        #expect(controller.lastReconfiguredIDs == [workingID])
-
-        // Same chrome + same timeline frame must not storm.
-        controller.apply(items: updatedItems, packet: updatedPacket, animatingDifferences: false)
-        #expect(controller.diffableSnapshotApplyCount == 2)
-    }
-
     @Test func nilPacket_identityStable_doesNotReconfigureAllOnRepeatApply() {
         let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
             itemContent: { Text($0.label) },

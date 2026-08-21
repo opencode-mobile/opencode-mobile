@@ -160,7 +160,6 @@ struct SessionChatView: View {
                         errorMessage: viewModel.uiState.errorMessage,
                         reviewChangesSummary: viewModel.uiState.reviewChangesSummary,
                         syncingIndicatorLabel: viewModel.uiState.syncingIndicatorLabel,
-                        workingIndicatorLabel: viewModel.uiState.workingIndicatorLabel,
                         sessionTodosVisible: sessionTodosPillVisible,
                         sessionTodoCompletedCount: viewModel.uiState.sessionTodoCompletedCount,
                         sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,
@@ -291,6 +290,9 @@ struct SessionChatView: View {
                             .padding(.horizontal, 12)
                             .padding(.bottom, 4)
                         }
+                    }
+                    if let label = viewModel.uiState.workingIndicatorLabel {
+                        SessionChatRunningAccessory(label: label)
                     }
                     composer
                 }

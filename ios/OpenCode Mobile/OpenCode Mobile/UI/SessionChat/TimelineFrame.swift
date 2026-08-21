@@ -215,39 +215,6 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
         )
     }
 
-    /// Session Chat path: keep declared timeline sets, and fold Working status
-    /// chrome into revision + `changedRowIDs` so label updates reconfigure that
-    /// stable row without clearing the packet (OPE-136). Syncing uses a top
-    /// overlay pill and is not a timeline row.
-    static func from(
-        _ frame: TimelineFrame,
-        workingIndicatorLabel: String?
-    ) -> MessageListTimelineApplyPacket {
-        let base = from(frame)
-        var statusIDs = Set<String>()
-        if workingIndicatorLabel != nil {
-            statusIDs.insert(SessionChatStatusChrome.workingRowID)
-        }
-        let chrome = SessionChatStatusChrome.fingerprint(
-            workingIndicatorLabel: workingIndicatorLabel
-        )
-        var kinds = base.kinds
-        if !statusIDs.isEmpty {
-            kinds.insert(.content)
-        }
-        return MessageListTimelineApplyPacket(
-            frameRevision: base.frameRevision &+ (chrome &* 1_000_003),
-            insertedRowIDs: base.insertedRowIDs,
-            changedRowIDs: base.changedRowIDs.union(statusIDs),
-            removedRowIDs: base.removedRowIDs,
-            layoutChangedRowIDs: base.layoutChangedRowIDs,
-            grewBottomRowIDs: base.grewBottomRowIDs,
-            decorateRowIDs: base.decorateRowIDs,
-            isRequired: base.isRequired,
-            kinds: kinds
-        )
-    }
-
     /// Gallery / non-projector path: treat every surviving ID as needing reconfigure.
     static func reconfigureAllSurviving(
         frameRevision: UInt64,
@@ -270,23 +237,6 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
                 ? []
                 : [.structure, .content]
         )
-    }
-}
-
-/// Stable IDs for Session Chat working rows appended outside the projector.
-enum SessionChatStatusChrome {
-    static let workingRowID = "session-chat-working-indicator"
-
-    static func fingerprint(
-        workingIndicatorLabel: String?
-    ) -> UInt64 {
-        var value: UInt64 = 0
-        guard let workingIndicatorLabel else { return value }
-        value = value &* 1_000_003 &+ 2
-        for scalar in workingIndicatorLabel.unicodeScalars {
-            value = value &* 31 &+ UInt64(scalar.value)
-        }
-        return value
     }
 }
 
