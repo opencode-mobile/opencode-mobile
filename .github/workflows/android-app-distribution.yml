@@ -129,14 +129,6 @@ jobs:
             android/app/build/outputs/apk/release/app-release.apk \
             "$EXPECTED_UPLOAD_CERT_SHA256"
 
-      - name: Upload signed APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-app-distribution-${{ env.DISTRIBUTED_SHA }}-${{ github.run_number }}
-          path: android/app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
-          retention-days: 7
-
       - name: Distribute to Firebase tester group
         shell: bash
         run: |
