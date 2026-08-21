@@ -113,6 +113,7 @@ struct SessionList<EmptyContent: View>: View {
     let onSessionLongPress: ((SessionListSession) -> Void)?
     let onAddProject: () -> Void
     let onNewSession: () -> Void
+    let onNewSessionLongPress: (() -> Void)?
     let onRemoveProject: ((String) -> Void)?
     let onRefresh: (() async -> Void)?
     let revealNewestToken: Int
@@ -141,6 +142,7 @@ struct SessionList<EmptyContent: View>: View {
         onSessionLongPress: ((SessionListSession) -> Void)? = nil,
         onAddProject: @escaping () -> Void,
         onNewSession: @escaping () -> Void,
+        onNewSessionLongPress: (() -> Void)? = nil,
         onRemoveProject: ((String) -> Void)? = nil,
         onRefresh: (() async -> Void)? = nil,
         revealNewestToken: Int = 0,
@@ -158,6 +160,7 @@ struct SessionList<EmptyContent: View>: View {
         self.onSessionLongPress = onSessionLongPress
         self.onAddProject = onAddProject
         self.onNewSession = onNewSession
+        self.onNewSessionLongPress = onNewSessionLongPress
         self.onRemoveProject = onRemoveProject
         self.onRefresh = onRefresh
         self.revealNewestToken = revealNewestToken
@@ -205,6 +208,7 @@ struct SessionList<EmptyContent: View>: View {
                 onFilterSelected: onFilterSelected,
                 onAddProject: onAddProject,
                 onNewSession: onNewSession,
+                onNewSessionLongPress: onNewSessionLongPress,
                 onRemoveProject: onRemoveProject
             )
             .background {

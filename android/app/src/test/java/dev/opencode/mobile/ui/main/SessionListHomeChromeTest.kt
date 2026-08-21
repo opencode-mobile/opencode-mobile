@@ -140,6 +140,39 @@ class SessionListHomeChromeTest {
         )
     }
 
+    @Test
+    fun newSessionLongPressAction_chipChromeDoesNothing() {
+        assertEquals(
+            SessionListHomeChrome.NewSessionAction.None,
+            SessionListHomeChrome.newSessionLongPressAction(
+                projects = listOf(mobile, playground),
+                useProjectPicker = false,
+            ),
+        )
+    }
+
+    @Test
+    fun newSessionLongPressAction_oneProjectDoesNothing() {
+        assertEquals(
+            SessionListHomeChrome.NewSessionAction.None,
+            SessionListHomeChrome.newSessionLongPressAction(
+                projects = listOf(mobile),
+                useProjectPicker = true,
+            ),
+        )
+    }
+
+    @Test
+    fun newSessionLongPressAction_pickerWithTwoProjectsPresentsPicker() {
+        assertEquals(
+            SessionListHomeChrome.NewSessionAction.PresentPicker,
+            SessionListHomeChrome.newSessionLongPressAction(
+                projects = listOf(mobile, playground),
+                useProjectPicker = true,
+            ),
+        )
+    }
+
     private val mobile =
         SessionListHomeChrome.Project(
             worktree = "/repo",

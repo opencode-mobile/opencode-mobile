@@ -121,6 +121,7 @@ fun SessionList(
     onRemoveProject: ((String) -> Unit)? = null,
     emptyContent: (@Composable () -> Unit)? = null,
     onSessionLongPress: ((SessionListSession) -> Unit)? = null,
+    onNewSessionLongPress: (() -> Unit)? = null,
     revealNewestToken: Int = 0,
 ) {
     val background = openCodeColor("background-base")
@@ -193,6 +194,7 @@ fun SessionList(
             onRemoveProject = onRemoveProject,
             onAddProject = onAddProject,
             onNewSession = onNewSession,
+            onNewSessionLongPress = onNewSessionLongPress,
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)

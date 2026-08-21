@@ -14,6 +14,7 @@ content.
 
 - Required: ordered filter tabs (`id`, `title`, `subtitle`, `count`, optional
   letter + accent), `selectedFilterId`, `onAddProject()`, `onNewSession()`.
+  Optional `onNewSessionLongPress()`; omit when the hold path should not exist.
 - Filter chrome: `useProjectPicker` (default off). Off uses Filter Chip
   `onFilterSelected(id)` plus optional selected-project `onRemoveProject(id)`.
   On uses `onOpenProjectPicker()` for tap on the scope control, and
@@ -87,6 +88,12 @@ Empty `filterTabs` omits the filter chrome (no empty strip). Add project is a
 compact leading control; New session is the full-width primary control beside
 it. Create error appears above the filter chrome when set.
 
+Tap New session fires `onNewSession()`. When `onNewSessionLongPress` is set,
+hold New session fires that callback and does not fire `onNewSession`. Callers
+omit the hold callback in chip chrome and when there are fewer than two
+projects. VoiceOver / TalkBack expose **Choose project** when the hold path is
+present.
+
 Chip-mode removal uses the selected chip’s remove control. Picker-mode removal
 is hold-to-remove on project rows in the sheet, not on the dock.
 
@@ -103,7 +110,9 @@ Both Component Galleries include a **Session List Dock** entry with a **Picker**
 preview switch (chips vs scope control), a **1 project** sample (All absent),
 and an optional create-error toggle. With Picker on, drag the scope control to
 feel the rubber-band tether; pull past the threshold and the switch fires
-without lifting. Session List gallery also shows the dock in full home context.
+without lifting. Hold **New session** to open the New session sheet (omitted
+when **1 project** is on). Session List gallery also shows the dock in full home
+context.
 
 ## Parity And Divergence
 

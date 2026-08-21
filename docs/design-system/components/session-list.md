@@ -43,6 +43,8 @@ settings) is owned by the home shell, not this component.
     `onOpenProjectPicker()` when using the picker.
 - Optional callbacks:
   - `onSessionLongPress(session)` on both platforms.
+  - `onNewSessionLongPress()` forwarded to the dock. Callers set it only in
+    picker chrome with two or more projects.
 - States: default and empty filtered list (dock and filters remain; optional
   caller-supplied empty content may fill the list region). Loading and
   load-error remain owned by the home screen shell. Page chrome is not part of
@@ -65,7 +67,9 @@ The component is stateless for session payloads. Callers own captions and
 Idle/Running/Ready mapping (Running outranks Ready; Ready uses pill text
 **Ready** with `success` tone), filter models/selection, add-project and
 new-session flows, and page chrome. **New session** opens the project picker
-only when the selected filter is **All**; a selected project creates there.
+only when the selected filter is **All**; a selected project creates there. In
+picker chrome with two or more projects, hold **New session** opens the same
+sheet without changing the selected filter.
 
 Session List applies the selected project filter, then groups via
 `HomeSessionLadder` using `updatedAtEpochMs`, Running/Ready attention, and
