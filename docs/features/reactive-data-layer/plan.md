@@ -268,16 +268,16 @@ invalidates the store. It does not implement a second fetch policy.
 ## UI States
 
 No new screen. Existing home rows, Session Chat timeline, and
-`live` / `connecting` / `offline` chrome from SSE occupancy composed with
-Device network path. Session Cache Syncing chrome unchanged.
+`live` / `connecting` / `offline` chrome from `LiveUpdates` (path × world
+occupancy × SSE). Session Cache Syncing chrome unchanged.
 
 Catch-up does not flash a full-screen spinner on return from background.
 
 ## Error States
 
 Failed catch-up keeps the last good snapshot, including Session Cache
-seed. Log a warning with `reason=` and the failure. Chrome follows SSE ×
-path, not a restore phase enum.
+seed. Log a warning with `reason=` and the failure. Chrome follows
+`LiveUpdates` (path × occupancy × SSE), not a restore phase enum.
 
 Pull-to-refresh failure stays a caller-visible refresh error, same as
 today's `refreshDisplayMessages` throw / home refresh failure.

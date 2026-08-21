@@ -56,7 +56,7 @@ final class SessionChatViewModel {
     private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver
     private let activeConnectionManager: ActiveConnectionManager
     private let connectionProfileStore: any ConnectionProfileStore
-    private let deviceNetworkPath: any DeviceNetworkPath
+    private let liveUpdates: any LiveUpdates
     private var projectLabel: String?
     private var projectLetter: Character?
     private var projectLetterAccent: LetterAccent?
@@ -82,7 +82,7 @@ final class SessionChatViewModel {
         activeConnectionManager: ActiveConnectionManager,
         connectionProfileStore: any ConnectionProfileStore,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
-        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath()
+        liveUpdates: any LiveUpdates = FixedLiveUpdates()
     ) {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
@@ -90,7 +90,7 @@ final class SessionChatViewModel {
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.activeConnectionManager = activeConnectionManager
         self.connectionProfileStore = connectionProfileStore
-        self.deviceNetworkPath = deviceNetworkPath
+        self.liveUpdates = liveUpdates
         self.uiState = .initial(
             sessionID: sessionID,
             sessionTitle: sessionTitle,
@@ -124,7 +124,7 @@ final class SessionChatViewModel {
             sessionRepository: sessionRepository,
             sessionStatusLiveStore: sessionStatusLiveStore,
             foregroundEventStream: foregroundEventStream,
-            deviceNetworkPath: deviceNetworkPath
+            liveUpdates: liveUpdates
         )
         self.reviewChanges = SessionChatReviewChanges(
             sessionID: sessionID,
@@ -878,10 +878,7 @@ final class SessionChatViewModel {
     }
 
     private var isConnectionLive: Bool {
-        SessionConnectionStatus(
-            connectionState: foregroundEventStream.connectionState,
-            path: deviceNetworkPath.status
-        ) == .live
+        sessionInfo.state.canMutate
     }
 
     private func visibleQuestionRequest() -> QuestionRequest? {
@@ -1157,6 +1154,7 @@ final class SessionChatViewModel {
             sessionTodoCompletedCount: SessionTodoList.completedCount(in: sessionTodos),
             sessionTodoTotalCount: sessionTodos.count,
             connectionStatus: infoState.connectionStatus,
+            canMutate: infoState.canMutate,
             messagesFromCache: timelineState.messagesFromCache,
             contextUsageFraction: sessionInfo.contextUsageFraction(
                 messages: timelineState.messages,

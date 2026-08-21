@@ -333,6 +333,20 @@ extension Container {
         }.singleton
     }
 
+    var liveUpdates: Factory<any LiveUpdates> {
+        self { @MainActor in
+            let manager = self.activeConnectionManager()
+            return DefaultLiveUpdates(
+                worldSignals: self.worldSignals(),
+                stream: self.foregroundEventStream(),
+                path: self.deviceNetworkPath(),
+                hasActiveConnection: {
+                    manager.connection != nil || manager.currentProfile() != nil
+                }
+            )
+        }.singleton
+    }
+
     var sessionStatusLiveStore: Factory<DefaultSessionStatusLiveStore> {
         self { @MainActor in
             DefaultSessionStatusLiveStore(
@@ -445,7 +459,7 @@ extension Container {
                     modelRepository: self.modelRepository()
                 ),
                 sessionCache: self.sessionCache(),
-                deviceNetworkPath: self.deviceNetworkPath()
+                liveUpdates: self.liveUpdates()
             )
         }
     }
@@ -475,7 +489,7 @@ extension Container {
                     store: self.sessionModelSelectionStore(),
                     modelRepository: self.modelRepository()
                 ),
-                deviceNetworkPath: self.deviceNetworkPath()
+                liveUpdates: self.liveUpdates()
             )
         }
     }

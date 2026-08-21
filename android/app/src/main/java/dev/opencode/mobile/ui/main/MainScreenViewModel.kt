@@ -10,10 +10,10 @@ import dev.opencode.mobile.domain.command.ClientSlashMessageRef
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
-import dev.opencode.mobile.domain.connection.DeviceNetworkPath
-import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
 import dev.opencode.mobile.domain.event.EventDomainAdapter
+import dev.opencode.mobile.domain.event.FixedLiveUpdates
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
@@ -56,6 +56,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -81,7 +82,7 @@ class MainScreenViewModel
         private val newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         private val sessionCache: SessionCache,
         private val optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator,
-        private val deviceNetworkPath: DeviceNetworkPath = ReadyDeviceNetworkPath,
+        private val liveUpdates: LiveUpdates = FixedLiveUpdates(),
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
@@ -97,19 +98,13 @@ class MainScreenViewModel
         val serversChrome: StateFlow<HomeServersChrome> = _serversChrome.asStateFlow()
         private var lastHomeHiddenAtEpochMs: Long? = HomeDisplayPreferences.lastHomeHiddenAtEpochMs()
         val liveUpdatesConnectionStatus: StateFlow<SessionConnectionStatus> =
-            combine(
-                foregroundEventStream.connectionState,
-                deviceNetworkPath.status,
-            ) { connectionState, path ->
-                connectionState.toSessionConnectionStatus(path)
-            }.stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
-                initialValue =
-                    foregroundEventStream.connectionState.value.toSessionConnectionStatus(
-                        deviceNetworkPath.status.value,
-                    ),
-            )
+            liveUpdates.chrome
+                .map { it.label.toSessionConnectionStatus() }
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
+                    initialValue = liveUpdates.chrome.value.label.toSessionConnectionStatus(),
+                )
 
         private val serverBaseUrl: String
             get() = activeConnectionManager.current()?.baseUrl.orEmpty()
@@ -319,7 +314,7 @@ class MainScreenViewModel
 
         fun createSession(worktree: String) {
             logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_CREATE_SESSION)
-            if (liveUpdatesConnectionStatus.value != SessionConnectionStatus.Live) {
+            if (!liveUpdates.chrome.value.canMutate) {
                 setProjectSessionCreateError("Reconnect to create a session")
                 return
             }

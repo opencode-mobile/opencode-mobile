@@ -1550,13 +1550,9 @@ struct SessionChatViewModelTests {
     }
 
     @Test func connectionState_mapsToSessionConnectionStatus() {
-        #expect(SessionConnectionStatus(connectionState: .connected) == .live)
-        #expect(SessionConnectionStatus(connectionState: .connecting) == .connecting)
-        #expect(SessionConnectionStatus(connectionState: .reconnecting) == .connecting)
-        #expect(SessionConnectionStatus(connectionState: .idle) == .offline)
-        #expect(SessionConnectionStatus(connectionState: .disconnected) == .offline)
-        #expect(SessionConnectionStatus(connectionState: .connected, path: .unavailable) == .offline)
-        #expect(SessionConnectionStatus(connectionState: .connecting, path: .unavailable) == .offline)
+        #expect(SessionConnectionStatus(label: .live) == .live)
+        #expect(SessionConnectionStatus(label: .connecting) == .connecting)
+        #expect(SessionConnectionStatus(label: .offline) == .offline)
     }
 
     // MARK: - isStreaming propagation

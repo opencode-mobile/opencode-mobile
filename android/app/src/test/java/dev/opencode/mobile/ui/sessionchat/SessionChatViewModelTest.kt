@@ -7,11 +7,11 @@ import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
-import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
+import dev.opencode.mobile.domain.event.LiveUpdatesLabel
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
@@ -2303,23 +2303,9 @@ class SessionChatViewModelTest {
     @Test
     fun connectionState_mapsToSessionConnectionStatus() =
         runTest(testDispatcher) {
-            assertEquals(SessionConnectionStatus.Live, EventStreamConnectionState.Connected.toSessionConnectionStatus())
-            assertEquals(SessionConnectionStatus.Connecting, EventStreamConnectionState.Connecting.toSessionConnectionStatus())
-            assertEquals(SessionConnectionStatus.Connecting, EventStreamConnectionState.Reconnecting.toSessionConnectionStatus())
-            assertEquals(SessionConnectionStatus.Offline, EventStreamConnectionState.Idle.toSessionConnectionStatus())
-            assertEquals(SessionConnectionStatus.Offline, EventStreamConnectionState.Disconnected.toSessionConnectionStatus())
-            assertEquals(
-                SessionConnectionStatus.Offline,
-                EventStreamConnectionState.Connected.toSessionConnectionStatus(
-                    DeviceNetworkPathStatus.Unavailable,
-                ),
-            )
-            assertEquals(
-                SessionConnectionStatus.Offline,
-                EventStreamConnectionState.Connecting.toSessionConnectionStatus(
-                    DeviceNetworkPathStatus.Unavailable,
-                ),
-            )
+            assertEquals(SessionConnectionStatus.Live, LiveUpdatesLabel.Live.toSessionConnectionStatus())
+            assertEquals(SessionConnectionStatus.Connecting, LiveUpdatesLabel.Connecting.toSessionConnectionStatus())
+            assertEquals(SessionConnectionStatus.Offline, LiveUpdatesLabel.Offline.toSessionConnectionStatus())
         }
 
     @Test

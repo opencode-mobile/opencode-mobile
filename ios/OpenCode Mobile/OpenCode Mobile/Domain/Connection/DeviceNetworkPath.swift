@@ -1,6 +1,6 @@
 import Foundation
 
-enum DeviceNetworkPathStatus: Equatable, Sendable {
+nonisolated enum DeviceNetworkPathStatus: Equatable, Sendable {
     case ready
     case unavailable
 }

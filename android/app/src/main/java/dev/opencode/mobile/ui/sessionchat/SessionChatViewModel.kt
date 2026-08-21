@@ -8,16 +8,16 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
-import dev.opencode.mobile.domain.connection.DeviceNetworkPath
-import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
 import dev.opencode.mobile.domain.event.EventDomainAdapter
+import dev.opencode.mobile.domain.event.FixedLiveUpdates
+import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.smartProjectLabel
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
-import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.EmptySessionTodoLiveStore
 import dev.opencode.mobile.domain.live.PermissionLiveStore
@@ -87,7 +87,7 @@ class SessionChatViewModel
         private val optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator,
         private val connectionProfileStore: ConnectionProfileStore,
         private val activeConnectionManager: ActiveConnectionManager,
-        deviceNetworkPath: DeviceNetworkPath = ReadyDeviceNetworkPath,
+        liveUpdates: LiveUpdates = FixedLiveUpdates(),
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -122,7 +122,7 @@ class SessionChatViewModel
                 foregroundEventStream = foregroundEventStream,
                 eventDomainAdapter = eventDomainAdapter,
                 scope = viewModelScope,
-                deviceNetworkPath = deviceNetworkPath,
+                liveUpdates = liveUpdates,
             )
         private val reviewChanges =
             SessionChatReviewChanges(
@@ -1042,8 +1042,7 @@ class SessionChatViewModel
             }
         }
 
-        private fun isConnectionLive(): Boolean =
-            sessionInfo.state.value.connectionStatus == SessionConnectionStatus.Live
+        private fun isConnectionLive(): Boolean = sessionInfo.state.value.canMutate
 
         private fun visibleQuestionRequest(): QuestionRequest? =
             if (permissionRequests.isNotEmpty()) null else questionRequests.firstOrNull()
@@ -1242,6 +1241,7 @@ class SessionChatViewModel
                 sessionTodoCompletedCount = SessionTodoList.completedCount(sessionTodos),
                 sessionTodoTotalCount = sessionTodos.size,
                 connectionStatus = infoState.connectionStatus,
+                canMutate = infoState.canMutate,
                 messagesFromCache = timelineState.messagesFromCache,
                 contextUsageFraction =
                     sessionInfo.contextUsageFraction(

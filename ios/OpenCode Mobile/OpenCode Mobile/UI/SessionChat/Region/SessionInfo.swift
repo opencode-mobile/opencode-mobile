@@ -11,7 +11,7 @@ final class SessionInfo {
     private let sessionRepository: any SessionRepository
     private let sessionStatusLiveStore: any SessionStatusLiveStore
     private let foregroundEventStream: any ForegroundEventStream
-    private let deviceNetworkPath: any DeviceNetworkPath
+    private let liveUpdates: any LiveUpdates
     private let eventAdapter = EventDomainAdapter()
     private var observationTask: Task<Void, Never>?
     private var eventFanoutTask: Task<Void, Never>?
@@ -22,13 +22,13 @@ final class SessionInfo {
         sessionRepository: any SessionRepository,
         sessionStatusLiveStore: any SessionStatusLiveStore,
         foregroundEventStream: any ForegroundEventStream,
-        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath()
+        liveUpdates: any LiveUpdates = FixedLiveUpdates()
     ) {
         self.worktree = worktree
         self.sessionRepository = sessionRepository
         self.sessionStatusLiveStore = sessionStatusLiveStore
         self.foregroundEventStream = foregroundEventStream
-        self.deviceNetworkPath = deviceNetworkPath
+        self.liveUpdates = liveUpdates
     }
 
     func bind(sessionID: String, sessionTitle: String) {
@@ -38,6 +38,8 @@ final class SessionInfo {
         renameTask = nil
         state.sessionID = sessionID
         state.sessionTitle = sessionTitle
+        state.connectionStatus = SessionConnectionStatus(label: liveUpdates.chrome.label)
+        state.canMutate = liveUpdates.chrome.canMutate
         state.rename = SessionRenameUiState()
         notifyChange()
     }
@@ -284,32 +286,22 @@ final class SessionInfo {
 
     private func observeConnectionState() async {
         applyComposedConnectionStatus()
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { [weak self] in
-                guard let stream = self?.foregroundEventStream else { return }
-                for await _ in stream.connectionStateUpdates() {
-                    await self?.applyComposedConnectionStatus()
-                }
-            }
-            group.addTask { [weak self] in
-                guard let path = self?.deviceNetworkPath else { return }
-                for await _ in path.updates() {
-                    await self?.applyComposedConnectionStatus()
-                }
-            }
-            await group.next()
-            group.cancelAll()
+        for await _ in liveUpdates.updates() {
+            applyComposedConnectionStatus()
         }
     }
 
     private func applyComposedConnectionStatus() {
-        let connectionState = foregroundEventStream.connectionState
-        let path = deviceNetworkPath.status
+        let chrome = liveUpdates.chrome
         OpenCodeLog.sessionChat.debug(
-            "live connection session=\(self.state.sessionID, privacy: .public) state=\(String(describing: connectionState), privacy: .public) path=\(String(describing: path), privacy: .public)"
+            "live connection session=\(self.state.sessionID, privacy: .public) label=\(chrome.label.rawValue, privacy: .public) canMutate=\(chrome.canMutate)"
         )
-        DiagnosticLog.debug(.session, "live connection session=\(state.sessionID) state=\(connectionState) path=\(path)")
-        state.connectionStatus = SessionConnectionStatus(connectionState: connectionState, path: path)
+        DiagnosticLog.debug(
+            .session,
+            "live connection session=\(state.sessionID) label=\(chrome.label.rawValue) canMutate=\(chrome.canMutate)"
+        )
+        state.connectionStatus = SessionConnectionStatus(label: chrome.label)
+        state.canMutate = chrome.canMutate
         notifyChange()
     }
 

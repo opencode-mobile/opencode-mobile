@@ -92,6 +92,26 @@ class ProcessWorldSignalsTest {
             job.cancel()
         }
 
+    @Test
+    fun occupancyTracksForegroundGraceAndStop() =
+        runTest(testDispatcher) {
+            val stream = FakeForegroundEventStream()
+            val signals = processWorldSignals(stream, this)
+            assertEquals(StreamOccupancy.Active, signals.occupancy.value)
+
+            signals.onBackground()
+            runCurrent()
+            assertEquals(StreamOccupancy.Grace, signals.occupancy.value)
+
+            advanceTimeBy(5_000L)
+            runCurrent()
+            assertEquals(StreamOccupancy.Stopped, signals.occupancy.value)
+
+            signals.onForeground()
+            runCurrent()
+            assertEquals(StreamOccupancy.Active, signals.occupancy.value)
+        }
+
     private fun processWorldSignals(
         stream: FakeForegroundEventStream,
         scope: CoroutineScope,

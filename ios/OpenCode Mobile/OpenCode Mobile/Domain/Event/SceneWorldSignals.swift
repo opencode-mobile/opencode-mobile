@@ -16,6 +16,8 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
     private let bufferLimit = 32
     private var stopTask: Task<Void, Never>?
     private var registered = false
+    private var _occupancy: StreamOccupancy = .active
+    private var occupancyContinuations: [UUID: AsyncStream<StreamOccupancy>.Continuation] = [:]
 
     init(
         stream: any ForegroundEventStream,
@@ -75,7 +77,12 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
         lock.lock()
         stopTask?.cancel()
         stopTask = nil
+        _occupancy = .active
+        let occupancySubscribers = Array(occupancyContinuations.values)
         lock.unlock()
+        for continuation in occupancySubscribers {
+            continuation.yield(.active)
+        }
         emit(.foreground)
         if hasActiveConnection() {
             stream.start()
@@ -85,15 +92,54 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
     func onBackground() {
         lock.lock()
         stopTask?.cancel()
+        _occupancy = .grace
+        let occupancySubscribers = Array(occupancyContinuations.values)
         let grace = stopGrace
         stopTask = Task { [weak self] in
             try? await Task.sleep(for: grace)
             guard !Task.isCancelled else { return }
+            self?.setOccupancy(.stopped)
             self?.emit(.backgroundStop)
             self?.stream.stop()
         }
         lock.unlock()
+        for continuation in occupancySubscribers {
+            continuation.yield(.grace)
+        }
         emit(.background)
+    }
+
+    var occupancy: StreamOccupancy {
+        lock.lock()
+        defer { lock.unlock() }
+        return _occupancy
+    }
+
+    func occupancyUpdates() -> AsyncStream<StreamOccupancy> {
+        let id = UUID()
+        return AsyncStream { continuation in
+            lock.lock()
+            occupancyContinuations[id] = continuation
+            let current = _occupancy
+            lock.unlock()
+            continuation.yield(current)
+            continuation.onTermination = { [weak self] _ in
+                guard let self else { return }
+                self.lock.lock()
+                self.occupancyContinuations.removeValue(forKey: id)
+                self.lock.unlock()
+            }
+        }
+    }
+
+    private func setOccupancy(_ occupancy: StreamOccupancy) {
+        lock.lock()
+        _occupancy = occupancy
+        let subscribers = Array(occupancyContinuations.values)
+        lock.unlock()
+        for continuation in subscribers {
+            continuation.yield(occupancy)
+        }
     }
 
     func signals() -> AsyncStream<WorldSignal> {
