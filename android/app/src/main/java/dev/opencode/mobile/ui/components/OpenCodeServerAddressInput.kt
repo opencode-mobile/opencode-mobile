@@ -45,11 +45,12 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
-/** Matches Material 3 single-line `OutlinedTextField` used by `OpenCodeTextInput`. */
-private val TextInputMinHeight = 56.dp
-private val TextInputCornerRadius = 8.dp
+private val TextInputMinHeight = OpenCodeTextInputMinHeight
+private val TextInputCornerRadius = OpenCodeTextInputCornerRadius
+
 /** `[16 [http 4 ↓] 8] 8 host 16` */
 private val FieldStartPadding = 16.dp
 private val FieldEndPadding = 16.dp
@@ -131,7 +132,7 @@ fun OpenCodeServerAddressInput(
                     .fillMaxWidth()
                     .height(TextInputMinHeight)
                     .background(
-                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        color = openCodeColor("surface-raised-base"),
                         shape = fieldShape,
                     ).border(
                         width = borderWidth,

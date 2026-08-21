@@ -50,8 +50,9 @@ content-type behavior. Visual styling is not exposed for feature-level override.
 - iOS: SwiftUI `TextField`/`SecureField` provide native content types and submit
   behavior. Hint maps to the field's placeholder string. Optional `isFocused`
   binding and `onSubmit` callback integrate with feature focus chains.
-- Android: Material `OutlinedTextField` provides native focus, keyboard, and
-  password transformation behavior. Hint maps to the field's placeholder; no
+- Android: Compose `BasicTextField` uses the same raised-surface chrome as iOS
+  (`textInput.minHeight` 48, `textInput.cornerRadius` 8,
+  `textInput.paddingHorizontal` 12). Hint maps to an in-field placeholder; no
   Material floating label is used. The control keeps a local `TextFieldValue` so
   caret/selection survive parent recomposition, and it does not set
   `contentDescription` when the hint already names the field (that override can
