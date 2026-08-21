@@ -489,6 +489,19 @@ struct ProjectListHomeView: View {
         navigationPath.append(session)
     }
 
+    private func presentNewSessionProjectPicker() {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.home,
+            actionId: ProductAnalytics.Action.homeOpenNewSessionProjectPicker
+        )
+        ProductAnalytics.logScreenView(
+            screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
+            presentation: ProductAnalytics.Presentation.sheet,
+            trigger: ProductAnalytics.Trigger.present
+        )
+        showNewSessionProjectPicker = true
+    }
+
     private var addProjectPresentedBinding: Binding<Bool> {
         Binding(
             get: { viewModel.isAddProjectPresented },
@@ -716,20 +729,17 @@ struct ProjectListHomeView: View {
                 case .none:
                     break
                 case .presentPicker:
-                    ProductAnalytics.logUserAction(
-                        screenId: ProductAnalytics.Screen.home,
-                        actionId: ProductAnalytics.Action.homeOpenNewSessionProjectPicker
-                    )
-                    ProductAnalytics.logScreenView(
-                        screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
-                        presentation: ProductAnalytics.Presentation.sheet,
-                        trigger: ProductAnalytics.Trigger.present
-                    )
-                    showNewSessionProjectPicker = true
+                    presentNewSessionProjectPicker()
                 case let .create(worktree):
                     Task { await viewModel.createSession(in: worktree) }
                 }
             },
+            onNewSessionLongPress: SessionListHomeChrome.newSessionLongPressAction(
+                projects: chromeProjects,
+                useProjectPicker: homeDisplayPreferences.sessionListProjectPickerEnabled
+            ) == .presentPicker
+                ? { presentNewSessionProjectPicker() }
+                : nil,
             onRemoveProject: { worktree in
                 viewModel.requestRemoveProject(worktree: worktree)
             },

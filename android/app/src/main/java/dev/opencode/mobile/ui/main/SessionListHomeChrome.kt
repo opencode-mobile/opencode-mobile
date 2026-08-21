@@ -67,4 +67,14 @@ object SessionListHomeChrome {
         }
         return NewSessionAction.PresentPicker
     }
+
+    fun newSessionLongPressAction(
+        projects: List<Project>,
+        useProjectPicker: Boolean,
+    ): NewSessionAction {
+        if (!useProjectPicker || projects.size < 2) {
+            return NewSessionAction.None
+        }
+        return NewSessionAction.PresentPicker
+    }
 }

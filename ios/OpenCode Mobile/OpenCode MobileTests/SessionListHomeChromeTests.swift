@@ -97,6 +97,33 @@ struct SessionListHomeChromeTests {
         )
     }
 
+    @Test func newSessionLongPressAction_chipChromeDoesNothing() {
+        #expect(
+            SessionListHomeChrome.newSessionLongPressAction(
+                projects: [mobile, playground],
+                useProjectPicker: false
+            ) == .none
+        )
+    }
+
+    @Test func newSessionLongPressAction_oneProjectDoesNothing() {
+        #expect(
+            SessionListHomeChrome.newSessionLongPressAction(
+                projects: [mobile],
+                useProjectPicker: true
+            ) == .none
+        )
+    }
+
+    @Test func newSessionLongPressAction_pickerWithTwoProjectsPresentsPicker() {
+        #expect(
+            SessionListHomeChrome.newSessionLongPressAction(
+                projects: [mobile, playground],
+                useProjectPicker: true
+            ) == .presentPicker
+        )
+    }
+
     private let mobile = SessionListHomeChrome.Project(
         worktree: "/repo",
         title: "opencode-mobile",

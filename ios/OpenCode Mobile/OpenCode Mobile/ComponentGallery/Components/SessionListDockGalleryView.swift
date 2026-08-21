@@ -6,6 +6,7 @@ struct SessionListDockGalleryView: View {
     @State private var oneProject = false
     @State private var useProjectPicker = false
     @State private var showProjectPicker = false
+    @State private var showNewSessionPicker = false
 
     private var filterTabs: [SessionListFilterTab] {
         oneProject
@@ -54,7 +55,10 @@ struct SessionListDockGalleryView: View {
                 onOpenProjectPicker: { showProjectPicker = true },
                 onFilterSelected: { selectedFilterId = $0 },
                 onAddProject: {},
-                onNewSession: {}
+                onNewSession: {},
+                onNewSessionLongPress: useProjectPicker && !oneProject
+                    ? { showNewSessionPicker = true }
+                    : nil
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -75,6 +79,18 @@ struct SessionListDockGalleryView: View {
                     showProjectPicker = false
                 }
             )
+        }
+        .openCodeBottomSheet(
+            isPresented: $showNewSessionPicker,
+            title: "New session"
+        ) {
+            ForEach(filterTabs.filter { !$0.isAll }) { tab in
+                OpenCodeBottomSheetEntry(
+                    title: tab.title,
+                    startDecorator: .icon(.folder),
+                    action: { showNewSessionPicker = false }
+                )
+            }
         }
     }
 }

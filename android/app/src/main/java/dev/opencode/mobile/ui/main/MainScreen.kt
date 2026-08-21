@@ -895,6 +895,17 @@ private fun HomeProjectsContent(
                         onCreateSession(action.worktree)
                 }
             },
+            onNewSessionLongPress =
+                if (
+                    SessionListHomeChrome.newSessionLongPressAction(
+                        projects = chromeProjects,
+                        useProjectPicker = HomeDisplayPreferences.sessionListProjectPickerEnabled,
+                    ) is SessionListHomeChrome.NewSessionAction.PresentPicker
+                ) {
+                    onRequestNewSessionProjectPicker
+                } else {
+                    null
+                },
             onSessionLongPress = onSessionLongPress,
             revealNewestToken = revealNewestToken,
             modifier = Modifier.fillMaxSize(),

@@ -15,12 +15,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeSessionListDock
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListProjectPickerRows
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
 fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
@@ -29,6 +32,7 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
     var oneProject by rememberSaveable { mutableStateOf(false) }
     var useProjectPicker by rememberSaveable { mutableStateOf(false) }
     var showProjectPicker by rememberSaveable { mutableStateOf(false) }
+    var showNewSessionPicker by rememberSaveable { mutableStateOf(false) }
     val filterTabs =
         if (oneProject) {
             sessionListDockGalleryOneProjectFilterTabs
@@ -78,6 +82,12 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
             onFilterSelected = { selectedFilterId = it },
             onAddProject = {},
             onNewSession = {},
+            onNewSessionLongPress =
+                if (useProjectPicker && !oneProject) {
+                    { showNewSessionPicker = true }
+                } else {
+                    null
+                },
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -105,6 +115,24 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
                 showProjectPicker = false
             },
         )
+    }
+
+    OpenCodeBottomSheet(
+        visible = showNewSessionPicker,
+        title = "New session",
+        onDismissRequest = { showNewSessionPicker = false },
+    ) {
+        filterTabs.filterNot { it.isAll }.forEach { tab ->
+            OpenCodeBottomSheetEntry(
+                title = tab.title,
+                startDecorator =
+                    BottomSheetEntryDecorator.Icon(
+                        imageVector = OpenCodeIcons.Folder,
+                        contentDescription = null,
+                    ),
+                onClick = { showNewSessionPicker = false },
+            )
+        }
     }
 }
 

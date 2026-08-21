@@ -4,8 +4,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
@@ -93,6 +95,7 @@ fun OpenCodeSessionListDock(
     onOpenProjectPicker: () -> Unit = {},
     onFilterSelected: (String) -> Unit = {},
     onRemoveProject: ((String) -> Unit)? = null,
+    onNewSessionLongPress: (() -> Unit)? = null,
 ) {
     val textStrong = openCodeColor("text-strong")
     val error = openCodeColor("error")
@@ -149,6 +152,8 @@ fun OpenCodeSessionListDock(
                 }
                 DockCta(
                     onClick = onNewSession,
+                    onLongClick = onNewSessionLongPress,
+                    onLongClickLabel = if (onNewSessionLongPress != null) "Choose project" else null,
                     fill = ctaFill,
                     shape = NewSessionButtonShape,
                     modifier =
@@ -652,20 +657,34 @@ private fun pickerStartDecorator(tab: SessionListFilterTab): StartDecorator {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DockCta(
     onClick: () -> Unit,
     fill: Color,
     shape: Shape,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
+    onLongClickLabel: String? = null,
     content: @Composable () -> Unit,
 ) {
+    val interaction =
+        if (onLongClick != null) {
+            Modifier.combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onLongClickLabel = onLongClickLabel,
+                role = Role.Button,
+            )
+        } else {
+            Modifier.clickable(role = Role.Button, onClick = onClick)
+        }
     Box(
         modifier =
             modifier
                 .clip(shape)
                 .background(fill)
-                .clickable(role = Role.Button, onClick = onClick),
+                .then(interaction),
         contentAlignment = Alignment.Center,
     ) {
         content()

@@ -9,6 +9,7 @@ struct OpenCodeSessionListDock: View {
     let onFilterSelected: (String) -> Void
     let onAddProject: () -> Void
     let onNewSession: () -> Void
+    let onNewSessionLongPress: (() -> Void)?
     let onRemoveProject: ((String) -> Void)?
 
     init(
@@ -20,6 +21,7 @@ struct OpenCodeSessionListDock: View {
         onFilterSelected: @escaping (String) -> Void = { _ in },
         onAddProject: @escaping () -> Void,
         onNewSession: @escaping () -> Void,
+        onNewSessionLongPress: (() -> Void)? = nil,
         onRemoveProject: ((String) -> Void)? = nil
     ) {
         self.filterTabs = filterTabs
@@ -30,6 +32,7 @@ struct OpenCodeSessionListDock: View {
         self.onFilterSelected = onFilterSelected
         self.onAddProject = onAddProject
         self.onNewSession = onNewSession
+        self.onNewSessionLongPress = onNewSessionLongPress
         self.onRemoveProject = onRemoveProject
     }
 
@@ -124,19 +127,10 @@ struct OpenCodeSessionListDock: View {
     }
 
     private var newSessionButton: some View {
-        Button(action: onNewSession) {
-            Text("New session")
-                .font(OpenCodeTypography.button)
-                .foregroundStyle(OpenCodeColors.textStrong)
-                .frame(maxWidth: .infinity)
-                .frame(height: Self.ctaHeight)
-                .background(
-                    OpenCodeColors.textStrong.opacity(Self.ctaFillOpacity),
-                    in: Capsule()
-                )
-                .contentShape(Capsule())
-        }
-        .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
+        NewSessionDockButton(
+            onNewSession: onNewSession,
+            onLongPress: onNewSessionLongPress
+        )
     }
 }
 
@@ -500,6 +494,61 @@ private struct SessionListScopeClusterSlide: ViewModifier, Animatable {
     func body(content: Content) -> some View {
         content
             .offset(x: x)
+    }
+}
+
+private struct NewSessionDockButton: View {
+    let onNewSession: () -> Void
+    let onLongPress: (() -> Void)?
+
+    @State private var isHolding = false
+    @State private var longPressHapticTick = 0
+
+    var body: some View {
+        let label = Text("New session")
+            .font(OpenCodeTypography.button)
+            .foregroundStyle(OpenCodeColors.textStrong)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(
+                OpenCodeColors.textStrong.opacity(0.14),
+                in: Capsule()
+            )
+            .contentShape(Capsule())
+
+        if let onLongPress {
+            label
+                .scaleEffect(isHolding ? 0.98 : 1)
+                .opacity(isHolding ? 0.92 : 1)
+                .animation(.smooth(duration: 0.16), value: isHolding)
+                .overlay {
+                    Color.clear
+                        .contentShape(Capsule())
+                        .onTapGesture(perform: onNewSession)
+                        .onLongPressGesture(
+                            minimumDuration: 0.42,
+                            maximumDistance: 18,
+                            pressing: { isHolding = $0 },
+                            perform: {
+                                isHolding = false
+                                longPressHapticTick += 1
+                                onLongPress()
+                            }
+                        )
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("New session")
+                .accessibilityHint("Use Choose project to start in a different project.")
+                .accessibilityAction(.default, onNewSession)
+                .accessibilityAction(named: "Choose project", onLongPress)
+                .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.9), trigger: longPressHapticTick)
+        } else {
+            Button(action: onNewSession) {
+                label
+            }
+            .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
+        }
     }
 }
 
