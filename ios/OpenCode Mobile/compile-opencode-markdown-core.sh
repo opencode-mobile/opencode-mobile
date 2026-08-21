@@ -12,7 +12,12 @@ if [ -z "${JAVA_HOME:-}" ]; then
 fi
 
 cd "$SRCROOT/../../android"
-CODE_SIGNING_ALLOWED=NO ./gradlew :markdown-core:embedAndSignAppleFrameworkForXcode
+# KMP embedAndSign codesigns when EXPANDED_CODE_SIGN_IDENTITY is set (inherited
+# from Xcode). That fails with errSecInternalComponent on the self-hosted Mac
+# Mini. Clear identity so Gradle only embeds; Xcode signs the framework below.
+CODE_SIGNING_ALLOWED=NO \
+  EXPANDED_CODE_SIGN_IDENTITY= \
+  ./gradlew :markdown-core:embedAndSignAppleFrameworkForXcode
 
 framework="$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/OpenCodeMarkdownCore.framework"
 if [ "${CODE_SIGNING_ALLOWED:-YES}" != "NO" ] && [ -d "$framework" ]; then
