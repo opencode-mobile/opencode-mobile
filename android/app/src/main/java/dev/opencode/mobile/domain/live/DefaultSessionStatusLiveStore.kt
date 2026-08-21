@@ -13,6 +13,9 @@ import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
@@ -37,13 +40,25 @@ class DefaultSessionStatusLiveStore
     ) : SessionStatusLiveStore {
         private val cache = ConcurrentHashMap<String, SharedFlow<Map<String, SessionStatus>>>()
         private val invalidationBus = StoreInvalidationBus()
+        private val activeDirectories = ConcurrentHashMap.newKeySet<String>()
 
         override fun clearCache() {
             cache.clear()
         }
 
-        override fun invalidate(directory: String?) {
-            invalidationBus.invalidate(directory, StoreRefreshReason.PULL_TO_REFRESH)
+        override suspend fun invalidate(directory: String?) {
+            val keys =
+                if (directory != null) {
+                    listOf(directory).filter { activeDirectories.contains(it) }
+                } else {
+                    activeDirectories.toList()
+                }
+            if (keys.isEmpty()) return
+            coroutineScope {
+                keys.map { key ->
+                    async { invalidationBus.invalidateAndWait(key, StoreRefreshReason.PULL_TO_REFRESH) }
+                }.awaitAll()
+            }
         }
 
         override fun observeStatuses(directory: String): Flow<Map<String, SessionStatus>> =
@@ -62,7 +77,8 @@ class DefaultSessionStatusLiveStore
                 var current = emptyMap<String, SessionStatus>()
                 var reconnectRefresh: Job? = null
                 var stale = false
-
+                activeDirectories.add(directory)
+                try {
                 suspend fun reloadFromServer(
                     reason: String,
                     force: Boolean,
@@ -115,6 +131,7 @@ class DefaultSessionStatusLiveStore
                                 current = statuses
                                 send(current)
                             }
+                            it.ack?.complete(Unit)
                         }
                 }
 
@@ -157,6 +174,9 @@ class DefaultSessionStatusLiveStore
                     }
                 } finally {
                     reconnectRefresh?.cancel()
+                }
+                } finally {
+                    activeDirectories.remove(directory)
                 }
             }
 

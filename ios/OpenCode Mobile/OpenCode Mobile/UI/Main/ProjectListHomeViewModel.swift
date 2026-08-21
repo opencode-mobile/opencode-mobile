@@ -272,8 +272,8 @@ final class ProjectListHomeViewModel {
             )
             isRefreshing = true
             defer { isRefreshing = false }
-            sessionLiveStore.invalidate(directory: nil)
-            sessionStatusLiveStore.invalidate(directory: nil)
+            await sessionLiveStore.invalidate(directory: nil)
+            await sessionStatusLiveStore.invalidate(directory: nil)
         default:
             break
         }

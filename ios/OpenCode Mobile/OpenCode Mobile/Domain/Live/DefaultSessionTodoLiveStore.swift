@@ -70,8 +70,9 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
                                 }
                                 guard let reason = signal.catchUpReason else { continue }
                                 guard stale.isSet else { continue }
-                                stale.clear()
-                                await store?.fetch(key: key, force: true, reason: reason)
+                                if await store?.fetch(key: key, force: true, reason: reason) == true {
+                                    stale.clear()
+                                }
                             }
                         }
                         group.addTask {
@@ -89,8 +90,9 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
                                         store?.handles[key]?.continuations.isEmpty == false
                                     }
                                     guard isObserved else { continue }
-                                    stale.clear()
-                                    await store?.fetch(key: key, force: true, reason: event.type)
+                                    if await store?.fetch(key: key, force: true, reason: event.type) == true {
+                                        stale.clear()
+                                    }
                                 }
                             }
                         }
@@ -148,14 +150,14 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
         }
     }
 
-    private func fetch(key: SessionKey, force: Bool, reason: String? = nil) async {
-        guard let handle = handles[key] else { return }
-        if handle.hasCache, !force { return }
+    private func fetch(key: SessionKey, force: Bool, reason: String? = nil) async -> Bool {
+        guard let handle = handles[key] else { return false }
+        if handle.hasCache, !force { return true }
         let directory = key.directory.isEmpty ? nil : key.directory
         guard let todos = try? await sessionRepository.listSessionTodos(
             id: key.sessionID,
             directory: directory
-        ) else { return }
+        ) else { return false }
         if let reason {
             DiagnosticLog.info(
                 .session,
@@ -163,6 +165,7 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
             )
         }
         replace(todos: todos, key: key, markCache: true)
+        return true
     }
 
     private func replace(todos: [SessionTodo], key: SessionKey, markCache: Bool) {

@@ -45,6 +45,7 @@ import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.ui.components.SessionListScrollPin
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -511,6 +512,36 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun pullToRefresh_keepsRefreshingUntilLiveStoreCatchUpFinishes() =
+        runTest(testDispatcher) {
+            val sessionsByWorktree =
+                mutableMapOf(
+                    "/repo" to listOf(Session(id = "1", title = "Session 1", updatedAtEpochMs = 1L)),
+                )
+            val sessionRepository = FakeSessionRepository(sessionsByWorktree)
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree = sessionsByWorktree,
+                    sessionRepository = sessionRepository,
+                )
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value is MainScreenUiState.Loaded)
+
+            val gate = CompletableDeferred<Unit>()
+            sessionRepository.nextListGate = gate
+            viewModel.pullToRefresh()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.isRefreshing.value)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.isRefreshing.value)
+        }
+
+    @Test
     fun pullToRefresh_replacesStaleLiveStoreSnapshot() =
         runTest(testDispatcher) {
             val sessionsByWorktree =
@@ -941,6 +972,7 @@ private class FakeSessionRepository(
     private val deleteResult: Boolean = true,
 ) : SessionRepository {
     var listSessionsCallCount = 0
+    var nextListGate: CompletableDeferred<Unit>? = null
     val createdDirectories = mutableListOf<String?>()
     val renamedTitles = mutableListOf<Pair<String, String?>>()
     val archivedIds = mutableListOf<String>()
@@ -949,6 +981,10 @@ private class FakeSessionRepository(
 
     override suspend fun listSessions(directory: String?): List<Session> {
         listSessionsCallCount += 1
+        nextListGate?.also {
+            nextListGate = null
+            it.await()
+        }
         return sessionsByWorktree[directory].orEmpty()
     }
 

@@ -1,7 +1,11 @@
 package dev.opencode.mobile.domain.live
 
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
+import dev.opencode.mobile.domain.event.FakeWorldSignals
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.event.SilentWorldSignals
+import dev.opencode.mobile.domain.event.WorldSignal
+import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionDecision
 import dev.opencode.mobile.domain.session.PermissionRequest
@@ -312,6 +316,39 @@ class SessionTodoLiveStoreTest {
         }
 
     @Test
+    fun worldForeground_failedCatchUp_keepsStaleForNextForeground() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeTodoSessionRepository(
+                    todos = listOf(SessionTodo(0, "A", SessionTodoStatus.Pending, "low")),
+                )
+            val world = FakeWorldSignals()
+            val store = createStore(repository, FakeForegroundEventStream(), world)
+            val emissions = mutableListOf<List<SessionTodo>>()
+            val job =
+                launch {
+                    store.observeTodos("ses-1", "/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+
+            world.emit(WorldSignal.Background)
+            advanceUntilIdle()
+            repository.listTodosError = SessionError.Http(500, "down")
+            world.emit(WorldSignal.Foreground)
+            advanceUntilIdle()
+            val afterFail = repository.listTodosCallCount
+
+            repository.listTodosError = null
+            repository.todos = listOf(SessionTodo(0, "B", SessionTodoStatus.Pending, "low"))
+            world.emit(WorldSignal.Foreground)
+            advanceUntilIdle()
+            job.cancel()
+
+            assertTrue(repository.listTodosCallCount > afterFail)
+            assertEquals("B", emissions.last().single().content)
+        }
+
+    @Test
     fun reconnect_fetchesWhileObservingIdle() =
         runTest(testDispatcher) {
             val repository =
@@ -339,11 +376,13 @@ class SessionTodoLiveStoreTest {
     private fun createStore(
         repository: SessionRepository,
         eventStream: FakeForegroundEventStream,
+        worldSignals: WorldSignals = SilentWorldSignals,
     ): DefaultSessionTodoLiveStore =
         DefaultSessionTodoLiveStore(
             sessionRepository = repository,
             eventStream = eventStream,
             liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
+            worldSignals = worldSignals,
         )
 }
 

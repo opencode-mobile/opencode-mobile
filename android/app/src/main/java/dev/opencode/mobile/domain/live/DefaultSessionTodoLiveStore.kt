@@ -126,8 +126,9 @@ class DefaultSessionTodoLiveStore
                             }
                             val reason = signal.catchUpReason() ?: return@collect
                             if (!stale) return@collect
-                            stale = false
-                            fetch(key, state, force = true)
+                            if (fetch(key, state, force = true)) {
+                                stale = false
+                            }
                         }
                     }
                     eventStream.events.collect { event ->
@@ -139,8 +140,9 @@ class DefaultSessionTodoLiveStore
                                 }
                             }
                             event.type == "stream.reconnected" || event.type == "server.connected" -> {
-                                stale = false
-                                fetch(key, state, force = true)
+                                if (fetch(key, state, force = true)) {
+                                    stale = false
+                                }
                             }
                         }
                     }
@@ -151,14 +153,15 @@ class DefaultSessionTodoLiveStore
             key: SessionKey,
             state: SessionState,
             force: Boolean,
-        ) {
-            if (state.hasCache && !force) return
+        ): Boolean {
+            if (state.hasCache && !force) return true
             val directory = key.directory.ifEmpty { null }
             val todos =
                 runCatching {
                     sessionRepository.listSessionTodos(key.sessionId, directory)
-                }.getOrNull() ?: return
+                }.getOrNull() ?: return false
             replace(state, todos, markCache = true)
+            return true
         }
 
         private suspend fun replace(

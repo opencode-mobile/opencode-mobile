@@ -7,5 +7,5 @@ interface SessionLiveStore {
 
     fun clearCache()
 
-    fun invalidate(directory: String?) {}
+    suspend fun invalidate(directory: String?) {}
 }

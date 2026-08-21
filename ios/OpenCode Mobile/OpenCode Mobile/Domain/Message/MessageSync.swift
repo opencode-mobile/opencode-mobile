@@ -562,10 +562,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 // snapshot in the store and never pushed a frame.
                 let published = observationStillCurrent(key: key)
                 if published {
+                    observationEpoch.adopt(connectionEpoch.current())
                     if fingerprintBefore != messageFingerprint(messages) {
                         publishMessages(messages)
                     }
-                    observationEpoch.adopt(connectionEpoch.current())
                 }
                 if becameHealthy {
                     if published {

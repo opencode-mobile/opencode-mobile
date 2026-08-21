@@ -7,6 +7,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     private let eventAdapter: EventDomainAdapter
     private let worldSignals: any WorldSignals
     private let invalidationBus = StoreInvalidationBus()
+    private let activeDirectories = ActiveDirectorySet()
     private var cache: [String: SharedLiveObservation<[String: SessionStatus]>] = [:]
 
     init(
@@ -28,6 +29,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             let eventAdapter = eventAdapter
             let worldSignals = worldSignals
             let invalidationBus = invalidationBus
+            let activeDirectories = activeDirectories
             cache[directory] = SharedLiveObservation { yield in
                 Task.detached {
                     await Self.runStatusLoop(
@@ -37,6 +39,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         eventAdapter: eventAdapter,
                         worldSignals: worldSignals,
                         invalidationBus: invalidationBus,
+                        activeDirectories: activeDirectories,
                         yield: yield
                     )
                 }
@@ -45,8 +48,24 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         return cache[directory]!.stream()
     }
 
-    func invalidate(directory: String?) {
-        invalidationBus.invalidate(key: directory, reason: StoreRefreshReason.pullToRefresh)
+    func invalidate(directory: String?) async {
+        let keys: [String]
+        if let directory {
+            keys = activeDirectories.contains(directory) ? [directory] : []
+        } else {
+            keys = activeDirectories.snapshot()
+        }
+        let bus = invalidationBus
+        await withTaskGroup(of: Void.self) { group in
+            for key in keys {
+                group.addTask {
+                    await bus.invalidateAndWait(
+                        key: key,
+                        reason: StoreRefreshReason.pullToRefresh
+                    )
+                }
+            }
+        }
     }
 
     func clearCache() {
@@ -60,8 +79,11 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         eventAdapter: EventDomainAdapter,
         worldSignals: any WorldSignals,
         invalidationBus: StoreInvalidationBus,
+        activeDirectories: ActiveDirectorySet,
         yield: @escaping @Sendable ([String: SessionStatus]) -> Void
     ) async {
+        activeDirectories.insert(directory)
+        defer { activeDirectories.remove(directory) }
         let currentBox = StatusBox()
         let stale = StaleBit()
 
@@ -118,6 +140,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         currentBox.replace(statuses)
                         yield(statuses)
                     }
+                    invalidation.ack?()
                 }
             }
             group.addTask {

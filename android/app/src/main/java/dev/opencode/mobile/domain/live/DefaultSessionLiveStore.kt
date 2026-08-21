@@ -18,6 +18,9 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
@@ -38,13 +41,25 @@ class DefaultSessionLiveStore
     ) : SessionLiveStore {
         private val cache = ConcurrentHashMap<String, SharedFlow<SessionListSnapshot>>()
         private val invalidationBus = StoreInvalidationBus()
+        private val activeDirectories = ConcurrentHashMap.newKeySet<String>()
 
         override fun clearCache() {
             cache.clear()
         }
 
-        override fun invalidate(directory: String?) {
-            invalidationBus.invalidate(directory, StoreRefreshReason.PULL_TO_REFRESH)
+        override suspend fun invalidate(directory: String?) {
+            val keys =
+                if (directory != null) {
+                    listOf(directory).filter { activeDirectories.contains(it) }
+                } else {
+                    activeDirectories.toList()
+                }
+            if (keys.isEmpty()) return
+            coroutineScope {
+                keys.map { key ->
+                    async { invalidationBus.invalidateAndWait(key, StoreRefreshReason.PULL_TO_REFRESH) }
+                }.awaitAll()
+            }
         }
 
         override fun observeSessions(directory: String): Flow<SessionListSnapshot> =
@@ -61,66 +76,71 @@ class DefaultSessionLiveStore
         private fun buildSessionFlow(directory: String): Flow<SessionListSnapshot> =
             channelFlow {
                 var stale = false
-
-                suspend fun refreshFromNetwork(
-                    reason: String,
-                    force: Boolean,
-                ): Boolean {
-                    if (!force && !stale) {
+                activeDirectories.add(directory)
+                try {
+                    suspend fun refreshFromNetwork(
+                        reason: String,
+                        force: Boolean,
+                    ): Boolean {
+                        if (!force && !stale) {
+                            DiagnosticLog.info(
+                                DiagnosticLogArea.Session,
+                                "sessionLiveStore skip directory=$directory reason=$reason",
+                            )
+                            return false
+                        }
+                        val sessions =
+                            runCatching { sessionRepository.listSessions(directory = directory) }.getOrNull()
+                                ?: return false
+                        sessionCache.rememberSessions(directory, sessions)
+                        send(SessionListSnapshot(sessions = sessions, isFromCache = false))
+                        stale = false
                         DiagnosticLog.info(
                             DiagnosticLogArea.Session,
-                            "sessionLiveStore skip directory=$directory reason=$reason",
+                            "sessionLiveStore refresh directory=$directory reason=$reason count=${sessions.size}",
                         )
-                        return false
+                        return true
                     }
-                    val sessions =
-                        runCatching { sessionRepository.listSessions(directory = directory) }.getOrNull()
-                            ?: return false
-                    sessionCache.rememberSessions(directory, sessions)
-                    send(SessionListSnapshot(sessions = sessions, isFromCache = false))
-                    stale = false
-                    DiagnosticLog.info(
-                        DiagnosticLogArea.Session,
-                        "sessionLiveStore refresh directory=$directory reason=$reason count=${sessions.size}",
-                    )
-                    return true
-                }
 
-                sessionCache.seedSessions(directory)?.let { seeded ->
-                    send(SessionListSnapshot(sessions = seeded, isFromCache = true))
-                }
+                    sessionCache.seedSessions(directory)?.let { seeded ->
+                        send(SessionListSnapshot(sessions = seeded, isFromCache = true))
+                    }
 
-                refreshFromNetwork(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)
+                    refreshFromNetwork(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)
 
-                launch {
-                    worldSignals.signals.collect { signal ->
-                        if (signal.marksStale()) {
-                            stale = true
-                            return@collect
-                        }
-                        signal.catchUpReason()?.let { reason ->
-                            refreshFromNetwork(reason, force = false)
+                    launch {
+                        worldSignals.signals.collect { signal ->
+                            if (signal.marksStale()) {
+                                stale = true
+                                return@collect
+                            }
+                            signal.catchUpReason()?.let { reason ->
+                                refreshFromNetwork(reason, force = false)
+                            }
                         }
                     }
-                }
-                launch {
-                    invalidationBus.events
-                        .filter { it.key == null || it.key == directory }
-                        .collect {
-                            stale = true
-                            refreshFromNetwork(it.reason, force = true)
-                        }
-                }
-
-                merge(
-                    eventStream.events
-                        .filter {
-                            it.type == "stream.reconnected" || it.type == "server.connected"
-                        }.map { it.type },
-                    eventStream.events.filter { it.triggersHomeRefresh }.map { it.type },
-                ).debounce(LiveStoreRefreshPolicy.SESSION_DEBOUNCE_MS)
-                    .collect { reason ->
-                        refreshFromNetwork(reason, force = true)
+                    launch {
+                        invalidationBus.events
+                            .filter { it.key == null || it.key == directory }
+                            .collect {
+                                stale = true
+                                refreshFromNetwork(it.reason, force = true)
+                                it.ack?.complete(Unit)
+                            }
                     }
+
+                    merge(
+                        eventStream.events
+                            .filter {
+                                it.type == "stream.reconnected" || it.type == "server.connected"
+                            }.map { it.type },
+                        eventStream.events.filter { it.triggersHomeRefresh }.map { it.type },
+                    ).debounce(LiveStoreRefreshPolicy.SESSION_DEBOUNCE_MS)
+                        .collect { reason ->
+                            refreshFromNetwork(reason, force = true)
+                        }
+                } finally {
+                    activeDirectories.remove(directory)
+                }
             }
     }
