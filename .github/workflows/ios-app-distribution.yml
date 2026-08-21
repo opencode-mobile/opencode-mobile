@@ -219,14 +219,6 @@ jobs:
             "$EXPECTED_TEAM_ID" \
             "$EXPECTED_BUNDLE_ID"
 
-      - name: Upload signed Ad Hoc IPA artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-app-distribution-${{ env.DISTRIBUTED_SHA }}-${{ github.run_number }}
-          path: ${{ env.IOS_IPA_PATH }}
-          if-no-files-found: error
-          retention-days: 7
-
       - name: Distribute to Firebase tester group
         shell: bash
         run: |
