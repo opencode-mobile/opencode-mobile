@@ -76,7 +76,7 @@ for png in "$SNAP_DIR"/*.png; do
 done
 ```
 
-Paparazzi lives on `:screenshot`, not `:app`. Applying it to `:app` breaks AGP 9 + Hilt artifact transforms. `:screenshot` uses a Java 21 toolchain (Paparazzi 2 requires class file 65). Never add `verifyPaparazzi*` or `:screenshot:testDebugUnitTest` to Android Checks.
+Paparazzi lives on `:screenshot`, not `:app`. Applying it to `:app` breaks AGP 9 + Hilt artifact transforms. Paparazzi 2 needs a Java 21 Gradle JVM, so `:screenshot` is left out of the default project graph on JDK 17. Never add `verifyPaparazzi*` or `:screenshot:testDebugUnitTest` to Android Checks.
 
 Then:
 
