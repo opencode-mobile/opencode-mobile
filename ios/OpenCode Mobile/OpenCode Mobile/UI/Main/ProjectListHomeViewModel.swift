@@ -122,7 +122,7 @@ final class ProjectListHomeViewModel {
     private let sessionStatusLiveStore: any SessionStatusLiveStore
     private let sessionReadyStore: any SessionReadyStore
     private let foregroundEventStream: any ForegroundEventStream
-    private let deviceNetworkPath: any DeviceNetworkPath
+    private let liveUpdates: any LiveUpdates
     private let sessionCache: any SessionCache
     private let eventAdapter = EventDomainAdapter()
     private let sessionAdapter = SessionDomainAdapter()
@@ -156,7 +156,7 @@ final class ProjectListHomeViewModel {
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver? = nil,
         sessionCache: any SessionCache = NoOpSessionCache.shared,
-        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath()
+        liveUpdates: any LiveUpdates = FixedLiveUpdates()
     ) {
         self.projectRepository = projectRepository
         self.filesystemRepository = filesystemRepository
@@ -168,7 +168,7 @@ final class ProjectListHomeViewModel {
         self.sessionStatusLiveStore = sessionStatusLiveStore
         self.sessionReadyStore = sessionReadyStore
         self.foregroundEventStream = foregroundEventStream
-        self.deviceNetworkPath = deviceNetworkPath
+        self.liveUpdates = liveUpdates
         self.connectionSessionCoordinator = connectionSessionCoordinator
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.sessionCache = sessionCache
@@ -204,30 +204,14 @@ final class ProjectListHomeViewModel {
         connectionStateObservationTask?.cancel()
         applyComposedConnectionStatus()
         connectionStateObservationTask = Task {
-            await withTaskGroup(of: Void.self) { group in
-                group.addTask { [weak self] in
-                    guard let stream = self?.foregroundEventStream else { return }
-                    for await _ in stream.connectionStateUpdates() {
-                        await self?.applyComposedConnectionStatus()
-                    }
-                }
-                group.addTask { [weak self] in
-                    guard let path = self?.deviceNetworkPath else { return }
-                    for await _ in path.updates() {
-                        await self?.applyComposedConnectionStatus()
-                    }
-                }
-                await group.next()
-                group.cancelAll()
+            for await _ in liveUpdates.updates() {
+                applyComposedConnectionStatus()
             }
         }
     }
 
     private func applyComposedConnectionStatus() {
-        liveUpdatesConnectionStatus = SessionConnectionStatus(
-            connectionState: foregroundEventStream.connectionState,
-            path: deviceNetworkPath.status
-        )
+        liveUpdatesConnectionStatus = SessionConnectionStatus(label: liveUpdates.chrome.label)
     }
 
     func refresh() async {
@@ -386,7 +370,7 @@ final class ProjectListHomeViewModel {
     }
 
     func createSession(in worktree: String) async {
-        guard liveUpdatesConnectionStatus == .live else {
+        guard liveUpdates.chrome.canMutate else {
             logCreateSession(outcome: ProductAnalytics.Outcome.blocked)
             setProjectSessionCreateError("Reconnect to create a session")
             return

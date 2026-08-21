@@ -184,6 +184,7 @@ struct SessionChatUiState: Equatable {
     var sessionTodoCompletedCount: Int = 0
     var sessionTodoTotalCount: Int = 0
     var connectionStatus: SessionConnectionStatus = .offline
+    var canMutate = false
     var messagesFromCache: Bool = false
     var contextUsageFraction: Double?
     var errorMessage: String?
@@ -479,6 +480,7 @@ struct SessionInfoRegionState: Equatable {
     var optimisticBusy = false
     var hasResolvedSessionStatus = false
     var connectionStatus: SessionConnectionStatus = .offline
+    var canMutate = false
     var rename = SessionRenameUiState()
     var isLifecycleActionInFlight = false
     var lifecycleErrorMessage: String?
@@ -549,20 +551,13 @@ enum SessionConnectionStatus: String, Equatable, Sendable {
     case connecting
     case offline
 
-    init(
-        connectionState: EventStreamConnectionState,
-        path: DeviceNetworkPathStatus = .ready
-    ) {
-        if path == .unavailable {
-            self = .offline
-            return
-        }
-        switch connectionState {
-        case .connected:
+    init(label: LiveUpdatesLabel) {
+        switch label {
+        case .live:
             self = .live
-        case .connecting, .reconnecting:
+        case .connecting:
             self = .connecting
-        case .idle, .disconnected:
+        case .offline:
             self = .offline
         }
     }

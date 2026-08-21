@@ -1,12 +1,12 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
-import dev.opencode.mobile.domain.connection.DeviceNetworkPath
-import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.FixedLiveUpdates
+import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.MessageRole
@@ -26,7 +26,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
@@ -39,7 +38,7 @@ class SessionInfo(
     private val foregroundEventStream: ForegroundEventStream,
     private val eventDomainAdapter: EventDomainAdapter,
     private val scope: CoroutineScope,
-    private val deviceNetworkPath: DeviceNetworkPath = ReadyDeviceNetworkPath,
+    private val liveUpdates: LiveUpdates = FixedLiveUpdates(),
 ) {
     private val _state = MutableStateFlow(SessionInfoRegionState())
     val state: StateFlow<SessionInfoRegionState> = _state.asStateFlow()
@@ -88,6 +87,8 @@ class SessionInfo(
             SessionInfoRegionState(
                 sessionId = sessionId,
                 sessionTitle = sessionTitle,
+                connectionStatus = liveUpdates.chrome.value.label.toSessionConnectionStatus(),
+                canMutate = liveUpdates.chrome.value.canMutate,
             )
         logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
         startObserving(sessionId, worktree)
@@ -336,20 +337,22 @@ class SessionInfo(
                         }
                     }
                     launch {
-                        combine(
-                            foregroundEventStream.connectionState,
-                            deviceNetworkPath.status,
-                        ) { connectionState, path ->
-                            connectionState to path
-                        }.collect { (connectionState, path) ->
+                        liveUpdates.chrome.collect { chrome ->
                             if (!isCurrentBinding(sessionId, worktree)) return@collect
-                            logD("live connection session=$sessionId state=$connectionState path=$path")
+                            logD(
+                                "live connection session=$sessionId " +
+                                    "label=${chrome.label} canMutate=${chrome.canMutate}",
+                            )
                             DiagnosticLog.debug(
                                 DiagnosticLogArea.Session,
-                                "live connection session=$sessionId state=$connectionState path=$path",
+                                "live connection session=$sessionId " +
+                                    "label=${chrome.label} canMutate=${chrome.canMutate}",
                             )
                             _state.update {
-                                it.copy(connectionStatus = connectionState.toSessionConnectionStatus(path))
+                                it.copy(
+                                    connectionStatus = chrome.label.toSessionConnectionStatus(),
+                                    canMutate = chrome.canMutate,
+                                )
                             }
                         }
                     }

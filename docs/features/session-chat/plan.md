@@ -156,7 +156,9 @@ Not `Thinking`. That word stays on the thought row while reasoning is open.
   the raw full session id.
 - The SSE indicator maps foreground event-stream state to lowercase product
   labels: `Connected` -> `live`, `Connecting`/`Reconnecting` -> `connecting`,
-  and `Idle`/`Disconnected` -> `offline`.
+  occupying `Idle`/`Disconnected` -> `connecting`, and stopped / no-path /
+  no-profile -> `offline`. Send, abort, create, and permission replies use
+  path-ready `canMutate`, not SSE `live`.
 - The context ring uses the latest assistant input token count divided by the
   selected or message model's context limit. If either value is unavailable, the
   ring renders as unavailable rather than as 0%.

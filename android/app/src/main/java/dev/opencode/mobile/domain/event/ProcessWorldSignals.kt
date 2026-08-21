@@ -11,8 +11,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -32,6 +35,8 @@ class ProcessWorldSignals(
     DefaultLifecycleObserver {
     private val _signals = MutableSharedFlow<WorldSignal>(extraBufferCapacity = 32)
     override val signals: SharedFlow<WorldSignal> = _signals.asSharedFlow()
+    private val _occupancy = MutableStateFlow(StreamOccupancy.Active)
+    override val occupancy: StateFlow<StreamOccupancy> = _occupancy.asStateFlow()
 
     private var stopJob: Job? = null
     private var registered = false
@@ -75,6 +80,7 @@ class ProcessWorldSignals(
     fun onForeground() {
         stopJob?.cancel()
         stopJob = null
+        _occupancy.value = StreamOccupancy.Active
         emit(WorldSignal.Foreground)
         if (hasActiveConnection()) {
             stream.start()
@@ -83,10 +89,12 @@ class ProcessWorldSignals(
 
     fun onBackground() {
         stopJob?.cancel()
+        _occupancy.value = StreamOccupancy.Grace
         emit(WorldSignal.Background)
         stopJob =
             scope.launch {
                 delay(stopGraceMs)
+                _occupancy.value = StreamOccupancy.Stopped
                 emit(WorldSignal.BackgroundStop)
                 stream.stop()
             }

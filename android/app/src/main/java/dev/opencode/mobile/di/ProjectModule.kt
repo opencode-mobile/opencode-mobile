@@ -14,8 +14,10 @@ import dev.opencode.mobile.domain.connection.ConnectivityDeviceNetworkPath
 import dev.opencode.mobile.domain.connection.DeviceNetworkPath
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.event.DefaultForegroundEventStream
+import dev.opencode.mobile.domain.event.DefaultLiveUpdates
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.event.ProcessWorldSignals
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.filesystem.DefaultFilesystemRepository
@@ -104,6 +106,21 @@ abstract class EventStreamModule {
                 profileSaved = connectionSessionCoordinator.profileSaved,
                 profileCleared = connectionSessionCoordinator.profileCleared,
                 scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+            )
+
+        @Provides
+        @Singleton
+        fun provideLiveUpdates(
+            worldSignals: WorldSignals,
+            stream: ForegroundEventStream,
+            deviceNetworkPath: DeviceNetworkPath,
+            activeConnectionManager: ActiveConnectionManager,
+        ): LiveUpdates =
+            DefaultLiveUpdates(
+                worldSignals = worldSignals,
+                stream = stream,
+                path = deviceNetworkPath,
+                hasActiveConnection = { activeConnectionManager.current() != null },
             )
     }
 }

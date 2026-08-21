@@ -100,6 +100,21 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
   retry is in flight; radio-off is a different cause and belongs on the overlay.
 - Revisit when: Wi-Fi roam flashes offline and needs a short debounce.
 
+## Chrome follows occupancy
+
+- Date: 2026-08-21
+- Decision: `LiveUpdates` composes path, `StreamOccupancy` (`Active` /
+  `Grace` / `Stopped` from world signals), and SSE state into the same three
+  product labels. Occupying plus Idle/Disconnected is **connecting**, not
+  **offline**. `BackgroundStop` is **offline**. Grace with a still-connected
+  socket stays **live**. Mutations (`canMutate`) require a Connection Profile,
+  a ready path, and occupancy that is not Stopped. They do not wait for SSE
+  `live`. Screen Models collect `LiveUpdates`; they do not fold the matrix.
+  Store stale bits stay out of the label. Quiet catch-up is still quiet.
+- Reason: after the reactive data layer, Idle while reconnecting was a false
+  **offline**, and REST already worked while the label blocked send/create.
+- Revisit when: cause copy (no network vs unreachable) is a product need.
+
 ## Heartbeats
 
 `server.heartbeat` updates connection state only. `server.connected` schedules

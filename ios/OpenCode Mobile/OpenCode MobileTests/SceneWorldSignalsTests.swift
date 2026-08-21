@@ -58,6 +58,21 @@ struct SceneWorldSignalsTests {
         job.cancel()
     }
 
+    @Test func occupancyTracksForegroundGraceAndStop() async {
+        let stream = FakeForegroundEventStream()
+        let signals = sceneWorldSignals(stream: stream, stopGrace: .milliseconds(50))
+        #expect(signals.occupancy == .active)
+
+        signals.onBackground()
+        #expect(signals.occupancy == .grace)
+
+        let stopped = await waitUntil { signals.occupancy == .stopped }
+        #expect(stopped)
+
+        signals.onForeground()
+        #expect(signals.occupancy == .active)
+    }
+
     private func sceneWorldSignals(
         stream: FakeForegroundEventStream,
         stopGrace: Duration

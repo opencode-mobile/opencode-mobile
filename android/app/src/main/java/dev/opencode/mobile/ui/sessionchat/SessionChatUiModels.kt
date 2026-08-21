@@ -5,8 +5,7 @@ import dev.opencode.mobile.domain.agent.MentionableAgent
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
-import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
-import dev.opencode.mobile.domain.event.EventStreamConnectionState
+import dev.opencode.mobile.domain.event.LiveUpdatesLabel
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
@@ -101,6 +100,7 @@ data class SessionChatUiState(
     val sessionTodoCompletedCount: Int = 0,
     val sessionTodoTotalCount: Int = 0,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
+    val canMutate: Boolean = false,
     val messagesFromCache: Boolean = false,
     val contextUsageFraction: Float? = null,
     val errorMessage: String? = null,
@@ -361,6 +361,7 @@ data class SessionInfoRegionState(
     val optimisticBusy: Boolean = false,
     val hasResolvedSessionStatus: Boolean = false,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
+    val canMutate: Boolean = false,
     val rename: SessionRenameUiState = SessionRenameUiState(),
     val isLifecycleActionInFlight: Boolean = false,
     val lifecycleErrorMessage: String? = null,
@@ -440,21 +441,11 @@ enum class SessionConnectionStatus(
     Offline("offline"),
 }
 
-fun EventStreamConnectionState.toSessionConnectionStatus(
-    path: DeviceNetworkPathStatus = DeviceNetworkPathStatus.Ready,
-): SessionConnectionStatus =
-    if (path == DeviceNetworkPathStatus.Unavailable) {
-        SessionConnectionStatus.Offline
-    } else {
-        when (this) {
-            EventStreamConnectionState.Connected -> SessionConnectionStatus.Live
-            EventStreamConnectionState.Connecting,
-            EventStreamConnectionState.Reconnecting,
-            -> SessionConnectionStatus.Connecting
-            EventStreamConnectionState.Idle,
-            EventStreamConnectionState.Disconnected,
-            -> SessionConnectionStatus.Offline
-        }
+fun LiveUpdatesLabel.toSessionConnectionStatus(): SessionConnectionStatus =
+    when (this) {
+        LiveUpdatesLabel.Live -> SessionConnectionStatus.Live
+        LiveUpdatesLabel.Connecting -> SessionConnectionStatus.Connecting
+        LiveUpdatesLabel.Offline -> SessionConnectionStatus.Offline
     }
 
 enum class SessionChatTimelineState {

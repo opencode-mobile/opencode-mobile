@@ -24,8 +24,10 @@ the stream.
 - Home reloads session sections on session lifecycle events.
 - Session status labels on home rows and Session Chat chrome (`Working`, `Retrying`).
 - Screen Model connection states: `idle`, `connecting`, `connected`, `disconnected`, `reconnecting`.
-- Device network path (`ready` / `unavailable`) composed with SSE for **live** /
-  **connecting** / **offline** chrome. See ope-173-plan.md.
+- Device network path (`ready` / `unavailable`) composed with SSE occupancy and
+  world `StreamOccupancy` (`Active` / `Grace` / `Stopped`) for **live** /
+  **connecting** / **offline** chrome. Mutations use path-ready `canMutate`,
+  not SSE connected. See [decisions](decisions.md#chrome-follows-occupancy).
 
 ## Out Of Scope
 
@@ -57,13 +59,17 @@ the stream.
 ## Domain Objects
 
 - `OpencodeEvent`, `EventStreamConnectionState`, `ForegroundEventStream`,
-  `DeviceNetworkPath`, `MessageSync`, and `InMemoryMessageStore`.
+  `DeviceNetworkPath`, `WorldSignals`, `StreamOccupancy`, `LiveUpdates`,
+  `MessageSync`, and `InMemoryMessageStore`.
 - Reuses `SessionStatus`, `SessionSummary`, `MessageRepository`, `SessionRepository`.
 
 ## UI States
 
 - Stream connection indicator is internal to Screen Models; no dedicated probe screen.
-- Session rows and chat header may show optional status subtitle when session is busy or retrying.
+- Home and Session Chat top-bar chrome is `live` / `connecting` / `offline`
+  from `LiveUpdates`: path, world occupancy, and SSE state. Idle while occupying
+  is **connecting**. Send / create / abort use `canMutate` (path ready), not SSE
+  `live`.
 
 ## Error States
 
