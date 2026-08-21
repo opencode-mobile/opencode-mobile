@@ -216,30 +216,35 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
     }
 
     /// Session Chat path: keep declared timeline sets, and fold Working status
-    /// chrome into revision + `changedRowIDs` so label updates reconfigure that
-    /// stable row without clearing the packet (OPE-136). Syncing uses a top
-    /// overlay pill and is not a timeline row.
+    /// chrome into revision. Label *changes* land in `changedRowIDs` so that
+    /// stable row reconfigures without clearing the packet (OPE-136). An
+    /// unchanged label while the timeline publishes must not reconfigure it.
+    /// Syncing uses a top overlay pill and is not a timeline row.
     static func from(
         _ frame: TimelineFrame,
-        workingIndicatorLabel: String?
+        workingIndicatorLabel: String?,
+        previousWorkingIndicatorLabel: String?
     ) -> MessageListTimelineApplyPacket {
         let base = from(frame)
-        var statusIDs = Set<String>()
-        if workingIndicatorLabel != nil {
-            statusIDs.insert(SessionChatStatusChrome.workingRowID)
-        }
+        let delta = SessionChatStatusChrome.applyDelta(
+            current: workingIndicatorLabel,
+            previous: previousWorkingIndicatorLabel
+        )
         let chrome = SessionChatStatusChrome.fingerprint(
             workingIndicatorLabel: workingIndicatorLabel
         )
         var kinds = base.kinds
-        if !statusIDs.isEmpty {
+        if !delta.inserted.isEmpty || !delta.removed.isEmpty {
+            kinds.insert(.structure)
+        }
+        if !delta.changed.isEmpty {
             kinds.insert(.content)
         }
         return MessageListTimelineApplyPacket(
             frameRevision: base.frameRevision &+ (chrome &* 1_000_003),
-            insertedRowIDs: base.insertedRowIDs,
-            changedRowIDs: base.changedRowIDs.union(statusIDs),
-            removedRowIDs: base.removedRowIDs,
+            insertedRowIDs: base.insertedRowIDs.union(delta.inserted),
+            changedRowIDs: base.changedRowIDs.union(delta.changed),
+            removedRowIDs: base.removedRowIDs.union(delta.removed),
             layoutChangedRowIDs: base.layoutChangedRowIDs,
             grewBottomRowIDs: base.grewBottomRowIDs,
             decorateRowIDs: base.decorateRowIDs,
@@ -287,6 +292,22 @@ enum SessionChatStatusChrome {
             value = value &* 31 &+ UInt64(scalar.value)
         }
         return value
+    }
+
+    static func applyDelta(
+        current: String?,
+        previous: String?
+    ) -> (inserted: Set<String>, changed: Set<String>, removed: Set<String>) {
+        switch (previous, current) {
+        case (nil, .some):
+            ([workingRowID], [], [])
+        case (.some, nil):
+            ([], [], [workingRowID])
+        case let (previous?, current?) where previous != current:
+            ([], [workingRowID], [])
+        default:
+            ([], [], [])
+        }
     }
 }
 

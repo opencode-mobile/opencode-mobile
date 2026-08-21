@@ -131,6 +131,7 @@ private struct SessionChatTimelineReadyView: View {
     @State private var sessionTodosPillCompletedCount = 0
     @State private var sessionTodosPillTotalCount = 1
     @State private var sessionTodosPillActivePreview: String?
+    @State private var previousWorkingIndicatorLabel: String?
 
     private var showScrollToEnd: Bool {
         scrollController.shouldShowScrollToEnd
@@ -168,11 +169,12 @@ private struct SessionChatTimelineReadyView: View {
             MessageListTimelineHost(
                 items: displayMessages,
                 // Declared timeline sets stay; Working label folds into
-                // revision + changed IDs so text can refresh without clearing
-                // the packet (that caused the OPE-136 storm).
+                // revision, and only label *changes* reconfigure that stable
+                // row without clearing the packet (OPE-136).
                 applyPacket: .from(
                     props.timelineFrame,
-                    workingIndicatorLabel: props.workingIndicatorLabel
+                    workingIndicatorLabel: props.workingIndicatorLabel,
+                    previousWorkingIndicatorLabel: previousWorkingIndicatorLabel
                 ),
                 scrollController: scrollController,
                 onRefresh: props.onRefresh,
@@ -235,9 +237,13 @@ private struct SessionChatTimelineReadyView: View {
             refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
         }
         .onAppear {
+            previousWorkingIndicatorLabel = props.workingIndicatorLabel
             refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
             scrollController.autoFollowEnabled = true
             logScroll("appear count=\(props.messages.count) pinned=\(scrollController.isPinnedToEnd)")
+        }
+        .onChange(of: props.workingIndicatorLabel) { _, newValue in
+            previousWorkingIndicatorLabel = newValue
         }
         .onChange(of: props.messages.count) { _, newCount in
             logScroll("message-count changed count=\(newCount)")

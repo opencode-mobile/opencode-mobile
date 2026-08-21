@@ -61,6 +61,12 @@ struct SessionChatRow: Identifiable, Equatable {
 
 extension SessionChatRow: MessageListTimelineHeightEstimating {
     var timelineRowHeightEstimate: CGFloat {
+        if id == SessionChatStatusChrome.workingRowID {
+            return MessageListTimelineRowHeightEstimate.fallback(
+                characterCount: text.count,
+                style: .compact
+            )
+        }
         let style: MessageListTimelineRowHeightEstimate.Style =
             switch role {
             case .user:

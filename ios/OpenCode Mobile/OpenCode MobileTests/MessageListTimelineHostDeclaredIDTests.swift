@@ -134,7 +134,8 @@ struct MessageListTimelineHostDeclaredIDTests {
         ]
         let initialPacket = MessageListTimelineApplyPacket.from(
             frame,
-            workingIndicatorLabel: "Working"
+            workingIndicatorLabel: "Working",
+            previousWorkingIndicatorLabel: nil
         )
         controller.apply(items: initialItems, packet: initialPacket, animatingDifferences: false)
         #expect(controller.diffableSnapshotApplyCount == 1)
@@ -145,10 +146,12 @@ struct MessageListTimelineHostDeclaredIDTests {
         ]
         let updatedPacket = MessageListTimelineApplyPacket.from(
             frame,
-            workingIndicatorLabel: "Compacting"
+            workingIndicatorLabel: "Compacting",
+            previousWorkingIndicatorLabel: "Working"
         )
         #expect(updatedPacket.frameRevision != initialPacket.frameRevision)
         #expect(updatedPacket.changedRowIDs.contains(workingID))
+        #expect(!updatedPacket.insertedRowIDs.contains(workingID))
 
         controller.apply(items: updatedItems, packet: updatedPacket, animatingDifferences: false)
         #expect(controller.diffableSnapshotApplyCount == 2)
@@ -157,6 +160,68 @@ struct MessageListTimelineHostDeclaredIDTests {
         // Same chrome + same timeline frame must not storm.
         controller.apply(items: updatedItems, packet: updatedPacket, animatingDifferences: false)
         #expect(controller.diffableSnapshotApplyCount == 2)
+    }
+
+    @Test func statusChromeUnchangedLabel_doesNotReconfigureWorkingRowWhenTimelineAdvances() {
+        let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
+            itemContent: { Text($0.label) },
+            horizontalContentPadding: 0,
+            topContentPadding: 0,
+            bottomContentPadding: 0,
+            bottomOverlayInset: 0,
+            interItemSpacing: 0
+        )
+        controller.loadViewIfNeeded()
+        controller.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+
+        let workingID = SessionChatStatusChrome.workingRowID
+        let items = [
+            EqualityCountingItem(id: "a", label: "A"),
+            EqualityCountingItem(id: workingID, label: "Working"),
+        ]
+        let initialFrame = TimelineFrame(
+            frameRevision: 3,
+            rows: [],
+            insertedRowIDs: ["a", workingID],
+            changedRowIDs: [],
+            removedRowIDs: [],
+            layoutChangedRowIDs: ["a", workingID],
+            grewBottomRowIDs: [],
+            decorateRowIDs: [],
+            isRequired: false
+        )
+        controller.apply(
+            items: items,
+            packet: .from(
+                initialFrame,
+                workingIndicatorLabel: "Working",
+                previousWorkingIndicatorLabel: nil
+            ),
+            animatingDifferences: false
+        )
+
+        let advancedFrame = TimelineFrame(
+            frameRevision: 4,
+            rows: [],
+            insertedRowIDs: [],
+            changedRowIDs: ["a"],
+            removedRowIDs: [],
+            layoutChangedRowIDs: [],
+            grewBottomRowIDs: [],
+            decorateRowIDs: [],
+            isRequired: false
+        )
+        let advancedPacket = MessageListTimelineApplyPacket.from(
+            advancedFrame,
+            workingIndicatorLabel: "Working",
+            previousWorkingIndicatorLabel: "Working"
+        )
+        #expect(!advancedPacket.changedRowIDs.contains(workingID))
+        #expect(!advancedPacket.insertedRowIDs.contains(workingID))
+        #expect(advancedPacket.changedRowIDs.contains("a"))
+
+        controller.apply(items: items, packet: advancedPacket, animatingDifferences: false)
+        #expect(controller.lastReconfiguredIDs == ["a"])
     }
 
     @Test func nilPacket_identityStable_doesNotReconfigureAllOnRepeatApply() {
