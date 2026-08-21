@@ -74,6 +74,8 @@ research/
 ios/OpenCode Mobile/OpenCode MobileTests/GeneratedSnapshotEvidence/
 android/app/src/test/java/dev/opencode/mobile/ui/snapshot/GeneratedSnapshotEvidence/
 android/app/src/test/snapshots/
+android/screenshot/src/test/java/dev/opencode/mobile/ui/snapshot/GeneratedSnapshotEvidence/
+android/screenshot/src/test/snapshots/
 **/*SnapshotEvidence.swift
 **/*SnapshotEvidence.kt
 
