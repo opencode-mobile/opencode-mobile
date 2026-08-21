@@ -9,6 +9,7 @@ struct SessionChatTimelineViewProps {
     let errorMessage: String?
     let reviewChangesSummary: ReviewChangesSummary?
     let syncingIndicatorLabel: String?
+    let workingIndicatorLabel: String?
     let sessionTodosVisible: Bool
     let sessionTodoCompletedCount: Int
     let sessionTodoTotalCount: Int
@@ -35,6 +36,7 @@ struct SessionChatTimelineViewProps {
         errorMessage: String?,
         reviewChangesSummary: ReviewChangesSummary?,
         syncingIndicatorLabel: String? = nil,
+        workingIndicatorLabel: String? = nil,
         sessionTodosVisible: Bool = false,
         sessionTodoCompletedCount: Int = 0,
         sessionTodoTotalCount: Int = 0,
@@ -59,6 +61,7 @@ struct SessionChatTimelineViewProps {
         self.errorMessage = errorMessage
         self.reviewChangesSummary = reviewChangesSummary
         self.syncingIndicatorLabel = syncingIndicatorLabel
+        self.workingIndicatorLabel = workingIndicatorLabel
         self.sessionTodosVisible = sessionTodosVisible
         self.sessionTodoCompletedCount = sessionTodoCompletedCount
         self.sessionTodoTotalCount = sessionTodoTotalCount
@@ -128,6 +131,7 @@ private struct SessionChatTimelineReadyView: View {
     @State private var sessionTodosPillCompletedCount = 0
     @State private var sessionTodosPillTotalCount = 1
     @State private var sessionTodosPillActivePreview: String?
+    @State private var previousWorkingIndicatorLabel: String?
 
     private var showScrollToEnd: Bool {
         scrollController.shouldShowScrollToEnd
@@ -145,11 +149,33 @@ private struct SessionChatTimelineReadyView: View {
         props.syncingIndicatorLabel != nil || showSessionTodosPill || showReviewChanges
     }
 
+    private var displayMessages: [SessionChatRow] {
+        var rows = props.messages
+        if let label = props.workingIndicatorLabel {
+            rows.append(
+                SessionChatRow(
+                    id: SessionChatStatusChrome.workingRowID,
+                    role: .assistant,
+                    text: label,
+                    metadataLabel: ""
+                )
+            )
+        }
+        return rows
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             MessageListTimelineHost(
-                items: props.messages,
-                applyPacket: .from(props.timelineFrame),
+                items: displayMessages,
+                // Declared timeline sets stay; Working label folds into
+                // revision, and only label *changes* reconfigure that stable
+                // row without clearing the packet (OPE-136).
+                applyPacket: .from(
+                    props.timelineFrame,
+                    workingIndicatorLabel: props.workingIndicatorLabel,
+                    previousWorkingIndicatorLabel: previousWorkingIndicatorLabel
+                ),
                 scrollController: scrollController,
                 onRefresh: props.onRefresh,
                 onUserScrollDismissKeyboard: props.onUserScrollDismissKeyboard,
@@ -211,9 +237,13 @@ private struct SessionChatTimelineReadyView: View {
             refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
         }
         .onAppear {
+            previousWorkingIndicatorLabel = props.workingIndicatorLabel
             refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
             scrollController.autoFollowEnabled = true
             logScroll("appear count=\(props.messages.count) pinned=\(scrollController.isPinnedToEnd)")
+        }
+        .onChange(of: props.workingIndicatorLabel) { _, newValue in
+            previousWorkingIndicatorLabel = newValue
         }
         .onChange(of: props.messages.count) { _, newCount in
             logScroll("message-count changed count=\(newCount)")
@@ -279,31 +309,56 @@ private struct SessionChatTimelineHostRow: View {
     let supportsSessionMessageDiff: Bool
 
     var body: some View {
-        HStack {
-            if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
-                SessionChatMessageRow(
-                    message: message,
-                    onMessageActionsTap: onMessageActionsTap,
-                    onToolDetailTap: onToolDetailTap,
-                    onToolGroupTap: onToolGroupTap,
-                    onChildSessionTap: onChildSessionTap,
-                    onChangesReviewTap: onChangesReviewTap,
-                    supportsSessionMessageDiff: supportsSessionMessageDiff
-                )
-                Spacer(minLength: 0)
-            } else {
-                Spacer(minLength: 0)
-                SessionChatMessageRow(
-                    message: message,
-                    onMessageActionsTap: onMessageActionsTap,
-                    onToolDetailTap: onToolDetailTap,
-                    onToolGroupTap: onToolGroupTap,
-                    onChildSessionTap: onChildSessionTap,
-                    onChangesReviewTap: onChangesReviewTap,
-                    supportsSessionMessageDiff: supportsSessionMessageDiff
-                )
+        if message.id == SessionChatStatusChrome.workingRowID {
+            SessionChatWorkingIndicatorRow(label: message.text)
+        } else {
+            HStack {
+                if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
+                    SessionChatMessageRow(
+                        message: message,
+                        onMessageActionsTap: onMessageActionsTap,
+                        onToolDetailTap: onToolDetailTap,
+                        onToolGroupTap: onToolGroupTap,
+                        onChildSessionTap: onChildSessionTap,
+                        onChangesReviewTap: onChangesReviewTap,
+                        supportsSessionMessageDiff: supportsSessionMessageDiff
+                    )
+                    Spacer(minLength: 0)
+                } else {
+                    Spacer(minLength: 0)
+                    SessionChatMessageRow(
+                        message: message,
+                        onMessageActionsTap: onMessageActionsTap,
+                        onToolDetailTap: onToolDetailTap,
+                        onToolGroupTap: onToolGroupTap,
+                        onChildSessionTap: onChildSessionTap,
+                        onChangesReviewTap: onChangesReviewTap,
+                        supportsSessionMessageDiff: supportsSessionMessageDiff
+                    )
+                }
             }
         }
+    }
+}
+
+/// Feature-local Working/Retrying/Compacting status chrome (not prose).
+private struct SessionChatWorkingIndicatorRow: View {
+    let label: String
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            SessionChatWorkingStatusDot()
+            Text(label)
+                .font(OpenCodeTypography.body)
+                .foregroundStyle(OpenCodeColors.textWeak)
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, 4)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
     }
 }
 

@@ -417,6 +417,7 @@ fun SessionChatScreen(
                             errorMessage = uiState.errorMessage,
                             reviewChangesSummary = uiState.reviewChangesSummary,
                             syncingIndicatorLabel = uiState.syncingIndicatorLabel,
+                            workingIndicatorLabel = uiState.workingIndicatorLabel,
                             sessionTodosVisible = sessionTodosPillVisible,
                             sessionTodoCompletedCount = uiState.sessionTodoCompletedCount,
                             sessionTodoTotalCount = uiState.sessionTodoTotalCount,
@@ -563,9 +564,6 @@ fun SessionChatScreen(
                             hasPermission = uiState.permissionRequest != null,
                             hasQuestion = uiState.questionRequest != null,
                         )
-                    uiState.workingIndicatorLabel?.let { label ->
-                        SessionChatRunningAccessory(label = label)
-                    }
                     val composerState =
                         when (composerKind) {
                             SessionChatComposerKind.Permission -> {

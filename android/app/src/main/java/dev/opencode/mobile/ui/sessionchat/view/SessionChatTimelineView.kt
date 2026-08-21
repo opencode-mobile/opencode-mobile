@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -87,6 +88,7 @@ internal data class SessionChatTimelineViewProps(
     val errorMessage: String?,
     val reviewChangesSummary: ReviewChangesSummary?,
     val syncingIndicatorLabel: String? = null,
+    val workingIndicatorLabel: String? = null,
     val sessionTodosVisible: Boolean = false,
     val sessionTodoCompletedCount: Int = 0,
     val sessionTodoTotalCount: Int = 0,
@@ -159,6 +161,7 @@ internal fun SessionChatTimelineView(
                 isRefreshing = props.isRefreshing,
                 reviewChangesSummary = props.reviewChangesSummary,
                 syncingIndicatorLabel = props.syncingIndicatorLabel,
+                workingIndicatorLabel = props.workingIndicatorLabel,
                 sessionTodosVisible = props.sessionTodosVisible,
                 sessionTodoCompletedCount = props.sessionTodoCompletedCount,
                 sessionTodoTotalCount = props.sessionTodoTotalCount,
@@ -188,6 +191,7 @@ private fun SessionChatTimelineReadyView(
     isRefreshing: Boolean,
     reviewChangesSummary: ReviewChangesSummary?,
     syncingIndicatorLabel: String?,
+    workingIndicatorLabel: String?,
     sessionTodosVisible: Boolean,
     sessionTodoCompletedCount: Int,
     sessionTodoTotalCount: Int,
@@ -278,6 +282,20 @@ private fun SessionChatTimelineReadyView(
                         bottom = bottomOverlayInset,
                     ),
                 key = { message -> message.id },
+                statusIndicatorKey =
+                    if (workingIndicatorLabel != null) {
+                        SESSION_CHAT_STATUS_INDICATOR_KEY
+                    } else {
+                        null
+                    },
+                statusIndicatorContent =
+                    if (workingIndicatorLabel != null) {
+                        {
+                            SessionChatWorkingIndicatorRow(label = workingIndicatorLabel)
+                        }
+                    } else {
+                        null
+                    },
             ) { message, isNewestMessage, onContentSizeSettled ->
                 SessionChatMessageRow(
                     message = message,
@@ -683,6 +701,29 @@ private fun ToolStatus.toToolCallCardStatus(): OpenCodeToolCallCardStatus =
     }
 
 private const val SESSION_CHAT_BOTTOM_ANCHOR_KEY = "session-chat-timeline-bottom"
+private const val SESSION_CHAT_STATUS_INDICATOR_KEY = "session-chat-status-indicators"
+
+/** Feature-local Working/Retrying/Compacting status chrome (not prose). */
+@Composable
+private fun SessionChatWorkingIndicatorRow(label: String) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 4.dp, top = 12.dp, bottom = 8.dp)
+                .semantics { contentDescription = label },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SessionChatWorkingStatusDot()
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.weight(1f))
+    }
+}
 
 @Composable
 private fun SessionChatWorkingStatusDot() {
