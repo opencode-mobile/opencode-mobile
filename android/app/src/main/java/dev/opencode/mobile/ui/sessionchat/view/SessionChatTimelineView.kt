@@ -36,7 +36,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -768,7 +767,16 @@ private fun ReasoningBlock(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(start = 4.dp, top = 12.dp, bottom = 8.dp),
+                .padding(start = 4.dp, top = 12.dp, bottom = 8.dp)
+                .then(
+                    if (onClick != null) {
+                        Modifier
+                            .clickable(role = Role.Button, onClick = onClick)
+                            .semantics { contentDescription = label }
+                    } else {
+                        Modifier.semantics { contentDescription = label }
+                    },
+                ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -777,18 +785,6 @@ private fun ReasoningBlock(
         }
         Text(
             text = label,
-            modifier =
-                Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .then(
-                        if (onClick != null) {
-                            Modifier
-                                .clickable(role = Role.Button, onClick = onClick)
-                                .semantics { contentDescription = label }
-                        } else {
-                            Modifier.semantics { contentDescription = label }
-                        },
-                    ),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
