@@ -162,6 +162,7 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         await viewModel.addProject(worktree: "/two")
         #expect(viewModel.pendingSelectedFilterId == "/two")
+        #expect(viewModel.removalSnackbar?.text == "\"two\" is already on home")
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one", "/two"])
     }
 

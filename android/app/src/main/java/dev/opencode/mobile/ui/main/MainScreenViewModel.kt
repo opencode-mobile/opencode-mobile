@@ -293,6 +293,11 @@ class MainScreenViewModel
                     dismissAddProjectSheet()
                     runHomeLoad(skipProbe = true)
                     _pendingSelectedFilterId.value = worktree
+                    _removalSnackbar.value =
+                        OpenCodeSnackbarMessage(
+                            text =
+                                "\"${ProjectDomainAdapter.displayNameFromWorktree(worktree)}\" is already on home",
+                        )
                     return@launch
                 }
                 updateAddProjectNavigator { it.copy(isValidating = true, errorMessage = null) }

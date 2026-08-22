@@ -322,6 +322,7 @@ class MainScreenViewModelTest {
             // Disk-first home paints from Session Cache and does not revalidate directories.
             assertTrue(projectRepository.validatedDirectories.isEmpty())
             assertEquals("/two", viewModel.pendingSelectedFilterId.value)
+            assertEquals("\"two\" is already on home", viewModel.removalSnackbar.value?.text)
         }
 
     @Test

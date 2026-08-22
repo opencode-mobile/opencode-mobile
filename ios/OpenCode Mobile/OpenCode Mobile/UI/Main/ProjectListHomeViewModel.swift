@@ -345,6 +345,9 @@ final class ProjectListHomeViewModel {
             dismissAddProjectSheet()
             await runHomeLoad(skipProbe: true)
             pendingSelectedFilterId = worktree
+            removalSnackbar = OpenCodeSnackbarMessage(
+                text: "\"\(ProjectDomainAdapter.displayName(from: worktree))\" is already on home"
+            )
             return
         }
         updateNavigator { current in

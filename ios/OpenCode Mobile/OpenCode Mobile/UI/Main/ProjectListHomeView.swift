@@ -96,7 +96,9 @@ struct ProjectListHomeView: View {
             }
             .onChange(of: viewModel.pendingSelectedFilterId) { _, worktree in
                 if let worktree {
-                    selectedSessionFilterId = worktree
+                    if selectedSessionFilterId != SessionListFilterTab.allId {
+                        selectedSessionFilterId = worktree
+                    }
                     viewModel.consumePendingSelectedFilter()
                 }
             }

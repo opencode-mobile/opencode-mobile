@@ -841,7 +841,9 @@ private fun HomeProjectsContent(
         }
         LaunchedEffect(pendingSelectedFilterId) {
             pendingSelectedFilterId?.let { filterId ->
-                selectedFilterId = filterId
+                if (resolvedFilterId != SessionListFilterTab.ALL_ID) {
+                    selectedFilterId = filterId
+                }
                 onConsumePendingSelectedFilter()
             }
         }
