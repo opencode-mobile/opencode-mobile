@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.ModelSelectionProvider
@@ -62,6 +63,7 @@ internal fun SessionChatPickerSheet(
     modelOptions: List<ModelSelectionOption>,
     selectedModel: ModelSelectionOption?,
     selectedMode: String,
+    selectableAgents: List<SelectableAgent>,
     selectedVariantLabel: String,
     variantOptions: List<String>,
     onDismiss: () -> Unit,
@@ -173,16 +175,16 @@ internal fun SessionChatPickerSheet(
                     onSelectModel = onSelectModel,
                 )
             ComposerPickerKind.Mode ->
-                SessionChatViewModel.AvailableModes.forEach { mode ->
+                selectableAgents.forEach { agent ->
                     OpenCodeBottomSheetEntry(
-                        title = mode,
+                        title = agent.displayName,
                         endDecorator =
-                            if (mode == selectedMode) {
+                            if (agent.id.equals(selectedMode, ignoreCase = true)) {
                                 BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
                             } else {
                                 BottomSheetEntryDecorator.None
                             },
-                        onClick = { onSelectMode(mode) },
+                        onClick = { onSelectMode(agent.id) },
                     )
                 }
             ComposerPickerKind.Variant ->

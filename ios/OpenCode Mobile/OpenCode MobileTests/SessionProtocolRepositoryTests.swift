@@ -608,6 +608,33 @@ struct SessionProtocolRepositoryTests {
         #expect(queryValue(url, "location[directory]") == "/repo")
     }
 
+    @Test func v2ListSelectableAgentsMapsIdAndKeepsPrimary() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            {"data":[
+              {"id":"build","mode":"primary","hidden":false,"description":"Primary"},
+              {"id":"review","mode":"all","hidden":false,"description":"Reviews work"},
+              {"id":"title","mode":"primary","hidden":true,"description":"Hidden"},
+              {"id":"explore","mode":"subagent","hidden":false,"description":"Explorer"}
+            ]}
+            """#)
+        ])
+        let manager = makeManager(serverProtocol: .v2)
+        let repository = DefaultAgentRepository(
+            api: AgentsAPIClient(connectionProvider: { manager.connection }, urlSession: makeURLSession()),
+            adapter: AgentDomainAdapter(),
+            activeConnectionManager: manager
+        )
+
+        let agents = try await repository.listSelectableAgents(directory: "/repo")
+
+        #expect(agents.map(\.id) == ["build", "review"])
+        #expect(agents.map(\.displayName) == ["Build", "Review"])
+        let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
+        #expect(url.path.hasSuffix("/api/agent"))
+        #expect(queryValue(url, "location[directory]") == "/repo")
+    }
+
     @Test func v2ListModelOptionsJoinsProviderAndModelLists() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
             .json(#"{"data":[{"id":"anthropic","name":"Anthropic","disabled":false}]}"#),

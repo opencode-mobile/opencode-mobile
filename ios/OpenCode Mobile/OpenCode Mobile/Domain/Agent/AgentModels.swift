@@ -1,5 +1,32 @@
 import Foundation
 
+struct SelectableAgent: Equatable, Sendable, Identifiable {
+    let id: String
+    let displayName: String
+    let description: String?
+
+    init(id: String, displayName: String, description: String? = nil) {
+        self.id = id
+        self.displayName = displayName
+        self.description = description
+    }
+
+    static let defaultID = "build"
+
+    static let fallback: [SelectableAgent] = [
+        SelectableAgent(id: "build", displayName: "Build"),
+        SelectableAgent(id: "plan", displayName: "Plan"),
+    ]
+
+    static func displayName(for id: String) -> String {
+        let parts = id.split { $0 == "-" || $0 == "_" }
+        let titled = parts.map { part in
+            part.prefix(1).uppercased() + part.dropFirst()
+        }.joined(separator: " ")
+        return titled.isEmpty ? id : titled
+    }
+}
+
 struct MentionableAgent: Equatable, Sendable, Identifiable {
     var id: String { name }
 

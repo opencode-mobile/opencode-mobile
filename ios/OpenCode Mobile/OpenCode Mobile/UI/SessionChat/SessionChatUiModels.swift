@@ -89,6 +89,7 @@ struct SessionChatComposerState: Equatable {
     var selectedModel: ModelSelection?
     var modelOptions: [ModelSelectionOption]
     var selectedMode: String
+    var selectableAgents: [SelectableAgent] = SelectableAgent.fallback
     var selectedVariant: String?
     var modelNotice: String?
     var isModelSelectionReady = false
@@ -96,6 +97,11 @@ struct SessionChatComposerState: Equatable {
     var agentMentions: [AgentMention] = []
     var cursor: Int = 0
     var selectionRevision: Int = 0
+
+    var selectedModeLabel: String {
+        selectableAgents.first { $0.id.compare(selectedMode, options: .caseInsensitive) == .orderedSame }?.displayName
+            ?? SelectableAgent.displayName(for: selectedMode)
+    }
 
     var selectedModelLabel: String {
         isModelSelectionReady ? selectedModel?.modelLabel ?? "Model" : "Loading model…"
@@ -299,7 +305,7 @@ struct SessionChatUiState: Equatable {
                 text: "",
                 selectedModel: nil,
                 modelOptions: [],
-                selectedMode: SessionChatPickers.modes[0],
+                selectedMode: SelectableAgent.defaultID,
                 selectedVariant: nil,
                 modelNotice: nil
             )
@@ -427,7 +433,7 @@ struct SessionChatComposerRegionState: Equatable {
         text: "",
         selectedModel: nil,
         modelOptions: [],
-        selectedMode: SessionChatPickers.modes[0],
+        selectedMode: SelectableAgent.defaultID,
         selectedVariant: nil,
         modelNotice: nil
     )
@@ -575,7 +581,6 @@ enum SessionConnectionStatus: String, Equatable, Sendable {
 }
 
 enum SessionChatPickers {
-    static let modes = ["Build", "Plan"]
     static let modelFilterThreshold = 10
 }
 

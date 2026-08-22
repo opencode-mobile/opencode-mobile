@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.MentionableAgent
+import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
@@ -25,7 +26,8 @@ data class SessionChatComposerState(
     val attachments: List<Attachment> = emptyList(),
     val selectedModel: ModelSelection? = null,
     val modelOptions: List<ModelSelectionOption> = emptyList(),
-    val selectedMode: String = SessionChatComposer.AvailableModes.first(),
+    val selectedMode: String = SelectableAgent.DefaultId,
+    val selectableAgents: List<SelectableAgent> = SelectableAgent.Fallback,
     val selectedVariant: String? = null,
     val modelNotice: String? = null,
     val isModelSelectionReady: Boolean = false,
@@ -34,6 +36,11 @@ data class SessionChatComposerState(
     val cursor: Int = 0,
     val selectionRevision: Int = 0,
 ) {
+    val selectedModeLabel: String
+        get() =
+            selectableAgents.firstOrNull { it.id.equals(selectedMode, ignoreCase = true) }?.displayName
+                ?: SelectableAgent.displayNameFor(selectedMode)
+
     val selectedModelLabel: String
         get() = if (isModelSelectionReady) selectedModel?.modelLabel ?: "Model" else "Loading model…"
 

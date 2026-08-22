@@ -633,7 +633,7 @@ fun SessionChatScreen(
                                     attachments =
                                         uiState.composer.attachments.map(AttachmentPresentationMapper::from),
                                     selectedModelLabel = uiState.composer.selectedModelLabel,
-                                    selectedModeLabel = uiState.composer.selectedMode,
+                                    selectedModeLabel = uiState.composer.selectedModeLabel,
                                     selectedVariantLabel = uiState.composer.selectedVariantLabel,
                                     showVariant = uiState.composer.canSelectVariant,
                                     sendEnabled =
@@ -780,6 +780,7 @@ fun SessionChatScreen(
             modelOptions = uiState.composer.modelOptions,
             selectedModel = uiState.composer.selectedModel?.option,
             selectedMode = uiState.composer.selectedMode,
+            selectableAgents = uiState.composer.selectableAgents,
             selectedVariantLabel = uiState.composer.selectedVariantLabel,
             variantOptions = uiState.composer.variantOptions,
             onDismiss = {

@@ -44,6 +44,7 @@ Session rename from Session Chat overflow is a separate Feature Slice:
 - `GET /session/{id}/message`
 - `POST /session/{id}/prompt_async`
 - `GET /config/providers`
+- `GET /agent` (v2: `GET /api/agent`)
 
 ## Domain Objects
 
@@ -90,8 +91,13 @@ is a thin facade. Any change to the facade is an architectural decision — see
   prompt input, selector chips, then attachment and Send actions.
 - Selector chips show current values only, without visible labels. Tapping a chip
   opens the shared **`OpenCodeBottomSheet`** with one row per option for **model**,
-  **agent mode** (`Build` / `Plan`), and **Variant** (`Default` plus server
-  variant keys for the selected model).
+  **agent mode** (server-backed primary/`all` agents that are not hidden), and
+  **Variant** (`Default` plus server variant keys for the selected model).
+- Agent mode is server-backed by `GET /agent` (v2: `GET /api/agent`). Hidden
+  system primaries stay out of the picker. `@` mentions stay the non-primary
+  path and do not change the selected agent. The selected agent id is sent with
+  async prompts and slash commands. Default is `build` when present; if the
+  selected agent disappears, fall back to `build` or the first catalog entry.
 - Model and Variant are server-backed by `/config/providers`; selected model and
   non-default Variant are sent with async prompts.
 - The attachment `+` opens native Photos and Files/document entry points through
