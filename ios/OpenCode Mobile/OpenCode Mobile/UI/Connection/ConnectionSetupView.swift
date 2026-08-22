@@ -1,5 +1,6 @@
 import AVFoundation
 import SwiftUI
+import UIKit
 import VisionKit
 
 struct ConnectionSetupView: View {
@@ -18,7 +19,8 @@ struct ConnectionSetupView: View {
     @State private var loggedPasswordEdit = false
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        NavigationStack {
+            ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 OpenCodeTopBar(
                     title: viewModel.screenTitle,
@@ -33,8 +35,14 @@ struct ConnectionSetupView: View {
                     showDivider: true
                 )
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
+                GeometryReader { geo in
+                    ScrollView {
+                        ZStack(alignment: .topLeading) {
+                            Color.clear
+                                .frame(minWidth: geo.size.width, minHeight: geo.size.height)
+                                .contentShape(Rectangle())
+                                .onTapGesture(perform: dismissKeyboard)
+                            VStack(alignment: .leading, spacing: 12) {
                         OpenCodeServerAddressInput(
                             value: $viewModel.baseURL,
                             hint: "macbook.local:4096",
@@ -123,12 +131,16 @@ struct ConnectionSetupView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
                     .padding(.bottom, 16)
+                        }
+                    }
+                    .scrollDismissesKeyboard(.immediately)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .scrollDismissesKeyboard(.interactively)
 
-                VStack(spacing: 12) {
-                    pairingQREntry
+                VStack(spacing: 20) {
+                    if !isEditingFields {
+                        pairingQREntry
+                    }
                     OpenCodeButton(
                         variant: .fullWidthText(title: viewModel.primaryActionLabel),
                         enabled: viewModel.primaryEnabled
@@ -200,6 +212,14 @@ struct ConnectionSetupView: View {
                 onDismiss: { showPairingScanner = false }
             )
         }
+        .toolbar(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done", action: dismissKeyboard)
+            }
+        }
+        }
     }
 
     private var pairingQREntry: some View {
@@ -215,10 +235,28 @@ struct ConnectionSetupView: View {
             }
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
+            .padding(.vertical, 8)
         }
         .buttonStyle(.plain)
         .disabled(viewModel.isBusy)
         .accessibilityLabel("Running opencode2? Connect with a QR code")
+    }
+
+    private var isEditingFields: Bool {
+        nameFocused || urlFocused || usernameFocused || passwordFocused
+    }
+
+    private func dismissKeyboard() {
+        urlFocused = false
+        nameFocused = false
+        usernameFocused = false
+        passwordFocused = false
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
     }
 
     private func openPairingScanner() {

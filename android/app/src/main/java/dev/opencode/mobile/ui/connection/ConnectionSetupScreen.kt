@@ -8,9 +8,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -43,6 +46,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ConnectionSetupScreen(
     uiState: ConnectionSetupUiState,
@@ -154,12 +158,14 @@ fun ConnectionSetupScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp)
                         .padding(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                PairingQREntry(
-                    enabled = !uiState.isBusy,
-                    onClick = { openPairingScanner() },
-                )
+                if (!WindowInsets.isImeVisible) {
+                    PairingQREntry(
+                        enabled = !uiState.isBusy,
+                        onClick = { openPairingScanner() },
+                    )
+                }
                 OpenCodeButton(
                     variant = OpenCodeButtonVariant.FullWidthText(uiState.primaryActionLabel),
                     enabled = uiState.primaryEnabled,
@@ -232,7 +238,8 @@ private fun PairingQREntry(
                     enabled = enabled,
                     role = Role.Button,
                     onClick = onClick,
-                ),
+                )
+                .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
