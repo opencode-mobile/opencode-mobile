@@ -51,7 +51,7 @@ content-type behavior. Visual styling is not exposed for feature-level override.
   behavior. Hint maps to the field's placeholder string. Optional `isFocused`
   binding and `onSubmit` callback integrate with feature focus chains.
 - Android: Compose `BasicTextField` uses the same raised-surface chrome as iOS
-  (`textInput.minHeight` 48, `textInput.cornerRadius` 8,
+  (`textInput.minHeight` 48 as a floor, `textInput.cornerRadius` 8,
   `textInput.paddingHorizontal` 12). Hint maps to an in-field placeholder; no
   Material floating label is used. The control keeps a local `TextFieldValue` so
   caret/selection survive parent recomposition, and it does not set

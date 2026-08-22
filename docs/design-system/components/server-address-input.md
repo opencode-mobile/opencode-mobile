@@ -34,7 +34,7 @@ wants scheme selection and paste-friendly host entry.
 
 - Layout matches a phone-style prefix field: tappable scheme segment (`http` /
   `https` + disclosure), vertical divider, then a single-line host field.
-- Outer chrome (height, corner radius, fill, border, body typography, error
+- Outer chrome (min height, corner radius, fill, border, body typography, error
   caption) matches `OpenCodeTextInput` so both fields read as the same control
   family.
 - Scheme segment is full field height with a press/ripple indication over the

@@ -8,7 +8,9 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -130,7 +132,8 @@ fun OpenCodeServerAddressInput(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(TextInputMinHeight)
+                    .defaultMinSize(minHeight = TextInputMinHeight)
+                    .height(IntrinsicSize.Min)
                     .background(
                         color = openCodeColor("surface-raised-base"),
                         shape = fieldShape,
