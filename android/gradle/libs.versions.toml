@@ -21,11 +21,13 @@ hiltNavigationCompose = "1.2.0"
 ksp = "2.2.21-2.0.5"
 datastore = "1.1.7"
 securityCrypto = "1.1.0-alpha06"
+room = "2.7.2"
 ktlintGradle = "14.2.0"
 firebaseBom = "34.16.0"
 firebaseCrashlyticsPlugin = "3.0.7"
 googleServicesPlugin = "4.5.0"
-room = "2.7.2"
+camera = "1.4.2"
+mlkitBarcode = "17.3.0"
 paparazzi = "2.0.0-alpha05"
 
 [libraries]
@@ -70,6 +72,11 @@ androidx-security-crypto = { module = "androidx.security:security-crypto", versi
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camera" }
+androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camera" }
+androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camera" }
+androidx-camera-mlkit-vision = { module = "androidx.camera:camera-mlkit-vision", version.ref = "camera" }
+mlkit-barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkitBarcode" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
 firebase-analytics = { module = "com.google.firebase:firebase-analytics" }

@@ -1,4 +1,6 @@
+import AVFoundation
 import SwiftUI
+import VisionKit
 
 struct ConnectionSetupView: View {
     @Bindable var viewModel: ConnectionSetupViewModel
@@ -8,6 +10,7 @@ struct ConnectionSetupView: View {
     @State private var usernameFocused = false
     @State private var passwordFocused = false
     @State private var showRemoveConfirm = false
+    @State private var showPairingScanner = false
     /// Field-edit Analytics fires once per field so keystrokes are not events and
     /// no field value can leak into a parameter.
     @State private var loggedBaseURLEdit = false
@@ -124,13 +127,16 @@ struct ConnectionSetupView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .scrollDismissesKeyboard(.interactively)
 
-                OpenCodeButton(
-                    variant: .fullWidthText(title: viewModel.primaryActionLabel),
-                    enabled: viewModel.primaryEnabled
-                ) {
-                    Task {
-                        if await viewModel.submit() {
-                            onDismiss()
+                VStack(spacing: 12) {
+                    pairingQREntry
+                    OpenCodeButton(
+                        variant: .fullWidthText(title: viewModel.primaryActionLabel),
+                        enabled: viewModel.primaryEnabled
+                    ) {
+                        Task {
+                            if await viewModel.submit() {
+                                onDismiss()
+                            }
                         }
                     }
                 }
@@ -142,7 +148,7 @@ struct ConnectionSetupView: View {
                 message: viewModel.snackbar,
                 onDismissed: { viewModel.consumeSnackbar() }
             )
-            .padding(.bottom, 88)
+            .padding(.bottom, 128)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
@@ -185,6 +191,65 @@ struct ConnectionSetupView: View {
                 showRemoveConfirm = false
             }
         )
+        .fullScreenCover(isPresented: $showPairingScanner) {
+            PairingQRScannerView(
+                onScanned: { raw in
+                    showPairingScanner = false
+                    viewModel.applyPairingQR(raw)
+                },
+                onDismiss: { showPairingScanner = false }
+            )
+        }
+    }
+
+    private var pairingQREntry: some View {
+        Button(action: openPairingScanner) {
+            VStack(spacing: 3) {
+                Text("Running opencode2?")
+                    .font(OpenCodeTypography.bodySecondary)
+                    .foregroundStyle(OpenCodeColors.textBase)
+                Text("Connect with a QR code")
+                    .font(OpenCodeTypography.body)
+                    .underline()
+                    .foregroundStyle(OpenCodeColors.textStrong)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(viewModel.isBusy)
+        .accessibilityLabel("Running opencode2? Connect with a QR code")
+    }
+
+    private func openPairingScanner() {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.connectionSetup,
+            actionId: ProductAnalytics.Action.connectionOpenPairingQR
+        )
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            presentPairingScanner()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                Task { @MainActor in
+                    if granted {
+                        presentPairingScanner()
+                    } else {
+                        viewModel.pairingQRCameraDenied()
+                    }
+                }
+            }
+        default:
+            viewModel.pairingQRCameraDenied()
+        }
+    }
+
+    private func presentPairingScanner() {
+        if DataScannerViewController.isSupported, DataScannerViewController.isAvailable {
+            showPairingScanner = true
+        } else {
+            viewModel.pairingQRCameraUnavailable()
+        }
     }
 
     private var removeAction: [OpenCodeTopBarAction] {

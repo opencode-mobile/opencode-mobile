@@ -172,6 +172,52 @@ class ConnectionSetupViewModelTest {
         assertFalse(ConnectionSetupViewModel.hostIsBlank("http://10.0.0.1:4096/"))
     }
 
+    @Test
+    fun applyPairingQR_fillsHostAndExpandsCredentials() {
+        val viewModel = viewModel(probe = neverProbe())
+        viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+        viewModel.applyPairingQR(
+            """{"urls":["http://192.168.0.160:4096"],"username":"opencode","password":"secret"}""",
+        )
+        val state = viewModel.uiState.value
+        assertEquals("http://192.168.0.160:4096/", state.baseUrl)
+        assertEquals("opencode", state.username)
+        assertEquals("secret", state.password)
+        assertTrue(state.credentialsExpanded)
+        assertEquals(null, state.snackbar)
+    }
+
+    @Test
+    fun applyPairingQR_invalid_showsSnackbar() {
+        val viewModel = viewModel(probe = neverProbe())
+        viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+        viewModel.applyPairingQR("nope")
+        assertEquals("This isn't an OpenCode 2 pairing QR", viewModel.uiState.value.snackbar?.text)
+        assertEquals("", viewModel.uiState.value.baseUrl)
+    }
+
+    @Test
+    fun pairingQRCameraDenied_showsSnackbar() {
+        val viewModel = viewModel(probe = neverProbe())
+        viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+        viewModel.pairingQRCameraDenied()
+        assertEquals(
+            "Allow camera access to scan the pairing QR",
+            viewModel.uiState.value.snackbar?.text,
+        )
+    }
+
+    @Test
+    fun pairingQRCameraUnavailable_showsSnackbar() {
+        val viewModel = viewModel(probe = neverProbe())
+        viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+        viewModel.pairingQRCameraUnavailable()
+        assertEquals(
+            "Camera isn't available on this device",
+            viewModel.uiState.value.snackbar?.text,
+        )
+    }
+
     private fun neverProbe(): ConnectionProbing = ConnectionProbing { error("probe should not run") }
 
     private fun viewModel(

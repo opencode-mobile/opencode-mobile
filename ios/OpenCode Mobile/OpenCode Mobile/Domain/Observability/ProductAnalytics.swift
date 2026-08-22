@@ -39,6 +39,7 @@ enum ProductAnalytics {
         static let homeConnectionEmpty = "home_connection_empty"
         static let homeProbeFailed = "home_probe_failed"
         static let connectionSetup = "connection_setup"
+        static let pairingQRScanner = "pairing_qr_scanner"
         static let homeAddProject = "home_add_project"
         static let homeNewSessionProjectPicker = "home_new_session_project_picker"
         static let homeFilterProjectPicker = "home_filter_project_picker"
@@ -103,6 +104,8 @@ enum ProductAnalytics {
         static let connectionEditPassword = "connection_edit_password"
         static let connectionTest = "connection_test"
         static let connectionSave = "connection_save"
+        static let connectionOpenPairingQR = "connection_open_pairing_qr"
+        static let connectionPairingQRScan = "connection_pairing_qr_scan"
 
         static let addProjectDismiss = "add_project_dismiss"
         static let addProjectGoUp = "add_project_go_up"

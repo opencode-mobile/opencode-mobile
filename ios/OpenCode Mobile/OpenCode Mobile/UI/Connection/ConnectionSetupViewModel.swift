@@ -139,6 +139,54 @@ final class ConnectionSetupViewModel {
         snackbar = nil
     }
 
+    func applyPairingQR(_ raw: String) {
+        switch PairingQRPayload.parse(raw) {
+        case let .success(credentials):
+            baseURL = credentials.baseURL
+            username = credentials.username
+            password = credentials.password
+            credentialsExpanded = true
+            snackbar = nil
+            onFieldChanged()
+            logConnectionAction(
+                ProductAnalytics.Action.connectionPairingQRScan,
+                outcome: ProductAnalytics.Outcome.success
+            )
+        case .failure(.invalidPayload):
+            snackbar = OpenCodeSnackbarMessage(
+                text: "This isn't an OpenCode 2 pairing QR",
+                variant: .error
+            )
+            logConnectionAction(
+                ProductAnalytics.Action.connectionPairingQRScan,
+                outcome: ProductAnalytics.Outcome.failure
+            )
+        case .failure(.noReachableURL):
+            snackbar = OpenCodeSnackbarMessage(
+                text: "That QR only has a localhost address",
+                variant: .error
+            )
+            logConnectionAction(
+                ProductAnalytics.Action.connectionPairingQRScan,
+                outcome: ProductAnalytics.Outcome.failure
+            )
+        }
+    }
+
+    func pairingQRCameraDenied() {
+        snackbar = OpenCodeSnackbarMessage(
+            text: "Allow camera access to scan the pairing QR",
+            variant: .error
+        )
+    }
+
+    func pairingQRCameraUnavailable() {
+        snackbar = OpenCodeSnackbarMessage(
+            text: "Camera isn't available on this device",
+            variant: .error
+        )
+    }
+
     /// Primary CTA: rename-only Save skips probe; otherwise probe then save.
     @discardableResult
     func submit() async -> Bool {

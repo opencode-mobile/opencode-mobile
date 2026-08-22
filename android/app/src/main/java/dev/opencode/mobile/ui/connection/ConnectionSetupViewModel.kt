@@ -10,6 +10,9 @@ import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.DuplicateConnectionProfileException
+import dev.opencode.mobile.domain.connection.PairingQRError
+import dev.opencode.mobile.domain.connection.PairingQRParseResult
+import dev.opencode.mobile.domain.connection.PairingQRPayload
 import dev.opencode.mobile.domain.connection.ProbeStatus
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.toProbeStatus
@@ -170,6 +173,48 @@ class ConnectionSetupViewModel
             if (_uiState.value.snackbar != null) {
                 _uiState.value = _uiState.value.copy(snackbar = null)
             }
+        }
+
+        fun applyPairingQR(raw: String) {
+            when (val result = PairingQRPayload.parse(raw)) {
+                is PairingQRParseResult.Ready -> {
+                    val credentials = result.credentials
+                    logAction(
+                        ProductAnalytics.Action.CONNECTION_PAIRING_QR_SCAN,
+                        mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.SUCCESS),
+                    )
+                    updateFields(
+                        baseUrl = credentials.baseUrl,
+                        username = credentials.username,
+                        password = credentials.password,
+                    )
+                    _uiState.value =
+                        _uiState.value.copy(
+                            credentialsExpanded = true,
+                            snackbar = null,
+                        )
+                }
+                is PairingQRParseResult.Failed -> {
+                    logAction(
+                        ProductAnalytics.Action.CONNECTION_PAIRING_QR_SCAN,
+                        mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.FAILURE),
+                    )
+                    val text =
+                        when (result.error) {
+                            PairingQRError.InvalidPayload -> "This isn't an OpenCode 2 pairing QR"
+                            PairingQRError.NoReachableUrl -> "That QR only has a localhost address"
+                        }
+                    showError(text)
+                }
+            }
+        }
+
+        fun pairingQRCameraDenied() {
+            showError("Allow camera access to scan the pairing QR")
+        }
+
+        fun pairingQRCameraUnavailable() {
+            showError("Camera isn't available on this device")
         }
 
         private fun reportFieldEdit(actionId: String) {

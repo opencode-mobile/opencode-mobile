@@ -160,6 +160,67 @@ struct ConnectionSetupViewModelTests {
         #expect(ConnectionSetupViewModel.hostIsBlank("https://"))
         #expect(ConnectionSetupViewModel.hostIsBlank("http://10.0.0.1:4096/") == false)
     }
+
+    @Test func applyPairingQR_fillsHostAndExpandsCredentials() {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            mode: .add
+        )
+        viewModel.applyPairingQR(
+            """
+            {"urls":["http://192.168.0.160:4096"],"username":"opencode","password":"secret"}
+            """
+        )
+        #expect(viewModel.baseURL == "http://192.168.0.160:4096/")
+        #expect(viewModel.username == "opencode")
+        #expect(viewModel.password == "secret")
+        #expect(viewModel.credentialsExpanded == true)
+        #expect(viewModel.snackbar == nil)
+    }
+
+    @Test func applyPairingQR_invalid_showsSnackbar() {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            mode: .add
+        )
+        viewModel.applyPairingQR("nope")
+        #expect(viewModel.snackbar?.text == "This isn't an OpenCode 2 pairing QR")
+        #expect(viewModel.baseURL.isEmpty)
+    }
+
+    @Test func pairingQRCameraDenied_showsSnackbar() {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            mode: .add
+        )
+        viewModel.pairingQRCameraDenied()
+        #expect(viewModel.snackbar?.text == "Allow camera access to scan the pairing QR")
+    }
+
+    @Test func pairingQRCameraUnavailable_showsSnackbar() {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            mode: .add
+        )
+        viewModel.pairingQRCameraUnavailable()
+        #expect(viewModel.snackbar?.text == "Camera isn't available on this device")
+    }
 }
 
 private struct FakeConnectionProbeService: ConnectionProbing {
