@@ -4,6 +4,7 @@ import Observation
 @Observable
 final class HomeDisplayPreferences {
     static let shared = HomeDisplayPreferences()
+    static let defaultSessionListProjectPickerEnabled = true
 
     private enum StorageKeys {
         static let showSessionListOnHome = "showSessionListOnHome"
@@ -19,6 +20,7 @@ final class HomeDisplayPreferences {
     private(set) var hideUserDirectoryPrefix: Bool
     private(set) var recentWindowHours: Int
     /// When true, home Session List uses the project picker instead of chips.
+    /// Missing preference defaults on; an explicit Settings off stays chips.
     private(set) var sessionListProjectPickerEnabled: Bool
 
     init(defaults: UserDefaults = .standard) {
@@ -35,7 +37,13 @@ final class HomeDisplayPreferences {
                 defaults.integer(forKey: StorageKeys.recentWindowHours)
             )
         }
-        sessionListProjectPickerEnabled = defaults.bool(forKey: StorageKeys.sessionListProjectPickerEnabled)
+        if defaults.object(forKey: StorageKeys.sessionListProjectPickerEnabled) == nil {
+            sessionListProjectPickerEnabled = Self.defaultSessionListProjectPickerEnabled
+        } else {
+            sessionListProjectPickerEnabled = defaults.bool(
+                forKey: StorageKeys.sessionListProjectPickerEnabled
+            )
+        }
     }
 
     func setHideUserDirectoryPrefix(_ value: Bool) {
@@ -78,6 +86,6 @@ final class HomeDisplayPreferences {
         defaults.removeObject(forKey: StorageKeys.sessionListProjectPickerEnabled)
         hideUserDirectoryPrefix = true
         recentWindowHours = HomeSessionLadder.defaultWindowHours
-        sessionListProjectPickerEnabled = false
+        sessionListProjectPickerEnabled = Self.defaultSessionListProjectPickerEnabled
     }
 }
