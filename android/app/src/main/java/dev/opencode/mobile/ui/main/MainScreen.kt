@@ -102,6 +102,7 @@ fun MainScreen(
     val removalSnackbar by viewModel.removalSnackbar.collectAsStateWithLifecycle()
     val sessionActions by viewModel.sessionActions.collectAsStateWithLifecycle()
     val revealNewestToken by viewModel.revealNewestToken.collectAsStateWithLifecycle()
+    val pendingSelectedFilterId by viewModel.pendingSelectedFilterId.collectAsStateWithLifecycle()
     val serversChrome by viewModel.serversChrome.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
         viewModel.onHomeRevealed()
@@ -116,6 +117,8 @@ fun MainScreen(
         removalSnackbar = removalSnackbar,
         sessionActions = sessionActions,
         revealNewestToken = revealNewestToken,
+        pendingSelectedFilterId = pendingSelectedFilterId,
+        onConsumePendingSelectedFilter = viewModel::consumePendingSelectedFilter,
         serversChrome = serversChrome,
         sessionActionsCallbacks =
             HomeSessionActionsCallbacks(
@@ -204,6 +207,8 @@ internal fun MainScreen(
     sessionActions: HomeSessionActionsUiState = HomeSessionActionsUiState(),
     sessionActionsCallbacks: HomeSessionActionsCallbacks = HomeSessionActionsCallbacks(),
     revealNewestToken: Int = 0,
+    pendingSelectedFilterId: String? = null,
+    onConsumePendingSelectedFilter: () -> Unit = {},
     serversChrome: HomeServersChrome = HomeServersChrome(),
     onTitleClick: () -> Unit = {},
     onDismissServersSheet: () -> Unit = {},
@@ -365,6 +370,8 @@ internal fun MainScreen(
                         removalSnackbar = removalSnackbar,
                         onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
                         revealNewestToken = revealNewestToken,
+                        pendingSelectedFilterId = pendingSelectedFilterId,
+                        onConsumePendingSelectedFilter = onConsumePendingSelectedFilter,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -802,6 +809,8 @@ private fun HomeProjectsContent(
     removalSnackbar: OpenCodeSnackbarMessage?,
     onSessionLongPress: (SessionListSession) -> Unit,
     revealNewestToken: Int = 0,
+    pendingSelectedFilterId: String? = null,
+    onConsumePendingSelectedFilter: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     PullToRefreshBox(
@@ -828,6 +837,14 @@ private fun HomeProjectsContent(
         LaunchedEffect(resolvedFilterId) {
             if (selectedFilterId != resolvedFilterId) {
                 selectedFilterId = resolvedFilterId
+            }
+        }
+        LaunchedEffect(pendingSelectedFilterId) {
+            pendingSelectedFilterId?.let { filterId ->
+                if (resolvedFilterId != SessionListFilterTab.ALL_ID) {
+                    selectedFilterId = filterId
+                }
+                onConsumePendingSelectedFilter()
             }
         }
         LaunchedEffect(removalSnackbar) {

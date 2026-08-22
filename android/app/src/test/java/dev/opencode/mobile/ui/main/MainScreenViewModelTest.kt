@@ -298,6 +298,7 @@ class MainScreenViewModelTest {
             assertEquals(listOf("/one", "/home"), store.added(serverUrl))
             assertTrue(projectRepository.validatedDirectories.contains("/home"))
             assertTrue(!loaded.showAddProjectSheet)
+            assertEquals("/home", viewModel.pendingSelectedFilterId.value)
         }
 
     @Test
@@ -320,6 +321,8 @@ class MainScreenViewModelTest {
             // Already-added path skips GET /project/current validation before reload.
             // Disk-first home paints from Session Cache and does not revalidate directories.
             assertTrue(projectRepository.validatedDirectories.isEmpty())
+            assertEquals("/two", viewModel.pendingSelectedFilterId.value)
+            assertEquals("\"two\" is already on home", viewModel.removalSnackbar.value?.text)
         }
 
     @Test
@@ -418,6 +421,7 @@ class MainScreenViewModelTest {
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
             assertTrue(loaded.showAddProjectSheet)
             assertEquals("not a project", loaded.addProjectNavigator?.errorMessage)
+            assertNull(viewModel.pendingSelectedFilterId.value)
         }
 
     @Test

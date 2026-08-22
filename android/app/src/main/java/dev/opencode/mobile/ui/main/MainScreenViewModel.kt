@@ -94,6 +94,8 @@ class MainScreenViewModel
         val sessionActions: StateFlow<HomeSessionActionsUiState> = _sessionActions.asStateFlow()
         private val _revealNewestToken = MutableStateFlow(0)
         val revealNewestToken: StateFlow<Int> = _revealNewestToken.asStateFlow()
+        private val _pendingSelectedFilterId = MutableStateFlow<String?>(null)
+        val pendingSelectedFilterId: StateFlow<String?> = _pendingSelectedFilterId.asStateFlow()
         private val _serversChrome = MutableStateFlow(HomeServersChrome())
         val serversChrome: StateFlow<HomeServersChrome> = _serversChrome.asStateFlow()
         private var lastHomeHiddenAtEpochMs: Long? = HomeDisplayPreferences.lastHomeHiddenAtEpochMs()
@@ -290,6 +292,12 @@ class MainScreenViewModel
                 if (worktree in added) {
                     dismissAddProjectSheet()
                     runHomeLoad(skipProbe = true)
+                    _pendingSelectedFilterId.value = worktree
+                    _removalSnackbar.value =
+                        OpenCodeSnackbarMessage(
+                            text =
+                                "\"${ProjectDomainAdapter.displayNameFromWorktree(worktree)}\" is already on home",
+                        )
                     return@launch
                 }
                 updateAddProjectNavigator { it.copy(isValidating = true, errorMessage = null) }
@@ -301,6 +309,7 @@ class MainScreenViewModel
                         connectionProfileStore.addWorktree(serverBaseUrl, worktree)
                         dismissAddProjectSheet()
                         runHomeLoad(skipProbe = true)
+                        _pendingSelectedFilterId.value = worktree
                     }.onFailure { error ->
                         updateAddProjectNavigator {
                             it.copy(
@@ -344,6 +353,10 @@ class MainScreenViewModel
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) state.copy(pendingOpenSession = null) else state
             }
+        }
+
+        fun consumePendingSelectedFilter() {
+            _pendingSelectedFilterId.value = null
         }
 
         fun markHomeHidden(nowEpochMs: Long = System.currentTimeMillis()) {

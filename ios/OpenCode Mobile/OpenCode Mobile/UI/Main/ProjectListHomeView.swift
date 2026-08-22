@@ -94,6 +94,14 @@ struct ProjectListHomeView: View {
                     viewModel.consumePendingSessionOpen()
                 }
             }
+            .onChange(of: viewModel.pendingSelectedFilterId) { _, worktree in
+                if let worktree {
+                    if selectedSessionFilterId != SessionListFilterTab.allId {
+                        selectedSessionFilterId = worktree
+                    }
+                    viewModel.consumePendingSelectedFilter()
+                }
+            }
             .onChange(of: isHomeVisible) { _, visible in
                 if visible {
                     viewModel.onHomeRevealed()
