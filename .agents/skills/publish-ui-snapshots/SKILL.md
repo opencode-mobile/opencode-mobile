@@ -21,7 +21,7 @@ Trigger phrase (verbatim):
 
 1. Identify the **subject** (default: assistant message), platforms (both unless named), frames (`isolated` + `in-session`), appearance (light; add dark when cheap).
 2. Reuse committed mocks/hosts under `SnapshotEvidence/` (iOS) and `ui/snapshot/` (Android). If the subject has no mock, add a small committed mock or stop and name the gap. Never screenshot a live server.
-3. Write throwaway tests (names/paths below). Do not edit `project.pbxproj`. Skip writing Android tests when no Layoutlib generate task exists.
+3. Write throwaway tests (names/paths below). Do not edit `project.pbxproj`.
 4. Generate images — do not verify goldens, do not run UITests, do not run `verifyPaparazziDebug`.
 5. Copy PNGs into `.snapshot-evidence/out/` using the filename convention, then run `scripts/write-report.sh`.
 6. Load `~/.agents/skills/publish-artifact/SKILL.md` and publish `.snapshot-evidence/out/` as a **sketch** (`--type plan`). Paste the URLs.
@@ -34,7 +34,8 @@ This step is complete when isolated and in-session PNGs exist for every requeste
 | Kind | Path |
 | --- | --- |
 | iOS throwaway tests | `ios/OpenCode Mobile/OpenCode MobileTests/GeneratedSnapshotEvidence/*SnapshotEvidence.swift` |
-| Android throwaway tests | `android/app/src/test/java/dev/opencode/mobile/ui/snapshot/GeneratedSnapshotEvidence/*SnapshotEvidence.kt` |
+| Android throwaway tests | `android/screenshot/src/test/java/dev/opencode/mobile/ui/snapshot/GeneratedSnapshotEvidence/*SnapshotEvidence.kt` |
+| Android Paparazzi goldens | `android/screenshot/src/test/snapshots/images/` |
 | Output | `.snapshot-evidence/out/` |
 | iOS helper | `OpenCode MobileTests/SnapshotEvidenceRenderer.swift` |
 | Hosts/mocks | iOS `OpenCode Mobile/SnapshotEvidence/`, Android `ui/snapshot/` |
@@ -60,7 +61,22 @@ xcodebuild test \
 
 If the simulator name is wrong, use `.github/scripts/select-ios-simulator.sh` / `xcrun simctl list`. Skip iOS on Linux.
 
-Android: skip generate unless `./gradlew :app:tasks` lists `recordPaparazziDebug` or `updateDebugScreenshotTest`. Those plugins are **not** applied on `:app` today (Paparazzi is not applied on `:app` today). Name the gap in the reply and still publish iOS shots. If a generate task exists later, copy PNGs into `.snapshot-evidence/out/` and rename to the filename convention. Never add verify/validate screenshot tasks to Checks.
+Android (from `android/`, after writing the throwaway test):
+
+```bash
+OUT="$REPO/.snapshot-evidence/out"
+mkdir -p "$OUT"
+./gradlew :screenshot:recordPaparazziDebug \
+  --tests 'dev.opencode.mobile.ui.snapshot.GeneratedSnapshotEvidence.*'
+SNAP_DIR="$REPO/android/screenshot/src/test/snapshots/images"
+for png in "$SNAP_DIR"/*.png; do
+  name="$(basename "$png" | sed -n 's/.*_\(android-[^.]*\)\.png$/\1/p')"
+  [ -n "$name" ] || continue
+  cp "$png" "$OUT/${name}.png"
+done
+```
+
+Paparazzi lives on `:screenshot`, not `:app`. Applying it to `:app` breaks AGP 9 + Hilt artifact transforms. Paparazzi 2 needs a Java 21 Gradle JVM, so `:screenshot` is left out of the default project graph on JDK 17. Never add `verifyPaparazzi*` or `:screenshot:testDebugUnitTest` to Android Checks.
 
 Then:
 
@@ -72,7 +88,7 @@ bash "$REPO/.agents/skills/publish-ui-snapshots/scripts/write-report.sh" \
 
 ## Throwaway test shape
 
-See [reference.md](reference.md) for copy-paste iOS and Android templates (assistant message). Isolated renders `OpenCodeAssistantMessage` only. In-session renders `SessionChatSnapshotHost` with `SnapshotEvidenceMocks.conversation`.
+See [reference.md](reference.md) for copy-paste iOS and Android templates (assistant message). Isolated renders `OpenCodeTextInput` / `OpenCodeAssistantMessage` as available on `:screenshot`. In-session renders the subject in screen chrome (`OpenCodeTopBar` + fields, or `SessionChatSnapshotHost` when that host compiles on `:screenshot`).
 
 ## Report
 

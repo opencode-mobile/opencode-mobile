@@ -8,7 +8,9 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -45,11 +47,12 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
-/** Matches Material 3 single-line `OutlinedTextField` used by `OpenCodeTextInput`. */
-private val TextInputMinHeight = 56.dp
-private val TextInputCornerRadius = 8.dp
+private val TextInputMinHeight = OpenCodeTextInputMinHeight
+private val TextInputCornerRadius = OpenCodeTextInputCornerRadius
+
 /** `[16 [http 4 ↓] 8] 8 host 16` */
 private val FieldStartPadding = 16.dp
 private val FieldEndPadding = 16.dp
@@ -129,9 +132,10 @@ fun OpenCodeServerAddressInput(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(TextInputMinHeight)
+                    .defaultMinSize(minHeight = TextInputMinHeight)
+                    .height(IntrinsicSize.Min)
                     .background(
-                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        color = openCodeColor("surface-raised-base"),
                         shape = fieldShape,
                     ).border(
                         width = borderWidth,

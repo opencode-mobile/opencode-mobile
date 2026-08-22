@@ -44,17 +44,20 @@ struct AssistantMessageSnapshotEvidence {
 
 For dark, duplicate with `appearance: .dark` and names `ios-isolated-dark` / `ios-in-session-dark`.
 
-## Android — assistant message
+## Android — text input
 
-Not wired on `:app` yet (no Paparazzi / Compose screenshot plugin). Keep this
-template for a follow-up; do not write it unless `recordPaparazziDebug` exists.
+`:screenshot` compiles theme, icons, and a small set of field-chrome components (see
+`android/screenshot/src/main/java/.../ui/components/` symlinks). Add a symlink
+there when a throwaway test needs another Hilt-free component.
 
-`android/app/src/test/java/dev/opencode/mobile/ui/snapshot/GeneratedSnapshotEvidence/AssistantMessageSnapshotEvidence.kt`
+`android/screenshot/src/test/java/dev/opencode/mobile/ui/snapshot/GeneratedSnapshotEvidence/TextInputSnapshotEvidence.kt`
 
 ```kotlin
 package dev.opencode.mobile.ui.snapshot.GeneratedSnapshotEvidence
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -62,55 +65,80 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
+import com.android.resources.NightMode
 import dev.opencode.mobile.theme.OpenCodeTheme
-import dev.opencode.mobile.ui.components.OpenCodeAssistantMessage
-import dev.opencode.mobile.ui.snapshot.SessionChatSnapshotHost
-import dev.opencode.mobile.ui.snapshot.SnapshotEvidenceMocks
+import dev.opencode.mobile.ui.components.OpenCodeTextInput
+import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
 import org.junit.Rule
 import org.junit.Test
 
-class AssistantMessageSnapshotEvidence {
+class TextInputSnapshotEvidence {
     @get:Rule
-    val paparazzi = Paparazzi(
-        deviceConfig = DeviceConfig.PIXEL_5,
-        theme = "android:Theme.Material.Light.NoActionBar",
-        showSystemUi = false,
-    )
+    val paparazzi =
+        Paparazzi(
+            deviceConfig = DeviceConfig.PIXEL_5,
+            theme = "android:Theme.Material.Light.NoActionBar",
+            showSystemUi = false,
+        )
 
     @Test
     fun isolatedLight() {
         paparazzi.snapshot("android-isolated-light") {
             OpenCodeTheme(darkTheme = false) {
-                OpenCodeAssistantMessage(
-                    text = SnapshotEvidenceMocks.assistantReply.text,
+                Column(
                     modifier =
                         Modifier
-                            .fillMaxWidth()
+                            .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background)
-                            .padding(16.dp),
-                )
+                            .padding(20.dp),
+                ) {
+                    OpenCodeTextInput(
+                        value = "",
+                        onValueChange = {},
+                        hint = "Server URL",
+                        kind = OpenCodeTextInputKind.Url,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
     }
 
     @Test
-    fun inSessionLight() {
-        paparazzi.snapshot("android-in-session-light") {
-            OpenCodeTheme(darkTheme = false) {
-                SessionChatSnapshotHost(
-                    sessionTitle = SnapshotEvidenceMocks.SESSION_TITLE,
-                    messages = SnapshotEvidenceMocks.conversation,
-                    composerState = SnapshotEvidenceMocks.idleComposer,
-                )
+    fun isolatedDark() {
+        paparazzi.unsafeUpdateConfig(
+            deviceConfig = DeviceConfig.PIXEL_5.copy(nightMode = NightMode.NIGHT),
+        )
+        paparazzi.snapshot("android-isolated-dark") {
+            OpenCodeTheme(darkTheme = true) {
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
+                            .padding(20.dp),
+                ) {
+                    OpenCodeTextInput(
+                        value = "",
+                        onValueChange = {},
+                        hint = "Server URL",
+                        kind = OpenCodeTextInputKind.Url,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
     }
 }
 ```
 
-Rename copied PNGs to `android-isolated-light.png` and `android-in-session-light.png`.
-For dark, copy `DeviceConfig.PIXEL_5` with `nightMode = NightMode.NIGHT` and wrap with `OpenCodeTheme(darkTheme = true)`.
+Copy recorded files whose names end in `_android-isolated-light.png` (etc.) to
+`.snapshot-evidence/out/android-isolated-light.png`. Never run
+`verifyPaparazziDebug`.
 
 ## Other subjects
 
-Add committed mocks next to `SnapshotEvidenceMocks` (same copy on both platforms). Isolated view must be the subject chrome; in-session must include that chrome in `SessionChatSnapshotHost.messages`.
+Add committed mocks next to `SnapshotEvidenceMocks` (same copy on both platforms)
+when the subject lives in Session Chat. Isolated view must be the subject chrome.
+On Android, only Hilt-free components that `:screenshot` compiles are available
+until a new symlink is added.

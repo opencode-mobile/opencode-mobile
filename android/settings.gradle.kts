@@ -34,3 +34,14 @@ rootProject.name = "OpenCode Mobile"
 include(":app")
 include(":markdown-core")
 project(":markdown-core").projectDir = file("../shared/markdown-core")
+
+val includeScreenshot =
+    JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21) ||
+        startParameter.projectProperties["includeScreenshot"] == "true" ||
+        startParameter.taskNames.any { name ->
+            val n = name.lowercase()
+            n.contains("paparazzi") || n.contains(":screenshot")
+        }
+if (includeScreenshot) {
+    include(":screenshot")
+}

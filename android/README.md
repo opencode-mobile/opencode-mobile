@@ -21,3 +21,9 @@ When CI is added for Android, include `ktlintCheck` in the job.
 ./gradlew :app:assembleDebug
 ./gradlew :app:testDebugUnitTest
 ```
+
+Throwaway UI snapshot evidence uses Paparazzi on `:screenshot` (Java 21 Gradle JVM), not `:app`. The module is included only on Java 21, or when you request a `:screenshot` / Paparazzi task (`-PincludeScreenshot=true` forces it):
+
+```bash
+./gradlew :screenshot:recordPaparazziDebug
+```
