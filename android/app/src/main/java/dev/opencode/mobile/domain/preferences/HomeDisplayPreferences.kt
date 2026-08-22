@@ -14,6 +14,7 @@ object HomeDisplayPreferences {
     private const val KEY_RECENT_WINDOW_HOURS = "recent_window_hours"
     private const val KEY_LAST_HOME_HIDDEN_AT_EPOCH_MS = "last_home_hidden_at_epoch_ms"
     private const val KEY_SESSION_LIST_PROJECT_PICKER_ENABLED = "session_list_project_picker_enabled"
+    const val DEFAULT_SESSION_LIST_PROJECT_PICKER_ENABLED = true
 
     /** When true, replace remote `/Users/…` or `/home/…` with `~` in path labels. */
     var hideUserDirectoryPrefix: Boolean by mutableStateOf(true)
@@ -22,8 +23,9 @@ object HomeDisplayPreferences {
     var recentWindowHours: Int by mutableIntStateOf(HomeSessionLadder.DEFAULT_WINDOW_HOURS)
         private set
 
-    /** When true, home Session List uses the project picker instead of chips. */
-    var sessionListProjectPickerEnabled: Boolean by mutableStateOf(false)
+    /** When true, home Session List uses the project picker instead of chips.
+     * Missing preference defaults on; an explicit Settings off stays chips. */
+    var sessionListProjectPickerEnabled: Boolean by mutableStateOf(DEFAULT_SESSION_LIST_PROJECT_PICKER_ENABLED)
         private set
 
     private var appContext: Context? = null
@@ -41,7 +43,15 @@ object HomeDisplayPreferences {
             HomeSessionLadder.sanitizeWindowHours(
                 prefs.getInt(KEY_RECENT_WINDOW_HOURS, HomeSessionLadder.DEFAULT_WINDOW_HOURS),
             )
-        sessionListProjectPickerEnabled = prefs.getBoolean(KEY_SESSION_LIST_PROJECT_PICKER_ENABLED, false)
+        sessionListProjectPickerEnabled =
+            if (prefs.contains(KEY_SESSION_LIST_PROJECT_PICKER_ENABLED)) {
+                prefs.getBoolean(
+                    KEY_SESSION_LIST_PROJECT_PICKER_ENABLED,
+                    DEFAULT_SESSION_LIST_PROJECT_PICKER_ENABLED,
+                )
+            } else {
+                DEFAULT_SESSION_LIST_PROJECT_PICKER_ENABLED
+            }
     }
 
     fun updateHideUserDirectoryPrefix(value: Boolean) {
@@ -87,7 +97,7 @@ object HomeDisplayPreferences {
             ?.apply()
         hideUserDirectoryPrefix = true
         recentWindowHours = HomeSessionLadder.DEFAULT_WINDOW_HOURS
-        sessionListProjectPickerEnabled = false
+        sessionListProjectPickerEnabled = DEFAULT_SESSION_LIST_PROJECT_PICKER_ENABLED
     }
 
     private fun prefs() = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
