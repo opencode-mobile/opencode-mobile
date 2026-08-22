@@ -1,6 +1,7 @@
 import Foundation
 
 protocol AgentRepository: Sendable {
+    func listSelectableAgents(directory: String?) async throws -> [SelectableAgent]
     func listMentionableAgents(directory: String?) async throws -> [MentionableAgent]
 }
 
@@ -17,6 +18,17 @@ struct DefaultAgentRepository: AgentRepository, Sendable {
         self.api = api
         self.adapter = adapter
         self.activeConnectionManager = activeConnectionManager
+    }
+
+    func listSelectableAgents(directory: String?) async throws -> [SelectableAgent] {
+        do {
+            if await activeConnectionManager?.currentProtocolOrProbe() == .v2 {
+                return try adapter.toSelectableAgents(await api.listAgentsV2(directory: directory))
+            }
+            return try adapter.toSelectableAgents(await api.listAgents(directory: directory))
+        } catch {
+            throw adapter.mapError(error)
+        }
     }
 
     func listMentionableAgents(directory: String?) async throws -> [MentionableAgent] {

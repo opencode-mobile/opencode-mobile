@@ -32,6 +32,8 @@ final class SessionChatComposer {
     private var attachmentRevisions: [String: Int] = [:]
     private var serverCommandsTask: Task<Void, Never>?
     private var mentionableAgentsTask: Task<Void, Never>?
+    private var selectableAgentsTask: Task<Void, Never>?
+    private var loadedSelectableAgents = false
 
     init(
         sessionID: String,
@@ -82,6 +84,7 @@ final class SessionChatComposer {
         persistDraft(sessionID: previousSessionID, draft: currentDraft())
         self.sessionID = sessionID
         loadedCatalog = nil
+        loadedSelectableAgents = false
         cachedSelection = nil
         newSessionPreference = nil
         initialSelectionState = .loadingCache
@@ -98,15 +101,18 @@ final class SessionChatComposer {
         }
         loadServerCommands()
         loadMentionableAgents()
+        loadSelectableAgents()
     }
 
     func startCatalogLoads() {
         loadServerCommands()
         loadMentionableAgents()
+        loadSelectableAgents()
     }
 
     func reset() {
         loadedCatalog = nil
+        loadedSelectableAgents = false
         cachedSelection = nil
         newSessionPreference = nil
         initialSelectionState = .loadingCache
@@ -151,6 +157,24 @@ final class SessionChatComposer {
                 // Keep any previously loaded catalog on transient refresh failures.
                 refreshComposerSuggestions(for: state.composer.text, cursor: state.composer.cursor)
                 notifyChange()
+            }
+        }
+    }
+
+    func loadSelectableAgents(force: Bool = false) {
+        if !force, loadedSelectableAgents { return }
+        selectableAgentsTask?.cancel()
+        selectableAgentsTask = Task {
+            do {
+                let agents = try await agentRepository.listSelectableAgents(directory: worktree)
+                guard !Task.isCancelled else { return }
+                loadedSelectableAgents = true
+                applySelectableAgents(agents)
+            } catch {
+                guard !Task.isCancelled else { return }
+                OpenCodeLog.sessionChat.warning(
+                    "selectable agent catalog failed error=\(error.localizedDescription, privacy: .public)"
+                )
             }
         }
     }
@@ -481,8 +505,10 @@ final class SessionChatComposer {
     }
 
     func selectMode(_ mode: String) {
-        guard SessionChatPickers.modes.contains(mode) else { return }
-        updateComposer { $0.selectedMode = mode }
+        guard let match = state.composer.selectableAgents.first(where: {
+            $0.id.compare(mode, options: .caseInsensitive) == .orderedSame
+        }) else { return }
+        updateComposer { $0.selectedMode = match.id }
     }
 
     func selectVariant(_ variant: String) {
@@ -567,7 +593,7 @@ final class SessionChatComposer {
             role: .user,
             text: displayText,
             metadataLabel: metadataLabel(
-                mode: composer.selectedMode,
+                mode: composer.selectedModeLabel,
                 model: composer.selectedModel?.modelLabel,
                 variant: composer.selectedVariant
             ),
@@ -613,7 +639,7 @@ final class SessionChatComposer {
                             modelID: selectedModel.option.modelID
                         ),
                         variant: composer.selectedVariant,
-                        mode: agentMode(mode: composer.selectedMode)
+                        mode: composer.selectedMode
                     ),
                     directory: worktree
                 )
@@ -628,7 +654,7 @@ final class SessionChatComposer {
                             modelID: selectedModel.option.modelID
                         ),
                         variant: composer.selectedVariant,
-                        mode: agentMode(mode: composer.selectedMode),
+                        mode: composer.selectedMode,
                         agentMentions: mentionsForSend
                     ),
                     directory: worktree
@@ -864,11 +890,22 @@ final class SessionChatComposer {
         [mode, model, variant, formatSentTime(Date())].compactMap { $0 }.joined(separator: " · ")
     }
 
-    private func agentMode(mode: String) -> String {
-        switch mode {
-        case "Plan": return "plan"
-        default: return "build"
+    private func applySelectableAgents(_ agents: [SelectableAgent]) {
+        let catalog = agents.isEmpty ? SelectableAgent.fallback : agents
+        updateComposer { composer in
+            composer.selectableAgents = catalog
+            composer.selectedMode = resolveSelectedAgentID(composer.selectedMode, in: catalog)
         }
+    }
+
+    private func resolveSelectedAgentID(_ current: String, in catalog: [SelectableAgent]) -> String {
+        if let match = catalog.first(where: { $0.id.compare(current, options: .caseInsensitive) == .orderedSame }) {
+            return match.id
+        }
+        if let build = catalog.first(where: { $0.id.compare(SelectableAgent.defaultID, options: .caseInsensitive) == .orderedSame }) {
+            return build.id
+        }
+        return catalog[0].id
     }
 
     private func formatSentTime(_ date: Date) -> String {

@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
 import dev.opencode.mobile.domain.agent.AgentRepository
+import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.agent.ComposerMentionRouting
 import dev.opencode.mobile.domain.agent.ComposerSuggestionMode
 import dev.opencode.mobile.domain.command.CommandInvocationCollapser
@@ -76,6 +77,7 @@ class SessionChatComposer(
     private var boundSessionId: String? = null
     private var boundWorktree: String? = null
     private var loadedCatalog: ModelSelectionCatalog? = null
+    private var loadedSelectableAgents = false
     private var cachedSelection: SessionModelSelection? = null
     private var newSessionPreference: SessionModelSelection? = null
     private var initialSelectionState = InitialSelectionState.LoadingCache
@@ -100,6 +102,7 @@ class SessionChatComposer(
                 loadCachedSelection()
                 loadServerCommands()
                 loadMentionableAgents()
+                loadSelectableAgents()
             }
             return
         }
@@ -122,6 +125,7 @@ class SessionChatComposer(
         boundSessionId = sessionId
         boundWorktree = worktree
         loadedCatalog = null
+        loadedSelectableAgents = false
         cachedSelection = null
         newSessionPreference = null
         initialSelectionState = InitialSelectionState.LoadingCache
@@ -135,6 +139,7 @@ class SessionChatComposer(
         loadCachedSelection()
         loadServerCommands()
         loadMentionableAgents()
+        loadSelectableAgents()
         applyOrLoadDraft(preserve)
     }
 
@@ -166,6 +171,25 @@ class SessionChatComposer(
                         mentions = state.composer.agentMentions,
                     )
                 }
+            }
+        }
+    }
+
+    fun loadSelectableAgents(force: Boolean = false) {
+        val worktree = boundWorktree ?: return
+        if (!force && loadedSelectableAgents) return
+        scope.launch {
+            runCatching {
+                withContext(ioDispatcher) {
+                    agentRepository.listSelectableAgents(directory = worktree)
+                }
+            }.onSuccess { agents ->
+                if (boundWorktree != worktree) return@onSuccess
+                loadedSelectableAgents = true
+                applySelectableAgents(agents)
+            }.onFailure { throwable ->
+                if (boundWorktree != worktree) return@onFailure
+                logW("selectable agent catalog failed: ${throwable.message}")
             }
         }
     }
@@ -537,9 +561,10 @@ class SessionChatComposer(
     }
 
     fun selectMode(mode: String) {
-        if (mode in AvailableModes) {
-            updateComposer { it.copy(selectedMode = mode) }
-        }
+        val match =
+            _state.value.composer.selectableAgents.firstOrNull { it.id.equals(mode, ignoreCase = true) }
+                ?: return
+        updateComposer { it.copy(selectedMode = match.id) }
     }
 
     fun selectVariant(variant: String) {
@@ -673,7 +698,7 @@ class SessionChatComposer(
                                             selectedModel.option.modelId,
                                         ),
                                     variant = composer.selectedVariant,
-                                    mode = agentMode(composer.selectedMode),
+                                    mode = composer.selectedMode,
                                 ),
                             directory = worktree,
                         )
@@ -690,7 +715,7 @@ class SessionChatComposer(
                                             selectedModel.option.modelId,
                                         ),
                                     variant = composer.selectedVariant,
-                                    mode = agentMode(composer.selectedMode),
+                                    mode = composer.selectedMode,
                                     agentMentions = mentionsForSend,
                                 ),
                             directory = worktree,
@@ -1032,17 +1057,30 @@ class SessionChatComposer(
 
     private fun composerMetadataLabel(composer: SessionChatComposerState): String =
         listOfNotNull(
-            composer.selectedMode,
+            composer.selectedModeLabel,
             composer.selectedModel?.modelLabel,
             composer.selectedVariant,
             formatSentTime(System.currentTimeMillis()),
         ).joinToString(" · ")
 
-    private fun agentMode(mode: String): String =
-        when (mode) {
-            "Plan" -> "plan"
-            else -> "build"
+    private fun applySelectableAgents(agents: List<SelectableAgent>) {
+        val catalog = agents.ifEmpty { SelectableAgent.Fallback }
+        updateComposer { composer ->
+            composer.copy(
+                selectableAgents = catalog,
+                selectedMode = resolveSelectedAgentId(composer.selectedMode, catalog),
+            )
         }
+    }
+
+    private fun resolveSelectedAgentId(
+        current: String,
+        catalog: List<SelectableAgent>,
+    ): String {
+        catalog.firstOrNull { it.id.equals(current, ignoreCase = true) }?.let { return it.id }
+        catalog.firstOrNull { it.id.equals(SelectableAgent.DefaultId, ignoreCase = true) }?.let { return it.id }
+        return catalog.first().id
+    }
 
     private fun updateComposer(transform: (SessionChatComposerState) -> SessionChatComposerState) {
         _state.update { state ->
@@ -1129,7 +1167,6 @@ class SessionChatComposer(
     companion object {
         private const val TAG = "SessionChatComposer"
         private const val DRAFT_PERSIST_DEBOUNCE_MS = 300L
-        val AvailableModes = listOf("Build", "Plan")
         const val ModelFilterThreshold = 10
         private val SentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
     }

@@ -23,4 +23,23 @@ class AgentDomainAdapterTest {
         assertEquals("Explorer", agents[0].description)
         assertEquals(null, agents[1].description)
     }
+
+    @Test
+    fun toSelectableAgents_keepsPrimaryAndAllNotHidden() {
+        val agents =
+            adapter.toSelectableAgents(
+                listOf(
+                    AgentDto(name = "build", description = "Primary", mode = "primary", hidden = false),
+                    AgentDto(name = "plan", description = "Plan", mode = "PRIMARY", hidden = false),
+                    AgentDto(name = "title", description = null, mode = "primary", hidden = true),
+                    AgentDto(name = "explore", description = "Explorer", mode = "subagent", hidden = false),
+                    AgentDto(name = "review", description = "Reviews work", mode = "all", hidden = null),
+                    AgentDto(name = "code-reviewer", description = "  ", mode = "primary", hidden = false),
+                ),
+            )
+        assertEquals(listOf("build", "plan", "review", "code-reviewer"), agents.map { it.id })
+        assertEquals(listOf("Build", "Plan", "Review", "Code Reviewer"), agents.map { it.displayName })
+        assertEquals("Reviews work", agents[2].description)
+        assertEquals(null, agents[3].description)
+    }
 }

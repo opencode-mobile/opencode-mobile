@@ -53,6 +53,39 @@ class AgentProtocolRepositoryTest {
             assertEquals("/repo", requests.single().url.parameters["location[directory]"])
         }
 
+    @Test
+    fun v2ListSelectableAgents_mapsIdAndKeepsPrimary() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """
+                        {"data":[
+                          {"id":"build","mode":"primary","hidden":false,"description":"Primary"},
+                          {"id":"review","mode":"all","hidden":false,"description":"Reviews work"},
+                          {"id":"title","mode":"primary","hidden":true,"description":"Hidden"},
+                          {"id":"explore","mode":"subagent","hidden":false,"description":"Explorer"}
+                        ]}
+                        """.trimIndent(),
+                    )
+                }
+            val repository =
+                DefaultAgentRepository(
+                    AgentsApi(client),
+                    AgentDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val agents = repository.listSelectableAgents("/repo")
+
+            assertEquals(listOf("build", "review"), agents.map { it.id })
+            assertEquals(listOf("Build", "Review"), agents.map { it.displayName })
+            assertTrue(requests.single().url.encodedPath.contains("/api/agent"))
+            assertEquals("/repo", requests.single().url.parameters["location[directory]"])
+        }
+
     private suspend fun manager(protocol: ServerProtocol): ActiveConnectionManager {
         val manager = ActiveConnectionManager(FakeProfileStore())
         manager.applyProfile(

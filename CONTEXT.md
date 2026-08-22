@@ -202,10 +202,11 @@ allowlist).
 ### Agent Repository
 
 The mobile integration layer that lists agents for the current project so
-Session Chat can offer **mentionable agents** under `@`.
+Session Chat can offer **selectable agents** in the composer mode picker and
+**mentionable agents** under `@`.
 
-Distinct from the composer's selected agent/mode picker and from **Command
-Repository**. Mentions do not change which agent owns the turn.
+Distinct from **Command Repository**. Mentions do not change which agent owns
+the turn.
 
 ### mentionable agent
 
@@ -213,7 +214,7 @@ An agent from the server catalog that the user may `@` mention in the Session
 Chat composer: not a primary turn-owning agent, and not hidden from `@`
 autocomplete.
 
-Distinct from the composer's selected Build/Plan (or other) mode.
+Distinct from the composer's selected turn-owning agent.
 _Avoid_: subagent (as the product name for this concept).
 
 ### agent mention

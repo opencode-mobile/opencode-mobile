@@ -748,10 +748,30 @@ struct SessionChatViewModelTests {
         let repository = FakeMessageRepository()
         let viewModel = makeViewModel(messageRepository: repository)
         await viewModel.loadMessages()
-        viewModel.selectMode("Plan")
+        viewModel.selectMode("plan")
         viewModel.updateComposerText("Plan me")
         await viewModel.sendPrompt()
         #expect(repository.sentOptions?.mode == "plan")
+    }
+
+    @Test func sendPrompt_customAgent_sendsAgentId() async {
+        let repository = FakeMessageRepository()
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            agentRepository: FakeAgentRepository(
+                selectableAgents: [
+                    SelectableAgent(id: "build", displayName: "Build"),
+                    SelectableAgent(id: "review", displayName: "Review"),
+                ]
+            )
+        )
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.composer.selectableAgents.contains { $0.id == "review" } }
+        viewModel.selectMode("review")
+        viewModel.updateComposerText("Review this")
+        await viewModel.sendPrompt()
+        #expect(repository.sentOptions?.mode == "review")
+        #expect(viewModel.uiState.composer.selectedModeLabel == "Review")
     }
 
     @Test func attachments_canBeAddedAndRemovedFromComposer() async {
@@ -2648,14 +2668,21 @@ private final class FakeCommandRepository: CommandRepository, @unchecked Sendabl
 
 private final class FakeAgentRepository: AgentRepository, @unchecked Sendable {
     var agents: [MentionableAgent]
+    var selectableAgents: [SelectableAgent]
 
     init(
         agents: [MentionableAgent] = [
             MentionableAgent(name: "explore", description: "Read-only explorer"),
             MentionableAgent(name: "general", description: "General helper"),
-        ]
+        ],
+        selectableAgents: [SelectableAgent] = SelectableAgent.fallback
     ) {
         self.agents = agents
+        self.selectableAgents = selectableAgents
+    }
+
+    func listSelectableAgents(directory: String?) async throws -> [SelectableAgent] {
+        selectableAgents
     }
 
     func listMentionableAgents(directory: String?) async throws -> [MentionableAgent] {

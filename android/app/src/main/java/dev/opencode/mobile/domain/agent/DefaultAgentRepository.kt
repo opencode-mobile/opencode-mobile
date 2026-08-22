@@ -14,6 +14,17 @@ class DefaultAgentRepository
         private val adapter: AgentDomainAdapter,
         private val activeConnectionManager: ActiveConnectionManager? = null,
     ) : AgentRepository {
+        override suspend fun listSelectableAgents(directory: String?): List<SelectableAgent> =
+            try {
+                if (activeConnectionManager?.currentProtocolOrProbe() == ServerProtocol.V2) {
+                    adapter.toSelectableAgentsFromV2(api.listAgentsV2(directory))
+                } else {
+                    adapter.toSelectableAgents(api.listAgents(directory))
+                }
+            } catch (throwable: Throwable) {
+                throw adapter.mapError(throwable)
+            }
+
         override suspend fun listMentionableAgents(directory: String?): List<MentionableAgent> =
             try {
                 if (activeConnectionManager?.currentProtocolOrProbe() == ServerProtocol.V2) {

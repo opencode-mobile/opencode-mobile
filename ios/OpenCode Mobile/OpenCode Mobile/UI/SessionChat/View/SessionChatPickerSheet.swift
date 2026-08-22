@@ -195,14 +195,14 @@ struct SessionChatPickerSheetModifier: ViewModifier {
         case .model:
             modelPickerEntries()
         case .mode:
-            ForEach(SessionChatPickers.modes, id: \.self) { mode in
+            ForEach(composer.selectableAgents) { agent in
                 OpenCodeBottomSheetEntry(
-                    title: mode,
-                    endDecorator: mode == composer.selectedMode
+                    title: agent.displayName,
+                    endDecorator: agent.id.compare(composer.selectedMode, options: .caseInsensitive) == .orderedSame
                         ? .icon(.check, accessibilityLabel: "Selected")
                         : .none,
                     action: {
-                        onSelectMode(mode)
+                        onSelectMode(agent.id)
                         activePicker = nil
                     },
                 )

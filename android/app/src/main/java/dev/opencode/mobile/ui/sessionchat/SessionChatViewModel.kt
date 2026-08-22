@@ -1362,7 +1362,6 @@ class SessionChatViewModel
 
         companion object {
             private const val TAG = "SessionChat"
-            val AvailableModes: List<String> = SessionChatComposer.AvailableModes
             const val ModelFilterThreshold: Int = SessionChatComposer.ModelFilterThreshold
         }
     }

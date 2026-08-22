@@ -841,7 +841,7 @@ struct SessionChatView: View {
                     selectionRevision: composer.selectionRevision,
                     attachments: composer.attachments.map(attachmentPresentation),
                     selectedModelLabel: composer.selectedModelLabel,
-                    selectedModeLabel: composer.selectedMode,
+                    selectedModeLabel: composer.selectedModeLabel,
                     selectedVariantLabel: composer.selectedVariantLabel,
                     showVariant: composer.canSelectVariant,
                     sendEnabled:

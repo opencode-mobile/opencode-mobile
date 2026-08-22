@@ -1620,12 +1620,46 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
 
-            viewModel.selectMode("Plan")
+            viewModel.selectMode("plan")
             viewModel.updateComposerText("Plan me")
             viewModel.sendPrompt()
             advanceUntilIdle()
 
             assertEquals("plan", repository.sentOptions?.mode)
+        }
+
+    @Test
+    fun sendPrompt_customAgent_sendsAgentId() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel =
+                createViewModel(
+                    repository,
+                    agentRepository =
+                        FakeAgentRepository(
+                            selectableAgents =
+                                listOf(
+                                    dev.opencode.mobile.domain.agent.SelectableAgent(
+                                        id = "build",
+                                        displayName = "Build",
+                                    ),
+                                    dev.opencode.mobile.domain.agent.SelectableAgent(
+                                        id = "review",
+                                        displayName = "Review",
+                                    ),
+                                ),
+                        ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.selectMode("review")
+            viewModel.updateComposerText("Review this")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals("review", repository.sentOptions?.mode)
+            assertEquals("Review", viewModel.uiState.value.composer.selectedModeLabel)
         }
 
     @Test
@@ -3480,7 +3514,12 @@ private class FakeAgentRepository(
             dev.opencode.mobile.domain.agent.MentionableAgent(name = "explore", description = "Read-only explorer"),
             dev.opencode.mobile.domain.agent.MentionableAgent(name = "general", description = "General helper"),
         ),
+    var selectableAgents: List<dev.opencode.mobile.domain.agent.SelectableAgent> =
+        dev.opencode.mobile.domain.agent.SelectableAgent.Fallback,
 ) : dev.opencode.mobile.domain.agent.AgentRepository {
+    override suspend fun listSelectableAgents(directory: String?): List<dev.opencode.mobile.domain.agent.SelectableAgent> =
+        selectableAgents
+
     override suspend fun listMentionableAgents(directory: String?): List<dev.opencode.mobile.domain.agent.MentionableAgent> =
         agents
 }
