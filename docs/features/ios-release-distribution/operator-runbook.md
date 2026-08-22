@@ -44,10 +44,9 @@ for the same marketing version after ASC has accepted a higher one. Do not use
 2. Actions → **iOS Release** → Run workflow on `main`.
 3. Set `version_name` (example: `0.1.0`).
 4. Leave `verify_crashlytics` at **false** for normal releases.
-5. Wait for archive, App Store IPA export, signature verification, **ASC
-   upload**, and artifact retention.
-6. Download `ios-ipa-…` and `ios-xcarchive-…` artifacts if needed (7-day
-   retention). The workflow already uploaded the same IPA to App Store Connect.
+5. Wait for archive, App Store IPA export, signature verification, and **ASC
+   upload**. CI does not retain the IPA or xcarchive as GitHub Actions
+   artifacts; install from TestFlight Internal Testing after ASC processing.
 
 Build number (`CFBundleVersion`) equals the workflow run number.
 

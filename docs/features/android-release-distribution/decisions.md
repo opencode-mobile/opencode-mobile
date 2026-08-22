@@ -128,11 +128,12 @@ authoritative.
 ## Artifact split and retention
 
 **Status:** Accepted
-**Decision:** CI produces an upload-key-signed AAB for Play and an
-upload-key-signed APK for Test Lab. GitHub retains the artifacts for seven days.
+**Decision:** CI produces an upload-key-signed AAB for Play and verifies an
+upload-key-signed APK. It does not retain either file, or `mapping.txt`, as
+GitHub Actions artifacts.
 Signature verification is required before upload.
-**Why:** The AAB matches Play's release format, the APK matches the initial
-Test Lab path, and short retention limits stale internal artifacts and storage.
+**Why:** Play is the distribution surface. GitHub artifact storage must not
+fail a successful store upload.
 
 ## Firebase product scope is ticketed explicitly
 
@@ -277,7 +278,7 @@ false until minify is proven on Play internal, pin NDK `27.2.12479018`, and set
 `ndk.debugSymbolLevel = SYMBOL_TABLE` so release AABs embed the R8 mapping and,
 when available, native debug symbols. Rely on AAB metadata for Play Console
 symbolication and on the Crashlytics Gradle plugin's default mapping upload for
-Firebase. Retain `mapping.txt` as a ninety-day workflow artifact for forensics.
+Firebase. Do not retain `mapping.txt` as a GitHub Actions artifact.
 Do not add Crashlytics NDK in this ticket.
 
 Current release native libraries come only from AndroidX and ship already

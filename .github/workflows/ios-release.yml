@@ -251,22 +251,6 @@ jobs:
             echo "- Do **not** Submit for Review, release the app, or create External TestFlight groups."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload signed IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-ipa-${{ inputs.version_name }}-${{ github.run_number }}
-          path: ${{ env.IOS_IPA_PATH }}
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload xcarchive
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-xcarchive-${{ inputs.version_name }}-${{ github.run_number }}
-          path: ${{ env.IOS_ARCHIVE_PATH }}
-          if-no-files-found: error
-          retention-days: 7
-
       - name: Remove temporary ASC API key and restore keychain search list
         if: always()
         shell: bash
