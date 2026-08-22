@@ -114,30 +114,6 @@ jobs:
             android/app/build/outputs/bundle/release/app-release.aab \
             android/app/build/outputs/mapping/release/mapping.txt
 
-      - name: Upload signed AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-aab-${{ inputs.version_name }}-${{ github.run_number }}
-          path: android/app/build/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload signed APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-apk-${{ inputs.version_name }}-${{ github.run_number }}
-          path: android/app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload R8 mapping
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-mapping-${{ inputs.version_name }}-${{ github.run_number }}
-          path: android/app/build/outputs/mapping/release/mapping.txt
-          if-no-files-found: error
-          retention-days: 90
-
       - name: Publish to Play internal testing
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:

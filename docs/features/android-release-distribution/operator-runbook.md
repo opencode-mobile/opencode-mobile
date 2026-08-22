@@ -55,11 +55,8 @@ gh workflow run "Android Release" --ref main -f version_name=0.1.0
 or `0.1.0-internal.1`. The workflow derives `versionCode` from the monotonically
 increasing GitHub run number.
 
-Each successful run uploads three artifacts:
-
-- `android-aab-<version-name>-<run-number>` — signed AAB for Play (7 days);
-- `android-apk-<version-name>-<run-number>` — signed APK for Test Lab (7 days);
-- `android-mapping-<version-name>-<run-number>` — R8 `mapping.txt` (90 days).
+CI does not retain the AAB, APK, or R8 mapping as GitHub Actions artifacts.
+Install from Play internal testing after the upload completes.
 
 The workflow verifies the AAB with `jarsigner`, the APK with `apksigner`, and
 confirms the AAB embeds R8 mapping metadata before Play upload. A missing
@@ -161,8 +158,10 @@ Pixel 9.
 ## Run Firebase Test Lab Robo
 
 Android Test Lab is an independent manual workflow. It accepts the numeric run
-ID of a successful Android Release dispatch from `main`, downloads that run's
-signed APK artifact, and rejects other workflow, branch, or conclusion states.
+ID of a successful Android Release dispatch from `main` and rejects other
+workflow, branch, or conclusion states. It still expects a signed APK GitHub
+artifact from that run; Android Release no longer publishes one, so new Test
+Lab dispatches need a rebuilt APK source before they can run.
 
 ```bash
 gh workflow run "Android Test Lab" \
