@@ -150,6 +150,19 @@ struct ProjectListHomeViewModelTests {
         }
         #expect(sections.map(\.worktree).contains("/two"))
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").contains("/two"))
+        #expect(viewModel.pendingSelectedFilterId == "/two")
+    }
+
+    @Test func addProject_alreadyAdded_selectsWorktree() async {
+        let store = FakeConnectionProfileStore(initial: ["/one", "/two"])
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+        await viewModel.addProject(worktree: "/two")
+        #expect(viewModel.pendingSelectedFilterId == "/two")
+        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one", "/two"])
     }
 
     @Test func requestRemoveProject_setsPendingRemoval() async {
@@ -266,6 +279,7 @@ struct ProjectListHomeViewModelTests {
         #expect(createError == nil)
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").contains("/home"))
         #expect(projectRepository.validatedDirectories.contains("/home"))
+        #expect(viewModel.pendingSelectedFilterId == "/home")
     }
 
     @Test func selectCurrentDirectory_persistsSelectedPathEvenWhenCurrentResolvesGlobal() async {

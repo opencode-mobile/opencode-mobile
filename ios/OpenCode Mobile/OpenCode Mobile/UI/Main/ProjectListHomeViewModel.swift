@@ -344,6 +344,7 @@ final class ProjectListHomeViewModel {
         if added.contains(worktree) {
             dismissAddProjectSheet()
             await runHomeLoad(skipProbe: true)
+            pendingSelectedFilterId = worktree
             return
         }
         updateNavigator { current in
@@ -359,6 +360,7 @@ final class ProjectListHomeViewModel {
             await connectionProfileStore.addWorktree(serverBaseURL: serverBaseURL, worktree: worktree)
             dismissAddProjectSheet()
             await runHomeLoad(skipProbe: true)
+            pendingSelectedFilterId = worktree
         } catch {
             updateNavigator { current in
                 var next = current
@@ -395,11 +397,16 @@ final class ProjectListHomeViewModel {
     }
 
     private(set) var pendingSessionOpen: SessionListItem?
+    private(set) var pendingSelectedFilterId: String?
     private(set) var revealNewestToken = 0
     private var lastHomeHiddenAtEpochMs: Int64?
 
     func consumePendingSessionOpen() {
         pendingSessionOpen = nil
+    }
+
+    func consumePendingSelectedFilter() {
+        pendingSelectedFilterId = nil
     }
 
     func markHomeHidden(nowEpochMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000)) {
