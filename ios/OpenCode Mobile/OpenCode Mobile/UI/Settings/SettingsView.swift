@@ -284,6 +284,10 @@ struct SettingsView: View {
                         action: {
                             logSettingsAction(ProductAnalytics.Action.settingsOpenPrivacyPolicy)
                             openURL(PrivacyPolicy.url)
+                        },
+                        trailing: {
+                            OpenCodeIconImage(icon: .chevronRight, size: 18)
+                                .foregroundStyle(OpenCodeColors.textBase)
                         }
                     )
                     .padding(.horizontal, 16)

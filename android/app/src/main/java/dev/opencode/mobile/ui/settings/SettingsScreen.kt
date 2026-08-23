@@ -338,6 +338,13 @@ fun SettingsScreen(
                         Intent(Intent.ACTION_VIEW, Uri.parse(PrivacyPolicy.URL)),
                     )
                 },
+                trailing = {
+                    Icon(
+                        imageVector = OpenCodeIcons.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
 
