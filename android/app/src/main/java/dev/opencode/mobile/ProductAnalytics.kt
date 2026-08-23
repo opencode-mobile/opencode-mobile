@@ -250,6 +250,7 @@ object ProductAnalytics {
         const val SETTINGS_TOGGLE_SESSION_LIST_PROJECT_PICKER = "settings_toggle_session_list_project_picker"
         const val SETTINGS_IMPORT_THEME = "settings_import_theme"
         const val SETTINGS_CLEAR_SESSION_CACHE = "settings_clear_session_cache"
+        const val SETTINGS_OPEN_PRIVACY_POLICY = "settings_open_privacy_policy"
         const val SETTINGS_TOGGLE_PRODUCT_ANALYTICS = "settings_toggle_product_analytics"
         const val SETTINGS_CLEAR_ALL_DATA = "settings_clear_all_data"
         const val THEME_PICKER_DISMISS = "theme_picker_dismiss"

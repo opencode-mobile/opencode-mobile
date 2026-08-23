@@ -237,6 +237,7 @@ enum ProductAnalytics {
         static let settingsToggleSessionListProjectPicker = "settings_toggle_session_list_project_picker"
         static let settingsImportTheme = "settings_import_theme"
         static let settingsClearSessionCache = "settings_clear_session_cache"
+        static let settingsOpenPrivacyPolicy = "settings_open_privacy_policy"
         static let settingsToggleProductAnalytics = "settings_toggle_product_analytics"
         static let settingsClearAllData = "settings_clear_all_data"
         static let themePickerDismiss = "theme_picker_dismiss"

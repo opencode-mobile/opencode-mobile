@@ -44,11 +44,13 @@ Not applicable.
 
 ## UI States / User Actions
 
-Not applicable — no in-app release UI.
+Settings → Privacy → Privacy Policy opens the hosted policy in the system
+browser. Other operator actions live in App Store Connect, TestFlight, and
+GitHub Actions.
 
 ## Native Navigation Entry Points
 
-Not applicable.
+Settings → Privacy.
 
 ## Error States
 
@@ -66,7 +68,7 @@ branch policy are covered under Decisions / runbook.
 
 ## Design-System Components
 
-Not applicable — no app UI.
+Existing `OpenCodeListItem`. No new primitive.
 
 ## Current Repo Baseline
 
