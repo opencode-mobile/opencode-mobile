@@ -54,12 +54,13 @@ Not applicable.
 
 ## UI States / User Actions
 
-Not applicable — no in-app release UI. Operator actions live in Play Console,
-Firebase / Google Cloud Console, and GitHub Actions.
+Settings → Privacy → Privacy Policy opens the hosted policy in the system
+browser. Other operator actions live in Play Console, Firebase / Google Cloud
+Console, and GitHub Actions.
 
 ## Native Navigation Entry Points
 
-Not applicable — this slice adds release infrastructure, not app navigation.
+Settings → Privacy on iOS and Android.
 
 ## Error States
 
@@ -79,7 +80,7 @@ covered under Decisions.
 
 ## Design-System Components
 
-Not applicable — no app UI.
+Existing `OpenCodeListItem`. No new primitive.
 
 ## Current Repo Baseline
 

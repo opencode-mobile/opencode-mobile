@@ -151,6 +151,10 @@ shots). The high-res listing icon is the flattened “d” at
 regenerate with `npm run app-icon:sync-store`.
 On-device launcher icons stay on `npm run app-icon:sync`.
 
+Privacy policy URL for Play listing and Settings → Privacy:
+
+https://opencode-mobile.github.io/opencode-mobile-docs/privacy/
+
 The first physical acceptance used `ivanfenenko@gmail.com` and confirmed that
 `0.1.0-internal.4` / `versionCode` 4 installed and opened successfully on a
 Pixel 9.

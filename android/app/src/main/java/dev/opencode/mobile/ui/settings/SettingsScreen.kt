@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.settings
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -22,8 +24,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.PrivacyPolicy
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.home.HomeSessionLadder
@@ -81,6 +85,7 @@ fun SettingsScreen(
     var showClearSessionCacheConfirmation by remember { mutableStateOf(false) }
     var showThemePicker by remember { mutableStateOf(false) }
     var showRecentWindowPicker by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     val currentTheme = ThemeManager.currentTheme
     val themeImportError = ThemeManager.loadError
     val presets =
@@ -321,6 +326,20 @@ fun SettingsScreen(
             )
 
             SectionHeader(title = "Privacy")
+
+            OpenCodeListItem(
+                title = "Privacy Policy",
+                subtitle = "How the apps handle data",
+                style = OpenCodeListItemStyle.Card,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Privacy Policy"),
+                onClick = {
+                    logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_PRIVACY_POLICY)
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse(PrivacyPolicy.URL)),
+                    )
+                },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
 
             OpenCodeListItem(
                 title = "Product Analytics",

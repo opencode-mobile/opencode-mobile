@@ -24,6 +24,7 @@ struct SettingsView: View {
     var onEditProfile: (ConnectionProfile) -> Void = { _ in }
     var serversRefreshToken: Int = 0
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var showComponentGallery = false
     @State private var showTextMateLogbook = false
     @State private var showDiagnosticLogs = false
@@ -274,6 +275,18 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     SectionHeader(title: "Privacy")
+
+                    OpenCodeListItem(
+                        title: "Privacy Policy",
+                        subtitle: "How the apps handle data",
+                        style: .card,
+                        startDecorator: .icon(.description, accessibilityLabel: "Privacy Policy"),
+                        action: {
+                            logSettingsAction(ProductAnalytics.Action.settingsOpenPrivacyPolicy)
+                            openURL(PrivacyPolicy.url)
+                        }
+                    )
+                    .padding(.horizontal, 16)
 
                     OpenCodeListItem(
                         title: "Product Analytics",
