@@ -13,8 +13,68 @@ struct PairingQRPayloadTests {
             return
         }
         #expect(credentials.baseURL == "http://192.168.0.160:4096/")
+        #expect(credentials.urls == ["http://192.168.0.160:4096/"])
         #expect(credentials.username == "opencode")
         #expect(credentials.password == "secret")
+    }
+
+    @Test func parse_keepsLanAndPrefersTailscaleForDisplay() {
+        let raw = """
+        {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}
+        """
+        let result = PairingQRPayload.parse(raw)
+        guard case let .success(credentials) = result else {
+            Issue.record("expected success")
+            return
+        }
+        #expect(credentials.baseURL == "http://100.84.57.15:4096/")
+        #expect(credentials.urls == [
+            "http://192.168.0.160:4096/",
+            "http://100.84.57.15:4096/",
+        ])
+    }
+
+    @Test func parse_prefersMagicDNSTailscaleHost() {
+        let raw = """
+        {"urls":["http://192.168.0.160:4096","http://mybox.tailxyz.ts.net:4096"],"username":"opencode","password":"secret"}
+        """
+        let result = PairingQRPayload.parse(raw)
+        guard case let .success(credentials) = result else {
+            Issue.record("expected success")
+            return
+        }
+        #expect(credentials.baseURL == "http://mybox.tailxyz.ts.net:4096/")
+    }
+
+    @Test func pickReachableURL_prefersFieldWhenReachable() {
+        let picked = PairingQRPayload.pickReachableURL(
+            fieldURL: "http://192.168.0.160:4096/",
+            reachable: [
+                "http://192.168.0.160:4096/",
+                "http://100.84.57.15:4096/",
+            ]
+        )
+        #expect(picked == "http://192.168.0.160:4096/")
+    }
+
+    @Test func pickReachableURL_fallsBackToLanWhenTailscaleMissing() {
+        let picked = PairingQRPayload.pickReachableURL(
+            fieldURL: "http://100.84.57.15:4096/",
+            reachable: ["http://192.168.0.160:4096/"]
+        )
+        #expect(picked == "http://192.168.0.160:4096/")
+    }
+
+    @Test func parse_stripsPathFromPairingURL() {
+        let raw = """
+        {"urls":["http://192.168.0.160:4096/session"],"username":"opencode","password":"secret"}
+        """
+        let result = PairingQRPayload.parse(raw)
+        guard case let .success(credentials) = result else {
+            Issue.record("expected success")
+            return
+        }
+        #expect(credentials.baseURL == "http://192.168.0.160:4096/")
     }
 
     @Test func parse_onlyLoopback_isUnreachable() {

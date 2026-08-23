@@ -188,6 +188,139 @@ class ConnectionSetupViewModelTest {
     }
 
     @Test
+    fun applyPairingQR_fillsTailscaleHostWhenPresent() {
+        val viewModel = viewModel(probe = neverProbe())
+        viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+        viewModel.applyPairingQR(
+            """{"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}""",
+        )
+        assertEquals("http://100.84.57.15:4096/", viewModel.uiState.value.baseUrl)
+    }
+
+    @Test
+    fun submit_pairingQr_bothReachable_savesTailscale() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val probed = mutableListOf<String>()
+            val viewModel =
+                viewModel(
+                    store = store,
+                    probe =
+                        ConnectionProbing { connection ->
+                            probed += connection.baseUrl
+                            ServerProtocol.V2
+                        },
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.applyPairingQR(
+                """{"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}""",
+            )
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertTrue(saved)
+            assertEquals(
+                setOf("http://192.168.0.160:4096/", "http://100.84.57.15:4096/"),
+                probed.toSet(),
+            )
+            assertEquals("http://100.84.57.15:4096/", store.saved.last().baseUrl)
+            assertEquals("http://100.84.57.15:4096/", viewModel.uiState.value.baseUrl)
+        }
+
+    @Test
+    fun submit_pairingQr_tailscaleDown_savesLan() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val viewModel =
+                viewModel(
+                    store = store,
+                    probe =
+                        ConnectionProbing { connection ->
+                            if (connection.baseUrl.contains("100.84.57.15")) {
+                                throw ServerProbeError.Transport(IllegalStateException("tailscale down"))
+                            }
+                            ServerProtocol.V2
+                        },
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.applyPairingQR(
+                """{"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}""",
+            )
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertTrue(saved)
+            assertEquals("http://192.168.0.160:4096/", store.saved.last().baseUrl)
+            assertEquals("http://192.168.0.160:4096/", viewModel.uiState.value.baseUrl)
+        }
+
+    @Test
+    fun submit_pairingQr_userChoseLan_savesLanWhenReachable() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val viewModel =
+                viewModel(
+                    store = store,
+                    probe = ConnectionProbing { ServerProtocol.V2 },
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.applyPairingQR(
+                """{"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}""",
+            )
+            viewModel.onBaseUrlChanged("http://192.168.0.160:4096/")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertTrue(saved)
+            assertEquals("http://192.168.0.160:4096/", store.saved.last().baseUrl)
+        }
+
+    @Test
+    fun submit_pairingQr_authFailure_doesNotSave() =
+        runTest(dispatcher) {
+            val viewModel =
+                viewModel(
+                    probe =
+                        ConnectionProbing {
+                            throw ServerProbeError.Http(401, "Unauthorized")
+                        },
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.applyPairingQR(
+                """{"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"wrong"}""",
+            )
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertFalse(saved)
+            assertEquals("Authentication failed", viewModel.uiState.value.snackbar?.text)
+        }
+
+    @Test
+    fun submit_pairingQr_customHost_probesOnlyEditedUrl() =
+        runTest(dispatcher) {
+            val probed = mutableListOf<String>()
+            val viewModel =
+                viewModel(
+                    probe =
+                        ConnectionProbing { connection ->
+                            probed += connection.baseUrl
+                            ServerProtocol.V1
+                        },
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.applyPairingQR(
+                """{"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}""",
+            )
+            viewModel.onBaseUrlChanged("http://10.0.0.1:4096/")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertTrue(saved)
+            assertEquals(listOf("http://10.0.0.1:4096/"), probed)
+        }
+
+    @Test
     fun applyPairingQR_invalid_showsSnackbar() {
         val viewModel = viewModel(probe = neverProbe())
         viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)

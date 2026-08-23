@@ -35,6 +35,7 @@ final class ConnectionSetupViewModel {
     private var savedPassword = ""
     private var savedProtocol: ServerProtocol?
     private var isEditingExistingProfile = false
+    private var pairingCandidateURLs: [String] = []
 
     init(
         connectionProbeService: ConnectionProbing,
@@ -50,6 +51,7 @@ final class ConnectionSetupViewModel {
     func configure(initialProfile: ConnectionProfile?, mode: ConnectionSetupMode = .first) {
         self.mode = mode
         isEditingExistingProfile = initialProfile != nil && mode == .edit
+        pairingCandidateURLs = []
         detectedProtocol = nil
         state = .idle
         credentialsExpanded = false
@@ -142,6 +144,7 @@ final class ConnectionSetupViewModel {
     func applyPairingQR(_ raw: String) {
         switch PairingQRPayload.parse(raw) {
         case let .success(credentials):
+            pairingCandidateURLs = credentials.urls
             baseURL = credentials.baseURL
             username = credentials.username
             password = credentials.password
@@ -204,34 +207,73 @@ final class ConnectionSetupViewModel {
     private func probeThenSave() async -> Bool {
         state = .connecting
         snackbar = nil
-        do {
-            detectedProtocol = try await connectionProbeService.probe(connection: draftConnection())
+        let fieldURL = baseURL
+        let probing = connectionProbeService
+        let connections = urlsToProbe().map { url in
+            (url, draftConnection(baseURL: url))
+        }
+        let outcomes: [(String, Result<ServerProtocol, Error>)] = await withTaskGroup(
+            of: (String, Result<ServerProtocol, Error>).self
+        ) { group in
+            for (url, connection) in connections {
+                group.addTask {
+                    do {
+                        let detected = try await probing.probe(connection: connection)
+                        return (url, .success(detected))
+                    } catch {
+                        return (url, .failure(error))
+                    }
+                }
+            }
+            var collected: [(String, Result<ServerProtocol, Error>)] = []
+            for await outcome in group {
+                collected.append(outcome)
+            }
+            return collected
+        }
+        let reachable = outcomes.compactMap { url, result -> (String, ServerProtocol)? in
+            guard case let .success(detected) = result else { return nil }
+            return (url, detected)
+        }
+        if let winnerURL = PairingQRPayload.pickReachableURL(
+            fieldURL: fieldURL,
+            reachable: reachable.map(\.0)
+        ), let winner = reachable.first(where: { $0.0 == winnerURL }) {
+            detectedProtocol = winner.1
+            if ConnectionProfileIdentity.normalizeBaseURL(winner.0) !=
+                ConnectionProfileIdentity.normalizeBaseURL(baseURL)
+            {
+                baseURL = winner.0
+            }
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
                 outcome: ProductAnalytics.Outcome.success
             )
             return await persist()
-        } catch let error as ServerProbeError {
-            detectedProtocol = nil
-            handleProbeFailure(error)
-            logConnectionAction(
-                ProductAnalytics.Action.connectionTest,
-                outcome: ProductAnalytics.Outcome.failure
-            )
-            return false
-        } catch {
-            detectedProtocol = nil
-            state = .idle
-            snackbar = OpenCodeSnackbarMessage(
-                text: error.localizedDescription,
-                variant: .error
-            )
-            logConnectionAction(
-                ProductAnalytics.Action.connectionTest,
-                outcome: ProductAnalytics.Outcome.failure
-            )
-            return false
         }
+        detectedProtocol = nil
+        let probeErrors = outcomes.compactMap { _, result -> ServerProbeError? in
+            guard case let .failure(error) = result else { return nil }
+            return error as? ServerProbeError
+        }
+        handleProbeFailure(
+            probeErrors.first(where: { $0.probeStatus == .authFailed })
+                ?? probeErrors.last
+                ?? .transport("Unable to reach the server")
+        )
+        logConnectionAction(
+            ProductAnalytics.Action.connectionTest,
+            outcome: ProductAnalytics.Outcome.failure
+        )
+        return false
+    }
+
+    private func urlsToProbe() -> [String] {
+        let current = ConnectionProfileIdentity.normalizeBaseURL(baseURL)
+        guard !pairingCandidateURLs.isEmpty else { return [current] }
+        let candidates = pairingCandidateURLs.map(ConnectionProfileIdentity.normalizeBaseURL)
+        guard candidates.contains(current) else { return [current] }
+        return [current] + candidates.filter { $0 != current }
     }
 
     private func handleProbeFailure(_ error: ServerProbeError) {
@@ -307,8 +349,12 @@ final class ConnectionSetupViewModel {
         )
     }
 
-    private func draftConnection() -> ServerConnection {
-        ServerConnection(profile: draftProfile())
+    private func draftConnection(baseURL: String? = nil) -> ServerConnection {
+        var profile = draftProfile()
+        if let baseURL {
+            profile.baseURL = baseURL
+        }
+        return ServerConnection(profile: profile)
     }
 
     static func hostIsBlank(_ baseURL: String) -> Bool {

@@ -13,8 +13,64 @@ class PairingQRPayloadTest {
         assertTrue(result is PairingQRParseResult.Ready)
         val credentials = (result as PairingQRParseResult.Ready).credentials
         assertEquals("http://192.168.0.160:4096/", credentials.baseUrl)
+        assertEquals(listOf("http://192.168.0.160:4096/"), credentials.urls)
         assertEquals("opencode", credentials.username)
         assertEquals("secret", credentials.password)
+    }
+
+    @Test
+    fun parse_keepsLanAndPrefersTailscaleForDisplay() {
+        val raw =
+            """{"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}"""
+        val result = PairingQRPayload.parse(raw)
+        val credentials = (result as PairingQRParseResult.Ready).credentials
+        assertEquals("http://100.84.57.15:4096/", credentials.baseUrl)
+        assertEquals(
+            listOf("http://192.168.0.160:4096/", "http://100.84.57.15:4096/"),
+            credentials.urls,
+        )
+    }
+
+    @Test
+    fun parse_prefersMagicDnsTailscaleHost() {
+        val raw =
+            """{"urls":["http://192.168.0.160:4096","http://mybox.tailxyz.ts.net:4096"],"username":"opencode","password":"secret"}"""
+        val result = PairingQRPayload.parse(raw)
+        val credentials = (result as PairingQRParseResult.Ready).credentials
+        assertEquals("http://mybox.tailxyz.ts.net:4096/", credentials.baseUrl)
+    }
+
+    @Test
+    fun pickReachableUrl_prefersFieldWhenReachable() {
+        val picked =
+            PairingQRPayload.pickReachableUrl(
+                fieldUrl = "http://192.168.0.160:4096/",
+                reachable =
+                    listOf(
+                        "http://192.168.0.160:4096/",
+                        "http://100.84.57.15:4096/",
+                    ),
+            )
+        assertEquals("http://192.168.0.160:4096/", picked)
+    }
+
+    @Test
+    fun pickReachableUrl_fallsBackToTailscaleThenLan() {
+        val picked =
+            PairingQRPayload.pickReachableUrl(
+                fieldUrl = "http://100.84.57.15:4096/",
+                reachable = listOf("http://192.168.0.160:4096/"),
+            )
+        assertEquals("http://192.168.0.160:4096/", picked)
+    }
+
+    @Test
+    fun parse_stripsPathFromPairingUrl() {
+        val raw =
+            """{"urls":["http://192.168.0.160:4096/session"],"username":"opencode","password":"secret"}"""
+        val result = PairingQRPayload.parse(raw)
+        val credentials = (result as PairingQRParseResult.Ready).credentials
+        assertEquals("http://192.168.0.160:4096/", credentials.baseUrl)
     }
 
     @Test

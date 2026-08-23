@@ -21,6 +21,9 @@ import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.network.ServerConnection
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -103,12 +106,14 @@ class ConnectionSetupViewModel
         private var savedUsername = ""
         private var savedPassword = ""
         private var savedProtocol: ServerProtocol? = null
+        private var pairingCandidateUrls: List<String> = emptyList()
 
         fun configure(
             initialProfile: ConnectionProfile?,
             mode: ConnectionSetupMode = if (initialProfile == null) ConnectionSetupMode.First else ConnectionSetupMode.Edit,
         ) {
             reportedFieldEdits.clear()
+            pairingCandidateUrls = emptyList()
             isEditingExistingProfile = initialProfile != null && mode == ConnectionSetupMode.Edit
             detectedProtocol = initialProfile?.serverProtocol
             if (initialProfile == null || mode != ConnectionSetupMode.Edit) {
@@ -183,6 +188,7 @@ class ConnectionSetupViewModel
                         ProductAnalytics.Action.CONNECTION_PAIRING_QR_SCAN,
                         mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.SUCCESS),
                     )
+                    pairingCandidateUrls = credentials.urls
                     updateFields(
                         baseUrl = credentials.baseUrl,
                         username = credentials.username,
@@ -287,26 +293,70 @@ class ConnectionSetupViewModel
                         state = ConnectionSetupState.Connecting,
                         snackbar = null,
                     )
-                try {
-                    val protocol = connectionProbeService.probe(draftConnection())
-                    detectedProtocol = protocol
+                val fieldUrl = _uiState.value.baseUrl
+                val outcomes =
+                    coroutineScope {
+                        urlsToProbe()
+                            .map { url -> async { probeOutcome(url) } }
+                            .awaitAll()
+                    }
+                val reachable =
+                    outcomes.mapNotNull { outcome ->
+                        (outcome as? ProbeOutcome.Reachable)?.let { it.url to it.protocol }
+                    }
+                val winnerUrl = PairingQRPayload.pickReachableUrl(fieldUrl, reachable.map { it.first })
+                val winner = reachable.firstOrNull { it.first == winnerUrl }
+                if (winner != null) {
+                    detectedProtocol = winner.second
+                    if (ConnectionProfileIdentity.normalizeBaseUrl(winner.first) !=
+                        ConnectionProfileIdentity.normalizeBaseUrl(_uiState.value.baseUrl)
+                    ) {
+                        _uiState.value = _uiState.value.copy(baseUrl = winner.first)
+                    }
                     persistAfterProbe(onSaved)
-                } catch (error: ServerProbeError) {
-                    detectedProtocol = null
-                    handleProbeFailure(error)
-                } catch (error: Throwable) {
-                    detectedProtocol = null
-                    _uiState.value =
-                        _uiState.value.copy(
-                            state = ConnectionSetupState.Idle,
-                            snackbar =
-                                OpenCodeSnackbarMessage(
-                                    text = error.message ?: "Unable to reach the server",
-                                    variant = OpenCodeSnackbarVariant.Error,
-                                ),
-                        )
+                    return@launch
                 }
+                detectedProtocol = null
+                val failed = outcomes.mapNotNull { (it as? ProbeOutcome.Failed)?.error }
+                val authError = failed.firstOrNull { it.toProbeStatus() == ProbeStatus.AuthFailed }
+                if (authError != null) {
+                    handleProbeFailure(authError)
+                    return@launch
+                }
+                handleProbeFailure(
+                    failed.lastOrNull()
+                        ?: ServerProbeError.Transport(IllegalStateException("Unable to reach the server")),
+                )
             }
+        }
+
+        private suspend fun probeOutcome(url: String): ProbeOutcome =
+            try {
+                ProbeOutcome.Reachable(url, connectionProbeService.probe(draftConnection(url)))
+            } catch (error: ServerProbeError) {
+                ProbeOutcome.Failed(url, error)
+            } catch (error: Throwable) {
+                ProbeOutcome.Failed(url, ServerProbeError.Transport(error))
+            }
+
+        private sealed interface ProbeOutcome {
+            data class Reachable(
+                val url: String,
+                val protocol: ServerProtocol,
+            ) : ProbeOutcome
+
+            data class Failed(
+                val url: String,
+                val error: ServerProbeError,
+            ) : ProbeOutcome
+        }
+
+        private fun urlsToProbe(): List<String> {
+            val current = ConnectionProfileIdentity.normalizeBaseUrl(_uiState.value.baseUrl)
+            if (pairingCandidateUrls.isEmpty()) return listOf(current)
+            val candidates = pairingCandidateUrls.map(ConnectionProfileIdentity::normalizeBaseUrl)
+            if (current !in candidates) return listOf(current)
+            return listOf(current) + candidates.filter { it != current }
         }
 
         private fun handleProbeFailure(error: ServerProbeError) {
@@ -404,7 +454,8 @@ class ConnectionSetupViewModel
                 name = _uiState.value.name,
             )
 
-        private fun draftConnection(): ServerConnection = ServerConnection.fromProfile(draftProfile())
+        private fun draftConnection(baseUrl: String = _uiState.value.baseUrl): ServerConnection =
+            ServerConnection.fromProfile(draftProfile().copy(baseUrl = baseUrl))
 
         companion object {
             fun hostIsBlank(baseUrl: String): Boolean {
