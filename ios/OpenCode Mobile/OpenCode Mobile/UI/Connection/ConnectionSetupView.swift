@@ -17,6 +17,7 @@ struct ConnectionSetupView: View {
     @State private var loggedBaseURLEdit = false
     @State private var loggedUsernameEdit = false
     @State private var loggedPasswordEdit = false
+    @State private var isKeyboardVisible = false
 
     var body: some View {
         NavigationStack {
@@ -138,7 +139,7 @@ struct ConnectionSetupView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 VStack(spacing: 20) {
-                    if !isEditingFields {
+                    if !isKeyboardVisible {
                         pairingQREntry
                     }
                     OpenCodeButton(
@@ -219,6 +220,24 @@ struct ConnectionSetupView: View {
                 Button("Done", action: dismissKeyboard)
             }
         }
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onReceive(
+                        NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
+                    ) { notification in
+                        isKeyboardVisible = KeyboardOverlap.amount(
+                            from: notification,
+                            in: geo.frame(in: .global)
+                        ) > 0
+                    }
+                    .onReceive(
+                        NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
+                    ) { _ in
+                        isKeyboardVisible = false
+                    }
+            }
+        }
         }
     }
 
@@ -240,10 +259,6 @@ struct ConnectionSetupView: View {
         .buttonStyle(.plain)
         .disabled(viewModel.isBusy)
         .accessibilityLabel("Running opencode2? Connect with a QR code")
-    }
-
-    private var isEditingFields: Bool {
-        nameFocused || urlFocused || usernameFocused || passwordFocused
     }
 
     private func dismissKeyboard() {

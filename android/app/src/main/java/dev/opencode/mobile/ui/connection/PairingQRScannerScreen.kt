@@ -264,9 +264,9 @@ private fun PairingQRCameraPreview(
         )
         onDispose {
             cancelled = true
-            cameraExecutor.shutdown()
-            barcodeScanner.close()
             cameraProvider?.unbindAll()
+            barcodeScanner.close()
+            cameraExecutor.shutdown()
         }
     }
 
