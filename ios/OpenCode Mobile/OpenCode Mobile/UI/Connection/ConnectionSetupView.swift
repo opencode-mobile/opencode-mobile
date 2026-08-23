@@ -1,4 +1,7 @@
+import AVFoundation
 import SwiftUI
+import UIKit
+import VisionKit
 
 struct ConnectionSetupView: View {
     @Bindable var viewModel: ConnectionSetupViewModel
@@ -8,14 +11,17 @@ struct ConnectionSetupView: View {
     @State private var usernameFocused = false
     @State private var passwordFocused = false
     @State private var showRemoveConfirm = false
+    @State private var showPairingScanner = false
     /// Field-edit Analytics fires once per field so keystrokes are not events and
     /// no field value can leak into a parameter.
     @State private var loggedBaseURLEdit = false
     @State private var loggedUsernameEdit = false
     @State private var loggedPasswordEdit = false
+    @State private var isKeyboardVisible = false
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        NavigationStack {
+            ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 OpenCodeTopBar(
                     title: viewModel.screenTitle,
@@ -30,8 +36,14 @@ struct ConnectionSetupView: View {
                     showDivider: true
                 )
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
+                GeometryReader { geo in
+                    ScrollView {
+                        ZStack(alignment: .topLeading) {
+                            Color.clear
+                                .frame(minWidth: geo.size.width, minHeight: geo.size.height)
+                                .contentShape(Rectangle())
+                                .onTapGesture(perform: dismissKeyboard)
+                            VStack(alignment: .leading, spacing: 12) {
                         OpenCodeServerAddressInput(
                             value: $viewModel.baseURL,
                             hint: "macbook.local:4096",
@@ -120,17 +132,24 @@ struct ConnectionSetupView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
                     .padding(.bottom, 16)
+                        }
+                    }
+                    .scrollDismissesKeyboard(.immediately)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .scrollDismissesKeyboard(.interactively)
 
-                OpenCodeButton(
-                    variant: .fullWidthText(title: viewModel.primaryActionLabel),
-                    enabled: viewModel.primaryEnabled
-                ) {
-                    Task {
-                        if await viewModel.submit() {
-                            onDismiss()
+                VStack(spacing: 20) {
+                    if !isKeyboardVisible {
+                        pairingQREntry
+                    }
+                    OpenCodeButton(
+                        variant: .fullWidthText(title: viewModel.primaryActionLabel),
+                        enabled: viewModel.primaryEnabled
+                    ) {
+                        Task {
+                            if await viewModel.submit() {
+                                onDismiss()
+                            }
                         }
                     }
                 }
@@ -142,7 +161,7 @@ struct ConnectionSetupView: View {
                 message: viewModel.snackbar,
                 onDismissed: { viewModel.consumeSnackbar() }
             )
-            .padding(.bottom, 88)
+            .padding(.bottom, 128)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
@@ -185,6 +204,105 @@ struct ConnectionSetupView: View {
                 showRemoveConfirm = false
             }
         )
+        .fullScreenCover(isPresented: $showPairingScanner) {
+            PairingQRScannerView(
+                onScanned: { raw in
+                    showPairingScanner = false
+                    viewModel.applyPairingQR(raw)
+                },
+                onDismiss: { showPairingScanner = false }
+            )
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done", action: dismissKeyboard)
+            }
+        }
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onReceive(
+                        NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
+                    ) { notification in
+                        isKeyboardVisible = KeyboardOverlap.amount(
+                            from: notification,
+                            in: geo.frame(in: .global)
+                        ) > 0
+                    }
+                    .onReceive(
+                        NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
+                    ) { _ in
+                        isKeyboardVisible = false
+                    }
+            }
+        }
+        }
+    }
+
+    private var pairingQREntry: some View {
+        Button(action: openPairingScanner) {
+            VStack(spacing: 3) {
+                Text("Running opencode2?")
+                    .font(OpenCodeTypography.bodySecondary)
+                    .foregroundStyle(OpenCodeColors.textBase)
+                Text("Connect with a QR code")
+                    .font(OpenCodeTypography.body)
+                    .underline()
+                    .foregroundStyle(OpenCodeColors.textStrong)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
+        .disabled(viewModel.isBusy)
+        .accessibilityLabel("Running opencode2? Connect with a QR code")
+    }
+
+    private func dismissKeyboard() {
+        urlFocused = false
+        nameFocused = false
+        usernameFocused = false
+        passwordFocused = false
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
+    }
+
+    private func openPairingScanner() {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.connectionSetup,
+            actionId: ProductAnalytics.Action.connectionOpenPairingQR
+        )
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            presentPairingScanner()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                Task { @MainActor in
+                    if granted {
+                        presentPairingScanner()
+                    } else {
+                        viewModel.pairingQRCameraDenied()
+                    }
+                }
+            }
+        default:
+            viewModel.pairingQRCameraDenied()
+        }
+    }
+
+    private func presentPairingScanner() {
+        if DataScannerViewController.isSupported, DataScannerViewController.isAvailable {
+            showPairingScanner = true
+        } else {
+            viewModel.pairingQRCameraUnavailable()
+        }
     }
 
     private var removeAction: [OpenCodeTopBarAction] {

@@ -41,6 +41,7 @@ object ProductAnalytics {
         const val HOME_CONNECTION_EMPTY = "home_connection_empty"
         const val HOME_PROBE_FAILED = "home_probe_failed"
         const val CONNECTION_SETUP = "connection_setup"
+        const val PAIRING_QR_SCANNER = "pairing_qr_scanner"
         const val HOME_ADD_PROJECT = "home_add_project"
         const val HOME_NEW_SESSION_PROJECT_PICKER = "home_new_session_project_picker"
         const val HOME_FILTER_PROJECT_PICKER = "home_filter_project_picker"
@@ -108,6 +109,8 @@ object ProductAnalytics {
         const val CONNECTION_EDIT_PASSWORD = "connection_edit_password"
         const val CONNECTION_TEST = "connection_test"
         const val CONNECTION_SAVE = "connection_save"
+        const val CONNECTION_OPEN_PAIRING_QR = "connection_open_pairing_qr"
+        const val CONNECTION_PAIRING_QR_SCAN = "connection_pairing_qr_scan"
 
         // Add project / see all / picker
         const val ADD_PROJECT_DISMISS = "add_project_dismiss"

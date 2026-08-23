@@ -8,6 +8,8 @@
 	<false/>
 	<key>OpenCodeVerifyCrashlytics</key>
 	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>OpenCode Mobile uses the camera to scan an OpenCode 2 pairing QR from your computer.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

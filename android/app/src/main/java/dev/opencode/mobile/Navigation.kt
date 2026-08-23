@@ -329,6 +329,11 @@ fun MainNavigation() {
                                                     }
                                                 },
                                                 onSnackbarDismissed = setupViewModel::consumeSnackbar,
+                                                onPairingQRScanned = setupViewModel::applyPairingQR,
+                                                onPairingQRCameraDenied =
+                                                    setupViewModel::pairingQRCameraDenied,
+                                                onPairingQRCameraUnavailable =
+                                                    setupViewModel::pairingQRCameraUnavailable,
                                                 onRemove = {
                                                     setupViewModel.removeConnection {
                                                         serversViewModel.refresh()

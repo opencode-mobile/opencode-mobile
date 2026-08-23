@@ -10,6 +10,9 @@ import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.DuplicateConnectionProfileException
+import dev.opencode.mobile.domain.connection.PairingQRError
+import dev.opencode.mobile.domain.connection.PairingQRParseResult
+import dev.opencode.mobile.domain.connection.PairingQRPayload
 import dev.opencode.mobile.domain.connection.ProbeStatus
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.toProbeStatus
@@ -18,6 +21,9 @@ import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.network.ServerConnection
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -100,12 +106,14 @@ class ConnectionSetupViewModel
         private var savedUsername = ""
         private var savedPassword = ""
         private var savedProtocol: ServerProtocol? = null
+        private var pairingCandidateUrls: List<String> = emptyList()
 
         fun configure(
             initialProfile: ConnectionProfile?,
             mode: ConnectionSetupMode = if (initialProfile == null) ConnectionSetupMode.First else ConnectionSetupMode.Edit,
         ) {
             reportedFieldEdits.clear()
+            pairingCandidateUrls = emptyList()
             isEditingExistingProfile = initialProfile != null && mode == ConnectionSetupMode.Edit
             detectedProtocol = initialProfile?.serverProtocol
             if (initialProfile == null || mode != ConnectionSetupMode.Edit) {
@@ -170,6 +178,49 @@ class ConnectionSetupViewModel
             if (_uiState.value.snackbar != null) {
                 _uiState.value = _uiState.value.copy(snackbar = null)
             }
+        }
+
+        fun applyPairingQR(raw: String) {
+            when (val result = PairingQRPayload.parse(raw)) {
+                is PairingQRParseResult.Ready -> {
+                    val credentials = result.credentials
+                    logAction(
+                        ProductAnalytics.Action.CONNECTION_PAIRING_QR_SCAN,
+                        mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.SUCCESS),
+                    )
+                    pairingCandidateUrls = credentials.urls
+                    updateFields(
+                        baseUrl = credentials.baseUrl,
+                        username = credentials.username,
+                        password = credentials.password,
+                    )
+                    _uiState.value =
+                        _uiState.value.copy(
+                            credentialsExpanded = true,
+                            snackbar = null,
+                        )
+                }
+                is PairingQRParseResult.Failed -> {
+                    logAction(
+                        ProductAnalytics.Action.CONNECTION_PAIRING_QR_SCAN,
+                        mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.FAILURE),
+                    )
+                    val text =
+                        when (result.error) {
+                            PairingQRError.InvalidPayload -> "This isn't an OpenCode 2 pairing QR"
+                            PairingQRError.NoReachableUrl -> "That QR only has a localhost address"
+                        }
+                    showError(text)
+                }
+            }
+        }
+
+        fun pairingQRCameraDenied() {
+            showError("Allow camera access to scan the pairing QR")
+        }
+
+        fun pairingQRCameraUnavailable() {
+            showError("Camera isn't available on this device")
         }
 
         private fun reportFieldEdit(actionId: String) {
@@ -242,26 +293,70 @@ class ConnectionSetupViewModel
                         state = ConnectionSetupState.Connecting,
                         snackbar = null,
                     )
-                try {
-                    val protocol = connectionProbeService.probe(draftConnection())
-                    detectedProtocol = protocol
+                val fieldUrl = _uiState.value.baseUrl
+                val outcomes =
+                    coroutineScope {
+                        urlsToProbe()
+                            .map { url -> async { probeOutcome(url) } }
+                            .awaitAll()
+                    }
+                val reachable =
+                    outcomes.mapNotNull { outcome ->
+                        (outcome as? ProbeOutcome.Reachable)?.let { it.url to it.protocol }
+                    }
+                val winnerUrl = PairingQRPayload.pickReachableUrl(fieldUrl, reachable.map { it.first })
+                val winner = reachable.firstOrNull { it.first == winnerUrl }
+                if (winner != null) {
+                    detectedProtocol = winner.second
+                    if (ConnectionProfileIdentity.normalizeBaseUrl(winner.first) !=
+                        ConnectionProfileIdentity.normalizeBaseUrl(_uiState.value.baseUrl)
+                    ) {
+                        _uiState.value = _uiState.value.copy(baseUrl = winner.first)
+                    }
                     persistAfterProbe(onSaved)
-                } catch (error: ServerProbeError) {
-                    detectedProtocol = null
-                    handleProbeFailure(error)
-                } catch (error: Throwable) {
-                    detectedProtocol = null
-                    _uiState.value =
-                        _uiState.value.copy(
-                            state = ConnectionSetupState.Idle,
-                            snackbar =
-                                OpenCodeSnackbarMessage(
-                                    text = error.message ?: "Unable to reach the server",
-                                    variant = OpenCodeSnackbarVariant.Error,
-                                ),
-                        )
+                    return@launch
                 }
+                detectedProtocol = null
+                val failed = outcomes.mapNotNull { (it as? ProbeOutcome.Failed)?.error }
+                val authError = failed.firstOrNull { it.toProbeStatus() == ProbeStatus.AuthFailed }
+                if (authError != null) {
+                    handleProbeFailure(authError)
+                    return@launch
+                }
+                handleProbeFailure(
+                    failed.lastOrNull()
+                        ?: ServerProbeError.Transport(IllegalStateException("Unable to reach the server")),
+                )
             }
+        }
+
+        private suspend fun probeOutcome(url: String): ProbeOutcome =
+            try {
+                ProbeOutcome.Reachable(url, connectionProbeService.probe(draftConnection(url)))
+            } catch (error: ServerProbeError) {
+                ProbeOutcome.Failed(url, error)
+            } catch (error: Throwable) {
+                ProbeOutcome.Failed(url, ServerProbeError.Transport(error))
+            }
+
+        private sealed interface ProbeOutcome {
+            data class Reachable(
+                val url: String,
+                val protocol: ServerProtocol,
+            ) : ProbeOutcome
+
+            data class Failed(
+                val url: String,
+                val error: ServerProbeError,
+            ) : ProbeOutcome
+        }
+
+        private fun urlsToProbe(): List<String> {
+            val current = ConnectionProfileIdentity.normalizeBaseUrl(_uiState.value.baseUrl)
+            if (pairingCandidateUrls.isEmpty()) return listOf(current)
+            val candidates = pairingCandidateUrls.map(ConnectionProfileIdentity::normalizeBaseUrl)
+            if (current !in candidates) return listOf(current)
+            return listOf(current) + candidates.filter { it != current }
         }
 
         private fun handleProbeFailure(error: ServerProbeError) {
@@ -359,7 +454,8 @@ class ConnectionSetupViewModel
                 name = _uiState.value.name,
             )
 
-        private fun draftConnection(): ServerConnection = ServerConnection.fromProfile(draftProfile())
+        private fun draftConnection(baseUrl: String = _uiState.value.baseUrl): ServerConnection =
+            ServerConnection.fromProfile(draftProfile().copy(baseUrl = baseUrl))
 
         companion object {
             fun hostIsBlank(baseUrl: String): Boolean {
