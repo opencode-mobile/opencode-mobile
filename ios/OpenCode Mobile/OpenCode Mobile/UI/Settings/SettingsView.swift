@@ -40,6 +40,7 @@ struct SettingsView: View {
     @State private var markdownHighlightPreferences = MarkdownHighlightPreferences.shared
     @State private var analyticsConsentPreferences = AnalyticsConsentPreferences.shared
     @State private var sessionChatDisplayPreferences = SessionChatDisplayPreferences.shared
+    @State private var developerToolsPreferences = DeveloperToolsPreferences.shared
     @State private var showServers = false
     @State private var serversSubtitleState = "No servers saved"
     @State private var serversLetter: Character = "S"
@@ -301,58 +302,6 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    SectionHeader(title: "Developer Tools")
-
-                    OpenCodeListItem(
-                        title: "Component Gallery",
-                        subtitle: "Design-system foundations and reusable components",
-                        style: .card,
-                        startDecorator: .icon(.architecture, accessibilityLabel: "Component Gallery"),
-                        action: { showComponentGallery = true }
-                    )
-                    .padding(.horizontal, 16)
-
-                    OpenCodeListItem(
-                        title: "TextMate Highlighting",
-                        subtitle: "On by default for all packaged languages; semantic fallback otherwise (can disable)",
-                        style: .card,
-                        startDecorator: .icon(.description, accessibilityLabel: "TextMate Highlighting"),
-                        trailing: {
-                            Toggle(
-                                "TextMate Highlighting",
-                                isOn: Binding(
-                                    get: { markdownHighlightPreferences.textMateEnabled },
-                                    set: { newValue in
-                                        markdownHighlightPreferences.setTextMateEnabled(newValue)
-                                        MessageContentPreparer.shared.clearDocumentCache()
-                                        BlockDecorationCache.shared.clear()
-                                    }
-                                )
-                            )
-                            .labelsHidden()
-                            .tint(OpenCodeColors.interactive)
-                        }
-                    )
-                    .padding(.horizontal, 16)
-
-                    OpenCodeListItem(
-                        title: "TextMate Languages",
-                        subtitle: "Opt out of any packaged language (all default on)",
-                        style: .card,
-                        startDecorator: .icon(.architecture, accessibilityLabel: "TextMate Languages"),
-                        action: { showTextMateLanguages = true }
-                    )
-                    .padding(.horizontal, 16)
-
-                    OpenCodeListItem(
-                        title: "TextMate Logbook",
-                        subtitle: "Persisted code-fence parsing measurements",
-                        style: .card,
-                        startDecorator: .icon(.description, accessibilityLabel: "TextMate Logbook"),
-                        action: { showTextMateLogbook = true }
-                    )
-                    .padding(.horizontal, 16)
-
                     OpenCodeListItem(
                         title: "Diagnostic Logs",
                         subtitle: "Share a redacted rolling runtime log window",
@@ -378,6 +327,60 @@ struct SettingsView: View {
                         }
                     )
                     .padding(.horizontal, 16)
+
+                    if developerToolsPreferences.unlocked {
+                        SectionHeader(title: "Developer Tools")
+
+                        OpenCodeListItem(
+                            title: "Component Gallery",
+                            subtitle: "Design-system foundations and reusable components",
+                            style: .card,
+                            startDecorator: .icon(.architecture, accessibilityLabel: "Component Gallery"),
+                            action: { showComponentGallery = true }
+                        )
+                        .padding(.horizontal, 16)
+
+                        OpenCodeListItem(
+                            title: "TextMate Highlighting",
+                            subtitle: "On by default for all packaged languages; semantic fallback otherwise (can disable)",
+                            style: .card,
+                            startDecorator: .icon(.description, accessibilityLabel: "TextMate Highlighting"),
+                            trailing: {
+                                Toggle(
+                                    "TextMate Highlighting",
+                                    isOn: Binding(
+                                        get: { markdownHighlightPreferences.textMateEnabled },
+                                        set: { newValue in
+                                            markdownHighlightPreferences.setTextMateEnabled(newValue)
+                                            MessageContentPreparer.shared.clearDocumentCache()
+                                            BlockDecorationCache.shared.clear()
+                                        }
+                                    )
+                                )
+                                .labelsHidden()
+                                .tint(OpenCodeColors.interactive)
+                            }
+                        )
+                        .padding(.horizontal, 16)
+
+                        OpenCodeListItem(
+                            title: "TextMate Languages",
+                            subtitle: "Opt out of any packaged language (all default on)",
+                            style: .card,
+                            startDecorator: .icon(.architecture, accessibilityLabel: "TextMate Languages"),
+                            action: { showTextMateLanguages = true }
+                        )
+                        .padding(.horizontal, 16)
+
+                        OpenCodeListItem(
+                            title: "TextMate Logbook",
+                            subtitle: "Persisted code-fence parsing measurements",
+                            style: .card,
+                            startDecorator: .icon(.description, accessibilityLabel: "TextMate Logbook"),
+                            action: { showTextMateLogbook = true }
+                        )
+                        .padding(.horizontal, 16)
+                    }
                 }
             }
         }

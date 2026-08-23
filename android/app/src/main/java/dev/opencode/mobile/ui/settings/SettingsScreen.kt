@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.home.HomeSessionLadder
+import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -343,49 +344,6 @@ fun SettingsScreen(
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
 
-            SectionHeader(title = "Developer Tools")
-
-            OpenCodeListItem(
-                title = "TextMate Highlighting",
-                subtitle = "On by default for all packaged languages; semantic fallback otherwise (can disable)",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Highlighting"),
-                trailing = {
-                    Switch(
-                        checked = textMateEnabled,
-                        onCheckedChange = onTextMateEnabledChange,
-                    )
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            OpenCodeListItem(
-                title = "TextMate Languages",
-                subtitle = "Opt out of any packaged language (all default on)",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Languages"),
-                onClick = onTextMateLanguagesClick,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            OpenCodeListItem(
-                title = "Component Gallery",
-                subtitle = "Design-system foundations and reusable components",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "Component Gallery"),
-                onClick = onComponentGalleryClick,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            OpenCodeListItem(
-                title = "TextMate Logbook",
-                subtitle = "Persisted code-fence parsing measurements",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "TextMate Logbook"),
-                onClick = onTextMateLogbookClick,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
             OpenCodeListItem(
                 title = "Diagnostic Logs",
                 subtitle = "Share a redacted rolling runtime log window",
@@ -406,6 +364,51 @@ fun SettingsScreen(
                 },
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
+
+            if (DeveloperToolsPreferences.unlocked) {
+                SectionHeader(title = "Developer Tools")
+
+                OpenCodeListItem(
+                    title = "TextMate Highlighting",
+                    subtitle = "On by default for all packaged languages; semantic fallback otherwise (can disable)",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Highlighting"),
+                    trailing = {
+                        Switch(
+                            checked = textMateEnabled,
+                            onCheckedChange = onTextMateEnabledChange,
+                        )
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                OpenCodeListItem(
+                    title = "TextMate Languages",
+                    subtitle = "Opt out of any packaged language (all default on)",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Languages"),
+                    onClick = onTextMateLanguagesClick,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                OpenCodeListItem(
+                    title = "Component Gallery",
+                    subtitle = "Design-system foundations and reusable components",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "Component Gallery"),
+                    onClick = onComponentGalleryClick,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                OpenCodeListItem(
+                    title = "TextMate Logbook",
+                    subtitle = "Persisted code-fence parsing measurements",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "TextMate Logbook"),
+                    onClick = onTextMateLogbookClick,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
         }
     }
 

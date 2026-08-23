@@ -38,6 +38,8 @@ final class ServersViewModel {
 struct ServersView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = ServersViewModel()
+    @State private var headerTapCount = 0
+    @State private var lastHeaderTapAtMs: Int64 = 0
     var onAddServer: () -> Void
     var onEditProfile: (ConnectionProfile) -> Void
     var refreshToken: Int = 0
@@ -61,6 +63,20 @@ struct ServersView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 16)
                         .padding(.top, 16)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+                            let next = DeveloperToolsUnlock.nextCount(
+                                previousCount: headerTapCount,
+                                lastTapAtMs: lastHeaderTapAtMs,
+                                nowMs: nowMs
+                            )
+                            headerTapCount = next
+                            lastHeaderTapAtMs = nowMs
+                            if next >= DeveloperToolsUnlock.requiredTaps {
+                                DeveloperToolsPreferences.shared.unlock()
+                            }
+                        }
                     ForEach(viewModel.profiles, id: \.id) { profile in
                         let isActive = profile.id == viewModel.activeId
                         OpenCodeListItem(
