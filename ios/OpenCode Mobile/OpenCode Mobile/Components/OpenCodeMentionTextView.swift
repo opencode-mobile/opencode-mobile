@@ -1,6 +1,55 @@
 import SwiftUI
 import UIKit
 
+/// Prompt-field height for `OpenCodeMentionTextView`. Height is measured from
+/// attributed text, not `UITextView.sizeThatFits`: once scroll is on,
+/// `sizeThatFits` returns the capped bounds and the next update turns scroll
+/// back off (OPE-213).
+enum OpenCodeMentionTextViewLayout {
+    static let font = UIFont.systemFont(ofSize: 16, weight: .regular)
+    /// ~5 body lines — enough for a long prompt without swallowing the chat.
+    static var maxCollapsedHeight: CGFloat { font.lineHeight * 5 }
+    static let scrollThreshold: CGFloat = 0.5
+
+    static func attributedString(
+        text: String,
+        mentionRanges: [Range<Int>],
+        textColor: UIColor,
+        mentionColor: UIColor
+    ) -> NSAttributedString {
+        let result = NSMutableAttributedString(
+            string: text,
+            attributes: [.foregroundColor: textColor, .font: font]
+        )
+        for range in mentionRanges.sorted(by: { $0.lowerBound < $1.lowerBound }) {
+            guard range.lowerBound >= 0, range.upperBound <= text.count, range.lowerBound < range.upperBound,
+                  let nsRange = text.nsRange(fromCharacterRange: range)
+            else { continue }
+            result.addAttribute(.foregroundColor, value: mentionColor, range: nsRange)
+        }
+        return result
+    }
+
+    static func contentHeight(for attributedText: NSAttributedString, width: CGFloat) -> CGFloat {
+        guard width > 0 else { return font.lineHeight }
+        guard attributedText.length > 0 else { return font.lineHeight }
+        let rect = attributedText.boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            context: nil
+        )
+        return max(ceil(rect.height), font.lineHeight)
+    }
+
+    static func clampedHeight(contentHeight: CGFloat) -> CGFloat {
+        min(max(contentHeight, font.lineHeight), maxCollapsedHeight)
+    }
+
+    static func shouldScroll(contentHeight: CGFloat) -> Bool {
+        contentHeight > maxCollapsedHeight + scrollThreshold
+    }
+}
+
 /// Multi-line text input that renders `@name` agent-mention spans inline and
 /// reports caret/selection changes alongside text changes. `UITextView` is used
 /// instead of SwiftUI's `TextField` because the composer needs attributed-range
@@ -40,12 +89,18 @@ private struct Representable: UIViewRepresentable {
     func makeUIView(context: Context) -> PlaceholderTextView {
         let view = PlaceholderTextView()
         view.backgroundColor = .clear
-        view.font = Self.font
+        view.font = OpenCodeMentionTextViewLayout.font
         view.textContainerInset = .zero
         view.textContainer.lineFragmentPadding = 0
-        view.isScrollEnabled = false
+        // Keep scroll on. Toggling it from `sizeThatFits` while measuring the
+        // live view turns it back off on the next SwiftUI update (OPE-213).
+        view.isScrollEnabled = true
+        view.alwaysBounceVertical = false
+        view.bounces = false
+        view.setContentHuggingPriority(.defaultLow, for: .vertical)
+        view.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         view.delegate = context.coordinator
-        view.placeholderLabel.font = Self.font
+        view.placeholderLabel.font = OpenCodeMentionTextViewLayout.font
         return view
     }
 
@@ -64,11 +119,6 @@ private struct Representable: UIViewRepresentable {
             selectionRevision: selectionRevision,
             to: uiView
         )
-        let width = uiView.bounds.width
-        if width > 0 {
-            let fitting = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-            uiView.isScrollEnabled = fitting.height > Self.maxCollapsedHeight + 0.5
-        }
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: PlaceholderTextView, context: Context) -> CGSize? {
@@ -86,20 +136,18 @@ private struct Representable: UIViewRepresentable {
             selectionRevision: selectionRevision,
             to: uiView
         )
-        let fitting = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-        let idealHeight = max(fitting.height, Self.font.lineHeight)
+        let contentHeight = OpenCodeMentionTextViewLayout.contentHeight(
+            for: uiView.attributedText ?? NSAttributedString(),
+            width: width
+        )
         // Cap growth so chips/send stay above the keyboard; further text scrolls
-        // inside the field (OPE-118).
-        return CGSize(width: width, height: min(idealHeight, Self.maxCollapsedHeight))
+        // inside the field (OPE-118 / OPE-213).
+        return CGSize(width: width, height: OpenCodeMentionTextViewLayout.clampedHeight(contentHeight: contentHeight))
     }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onChange: onChange)
     }
-
-    fileprivate static let font = UIFont.systemFont(ofSize: 16, weight: .regular)
-    /// ~5 body lines — enough for a long prompt without swallowing the chat.
-    fileprivate static let maxCollapsedHeight: CGFloat = font.lineHeight * 5
 
     final class Coordinator: NSObject, UITextViewDelegate {
         private let onChange: (String, Int, Int) -> Void
@@ -122,12 +170,11 @@ private struct Representable: UIViewRepresentable {
             to view: PlaceholderTextView
         ) {
             if lastRenderedText != text || lastRenderedMentionRanges != mentionRanges {
-                view.attributedText = Self.attributedString(
+                view.attributedText = OpenCodeMentionTextViewLayout.attributedString(
                     text: text,
                     mentionRanges: mentionRanges,
                     textColor: textColor,
-                    mentionColor: mentionColor,
-                    font: Representable.font
+                    mentionColor: mentionColor
                 )
                 lastRenderedText = text
                 lastRenderedMentionRanges = mentionRanges
@@ -135,6 +182,7 @@ private struct Representable: UIViewRepresentable {
             if lastAppliedSelectionRevision != selectionRevision {
                 lastAppliedSelectionRevision = selectionRevision
                 applySelection(start: selectionStart, end: selectionEnd, text: text, to: view)
+                view.scrollCaretIntoViewIfNeeded()
             }
             view.placeholderLabel.isHidden = !text.isEmpty
         }
@@ -142,8 +190,10 @@ private struct Representable: UIViewRepresentable {
         func textViewDidChange(_ textView: UITextView) {
             let text = textView.text ?? ""
             lastRenderedText = text
-            (textView as? PlaceholderTextView)?.placeholderLabel.isHidden = !text.isEmpty
+            let mentionView = textView as? PlaceholderTextView
+            mentionView?.placeholderLabel.isHidden = !text.isEmpty
             reportSelection(text: text, utf16Range: textView.selectedRange)
+            mentionView?.scrollCaretIntoViewIfNeeded()
         }
 
         func textViewDidChangeSelection(_ textView: UITextView) {
@@ -171,26 +221,6 @@ private struct Representable: UIViewRepresentable {
             else { return }
             view.selectedTextRange = range
         }
-
-        private static func attributedString(
-            text: String,
-            mentionRanges: [Range<Int>],
-            textColor: UIColor,
-            mentionColor: UIColor,
-            font: UIFont
-        ) -> NSAttributedString {
-            let result = NSMutableAttributedString(
-                string: text,
-                attributes: [.foregroundColor: textColor, .font: font]
-            )
-            for range in mentionRanges.sorted(by: { $0.lowerBound < $1.lowerBound }) {
-                guard range.lowerBound >= 0, range.upperBound <= text.count, range.lowerBound < range.upperBound,
-                      let nsRange = text.nsRange(fromCharacterRange: range)
-                else { continue }
-                result.addAttribute(.foregroundColor, value: mentionColor, range: nsRange)
-            }
-            return result
-        }
     }
 }
 
@@ -212,6 +242,17 @@ final class PlaceholderTextView: UITextView {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    func scrollCaretIntoViewIfNeeded() {
+        let width = bounds.width
+        guard width > 0 else { return }
+        let contentHeight = OpenCodeMentionTextViewLayout.contentHeight(
+            for: attributedText ?? NSAttributedString(),
+            width: width
+        )
+        guard OpenCodeMentionTextViewLayout.shouldScroll(contentHeight: contentHeight) else { return }
+        scrollRangeToVisible(selectedRange)
     }
 }
 
@@ -253,6 +294,21 @@ private extension String {
         placeholder: "Ask anything...",
         onChange: { _, _, _ in }
     )
+    .padding()
+    .openCodeTheme()
+}
+
+#Preview("Long prompt") {
+    OpenCodeMentionTextView(
+        text: String(repeating: "a very long message ", count: 24),
+        mentionRanges: [],
+        selectionStart: nil,
+        selectionEnd: nil,
+        selectionRevision: 0,
+        placeholder: "Ask anything...",
+        onChange: { _, _, _ in }
+    )
+    .frame(maxWidth: 320)
     .padding()
     .openCodeTheme()
 }
