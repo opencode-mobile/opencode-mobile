@@ -1915,6 +1915,89 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun loadMessages_initializesAgentFromLatestUserMessage() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-1",
+                                    role = MessageRole.User,
+                                    text = "Plan this",
+                                    modelProviderId = "anthropic",
+                                    modelId = "claude-sonnet",
+                                    mode = "plan",
+                                    sentAtEpochMs = 2_000L,
+                                ),
+                            ),
+                    ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("plan", viewModel.uiState.value.composer.selectedMode)
+            assertEquals("Plan", viewModel.uiState.value.composer.selectedModeLabel)
+        }
+
+    @Test
+    fun loadMessages_newerUserAgentOverridesOlderCachedAgent() =
+        runTest(testDispatcher) {
+            val selectionStore = FakeSessionModelSelectionStore()
+            selectionStore.seed(
+                serverBaseUrl = "http://127.0.0.1:4096/",
+                worktree = "/repo",
+                sessionId = "ses-1",
+                selection =
+                    SessionModelSelection(
+                        providerId = "anthropic",
+                        modelId = "claude-sonnet",
+                        agentId = "build",
+                        savedAtEpochMs = 1_000L,
+                    ),
+            )
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-1",
+                                    role = MessageRole.User,
+                                    text = "Switch to plan",
+                                    modelProviderId = "anthropic",
+                                    modelId = "claude-sonnet",
+                                    mode = "plan",
+                                    sentAtEpochMs = 2_000L,
+                                ),
+                            ),
+                    ),
+                    sessionModelSelectionStore = selectionStore,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("plan", viewModel.uiState.value.composer.selectedMode)
+        }
+
+    @Test
+    fun selectMode_persistsAgentForTheSessionWithoutNewSessionPreference() =
+        runTest(testDispatcher) {
+            val selectionStore = FakeSessionModelSelectionStore()
+            val viewModel = createViewModel(FakeMessageRepository(), sessionModelSelectionStore = selectionStore)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.selectMode("plan")
+            advanceUntilIdle()
+
+            val identity = ModelSelectionConnectionIdentity("http://127.0.0.1:4096/", "opencode")
+            assertEquals("plan", selectionStore.loadSession(identity, "/repo", "ses-1")?.agentId)
+            assertNull(selectionStore.loadNewSessionPreference(identity, "/repo")?.agentId)
+        }
+
+    @Test
     fun initialization_waitsForLateCacheAndPublishesSelectionOnceReady() =
         runTest(testDispatcher) {
             val defaultOption =

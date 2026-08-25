@@ -284,7 +284,9 @@ final class SessionChatTimeline {
         let sorted = sortedByRecency(lastLoadedMessages)
         return ModelSelectionHistoryHints(
             user: latestModelHint(from: sorted, role: .user),
-            assistant: latestModelHint(from: sorted, role: .assistant)
+            assistant: latestModelHint(from: sorted, role: .assistant),
+            userAgent: latestAgentHint(from: sorted, role: .user),
+            assistantAgent: latestAgentHint(from: sorted, role: .assistant)
         )
     }
 
@@ -580,6 +582,14 @@ final class SessionChatTimeline {
             sentAtEpochMs: message.sentAtEpochMs,
             source: role == .user ? .user : .assistant
         )
+    }
+
+    private func latestAgentHint(from sortedMessages: [Message], role: MessageRole) -> LatestAgentHint? {
+        guard let message = sortedMessages.first(where: {
+            $0.role == role && !($0.mode?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        }), let mode = message.mode
+        else { return nil }
+        return LatestAgentHint(mode: mode, sentAtEpochMs: message.sentAtEpochMs)
     }
 
     private func signatureCounts(_ rows: [SessionChatRow]) -> [String: Int] {

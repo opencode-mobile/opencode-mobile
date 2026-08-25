@@ -1171,6 +1171,100 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.composer.selectedVariant == "high")
     }
 
+    @Test func loadMessages_initializesAgentFromLatestUserMessage() async {
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .user,
+                        text: "Plan this",
+                        model: nil,
+                        modelProviderID: "anthropic",
+                        modelID: "claude-sonnet",
+                        variant: nil,
+                        mode: "plan",
+                        sentAtEpochMs: 2_000
+                    ),
+                ]
+            )
+        )
+
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.composer.selectedMode == "plan" }
+        #expect(viewModel.uiState.composer.selectedMode == "plan")
+        #expect(viewModel.uiState.composer.selectedModeLabel == "Plan")
+    }
+
+    @Test func loadMessages_newerUserAgentOverridesOlderCachedAgent() async {
+        let selectionStore = InMemorySessionModelSelectionStore()
+        await selectionStore.save(
+            serverBaseURL: "http://127.0.0.1:4096/",
+            worktree: "/repo",
+            sessionID: "ses-1",
+            selection: SessionModelSelection(
+                providerID: "anthropic",
+                modelID: "claude-sonnet",
+                variant: nil,
+                agentID: "build",
+                savedAtEpochMs: 1_000
+            )
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .user,
+                        text: "Switch to plan",
+                        model: nil,
+                        modelProviderID: "anthropic",
+                        modelID: "claude-sonnet",
+                        variant: nil,
+                        mode: "plan",
+                        sentAtEpochMs: 2_000
+                    ),
+                ]
+            ),
+            sessionModelSelectionStore: selectionStore
+        )
+
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.composer.selectedMode == "plan" }
+        #expect(viewModel.uiState.composer.selectedMode == "plan")
+    }
+
+    @Test func selectMode_persistsAgentForTheSessionWithoutNewSessionPreference() async {
+        let selectionStore = InMemorySessionModelSelectionStore()
+        let viewModel = makeViewModel(sessionModelSelectionStore: selectionStore)
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.composer.isModelSelectionReady }
+
+        viewModel.selectMode("plan")
+        let identity = ModelSelectionConnectionIdentity(
+            serverBaseURL: "http://127.0.0.1:4096/",
+            username: "opencode"
+        )
+        var storedAgent: String?
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline {
+            storedAgent = await selectionStore.loadSession(
+                connectionIdentity: identity,
+                worktree: "/repo",
+                sessionID: "ses-1"
+            )?.agentID
+            if storedAgent == "plan" { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(storedAgent == "plan")
+        #expect(
+            await selectionStore.loadNewSessionPreference(
+                connectionIdentity: identity,
+                worktree: "/repo"
+            )?.agentID == nil
+        )
+    }
+
     @Test func initialization_waitsForLateCacheAndPublishesSelectionOnceReady() async {
         let defaultOption = ModelSelectionOption(
             providerID: "anthropic",
