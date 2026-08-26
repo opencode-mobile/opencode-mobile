@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.command
 
 import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.PromptModelSelection
 
 enum class ServerCommandSource {
@@ -24,6 +25,7 @@ data class CommandRunOptions(
     val model: PromptModelSelection? = null,
     val variant: String? = null,
     val mode: String? = null,
+    val delivery: FollowUpDelivery = FollowUpDelivery.Steer,
 )
 
 sealed class ComposerSubmitIntent {

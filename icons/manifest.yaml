@@ -8,7 +8,11 @@ icons:
     notes: SF Symbol chevron.left
   - name: arrow_upward
     style: filled
-    notes: SF Symbol arrow.up
+    notes: SF Symbol arrow.up; Queue / default Send
+  - name: arrow_warm_up
+    source: material_symbols
+    style: filled
+    notes: Steer follow-up send
   - name: arrow_downward
     style: filled
     notes: SF Symbol arrow.down; scroll-to-end action pill

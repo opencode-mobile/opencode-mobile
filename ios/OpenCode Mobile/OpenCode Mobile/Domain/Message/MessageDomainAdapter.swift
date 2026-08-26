@@ -19,7 +19,9 @@ nonisolated struct MessageDomainAdapter: Sendable {
             mode: info.mode ?? info.agent,
             sentAtEpochMs: info.time?.created,
             contextInputTokens: info.tokens?.input,
-            contextEstimate: contextEstimate(role: info.role, parts: dto.parts)
+            contextEstimate: contextEstimate(role: info.role, parts: dto.parts),
+            followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
+            isWaitingForPickup: info.waiting == true
         )
     }
 
@@ -42,7 +44,9 @@ nonisolated struct MessageDomainAdapter: Sendable {
             mode: info.mode ?? info.agent,
             sentAtEpochMs: info.time?.created,
             contextInputTokens: info.tokens?.input,
-            contextEstimate: MessageContextEstimate()
+            contextEstimate: MessageContextEstimate(),
+            followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
+            isWaitingForPickup: info.waiting == true
         )
     }
 
@@ -179,7 +183,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
         return V2PromptRequestDTO(
             text: options.text,
             files: files.isEmpty ? nil : files,
-            agents: agents.isEmpty ? nil : agents
+            agents: agents.isEmpty ? nil : agents,
+            delivery: options.delivery.wireValue
         )
     }
 

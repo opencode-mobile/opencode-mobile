@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
 import dev.opencode.mobile.domain.event.LiveUpdatesLabel
 import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.model.ModelSelection
@@ -35,6 +36,8 @@ data class SessionChatComposerState(
     val agentMentions: List<AgentMention> = emptyList(),
     val cursor: Int = 0,
     val selectionRevision: Int = 0,
+    val followUpDelivery: FollowUpDelivery = FollowUpDelivery.Steer,
+    val supportsFollowUpDelivery: Boolean = false,
 ) {
     val selectedModeLabel: String
         get() =
@@ -336,6 +339,7 @@ data class SessionChatComposerRegionState(
     val slashSuggestions: List<SessionChatSlashSuggestion> = emptyList(),
     val atSuggestionsVisible: Boolean = false,
     val atSuggestions: List<SessionChatAtSuggestion> = emptyList(),
+    val followUpNotice: String? = null,
 )
 
 fun ServerCommand.toSlashSuggestion(): SessionChatSlashSuggestion =
@@ -468,6 +472,8 @@ data class SessionChatMessageItem(
     val role: MessageRole,
     val text: String,
     val metadataLabel: String,
+    val waitingCaption: String? = null,
+    val waitingDelivery: FollowUpDelivery? = null,
     val isPending: Boolean = false,
     val isStreaming: Boolean = false,
     val renderedMarkdown: MarkdownDocument? = null,

@@ -17,8 +17,12 @@ Still binding:
   for missing SSE. Heartbeat-only is not acceptable.
   Project `session.reasoning.*` /
   `session.next.reasoning.*` into a distinct reasoning part. Render thinking.
-- `session.inbox.enqueued` / `.delivered` / `session.next.prompted` project
-  to user `message.*`. Read `item.payload` (and `inboxID`).
+- `session.next.prompt.admitted` (and legacy `session.inbox.enqueued`) is
+  inbox-only: project a user row marked waiting. `session.next.prompted`
+  (and legacy `session.inbox.delivered`) is pickup: the same user row
+  without waiting. Do not treat admitted as already in the model turn.
+- V2 prompt and command send include `delivery`: `steer` (default) or
+  `queue`. V1 `prompt_async` has no delivery field.
 - `session.next.step.ended` is not idle. Idle is execution succeeded /
   interrupted / failed.
 - Tool, shell, compaction, and text `session.next.*` / `session.*` project

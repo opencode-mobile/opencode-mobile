@@ -59,7 +59,8 @@ Some catalog icons have a stable product meaning beyond gallery samples:
 | `search` | Gallery and Top Bar search samples |
 | `folder_check` | **Current directory** row in Add project sheet |
 | `subdirectory_arrow_right` | Subdirectory rows in Add project sheet |
-| `arrow_upward` | **Go up** row in Add project sheet |
+| `arrow_upward` | **Go up** row in Add project sheet; Queue / default Send |
+| `arrow_warm_up` | Steer follow-up send |
 | `edit` | Edit/rename affordances in gallery and samples; not the gallery entry on home |
 | `archive` | Session Chat overflow **Archive** action |
 | `delete` | Edit server top-bar **Remove** |

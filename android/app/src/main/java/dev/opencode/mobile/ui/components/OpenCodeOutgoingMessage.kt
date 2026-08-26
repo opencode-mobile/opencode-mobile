@@ -5,10 +5,13 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -28,9 +31,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.command.commandTokenHighlightRange
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private const val OUTGOING_MESSAGE_MAX_WIDTH_FRACTION = 0.80f
 private val OutgoingMessageShape = RoundedCornerShape(8.dp)
@@ -53,6 +58,8 @@ sealed interface OpenCodeOutgoingMessageContent {
 fun OpenCodeOutgoingMessage(
     text: String,
     metadataLabel: String,
+    waitingCaption: String? = null,
+    waitingDelivery: FollowUpDelivery? = null,
     modifier: Modifier = Modifier,
     renderedMarkdown: MarkdownDocument? = null,
     attachments: List<OpenCodeAttachmentPresentation> = emptyList(),
@@ -148,6 +155,32 @@ fun OpenCodeOutgoingMessage(
                         .widthIn(max = maxBubbleWidth)
                         .padding(top = if (resolvedContent.isEmpty()) 0.dp else OutgoingMessageFooterSpacing),
             )
+            if (waitingCaption != null) {
+                Row(
+                    modifier = Modifier.widthIn(max = maxBubbleWidth),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Icon(
+                        imageVector =
+                            if (waitingDelivery == FollowUpDelivery.Queue) {
+                                OpenCodeIcons.ArrowUpward
+                            } else {
+                                OpenCodeIcons.ArrowWarmUp
+                            },
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(13.dp),
+                    )
+                    Text(
+                        text = waitingCaption,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
     }
 }

@@ -1,6 +1,9 @@
 package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -69,6 +72,7 @@ enum class OpenCodeButtonSize {
     Medium,
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OpenCodeButton(
     variant: OpenCodeButtonVariant,
@@ -77,6 +81,7 @@ fun OpenCodeButton(
     enabled: Boolean = true,
     contrast: OpenCodeButtonContrast = OpenCodeButtonContrast.High,
     size: OpenCodeButtonSize = OpenCodeButtonSize.Medium,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val containerColor =
         when {
@@ -125,10 +130,18 @@ fun OpenCodeButton(
             else -> OpenCodeButtonCornerRadius
         }
 
+    val interaction =
+        if (onLongClick != null) {
+            Modifier.combinedClickable(
+                enabled = enabled,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
+        } else {
+            Modifier.clickable(enabled = enabled, onClick = onClick)
+        }
     Surface(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier.then(variantModifier),
+        modifier = modifier.then(variantModifier).then(interaction),
         shape = shape,
         color = containerColor,
         contentColor = contentColor,

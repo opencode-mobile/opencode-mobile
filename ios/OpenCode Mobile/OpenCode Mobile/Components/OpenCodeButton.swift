@@ -25,27 +25,45 @@ struct OpenCodeButton: View {
     let enabled: Bool
     let contrast: OpenCodeButtonContrast
     let action: () -> Void
+    let longPress: (() -> Void)?
 
     init(
         variant: OpenCodeButtonVariant,
         size: OpenCodeButtonSize = .medium,
         enabled: Bool = true,
         contrast: OpenCodeButtonContrast = .high,
+        longPress: (() -> Void)? = nil,
         action: @escaping () -> Void
     ) {
         self.variant = variant
         self.size = size
         self.enabled = enabled
         self.contrast = contrast
+        self.longPress = longPress
         self.action = action
     }
 
+    @State private var didLongPress = false
+
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            if didLongPress {
+                didLongPress = false
+                return
+            }
+            action()
+        }) {
             label
         }
         .buttonStyle(OpenCodeButtonStyle(variant: variant, size: size, enabled: enabled, contrast: contrast))
         .disabled(!enabled)
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+                guard enabled, let longPress else { return }
+                didLongPress = true
+                longPress()
+            }
+        )
     }
 
     @ViewBuilder

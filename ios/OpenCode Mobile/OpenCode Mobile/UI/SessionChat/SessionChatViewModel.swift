@@ -481,6 +481,11 @@ final class SessionChatViewModel {
         await sessionInfo.confirmRenameSession()
     }
 
+    func toggleFollowUp() {
+        guard activeConnectionManager.capabilities.supportsFollowUpDelivery else { return }
+        composer.toggleFollowUp()
+    }
+
     func sendPrompt() async {
         let hasAttachments = !composer.state.composer.attachments.isEmpty
         guard isConnectionLive else {
@@ -539,7 +544,9 @@ final class SessionChatViewModel {
                 self?.sessionInfo.clearOptimisticBusy()
                 self?.composer.setSendError(error)
                 self?.timeline.failOptimisticSend(optimisticID: optimisticID, error: error)
-            }
+            },
+            isSessionBusy: sessionInfo.state.sessionStatusLabel != nil,
+            supportsFollowUp: activeConnectionManager.capabilities.supportsFollowUpDelivery
         )
         DiagnosticLog.info(.chat, "sendPrompt end session=\(sessionID)")
     }
@@ -1105,7 +1112,7 @@ final class SessionChatViewModel {
         }()
         let snackbar = resolveSnackbar(
             transientError: transientError,
-            successNotice: commandsState.actionSuccessMessage
+            successNotice: composerState.followUpNotice ?? commandsState.actionSuccessMessage
         )
         // Reuse the current TimelineFrame when only composer / session-info /
         // review / command republish (same revision → no O(n) remap).
@@ -1138,7 +1145,11 @@ final class SessionChatViewModel {
             timeline: timelineState.timeline,
             messages: timelineState.messages,
             timelineFrame: timelineFrame,
-            composer: composer.state.composer,
+            composer: {
+                var next = composer.state.composer
+                next.supportsFollowUpDelivery = activeConnectionManager.capabilities.supportsFollowUpDelivery
+                return next
+            }(),
             isSending: composerState.isSending,
             isRefreshing: timelineState.isRefreshing,
             isAborting: composerState.isAborting,

@@ -94,6 +94,7 @@ final class SessionChatComposer {
         attachmentRevision = 0
         attachmentRevisions = [:]
         state = SessionChatComposerRegionState()
+        state.composer.followUpDelivery = SessionChatDisplayPreferences.shared.followUpDelivery
         notifyChange()
         Task {
             await self.loadCachedSelection()
@@ -122,6 +123,7 @@ final class SessionChatComposer {
         attachmentRevision = 0
         attachmentRevisions = [:]
         state = SessionChatComposerRegionState()
+        state.composer.followUpDelivery = SessionChatDisplayPreferences.shared.followUpDelivery
         notifyChange()
     }
 
@@ -536,11 +538,29 @@ final class SessionChatComposer {
         schedulePersistDraft()
     }
 
+    @discardableResult
+    func toggleFollowUp() -> FollowUpDelivery {
+        let next = state.composer.followUpDelivery.toggled
+        state.composer.followUpDelivery = next
+        state.followUpNotice = next.switchedSnackbar
+        notifyChange()
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(2200))
+            if state.followUpNotice == next.switchedSnackbar {
+                state.followUpNotice = nil
+                notifyChange()
+            }
+        }
+        return next
+    }
+
     func sendPrompt(
         sessionID: String,
         onOptimisticRows: ([SessionChatRow]) async -> Void,
         onSendAccepted: () async -> Void,
-        onSendFailed: (String, String) -> Void
+        onSendFailed: (String, String) -> Void,
+        isSessionBusy: Bool,
+        supportsFollowUp: Bool
     ) async {
         let submittedText = state.composer.text
         let (trimmed, mentionsForSend) = ComposerMentionRouting.trimForSend(
@@ -597,6 +617,8 @@ final class SessionChatComposer {
                 model: composer.selectedModel?.modelLabel,
                 variant: composer.selectedVariant
             ),
+            waitingCaption: (supportsFollowUp && isSessionBusy) ? composer.followUpDelivery.waitingCaption : nil,
+            waitingDelivery: (supportsFollowUp && isSessionBusy) ? composer.followUpDelivery : nil,
             isPending: true,
             isStreaming: false,
             renderedMarkdown: nil,
@@ -639,7 +661,8 @@ final class SessionChatComposer {
                             modelID: selectedModel.option.modelID
                         ),
                         variant: composer.selectedVariant,
-                        mode: composer.selectedMode
+                        mode: composer.selectedMode,
+                        delivery: composer.followUpDelivery
                     ),
                     directory: worktree
                 )
@@ -655,7 +678,8 @@ final class SessionChatComposer {
                         ),
                         variant: composer.selectedVariant,
                         mode: composer.selectedMode,
-                        agentMentions: mentionsForSend
+                        agentMentions: mentionsForSend,
+                        delivery: composer.followUpDelivery
                     ),
                     directory: worktree
                 )
@@ -1015,6 +1039,8 @@ final class SessionChatComposer {
             role: optimistic.role,
             text: optimistic.text,
             metadataLabel: optimistic.metadataLabel,
+            waitingCaption: optimistic.waitingCaption,
+            waitingDelivery: optimistic.waitingDelivery,
             isPending: optimistic.isPending,
             isStreaming: optimistic.isStreaming,
             renderedMarkdown: preferPlainCommandHighlight ? nil : prepared.renderedMarkdown,

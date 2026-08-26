@@ -854,7 +854,8 @@ struct SessionChatView: View {
                     attachEnabled: composer.canAttach && composer.isModelSelectionReady,
                     showStop: viewModel.uiState.sessionStatusLabel != nil,
                     stopEnabled: !viewModel.uiState.isAborting &&
-                        viewModel.uiState.canMutate
+                        viewModel.uiState.canMutate,
+                    followUpDelivery: composer.supportsFollowUpDelivery ? composer.followUpDelivery : nil
                 )
             )
         }
@@ -901,6 +902,8 @@ struct SessionChatView: View {
                     viewModel.openCommands()
                 case .send:
                     Task { await viewModel.sendPrompt() }
+                case .toggleFollowUp:
+                    viewModel.toggleFollowUp()
                 case .stop:
                     Task { await viewModel.abortSession() }
                 case let .allowPermissionOnce(requestID, sessionID):

@@ -109,6 +109,11 @@ nonisolated enum AnySendable: Sendable, Equatable {
         else { nil }
     }
 
+    var boolValue: Bool? {
+        if case let .bool(value) = self { value }
+        else { nil }
+    }
+
     var int64Value: Int64? {
         switch self {
         case let .int(value): Int64(value)

@@ -375,7 +375,7 @@ class ChangesViewModelTest {
     private fun row(
         id: String,
         role: MessageRole,
-    ) = SessionChatMessageItem(id, role, "", "", false)
+    ) = SessionChatMessageItem(id, role, "", "", isPending = false)
 
     private fun file(
         path: String,

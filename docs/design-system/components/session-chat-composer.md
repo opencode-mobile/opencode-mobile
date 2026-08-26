@@ -35,7 +35,8 @@ request have identical width, shape, inset, background, and border behavior.
 
 The public native API accepts one semantic state value and one action callback.
 Prompt actions are text changed (text plus selection), select model, select mode,
-select variant, attach, open commands, remove attachment, send, and stop.
+select variant, attach, open commands, remove attachment, send, long-press send
+(V2 follow-up mode flip), and stop.
 Prompt content includes `attachEnabled` so the feature can disable Attach when
 the selected model lacks image and PDF input. Prompt text may include mention
 ranges that render with the `syntax-type` token (inline `@name` agent

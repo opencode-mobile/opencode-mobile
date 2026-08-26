@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -124,6 +125,7 @@ class EventDomainAdapterTest {
         assertEquals("ses-1", event?.sessionId)
         assertEquals("user", event?.rawProperties?.get("info")?.jsonObject?.get("role")?.jsonPrimitive?.content)
         assertEquals("msg-1", event?.rawProperties?.get("info")?.jsonObject?.get("id")?.jsonPrimitive?.content)
+        assertEquals(true, event?.rawProperties?.get("info")?.jsonObject?.get("waiting")?.jsonPrimitive?.booleanOrNull)
     }
 
     @Test
@@ -135,6 +137,8 @@ class EventDomainAdapterTest {
 
         assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
         assertEquals("user", events[0].rawProperties?.get("info")?.jsonObject?.get("role")?.jsonPrimitive?.content)
+        assertEquals(false, events[0].rawProperties?.get("info")?.jsonObject?.get("waiting")?.jsonPrimitive?.booleanOrNull)
+        assertEquals("steer", events[0].rawProperties?.get("info")?.jsonObject?.get("delivery")?.jsonPrimitive?.content)
         val part = events[1].rawProperties?.get("part")?.jsonObject
         assertEquals("text", part?.get("type")?.jsonPrimitive?.content)
         assertEquals("Hello from CLI", part?.get("text")?.jsonPrimitive?.content)

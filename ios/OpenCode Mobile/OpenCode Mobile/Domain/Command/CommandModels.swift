@@ -35,6 +35,7 @@ struct CommandRunOptions: Equatable, Sendable {
     let model: PromptModelSelection?
     let variant: String?
     let mode: String?
+    let delivery: FollowUpDelivery
 
     init(
         command: String,
@@ -42,7 +43,8 @@ struct CommandRunOptions: Equatable, Sendable {
         attachments: [Attachment] = [],
         model: PromptModelSelection? = nil,
         variant: String? = nil,
-        mode: String? = nil
+        mode: String? = nil,
+        delivery: FollowUpDelivery = .steer
     ) {
         self.command = command
         self.arguments = arguments
@@ -50,6 +52,7 @@ struct CommandRunOptions: Equatable, Sendable {
         self.model = model
         self.variant = variant
         self.mode = mode
+        self.delivery = delivery
     }
 }
 

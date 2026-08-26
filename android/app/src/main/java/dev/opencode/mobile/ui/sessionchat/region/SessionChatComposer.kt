@@ -18,7 +18,9 @@ import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.PromptModelSelection
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.PromptSendOptions
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
@@ -134,7 +136,13 @@ class SessionChatComposer(
         draftRevision = 0
         nextAttachmentRevision = 1
         attachmentRevisions.clear()
-        _state.value = SessionChatComposerRegionState()
+        _state.value =
+            SessionChatComposerRegionState(
+                composer =
+                    SessionChatComposerState(
+                        followUpDelivery = SessionChatDisplayPreferences.followUpDelivery,
+                    ),
+            )
         logI("bind session=$sessionId worktree=$worktree")
         loadCachedSelection()
         loadServerCommands()
@@ -598,12 +606,31 @@ class SessionChatComposer(
         schedulePersistDraft()
     }
 
+    fun toggleFollowUp(): FollowUpDelivery {
+        val next = _state.value.composer.followUpDelivery.toggled()
+        updateComposer { it.copy(followUpDelivery = next) }
+        _state.update { it.copy(followUpNotice = next.switchedSnackbar) }
+        scope.launch {
+            delay(2_200)
+            _state.update { current ->
+                if (current.followUpNotice == next.switchedSnackbar) {
+                    current.copy(followUpNotice = null)
+                } else {
+                    current
+                }
+            }
+        }
+        return next
+    }
+
     fun sendPrompt(
         sessionId: String,
         worktree: String,
         onOptimisticRows: suspend (List<SessionChatMessageItem>) -> Unit,
         onSendAccepted: suspend () -> Unit,
         onSendFailed: (optimisticId: String, error: String) -> Unit,
+        isSessionBusy: Boolean,
+        supportsFollowUp: Boolean,
     ) {
         val composer = _state.value.composer
         val (prompt, mentionsForSend) =
@@ -643,6 +670,12 @@ class SessionChatComposer(
                             role = dev.opencode.mobile.domain.message.MessageRole.User,
                             text = display.text,
                             metadataLabel = composerMetadataLabel(composer),
+                            waitingCaption =
+                                composer.followUpDelivery.waitingCaption.takeIf {
+                                    supportsFollowUp && isSessionBusy
+                                },
+                            waitingDelivery =
+                                composer.followUpDelivery.takeIf { supportsFollowUp && isSessionBusy },
                             isPending = true,
                             isStreaming = false,
                             renderedMarkdown = optimisticMarkdown,
@@ -699,6 +732,7 @@ class SessionChatComposer(
                                         ),
                                     variant = composer.selectedVariant,
                                     mode = composer.selectedMode,
+                                    delivery = composer.followUpDelivery,
                                 ),
                             directory = worktree,
                         )
@@ -717,6 +751,7 @@ class SessionChatComposer(
                                     variant = composer.selectedVariant,
                                     mode = composer.selectedMode,
                                     agentMentions = mentionsForSend,
+                                    delivery = composer.followUpDelivery,
                                 ),
                             directory = worktree,
                         )

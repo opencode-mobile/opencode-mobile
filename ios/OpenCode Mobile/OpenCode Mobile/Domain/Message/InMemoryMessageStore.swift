@@ -257,7 +257,12 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
 
         ensureCaches(sessionID: sessionID)
         let inserted = !(messageOrder[sessionID]?.contains(messageID) ?? false)
-        infoCache[sessionID]?[messageID] = .dictionary(infoDict)
+        var merged = infoDict
+        if infoDict["waiting"] == nil, case let .dictionary(prior) = infoCache[sessionID]?[messageID] {
+            if let waiting = prior["waiting"] { merged["waiting"] = waiting }
+            if let delivery = prior["delivery"] { merged["delivery"] = delivery }
+        }
+        infoCache[sessionID]?[messageID] = .dictionary(merged)
 
         if partsCache[sessionID]?[messageID] == nil {
             partsCache[sessionID]?[messageID] = [:]

@@ -23,13 +23,22 @@ nonisolated enum ServerProtocol: String, Sendable, Equatable {
 nonisolated struct ServerCapabilities: Sendable, Equatable {
     let supportsSessionMessageDiff: Bool
     let supportsSessionArchive: Bool
+    let supportsFollowUpDelivery: Bool
 
     static func forProtocol(_ serverProtocol: ServerProtocol) -> ServerCapabilities {
         switch serverProtocol {
         case .v1:
-            return ServerCapabilities(supportsSessionMessageDiff: true, supportsSessionArchive: true)
+            return ServerCapabilities(
+                supportsSessionMessageDiff: true,
+                supportsSessionArchive: true,
+                supportsFollowUpDelivery: false
+            )
         case .v2:
-            return ServerCapabilities(supportsSessionMessageDiff: false, supportsSessionArchive: false)
+            return ServerCapabilities(
+                supportsSessionMessageDiff: false,
+                supportsSessionArchive: false,
+                supportsFollowUpDelivery: true
+            )
         }
     }
 }

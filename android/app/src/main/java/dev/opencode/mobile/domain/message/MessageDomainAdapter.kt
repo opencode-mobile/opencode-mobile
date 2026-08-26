@@ -54,6 +54,8 @@ class MessageDomainAdapter {
             sentAtEpochMs = info.time?.created,
             contextInputTokens = info.tokens?.input,
             contextEstimate = toContextEstimate(info.role, dto.parts),
+            followUpDelivery = FollowUpDelivery.fromWire(info.delivery),
+            isWaitingForPickup = info.waiting == true,
         )
     }
 
@@ -77,6 +79,8 @@ class MessageDomainAdapter {
             sentAtEpochMs = info.time?.created,
             contextInputTokens = info.tokens?.input,
             contextEstimate = MessageContextEstimate(),
+            followUpDelivery = FollowUpDelivery.fromWire(info.delivery),
+            isWaitingForPickup = info.waiting == true,
         )
     }
 
@@ -235,7 +239,7 @@ class MessageDomainAdapter {
             text = options.text,
             files = files,
             agents = agents,
-            delivery = "steer",
+            delivery = options.delivery.wireValue,
         )
     }
 

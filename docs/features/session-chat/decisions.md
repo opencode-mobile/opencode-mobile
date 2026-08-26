@@ -35,3 +35,13 @@ Still binding:
   `[REDACTED]`-only parts are omitted). Once text exists, the thought
   row is one stable item: keep it and only change the label. Do not
   drop or remount it between Thinking and Thought.
+- Follow-up send is V2-only. Default is Steer. Settings **Follow-up
+  send** chooses Steer or Queue. The composer send icon is Arrow Warm
+  Up for Steer and Arrow Upward for Queue. Long-press send flips the
+  next send and snacks `Switched to Steer` / `Switched to Queue`. Tap
+  sends with the current mode. V1 has no delivery field, no long-press
+  flip, and the setting is disabled (`Not supported on V1. This server
+  always sends immediately.`).
+- Waiting caption is feed-only and only until pickup. Copy: `Waiting
+  to steer` / `Held until idle`, caption type, no badge. After
+  `session.next.prompted` the row is a normal outgoing message.

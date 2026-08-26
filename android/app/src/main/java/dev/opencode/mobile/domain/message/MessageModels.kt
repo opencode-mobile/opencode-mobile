@@ -18,7 +18,12 @@ data class Message(
     val sentAtEpochMs: Long? = null,
     val contextInputTokens: Long? = null,
     val contextEstimate: MessageContextEstimate = MessageContextEstimate(),
-)
+    val followUpDelivery: FollowUpDelivery? = null,
+    val isWaitingForPickup: Boolean = false,
+) {
+    val waitingCaption: String?
+        get() = if (isWaitingForPickup) followUpDelivery?.waitingCaption else null
+}
 
 data class MessageTokenUsage(
     val input: Long,
@@ -118,6 +123,7 @@ data class PromptSendOptions(
     val variant: String? = null,
     val mode: String? = null,
     val agentMentions: List<AgentMention> = emptyList(),
+    val delivery: FollowUpDelivery = FollowUpDelivery.Steer,
 )
 
 data class PromptModelSelection(

@@ -110,6 +110,7 @@ struct EventDomainAdapterTests {
         #expect(event?.sessionID == "ses-1")
         #expect(event?.rawProperties?["info"]?.dictionaryValue?["role"]?.stringValue == "user")
         #expect(event?.rawProperties?["info"]?.dictionaryValue?["id"]?.stringValue == "msg-1")
+        #expect(event?.rawProperties?["info"]?.dictionaryValue?["waiting"]?.boolValue == true)
     }
 
     @Test func parseEvents_projectsPromptedIntoUserMessageAndTextPart() {
@@ -119,6 +120,8 @@ struct EventDomainAdapterTests {
         )
         #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
         #expect(events[0].rawProperties?["info"]?.dictionaryValue?["role"]?.stringValue == "user")
+        #expect(events[0].rawProperties?["info"]?.dictionaryValue?["waiting"]?.boolValue == false)
+        #expect(events[0].rawProperties?["info"]?.dictionaryValue?["delivery"]?.stringValue == "steer")
         let part = events[1].rawProperties?["part"]?.dictionaryValue
         #expect(part?["type"]?.stringValue == "text")
         #expect(part?["text"]?.stringValue == "Hello from CLI")

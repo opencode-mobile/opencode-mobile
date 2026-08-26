@@ -30,6 +30,7 @@ fun IconsGalleryScreen(modifier: Modifier = Modifier) {
             "add" to OpenCodeIcons.Add,
             "arrow_back" to OpenCodeIcons.ArrowBack,
             "arrow_upward" to OpenCodeIcons.ArrowUpward,
+            "arrow_warm_up" to OpenCodeIcons.ArrowWarmUp,
             "check" to OpenCodeIcons.Check,
             "chevron_right" to OpenCodeIcons.ChevronRight,
             "close" to OpenCodeIcons.Close,

@@ -34,6 +34,7 @@ struct SettingsView: View {
     @State private var sessionCacheSizeLabel = "Empty"
     @State private var showThemePicker = false
     @State private var showRecentWindowPicker = false
+    @State private var showFollowUpPicker = false
     @State private var showThemeImporter = false
     @State private var importError: String?
     @State private var themeManager = ThemeManager.shared
@@ -215,6 +216,19 @@ struct SettingsView: View {
                             .labelsHidden()
                             .tint(OpenCodeColors.interactive)
                         }
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
+                        title: "Follow-up send",
+                        subtitle: followUpSubtitle,
+                        enabled: supportsFollowUpDelivery,
+                        style: .card,
+                        startDecorator: .icon(
+                            followUpIcon,
+                            accessibilityLabel: "Follow-up send"
+                        ),
+                        action: supportsFollowUpDelivery ? { showFollowUpPicker = true } : nil
                     )
                     .padding(.horizontal, 16)
 
@@ -475,6 +489,21 @@ struct SettingsView: View {
                 .id("hours-\(hours)")
             }
         }
+        .openCodeBottomSheet(isPresented: $showFollowUpPicker, title: "Follow-up send") {
+            ForEach(FollowUpDelivery.allCases, id: \.self) { mode in
+                OpenCodeBottomSheetEntry(
+                    title: mode == .steer ? "Steer" : "Queue",
+                    startDecorator: .icon(mode == .steer ? .arrowWarmUp : .arrowUpward, accessibilityLabel: nil),
+                    endDecorator: mode == sessionChatDisplayPreferences.followUpDelivery
+                        ? .icon(.check, accessibilityLabel: "Selected")
+                        : .none,
+                    action: {
+                        sessionChatDisplayPreferences.setFollowUpDelivery(mode)
+                        showFollowUpPicker = false
+                    }
+                )
+            }
+        }
         .fileImporter(
             isPresented: $showThemeImporter,
             allowedContentTypes: [.json],
@@ -563,6 +592,25 @@ struct SettingsView: View {
         } else {
             serversSubtitleState = "\(profiles.count) saved"
         }
+    }
+
+    private var supportsFollowUpDelivery: Bool {
+        Container.shared.activeConnectionManager().capabilities.supportsFollowUpDelivery
+    }
+
+    private var followUpSubtitle: String {
+        if supportsFollowUpDelivery {
+            let label = sessionChatDisplayPreferences.followUpDelivery == .steer ? "Steer" : "Queue"
+            return "\(label) · V2 servers only. V1 does not support this."
+        }
+        return "Not supported on V1. This server always sends immediately."
+    }
+
+    private var followUpIcon: OpenCodeIcon {
+        if supportsFollowUpDelivery, sessionChatDisplayPreferences.followUpDelivery == .steer {
+            return .arrowWarmUp
+        }
+        return .arrowUpward
     }
 
     private func logSettingsAction(_ actionId: String) {

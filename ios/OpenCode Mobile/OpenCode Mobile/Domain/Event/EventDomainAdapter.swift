@@ -128,10 +128,11 @@ nonisolated struct EventDomainAdapter: Sendable {
             [event(type: "question.replied", properties: properties)]
         case "question.v2.rejected", "form.cancelled":
             [event(type: "question.rejected", properties: properties)]
-        case "session.next.prompt.admitted", "session.next.prompted",
-             "session.inbox.enqueued", "session.inbox.delivered",
+        case "session.next.prompt.admitted", "session.inbox.enqueued":
+            userPromptEvents(properties, waiting: true)
+        case "session.next.prompted", "session.inbox.delivered",
              "session.inbox.delivery.changed":
-            userPromptEvents(properties)
+            userPromptEvents(properties, waiting: false)
         case "session.inbox.cancelled":
             [inboxCancelled(properties)]
         case "session.next.step.started", "session.step.started":
@@ -268,13 +269,13 @@ nonisolated struct EventDomainAdapter: Sendable {
         return event(type: "message.removed", properties: projected)
     }
 
-    private func userPromptEvents(_ properties: [String: Any]) -> [OpencodeEvent] {
-        [userMessageUpdated(properties)] + userPromptParts(properties)
+    private func userPromptEvents(_ properties: [String: Any], waiting: Bool) -> [OpencodeEvent] {
+        [userMessageUpdated(properties, waiting: waiting)] + userPromptParts(properties)
     }
 
-    private func userMessageUpdated(_ properties: [String: Any]) -> OpencodeEvent {
+    private func userMessageUpdated(_ properties: [String: Any], waiting: Bool) -> OpencodeEvent {
         let sessionID = sessionID(from: properties)
-        var info: [String: Any] = ["role": "user"]
+        var info: [String: Any] = ["role": "user", "waiting": waiting]
         if let messageID = userMessageID(in: properties) {
             info["id"] = messageID
         }
@@ -287,6 +288,9 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let agent = string(in: properties, key: "agent") ?? string(in: properties, key: "mode") {
             info["agent"] = agent
             info["mode"] = agent
+        }
+        if let delivery = string(in: properties, key: "delivery") {
+            info["delivery"] = delivery
         }
         return event(type: "message.updated", properties: ["info": info])
     }

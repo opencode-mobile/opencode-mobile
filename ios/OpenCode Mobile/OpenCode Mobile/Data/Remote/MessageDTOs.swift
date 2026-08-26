@@ -19,6 +19,8 @@ nonisolated struct MessageInfoDTO: Codable, Sendable {
     let error: MessageErrorInfoDTO?
     let tokens: MessageTokensDTO?
     let cost: Double?
+    let waiting: Bool?
+    let delivery: String?
 }
 
 nonisolated struct MessageTokensDTO: Codable, Sendable {
