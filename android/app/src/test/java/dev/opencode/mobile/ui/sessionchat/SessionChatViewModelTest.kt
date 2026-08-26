@@ -1998,6 +1998,55 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun loadMessages_delayedAgentCatalog_restoresCustomAgentFromHistoryWithoutPersistingFallback() =
+        runTest(testDispatcher) {
+            val selectionStore = FakeSessionModelSelectionStore()
+            val agentGate = CompletableDeferred<Unit>()
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-1",
+                                    role = MessageRole.User,
+                                    text = "Review this",
+                                    modelProviderId = "anthropic",
+                                    modelId = "claude-sonnet",
+                                    mode = "review",
+                                    sentAtEpochMs = 2_000L,
+                                ),
+                            ),
+                    ),
+                    agentRepository =
+                        FakeAgentRepository(
+                            selectableAgents =
+                                listOf(
+                                    dev.opencode.mobile.domain.agent.SelectableAgent(
+                                        id = "build",
+                                        displayName = "Build",
+                                    ),
+                                    dev.opencode.mobile.domain.agent.SelectableAgent(
+                                        id = "review",
+                                        displayName = "Review",
+                                    ),
+                                ),
+                            selectableAgentsGate = agentGate,
+                        ),
+                    sessionModelSelectionStore = selectionStore,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            runCurrent()
+
+            agentGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals("review", viewModel.uiState.value.composer.selectedMode)
+            val identity = ModelSelectionConnectionIdentity("http://127.0.0.1:4096/", "opencode")
+            assertEquals("review", selectionStore.loadSession(identity, "/repo", "ses-1")?.agentId)
+        }
+
+    @Test
     fun initialization_waitsForLateCacheAndPublishesSelectionOnceReady() =
         runTest(testDispatcher) {
             val defaultOption =
@@ -3599,9 +3648,12 @@ private class FakeAgentRepository(
         ),
     var selectableAgents: List<dev.opencode.mobile.domain.agent.SelectableAgent> =
         dev.opencode.mobile.domain.agent.SelectableAgent.Fallback,
+    private val selectableAgentsGate: CompletableDeferred<Unit>? = null,
 ) : dev.opencode.mobile.domain.agent.AgentRepository {
-    override suspend fun listSelectableAgents(directory: String?): List<dev.opencode.mobile.domain.agent.SelectableAgent> =
-        selectableAgents
+    override suspend fun listSelectableAgents(directory: String?): List<dev.opencode.mobile.domain.agent.SelectableAgent> {
+        selectableAgentsGate?.await()
+        return selectableAgents
+    }
 
     override suspend fun listMentionableAgents(directory: String?): List<dev.opencode.mobile.domain.agent.MentionableAgent> =
         agents

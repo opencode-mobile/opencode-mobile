@@ -1265,6 +1265,54 @@ struct SessionChatViewModelTests {
         )
     }
 
+    @Test func loadMessages_delayedAgentCatalog_restoresCustomAgentFromHistoryWithoutPersistingFallback() async {
+        let selectionStore = InMemorySessionModelSelectionStore()
+        let agentRepository = FakeAgentRepository(
+            selectableAgents: [
+                SelectableAgent(id: "build", displayName: "Build"),
+                SelectableAgent(id: "review", displayName: "Review"),
+            ],
+            blockSelectableAgents: true
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .user,
+                        text: "Review this",
+                        model: nil,
+                        modelProviderID: "anthropic",
+                        modelID: "claude-sonnet",
+                        variant: nil,
+                        mode: "review",
+                        sentAtEpochMs: 2_000
+                    ),
+                ]
+            ),
+            sessionModelSelectionStore: selectionStore,
+            agentRepository: agentRepository
+        )
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        agentRepository.releaseSelectableAgents()
+        _ = await waitUntil { viewModel.uiState.composer.selectedMode == "review" }
+
+        #expect(viewModel.uiState.composer.selectedMode == "review")
+        let identity = ModelSelectionConnectionIdentity(
+            serverBaseURL: "http://127.0.0.1:4096/",
+            username: "opencode"
+        )
+        #expect(
+            await selectionStore.loadSession(
+                connectionIdentity: identity,
+                worktree: "/repo",
+                sessionID: "ses-1"
+            )?.agentID == "review"
+        )
+    }
+
     @Test func initialization_waitsForLateCacheAndPublishesSelectionOnceReady() async {
         let defaultOption = ModelSelectionOption(
             providerID: "anthropic",
@@ -2763,20 +2811,28 @@ private final class FakeCommandRepository: CommandRepository, @unchecked Sendabl
 private final class FakeAgentRepository: AgentRepository, @unchecked Sendable {
     var agents: [MentionableAgent]
     var selectableAgents: [SelectableAgent]
+    private var blockSelectableAgents: Bool
 
     init(
         agents: [MentionableAgent] = [
             MentionableAgent(name: "explore", description: "Read-only explorer"),
             MentionableAgent(name: "general", description: "General helper"),
         ],
-        selectableAgents: [SelectableAgent] = SelectableAgent.fallback
+        selectableAgents: [SelectableAgent] = SelectableAgent.fallback,
+        blockSelectableAgents: Bool = false
     ) {
         self.agents = agents
         self.selectableAgents = selectableAgents
+        self.blockSelectableAgents = blockSelectableAgents
+    }
+
+    func releaseSelectableAgents() {
+        blockSelectableAgents = false
     }
 
     func listSelectableAgents(directory: String?) async throws -> [SelectableAgent] {
-        selectableAgents
+        while blockSelectableAgents { await Task.yield() }
+        return selectableAgents
     }
 
     func listMentionableAgents(directory: String?) async throws -> [MentionableAgent] {

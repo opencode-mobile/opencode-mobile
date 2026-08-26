@@ -191,6 +191,8 @@ class SessionChatComposer(
             }.onFailure { throwable ->
                 if (boundWorktree != worktree) return@onFailure
                 logW("selectable agent catalog failed: ${throwable.message}")
+                loadedSelectableAgents = true
+                applyInitialSelectionIfReady()
             }
         }
     }
@@ -272,6 +274,7 @@ class SessionChatComposer(
             return
         }
         if (initialSelectionState == InitialSelectionState.LoadingCache) return
+        if (!loadedSelectableAgents) return
         val catalog = loadedCatalog ?: return
         if (catalog.options.isEmpty()) return
         val timelineState = latestTimelineState ?: return
@@ -1099,6 +1102,7 @@ class SessionChatComposer(
                 selectedMode = resolveSelectedAgentId(composer.selectedMode, catalog),
             )
         }
+        applyInitialSelectionIfReady()
     }
 
     private fun resolveSelectedAgentId(

@@ -175,6 +175,8 @@ final class SessionChatComposer {
                 OpenCodeLog.sessionChat.warning(
                     "selectable agent catalog failed error=\(error.localizedDescription, privacy: .public)"
                 )
+                loadedSelectableAgents = true
+                applyInitialSelectionIfReady()
             }
         }
     }
@@ -213,6 +215,7 @@ final class SessionChatComposer {
     private func applyInitialSelectionIfReady() {
         guard initialSelectionState != .resolved, initialSelectionState != .failedWithFallback else { return }
         guard initialSelectionState != .loadingCache else { return }
+        guard loadedSelectableAgents else { return }
         guard let catalog = loadedCatalog, !catalog.options.isEmpty else { return }
         guard let timelineState = latestTimelineState else { return }
 
@@ -922,6 +925,7 @@ final class SessionChatComposer {
             composer.selectableAgents = catalog
             composer.selectedMode = resolveSelectedAgentID(composer.selectedMode, in: catalog)
         }
+        applyInitialSelectionIfReady()
     }
 
     private func resolveSelectedAgentID(_ current: String, in catalog: [SelectableAgent]) -> String {
