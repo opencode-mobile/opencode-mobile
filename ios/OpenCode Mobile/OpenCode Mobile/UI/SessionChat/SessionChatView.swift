@@ -323,7 +323,7 @@ struct SessionChatView: View {
         }
         .sessionChatMessageActionsSheet(
             target: $messageActionsTarget,
-            onRestoreToComposer: { viewModel.restoreComposerText($0) }
+            onRevertMessage: { viewModel.revertMessage($0) }
         )
         .sessionChatToolDetailSheet(target: $toolDetailTarget)
         .sessionChatTodosSheet(
@@ -840,6 +840,7 @@ struct SessionChatView: View {
                     selectionEnd: composer.cursor,
                     selectionRevision: composer.selectionRevision,
                     attachments: composer.attachments.map(attachmentPresentation),
+                    showPendingRevert: viewModel.uiState.hasPendingRevert,
                     selectedModelLabel: composer.selectedModelLabel,
                     selectedModeLabel: composer.selectedModeLabel,
                     selectedVariantLabel: composer.selectedVariantLabel,
@@ -897,6 +898,8 @@ struct SessionChatView: View {
                     }
                 case let .removeAttachment(id):
                     viewModel.removeAttachment(id: id)
+                case .cancelRevert:
+                    viewModel.cancelRevert()
                 case .openCommands:
                     viewModel.openCommands()
                 case .send:

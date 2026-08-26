@@ -34,6 +34,7 @@ private enum class SessionComposerGalleryScenario(
     Mentions("Mentions"),
     Active("Active"),
     Attachments("Attachments"),
+    Revert("Revert"),
     ChildLockout("Child"),
     Permission("Permission"),
     Queued("Queued"),
@@ -116,6 +117,11 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                                 variant = OpenCodeAttachmentVariant.Text,
                             ),
                         ),
+                )
+            SessionComposerGalleryScenario.Revert ->
+                promptState(
+                    text = "Add a dark mode toggle to Settings",
+                    showPendingRevert = true,
                 )
             SessionComposerGalleryScenario.ChildLockout ->
                 OpenCodeSessionComposerState.ChildLockout(
@@ -291,11 +297,13 @@ private fun promptState(
     text: String,
     mentionRanges: List<IntRange> = emptyList(),
     attachments: List<OpenCodeAttachmentPresentation> = emptyList(),
+    showPendingRevert: Boolean = false,
     showStop: Boolean = false,
 ) = OpenCodeSessionComposerState.Prompt(
     text = text,
     mentionRanges = mentionRanges,
     attachments = attachments,
+    showPendingRevert = showPendingRevert,
     selectedModelLabel = "Claude Sonnet 4",
     selectedModeLabel = "Build",
     selectedVariantLabel = "Default",
@@ -364,6 +372,7 @@ private val OpenCodeSessionComposerAction.label: String
             OpenCodeSessionComposerAction.Attach -> "Attach"
             OpenCodeSessionComposerAction.OpenCommands -> "Open commands"
             is OpenCodeSessionComposerAction.RemoveAttachment -> "Remove attachment"
+            OpenCodeSessionComposerAction.CancelRevert -> "Cancel revert"
             OpenCodeSessionComposerAction.Send -> "Send"
             OpenCodeSessionComposerAction.Stop -> "Stop"
             is OpenCodeSessionComposerAction.AllowPermissionOnce -> "Allow once"

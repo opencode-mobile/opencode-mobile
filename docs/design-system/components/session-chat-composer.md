@@ -11,8 +11,8 @@ request have identical width, shape, inset, background, and border behavior.
 
 - Component state: `prompt`, `permission`, `question`, or `childLockout`.
 - Prompt-entry states: empty, populated, pending attachments,
-  attach-disabled, sending-disabled, stop available, and model/mode/variant
-  selection.
+  pending revert, attach-disabled, sending-disabled, stop available, and
+  model/mode/variant selection.
 - Child-lockout states: default display of the model and thinking-effort
   used for that child session. Pressed applies only to the back action.
 - Permission states: pending, submitting/disabled, queued, and response error.
@@ -35,12 +35,16 @@ request have identical width, shape, inset, background, and border behavior.
 
 The public native API accepts one semantic state value and one action callback.
 Prompt actions are text changed (text plus selection), select model, select mode,
-select variant, attach, open commands, remove attachment, send, and stop.
+select variant, attach, open commands, remove attachment, cancel revert, send,
+and stop.
 Prompt content includes `attachEnabled` so the feature can disable Attach when
 the selected model lacks image and PDF input. Prompt text may include mention
 ranges that render with the `syntax-type` token (inline `@name` agent
 mentions). Pending attachment content uses presentation-safe
-`OpenCodeAttachmentChip` state.
+`OpenCodeAttachmentChip` state. Pending revert is a boolean on prompt state;
+the composer renders a full-width chip above attachments using the attachment
+chip recipe (undo icon, title **Reverting this message**, kind **REVERT**,
+remove control). The feature owns when the chip is shown.
 Child-lockout actions are back to main session. Chips do not open pickers.
 Permission actions are allow once and deny, and return the opaque request and
 session identifiers rendered with the decision. Question actions are toggle
@@ -84,8 +88,12 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   button. There is no text field, attach, commands, send, or stop.
 - A pending permission or question request still replaces child lockout.
 - Prompt send is available when trimmed text or at least one pending attachment
-  exists. Pending attachments render as a vertical stack of full-width removable
-  chips above the prompt input at 6–8 logical-pixel spacing. Attach is disabled
+  exists. Pending revert, when shown, is a full-width removable chip above
+  attachments and the prompt, stacked at 6–8 logical-pixel spacing, using the
+  same surface, border, and remove control as `OpenCodeAttachmentChip`. The
+  shell stays on the neutral outline. X reports `cancelRevert`. Pending
+  attachments render as a vertical stack of full-width removable chips above
+  the prompt input at 6–8 logical-pixel spacing. Attach is disabled
   when the selected model cannot accept image or PDF input; the feature owns
   that gate and passes `attachEnabled` into the composer.
 - Send clears composer focus and dismisses the software keyboard (OPE-138;
@@ -173,12 +181,12 @@ child-lockout, and mention-styled prompt previews for light and dark theme
 review, plus an `iconCircleText` button preview. Both Component Galleries
 expose one live, edge-to-edge composer with interactive controls for empty
 prompt, populated prompt, mention-styled prompt, active work, pending
-attachments, child lockout, pending permission, queued permission, permission
-submitting, permission error, single-question, multi-question, multi-select,
-custom answer, question submitting, and question error states, and log
-`openCommands` and `backToMainSession` in the action log like the other
-prompt actions (opening the Commands sheet itself is feature-owned, not shown
-in the gallery). The Mentions scenario seeds an
+attachments, pending revert, child lockout, pending permission, queued
+permission, permission submitting, permission error, single-question,
+multi-question, multi-select, custom answer, question submitting, and
+question error states, and log `openCommands`, `cancelRevert`, and
+`backToMainSession` in the action log like the other prompt actions
+(opening the Commands sheet itself is feature-owned, not shown in the gallery). The Mentions scenario seeds an
 inline `@name` range with `syntax-type` color. The pending attachments scenario
 shows at least two sample chips with empty draft text and send enabled. Question
 scenarios keep local selection drafts so option, custom, Back / Next, Submit,

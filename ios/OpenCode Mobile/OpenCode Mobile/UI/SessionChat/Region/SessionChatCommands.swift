@@ -211,49 +211,45 @@ final class SessionChatCommands {
         let boundary = currentRevertMessageID
         guard let target = lastMessages
             .filter({ boundary == nil || $0.id < boundary! })
-            .last(where: { $0.role == .user && !$0.isPending && !$0.isStreaming && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+            .last(where: isRevertibleUserMessage)
         else { return }
-        let sessionID = sessionID
-        let worktree = worktree
-        revertTask?.cancel()
-        revertTask = Task {
-            if isBusy { _ = try? await sessionRepository.abortSession(id: sessionID, directory: worktree) }
-            do {
-                _ = try await sessionRepository.revertSession(id: sessionID, messageID: target.id, partID: nil)
-                guard !Task.isCancelled else { return }
-                OpenCodeLog.sessionChat.info("undo success session=\(sessionID, privacy: .public) message=\(target.id, privacy: .public)")
-                await refreshRevertNow()
-                restoreComposerText(target.text)
-            } catch {
-                guard !Task.isCancelled else { return }
-                OpenCodeLog.sessionChat.warning("undo failed session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-                state.actionErrorMessage = "Couldn't undo last message."
-                notifyChange()
-            }
-        }
+        revert(
+            target,
+            isBusy: isBusy,
+            restoreComposerText: restoreComposerText,
+            operation: "undo",
+            failureMessage: "Couldn't undo last message."
+        )
+    }
+
+    func revertMessage(id: String, isBusy: Bool, restoreComposerText: @escaping (String) -> Void) {
+        guard let target = lastMessages.first(where: { $0.id == id && isRevertibleUserMessage($0) }) else { return }
+        revert(
+            target,
+            isBusy: isBusy,
+            restoreComposerText: restoreComposerText,
+            operation: "revert",
+            failureMessage: "Couldn't revert message."
+        )
     }
 
     func runRedo(isBusy: Bool, clearComposerRestore: @escaping () -> Void) {
         dismissCommands()
-        guard currentRevertMessageID != nil else { return }
-        let sessionID = sessionID
-        let worktree = worktree
-        revertTask?.cancel()
-        revertTask = Task {
-            if isBusy { _ = try? await sessionRepository.abortSession(id: sessionID, directory: worktree) }
-            do {
-                _ = try await sessionRepository.unrevertSession(id: sessionID)
-                guard !Task.isCancelled else { return }
-                OpenCodeLog.sessionChat.info("redo success session=\(sessionID, privacy: .public)")
-                await refreshRevertNow()
-                clearComposerRestore()
-            } catch {
-                guard !Task.isCancelled else { return }
-                OpenCodeLog.sessionChat.warning("redo failed session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-                state.actionErrorMessage = "Couldn't redo."
-                notifyChange()
-            }
-        }
+        unrevert(
+            isBusy: isBusy,
+            clearComposerRestore: clearComposerRestore,
+            operation: "redo",
+            failureMessage: "Couldn't redo."
+        )
+    }
+
+    func cancelRevert(isBusy: Bool, clearComposerRestore: @escaping () -> Void) {
+        unrevert(
+            isBusy: isBusy,
+            clearComposerRestore: clearComposerRestore,
+            operation: "cancel-revert",
+            failureMessage: "Couldn't cancel revert."
+        )
     }
 
     func runCompact(
@@ -315,15 +311,100 @@ final class SessionChatCommands {
         }
     }
 
+    private func isRevertibleUserMessage(_ message: SessionChatRow) -> Bool {
+        message.role == .user
+            && !message.isPending
+            && !message.isStreaming
+            && isBeforeRevertBoundary(message.id)
+            && hasRevertibleContent(message)
+    }
+
+    private func isBeforeRevertBoundary(_ id: String) -> Bool {
+        guard let boundary = currentRevertMessageID else { return true }
+        return id < boundary
+    }
+
+    private func hasRevertibleContent(_ message: SessionChatRow) -> Bool {
+        !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || message.blocks.contains { if case .attachment = $0 { true } else { false } }
+    }
+
+    private func revert(
+        _ target: SessionChatRow,
+        isBusy: Bool,
+        restoreComposerText: @escaping (String) -> Void,
+        operation: String,
+        failureMessage: String
+    ) {
+        let sessionID = sessionID
+        let worktree = worktree
+        revertTask?.cancel()
+        revertTask = Task {
+            if isBusy { _ = try? await sessionRepository.abortSession(id: sessionID, directory: worktree) }
+            do {
+                _ = try await sessionRepository.revertSession(id: sessionID, messageID: target.id, partID: nil)
+                guard !Task.isCancelled else { return }
+                OpenCodeLog.sessionChat.info(
+                    "\(operation, privacy: .public) success session=\(sessionID, privacy: .public) message=\(target.id, privacy: .public)"
+                )
+                setRevertBoundary(target.id)
+                await refreshRevertNow()
+                restoreComposerText(target.text)
+            } catch {
+                guard !Task.isCancelled else { return }
+                OpenCodeLog.sessionChat.warning(
+                    "\(operation, privacy: .public) failed session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                )
+                state.actionErrorMessage = failureMessage
+                notifyChange()
+            }
+        }
+    }
+
+    private func unrevert(
+        isBusy: Bool,
+        clearComposerRestore: @escaping () -> Void,
+        operation: String,
+        failureMessage: String
+    ) {
+        guard currentRevertMessageID != nil else { return }
+        let sessionID = sessionID
+        let worktree = worktree
+        revertTask?.cancel()
+        revertTask = Task {
+            if isBusy { _ = try? await sessionRepository.abortSession(id: sessionID, directory: worktree) }
+            do {
+                _ = try await sessionRepository.unrevertSession(id: sessionID)
+                guard !Task.isCancelled else { return }
+                OpenCodeLog.sessionChat.info("\(operation, privacy: .public) success session=\(sessionID, privacy: .public)")
+                setRevertBoundary(nil)
+                await refreshRevertNow()
+                clearComposerRestore()
+            } catch {
+                guard !Task.isCancelled else { return }
+                OpenCodeLog.sessionChat.warning(
+                    "\(operation, privacy: .public) failed session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                )
+                state.actionErrorMessage = failureMessage
+                notifyChange()
+            }
+        }
+    }
+
+    private func setRevertBoundary(_ messageID: String?) {
+        currentRevertMessageID = messageID
+        state.hasPendingRevert = messageID != nil
+        updateVisibility(messages: lastMessages, hasSelectedComposerModel: lastHasSelectedComposerModel)
+        notifyChange()
+    }
+
     private func refreshRevert() {
         Task { await refreshRevertNow() }
     }
 
     private func refreshRevertNow() async {
         guard let session = try? await sessionRepository.getSession(id: sessionID, directory: worktree) else { return }
-        currentRevertMessageID = session.revert?.messageID
-        updateVisibility(messages: lastMessages, hasSelectedComposerModel: lastHasSelectedComposerModel)
-        notifyChange()
+        setRevertBoundary(session.revert?.messageID)
     }
 
     private func notifyChange() {

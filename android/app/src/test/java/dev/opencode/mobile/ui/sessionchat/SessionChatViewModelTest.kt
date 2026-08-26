@@ -3039,6 +3039,7 @@ class SessionChatViewModelTest {
             assertEquals("Second", viewModel.uiState.value.composer.text)
             assertEquals(0, sessionRepository.abortCallCount)
             assertFalse(commandRepository.runCommandCalled)
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
         }
 
     @Test
@@ -3060,6 +3061,191 @@ class SessionChatViewModelTest {
 
             assertEquals(1, sessionRepository.abortCallCount)
             assertEquals("msg-1", sessionRepository.revertRequest?.messageId)
+        }
+
+    @Test
+    fun revertMessage_revertsThatUserTurnAndRestoresComposer() =
+        runTest(testDispatcher) {
+            val messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "First"),
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
+                    Message(id = "msg-3", role = MessageRole.User, text = "Second"),
+                )
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(messages = messages),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.revertMessage("msg-1")
+            advanceUntilIdle()
+
+            assertEquals(
+                FakeSessionRepository.RevertRequest(id = "ses-1", messageId = "msg-1", partId = null, directory = "/repo"),
+                sessionRepository.revertRequest,
+            )
+            assertEquals("First", viewModel.uiState.value.composer.text)
+            assertEquals(0, sessionRepository.abortCallCount)
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
+        }
+
+    @Test
+    fun cancelRevert_unrevertsAndClearsComposer() =
+        runTest(testDispatcher) {
+            val messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "First"),
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
+                )
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(messages = messages),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.revertMessage("msg-1")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
+
+            viewModel.cancelRevert()
+            advanceUntilIdle()
+
+            assertEquals(
+                FakeSessionRepository.LifecycleRequest(id = "ses-1", directory = "/repo"),
+                sessionRepository.unrevertRequest,
+            )
+            assertEquals("", viewModel.uiState.value.composer.text)
+            assertFalse(viewModel.uiState.value.hasPendingRevert)
+        }
+
+    @Test
+    fun cancelRevert_withoutPendingRevert_isNoop() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel = createViewModel(repository = FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.cancelRevert()
+            advanceUntilIdle()
+
+            assertEquals(null, sessionRepository.unrevertRequest)
+        }
+
+    @Test
+    fun revertMessage_whenBusy_abortsBeforeReverting() =
+        runTest(testDispatcher) {
+            val messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "First"),
+                    Message(id = "msg-2", role = MessageRole.User, text = "Second"),
+                )
+            val sessionRepository = FakeSessionRepository(sessionStatusType = "busy")
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(messages = messages),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertNotNull(viewModel.uiState.value.sessionStatusLabel)
+
+            viewModel.revertMessage("msg-1")
+            advanceUntilIdle()
+
+            assertEquals(1, sessionRepository.abortCallCount)
+            assertEquals("msg-1", sessionRepository.revertRequest?.messageId)
+            assertEquals("First", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
+    fun revertMessage_unknownMessage_isNoop() =
+        runTest(testDispatcher) {
+            val messages = listOf(Message(id = "msg-1", role = MessageRole.User, text = "First"))
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(messages = messages),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.revertMessage("missing")
+            advanceUntilIdle()
+
+            assertEquals(null, sessionRepository.revertRequest)
+            assertEquals("", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
+    fun revertMessage_attachmentOnly_revertsThatTurn() =
+        runTest(testDispatcher) {
+            val file =
+                MessagePart.File(
+                    id = "file-1",
+                    filename = "notes.txt",
+                    mime = "text/plain",
+                    kind = AttachmentKind.Text,
+                    dataUrl = "data:text/plain;base64,SGk=",
+                )
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(id = "msg-1", role = MessageRole.User, text = "", parts = listOf(file)),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.revertMessage("msg-1")
+            advanceUntilIdle()
+
+            assertEquals("msg-1", sessionRepository.revertRequest?.messageId)
+            assertEquals("", viewModel.uiState.value.composer.text)
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
+        }
+
+    @Test
+    fun revertMessage_afterEarlierRevert_ignoresLaterStillVisibleTurn() =
+        runTest(testDispatcher) {
+            val messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "First"),
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
+                    Message(id = "msg-3", role = MessageRole.User, text = "Second"),
+                )
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(messages = messages),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.revertMessage("msg-1")
+            advanceUntilIdle()
+            assertEquals("msg-1", sessionRepository.revertRequest?.messageId)
+
+            viewModel.revertMessage("msg-3")
+            advanceUntilIdle()
+
+            assertEquals("msg-1", sessionRepository.revertRequest?.messageId)
+            assertEquals("First", viewModel.uiState.value.composer.text)
         }
 
     @Test
@@ -4096,6 +4282,9 @@ private class FakeSessionRepository(
     ): Boolean {
         revertRequest = RevertRequest(id = id, messageId = messageId, partId = partId, directory = directory)
         revertError?.let { throw it }
+        getSessionResult =
+            (getSessionResult ?: Session(id = id, title = "Title", directory = directory))
+                .copy(revert = SessionRevert(messageId = messageId))
         return true
     }
 
@@ -4105,6 +4294,7 @@ private class FakeSessionRepository(
     ): Boolean {
         unrevertRequest = LifecycleRequest(id = id, directory = directory)
         unrevertError?.let { throw it }
+        getSessionResult = getSessionResult?.copy(revert = null)
         return true
     }
 
