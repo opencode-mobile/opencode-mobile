@@ -118,18 +118,16 @@ internal fun rememberMessageListScrollToEndVisibility(
 
 @Composable
 internal fun MessageListInitialEndSnapEffect(
-    firstMessageId: String?,
-    lastMessageId: String?,
     messageCount: Int,
     autoFollowEnabled: Boolean,
     autoFollowTolerancePx: Int,
     bottomAnchorHeightPx: Int,
     scrollController: MessageListTimelineScrollController,
 ) {
-    var initialEndScrollDone by remember(firstMessageId, lastMessageId) { mutableStateOf(false) }
+    var snapState by remember(scrollController) { mutableStateOf(MessageListInitialEndSnapState()) }
 
-    LaunchedEffect(firstMessageId, lastMessageId, messageCount) {
-        if (!initialEndScrollDone && messageCount > 0) {
+    LaunchedEffect(scrollController, messageCount) {
+        if (snapState.shouldSnap(messageCount = messageCount)) {
             withFrameNanos { }
             withFrameNanos { }
             scrollController.snapToEnd(
@@ -138,7 +136,7 @@ internal fun MessageListInitialEndSnapEffect(
                 bottomAnchorHeightPx = bottomAnchorHeightPx,
                 autoFollowEnabled = autoFollowEnabled,
             )
-            initialEndScrollDone = true
+            snapState = snapState.markSnapped()
         }
     }
 }

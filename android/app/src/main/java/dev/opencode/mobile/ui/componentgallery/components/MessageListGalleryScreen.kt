@@ -56,8 +56,6 @@ private fun GalleryPreview(
     val timeline =
         rememberMessageListTimeline(
             messageCount = messages.size,
-            firstMessageId = messages.firstOrNull()?.id,
-            lastMessageId = messages.lastOrNull()?.id,
             layoutAffectingRevision = messages.layoutSignature().toLong(),
             autoFollowEnabled = autoFollowEnabled,
         )

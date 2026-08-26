@@ -58,8 +58,6 @@ internal class MessageListTimelineHandle(
 @Composable
 internal fun rememberMessageListTimeline(
     messageCount: Int,
-    firstMessageId: String?,
-    lastMessageId: String?,
     layoutAffectingRevision: Long,
     autoFollowEnabled: Boolean,
     messageIdsChronological: List<String> = emptyList(),
@@ -130,8 +128,6 @@ internal fun rememberMessageListTimeline(
         )
 
     MessageListInitialEndSnapEffect(
-        firstMessageId = firstMessageId,
-        lastMessageId = lastMessageId,
         messageCount = messageCount,
         autoFollowEnabled = autoFollowEnabled,
         autoFollowTolerancePx = autoFollowTolerancePx,
