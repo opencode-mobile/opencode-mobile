@@ -14,6 +14,7 @@ import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.sessionchat.ContentRevision
 import dev.opencode.mobile.ui.sessionchat.DisplayFrame
 import dev.opencode.mobile.ui.sessionchat.DisplayMessageBody
+import dev.opencode.mobile.ui.sessionchat.LatestAgentHint
 import dev.opencode.mobile.ui.sessionchat.LatestModelHint
 import dev.opencode.mobile.ui.sessionchat.OptimisticInputs
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
@@ -332,6 +333,8 @@ class SessionChatTimeline(
         return dev.opencode.mobile.ui.sessionchat.ModelSelectionHistoryHints(
             user = latestModelHintFromMessages(sorted, MessageRole.User),
             assistant = latestModelHintFromMessages(sorted, MessageRole.Assistant),
+            userAgent = latestAgentHintFromMessages(sorted, MessageRole.User),
+            assistantAgent = latestAgentHintFromMessages(sorted, MessageRole.Assistant),
         )
     }
 
@@ -397,6 +400,19 @@ class SessionChatTimeline(
                         } else {
                             dev.opencode.mobile.ui.sessionchat.ModelSelectionHistorySource.Assistant
                         },
+                )
+            }
+
+    private fun latestAgentHintFromMessages(
+        sortedMessages: List<Message>,
+        role: MessageRole,
+    ): LatestAgentHint? =
+        sortedMessages
+            .firstOrNull { it.role == role && !it.mode.isNullOrBlank() }
+            ?.let { message ->
+                LatestAgentHint(
+                    mode = message.mode.orEmpty(),
+                    sentAtEpochMs = message.sentAtEpochMs,
                 )
             }
 

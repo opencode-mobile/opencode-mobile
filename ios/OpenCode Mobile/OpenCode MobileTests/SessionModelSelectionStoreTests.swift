@@ -23,8 +23,29 @@ import Testing
         #expect(loaded?.providerID == "openai")
         #expect(loaded?.modelID == "gpt-4")
         #expect(loaded?.variant == "high")
+        #expect(loaded?.agentID == nil)
         #expect(loaded?.savedAtEpochMs != nil)
         #expect(await store.load(serverBaseURL: "http://127.0.0.1:4096/", worktree: "/repo", sessionID: "ses-2") == nil)
+    }
+
+    @Test func saveAndLoad_roundTripsAgentID() async {
+        let defaults = UserDefaults(suiteName: "SessionModelSelectionStoreTests.agent")!
+        defaults.removePersistentDomain(forName: "SessionModelSelectionStoreTests.agent")
+        let store = UserDefaultsSessionModelSelectionStore(defaults: defaults)
+
+        await store.save(
+            serverBaseURL: "http://127.0.0.1:4096",
+            worktree: "/repo",
+            sessionID: "ses-1",
+            selection: SessionModelSelection(
+                providerID: "openai",
+                modelID: "gpt-4",
+                variant: nil,
+                agentID: "plan"
+            )
+        )
+
+        #expect(await store.load(serverBaseURL: "http://127.0.0.1:4096/", worktree: "/repo", sessionID: "ses-1")?.agentID == "plan")
     }
 
     @Test func clearAll_removesSavedSelections() async {

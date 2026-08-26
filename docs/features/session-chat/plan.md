@@ -96,8 +96,11 @@ is a thin facade. Any change to the facade is an architectural decision — see
 - Agent mode is server-backed by `GET /agent` (v2: `GET /api/agent`). Hidden
   system primaries stay out of the picker. `@` mentions stay the non-primary
   path and do not change the selected agent. The selected agent id is sent with
-  async prompts and slash commands. Default is `build` when present; if the
-  selected agent disappears, fall back to `build` or the first catalog entry.
+  async prompts and slash commands. Existing sessions preset Model, Agent, and
+  Variant from the latest user-sent turn, or the last explicit chip pick for
+  that session. New sessions keep the New Session Model Preference and default
+  to `build` when present; if the selected agent disappears, fall back to
+  `build` or the first catalog entry.
 - Model and Variant are server-backed by `/config/providers`; selected model and
   non-default Variant are sent with async prompts.
 - The attachment `+` opens native Photos and Files/document entry points through

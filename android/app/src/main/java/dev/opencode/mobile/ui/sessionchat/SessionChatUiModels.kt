@@ -430,9 +430,16 @@ data class LatestModelHint(
     val source: ModelSelectionHistorySource,
 )
 
+data class LatestAgentHint(
+    val mode: String,
+    val sentAtEpochMs: Long?,
+)
+
 data class ModelSelectionHistoryHints(
     val user: LatestModelHint?,
     val assistant: LatestModelHint?,
+    val userAgent: LatestAgentHint? = null,
+    val assistantAgent: LatestAgentHint? = null,
 )
 
 enum class ModelSelectionHistorySource {

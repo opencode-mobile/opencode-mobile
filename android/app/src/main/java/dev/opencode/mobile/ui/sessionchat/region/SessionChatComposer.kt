@@ -29,6 +29,7 @@ import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
+import dev.opencode.mobile.ui.sessionchat.LatestAgentHint
 import dev.opencode.mobile.ui.sessionchat.LatestModelHint
 import dev.opencode.mobile.ui.sessionchat.ModelSelectionHistoryHints
 import dev.opencode.mobile.ui.sessionchat.ModelSelectionHistorySource
@@ -190,6 +191,8 @@ class SessionChatComposer(
             }.onFailure { throwable ->
                 if (boundWorktree != worktree) return@onFailure
                 logW("selectable agent catalog failed: ${throwable.message}")
+                loadedSelectableAgents = true
+                applyInitialSelectionIfReady()
             }
         }
     }
@@ -271,6 +274,7 @@ class SessionChatComposer(
             return
         }
         if (initialSelectionState == InitialSelectionState.LoadingCache) return
+        if (!loadedSelectableAgents) return
         val catalog = loadedCatalog ?: return
         if (catalog.options.isEmpty()) return
         val timelineState = latestTimelineState ?: return
@@ -333,6 +337,16 @@ class SessionChatComposer(
                         modelOptions = catalog.options,
                         selectedModel = ModelSelection(option, variant),
                         selectedVariant = variant,
+                        selectedMode =
+                            resolveSelectedAgentId(
+                                chooseInitialAgent(
+                                    cached = validCached?.agentId,
+                                    cachedAt = validCached?.savedAtEpochMs,
+                                    userHint = historyHints.userAgent,
+                                    assistantHint = historyHints.assistantAgent,
+                                ) ?: state.composer.selectedMode,
+                                state.composer.selectableAgents,
+                            ),
                         attachments = keptAttachments,
                         isModelSelectionReady = true,
                         modelCatalogError = null,
@@ -369,6 +383,21 @@ class SessionChatComposer(
         }
         if (cached != null) return InitialSelection.Cached(cached)
         return assistantHint?.let(InitialSelection::History) ?: preference?.let(InitialSelection::Preference)
+    }
+
+    private fun chooseInitialAgent(
+        cached: String?,
+        cachedAt: Long?,
+        userHint: LatestAgentHint?,
+        assistantHint: LatestAgentHint?,
+    ): String? {
+        if (userHint != null) {
+            if (cached == null || cachedAt == null) return userHint.mode
+            val historyTime = userHint.sentAtEpochMs ?: return cached
+            return if (historyTime > cachedAt) userHint.mode else cached
+        }
+        if (cached != null) return cached
+        return assistantHint?.mode
     }
 
     fun updateComposerText(
@@ -565,6 +594,7 @@ class SessionChatComposer(
             _state.value.composer.selectableAgents.firstOrNull { it.id.equals(mode, ignoreCase = true) }
                 ?: return
         updateComposer { it.copy(selectedMode = match.id) }
+        persistCurrentSelection(updatePreference = false)
     }
 
     fun selectVariant(variant: String) {
@@ -987,6 +1017,7 @@ class SessionChatComposer(
                     providerId = selected.option.providerId,
                     modelId = selected.option.modelId,
                     variant = variant,
+                    agentId = _state.value.composer.selectedMode,
                     savedAtEpochMs = timestamp,
                 )
             runCatching {
@@ -1071,6 +1102,7 @@ class SessionChatComposer(
                 selectedMode = resolveSelectedAgentId(composer.selectedMode, catalog),
             )
         }
+        applyInitialSelectionIfReady()
     }
 
     private fun resolveSelectedAgentId(

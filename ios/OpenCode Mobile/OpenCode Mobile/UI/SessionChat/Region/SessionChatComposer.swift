@@ -175,6 +175,8 @@ final class SessionChatComposer {
                 OpenCodeLog.sessionChat.warning(
                     "selectable agent catalog failed error=\(error.localizedDescription, privacy: .public)"
                 )
+                loadedSelectableAgents = true
+                applyInitialSelectionIfReady()
             }
         }
     }
@@ -213,6 +215,7 @@ final class SessionChatComposer {
     private func applyInitialSelectionIfReady() {
         guard initialSelectionState != .resolved, initialSelectionState != .failedWithFallback else { return }
         guard initialSelectionState != .loadingCache else { return }
+        guard loadedSelectableAgents else { return }
         guard let catalog = loadedCatalog, !catalog.options.isEmpty else { return }
         guard let timelineState = latestTimelineState else { return }
 
@@ -277,6 +280,15 @@ final class SessionChatComposer {
             $0.modelOptions = catalog.options
             $0.selectedModel = ModelSelection(option: option, selectedVariant: variant)
             $0.selectedVariant = variant
+            $0.selectedMode = resolveSelectedAgentID(
+                chooseInitialAgent(
+                    cached: validCached?.agentID,
+                    cachedAt: validCached?.savedAtEpochMs,
+                    userHint: historyHints.userAgent,
+                    assistantHint: historyHints.assistantAgent
+                ) ?? $0.selectedMode,
+                in: $0.selectableAgents
+            )
             $0.isModelSelectionReady = true
             $0.modelCatalogError = nil
             if staleCached != nil {
@@ -308,6 +320,21 @@ final class SessionChatComposer {
         }
         if let cached { return .cached(cached) }
         return assistantHint.map(InitialSelection.history) ?? preference.map(InitialSelection.preference)
+    }
+
+    private func chooseInitialAgent(
+        cached: String?,
+        cachedAt: Int64?,
+        userHint: LatestAgentHint?,
+        assistantHint: LatestAgentHint?
+    ) -> String? {
+        if let userHint {
+            guard let cached, let cachedAt else { return userHint.mode }
+            guard let historyTime = userHint.sentAtEpochMs else { return cached }
+            return historyTime > cachedAt ? userHint.mode : cached
+        }
+        if let cached { return cached }
+        return assistantHint?.mode
     }
 
     func updateComposerText(_ text: String, cursor: Int? = nil) {
@@ -509,6 +536,7 @@ final class SessionChatComposer {
             $0.id.compare(mode, options: .caseInsensitive) == .orderedSame
         }) else { return }
         updateComposer { $0.selectedMode = match.id }
+        persistCurrentSelection(updatePreference: false)
     }
 
     func selectVariant(_ variant: String) {
@@ -828,6 +856,7 @@ final class SessionChatComposer {
             providerID: selectedModel.option.providerID,
             modelID: selectedModel.option.modelID,
             variant: state.composer.selectedVariant,
+            agentID: state.composer.selectedMode,
             savedAtEpochMs: timestamp
         )
         cachedSelection = selection
@@ -896,6 +925,7 @@ final class SessionChatComposer {
             composer.selectableAgents = catalog
             composer.selectedMode = resolveSelectedAgentID(composer.selectedMode, in: catalog)
         }
+        applyInitialSelectionIfReady()
     }
 
     private func resolveSelectedAgentID(_ current: String, in catalog: [SelectableAgent]) -> String {

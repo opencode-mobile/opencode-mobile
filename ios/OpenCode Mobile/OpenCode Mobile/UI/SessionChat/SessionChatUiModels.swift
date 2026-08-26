@@ -542,9 +542,16 @@ struct LatestModelHint: Equatable {
     let source: ModelSelectionHistorySource
 }
 
+struct LatestAgentHint: Equatable {
+    let mode: String
+    let sentAtEpochMs: Int64?
+}
+
 struct ModelSelectionHistoryHints: Equatable {
     let user: LatestModelHint?
     let assistant: LatestModelHint?
+    let userAgent: LatestAgentHint?
+    let assistantAgent: LatestAgentHint?
 }
 
 enum ModelSelectionHistorySource: Equatable {
