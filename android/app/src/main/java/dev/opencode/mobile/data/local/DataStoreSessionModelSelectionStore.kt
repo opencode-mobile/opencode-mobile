@@ -170,6 +170,7 @@ class DataStoreSessionModelSelectionStore
                     providerId = it.providerId,
                     modelId = it.modelId,
                     variant = it.variant,
+                    agentId = it.agentId,
                     savedAtEpochMs = it.savedAtEpochMs,
                 )
             }
@@ -193,6 +194,7 @@ class DataStoreSessionModelSelectionStore
                         providerId = selection.providerId,
                         modelId = selection.modelId,
                         variant = selection.variant,
+                        agentId = selection.agentId,
                         savedAtEpochMs = selection.savedAtEpochMs,
                     ),
                 )
@@ -229,6 +231,7 @@ class DataStoreSessionModelSelectionStore
             val providerId: String,
             val modelId: String,
             val variant: String? = null,
+            val agentId: String? = null,
             val savedAtEpochMs: Long? = null,
         )
 

@@ -37,6 +37,21 @@ class DataStoreSessionModelSelectionStoreTest {
         }
 
     @Test
+    fun saveAndLoad_roundTripsAgentId() =
+        runTest {
+            val store = store(backgroundScope)
+            val identity = identity("opencode")
+            store.saveSession(
+                identity,
+                "/repo",
+                "ses-1",
+                SessionModelSelection("openai", "gpt-4", agentId = "plan", savedAtEpochMs = 2_000),
+            )
+
+            assertEquals("plan", store.loadSession(identity, "/repo", "ses-1")?.agentId)
+        }
+
+    @Test
     fun olderWriteCannotReplaceNewerSelection() =
         runTest {
             val store = store(backgroundScope)
