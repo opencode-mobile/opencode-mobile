@@ -50,7 +50,8 @@ struct CommandDomainAdapter: Sendable {
             },
             files: options.attachments.isEmpty ? nil : options.attachments.map { attachment in
                 V2PromptFileDTO(uri: attachment.dataURL, name: attachment.filename, mime: attachment.mime)
-            }
+            },
+            delivery: options.delivery.wireValue
         )
     }
 

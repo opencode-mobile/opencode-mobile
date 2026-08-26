@@ -111,6 +111,9 @@ is a thin facade. Any change to the facade is an architectural decision — see
 - The attachment `+` opens native Photos and Files/document entry points through
   the delivered [File Attachments](../file-attachments/plan.md) slice. It uses
   **Add attachment** rather than the legacy **Attach context** label.
+- On V2, Send uses the Follow-up send default (Steer or Queue). Long-press
+  flips the next send. A waiting follow-up shows a quiet caption under the
+  outgoing footer until the server prompts it; then the caption is gone.
 - When this session’s status is not idle, Session Running chrome is the last
   timeline row. See [Session Running accessory](#session-running-accessory).
 

@@ -8,10 +8,12 @@ nonisolated final class SessionChatDisplayPreferences {
     static let shared = SessionChatDisplayPreferences()
     static let defaultCollapseConsecutiveToolCalls = true
     static let defaultSmoothStreamingUpdates = true
+    static let defaultFollowUpDelivery = FollowUpDelivery.steer
 
     private enum StorageKeys {
         static let collapseConsecutiveToolCalls = "collapseConsecutiveToolCalls"
         static let smoothStreamingUpdates = "smoothStreamingUpdates"
+        static let followUpDelivery = "followUpDelivery"
     }
 
     private let defaults: UserDefaults
@@ -23,6 +25,7 @@ nonisolated final class SessionChatDisplayPreferences {
     /// When true, live assistant tokens coalesce into 80ms / 160ms display frames.
     /// Off paints every streaming snapshot immediately.
     private(set) var smoothStreamingUpdates: Bool
+    private(set) var followUpDelivery: FollowUpDelivery
 
     nonisolated static func currentSmoothStreamingUpdates(defaults: UserDefaults = .standard) -> Bool {
         if defaults.object(forKey: StorageKeys.smoothStreamingUpdates) == nil {
@@ -43,6 +46,8 @@ nonisolated final class SessionChatDisplayPreferences {
         } else {
             smoothStreamingUpdates = defaults.bool(forKey: StorageKeys.smoothStreamingUpdates)
         }
+        followUpDelivery = FollowUpDelivery.fromWire(defaults.string(forKey: StorageKeys.followUpDelivery))
+            ?? Self.defaultFollowUpDelivery
     }
 
     func setCollapseConsecutiveToolCalls(_ value: Bool) {
@@ -55,10 +60,17 @@ nonisolated final class SessionChatDisplayPreferences {
         defaults.set(value, forKey: StorageKeys.smoothStreamingUpdates)
     }
 
+    func setFollowUpDelivery(_ value: FollowUpDelivery) {
+        followUpDelivery = value
+        defaults.set(value.wireValue, forKey: StorageKeys.followUpDelivery)
+    }
+
     func clear() {
         defaults.removeObject(forKey: StorageKeys.collapseConsecutiveToolCalls)
         defaults.removeObject(forKey: StorageKeys.smoothStreamingUpdates)
+        defaults.removeObject(forKey: StorageKeys.followUpDelivery)
         collapseConsecutiveToolCalls = Self.defaultCollapseConsecutiveToolCalls
         smoothStreamingUpdates = Self.defaultSmoothStreamingUpdates
+        followUpDelivery = Self.defaultFollowUpDelivery
     }
 }

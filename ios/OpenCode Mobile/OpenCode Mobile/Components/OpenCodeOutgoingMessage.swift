@@ -54,6 +54,8 @@ struct OpenCodeOutgoingMessage: View {
     let content: [OpenCodeOutgoingMessageContent]
     let renderedMarkdown: NativeMarkdownDocument?
     let metadataLabel: String
+    let waitingCaption: String?
+    let waitingDelivery: FollowUpDelivery?
     let onTap: (() -> Void)?
     let onLongPress: (() -> Void)?
 
@@ -62,6 +64,8 @@ struct OpenCodeOutgoingMessage: View {
         renderedMarkdown: NativeMarkdownDocument? = nil,
         attachments: [OpenCodeAttachmentPresentation] = [],
         metadataLabel: String,
+        waitingCaption: String? = nil,
+        waitingDelivery: FollowUpDelivery? = nil,
         onTap: (() -> Void)? = nil,
         onLongPress: (() -> Void)? = nil
     ) {
@@ -70,6 +74,8 @@ struct OpenCodeOutgoingMessage: View {
         ]
         self.renderedMarkdown = renderedMarkdown
         self.metadataLabel = metadataLabel
+        self.waitingCaption = waitingCaption
+        self.waitingDelivery = waitingDelivery
         self.onTap = onTap
         self.onLongPress = onLongPress
     }
@@ -78,12 +84,16 @@ struct OpenCodeOutgoingMessage: View {
         content: [OpenCodeOutgoingMessageContent],
         renderedMarkdown: NativeMarkdownDocument? = nil,
         metadataLabel: String,
+        waitingCaption: String? = nil,
+        waitingDelivery: FollowUpDelivery? = nil,
         onTap: (() -> Void)? = nil,
         onLongPress: (() -> Void)? = nil
     ) {
         self.content = content
         self.renderedMarkdown = renderedMarkdown
         self.metadataLabel = metadataLabel
+        self.waitingCaption = waitingCaption
+        self.waitingDelivery = waitingDelivery
         self.onTap = onTap
         self.onLongPress = onLongPress
     }
@@ -102,6 +112,19 @@ struct OpenCodeOutgoingMessage: View {
                     }
                 }
                 metadataFooter
+                if let waitingCaption {
+                    HStack(spacing: 5) {
+                        OpenCodeIconImage(
+                            icon: waitingDelivery == .queue ? .arrowUpward : .arrowWarmUp,
+                            size: 13
+                        )
+                        .foregroundStyle(OpenCodeColors.textWeak)
+                        Text(waitingCaption)
+                            .font(OpenCodeTypography.caption)
+                            .foregroundStyle(OpenCodeColors.textWeak)
+                            .lineLimit(1)
+                    }
+                }
             }
         }
     }

@@ -138,11 +138,12 @@ class EventDomainAdapter(
             "form.cancelled",
             -> listOf(event("question.rejected", properties))
             "session.next.prompt.admitted",
-            "session.next.prompted",
             "session.inbox.enqueued",
+            -> userPromptEvents(properties, waiting = true)
+            "session.next.prompted",
             "session.inbox.delivered",
             "session.inbox.delivery.changed",
-            -> userPromptEvents(properties)
+            -> userPromptEvents(properties, waiting = false)
             "session.inbox.cancelled" -> listOf(inboxCancelled(properties))
             "session.next.step.started",
             "session.step.started",
@@ -307,10 +308,15 @@ class EventDomainAdapter(
         return event("message.removed", projected)
     }
 
-    private fun userPromptEvents(properties: JsonObject): List<OpencodeEvent> =
-        listOf(userMessageUpdated(properties)) + userPromptParts(properties)
+    private fun userPromptEvents(
+        properties: JsonObject,
+        waiting: Boolean,
+    ): List<OpencodeEvent> = listOf(userMessageUpdated(properties, waiting)) + userPromptParts(properties)
 
-    private fun userMessageUpdated(properties: JsonObject): OpencodeEvent {
+    private fun userMessageUpdated(
+        properties: JsonObject,
+        waiting: Boolean,
+    ): OpencodeEvent {
         val sessionId = sessionIdFromProperties(properties)
         val messageId = userMessageId(properties)
         val info =
@@ -325,6 +331,8 @@ class EventDomainAdapter(
                     put("agent", agent)
                     put("mode", agent)
                 }
+                put("waiting", waiting)
+                properties.string("delivery")?.let { put("delivery", it) }
             }
         return event("message.updated", buildJsonObject { put("info", info) })
     }

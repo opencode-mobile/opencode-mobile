@@ -17,6 +17,7 @@ enum OpenCodeSessionComposerState {
         let attachEnabled: Bool
         let showStop: Bool
         let stopEnabled: Bool
+        let followUpDelivery: FollowUpDelivery?
 
         init(
             text: String,
@@ -33,7 +34,8 @@ enum OpenCodeSessionComposerState {
             sendEnabled: Bool,
             attachEnabled: Bool = true,
             showStop: Bool,
-            stopEnabled: Bool
+            stopEnabled: Bool,
+            followUpDelivery: FollowUpDelivery? = nil
         ) {
             self.text = text
             self.mentionRanges = mentionRanges
@@ -50,6 +52,7 @@ enum OpenCodeSessionComposerState {
             self.attachEnabled = attachEnabled
             self.showStop = showStop
             self.stopEnabled = stopEnabled
+            self.followUpDelivery = followUpDelivery
         }
     }
 
@@ -174,6 +177,7 @@ enum OpenCodeSessionComposerAction {
     case removeAttachment(String)
     case cancelRevert
     case send
+    case toggleFollowUp
     case stop
     case allowPermissionOnce(requestID: String, sessionID: String)
     case denyPermission(requestID: String, sessionID: String)
@@ -277,9 +281,19 @@ struct OpenCodeSessionComposer: View {
                     }
 
                     OpenCodeButton(
-                        variant: .iconCircle(.arrowUpward, accessibilityLabel: "Send prompt"),
+                        variant: .iconCircle(
+                            prompt.followUpDelivery == .steer ? .arrowWarmUp : .arrowUpward,
+                            accessibilityLabel: {
+                                switch prompt.followUpDelivery {
+                                case .steer: "Send as Steer"
+                                case .queue: "Send as Queue"
+                                case nil: "Send prompt"
+                                }
+                            }()
+                        ),
                         enabled: prompt.sendEnabled,
                         contrast: .low,
+                        longPress: prompt.followUpDelivery == nil ? nil : { onAction(.toggleFollowUp) },
                         action: {
                             // OPE-138: send leaves editing intent. Mention UITextView is
                             // outside SwiftUI @FocusState, so resign first responder.

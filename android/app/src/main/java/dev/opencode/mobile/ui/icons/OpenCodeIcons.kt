@@ -13,6 +13,7 @@ object OpenCodeIcons {
 private var _add: ImageVector? = null
 private var _arrow_back: ImageVector? = null
 private var _arrow_upward: ImageVector? = null
+private var _arrow_warm_up: ImageVector? = null
 private var _arrow_downward: ImageVector? = null
 private var _check: ImageVector? = null
 private var _chevron_right: ImageVector? = null
@@ -97,6 +98,30 @@ private var _widgets: ImageVector? = null
     )
       }.build()
       return _arrow_upward!!
+    }
+
+  val ArrowWarmUp: ImageVector
+    get() {
+      if (_arrow_warm_up != null) return _arrow_warm_up!!
+      _arrow_warm_up = ImageVector.Builder(
+        name = "ArrowWarmUp",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 960f,
+        viewportHeight = 960f,
+      ).apply {
+    group(
+      translationX = 0f,
+      translationY = 960f,
+    ) {
+    addPath(
+      pathData = PathParser().parsePathString("M440-727 256-544l-56-56 280-280 280 280-56 57-184-184v287h-80v-287Zm0 487v-120h80v120h-80Zm0 160v-80h80v80h-80Z").toNodes(),
+      fill = SolidColor(Color.Black),
+      pathFillType = PathFillType.NonZero,
+    )
+    }
+      }.build()
+      return _arrow_warm_up!!
     }
 
   val ArrowDownward: ImageVector

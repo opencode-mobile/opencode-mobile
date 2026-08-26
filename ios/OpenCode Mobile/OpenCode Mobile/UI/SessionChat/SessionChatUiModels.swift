@@ -5,6 +5,8 @@ struct SessionChatRow: Identifiable, Equatable {
     let role: MessageRole
     let text: String
     let metadataLabel: String
+    let waitingCaption: String?
+    let waitingDelivery: FollowUpDelivery?
     let isPending: Bool
     let isStreaming: Bool
     let renderedMarkdown: NativeMarkdownDocument?
@@ -18,6 +20,8 @@ struct SessionChatRow: Identifiable, Equatable {
         role: MessageRole,
         text: String,
         metadataLabel: String,
+        waitingCaption: String? = nil,
+        waitingDelivery: FollowUpDelivery? = nil,
         isPending: Bool = false,
         isStreaming: Bool = false,
         renderedMarkdown: NativeMarkdownDocument? = nil,
@@ -30,6 +34,8 @@ struct SessionChatRow: Identifiable, Equatable {
         self.role = role
         self.text = text
         self.metadataLabel = metadataLabel
+        self.waitingCaption = waitingCaption
+        self.waitingDelivery = waitingDelivery
         self.isPending = isPending
         self.isStreaming = isStreaming
         self.renderedMarkdown = renderedMarkdown
@@ -52,6 +58,8 @@ struct SessionChatRow: Identifiable, Equatable {
               lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count,
               lhs.text.count == rhs.text.count,
               lhs.metadataLabel == rhs.metadataLabel,
+              lhs.waitingCaption == rhs.waitingCaption,
+              lhs.waitingDelivery == rhs.waitingDelivery,
               lhs.blocks.count == rhs.blocks.count
         else { return false }
         // Huge assistant replies: compare text only after cheap fields match.
@@ -97,6 +105,8 @@ struct SessionChatComposerState: Equatable {
     var agentMentions: [AgentMention] = []
     var cursor: Int = 0
     var selectionRevision: Int = 0
+    var followUpDelivery: FollowUpDelivery = .steer
+    var supportsFollowUpDelivery = false
 
     var selectedModeLabel: String {
         selectableAgents.first { $0.id.compare(selectedMode, options: .caseInsensitive) == .orderedSame }?.displayName
@@ -448,6 +458,7 @@ struct SessionChatComposerRegionState: Equatable {
     var slashSuggestions: [SessionChatSlashSuggestion] = []
     var atSuggestionsVisible = false
     var atSuggestions: [SessionChatAtSuggestion] = []
+    var followUpNotice: String?
 }
 
 extension ServerCommand {

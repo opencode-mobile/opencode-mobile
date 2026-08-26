@@ -270,6 +270,12 @@ fun MainNavigation() {
                                                     SessionChatDisplayPreferences.smoothStreamingUpdates,
                                                 onSmoothStreamingUpdatesChange =
                                                     settingsViewModel::setSmoothStreamingUpdates,
+                                                followUpDelivery =
+                                                    SessionChatDisplayPreferences.followUpDelivery,
+                                                onFollowUpDeliveryChange =
+                                                    settingsViewModel::setFollowUpDelivery,
+                                                supportsFollowUpDelivery =
+                                                    settingsViewModel.supportsFollowUpDelivery(),
                                                 textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
                                                 onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
                                                 productAnalyticsConsented =

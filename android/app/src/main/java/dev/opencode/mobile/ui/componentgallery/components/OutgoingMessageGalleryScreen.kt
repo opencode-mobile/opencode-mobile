@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentPresentation
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 
 private enum class OutgoingMessageSample(
@@ -44,6 +45,10 @@ private enum class OutgoingMessageSample(
                 OpenCodeAttachmentPresentation("text", "notes.md", OpenCodeAttachmentVariant.Text),
             ),
     ),
+    Waiting(
+        label = "Waiting",
+        text = "Also check the compact path.",
+    ),
 }
 
 @Composable
@@ -71,6 +76,9 @@ fun OutgoingMessageGalleryScreen(modifier: Modifier = Modifier) {
         OpenCodeOutgoingMessage(
             text = sample.text,
             metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
+            waitingCaption =
+                FollowUpDelivery.Steer.waitingCaption.takeIf { sample == OutgoingMessageSample.Waiting },
+            waitingDelivery = FollowUpDelivery.Steer.takeIf { sample == OutgoingMessageSample.Waiting },
             attachments = sample.attachments,
             modifier = Modifier.fillMaxWidth(),
             onClick = {},

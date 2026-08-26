@@ -237,7 +237,18 @@ class InMemoryMessageStore
             ensureCaches(sessionId)
             val order = messageOrders[sessionId]!!
             val inserted = messageId !in order
-            infoCaches[sessionId]!![messageId] = infoJson
+            val previous = infoCaches[sessionId]!![messageId]
+            val merged =
+                if (infoJson.containsKey("waiting") || previous == null) {
+                    infoJson
+                } else {
+                    buildJsonObject {
+                        infoJson.forEach { (key, value) -> put(key, value) }
+                        previous["waiting"]?.let { put("waiting", it) }
+                        previous["delivery"]?.let { put("delivery", it) }
+                    }
+                }
+            infoCaches[sessionId]!![messageId] = merged
             partsCaches[sessionId]!!.getOrPut(messageId) { mutableMapOf() }
             partOrders[sessionId]!!.getOrPut(messageId) { mutableListOf() }
             if (inserted) {

@@ -374,6 +374,7 @@ private val OpenCodeSessionComposerAction.label: String
             is OpenCodeSessionComposerAction.RemoveAttachment -> "Remove attachment"
             OpenCodeSessionComposerAction.CancelRevert -> "Cancel revert"
             OpenCodeSessionComposerAction.Send -> "Send"
+            OpenCodeSessionComposerAction.ToggleFollowUp -> "Toggle follow-up"
             OpenCodeSessionComposerAction.Stop -> "Stop"
             is OpenCodeSessionComposerAction.AllowPermissionOnce -> "Allow once"
             is OpenCodeSessionComposerAction.DenyPermission -> "Deny"

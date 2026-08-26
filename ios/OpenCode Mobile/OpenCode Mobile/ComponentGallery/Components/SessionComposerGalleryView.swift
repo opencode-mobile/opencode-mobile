@@ -358,6 +358,7 @@ private extension OpenCodeSessionComposerAction {
         case .removeAttachment: "Remove attachment"
         case .cancelRevert: "Cancel revert"
         case .send: "Send"
+        case .toggleFollowUp: "Toggle follow-up"
         case .stop: "Stop"
         case .allowPermissionOnce: "Allow once"
         case .denyPermission: "Deny"

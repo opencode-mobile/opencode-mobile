@@ -15,6 +15,12 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
     let sentAtEpochMs: Int64?
     let contextInputTokens: Int64?
     let contextEstimate: MessageContextEstimate
+    let followUpDelivery: FollowUpDelivery?
+    let isWaitingForPickup: Bool
+
+    var waitingCaption: String? {
+        isWaitingForPickup ? followUpDelivery?.waitingCaption : nil
+    }
 
     init(
         id: String,
@@ -30,7 +36,9 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         mode: String?,
         sentAtEpochMs: Int64?,
         contextInputTokens: Int64? = nil,
-        contextEstimate: MessageContextEstimate = MessageContextEstimate()
+        contextEstimate: MessageContextEstimate = MessageContextEstimate(),
+        followUpDelivery: FollowUpDelivery? = nil,
+        isWaitingForPickup: Bool = false
     ) {
         self.id = id
         self.role = role
@@ -46,6 +54,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         self.sentAtEpochMs = sentAtEpochMs
         self.contextInputTokens = contextInputTokens
         self.contextEstimate = contextEstimate
+        self.followUpDelivery = followUpDelivery
+        self.isWaitingForPickup = isWaitingForPickup
     }
 }
 
@@ -232,6 +242,7 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
     let variant: String?
     let mode: String?
     let agentMentions: [AgentMention]
+    let delivery: FollowUpDelivery
 
     init(
         text: String,
@@ -239,7 +250,8 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
         model: PromptModelSelection? = nil,
         variant: String? = nil,
         mode: String? = nil,
-        agentMentions: [AgentMention] = []
+        agentMentions: [AgentMention] = [],
+        delivery: FollowUpDelivery = .steer
     ) {
         self.text = text
         self.attachments = attachments
@@ -247,6 +259,7 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
         self.variant = variant
         self.mode = mode
         self.agentMentions = agentMentions
+        self.delivery = delivery
     }
 }
 

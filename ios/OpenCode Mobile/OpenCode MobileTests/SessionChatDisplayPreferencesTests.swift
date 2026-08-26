@@ -38,6 +38,20 @@ import Testing
         #expect(defaults.object(forKey: "collapseConsecutiveToolCalls") == nil)
         #expect(preferences.smoothStreamingUpdates == true)
         #expect(defaults.object(forKey: "smoothStreamingUpdates") == nil)
+        #expect(preferences.followUpDelivery == .steer)
+        #expect(defaults.object(forKey: "followUpDelivery") == nil)
+    }
+
+    @Test func followUpDelivery_defaultsSteerAndPersistsQueue() {
+        let suite = "SessionChatDisplayPreferencesTests.followUp"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+        #expect(preferences.followUpDelivery == .steer)
+        preferences.setFollowUpDelivery(.queue)
+        #expect(preferences.followUpDelivery == .queue)
+        let reloaded = SessionChatDisplayPreferences(defaults: defaults)
+        #expect(reloaded.followUpDelivery == .queue)
     }
 
     @Test func missingSmoothStreamingKey_defaultsOn() {

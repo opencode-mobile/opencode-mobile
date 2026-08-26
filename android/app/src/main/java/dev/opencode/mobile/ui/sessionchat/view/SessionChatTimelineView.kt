@@ -423,6 +423,8 @@ private fun SessionChatMessageRow(
                     text = message.text,
                     renderedMarkdown = message.renderedMarkdown,
                     metadataLabel = message.metadataLabel,
+                    waitingCaption = message.waitingCaption,
+                    waitingDelivery = message.waitingDelivery,
                     content = message.outgoingContent(),
                     modifier = Modifier.fillMaxWidth(),
                     onClick =

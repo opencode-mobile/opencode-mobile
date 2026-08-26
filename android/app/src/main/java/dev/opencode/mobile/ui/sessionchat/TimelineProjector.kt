@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
@@ -13,6 +14,8 @@ data class TimelineRow(
     val role: MessageRole,
     val text: String,
     val metadataLabel: String,
+    val waitingCaption: String? = null,
+    val waitingDelivery: FollowUpDelivery? = null,
     val isPending: Boolean = false,
     val isStreaming: Boolean = false,
     val blocks: List<SessionChatTimelineBlock> = emptyList(),
@@ -114,6 +117,8 @@ object TimelineProjector {
                 role = item.role,
                 text = item.text,
                 metadataLabel = item.metadataLabel,
+                waitingCaption = item.waitingCaption,
+                waitingDelivery = item.waitingDelivery,
                 isPending = item.isPending,
                 isStreaming = item.isStreaming,
                 blocks = item.blocks,
@@ -138,6 +143,8 @@ object TimelineProjector {
             role = row.role,
             text = row.text,
             metadataLabel = row.metadataLabel,
+            waitingCaption = row.waitingCaption,
+            waitingDelivery = row.waitingDelivery,
             isPending = row.isPending,
             isStreaming = row.isStreaming,
             renderedMarkdown = soleDecoratedText,
@@ -215,6 +222,8 @@ object TimelineProjector {
                 role = message.role,
                 text = displayText,
                 metadataLabel = metadataLabel(message),
+                waitingCaption = message.waitingCaption,
+                waitingDelivery = message.followUpDelivery.takeIf { message.isWaitingForPickup },
                 isPending = false,
                 isStreaming = isStreaming(message),
                 blocks = body.blocks,
@@ -252,6 +261,8 @@ object TimelineProjector {
             left.role == right.role &&
             left.text == right.text &&
             left.metadataLabel == right.metadataLabel &&
+            left.waitingCaption == right.waitingCaption &&
+            left.waitingDelivery == right.waitingDelivery &&
             left.isPending == right.isPending &&
             left.isStreaming == right.isStreaming &&
             left.blocks == right.blocks &&
@@ -270,6 +281,7 @@ object TimelineProjector {
                 },
             isStreaming = row.isStreaming,
             hasMetadata = row.metadataLabel.isNotEmpty(),
+            hasWaiting = row.waitingCaption != null,
             attachmentSignatures = row.attachments.map { "${it.id}\u0000${it.signature}" },
             blockLayoutFingerprints = row.blocks.map(::blockLayoutFingerprint),
         )
@@ -296,6 +308,7 @@ object TimelineProjector {
         val hasMarkdown: Boolean,
         val isStreaming: Boolean,
         val hasMetadata: Boolean,
+        val hasWaiting: Boolean,
         val attachmentSignatures: List<String>,
         val blockLayoutFingerprints: List<String>,
     )

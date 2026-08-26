@@ -406,6 +406,8 @@ private struct SessionChatMessageRow: View {
                     content: message.outgoingContent,
                     renderedMarkdown: message.renderedMarkdown,
                     metadataLabel: message.metadataLabel,
+                    waitingCaption: message.waitingCaption,
+                    waitingDelivery: message.waitingDelivery,
                     onTap: message.renderedMarkdown == nil
                         ? { openMessageActions(showsRevertMessage: true) }
                         : nil,

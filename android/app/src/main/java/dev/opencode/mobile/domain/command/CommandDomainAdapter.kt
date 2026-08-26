@@ -73,7 +73,7 @@ class CommandDomainAdapter {
                             mime = attachment.mime,
                         )
                     }.takeIf { it.isNotEmpty() },
-            delivery = "steer",
+            delivery = options.delivery.wireValue,
         )
 
     fun mapError(throwable: Throwable): CommandError =

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
@@ -26,6 +27,7 @@ import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.textmate.TextMateLogbook
@@ -42,6 +44,7 @@ class SettingsViewModel
     constructor(
         @ApplicationContext private val context: Context,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
+        private val activeConnectionManager: ActiveConnectionManager,
         private val foregroundEventStream: ForegroundEventStream,
         private val permissionLiveStore: PermissionLiveStore,
         private val questionLiveStore: QuestionLiveStore,
@@ -142,6 +145,13 @@ class SettingsViewModel
         fun setSmoothStreamingUpdates(enabled: Boolean) {
             SessionChatDisplayPreferences.updateSmoothStreamingUpdates(enabled)
         }
+
+        fun setFollowUpDelivery(value: FollowUpDelivery) {
+            SessionChatDisplayPreferences.updateFollowUpDelivery(value)
+        }
+
+        fun supportsFollowUpDelivery(): Boolean =
+            activeConnectionManager.currentCapabilities().supportsFollowUpDelivery
 
         fun setTextMateEnabled(enabled: Boolean) {
             MarkdownHighlightPreferences.updateTextMateEnabled(enabled)

@@ -8,8 +8,18 @@ class ServerProtocolMatrixTest {
     fun capabilitiesAndLastTurnAvailabilityMatchProtocol() {
         val rows =
             listOf(
-                Row(ServerProtocol.V1, supportsSessionMessageDiff = true, supportsSessionArchive = true),
-                Row(ServerProtocol.V2, supportsSessionMessageDiff = false, supportsSessionArchive = false),
+                Row(
+                    ServerProtocol.V1,
+                    supportsSessionMessageDiff = true,
+                    supportsSessionArchive = true,
+                    supportsFollowUpDelivery = false,
+                ),
+                Row(
+                    ServerProtocol.V2,
+                    supportsSessionMessageDiff = false,
+                    supportsSessionArchive = false,
+                    supportsFollowUpDelivery = true,
+                ),
             )
         for (row in rows) {
             assertEquals(
@@ -20,6 +30,10 @@ class ServerProtocolMatrixTest {
                 row.supportsSessionArchive,
                 ServerCapabilities.forProtocol(row.protocol).supportsSessionArchive,
             )
+            assertEquals(
+                row.supportsFollowUpDelivery,
+                ServerCapabilities.forProtocol(row.protocol).supportsFollowUpDelivery,
+            )
         }
     }
 
@@ -27,5 +41,6 @@ class ServerProtocolMatrixTest {
         val protocol: ServerProtocol,
         val supportsSessionMessageDiff: Boolean,
         val supportsSessionArchive: Boolean,
+        val supportsFollowUpDelivery: Boolean,
     )
 }

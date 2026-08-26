@@ -653,6 +653,11 @@ class SessionChatViewModel
             sessionInfo.confirmRenameSession()
         }
 
+        fun toggleFollowUp() {
+            if (!activeConnectionManager.currentCapabilities().supportsFollowUpDelivery) return
+            composer.toggleFollowUp()
+        }
+
         fun sendPrompt() {
             val composerState = composer.state.value.composer
             logAction(
@@ -670,6 +675,8 @@ class SessionChatViewModel
             composer.sendPrompt(
                 sessionId = sessionId,
                 worktree = worktree,
+                isSessionBusy = sessionInfo.state.value.sessionStatusLabel != null,
+                supportsFollowUp = activeConnectionManager.currentCapabilities().supportsFollowUpDelivery,
                 onOptimisticRows = { rows ->
                     // Mark only after composer passes early-return checks.
                     sessionInfo.markOptimisticBusy()
@@ -1197,7 +1204,11 @@ class SessionChatViewModel
                         else -> null
                     }
                 }
-            val snackbar = resolveSnackbar(transientError, commandsState.actionSuccessMessage)
+            val snackbar =
+                resolveSnackbar(
+                    transientError,
+                    composerState.followUpNotice ?: commandsState.actionSuccessMessage,
+                )
             val sessionStatusLabel =
                 if (isCompacting) {
                     SessionCompactChrome.STATUS_LABEL
@@ -1232,7 +1243,11 @@ class SessionChatViewModel
                 timeline = timelineState.timeline,
                 messages = messages,
                 timelineFrame = timelineFrame,
-                composer = composerState.composer,
+                composer =
+                    composerState.composer.copy(
+                        supportsFollowUpDelivery =
+                            activeConnectionManager.currentCapabilities().supportsFollowUpDelivery,
+                    ),
                 isSending = composerState.isSending,
                 isRefreshing = timelineState.isRefreshing,
                 isAborting = composerState.isAborting,

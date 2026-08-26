@@ -31,6 +31,7 @@ import dev.opencode.mobile.PrivacyPolicy
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.home.HomeSessionLadder
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
@@ -74,6 +75,9 @@ fun SettingsScreen(
     onCollapseConsecutiveToolCallsChange: (Boolean) -> Unit,
     smoothStreamingUpdates: Boolean,
     onSmoothStreamingUpdatesChange: (Boolean) -> Unit,
+    followUpDelivery: FollowUpDelivery,
+    onFollowUpDeliveryChange: (FollowUpDelivery) -> Unit,
+    supportsFollowUpDelivery: Boolean,
     textMateEnabled: Boolean,
     onTextMateEnabledChange: (Boolean) -> Unit,
     productAnalyticsConsented: Boolean,
@@ -85,6 +89,7 @@ fun SettingsScreen(
     var showClearSessionCacheConfirmation by remember { mutableStateOf(false) }
     var showThemePicker by remember { mutableStateOf(false) }
     var showRecentWindowPicker by remember { mutableStateOf(false) }
+    var showFollowUpPicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val currentTheme = ThemeManager.currentTheme
     val themeImportError = ThemeManager.loadError
@@ -279,6 +284,47 @@ fun SettingsScreen(
                         },
                     )
                 },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+
+            OpenCodeListItem(
+                title = "Follow-up send",
+                subtitle =
+                    if (supportsFollowUpDelivery) {
+                        val label = if (followUpDelivery == FollowUpDelivery.Steer) "Steer" else "Queue"
+                        "$label · V2 servers only. V1 does not support this."
+                    } else {
+                        "Not supported on V1. This server always sends immediately."
+                    },
+                style = OpenCodeListItemStyle.Card,
+                enabled = supportsFollowUpDelivery,
+                startDecorator =
+                    StartDecorator.Icon(
+                        if (followUpDelivery == FollowUpDelivery.Steer && supportsFollowUpDelivery) {
+                            OpenCodeIcons.ArrowWarmUp
+                        } else {
+                            OpenCodeIcons.ArrowUpward
+                        },
+                        "Follow-up send",
+                    ),
+                onClick =
+                    if (supportsFollowUpDelivery) {
+                        { showFollowUpPicker = true }
+                    } else {
+                        null
+                    },
+                trailing =
+                    if (supportsFollowUpDelivery) {
+                        {
+                            Icon(
+                                imageVector = OpenCodeIcons.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        null
+                    },
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
 
@@ -514,6 +560,33 @@ fun SettingsScreen(
         }
     }
 
+    OpenCodeBottomSheet(
+        visible = showFollowUpPicker,
+        title = "Follow-up send",
+        onDismissRequest = { showFollowUpPicker = false },
+    ) {
+        FollowUpDelivery.entries.forEach { mode ->
+            OpenCodeBottomSheetEntry(
+                title = if (mode == FollowUpDelivery.Steer) "Steer" else "Queue",
+                startDecorator =
+                    BottomSheetEntryDecorator.Icon(
+                        if (mode == FollowUpDelivery.Steer) OpenCodeIcons.ArrowWarmUp else OpenCodeIcons.ArrowUpward,
+                        null,
+                    ),
+                endDecorator =
+                    if (mode == followUpDelivery) {
+                        BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
+                    } else {
+                        BottomSheetEntryDecorator.None
+                    },
+                onClick = {
+                    onFollowUpDeliveryChange(mode)
+                    showFollowUpPicker = false
+                },
+            )
+        }
+    }
+
     OpenCodeDialog(
         visible = showClearSessionCacheConfirmation,
         title = "Clear session cache?",
@@ -640,6 +713,9 @@ private fun SettingsScreenLightPreview() {
             smoothStreamingUpdates =
                 SessionChatDisplayPreferences.smoothStreamingUpdates,
             onSmoothStreamingUpdatesChange = {},
+            followUpDelivery = FollowUpDelivery.Steer,
+            onFollowUpDeliveryChange = {},
+            supportsFollowUpDelivery = true,
             textMateEnabled = false,
             onTextMateEnabledChange = {},
             productAnalyticsConsented = false,
@@ -677,6 +753,9 @@ private fun SettingsScreenDarkPreview() {
             smoothStreamingUpdates =
                 SessionChatDisplayPreferences.smoothStreamingUpdates,
             onSmoothStreamingUpdatesChange = {},
+            followUpDelivery = FollowUpDelivery.Steer,
+            onFollowUpDeliveryChange = {},
+            supportsFollowUpDelivery = true,
             textMateEnabled = false,
             onTextMateEnabledChange = {},
             productAnalyticsConsented = false,

@@ -27,6 +27,8 @@ icon-only button needs.
   - short text glyph for `iconCircleText`.
 - Optional content:
   - icon accessibility label for icon variants and `iconCircleText`.
+  - `onLongClick` / `longPress` — optional second action. When omitted,
+    the button is tap-only.
 
 ## Token Usage
 

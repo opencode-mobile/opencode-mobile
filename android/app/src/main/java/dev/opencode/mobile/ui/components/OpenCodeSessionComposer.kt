@@ -62,6 +62,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -83,6 +84,7 @@ sealed interface OpenCodeSessionComposerState {
         val attachEnabled: Boolean = true,
         val showStop: Boolean,
         val stopEnabled: Boolean,
+        val followUpDelivery: FollowUpDelivery? = null,
     ) : OpenCodeSessionComposerState
 
     data class Permission(
@@ -153,6 +155,8 @@ sealed interface OpenCodeSessionComposerAction {
     data object CancelRevert : OpenCodeSessionComposerAction
 
     data object Send : OpenCodeSessionComposerAction
+
+    data object ToggleFollowUp : OpenCodeSessionComposerAction
 
     data object Stop : OpenCodeSessionComposerAction
 
@@ -425,9 +429,27 @@ private fun PromptEntryContent(
                 )
             }
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send prompt"),
+                variant =
+                    OpenCodeButtonVariant.IconCircle(
+                        imageVector =
+                            if (state.followUpDelivery == FollowUpDelivery.Steer) {
+                                OpenCodeIcons.ArrowWarmUp
+                            } else {
+                                OpenCodeIcons.ArrowUpward
+                            },
+                        contentDescription =
+                            when (state.followUpDelivery) {
+                                FollowUpDelivery.Steer -> "Send as Steer"
+                                FollowUpDelivery.Queue -> "Send as Queue"
+                                null -> "Send prompt"
+                            },
+                    ),
                 enabled = state.sendEnabled,
                 contrast = OpenCodeButtonContrast.Low,
+                onLongClick =
+                    state.followUpDelivery?.let {
+                        { onAction(OpenCodeSessionComposerAction.ToggleFollowUp) }
+                    },
                 onClick = {
                     // OPE-138: send leaves editing intent; clear focus so the IME dismisses.
                     focusManager.clearFocus()

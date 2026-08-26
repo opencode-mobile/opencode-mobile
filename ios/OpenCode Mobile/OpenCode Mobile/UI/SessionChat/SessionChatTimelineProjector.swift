@@ -179,6 +179,8 @@ nonisolated enum SessionChatTimelineProjector {
             role: message.role,
             text: displayText,
             metadataLabel: label,
+            waitingCaption: message.waitingCaption,
+            waitingDelivery: message.isWaitingForPickup ? message.followUpDelivery : nil,
             isPending: false,
             isStreaming: body.isStreaming,
             renderedMarkdown: bridgeMarkdown,
@@ -414,7 +416,7 @@ nonisolated enum SessionChatTimelineProjector {
                 "n:\(id)"
             }
         }.joined(separator: "|")
-        return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(blockKey)"
+        return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(row.waitingCaption == nil ? "0" : "1"):\(blockKey)"
     }
 
     /// Layout bump caused only by markdown presence/sourceHash while streaming flag and

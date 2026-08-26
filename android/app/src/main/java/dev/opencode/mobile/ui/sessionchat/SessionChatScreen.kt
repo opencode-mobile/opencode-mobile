@@ -649,6 +649,10 @@ fun SessionChatScreen(
                                     stopEnabled =
                                         !uiState.isAborting &&
                                             uiState.canMutate,
+                                    followUpDelivery =
+                                        uiState.composer.followUpDelivery.takeIf {
+                                            uiState.composer.supportsFollowUpDelivery
+                                        },
                                 )
                         }
                     OpenCodeSessionComposer(
@@ -694,6 +698,7 @@ fun SessionChatScreen(
                                 is OpenCodeSessionComposerAction.RemoveAttachment -> viewModel.removeAttachment(action.id)
                                 OpenCodeSessionComposerAction.CancelRevert -> viewModel.cancelRevert()
                                 OpenCodeSessionComposerAction.Send -> viewModel.sendPrompt()
+                                OpenCodeSessionComposerAction.ToggleFollowUp -> viewModel.toggleFollowUp()
                                 OpenCodeSessionComposerAction.Stop -> viewModel.abort()
                                 is OpenCodeSessionComposerAction.AllowPermissionOnce ->
                                     viewModel.allowPermissionOnce(action.requestId, action.sessionId)

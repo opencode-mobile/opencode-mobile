@@ -22,6 +22,9 @@ outgoing message.
 - Required content:
   - metadata label using dot-separated sent-message context.
 - Optional content:
+  - `waitingCaption` — quiet follow-up status under the footer, only
+    while the prompt is admitted and not yet prompted. Omit after
+    pickup. No badge, no “picked up” mark.
   - legacy convenience inputs: plain `text`, optional top-level
     `renderedMarkdown`, and/or `attachments`.
   - ordered `content` parts (`Text` and `Attachment`) for multi-part outgoing
@@ -69,6 +72,11 @@ Every outgoing message includes a tiny footer directly below the rounded bubble.
 The right-aligned footer label uses compact caption typography and combines
 sent-message context as `mode · model · time`, for example
 `Build · DeepSeek V4 Flash · 9:05 PM`.
+
+When `waitingCaption` is set, a second caption row sits under that footer:
+the Follow-up send icon (Arrow Warm Up or Arrow Upward) plus
+`Waiting to steer` or `Held until idle`. Same caption type and
+`text-weaker` / on-surface-variant color. It is not tappable.
 
 When the owning feature enables message actions, only the rounded message pill
 is interactive. Press feedback is clipped to the pill shape; the metadata
