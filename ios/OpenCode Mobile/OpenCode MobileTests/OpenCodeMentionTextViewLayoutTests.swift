@@ -42,6 +42,28 @@ struct OpenCodeMentionTextViewLayoutTests {
         #expect(first > OpenCodeMentionTextViewLayout.maxCollapsedHeight)
     }
 
+    @Test @MainActor func scrollCaret_retriesAfterFirstLayoutWhenBoundsStartAtZero() {
+        let view = PlaceholderTextView()
+        view.isScrollEnabled = true
+        view.font = OpenCodeMentionTextViewLayout.font
+        view.textContainerInset = .zero
+        view.textContainer.lineFragmentPadding = 0
+        view.attributedText = attributed(String(repeating: "a very long message ", count: 24))
+        view.selectedRange = NSRange(location: (view.text as NSString).length, length: 0)
+
+        view.scrollCaretIntoViewIfNeeded()
+        #expect(view.contentOffset.y == 0)
+
+        view.frame = CGRect(
+            x: 0,
+            y: 0,
+            width: width,
+            height: OpenCodeMentionTextViewLayout.maxCollapsedHeight
+        )
+        view.layoutIfNeeded()
+        #expect(view.contentOffset.y > 0)
+    }
+
     private func attributed(_ text: String) -> NSAttributedString {
         OpenCodeMentionTextViewLayout.attributedString(
             text: text,

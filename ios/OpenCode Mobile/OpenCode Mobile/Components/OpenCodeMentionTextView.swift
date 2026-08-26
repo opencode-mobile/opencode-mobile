@@ -183,6 +183,8 @@ private struct Representable: UIViewRepresentable {
                 lastAppliedSelectionRevision = selectionRevision
                 applySelection(start: selectionStart, end: selectionEnd, text: text, to: view)
                 view.scrollCaretIntoViewIfNeeded()
+            } else {
+                view.retryPendingCaretScrollIfNeeded()
             }
             view.placeholderLabel.isHidden = !text.isEmpty
         }
@@ -226,6 +228,7 @@ private struct Representable: UIViewRepresentable {
 
 final class PlaceholderTextView: UITextView {
     let placeholderLabel = UILabel()
+    private var pendingCaretScroll = false
 
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
@@ -244,15 +247,31 @@ final class PlaceholderTextView: UITextView {
         fatalError("init(coder:) is not supported")
     }
 
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        retryPendingCaretScrollIfNeeded()
+    }
+
     func scrollCaretIntoViewIfNeeded() {
-        let width = bounds.width
-        guard width > 0 else { return }
+        guard bounds.width > 0, bounds.height > 0 else {
+            pendingCaretScroll = true
+            return
+        }
         let contentHeight = OpenCodeMentionTextViewLayout.contentHeight(
             for: attributedText ?? NSAttributedString(),
-            width: width
+            width: bounds.width
         )
-        guard OpenCodeMentionTextViewLayout.shouldScroll(contentHeight: contentHeight) else { return }
+        guard OpenCodeMentionTextViewLayout.shouldScroll(contentHeight: contentHeight) else {
+            pendingCaretScroll = false
+            return
+        }
+        pendingCaretScroll = false
         scrollRangeToVisible(selectedRange)
+    }
+
+    func retryPendingCaretScrollIfNeeded() {
+        guard pendingCaretScroll else { return }
+        scrollCaretIntoViewIfNeeded()
     }
 }
 
