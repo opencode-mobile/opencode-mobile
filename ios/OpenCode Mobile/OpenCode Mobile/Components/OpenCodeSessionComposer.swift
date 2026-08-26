@@ -8,6 +8,7 @@ enum OpenCodeSessionComposerState {
         let selectionEnd: Int?
         let selectionRevision: Int
         let attachments: [OpenCodeAttachmentPresentation]
+        let showPendingRevert: Bool
         let selectedModelLabel: String
         let selectedModeLabel: String
         let selectedVariantLabel: String
@@ -24,6 +25,7 @@ enum OpenCodeSessionComposerState {
             selectionEnd: Int? = nil,
             selectionRevision: Int = 0,
             attachments: [OpenCodeAttachmentPresentation] = [],
+            showPendingRevert: Bool = false,
             selectedModelLabel: String,
             selectedModeLabel: String,
             selectedVariantLabel: String,
@@ -39,6 +41,7 @@ enum OpenCodeSessionComposerState {
             self.selectionEnd = selectionEnd
             self.selectionRevision = selectionRevision
             self.attachments = attachments
+            self.showPendingRevert = showPendingRevert
             self.selectedModelLabel = selectedModelLabel
             self.selectedModeLabel = selectedModeLabel
             self.selectedVariantLabel = selectedVariantLabel
@@ -169,6 +172,7 @@ enum OpenCodeSessionComposerAction {
     case attach
     case openCommands
     case removeAttachment(String)
+    case cancelRevert
     case send
     case stop
     case allowPermissionOnce(requestID: String, sessionID: String)
@@ -215,8 +219,11 @@ struct OpenCodeSessionComposer: View {
 
     @ViewBuilder
     private func promptEntryContent(_ prompt: OpenCodeSessionComposerState.Prompt) -> some View {
-            if !prompt.attachments.isEmpty {
+            if prompt.showPendingRevert || !prompt.attachments.isEmpty {
                 VStack(spacing: 8) {
+                    if prompt.showPendingRevert {
+                        pendingRevertChip
+                    }
                     ForEach(prompt.attachments) { attachment in
                         OpenCodeAttachmentChip(attachment: attachment) { id in
                             onAction(.removeAttachment(id))
@@ -282,6 +289,37 @@ struct OpenCodeSessionComposer: View {
                     )
                 }
             }
+    }
+
+    private var pendingRevertChip: some View {
+        HStack(spacing: 8) {
+            OpenCodeIconImage(icon: .undo, size: 28)
+                .foregroundStyle(OpenCodeColors.iconBase)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Reverting this message")
+                    .font(OpenCodeTypography.bodySecondary)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                    .lineLimit(1)
+                Text("REVERT")
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textBase)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Reverting this message, REVERT")
+            Button(action: { onAction(.cancelRevert) }) {
+                OpenCodeIconImage(icon: .close, size: 20)
+                    .foregroundStyle(OpenCodeColors.iconStrongBase)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Cancel revert")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1))
+        .accessibilityElement(children: .contain)
     }
 
     /// Mention prompt uses `UITextView`; resign is the reliable dismiss path
@@ -649,6 +687,47 @@ private struct QuestionCustomTextField: View {
                 sessionID: "session-preview",
                 permission: "external_directory",
                 patterns: ["/Users/ivan/Projects/opencode-web/**"]
+            )
+        ),
+        onAction: { _ in }
+    )
+    .openCodeTheme()
+    .environment(\.colorScheme, .dark)
+}
+
+#Preview("Pending revert composer") {
+    OpenCodeSessionComposer(
+        state: .prompt(
+            .init(
+                text: "Add a dark mode toggle to Settings",
+                showPendingRevert: true,
+                selectedModelLabel: "Claude Sonnet 4",
+                selectedModeLabel: "Build",
+                selectedVariantLabel: "Default",
+                showVariant: true,
+                sendEnabled: true,
+                showStop: false,
+                stopEnabled: false
+            )
+        ),
+        onAction: { _ in }
+    )
+    .openCodeTheme()
+}
+
+#Preview("Pending revert composer dark") {
+    OpenCodeSessionComposer(
+        state: .prompt(
+            .init(
+                text: "Add a dark mode toggle to Settings",
+                showPendingRevert: true,
+                selectedModelLabel: "Claude Sonnet 4",
+                selectedModeLabel: "Build",
+                selectedVariantLabel: "Default",
+                showVariant: true,
+                sendEnabled: true,
+                showStop: false,
+                stopEnabled: false
             )
         ),
         onAction: { _ in }

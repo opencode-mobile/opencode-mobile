@@ -31,8 +31,9 @@ Chat screen with visible messages and a composer ready for new prompts.
   mobile exposes allow-once and deny only.
 - Message sheet **Revert message** reverts the session from that user turn
   (abort if busy, then `revertSession`, restore the prompt in the composer),
-  matching `/undo`. Copy stays clipboard-only. Live timeline truncation after
-  revert is still outstanding.
+  matching `/undo`. Copy stays clipboard-only. While revert is pending, the
+  composer shows an attachment-style chip (`Reverting this message` / `REVERT`)
+  with X to cancel. Live timeline truncation after revert is still outstanding.
 
 ## Still Out Of Scope
 

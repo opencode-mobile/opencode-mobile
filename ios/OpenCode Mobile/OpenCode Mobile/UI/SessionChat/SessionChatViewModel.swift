@@ -282,6 +282,13 @@ final class SessionChatViewModel {
         )
     }
 
+    func cancelRevert() {
+        commands.cancelRevert(
+            isBusy: uiState.sessionStatusLabel != nil || effectiveCompacting(),
+            clearComposerRestore: { [weak self] in self?.composer.restoreComposerText("") }
+        )
+    }
+
     func openCommands() {
         logChatAction(ProductAnalytics.Action.composerOpenCommands)
         ProductAnalytics.logScreenView(
@@ -1203,7 +1210,8 @@ final class SessionChatViewModel {
             forkErrorMessage: commandsState.forkErrorMessage,
             forkResultVisible: commandsState.forkResultVisible,
             forkedSessionTitle: commandsState.forkedSessionTitle,
-            pendingSessionReplace: commandsState.pendingSessionReplace
+            pendingSessionReplace: commandsState.pendingSessionReplace,
+            hasPendingRevert: commandsState.hasPendingRevert
         )
     }
 

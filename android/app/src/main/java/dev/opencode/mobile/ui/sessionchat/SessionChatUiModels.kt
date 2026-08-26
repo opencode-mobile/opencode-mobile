@@ -143,6 +143,7 @@ data class SessionChatUiState(
     val forkResultVisible: Boolean = false,
     val forkedSessionTitle: String = "",
     val pendingSessionReplace: ChildSessionNavigationTarget? = null,
+    val hasPendingRevert: Boolean = false,
     /** Smart project label for top-bar chrome; null when worktree missing. */
     val projectLabel: String? = null,
     val projectLetter: Char? = null,
@@ -410,6 +411,7 @@ data class SessionChatReviewChangesRegionState(
 data class SessionChatCommandsRegionState(
     val commandsSheetVisible: Boolean = false,
     val visibleActions: List<ClientSlashAction> = listOf(ClientSlashAction.New),
+    val hasPendingRevert: Boolean = false,
     val forkDialogVisible: Boolean = false,
     val forkDraftTitle: String = "",
     val forkSubmitting: Boolean = false,

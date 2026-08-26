@@ -1973,6 +1973,7 @@ struct SessionChatViewModelTests {
         #expect(sessionRepository.revertRequest == .init(id: "ses-1", messageID: "msg-3", partID: nil))
         #expect(sessionRepository.abortCallCount == 0)
         #expect(commandRepository.runCommandCalled == false)
+        #expect(viewModel.uiState.hasPendingRevert)
     }
 
     @Test func runClientSlashAction_undo_whenBusy_abortsBeforeReverting() async {
@@ -2012,6 +2013,47 @@ struct SessionChatViewModelTests {
 
         #expect(sessionRepository.revertRequest == .init(id: "ses-1", messageID: "msg-1", partID: nil))
         #expect(sessionRepository.abortCallCount == 0)
+        #expect(viewModel.uiState.hasPendingRevert)
+    }
+
+    @Test func cancelRevert_unrevertsAndClearsComposer() async {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "First", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(id: "msg-2", role: .assistant, text: "Reply", model: nil, mode: nil, sentAtEpochMs: 2),
+        ]
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: messages),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.revertMessage("msg-1")
+        await waitUntil { viewModel.uiState.hasPendingRevert }
+        #expect(viewModel.uiState.composer.text == "First")
+
+        viewModel.cancelRevert()
+        await waitUntil { sessionRepository.unrevertRequest != nil }
+
+        #expect(sessionRepository.unrevertRequest == "ses-1")
+        #expect(viewModel.uiState.composer.text == "")
+        #expect(!viewModel.uiState.hasPendingRevert)
+    }
+
+    @Test func cancelRevert_withoutPendingRevert_isNoop() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.cancelRevert()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        #expect(sessionRepository.unrevertRequest == nil)
     }
 
     @Test func revertMessage_whenBusy_abortsBeforeReverting() async {
@@ -3162,11 +3204,26 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool {
         revertRequest = RevertRequest(id: id, messageID: messageID, partID: partID)
         if let revertError { throw revertError }
+        var session = getSessionResult ?? Session(
+            id: id,
+            title: "Title",
+            slug: nil,
+            projectID: nil,
+            directory: nil,
+            parentID: nil,
+            updatedAtEpochMs: nil
+        )
+        session.revert = SessionRevert(messageID: messageID)
+        getSessionResult = session
         return true
     }
     func unrevertSession(id: String) async throws -> Bool {
         unrevertRequest = id
         if let unrevertError { throw unrevertError }
+        if var session = getSessionResult {
+            session.revert = nil
+            getSessionResult = session
+        }
         return true
     }
     func respondToPermission(
