@@ -540,6 +540,7 @@ final class SessionChatViewModel {
             onSendAccepted: { [weak self] in
                 guard let self else { return }
                 DiagnosticLog.info(.chat, "sendPrompt accepted session=\(self.sessionID)")
+                self.commands.consumePendingRevert()
                 self.sessionReadyStore.notifyPromptSent(sessionID: self.sessionID, directory: self.worktree)
                 await self.sessionInfo.refreshStatus()
                 DiagnosticLog.info(.chat, "sendPrompt reloadAfterSend start")

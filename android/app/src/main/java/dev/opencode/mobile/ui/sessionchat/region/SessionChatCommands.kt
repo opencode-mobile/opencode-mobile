@@ -261,6 +261,11 @@ class SessionChatCommands(
         )
     }
 
+    fun consumePendingRevert() {
+        if (currentRevertMessageId == null) return
+        setRevertBoundary(null)
+    }
+
     fun runCompact(
         providerId: String,
         modelId: String,
