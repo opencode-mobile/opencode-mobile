@@ -146,8 +146,11 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   still reporting caret/selection changes back through `textChanged`; the
   representable applies caret placement only when `selectionRevision`
   changes, matching Android's revision-gated selection updates. Prompt height
-  caps at `font.lineHeight * 5` with internal scroll beyond that. Question
-  custom text uses `OpenCodeTextInput`. Shell fill uses shared
+  is measured from attributed text (`boundingRect`) and capped at
+  `font.lineHeight * 5`. `UITextView.sizeThatFits` is not used: once internal
+  scroll is on, that API returns the capped bounds and a follow-up update
+  would turn scroll back off (OPE-213). Overflow scrolls inside the field.
+  Question custom text uses `OpenCodeTextInput`. Shell fill uses shared
   `openCodeFloatingChrome` (iOS 26+ Liquid Glass + underlay; material fallback).
 - Android uses Compose selection, live-region semantics, and progress
   primitives. Prompt mention spans render through a `VisualTransformation` on
@@ -202,7 +205,8 @@ resize motion can be reviewed in a realistic Session Chat placement.
   Chrome; see `../divergences.md`.
 - Automated checks: compile on iOS simulator and Android `compileDebugKotlin`
   for OPE-99 materials; Android `compileDebugKotlin` for OPE-127 prompt
-  `maxLines`.
+  `maxLines`; iOS `OpenCodeMentionTextViewLayoutTests` for OPE-213 prompt
+  height cap and scroll gating.
 
 ## Parity And Divergence
 
