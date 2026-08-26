@@ -725,7 +725,7 @@ fun SessionChatScreen(
         SessionChatMessageActionsSheet(
             target = messageActionsTarget,
             onDismiss = { messageActionsTarget = null },
-            onRestoreToComposer = viewModel::restoreComposerText,
+            onRevertMessage = viewModel::revertMessage,
         )
 
         SessionChatToolDetailSheet(

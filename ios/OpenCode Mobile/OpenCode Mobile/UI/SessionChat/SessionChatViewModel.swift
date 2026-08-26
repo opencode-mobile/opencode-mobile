@@ -274,6 +274,14 @@ final class SessionChatViewModel {
         composer.restoreComposerText(text)
     }
 
+    func revertMessage(_ messageID: String) {
+        commands.revertMessage(
+            id: messageID,
+            isBusy: uiState.sessionStatusLabel != nil || effectiveCompacting(),
+            restoreComposerText: { [weak self] text in self?.composer.restoreComposerText(text) }
+        )
+    }
+
     func openCommands() {
         logChatAction(ProductAnalytics.Action.composerOpenCommands)
         ProductAnalytics.logScreenView(

@@ -468,6 +468,19 @@ class SessionChatViewModel
             composer.restoreComposerText(text)
         }
 
+        fun revertMessage(messageId: String) {
+            commands.revertMessage(
+                id = messageId,
+                isBusy =
+                    sessionInfo.state.value.sessionStatusLabel != null ||
+                        effectiveCompacting(
+                            localCompacting = commands.state.value.isCompacting,
+                            sessionStatusLabel = sessionInfo.state.value.sessionStatusLabel,
+                        ),
+                restoreComposerText = composer::restoreComposerText,
+            )
+        }
+
         fun openCommands() {
             logAction(ProductAnalytics.Action.COMPOSER_OPEN_COMMANDS)
             commands.openCommands()

@@ -323,7 +323,7 @@ struct SessionChatView: View {
         }
         .sessionChatMessageActionsSheet(
             target: $messageActionsTarget,
-            onRestoreToComposer: { viewModel.restoreComposerText($0) }
+            onRevertMessage: { viewModel.revertMessage($0) }
         )
         .sessionChatToolDetailSheet(target: $toolDetailTarget)
         .sessionChatTodosSheet(

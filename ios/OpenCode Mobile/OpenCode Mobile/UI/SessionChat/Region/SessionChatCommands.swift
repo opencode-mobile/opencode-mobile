@@ -211,26 +211,26 @@ final class SessionChatCommands {
         let boundary = currentRevertMessageID
         guard let target = lastMessages
             .filter({ boundary == nil || $0.id < boundary! })
-            .last(where: { $0.role == .user && !$0.isPending && !$0.isStreaming && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+            .last(where: isRevertibleUserMessage)
         else { return }
-        let sessionID = sessionID
-        let worktree = worktree
-        revertTask?.cancel()
-        revertTask = Task {
-            if isBusy { _ = try? await sessionRepository.abortSession(id: sessionID, directory: worktree) }
-            do {
-                _ = try await sessionRepository.revertSession(id: sessionID, messageID: target.id, partID: nil)
-                guard !Task.isCancelled else { return }
-                OpenCodeLog.sessionChat.info("undo success session=\(sessionID, privacy: .public) message=\(target.id, privacy: .public)")
-                await refreshRevertNow()
-                restoreComposerText(target.text)
-            } catch {
-                guard !Task.isCancelled else { return }
-                OpenCodeLog.sessionChat.warning("undo failed session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-                state.actionErrorMessage = "Couldn't undo last message."
-                notifyChange()
-            }
-        }
+        revert(
+            target,
+            isBusy: isBusy,
+            restoreComposerText: restoreComposerText,
+            operation: "undo",
+            failureMessage: "Couldn't undo last message."
+        )
+    }
+
+    func revertMessage(id: String, isBusy: Bool, restoreComposerText: @escaping (String) -> Void) {
+        guard let target = lastMessages.first(where: { $0.id == id && isRevertibleUserMessage($0) }) else { return }
+        revert(
+            target,
+            isBusy: isBusy,
+            restoreComposerText: restoreComposerText,
+            operation: "revert",
+            failureMessage: "Couldn't revert message."
+        )
     }
 
     func runRedo(isBusy: Bool, clearComposerRestore: @escaping () -> Void) {
@@ -310,6 +310,44 @@ final class SessionChatCommands {
                 state.isCompacting = false
                 state.actionErrorMessage = SessionCompactChrome.failure
                 state.actionSuccessMessage = nil
+                notifyChange()
+            }
+        }
+    }
+
+    private func isRevertibleUserMessage(_ message: SessionChatRow) -> Bool {
+        message.role == .user
+            && !message.isPending
+            && !message.isStreaming
+            && !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func revert(
+        _ target: SessionChatRow,
+        isBusy: Bool,
+        restoreComposerText: @escaping (String) -> Void,
+        operation: String,
+        failureMessage: String
+    ) {
+        let sessionID = sessionID
+        let worktree = worktree
+        revertTask?.cancel()
+        revertTask = Task {
+            if isBusy { _ = try? await sessionRepository.abortSession(id: sessionID, directory: worktree) }
+            do {
+                _ = try await sessionRepository.revertSession(id: sessionID, messageID: target.id, partID: nil)
+                guard !Task.isCancelled else { return }
+                OpenCodeLog.sessionChat.info(
+                    "\(operation, privacy: .public) success session=\(sessionID, privacy: .public) message=\(target.id, privacy: .public)"
+                )
+                await refreshRevertNow()
+                restoreComposerText(target.text)
+            } catch {
+                guard !Task.isCancelled else { return }
+                OpenCodeLog.sessionChat.warning(
+                    "\(operation, privacy: .public) failed session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                )
+                state.actionErrorMessage = failureMessage
                 notifyChange()
             }
         }

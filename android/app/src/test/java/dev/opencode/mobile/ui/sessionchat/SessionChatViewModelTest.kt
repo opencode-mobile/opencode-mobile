@@ -2931,6 +2931,81 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun revertMessage_revertsThatUserTurnAndRestoresComposer() =
+        runTest(testDispatcher) {
+            val messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "First"),
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
+                    Message(id = "msg-3", role = MessageRole.User, text = "Second"),
+                )
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(messages = messages),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.revertMessage("msg-1")
+            advanceUntilIdle()
+
+            assertEquals(
+                FakeSessionRepository.RevertRequest(id = "ses-1", messageId = "msg-1", partId = null, directory = "/repo"),
+                sessionRepository.revertRequest,
+            )
+            assertEquals("First", viewModel.uiState.value.composer.text)
+            assertEquals(0, sessionRepository.abortCallCount)
+        }
+
+    @Test
+    fun revertMessage_whenBusy_abortsBeforeReverting() =
+        runTest(testDispatcher) {
+            val messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "First"),
+                    Message(id = "msg-2", role = MessageRole.User, text = "Second"),
+                )
+            val sessionRepository = FakeSessionRepository(sessionStatusType = "busy")
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(messages = messages),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertNotNull(viewModel.uiState.value.sessionStatusLabel)
+
+            viewModel.revertMessage("msg-1")
+            advanceUntilIdle()
+
+            assertEquals(1, sessionRepository.abortCallCount)
+            assertEquals("msg-1", sessionRepository.revertRequest?.messageId)
+            assertEquals("First", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
+    fun revertMessage_unknownMessage_isNoop() =
+        runTest(testDispatcher) {
+            val messages = listOf(Message(id = "msg-1", role = MessageRole.User, text = "First"))
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(messages = messages),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.revertMessage("missing")
+            advanceUntilIdle()
+
+            assertEquals(null, sessionRepository.revertRequest)
+            assertEquals("", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
     fun abort_interruptsBoundSessionAndRunningSubagentChild() =
         runTest(testDispatcher) {
             val sessionRepository = FakeSessionRepository(sessionStatusType = "busy")

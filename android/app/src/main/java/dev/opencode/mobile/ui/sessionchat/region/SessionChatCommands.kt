@@ -205,26 +205,34 @@ class SessionChatCommands(
         restoreComposerText: (String) -> Unit,
     ) {
         dismissCommands()
-        val sessionId = boundSessionId ?: return
-        val worktree = boundWorktree ?: return
         val boundary = currentRevertMessageId
         val target =
             lastMessages
                 .filter { boundary == null || it.id < boundary }
-                .lastOrNull { it.role == MessageRole.User && !it.isPending && !it.isStreaming && it.text.isNotBlank() }
+                .lastOrNull(::isRevertibleUserMessage)
                 ?: return
-        scope.launch(ioDispatcher) {
-            if (isBusy) runCatching { sessionRepository.abortSession(sessionId, directory = worktree) }
-            runCatching { sessionRepository.revertSession(sessionId, target.id, null, worktree) }
-                .onSuccess {
-                    logI("undo success session=$sessionId message=${target.id}")
-                    refreshRevertNow(sessionId, worktree)
-                    restoreComposerText(target.text)
-                }.onFailure { error ->
-                    logW("undo failed session=$sessionId error=${error.message}")
-                    _state.update { it.copy(actionErrorMessage = "Couldn't undo last message.") }
-                }
-        }
+        revert(
+            target = target,
+            isBusy = isBusy,
+            restoreComposerText = restoreComposerText,
+            operation = "undo",
+            failureMessage = "Couldn't undo last message.",
+        )
+    }
+
+    fun revertMessage(
+        id: String,
+        isBusy: Boolean,
+        restoreComposerText: (String) -> Unit,
+    ) {
+        val target = lastMessages.firstOrNull { it.id == id && isRevertibleUserMessage(it) } ?: return
+        revert(
+            target = target,
+            isBusy = isBusy,
+            restoreComposerText = restoreComposerText,
+            operation = "revert",
+            failureMessage = "Couldn't revert message.",
+        )
     }
 
     fun runRedo(
@@ -294,6 +302,35 @@ class SessionChatCommands(
                             actionSuccessMessage = null,
                         )
                     }
+                }
+        }
+    }
+
+    private fun isRevertibleUserMessage(message: SessionChatMessageItem): Boolean =
+        message.role == MessageRole.User &&
+            !message.isPending &&
+            !message.isStreaming &&
+            message.text.isNotBlank()
+
+    private fun revert(
+        target: SessionChatMessageItem,
+        isBusy: Boolean,
+        restoreComposerText: (String) -> Unit,
+        operation: String,
+        failureMessage: String,
+    ) {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        scope.launch(ioDispatcher) {
+            if (isBusy) runCatching { sessionRepository.abortSession(sessionId, directory = worktree) }
+            runCatching { sessionRepository.revertSession(sessionId, target.id, null, worktree) }
+                .onSuccess {
+                    logI("$operation success session=$sessionId message=${target.id}")
+                    refreshRevertNow(sessionId, worktree)
+                    restoreComposerText(target.text)
+                }.onFailure { error ->
+                    logW("$operation failed session=$sessionId error=${error.message}")
+                    _state.update { it.copy(actionErrorMessage = failureMessage) }
                 }
         }
     }

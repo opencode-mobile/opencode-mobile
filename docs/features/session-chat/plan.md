@@ -29,6 +29,10 @@ Chat screen with visible messages and a composer ready for new prompts.
 - Abort/stop is wired through `SessionRepository` from the composer.
 - Permission requests are observed and resolved from the native composer state;
   mobile exposes allow-once and deny only.
+- Message sheet **Revert message** reverts the session from that user turn
+  (abort if busy, then `revertSession`, restore the prompt in the composer),
+  matching `/undo`. Copy stays clipboard-only. Live timeline truncation after
+  revert is still outstanding.
 
 ## Still Out Of Scope
 

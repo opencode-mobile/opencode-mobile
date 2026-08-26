@@ -2,13 +2,14 @@ import SwiftUI
 import UIKit
 
 struct SessionChatMessageActionsTarget: Equatable {
+    let id: String
     let text: String
     let showsRevertMessage: Bool
 }
 
 struct SessionChatMessageActionsSheetModifier: ViewModifier {
     @Binding var target: SessionChatMessageActionsTarget?
-    let onRestoreToComposer: (String) -> Void
+    let onRevertMessage: (String) -> Void
 
     func body(content: Content) -> some View {
         content
@@ -40,7 +41,7 @@ struct SessionChatMessageActionsSheetModifier: ViewModifier {
                 action: {
                     logAction(ProductAnalytics.Action.messageActionsRevert)
                     if let target {
-                        onRestoreToComposer(target.text)
+                        onRevertMessage(target.id)
                     }
                     self.target = nil
                 }
@@ -71,12 +72,12 @@ struct SessionChatMessageActionsSheetModifier: ViewModifier {
 extension View {
     func sessionChatMessageActionsSheet(
         target: Binding<SessionChatMessageActionsTarget?>,
-        onRestoreToComposer: @escaping (String) -> Void
+        onRevertMessage: @escaping (String) -> Void
     ) -> some View {
         modifier(
             SessionChatMessageActionsSheetModifier(
                 target: target,
-                onRestoreToComposer: onRestoreToComposer
+                onRevertMessage: onRevertMessage
             )
         )
     }
