@@ -3054,6 +3054,69 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun revertMessage_attachmentOnly_revertsThatTurn() =
+        runTest(testDispatcher) {
+            val file =
+                MessagePart.File(
+                    id = "file-1",
+                    filename = "notes.txt",
+                    mime = "text/plain",
+                    kind = AttachmentKind.Text,
+                    dataUrl = "data:text/plain;base64,SGk=",
+                )
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(id = "msg-1", role = MessageRole.User, text = "", parts = listOf(file)),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.revertMessage("msg-1")
+            advanceUntilIdle()
+
+            assertEquals("msg-1", sessionRepository.revertRequest?.messageId)
+            assertEquals("", viewModel.uiState.value.composer.text)
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
+        }
+
+    @Test
+    fun revertMessage_afterEarlierRevert_ignoresLaterStillVisibleTurn() =
+        runTest(testDispatcher) {
+            val messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "First"),
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
+                    Message(id = "msg-3", role = MessageRole.User, text = "Second"),
+                )
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(messages = messages),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.revertMessage("msg-1")
+            advanceUntilIdle()
+            assertEquals("msg-1", sessionRepository.revertRequest?.messageId)
+
+            viewModel.revertMessage("msg-3")
+            advanceUntilIdle()
+
+            assertEquals("msg-1", sessionRepository.revertRequest?.messageId)
+            assertEquals("First", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
     fun abort_interruptsBoundSessionAndRunningSubagentChild() =
         runTest(testDispatcher) {
             val sessionRepository = FakeSessionRepository(sessionStatusType = "busy")

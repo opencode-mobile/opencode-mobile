@@ -12,6 +12,7 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.ChildSessionNavigationTarget
 import dev.opencode.mobile.ui.sessionchat.SessionChatCommandsRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionCompactChrome
 import dev.opencode.mobile.ui.sessionchat.SessionCompactionPresence
 import kotlinx.coroutines.CoroutineDispatcher
@@ -313,7 +314,18 @@ class SessionChatCommands(
         message.role == MessageRole.User &&
             !message.isPending &&
             !message.isStreaming &&
-            message.text.isNotBlank()
+            isBeforeRevertBoundary(message.id) &&
+            hasRevertibleContent(message)
+
+    private fun isBeforeRevertBoundary(id: String): Boolean {
+        val boundary = currentRevertMessageId ?: return true
+        return id < boundary
+    }
+
+    private fun hasRevertibleContent(message: SessionChatMessageItem): Boolean =
+        message.text.isNotBlank() ||
+            message.attachments.isNotEmpty() ||
+            message.blocks.any { it is SessionChatTimelineBlock.Attachment }
 
     private fun revert(
         target: SessionChatMessageItem,

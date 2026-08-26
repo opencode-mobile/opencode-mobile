@@ -315,7 +315,18 @@ final class SessionChatCommands {
         message.role == .user
             && !message.isPending
             && !message.isStreaming
-            && !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && isBeforeRevertBoundary(message.id)
+            && hasRevertibleContent(message)
+    }
+
+    private func isBeforeRevertBoundary(_ id: String) -> Bool {
+        guard let boundary = currentRevertMessageID else { return true }
+        return id < boundary
+    }
+
+    private func hasRevertibleContent(_ message: SessionChatRow) -> Bool {
+        !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || message.blocks.contains { if case .attachment = $0 { true } else { false } }
     }
 
     private func revert(

@@ -2095,6 +2095,67 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.composer.text == "")
     }
 
+    @Test func revertMessage_attachmentOnly_revertsThatTurn() async {
+        let file = FilePart(
+            id: "file-1",
+            filename: "notes.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "data:text/plain;base64,SGk="
+        )
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .user,
+                        text: "",
+                        parts: [.file(file)],
+                        model: nil,
+                        mode: nil,
+                        sentAtEpochMs: 1
+                    ),
+                ]
+            ),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.revertMessage("msg-1")
+        await waitUntil { sessionRepository.revertRequest != nil }
+
+        #expect(sessionRepository.revertRequest?.messageID == "msg-1")
+        #expect(viewModel.uiState.composer.text == "")
+        #expect(viewModel.uiState.hasPendingRevert)
+    }
+
+    @Test func revertMessage_afterEarlierRevert_ignoresLaterStillVisibleTurn() async {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "First", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(id: "msg-2", role: .assistant, text: "Reply", model: nil, mode: nil, sentAtEpochMs: 2),
+            Message(id: "msg-3", role: .user, text: "Second", model: nil, mode: nil, sentAtEpochMs: 3),
+        ]
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: messages),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.revertMessage("msg-1")
+        await waitUntil { viewModel.uiState.hasPendingRevert }
+        #expect(sessionRepository.revertRequest?.messageID == "msg-1")
+
+        viewModel.revertMessage("msg-3")
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(sessionRepository.revertRequest?.messageID == "msg-1")
+        #expect(viewModel.uiState.composer.text == "First")
+    }
+
     @Test func abortSession_interruptsBoundSessionAndRunningSubagentChild() async {
         let sessionRepository = FakeChatSessionRepository(sessionStatusType: "busy")
         let viewModel = makeViewModel(
