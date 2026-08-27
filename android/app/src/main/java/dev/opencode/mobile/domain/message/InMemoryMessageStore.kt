@@ -239,13 +239,17 @@ class InMemoryMessageStore
             val inserted = messageId !in order
             val previous = infoCaches[sessionId]!![messageId]
             val merged =
-                if (infoJson.containsKey("waiting") || previous == null) {
+                if (previous == null) {
                     infoJson
                 } else {
                     buildJsonObject {
                         infoJson.forEach { (key, value) -> put(key, value) }
-                        previous["waiting"]?.let { put("waiting", it) }
-                        previous["delivery"]?.let { put("delivery", it) }
+                        if (!infoJson.containsKey("waiting")) {
+                            previous["waiting"]?.let { put("waiting", it) }
+                        }
+                        if (!infoJson.containsKey("delivery")) {
+                            previous["delivery"]?.let { put("delivery", it) }
+                        }
                     }
                 }
             infoCaches[sessionId]!![messageId] = merged

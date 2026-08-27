@@ -335,8 +335,22 @@ class EventDomainAdapterTest {
         assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
         assertEquals("ses-1", events[0].sessionId)
         assertEquals("msg-2", events[0].rawProperties?.get("info")?.jsonObject?.get("id")?.jsonPrimitive?.content)
+        assertEquals(true, events[0].rawProperties?.get("info")?.jsonObject?.get("waiting")?.jsonPrimitive?.booleanOrNull)
+        assertEquals("steer", events[0].rawProperties?.get("info")?.jsonObject?.get("delivery")?.jsonPrimitive?.content)
         assertEquals("Hello from inbox", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
         assertEquals("msg-2", events[1].rawProperties?.get("part")?.jsonObject?.get("messageID")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvent_projectsInboxDeliveryChangedAsStillWaiting() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.inbox.delivery.changed","data":{"inboxID":"msg-2","sessionID":"ses-1","item":{"delivery":"queue"}}}""",
+            )
+
+        assertEquals("message.updated", event?.type)
+        assertEquals(true, event?.rawProperties?.get("info")?.jsonObject?.get("waiting")?.jsonPrimitive?.booleanOrNull)
+        assertEquals("queue", event?.rawProperties?.get("info")?.jsonObject?.get("delivery")?.jsonPrimitive?.content)
     }
 
     @Test

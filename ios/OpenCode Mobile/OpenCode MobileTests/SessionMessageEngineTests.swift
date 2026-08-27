@@ -811,6 +811,59 @@ import Testing
         #expect(text.isStreaming)
     }
 
+    @Test func infoUpdated_keepsDeliveryWhenWaitingUpdateOmitsIt() {
+        let engine = makeEngine()
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .infoUpdated([
+                "id": .string("msg-1"),
+                "role": .string("user"),
+                "sessionID": .string("ses-1"),
+                "waiting": .bool(true),
+                "delivery": .string("queue"),
+            ])
+        )
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .partUpdated(
+                part: [
+                    "id": .string("msg-1:text:0"),
+                    "messageID": .string("msg-1"),
+                    "sessionID": .string("ses-1"),
+                    "type": .string("text"),
+                    "text": .string("Hello"),
+                ],
+                delta: nil
+            )
+        )
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .infoUpdated([
+                "id": .string("msg-1"),
+                "role": .string("user"),
+                "sessionID": .string("ses-1"),
+                "waiting": .bool(true),
+            ])
+        )
+        let message = engine.messages(sessionID: "ses-1").first
+        #expect(message?.followUpDelivery == .queue)
+        #expect(message?.isWaitingForPickup == true)
+        #expect(message?.waitingCaption == "Held until idle")
+    }
+
+    @Test func waitingCaption_usesSteerWhenWaitingWithoutDelivery() {
+        let message = Message(
+            id: "msg-1",
+            role: .user,
+            text: "Hello",
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil,
+            isWaitingForPickup: true
+        )
+        #expect(message.waitingCaption == "Waiting to steer")
+    }
+
     private func makeEngine() -> SessionMessageEngine {
         SessionMessageEngine(store: InMemoryMessageStore())
     }

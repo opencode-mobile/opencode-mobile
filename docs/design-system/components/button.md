@@ -28,7 +28,9 @@ icon-only button needs.
 - Optional content:
   - icon accessibility label for icon variants and `iconCircleText`.
   - `onLongClick` / `longPress` — optional second action. When omitted,
-    the button is tap-only.
+    the button is tap-only. When set, a long-press fires only that
+    action: it must not also invoke tap, and it must not swallow the
+    next tap.
 
 ## Token Usage
 

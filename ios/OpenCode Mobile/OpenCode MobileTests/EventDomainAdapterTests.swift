@@ -275,8 +275,20 @@ struct EventDomainAdapterTests {
         #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
         #expect(events[0].sessionID == "ses-1")
         #expect(events[0].rawProperties?["info"]?.dictionaryValue?["id"]?.stringValue == "msg-2")
+        #expect(events[0].rawProperties?["info"]?.dictionaryValue?["waiting"]?.boolValue == true)
+        #expect(events[0].rawProperties?["info"]?.dictionaryValue?["delivery"]?.stringValue == "steer")
         #expect(events[1].rawProperties?["part"]?.dictionaryValue?["text"]?.stringValue == "Hello from inbox")
         #expect(events[1].rawProperties?["part"]?.dictionaryValue?["messageID"]?.stringValue == "msg-2")
+    }
+
+    @Test func parseEvent_projectsInboxDeliveryChangedAsStillWaiting() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.inbox.delivery.changed","data":{"inboxID":"msg-2","sessionID":"ses-1","item":{"delivery":"queue"}}}"#
+        )
+        #expect(event?.type == "message.updated")
+        #expect(event?.rawProperties?["info"]?.dictionaryValue?["waiting"]?.boolValue == true)
+        #expect(event?.rawProperties?["info"]?.dictionaryValue?["delivery"]?.stringValue == "queue")
     }
 
     @Test func parseEvents_projectsInboxEnqueuedCreatedIntoUserInfoTime() {

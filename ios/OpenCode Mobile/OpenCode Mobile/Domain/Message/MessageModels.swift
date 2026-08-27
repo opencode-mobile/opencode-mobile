@@ -19,7 +19,7 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
     let isWaitingForPickup: Bool
 
     var waitingCaption: String? {
-        isWaitingForPickup ? followUpDelivery?.waitingCaption : nil
+        isWaitingForPickup ? (followUpDelivery ?? .steer).waitingCaption : nil
     }
 
     init(

@@ -22,7 +22,7 @@ data class Message(
     val isWaitingForPickup: Boolean = false,
 ) {
     val waitingCaption: String?
-        get() = if (isWaitingForPickup) followUpDelivery?.waitingCaption else null
+        get() = if (isWaitingForPickup) (followUpDelivery ?: FollowUpDelivery.Steer).waitingCaption else null
 }
 
 data class MessageTokenUsage(
