@@ -4,6 +4,7 @@ data class SessionReadyPersistedEntry(
     val sessionId: String,
     val directory: String,
     val atEpochMs: Long,
+    val profileId: String = "",
 )
 
 data class SessionReadyPersistedState(

@@ -224,6 +224,87 @@ class SessionReadyStoreTest {
         }
 
     @Test
+    fun bindProfile_switchAway_doesNotMarkReadyFromOtherServer() =
+        runTest(testDispatcher) {
+            val statusStore = FakeReadyStatusStore()
+            val store = createStore(statusStore)
+            val emissions = mutableListOf<Set<String>>()
+            val job =
+                launch {
+                    store.observeReadyIds("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+
+            store.bindProfile("profile-a")
+            store.notifyPromptSent("ses-1", "/repo")
+            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            advanceUntilIdle()
+            store.bindProfile("profile-b")
+            advanceUntilIdle()
+            statusStore.emit("/repo", emptyMap())
+            advanceUntilIdle()
+            job.cancel()
+
+            assertTrue(emissions.last().isEmpty())
+        }
+
+    @Test
+    fun bindProfile_parksWatch_newStoreOnOriginalProfile_idleCatchUpSetsReady() =
+        runTest(testDispatcher) {
+            val persistence = InMemorySessionReadyPersistence()
+            val first = createStore(FakeReadyStatusStore(), persistence = persistence)
+            first.bindProfile("profile-a")
+            first.observeReadyIds("/repo").first()
+            first.notifyPromptSent("ses-1", "/repo")
+            first.bindProfile("profile-b")
+
+            val statusStore = FakeReadyStatusStore()
+            val second = createStore(statusStore, persistence = persistence)
+            val emissions = mutableListOf<Set<String>>()
+            val job =
+                launch {
+                    second.observeReadyIds("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+            second.bindProfile("profile-a")
+            advanceUntilIdle()
+            statusStore.emit("/repo", emptyMap())
+            advanceUntilIdle()
+            job.cancel()
+
+            assertTrue(emissions.last().contains("ses-1"))
+        }
+
+    @Test
+    fun bindProfile_switchAwayAndBack_idleCatchUpSetsReady() =
+        runTest(testDispatcher) {
+            val statusStore = FakeReadyStatusStore()
+            val store = createStore(statusStore)
+            val emissions = mutableListOf<Set<String>>()
+            val job =
+                launch {
+                    store.observeReadyIds("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+
+            store.bindProfile("profile-a")
+            store.notifyPromptSent("ses-1", "/repo")
+            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            advanceUntilIdle()
+            store.bindProfile("profile-b")
+            advanceUntilIdle()
+            statusStore.emit("/repo", emptyMap())
+            advanceUntilIdle()
+            store.bindProfile("profile-a")
+            advanceUntilIdle()
+            statusStore.emit("/repo", emptyMap())
+            advanceUntilIdle()
+            job.cancel()
+
+            assertTrue(emissions.last().contains("ses-1"))
+        }
+
+    @Test
     fun clearCache_emptiesReady() =
         runTest(testDispatcher) {
             val statusStore = FakeReadyStatusStore()

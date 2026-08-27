@@ -173,10 +173,11 @@ final class ProjectListHomeViewModel {
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.sessionCache = sessionCache
         lastHomeHiddenAtEpochMs = HomeDisplayPreferences.shared.lastHomeHiddenAtEpochMs()
+        sessionReadyStore.bindProfile(profileID: activeConnectionManager.currentProfile()?.id)
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
                 self?.stopLiveObservations()
-                self?.sessionReadyStore.clearCache()
+                self?.sessionReadyStore.bindProfile(profileID: self?.activeConnectionManager.currentProfile()?.id)
                 self?.sessionLiveStore.clearCache()
                 self?.sessionStatusLiveStore.clearCache()
                 self?.messageRepository.clearMessageCache()
@@ -185,7 +186,7 @@ final class ProjectListHomeViewModel {
         }
         connectionSessionCoordinator.onProfileCleared { [weak self] in
             Task { @MainActor in
-                self?.sessionReadyStore.clearCache()
+                self?.sessionReadyStore.bindProfile(profileID: nil)
                 self?.sessionLiveStore.clearCache()
                 self?.sessionStatusLiveStore.clearCache()
                 self?.messageRepository.clearMessageCache()

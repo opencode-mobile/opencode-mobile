@@ -5,6 +5,7 @@ protocol SessionReadyStore: AnyObject, Sendable {
     func observeReadyIds(directory: String) -> AsyncStream<Set<String>>
     func notifyPromptSent(sessionID: String, directory: String)
     func setFocusedSession(sessionID: String?, directory: String?)
+    func bindProfile(profileID: String?)
     func clearCache()
 }
 
@@ -20,6 +21,8 @@ final class EmptySessionReadyStore: SessionReadyStore {
     func notifyPromptSent(sessionID: String, directory: String) {}
 
     func setFocusedSession(sessionID: String?, directory: String?) {}
+
+    func bindProfile(profileID: String?) {}
 
     func clearCache() {}
 }

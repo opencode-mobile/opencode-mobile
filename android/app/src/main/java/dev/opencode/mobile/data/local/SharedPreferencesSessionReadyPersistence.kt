@@ -37,6 +37,7 @@ class SharedPreferencesSessionReadyPersistence
                                     sessionId = it.sessionId,
                                     directory = it.directory,
                                     atEpochMs = it.readyAtEpochMs,
+                                    profileId = "",
                                 )
                             }
                         SessionReadyPersistedState(ready = ready)
@@ -77,12 +78,14 @@ class SharedPreferencesSessionReadyPersistence
             val sessionId: String,
             val directory: String,
             val atEpochMs: Long,
+            val profileId: String = "",
         ) {
             fun toDomain() =
                 SessionReadyPersistedEntry(
                     sessionId = sessionId,
                     directory = directory,
                     atEpochMs = atEpochMs,
+                    profileId = profileId,
                 )
 
             companion object {
@@ -91,6 +94,7 @@ class SharedPreferencesSessionReadyPersistence
                         sessionId = entry.sessionId,
                         directory = entry.directory,
                         atEpochMs = entry.atEpochMs,
+                        profileId = entry.profileId,
                     )
             }
         }

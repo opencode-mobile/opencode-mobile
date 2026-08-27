@@ -31,6 +31,7 @@ final class DefaultSessionReadyStore: SessionReadyStore {
 
     private var watched: [String: WatchRecord] = [:]
     private var ready: [String: ReadyRecord] = [:]
+    private var currentProfileID = ""
     private var focusedSessionID: String?
     private var focusedDirectory: String?
     private var handles: [String: DirectoryHandle] = [:]
@@ -147,12 +148,48 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         }
     }
 
+    func bindProfile(profileID: String?) {
+        let next = profileID ?? ""
+        if next == currentProfileID { return }
+        let migrateUnscoped = currentProfileID.isEmpty && !next.isEmpty && (!ready.isEmpty || !watched.isEmpty)
+        if migrateUnscoped {
+            currentProfileID = next
+            persistState()
+            focusedSessionID = nil
+            focusedDirectory = nil
+            for handle in handles.values {
+                handle.previousTypes.removeAll()
+            }
+            logger.info("bindProfile migrated unscoped profile=\(next, privacy: .public)")
+            return
+        }
+        persistState()
+        watched.removeAll()
+        ready.removeAll()
+        focusedSessionID = nil
+        focusedDirectory = nil
+        currentProfileID = next
+        loadPersisted()
+        for (directory, handle) in handles {
+            handle.previousTypes.removeAll()
+            publishReady(directory: directory, handle: handle, prune: false)
+        }
+        for directory in Set(watched.values.map(\.directory)) {
+            let handle = handles[directory] ?? DirectoryHandle()
+            handles[directory] = handle
+            ensureStatusObservation(directory: directory, handle: handle)
+        }
+        logger.info(
+            "bindProfile profile=\(next, privacy: .public) ready=\(self.ready.count, privacy: .public) watched=\(self.watched.count, privacy: .public)"
+        )
+    }
+
     func clearCache() {
         watched.removeAll()
         ready.removeAll()
         focusedSessionID = nil
         focusedDirectory = nil
-        persistState()
+        persistence.save(SessionReadyPersistedState())
         for (directory, handle) in handles {
             handle.previousTypes.removeAll()
             publishReady(directory: directory, handle: handle, prune: false)
@@ -284,6 +321,7 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         let state = persistence.load()
         var pruned = false
         for entry in state.ready {
+            if entry.profileID != currentProfileID { continue }
             if now - entry.atEpochMs >= Self.readyTTLMs {
                 pruned = true
                 continue
@@ -294,6 +332,7 @@ final class DefaultSessionReadyStore: SessionReadyStore {
             )
         }
         for entry in state.watched {
+            if entry.profileID != currentProfileID { continue }
             if now - entry.atEpochMs >= Self.readyTTLMs {
                 pruned = true
                 continue
@@ -340,19 +379,29 @@ final class DefaultSessionReadyStore: SessionReadyStore {
     }
 
     private func persistState() {
+        let now = clock.nowEpochMs()
+        let stored = persistence.load()
+        let otherReady = stored.ready.filter {
+            $0.profileID != currentProfileID && now - $0.atEpochMs < Self.readyTTLMs
+        }
+        let otherWatched = stored.watched.filter {
+            $0.profileID != currentProfileID && now - $0.atEpochMs < Self.readyTTLMs
+        }
         let state = SessionReadyPersistedState(
-            ready: ready.map { sessionID, record in
+            ready: otherReady + ready.map { sessionID, record in
                 SessionReadyPersistedEntry(
                     sessionID: sessionID,
                     directory: record.directory,
-                    atEpochMs: record.readyAtEpochMs
+                    atEpochMs: record.readyAtEpochMs,
+                    profileID: currentProfileID
                 )
             },
-            watched: watched.map { sessionID, record in
+            watched: otherWatched + watched.map { sessionID, record in
                 SessionReadyPersistedEntry(
                     sessionID: sessionID,
                     directory: record.directory,
-                    atEpochMs: record.watchedAtEpochMs
+                    atEpochMs: record.watchedAtEpochMs,
+                    profileID: currentProfileID
                 )
             }
         )
