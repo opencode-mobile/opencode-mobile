@@ -4,6 +4,29 @@ nonisolated struct SessionReadyPersistedEntry: Codable, Equatable, Sendable {
     var sessionID: String
     var directory: String
     var atEpochMs: Double
+    var profileID: String
+
+    enum CodingKeys: String, CodingKey {
+        case sessionID
+        case directory
+        case atEpochMs
+        case profileID
+    }
+
+    init(sessionID: String, directory: String, atEpochMs: Double, profileID: String = "") {
+        self.sessionID = sessionID
+        self.directory = directory
+        self.atEpochMs = atEpochMs
+        self.profileID = profileID
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sessionID = try container.decode(String.self, forKey: .sessionID)
+        directory = try container.decode(String.self, forKey: .directory)
+        atEpochMs = try container.decode(Double.self, forKey: .atEpochMs)
+        profileID = try container.decodeIfPresent(String.self, forKey: .profileID) ?? ""
+    }
 }
 
 nonisolated struct SessionReadyPersistedState: Codable, Equatable, Sendable {

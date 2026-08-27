@@ -122,6 +122,77 @@ final class SessionReadyStoreTests: XCTestCase {
         XCTAssertTrue(ready.latest.isEmpty)
     }
 
+    func testBindProfile_switchAway_doesNotMarkReadyFromOtherServer() async {
+        let statusStore = FakeReadyStatusStore()
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionReadyStore(sessionStatusLiveStore: statusStore, eventStream: eventStream)
+        let ready = ReadyCollector(store: store, directory: "/repo")
+        await ready.waitForSubscription()
+
+        store.bindProfile(profileID: "profile-a")
+        store.notifyPromptSent(sessionID: "ses-1", directory: "/repo")
+        statusStore.emit(directory: "/repo", statuses: ["ses-1": status(type: "busy")])
+        await settle()
+        store.bindProfile(profileID: "profile-b")
+        await settle()
+        statusStore.emit(directory: "/repo", statuses: [:])
+        await settle()
+        ready.cancel()
+
+        XCTAssertTrue(ready.latest.isEmpty)
+    }
+
+    func testBindProfile_parksWatch_newStoreOnOriginalProfile_idleCatchUpSetsReady() async {
+        let persistence = InMemorySessionReadyPersistence()
+        let first = DefaultSessionReadyStore(
+            sessionStatusLiveStore: FakeReadyStatusStore(),
+            eventStream: FakeForegroundEventStream(),
+            persistence: persistence
+        )
+        first.bindProfile(profileID: "profile-a")
+        first.notifyPromptSent(sessionID: "ses-1", directory: "/repo")
+        first.bindProfile(profileID: "profile-b")
+
+        let statusStore = FakeReadyStatusStore()
+        let second = DefaultSessionReadyStore(
+            sessionStatusLiveStore: statusStore,
+            eventStream: FakeForegroundEventStream(),
+            persistence: persistence
+        )
+        let ready = ReadyCollector(store: second, directory: "/repo")
+        await ready.waitForSubscription()
+        second.bindProfile(profileID: "profile-a")
+        statusStore.emit(directory: "/repo", statuses: [:])
+        await ready.waitUntil { $0.contains("ses-1") }
+        ready.cancel()
+
+        XCTAssertTrue(ready.latest.contains("ses-1"))
+    }
+
+    func testBindProfile_switchAwayAndBack_idleCatchUpSetsReady() async {
+        let statusStore = FakeReadyStatusStore()
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionReadyStore(sessionStatusLiveStore: statusStore, eventStream: eventStream)
+        let ready = ReadyCollector(store: store, directory: "/repo")
+        await ready.waitForSubscription()
+
+        store.bindProfile(profileID: "profile-a")
+        store.notifyPromptSent(sessionID: "ses-1", directory: "/repo")
+        statusStore.emit(directory: "/repo", statuses: ["ses-1": status(type: "busy")])
+        await settle()
+        store.bindProfile(profileID: "profile-b")
+        await settle()
+        statusStore.emit(directory: "/repo", statuses: [:])
+        await settle()
+        store.bindProfile(profileID: "profile-a")
+        await settle()
+        statusStore.emit(directory: "/repo", statuses: [:])
+        await ready.waitUntil { $0.contains("ses-1") }
+        ready.cancel()
+
+        XCTAssertTrue(ready.latest.contains("ses-1"))
+    }
+
     func testClearCache_emptiesReady() async {
         let statusStore = FakeReadyStatusStore()
         let eventStream = FakeForegroundEventStream()

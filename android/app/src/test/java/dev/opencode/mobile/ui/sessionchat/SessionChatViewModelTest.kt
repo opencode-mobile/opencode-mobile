@@ -3719,6 +3719,8 @@ private class RecordingSessionReadyStore : SessionReadyStore {
         focusCalls.add(sessionId to directory)
     }
 
+    override fun bindProfile(profileId: String?) = Unit
+
     override fun clearCache() = Unit
 }
 

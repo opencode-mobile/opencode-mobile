@@ -119,13 +119,14 @@ class MainScreenViewModel
         private var forkDraftEditReported = false
 
         init {
+            sessionReadyStore.bindProfile(connectionSessionCoordinator.currentProfile()?.id)
             refresh()
             viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
                     stopLiveObservations()
+                    sessionReadyStore.bindProfile(connectionSessionCoordinator.currentProfile()?.id)
                     sessionLiveStore.clearCache()
                     sessionStatusLiveStore.clearCache()
-                    sessionReadyStore.clearCache()
                     messageRepository.clearMessageCache()
                     refresh()
                 }
@@ -133,9 +134,9 @@ class MainScreenViewModel
             viewModelScope.launch {
                 connectionSessionCoordinator.profileCleared.collect {
                     stopLiveObservations()
+                    sessionReadyStore.bindProfile(null)
                     sessionLiveStore.clearCache()
                     sessionStatusLiveStore.clearCache()
-                    sessionReadyStore.clearCache()
                     messageRepository.clearMessageCache()
                     _uiState.value = MainScreenUiState.Disconnected
                     _serversChrome.value = HomeServersChrome()

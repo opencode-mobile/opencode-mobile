@@ -24,6 +24,7 @@ class DefaultSessionReadyStore
         private val lock = Any()
         private val watched = mutableMapOf<String, WatchRecord>()
         private val ready = mutableMapOf<String, ReadyRecord>()
+        private var currentProfileId: String = ""
         private var focusedSessionId: String? = null
         private var focusedDirectory: String? = null
         private val previousTypes = mutableMapOf<String, MutableMap<String, String?>>()
@@ -117,6 +118,41 @@ class DefaultSessionReadyStore
             }
         }
 
+        override fun bindProfile(profileId: String?) {
+            val directoriesToObserve: Set<String>
+            synchronized(lock) {
+                val next = profileId.orEmpty()
+                if (next == currentProfileId) return
+                val migrateUnscoped =
+                    currentProfileId.isEmpty() &&
+                        next.isNotEmpty() &&
+                        (ready.isNotEmpty() || watched.isNotEmpty())
+                if (migrateUnscoped) {
+                    currentProfileId = next
+                    persistStateLocked()
+                    focusedSessionId = null
+                    focusedDirectory = null
+                    previousTypes.clear()
+                    logI("bindProfile migrated unscoped profile=$next")
+                    return
+                }
+                persistStateLocked()
+                watched.clear()
+                ready.clear()
+                focusedSessionId = null
+                focusedDirectory = null
+                previousTypes.clear()
+                currentProfileId = next
+                loadPersistedLocked()
+                readyFlows.keys.toList().forEach { directory ->
+                    publishReadyLocked(directory, prune = false)
+                }
+                directoriesToObserve = watched.values.map { it.directory }.toSet()
+                logI("bindProfile profile=$next ready=${ready.size} watched=${watched.size}")
+            }
+            directoriesToObserve.forEach { ensureStatusObservation(it) }
+        }
+
         override fun clearCache() {
             synchronized(lock) {
                 watched.clear()
@@ -124,7 +160,7 @@ class DefaultSessionReadyStore
                 focusedSessionId = null
                 focusedDirectory = null
                 previousTypes.clear()
-                persistStateLocked()
+                persistence.save(SessionReadyPersistedState())
                 readyFlows.keys.toList().forEach { directory ->
                     readyFlows[directory]?.value = emptySet()
                 }
@@ -273,6 +309,7 @@ class DefaultSessionReadyStore
             val state = persistence.load()
             var pruned = false
             for (entry in state.ready) {
+                if (entry.profileId != currentProfileId) continue
                 if (now - entry.atEpochMs >= READY_TTL_MS) {
                     pruned = true
                     continue
@@ -284,6 +321,7 @@ class DefaultSessionReadyStore
                     )
             }
             for (entry in state.watched) {
+                if (entry.profileId != currentProfileId) continue
                 if (now - entry.atEpochMs >= READY_TTL_MS) {
                     pruned = true
                     continue
@@ -329,24 +367,38 @@ class DefaultSessionReadyStore
         }
 
         private fun persistStateLocked() {
+            val now = clock.nowEpochMs()
+            val stored = persistence.load()
+            val otherReady =
+                stored.ready.filter {
+                    it.profileId != currentProfileId && now - it.atEpochMs < READY_TTL_MS
+                }
+            val otherWatched =
+                stored.watched.filter {
+                    it.profileId != currentProfileId && now - it.atEpochMs < READY_TTL_MS
+                }
             persistence.save(
                 SessionReadyPersistedState(
                     ready =
-                        ready.map { (sessionId, record) ->
-                            SessionReadyPersistedEntry(
-                                sessionId = sessionId,
-                                directory = record.directory,
-                                atEpochMs = record.readyAtEpochMs,
-                            )
-                        },
+                        otherReady +
+                            ready.map { (sessionId, record) ->
+                                SessionReadyPersistedEntry(
+                                    sessionId = sessionId,
+                                    directory = record.directory,
+                                    atEpochMs = record.readyAtEpochMs,
+                                    profileId = currentProfileId,
+                                )
+                            },
                     watched =
-                        watched.map { (sessionId, record) ->
-                            SessionReadyPersistedEntry(
-                                sessionId = sessionId,
-                                directory = record.directory,
-                                atEpochMs = record.watchedAtEpochMs,
-                            )
-                        },
+                        otherWatched +
+                            watched.map { (sessionId, record) ->
+                                SessionReadyPersistedEntry(
+                                    sessionId = sessionId,
+                                    directory = record.directory,
+                                    atEpochMs = record.watchedAtEpochMs,
+                                    profileId = currentProfileId,
+                                )
+                            },
                 ),
             )
         }

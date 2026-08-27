@@ -15,6 +15,8 @@ interface SessionReadyStore {
         directory: String? = null,
     )
 
+    fun bindProfile(profileId: String?)
+
     fun clearCache()
 }
 
@@ -31,6 +33,8 @@ object EmptySessionReadyStore : SessionReadyStore {
         sessionId: String?,
         directory: String?,
     ) = Unit
+
+    override fun bindProfile(profileId: String?) = Unit
 
     override fun clearCache() = Unit
 }
