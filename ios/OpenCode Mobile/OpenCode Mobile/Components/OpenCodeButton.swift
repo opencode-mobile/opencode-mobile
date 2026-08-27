@@ -43,27 +43,29 @@ struct OpenCodeButton: View {
         self.action = action
     }
 
-    @State private var didLongPress = false
-
     var body: some View {
-        Button(action: {
-            if didLongPress {
-                didLongPress = false
-                return
-            }
-            action()
-        }) {
+        let button = Button(action: longPress == nil ? action : {}) {
             label
         }
         .buttonStyle(OpenCodeButtonStyle(variant: variant, size: size, enabled: enabled, contrast: contrast))
         .disabled(!enabled)
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+        if longPress != nil {
+            button.simultaneousGesture(longPressExclusiveTap)
+        } else {
+            button
+        }
+    }
+
+    private var longPressExclusiveTap: some Gesture {
+        LongPressGesture(minimumDuration: 0.4)
+            .onEnded { _ in
                 guard enabled, let longPress else { return }
-                didLongPress = true
                 longPress()
             }
-        )
+            .exclusively(before: TapGesture().onEnded {
+                guard enabled else { return }
+                action()
+            })
     }
 
     @ViewBuilder

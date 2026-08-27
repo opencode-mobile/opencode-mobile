@@ -139,10 +139,10 @@ class EventDomainAdapter(
             -> listOf(event("question.rejected", properties))
             "session.next.prompt.admitted",
             "session.inbox.enqueued",
+            "session.inbox.delivery.changed",
             -> userPromptEvents(properties, waiting = true)
             "session.next.prompted",
             "session.inbox.delivered",
-            "session.inbox.delivery.changed",
             -> userPromptEvents(properties, waiting = false)
             "session.inbox.cancelled" -> listOf(inboxCancelled(properties))
             "session.next.step.started",
@@ -332,7 +332,7 @@ class EventDomainAdapter(
                     put("mode", agent)
                 }
                 put("waiting", waiting)
-                properties.string("delivery")?.let { put("delivery", it) }
+                deliveryValue(properties)?.let { put("delivery", it) }
             }
         return event("message.updated", buildJsonObject { put("info", info) })
     }
@@ -391,6 +391,10 @@ class EventDomainAdapter(
             }
         return event("message.part.updated", buildJsonObject { put("part", part) })
     }
+
+    private fun deliveryValue(properties: JsonObject): String? =
+        properties.string("delivery")
+            ?: (properties["item"] as? JsonObject)?.string("delivery")
 
     private fun promptObject(properties: JsonObject): JsonObject? =
         decodePromptValue(properties["prompt"])

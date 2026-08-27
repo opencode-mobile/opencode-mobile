@@ -559,6 +559,62 @@ class SessionMessageEngineTest {
         assertFalse(text.isStreaming)
     }
 
+    @Test
+    fun infoUpdated_keepsDeliveryWhenWaitingUpdateOmitsIt() {
+        engine.apply(
+            "ses-1",
+            MessagePatch.InfoUpdated(
+                buildJsonObject {
+                    put("id", "msg-1")
+                    put("role", "user")
+                    put("sessionID", "ses-1")
+                    put("waiting", true)
+                    put("delivery", "queue")
+                },
+            ),
+        )
+        engine.apply(
+            "ses-1",
+            MessagePatch.PartUpdated(
+                buildJsonObject {
+                    put("id", "msg-1:text:0")
+                    put("messageID", "msg-1")
+                    put("sessionID", "ses-1")
+                    put("type", "text")
+                    put("text", "Hello")
+                },
+                delta = null,
+            ),
+        )
+        engine.apply(
+            "ses-1",
+            MessagePatch.InfoUpdated(
+                buildJsonObject {
+                    put("id", "msg-1")
+                    put("role", "user")
+                    put("sessionID", "ses-1")
+                    put("waiting", true)
+                },
+            ),
+        )
+        val message = engine.messages("ses-1").single()
+        assertEquals(FollowUpDelivery.Queue, message.followUpDelivery)
+        assertTrue(message.isWaitingForPickup)
+        assertEquals("Held until idle", message.waitingCaption)
+    }
+
+    @Test
+    fun waitingCaption_usesSteerWhenWaitingWithoutDelivery() {
+        val message =
+            Message(
+                id = "msg-1",
+                role = MessageRole.User,
+                text = "Hello",
+                isWaitingForPickup = true,
+            )
+        assertEquals("Waiting to steer", message.waitingCaption)
+    }
+
     private fun seedStreamingAssistant() {
         engine.replaceAll(
             "ses-1",

@@ -128,10 +128,10 @@ nonisolated struct EventDomainAdapter: Sendable {
             [event(type: "question.replied", properties: properties)]
         case "question.v2.rejected", "form.cancelled":
             [event(type: "question.rejected", properties: properties)]
-        case "session.next.prompt.admitted", "session.inbox.enqueued":
-            userPromptEvents(properties, waiting: true)
-        case "session.next.prompted", "session.inbox.delivered",
+        case "session.next.prompt.admitted", "session.inbox.enqueued",
              "session.inbox.delivery.changed":
+            userPromptEvents(properties, waiting: true)
+        case "session.next.prompted", "session.inbox.delivered":
             userPromptEvents(properties, waiting: false)
         case "session.inbox.cancelled":
             [inboxCancelled(properties)]
@@ -289,7 +289,7 @@ nonisolated struct EventDomainAdapter: Sendable {
             info["agent"] = agent
             info["mode"] = agent
         }
-        if let delivery = string(in: properties, key: "delivery") {
+        if let delivery = deliveryValue(in: properties) {
             info["delivery"] = delivery
         }
         return event(type: "message.updated", properties: ["info": info])
@@ -353,6 +353,14 @@ nonisolated struct EventDomainAdapter: Sendable {
             part["filename"] = name
         }
         return event(type: "message.part.updated", properties: ["part": part])
+    }
+
+    private func deliveryValue(in properties: [String: Any]) -> String? {
+        if let delivery = string(in: properties, key: "delivery") {
+            return delivery
+        }
+        guard let item = properties["item"] as? [String: Any] else { return nil }
+        return string(in: item, key: "delivery")
     }
 
     private func promptObject(in properties: [String: Any]) -> [String: Any]? {
