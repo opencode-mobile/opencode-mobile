@@ -92,7 +92,7 @@ struct OpenCodeServerAddressInput: View {
                         )!
                     )
             }
-            .frame(minHeight: minHeight)
+            .frame(minHeight: minHeight, maxHeight: minHeight)
             .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: cornerRadius))
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius)
