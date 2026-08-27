@@ -683,6 +683,7 @@ class SessionChatViewModel
                     timeline.beginOptimisticSend(rows)
                 },
                 onSendAccepted = {
+                    commands.consumePendingRevert()
                     sessionReadyStore.notifyPromptSent(sessionId, worktree)
                     sessionInfo.refreshStatus()
                     timeline.reloadAfterSend(

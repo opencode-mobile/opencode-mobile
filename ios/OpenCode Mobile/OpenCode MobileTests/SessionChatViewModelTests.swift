@@ -2198,6 +2198,57 @@ struct SessionChatViewModelTests {
         #expect(sessionRepository.unrevertRequest == nil)
     }
 
+    @Test func sendPrompt_afterRevert_clearsPendingRevertChip() async {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "First", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(id: "msg-2", role: .assistant, text: "Reply", model: nil, mode: nil, sentAtEpochMs: 2),
+        ]
+        let sessionRepository = FakeChatSessionRepository()
+        let repository = FakeMessageRepository(messages: messages)
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.revertMessage("msg-1")
+        await waitUntil { viewModel.uiState.hasPendingRevert }
+
+        viewModel.updateComposerText("Changed")
+        await viewModel.sendPrompt()
+
+        #expect(repository.sendPromptAsyncCalled)
+        #expect(viewModel.uiState.composer.text == "")
+        #expect(!viewModel.uiState.hasPendingRevert)
+        #expect(sessionRepository.unrevertRequest == nil)
+    }
+
+    @Test func sendPrompt_failure_keepsPendingRevertChip() async {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "First", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(id: "msg-2", role: .assistant, text: "Reply", model: nil, mode: nil, sentAtEpochMs: 2),
+        ]
+        let sessionRepository = FakeChatSessionRepository()
+        let repository = FakeMessageRepository(messages: messages, shouldFailSend: true)
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.revertMessage("msg-1")
+        await waitUntil { viewModel.uiState.hasPendingRevert }
+
+        viewModel.updateComposerText("Changed")
+        await viewModel.sendPrompt()
+
+        #expect(repository.sendPromptAsyncCalled)
+        #expect(viewModel.uiState.hasPendingRevert)
+        #expect(sessionRepository.unrevertRequest == nil)
+    }
+
     @Test func revertMessage_whenBusy_abortsBeforeReverting() async {
         let messages = [
             Message(id: "msg-1", role: .user, text: "First", model: nil, mode: nil, sentAtEpochMs: 1),

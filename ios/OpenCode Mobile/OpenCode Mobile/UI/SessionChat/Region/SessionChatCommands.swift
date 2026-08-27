@@ -252,6 +252,11 @@ final class SessionChatCommands {
         )
     }
 
+    func consumePendingRevert() {
+        guard currentRevertMessageID != nil else { return }
+        setRevertBoundary(nil)
+    }
+
     func runCompact(
         providerID: String,
         modelID: String,

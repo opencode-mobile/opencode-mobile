@@ -3140,6 +3140,69 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun sendPrompt_afterRevert_clearsPendingRevertChip() =
+        runTest(testDispatcher) {
+            val messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "First"),
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
+                )
+            val sessionRepository = FakeSessionRepository()
+            val repository = FakeMessageRepository(messages = messages)
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.revertMessage("msg-1")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
+
+            viewModel.updateComposerText("Changed")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertTrue(repository.sendPromptAsyncCalled)
+            assertEquals("", viewModel.uiState.value.composer.text)
+            assertFalse(viewModel.uiState.value.hasPendingRevert)
+            assertEquals(null, sessionRepository.unrevertRequest)
+        }
+
+    @Test
+    fun sendPrompt_failure_keepsPendingRevertChip() =
+        runTest(testDispatcher) {
+            val messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "First"),
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
+                )
+            val sessionRepository = FakeSessionRepository()
+            val repository = FakeMessageRepository(messages = messages, shouldFailSend = true)
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.revertMessage("msg-1")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
+
+            viewModel.updateComposerText("Changed")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertTrue(repository.sendPromptAsyncCalled)
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
+            assertEquals(null, sessionRepository.unrevertRequest)
+        }
+
+    @Test
     fun revertMessage_whenBusy_abortsBeforeReverting() =
         runTest(testDispatcher) {
             val messages =
