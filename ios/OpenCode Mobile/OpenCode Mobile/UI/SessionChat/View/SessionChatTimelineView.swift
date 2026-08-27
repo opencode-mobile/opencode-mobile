@@ -391,6 +391,7 @@ private struct SessionChatMessageRow: View {
     private func openMessageActions(showsRevertMessage: Bool) {
         onMessageActionsTap(
             SessionChatMessageActionsTarget(
+                id: message.id,
                 text: message.text,
                 showsRevertMessage: showsRevertMessage
             )

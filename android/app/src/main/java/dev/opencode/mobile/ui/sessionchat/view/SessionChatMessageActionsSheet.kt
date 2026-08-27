@@ -12,6 +12,7 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 internal data class SessionChatMessageActionsTarget(
+    val id: String,
     val text: String,
     val showsRevertMessage: Boolean,
 )
@@ -20,7 +21,7 @@ internal data class SessionChatMessageActionsTarget(
 internal fun SessionChatMessageActionsSheet(
     target: SessionChatMessageActionsTarget?,
     onDismiss: () -> Unit,
-    onRestoreToComposer: (String) -> Unit,
+    onRevertMessage: (String) -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -44,7 +45,7 @@ internal fun SessionChatMessageActionsSheet(
                 startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Undo, "Revert message"),
                 onClick = {
                     logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_REVERT)
-                    target.let { onRestoreToComposer(it.text) }
+                    onRevertMessage(target.id)
                     onDismiss()
                 },
             )

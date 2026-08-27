@@ -4,6 +4,7 @@ struct SessionModelSelection: Equatable, Sendable, Codable {
     let providerID: String
     let modelID: String
     let variant: String?
+    var agentID: String? = nil
     var savedAtEpochMs: Int64? = nil
 }
 

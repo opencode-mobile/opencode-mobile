@@ -29,6 +29,10 @@ Still binding:
   chrome (`Explored — 1 read`, `Explored — 2 searches`). Read subtitle is
   `filePath`, never explore/cwd `path` (often the project root). Mixed
   non-context groups stay `N tools`.
+- Pending revert chrome is an attachment-style chip inside the composer,
+  above the prompt: undo icon, title, `REVERT` kind, X to cancel. Do not
+  mark the timeline, and do not use warning or highlight color on the
+  composer shell. Send applies the revert. X cancels it.
 - Streaming thought chrome is `Thinking` with the same pulsing status
   dot as Working. Finished thought is `Thought` / `Thought · Nms` with
   no dot. TUI only paints reasoning with display text (blank and

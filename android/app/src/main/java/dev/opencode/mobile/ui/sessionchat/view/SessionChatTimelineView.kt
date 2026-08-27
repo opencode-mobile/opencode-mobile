@@ -395,6 +395,7 @@ private fun SessionChatMessageRow(
     fun openMessageActions(showsRevertMessage: Boolean) {
         onMessageActionsTap(
             SessionChatMessageActionsTarget(
+                id = message.id,
                 text = message.text,
                 showsRevertMessage = showsRevertMessage,
             ),

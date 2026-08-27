@@ -468,6 +468,21 @@ class SessionChatViewModel
             composer.restoreComposerText(text)
         }
 
+        fun revertMessage(messageId: String) {
+            commands.revertMessage(
+                id = messageId,
+                isBusy = isSessionBusy(),
+                restoreComposerText = composer::restoreComposerText,
+            )
+        }
+
+        fun cancelRevert() {
+            commands.cancelRevert(
+                isBusy = isSessionBusy(),
+                clearComposerRestore = { composer.restoreComposerText("") },
+            )
+        }
+
         fun openCommands() {
             logAction(ProductAnalytics.Action.COMPOSER_OPEN_COMMANDS)
             commands.openCommands()
@@ -500,22 +515,12 @@ class SessionChatViewModel
                 }
                 ClientSlashAction.Undo ->
                     commands.runUndo(
-                        isBusy =
-                            sessionInfo.state.value.sessionStatusLabel != null ||
-                                effectiveCompacting(
-                                    localCompacting = commands.state.value.isCompacting,
-                                    sessionStatusLabel = sessionInfo.state.value.sessionStatusLabel,
-                                ),
+                        isBusy = isSessionBusy(),
                         restoreComposerText = composer::restoreComposerText,
                     )
                 ClientSlashAction.Redo ->
                     commands.runRedo(
-                        isBusy =
-                            sessionInfo.state.value.sessionStatusLabel != null ||
-                                effectiveCompacting(
-                                    localCompacting = commands.state.value.isCompacting,
-                                    sessionStatusLabel = sessionInfo.state.value.sessionStatusLabel,
-                                ),
+                        isBusy = isSessionBusy(),
                         clearComposerRestore = { composer.restoreComposerText("") },
                     )
                 ClientSlashAction.Compact -> {
@@ -1302,6 +1307,7 @@ class SessionChatViewModel
                 forkResultVisible = commandsState.forkResultVisible,
                 forkedSessionTitle = commandsState.forkedSessionTitle,
                 pendingSessionReplace = commandsState.pendingSessionReplace,
+                hasPendingRevert = commandsState.hasPendingRevert,
                 projectLabel = projectLabel,
                 projectLetter = projectLetter,
                 projectLetterAccent = projectLetterAccent,
@@ -1341,6 +1347,13 @@ class SessionChatViewModel
                 id = snackbarSequence,
             )
         }
+
+        private fun isSessionBusy(): Boolean =
+            sessionInfo.state.value.sessionStatusLabel != null ||
+                effectiveCompacting(
+                    localCompacting = commands.state.value.isCompacting,
+                    sessionStatusLabel = sessionInfo.state.value.sessionStatusLabel,
+                )
 
         private fun effectiveCompacting(
             localCompacting: Boolean,

@@ -4,6 +4,7 @@ data class SessionModelSelection(
     val providerId: String,
     val modelId: String,
     val variant: String? = null,
+    val agentId: String? = null,
     val savedAtEpochMs: Long? = null,
 )
 

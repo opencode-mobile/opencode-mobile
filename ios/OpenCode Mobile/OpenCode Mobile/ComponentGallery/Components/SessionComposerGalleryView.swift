@@ -6,6 +6,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
     case mentions
     case active
     case attachments
+    case revert
     case childLockout
     case permission
     case queued
@@ -27,6 +28,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
         case .mentions: "Mentions"
         case .active: "Active"
         case .attachments: "Attachments"
+        case .revert: "Revert"
         case .childLockout: "Child"
         case .permission: "Permission"
         case .queued: "Queued"
@@ -121,6 +123,8 @@ struct SessionComposerGalleryView: View {
                 .init(id: "pdf", filename: "requirements.pdf", variant: .pdf),
                 .init(id: "text", filename: "notes.md", variant: .text),
             ])
+        case .revert:
+            promptState(text: "Add a dark mode toggle to Settings", showPendingRevert: true)
         case .childLockout:
             .childLockout(
                 .init(
@@ -202,6 +206,7 @@ struct SessionComposerGalleryView: View {
         text: String,
         mentionRanges: [Range<Int>] = [],
         attachments: [OpenCodeAttachmentPresentation] = [],
+        showPendingRevert: Bool = false,
         showStop: Bool = false
     ) -> OpenCodeSessionComposerState {
         .prompt(
@@ -209,6 +214,7 @@ struct SessionComposerGalleryView: View {
                 text: text,
                 mentionRanges: mentionRanges,
                 attachments: attachments,
+                showPendingRevert: showPendingRevert,
                 selectedModelLabel: "Claude Sonnet 4",
                 selectedModeLabel: "Build",
                 selectedVariantLabel: "Default",
@@ -350,6 +356,7 @@ private extension OpenCodeSessionComposerAction {
         case .attach: "Attach"
         case .openCommands: "Open commands"
         case .removeAttachment: "Remove attachment"
+        case .cancelRevert: "Cancel revert"
         case .send: "Send"
         case .toggleFollowUp: "Toggle follow-up"
         case .stop: "Stop"

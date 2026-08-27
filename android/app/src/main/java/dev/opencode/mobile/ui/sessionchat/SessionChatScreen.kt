@@ -632,6 +632,7 @@ fun SessionChatScreen(
                                     selectionRevision = uiState.composer.selectionRevision,
                                     attachments =
                                         uiState.composer.attachments.map(AttachmentPresentationMapper::from),
+                                    showPendingRevert = uiState.hasPendingRevert,
                                     selectedModelLabel = uiState.composer.selectedModelLabel,
                                     selectedModeLabel = uiState.composer.selectedModeLabel,
                                     selectedVariantLabel = uiState.composer.selectedVariantLabel,
@@ -695,6 +696,7 @@ fun SessionChatScreen(
                                     }
                                 }
                                 is OpenCodeSessionComposerAction.RemoveAttachment -> viewModel.removeAttachment(action.id)
+                                OpenCodeSessionComposerAction.CancelRevert -> viewModel.cancelRevert()
                                 OpenCodeSessionComposerAction.Send -> viewModel.sendPrompt()
                                 OpenCodeSessionComposerAction.ToggleFollowUp -> viewModel.toggleFollowUp()
                                 OpenCodeSessionComposerAction.Stop -> viewModel.abort()
@@ -730,7 +732,7 @@ fun SessionChatScreen(
         SessionChatMessageActionsSheet(
             target = messageActionsTarget,
             onDismiss = { messageActionsTarget = null },
-            onRestoreToComposer = viewModel::restoreComposerText,
+            onRevertMessage = viewModel::revertMessage,
         )
 
         SessionChatToolDetailSheet(

@@ -29,6 +29,11 @@ Chat screen with visible messages and a composer ready for new prompts.
 - Abort/stop is wired through `SessionRepository` from the composer.
 - Permission requests are observed and resolved from the native composer state;
   mobile exposes allow-once and deny only.
+- Message sheet **Revert message** reverts the session from that user turn
+  (abort if busy, then `revertSession`, restore the prompt in the composer),
+  matching `/undo`. Copy stays clipboard-only. While revert is pending, the
+  composer shows an attachment-style chip (`Reverting this message` / `REVERT`)
+  with X to cancel. Live timeline truncation after revert is still outstanding.
 
 ## Still Out Of Scope
 
@@ -96,8 +101,11 @@ is a thin facade. Any change to the facade is an architectural decision — see
 - Agent mode is server-backed by `GET /agent` (v2: `GET /api/agent`). Hidden
   system primaries stay out of the picker. `@` mentions stay the non-primary
   path and do not change the selected agent. The selected agent id is sent with
-  async prompts and slash commands. Default is `build` when present; if the
-  selected agent disappears, fall back to `build` or the first catalog entry.
+  async prompts and slash commands. Existing sessions preset Model, Agent, and
+  Variant from the latest user-sent turn, or the last explicit chip pick for
+  that session. New sessions keep the New Session Model Preference and default
+  to `build` when present; if the selected agent disappears, fall back to
+  `build` or the first catalog entry.
 - Model and Variant are server-backed by `/config/providers`; selected model and
   non-default Variant are sent with async prompts.
 - The attachment `+` opens native Photos and Files/document entry points through

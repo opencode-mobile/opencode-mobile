@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -20,12 +21,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,6 +59,7 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.message.FollowUpDelivery
@@ -70,6 +75,7 @@ sealed interface OpenCodeSessionComposerState {
         val selectionEnd: Int? = null,
         val selectionRevision: Int = 0,
         val attachments: List<OpenCodeAttachmentPresentation> = emptyList(),
+        val showPendingRevert: Boolean = false,
         val selectedModelLabel: String,
         val selectedModeLabel: String,
         val selectedVariantLabel: String,
@@ -145,6 +151,8 @@ sealed interface OpenCodeSessionComposerAction {
     data class RemoveAttachment(
         val id: String,
     ) : OpenCodeSessionComposerAction
+
+    data object CancelRevert : OpenCodeSessionComposerAction
 
     data object Send : OpenCodeSessionComposerAction
 
@@ -307,11 +315,14 @@ private fun PromptEntryContent(
     onAction: (OpenCodeSessionComposerAction) -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
-    if (state.attachments.isNotEmpty()) {
+    if (state.showPendingRevert || state.attachments.isNotEmpty()) {
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            if (state.showPendingRevert) {
+                PendingRevertChip(onCancel = { onAction(OpenCodeSessionComposerAction.CancelRevert) })
+            }
             state.attachments.forEach { attachment ->
                 OpenCodeAttachmentChip(
                     attachment = attachment,
@@ -469,6 +480,59 @@ private class MentionVisualTransformation(
                 }
             }
         return TransformedText(styled, OffsetMapping.Identity)
+    }
+}
+
+@Composable
+private fun PendingRevertChip(onCancel: () -> Unit) {
+    val chipShape = RoundedCornerShape(8.dp)
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .border(1.dp, openCodeColor("border-weaker-base"), chipShape)
+                .background(openCodeColor("surface-raised-base"), chipShape)
+                .padding(start = 6.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            modifier = Modifier.size(36.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                OpenCodeIcons.Undo,
+                contentDescription = null,
+                tint = openCodeColor("icon-base"),
+            )
+        }
+        Column(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .semantics { contentDescription = "Reverting this message, REVERT" },
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = "Reverting this message",
+                style = MaterialTheme.typography.bodyMedium,
+                color = openCodeColor("text-strong"),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "REVERT",
+                style = MaterialTheme.typography.bodySmall,
+                color = openCodeColor("text-base"),
+            )
+        }
+        IconButton(onClick = onCancel, modifier = Modifier.size(36.dp)) {
+            Icon(
+                OpenCodeIcons.Close,
+                contentDescription = "Cancel revert",
+                tint = openCodeColor("icon-strong-base"),
+            )
+        }
     }
 }
 
@@ -846,6 +910,39 @@ private fun PermissionComposerPreviewContent() {
                     permission = "bash",
                     patterns = listOf("git status", "git diff --stat"),
                     queueCount = 2,
+                ),
+            onAction = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun PendingRevertComposerPreview() {
+    PendingRevertComposerPreviewContent()
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun PendingRevertComposerDarkPreview() {
+    PendingRevertComposerPreviewContent()
+}
+
+@Composable
+private fun PendingRevertComposerPreviewContent() {
+    OpenCodeTheme {
+        OpenCodeSessionComposer(
+            state =
+                OpenCodeSessionComposerState.Prompt(
+                    text = "Add a dark mode toggle to Settings",
+                    showPendingRevert = true,
+                    selectedModelLabel = "Claude Sonnet 4",
+                    selectedModeLabel = "Build",
+                    selectedVariantLabel = "Default",
+                    showVariant = true,
+                    sendEnabled = true,
+                    showStop = false,
+                    stopEnabled = false,
                 ),
             onAction = {},
         )

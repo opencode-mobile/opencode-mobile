@@ -146,6 +146,7 @@ data class SessionChatUiState(
     val forkResultVisible: Boolean = false,
     val forkedSessionTitle: String = "",
     val pendingSessionReplace: ChildSessionNavigationTarget? = null,
+    val hasPendingRevert: Boolean = false,
     /** Smart project label for top-bar chrome; null when worktree missing. */
     val projectLabel: String? = null,
     val projectLetter: Char? = null,
@@ -414,6 +415,7 @@ data class SessionChatReviewChangesRegionState(
 data class SessionChatCommandsRegionState(
     val commandsSheetVisible: Boolean = false,
     val visibleActions: List<ClientSlashAction> = listOf(ClientSlashAction.New),
+    val hasPendingRevert: Boolean = false,
     val forkDialogVisible: Boolean = false,
     val forkDraftTitle: String = "",
     val forkSubmitting: Boolean = false,
@@ -434,9 +436,16 @@ data class LatestModelHint(
     val source: ModelSelectionHistorySource,
 )
 
+data class LatestAgentHint(
+    val mode: String,
+    val sentAtEpochMs: Long?,
+)
+
 data class ModelSelectionHistoryHints(
     val user: LatestModelHint?,
     val assistant: LatestModelHint?,
+    val userAgent: LatestAgentHint? = null,
+    val assistantAgent: LatestAgentHint? = null,
 )
 
 enum class ModelSelectionHistorySource {
