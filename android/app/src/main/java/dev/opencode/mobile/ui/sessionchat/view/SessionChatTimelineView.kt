@@ -247,8 +247,6 @@ private fun SessionChatTimelineReadyView(
     val timeline =
         rememberMessageListTimeline(
             messageCount = committedMessages.size,
-            firstMessageId = committedMessages.firstOrNull()?.id,
-            lastMessageId = committedMessages.lastOrNull()?.id,
             layoutAffectingRevision = layoutAffectingRevision,
             structureAffectingRevision = structureAffectingRevision,
             growBottomRevision = growBottomRevision,
