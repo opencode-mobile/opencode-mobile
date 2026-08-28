@@ -274,7 +274,7 @@ class SessionsApi private constructor(
             .post("session/$id/revert") {
                 applyDirectory(directory)
                 setJsonBody(json, body)
-            }.body()
+            }.ensureSuccess()
 
     suspend fun unrevertSession(
         id: String,
@@ -284,7 +284,7 @@ class SessionsApi private constructor(
             .get()
             .post("session/$id/unrevert") {
                 applyDirectory(directory)
-            }.body()
+            }.ensureSuccess()
 
     suspend fun respondToPermission(
         sessionId: String,
