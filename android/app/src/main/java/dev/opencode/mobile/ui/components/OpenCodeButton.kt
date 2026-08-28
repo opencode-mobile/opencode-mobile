@@ -20,6 +20,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
@@ -131,12 +133,16 @@ fun OpenCodeButton(
             else -> OpenCodeButtonCornerRadius
         }
 
+    val haptic = LocalHapticFeedback.current
     val interaction =
         if (onLongClick != null) {
             Modifier.combinedClickable(
                 enabled = enabled,
                 onClick = onClick,
-                onLongClick = onLongClick,
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClick()
+                },
             )
         } else {
             Modifier.clickable(enabled = enabled, onClick = onClick)

@@ -668,11 +668,15 @@ private fun DockCta(
     onLongClickLabel: String? = null,
     content: @Composable () -> Unit,
 ) {
+    val haptic = LocalHapticFeedback.current
     val interaction =
         if (onLongClick != null) {
             Modifier.combinedClickable(
                 onClick = onClick,
-                onLongClick = onLongClick,
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClick()
+                },
                 onLongClickLabel = onLongClickLabel,
                 role = Role.Button,
             )

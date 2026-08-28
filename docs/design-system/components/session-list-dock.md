@@ -64,7 +64,7 @@ count is not under the icon.
   the finger like rubber — glued to rest, and the farther the pull the less
   extra travel you get, capping around **52pt**. Neighbor pages do not peek
   during the drag.
-- Cross **28pt** of visual travel with a neighbor: light haptic, select that
+- Cross **28pt** of visual travel with a neighbor: selection haptic, select that
   tab, and play a **450ms** switch without waiting for finger-up. The current
   cluster continues off in the pull direction; the next cluster enters from
   the opposite side. Remaining motion on that finger-down is ignored until
@@ -89,10 +89,11 @@ compact leading control; New session is the full-width primary control beside
 it. Create error appears above the filter chrome when set.
 
 Tap New session fires `onNewSession()`. When `onNewSessionLongPress` is set,
-hold New session fires that callback and does not fire `onNewSession`. Callers
-omit the hold callback in chip chrome and when there are fewer than two
-projects. VoiceOver / TalkBack keep the default **New session** action and
-expose **Choose project** when the hold path is present.
+hold New session plays a context-action haptic, fires that callback, and does
+not fire `onNewSession`. Callers omit the hold callback in chip chrome and when
+there are fewer than two projects. VoiceOver / TalkBack keep the default
+**New session** action and expose **Choose project** when the hold path is
+present. Accessibility actions do not play the hold haptic.
 
 Chip-mode removal uses the selected chip’s remove control. Picker-mode removal
 is hold-to-remove on project rows in the sheet, not on the dock.
@@ -100,9 +101,12 @@ is hold-to-remove on project rows in the sheet, not on the dock.
 ## Platform Notes
 
 - iOS: `OpenCodeFloatingDock` + fill-only CTA row. Add project / New session
-  stay fill-only (circle + capsule, 52pt) to match Android.
+  stay fill-only (circle + capsule, 52pt) to match Android. Play selection and
+  context-action haptics through UIKit generators at the gesture.
+  `.sensoryFeedback` is silent when a sheet presents in the same update.
 - Android: same structure with Material raised dock and fill-only CTAs at 52dp /
-  8dp gap.
+  8dp gap. Project switch uses `HapticFeedbackType.TextHandleMove`; New session
+  hold uses `LongPress`.
 
 ## Review Surfaces
 
