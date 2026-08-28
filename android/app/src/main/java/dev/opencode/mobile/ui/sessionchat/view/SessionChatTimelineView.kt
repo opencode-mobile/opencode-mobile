@@ -30,12 +30,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -61,6 +64,7 @@ import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
 import dev.opencode.mobile.ui.scroll.MessageListReversedTimelineColumn
 import dev.opencode.mobile.ui.scroll.MessageListTimelineApplyHold
+import dev.opencode.mobile.ui.scroll.MessageListTimelineDefaults
 import dev.opencode.mobile.ui.scroll.messageListAnimateLastMessageSize
 import dev.opencode.mobile.ui.scroll.messageListTimelineItemSpacing
 import dev.opencode.mobile.ui.scroll.rememberMessageListTimeline
@@ -209,6 +213,9 @@ private fun SessionChatTimelineReadyView(
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
+    val density = LocalDensity.current
+    var topOverlayInsetPx by remember { mutableIntStateOf(0) }
+    val topOverlayInset = with(density) { topOverlayInsetPx.toDp() }
     // Only user drag/fling holds applies — not programmatic auto-follow
     // (listState.isScrollInProgress is true for both; iOS holds on isDragging /
     // isDecelerating / isUserScrolling only).
@@ -272,7 +279,9 @@ private fun SessionChatTimelineReadyView(
                     PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
-                        top = 12.dp,
+                        top =
+                            MessageListTimelineDefaults.contentPadding.calculateTopPadding() +
+                                topOverlayInset,
                         // reverseLayout: bottom padding is beforeContent (visual bottom).
                         // Overlay inset is composer height + 16 end-pin gap — do not also
                         // add the default 12 or the resting gap becomes 28.
@@ -317,12 +326,22 @@ private fun SessionChatTimelineReadyView(
         val showSessionTodosPill = !hideFloatStack && sessionTodosVisible && sessionTodoTotalCount > 0
         val showTopOverlayStack =
             syncingIndicatorLabel != null || showSessionTodosPill || showReviewChanges
+        LaunchedEffect(showTopOverlayStack) {
+            if (!showTopOverlayStack) {
+                topOverlayInsetPx = 0
+            }
+        }
         if (showTopOverlayStack) {
             Column(
                 modifier =
                     Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 10.dp),
+                        .onGloballyPositioned { coordinates ->
+                            val height = coordinates.size.height
+                            if (height != topOverlayInsetPx) {
+                                topOverlayInsetPx = height
+                            }
+                        }.padding(top = 10.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {

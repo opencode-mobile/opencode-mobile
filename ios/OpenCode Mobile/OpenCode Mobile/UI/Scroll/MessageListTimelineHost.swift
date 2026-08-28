@@ -20,6 +20,10 @@ where Item.ID == String {
     /// host VC's `additionalSafeAreaInsets.bottom` so `adjustedContentInset`
     /// grows and end-pin can clear the overlay.
     var bottomOverlayInset: CGFloat = 0
+    /// Extra scroll clearance under the top float stack (todos / review / sync).
+    /// Applied via `additionalSafeAreaInsets.top` so the first message rests
+    /// below the overlay while content can still scroll under it.
+    var topOverlayInset: CGFloat = 0
     var interItemSpacing: CGFloat = MessageListTimelineDefaults.messageSpacing
     @ViewBuilder var itemContent: (Item) -> ItemContent
 
@@ -30,6 +34,7 @@ where Item.ID == String {
             topContentPadding: topContentPadding,
             bottomContentPadding: bottomContentPadding,
             bottomOverlayInset: bottomOverlayInset,
+            topOverlayInset: topOverlayInset,
             interItemSpacing: interItemSpacing
         )
         viewController.scrollController = scrollController
@@ -55,6 +60,7 @@ where Item.ID == String {
         viewController.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
         viewController.itemContent = itemContent
         viewController.updateBottomOverlayInset(bottomOverlayInset)
+        viewController.updateTopOverlayInset(topOverlayInset)
         scrollController.attach(viewController)
         viewController.loadViewIfNeeded()
         viewController.updateRefreshControlAvailability()
@@ -83,6 +89,7 @@ where Item.ID == String {
     private let topContentPadding: CGFloat
     private let bottomContentPadding: CGFloat
     private var bottomOverlayInset: CGFloat
+    private var topOverlayInset: CGFloat
     private let interItemSpacing: CGFloat
 
     private var collectionView: UICollectionView!
@@ -134,6 +141,7 @@ where Item.ID == String {
         topContentPadding: CGFloat,
         bottomContentPadding: CGFloat,
         bottomOverlayInset: CGFloat,
+        topOverlayInset: CGFloat = 0,
         interItemSpacing: CGFloat
     ) {
         self.itemContent = itemContent
@@ -141,6 +149,7 @@ where Item.ID == String {
         self.topContentPadding = topContentPadding
         self.bottomContentPadding = bottomContentPadding
         self.bottomOverlayInset = bottomOverlayInset
+        self.topOverlayInset = topOverlayInset
         self.interItemSpacing = interItemSpacing
         super.init(nibName: nil, bundle: nil)
     }
@@ -182,6 +191,34 @@ where Item.ID == String {
         }
     }
 
+    func updateTopOverlayInset(_ value: CGFloat) {
+        let inset = max(0, value)
+        guard abs(topOverlayInset - inset) > 0.5 else {
+            applyTopOverlaySafeArea(repinIfNeeded: false)
+            return
+        }
+        topOverlayInset = inset
+        applyTopOverlaySafeArea(repinIfNeeded: true)
+    }
+
+    private func applyTopOverlaySafeArea(repinIfNeeded: Bool) {
+        guard isViewLoaded else { return }
+        let inset = topOverlayInset
+        if abs(additionalSafeAreaInsets.top - inset) > 0.5 {
+            var safe = additionalSafeAreaInsets
+            safe.top = inset
+            additionalSafeAreaInsets = safe
+        }
+        updateBottomAlignmentInset()
+        guard repinIfNeeded, scrollController?.isPinnedToEnd == true else { return }
+        performScrollToEnd(animated: false)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            guard self.scrollController?.isPinnedToEnd == true else { return }
+            self.pinToBottomWithoutAnimation()
+        }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .clear
@@ -190,6 +227,7 @@ where Item.ID == String {
         updateRefreshControlAvailability()
         observeContentSize()
         applyBottomOverlaySafeArea(repinIfNeeded: false)
+        applyTopOverlaySafeArea(repinIfNeeded: false)
     }
 
     func updateRefreshControlAvailability() {
