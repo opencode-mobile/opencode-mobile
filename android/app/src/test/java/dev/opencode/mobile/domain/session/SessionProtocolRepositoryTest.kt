@@ -607,6 +607,59 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
+    fun v1RevertSession_acceptsSessionJsonBody() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """{"id":"ses_1","title":"One","projectID":"proj","directory":"/repo","time":{"created":1,"updated":2},"revert":{"messageID":"msg_9"}}""",
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            val ok = repository.revertSession("ses_1", "msg_9", null, "/repo")
+
+            assertTrue(ok)
+            assertEquals(HttpMethod.Post, requests.single().method)
+            assertTrue(requests.single().url.encodedPath.contains("/session/ses_1/revert"))
+            assertEquals("/repo", requests.single().url.parameters["directory"])
+            val body = requests.single().requestBodyText()
+            assertTrue(body.contains("\"messageID\":\"msg_9\""))
+        }
+
+    @Test
+    fun v1UnrevertSession_acceptsSessionJsonBody() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """{"id":"ses_1","title":"One","projectID":"proj","directory":"/repo","time":{"created":1,"updated":2}}""",
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            val ok = repository.unrevertSession("ses_1", "/repo")
+
+            assertTrue(ok)
+            assertEquals(HttpMethod.Post, requests.single().method)
+            assertTrue(requests.single().url.encodedPath.contains("/session/ses_1/unrevert"))
+        }
+
+    @Test
     fun v2RevertSession_stagesWithMessageAndFiles() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()
