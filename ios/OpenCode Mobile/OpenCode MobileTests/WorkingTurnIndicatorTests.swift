@@ -55,4 +55,64 @@ struct WorkingTurnIndicatorTests {
             ) == SessionCompactChrome.statusLabel
         )
     }
+
+    @Test func labelForActiveTurn_hidesWhenLastIsThinking() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                lastIsThinking: true
+            ) == nil
+        )
+    }
+
+    @Test func labelForActiveTurn_hidesCompactingWhenLastIsThinking() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                isCompacting: true,
+                lastIsThinking: true
+            ) == nil
+        )
+    }
+
+    @Test func lastIsThinking_trueWhenLastBlockIsStreamingReasoning() {
+        #expect(
+            WorkingTurnIndicator.lastIsThinking(messages: [
+                row(.reasoning(blockID: "r1", text: "hmm", isStreaming: true, durationMs: nil)),
+            ])
+        )
+    }
+
+    @Test func lastIsThinking_falseWhenLastIsSettledThought() {
+        #expect(
+            WorkingTurnIndicator.lastIsThinking(messages: [
+                row(.reasoning(blockID: "r1", text: "hmm", isStreaming: false, durationMs: nil)),
+            ]) == false
+        )
+    }
+
+    @Test func lastIsThinking_falseWhenThinkingThenText() {
+        #expect(
+            WorkingTurnIndicator.lastIsThinking(messages: [
+                row(
+                    .reasoning(blockID: "r1", text: "hmm", isStreaming: true, durationMs: nil),
+                    .text(blockID: "t1", text: "Hello", renderedMarkdown: nil)
+                ),
+            ]) == false
+        )
+    }
+
+    @Test func lastIsThinking_falseWhenEmpty() {
+        #expect(WorkingTurnIndicator.lastIsThinking(messages: []) == false)
+    }
+
+    private func row(_ blocks: SessionChatTimelineBlock...) -> SessionChatRow {
+        SessionChatRow(
+            id: "m1",
+            role: .assistant,
+            text: "",
+            metadataLabel: "",
+            blocks: blocks
+        )
+    }
 }
