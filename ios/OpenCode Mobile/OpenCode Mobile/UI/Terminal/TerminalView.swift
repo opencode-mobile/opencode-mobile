@@ -8,7 +8,10 @@ struct TerminalRoute: Hashable {
 
 struct TerminalView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel: TerminalViewModel
+    @State private var ctrlSticky = false
     private let worktree: String
     private let projectTitle: String
 
@@ -46,6 +49,16 @@ struct TerminalView: View {
         .onDisappear {
             viewModel.disappear()
         }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active:
+                Task { await viewModel.appear() }
+            case .inactive, .background:
+                viewModel.disappear()
+            @unknown default:
+                break
+            }
+        }
     }
 
     @ViewBuilder
@@ -53,9 +66,8 @@ struct TerminalView: View {
         switch viewModel.state {
         case .connecting:
             OpenCodeStatusStack(title: "Connecting", subtitle: "Starting shell…")
-        case .live:
-            Color.clear
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .live, .reconnecting:
+            livePane
         case .connectFailed:
             errorContent(
                 title: "Connect failed",
@@ -64,6 +76,32 @@ struct TerminalView: View {
         case .exited:
             errorContent(title: "Shell ended", message: "Shell ended")
         }
+    }
+
+    private var livePane: some View {
+        let tokens = ThemeManager.shared.tokens(for: colorScheme)
+        return VStack(spacing: 0) {
+            TerminalEmulatorView(
+                viewModel: viewModel,
+                backgroundHex: tokens["background-base"],
+                foregroundHex: tokens["text-strong"],
+                onData: emit,
+                onResize: { cols, rows in
+                    viewModel.resize(cols: cols, rows: rows)
+                }
+            )
+            TerminalControlStrip(
+                ctrlSticky: ctrlSticky,
+                onToggleCtrl: { ctrlSticky.toggle() },
+                onSend: emit
+            )
+        }
+    }
+
+    private func emit(_ text: String) {
+        let (payload, nextSticky) = applyTerminalCtrl(text, ctrlSticky: ctrlSticky)
+        ctrlSticky = nextSticky
+        viewModel.sendInput(payload)
     }
 
     private func errorContent(title: String, message: String) -> some View {

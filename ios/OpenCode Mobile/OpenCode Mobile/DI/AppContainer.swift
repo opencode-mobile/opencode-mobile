@@ -526,7 +526,9 @@ extension Container {
         self { @MainActor in
             TerminalViewModel(
                 worktree: $0,
-                repository: self.terminalRepository()
+                repository: self.terminalRepository(),
+                activeConnectionManager: self.activeConnectionManager(),
+                socketClient: URLSessionTerminalSocketClient()
             )
         }
     }

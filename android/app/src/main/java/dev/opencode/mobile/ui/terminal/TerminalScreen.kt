@@ -1,14 +1,17 @@
 package dev.opencode.mobile.ui.terminal
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -16,6 +19,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
+import dev.opencode.mobile.theme.ThemeManager
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.OpenCodeButton
@@ -61,8 +66,10 @@ fun TerminalScreen(
                     subtitle = "Starting shell…",
                     modifier = Modifier.fillMaxSize(),
                 )
-            TerminalUiState.Live ->
-                Box(modifier = Modifier.fillMaxSize())
+            is TerminalUiState.Live,
+            is TerminalUiState.Reconnecting,
+            ->
+                TerminalLivePane(viewModel = viewModel)
             TerminalUiState.ConnectFailed ->
                 TerminalErrorContent(
                     title = "Connect failed",
@@ -76,6 +83,43 @@ fun TerminalScreen(
                     onRetry = viewModel::retry,
                 )
         }
+    }
+}
+
+@Composable
+private fun TerminalLivePane(viewModel: TerminalViewModel) {
+    val isDark = LocalOpenCodeDarkTheme.current
+    val tokens = if (isDark) ThemeManager.resolvedDark else ThemeManager.resolvedLight
+    var ctrlSticky by remember { mutableStateOf(false) }
+    val emit: (String) -> Unit = { text ->
+        val (payload, nextSticky) = applyTerminalCtrl(text, ctrlSticky)
+        ctrlSticky = nextSticky
+        viewModel.sendInput(payload)
+    }
+    Column(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .imePadding(),
+    ) {
+        TerminalEmulator(
+            output = viewModel.output,
+            backgroundHex = tokens["background-base"],
+            foregroundHex = tokens["text-strong"],
+            onEvent = { event ->
+                when (event) {
+                    TerminalEmulatorEvent.Ready -> Unit
+                    is TerminalEmulatorEvent.Data -> emit(event.text)
+                    is TerminalEmulatorEvent.Resize -> viewModel.resize(event.cols, event.rows)
+                }
+            },
+            modifier = Modifier.weight(1f),
+        )
+        TerminalControlStrip(
+            ctrlSticky = ctrlSticky,
+            onToggleCtrl = { ctrlSticky = !ctrlSticky },
+            onSend = emit,
+        )
     }
 }
 

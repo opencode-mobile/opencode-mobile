@@ -1,10 +1,16 @@
 package dev.opencode.mobile.ui.terminal
 
+import dev.opencode.mobile.domain.connection.ConnectionProfile
+import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.terminal.TerminalConnectRequest
+import dev.opencode.mobile.domain.terminal.TerminalError
 import dev.opencode.mobile.domain.terminal.TerminalRepository
 import dev.opencode.mobile.domain.terminal.TerminalSession
 import dev.opencode.mobile.domain.terminal.TerminalSessionStatus
+import dev.opencode.mobile.domain.terminal.TerminalSocketClient
+import dev.opencode.mobile.domain.terminal.TerminalSocketListener
+import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -14,6 +20,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -32,29 +39,28 @@ class TerminalViewModelTest {
     }
 
     @Test
-    fun appearSuccess_showsLive() =
+    fun appearSuccess_showsLiveWithSessionId() =
         runTest(testDispatcher) {
-            val viewModel =
-                TerminalViewModel(
-                    FakeTerminalRepository(
-                        ArrayDeque(listOf(Result.success(runningSession()))),
-                    ),
-                )
+            val socket = FakeTerminalSocketClient()
+            val viewModel = viewModel(socket = socket)
 
             viewModel.appear("/repo")
             advanceUntilIdle()
 
-            assertEquals(TerminalUiState.Live, viewModel.uiState.value)
+            val state = viewModel.uiState.value
+            assertTrue(state is TerminalUiState.Live)
+            assertEquals("pty_1", (state as TerminalUiState.Live).session.id)
         }
 
     @Test
     fun appearThrow_showsConnectFailed() =
         runTest(testDispatcher) {
             val viewModel =
-                TerminalViewModel(
-                    FakeTerminalRepository(
-                        ArrayDeque(listOf(Result.failure(RuntimeException("nope")))),
-                    ),
+                viewModel(
+                    repository =
+                        FakeTerminalRepository(
+                            ensureResults = ArrayDeque(listOf(Result.failure(RuntimeException("nope")))),
+                        ),
                 )
 
             viewModel.appear("/repo")
@@ -67,15 +73,17 @@ class TerminalViewModelTest {
     fun retryAfterFail_showsLive() =
         runTest(testDispatcher) {
             val viewModel =
-                TerminalViewModel(
-                    FakeTerminalRepository(
-                        ArrayDeque(
-                            listOf(
-                                Result.failure(RuntimeException("nope")),
-                                Result.success(runningSession()),
-                            ),
+                viewModel(
+                    repository =
+                        FakeTerminalRepository(
+                            ensureResults =
+                                ArrayDeque(
+                                    listOf(
+                                        Result.failure(RuntimeException("nope")),
+                                        Result.success(runningSession()),
+                                    ),
+                                ),
                         ),
-                    ),
                 )
 
             viewModel.appear("/repo")
@@ -83,8 +91,123 @@ class TerminalViewModelTest {
             viewModel.retry()
             advanceUntilIdle()
 
-            assertEquals(TerminalUiState.Live, viewModel.uiState.value)
+            val state = viewModel.uiState.value
+            assertTrue(state is TerminalUiState.Live)
+            assertEquals("pty_1", (state as TerminalUiState.Live).session.id)
         }
+
+    @Test
+    fun disappear_closesSocket() =
+        runTest(testDispatcher) {
+            val socket = FakeTerminalSocketClient()
+            val viewModel = viewModel(socket = socket)
+
+            viewModel.appear("/repo")
+            advanceUntilIdle()
+            viewModel.disappear()
+
+            assertTrue(socket.closed)
+        }
+
+    @Test
+    fun abnormalClose_getRunning_showsReconnecting() =
+        runTest(testDispatcher) {
+            val socket = FakeTerminalSocketClient()
+            val viewModel =
+                viewModel(
+                    repository =
+                        FakeTerminalRepository(
+                            ensureResults = ArrayDeque(listOf(Result.success(runningSession()))),
+                            getResults = ArrayDeque(listOf(Result.success(runningSession()))),
+                        ),
+                    socket = socket,
+                )
+
+            viewModel.appear("/repo")
+            advanceUntilIdle()
+            socket.autoOpen = false
+            socket.abnormalClose()
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertTrue(state is TerminalUiState.Reconnecting)
+            assertEquals("pty_1", (state as TerminalUiState.Reconnecting).session.id)
+        }
+
+    @Test
+    fun abnormalClose_getExited_showsExited() =
+        runTest(testDispatcher) {
+            val socket = FakeTerminalSocketClient()
+            val viewModel =
+                viewModel(
+                    repository =
+                        FakeTerminalRepository(
+                            ensureResults = ArrayDeque(listOf(Result.success(runningSession()))),
+                            getResults =
+                                ArrayDeque(
+                                    listOf(
+                                        Result.success(runningSession().copy(status = TerminalSessionStatus.Exited)),
+                                    ),
+                                ),
+                        ),
+                    socket = socket,
+                )
+
+            viewModel.appear("/repo")
+            advanceUntilIdle()
+            socket.abnormalClose()
+            advanceUntilIdle()
+
+            assertEquals(TerminalUiState.Exited, viewModel.uiState.value)
+        }
+
+    @Test
+    fun abnormalClose_getNotFound_showsExited() =
+        runTest(testDispatcher) {
+            val socket = FakeTerminalSocketClient()
+            val viewModel =
+                viewModel(
+                    repository =
+                        FakeTerminalRepository(
+                            ensureResults = ArrayDeque(listOf(Result.success(runningSession()))),
+                            getResults =
+                                ArrayDeque(
+                                    listOf(Result.failure(TerminalError.Http(statusCode = 404, message = "gone"))),
+                                ),
+                        ),
+                    socket = socket,
+                )
+
+            viewModel.appear("/repo")
+            advanceUntilIdle()
+            socket.abnormalClose()
+            advanceUntilIdle()
+
+            assertEquals(TerminalUiState.Exited, viewModel.uiState.value)
+        }
+
+    private suspend fun viewModel(
+        repository: FakeTerminalRepository =
+            FakeTerminalRepository(
+                ensureResults = ArrayDeque(listOf(Result.success(runningSession()))),
+            ),
+        socket: FakeTerminalSocketClient = FakeTerminalSocketClient(),
+    ): TerminalViewModel {
+        val manager = ActiveConnectionManager(FakeProfileStore())
+        manager.applyProfile(
+            ConnectionProfile(
+                baseUrl = "http://127.0.0.1:4096/",
+                username = "opencode",
+                password = "secret",
+            ),
+            serverProtocol = ServerProtocol.V1,
+        )
+        return TerminalViewModel(
+            terminalRepository = repository,
+            activeConnectionManager = manager,
+            socketClient = socket,
+        )
+    }
 
     private fun runningSession(): TerminalSession =
         TerminalSession(
@@ -96,8 +219,35 @@ class TerminalViewModelTest {
         )
 }
 
+private class FakeTerminalSocketClient(
+    var autoOpen: Boolean = true,
+) : TerminalSocketClient {
+    var listener: TerminalSocketListener? = null
+    var closed: Boolean = false
+
+    override fun open(
+        url: String,
+        listener: TerminalSocketListener,
+    ) {
+        closed = false
+        this.listener = listener
+        if (autoOpen) listener.onOpen()
+    }
+
+    override fun sendText(text: String) = Unit
+
+    override fun close() {
+        closed = true
+    }
+
+    fun abnormalClose(code: Int = 1006) {
+        listener?.onClosed(code)
+    }
+}
+
 private class FakeTerminalRepository(
-    private val results: ArrayDeque<Result<TerminalSession>>,
+    private val ensureResults: ArrayDeque<Result<TerminalSession>>,
+    private val getResults: ArrayDeque<Result<TerminalSession>> = ArrayDeque(),
 ) : TerminalRepository {
     override suspend fun list(directory: String): List<TerminalSession> = error("unused")
 
@@ -109,7 +259,7 @@ private class FakeTerminalRepository(
     override suspend fun get(
         id: String,
         directory: String,
-    ): TerminalSession = error("unused")
+    ): TerminalSession = getResults.removeFirst().getOrThrow()
 
     override suspend fun updateSize(
         id: String,
@@ -118,7 +268,7 @@ private class FakeTerminalRepository(
         rows: Int,
     ): TerminalSession = error("unused")
 
-    override suspend fun ensureRunning(directory: String): TerminalSession = results.removeFirst().getOrThrow()
+    override suspend fun ensureRunning(directory: String): TerminalSession = ensureResults.removeFirst().getOrThrow()
 
     override fun connectRequest(
         id: String,
@@ -129,5 +279,36 @@ private class FakeTerminalRepository(
         ticket: String?,
         username: String,
         password: String,
-    ): TerminalConnectRequest = error("unused")
+    ): TerminalConnectRequest = TerminalConnectRequest("ws://example.test/pty/$id/connect")
+}
+
+private class FakeProfileStore : ConnectionProfileStore {
+    private var profile: ConnectionProfile? = null
+
+    override suspend fun activeProfile(): ConnectionProfile? = profile
+
+    override suspend fun saveProfile(profile: ConnectionProfile) {
+        this.profile = profile
+    }
+
+    override suspend fun addedWorktrees(serverBaseUrl: String): List<String> = emptyList()
+
+    override suspend fun addWorktree(
+        serverBaseUrl: String,
+        worktree: String,
+    ) {}
+
+    override suspend fun removeWorktree(
+        serverBaseUrl: String,
+        worktree: String,
+    ) {}
+
+    override suspend fun setAddedWorktrees(
+        serverBaseUrl: String,
+        worktrees: List<String>,
+    ) {}
+
+    override suspend fun clearAll() {
+        profile = null
+    }
 }

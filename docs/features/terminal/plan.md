@@ -2,13 +2,14 @@
 
 ## Now
 
-Home Terminal action and Terminal screen chrome: connecting, live placeholder,
-connect failed, and exited. Dual remotes and `ensureRunning` are in place.
+Home Terminal action, dual remotes, `ensureRunning`, bundled xterm.js WebView
+with native WebSocket I/O, control strip, and reconnecting after a dropped
+socket.
 
 ## Remaining
 
-Bundled xterm.js WebView, WebSocket I/O, control strip, background
-disconnect/reconnect.
+Connect-token HTTP when the server requires `x-opencode-ticket`. Hardware
+keyboard shortcuts.
 
 ## User Goal
 
@@ -133,18 +134,18 @@ requests stay in Session Chat.
 
 ## Expected results (iOS and Android)
 
-- [ ] Home loaded with at least one added project shows a Terminal action
+- [x] Home loaded with at least one added project shows a Terminal action
   left of Settings.
-- [ ] That action is hidden when home is not loaded or there are no added
+- [x] That action is hidden when home is not loaded or there are no added
   projects.
-- [ ] Tap with All selected snacks `Select a project first.` and does not
+- [x] Tap with All selected snacks `Select a project first.` and does not
   open Terminal.
-- [ ] Tap with a project selected pushes Terminal for that worktree.
-- [ ] First open creates a server PTY in that worktree and shows a live
+- [x] Tap with a project selected pushes Terminal for that worktree.
+- [x] First open creates a server PTY in that worktree and shows a live
   shell. Second open while it is still running reconnects to the same id.
-- [ ] Typing and the control strip send input; output renders in the
+- [x] Typing and the control strip send input; output renders in the
   emulator.
-- [ ] Resize updates server cols/rows. Background closes the socket and
+- [x] Resize updates server cols/rows. Background closes the socket and
   does not delete the PTY. Foreground reconnects if still running.
-- [ ] Process exit shows `Shell ended` and Retry starts a new PTY.
-- [ ] v1-only and v2-only servers both work. Session Chat is unchanged.
+- [x] Process exit shows `Shell ended` and Retry starts a new PTY.
+- [x] v1-only and v2-only servers both work. Session Chat is unchanged.
