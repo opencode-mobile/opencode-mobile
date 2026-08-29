@@ -75,7 +75,9 @@ reads as a real pill without an accent color.
 - iOS: press `ButtonStyle` when only tap exists; when long-press is set, an
   invisible full-row gesture overlay owns tap/long-press so `Text` cannot steal
   hits (padding-only long-press), with press tracking + spring pop/haptic on
-  context action recognition.
+  context action recognition. Play the context-action haptic through UIKit
+  generators at the gesture. `.sensoryFeedback` is silent when a sheet presents
+  in the same update.
 - Android: shared `interactionSource` with ripple, press scale, and long-press
   spring pop/haptic. Interactive rows clip to the shared corner radius so press
   chrome stays rounded even for plain style.

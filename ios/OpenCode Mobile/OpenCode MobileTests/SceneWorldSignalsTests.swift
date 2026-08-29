@@ -114,3 +114,32 @@ private final class SignalCollector: @unchecked Sendable {
         return values
     }
 }
+
+@Suite
+struct SilentWorldSignalsTests {
+    @Test func signalsDoNotFinishImmediately() async {
+        var finished = false
+        let job = Task {
+            for await _ in SilentWorldSignals.shared.signals() {}
+            finished = true
+        }
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(!finished)
+        job.cancel()
+    }
+
+    @Test func occupancyUpdatesStayOpenAfterInitialActive() async {
+        var finished = false
+        var sawActive = false
+        let job = Task {
+            for await occupancy in SilentWorldSignals.shared.occupancyUpdates() {
+                if occupancy == .active { sawActive = true }
+            }
+            finished = true
+        }
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(sawActive)
+        #expect(!finished)
+        job.cancel()
+    }
+}

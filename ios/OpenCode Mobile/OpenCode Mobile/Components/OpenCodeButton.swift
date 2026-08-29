@@ -47,7 +47,15 @@ struct OpenCodeButton: View {
         let button = Button(action: longPress == nil ? action : {}) {
             label
         }
-        .buttonStyle(OpenCodeButtonStyle(variant: variant, size: size, enabled: enabled, contrast: contrast))
+        .buttonStyle(
+            OpenCodeButtonStyle(
+                variant: variant,
+                size: size,
+                enabled: enabled,
+                contrast: contrast,
+                prepareHapticOnPress: longPress != nil
+            )
+        )
         .disabled(!enabled)
         if longPress != nil {
             button.simultaneousGesture(longPressExclusiveTap)
@@ -100,6 +108,7 @@ private struct OpenCodeButtonStyle: ButtonStyle {
     let size: OpenCodeButtonSize
     let enabled: Bool
     let contrast: OpenCodeButtonContrast
+    let prepareHapticOnPress: Bool
 
     @ViewBuilder
     func makeBody(configuration: Configuration) -> some View {
@@ -109,38 +118,44 @@ private struct OpenCodeButtonStyle: ButtonStyle {
         let minWidth: CGFloat? = variant.isIconOnly ? iconSize : nil
         let fixedWidth: CGFloat? = variant.isIconOnly ? iconSize : nil
         let fixedHeight: CGFloat? = variant.isIconOnly ? iconSize : nil
-        if variant.isIconCircle {
-            baseLabel(
-                configuration: configuration,
-                minWidth: minWidth,
-                maxWidth: maxWidth,
-                fixedWidth: fixedWidth,
-                fixedHeight: fixedHeight
-            )
-            .background(backgroundColor(isPressed: isPressed), in: Circle())
-            .overlay(
-                Circle()
-                    .strokeBorder(borderColor(isPressed: isPressed), lineWidth: 1)
-            )
-            .opacity(isPressed ? 0.92 : 1)
-            .scaleEffect(isPressed ? 0.98 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-        } else {
-            baseLabel(
-                configuration: configuration,
-                minWidth: minWidth,
-                maxWidth: maxWidth,
-                fixedWidth: fixedWidth,
-                fixedHeight: fixedHeight
-            )
-            .background(backgroundColor(isPressed: isPressed), in: RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(borderColor(isPressed: isPressed), lineWidth: 1)
-            )
-            .opacity(isPressed ? 0.92 : 1)
-            .scaleEffect(isPressed ? 0.98 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+        Group {
+            if variant.isIconCircle {
+                baseLabel(
+                    configuration: configuration,
+                    minWidth: minWidth,
+                    maxWidth: maxWidth,
+                    fixedWidth: fixedWidth,
+                    fixedHeight: fixedHeight
+                )
+                .background(backgroundColor(isPressed: isPressed), in: Circle())
+                .overlay(
+                    Circle()
+                        .strokeBorder(borderColor(isPressed: isPressed), lineWidth: 1)
+                )
+                .opacity(isPressed ? 0.92 : 1)
+                .scaleEffect(isPressed ? 0.98 : 1)
+                .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            } else {
+                baseLabel(
+                    configuration: configuration,
+                    minWidth: minWidth,
+                    maxWidth: maxWidth,
+                    fixedWidth: fixedWidth,
+                    fixedHeight: fixedHeight
+                )
+                .background(backgroundColor(isPressed: isPressed), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(borderColor(isPressed: isPressed), lineWidth: 1)
+                )
+                .opacity(isPressed ? 0.92 : 1)
+                .scaleEffect(isPressed ? 0.98 : 1)
+                .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            }
+        }
+        .onChange(of: configuration.isPressed) { _, pressed in
+            guard prepareHapticOnPress, enabled, pressed else { return }
+            OpenCodeHaptics.prepareContextAction()
         }
     }
 
