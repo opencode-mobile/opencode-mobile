@@ -30,7 +30,8 @@ icon-only button needs.
   - `onLongClick` / `longPress` — optional second action. When omitted,
     the button is tap-only. When set, a long-press fires only that
     action: it must not also invoke tap, and it must not swallow the
-    next tap.
+    next tap. Recognized long-press plays a context-action haptic (same
+    family as list-item long-press). Tap stays silent.
 
 ## Token Usage
 
@@ -84,11 +85,13 @@ Android relies on Material ripple on the shaped `Surface`.
 ## Platform Notes
 
 - iOS: implemented as a `Button` with a custom style that maps variant geometry
-  and press feedback.
+  and press feedback. Long-press haptic uses `UIImpactFeedbackGenerator` (.soft)
+  at the gesture, not `.sensoryFeedback`.
 - Android: implemented with Material 3 `Surface(onClick = ..., enabled = ...)`
   so interaction and ripple indication follow the component shape (rounded
   rectangle or circle for icon variants). Avoid layering `Modifier.clickable`
   outside `Surface`, which can produce a rectangular ripple that ignores shape.
+  Long-press uses `HapticFeedbackType.LongPress`.
 
 ## Previews
 

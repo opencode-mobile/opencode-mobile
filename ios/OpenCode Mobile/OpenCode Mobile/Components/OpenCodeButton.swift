@@ -60,6 +60,7 @@ struct OpenCodeButton: View {
         LongPressGesture(minimumDuration: 0.4)
             .onEnded { _ in
                 guard enabled, let longPress else { return }
+                OpenCodeHaptics.contextAction()
                 longPress()
             }
             .exclusively(before: TapGesture().onEnded {

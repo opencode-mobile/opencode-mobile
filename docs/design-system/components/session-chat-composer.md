@@ -98,7 +98,9 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   that gate and passes `attachEnabled` into the composer.
 - Send clears composer focus and dismisses the software keyboard (OPE-138;
   restores the OPE-62 chat send policy). Focus stays view-local in the
-  composer; Screen Models do not track keyboard visibility.
+  composer; Screen Models do not track keyboard visibility. Long-press send,
+  when follow-up delivery is active, plays the Button context-action haptic
+  and reports `toggleFollowUp`. Tap send stays silent.
 - Model, mode, and thinking-effort (variant) pickers use `OpenCodeChoiceBadge`
   **glass** variant in the **unselected** (clear / clickable) chrome — they open
   pickers rather than toggling a selected peer in-row.

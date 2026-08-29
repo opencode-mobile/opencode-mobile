@@ -151,7 +151,6 @@ struct SessionListScopeControl: View {
     @State private var outgoingTab: SessionListFilterTab?
     @State private var outgoingSlide: CGFloat = 0
     @State private var incomingSlide: CGFloat = 0
-    @State private var switchHapticTick = 0
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
 
     var body: some View {
@@ -169,7 +168,6 @@ struct SessionListScopeControl: View {
         .contentShape(controlShape)
         .gesture(drag)
         .onTapGesture(perform: onOpen)
-        .sensoryFeedback(.selection, trigger: switchHapticTick)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(accessibilityHint)
@@ -316,6 +314,7 @@ struct SessionListScopeControl: View {
                 if !isDragging {
                     isDragging = true
                     gestureOrigin = clusterSlide
+                    OpenCodeHaptics.prepareSelection()
                 }
                 let translation = gestureOrigin + value.translation.width
                 let visual = SessionListScopePaging.rubberBandOffset(translation)
@@ -383,7 +382,7 @@ struct SessionListScopeControl: View {
             shownTabId = neighbor.id
             clusterSlide = 0
         }
-        switchHapticTick += 1
+        OpenCodeHaptics.selectionChanged()
         onSelect(neighbor.id)
         settleTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(16))
@@ -502,7 +501,6 @@ private struct NewSessionDockButton: View {
     let onLongPress: (() -> Void)?
 
     @State private var isHolding = false
-    @State private var longPressHapticTick = 0
 
     var body: some View {
         let label = Text("New session")
@@ -528,10 +526,15 @@ private struct NewSessionDockButton: View {
                         .onLongPressGesture(
                             minimumDuration: 0.42,
                             maximumDistance: 18,
-                            pressing: { isHolding = $0 },
+                            pressing: { pressing in
+                                isHolding = pressing
+                                if pressing {
+                                    OpenCodeHaptics.prepareContextAction()
+                                }
+                            },
                             perform: {
                                 isHolding = false
-                                longPressHapticTick += 1
+                                OpenCodeHaptics.contextAction()
                                 onLongPress()
                             }
                         )
@@ -542,7 +545,6 @@ private struct NewSessionDockButton: View {
                 .accessibilityHint("Use Choose project to start in a different project.")
                 .accessibilityAction(.default, onNewSession)
                 .accessibilityAction(named: "Choose project", onLongPress)
-                .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.9), trigger: longPressHapticTick)
         } else {
             Button(action: onNewSession) {
                 label
