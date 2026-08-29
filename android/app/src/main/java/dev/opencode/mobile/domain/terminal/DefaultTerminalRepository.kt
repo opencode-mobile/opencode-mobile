@@ -1,0 +1,74 @@
+package dev.opencode.mobile.domain.terminal
+
+import dev.opencode.mobile.data.remote.PtyApi
+import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.network.ActiveConnectionManager
+import javax.inject.Inject
+
+class DefaultTerminalRepository
+    @Inject
+    constructor(
+        api: PtyApi,
+        private val adapter: TerminalDomainAdapter,
+        private val activeConnectionManager: ActiveConnectionManager? = null,
+    ) : TerminalRepository {
+        private val remote: TerminalRemote =
+            ProtocolSelectedTerminalRemote(
+                v1 = V1TerminalRemote(api, adapter),
+                v2 = V2TerminalRemote(api, adapter),
+                activeConnectionManager = activeConnectionManager,
+            )
+
+        override suspend fun list(directory: String): List<TerminalSession> =
+            runCatching { remote.list(directory) }
+                .getOrElse { throw adapter.mapError(it) }
+
+        override suspend fun create(
+            directory: String,
+            cwd: String,
+        ): TerminalSession =
+            runCatching { remote.create(directory, cwd) }
+                .getOrElse { throw adapter.mapError(it) }
+
+        override suspend fun get(
+            id: String,
+            directory: String,
+        ): TerminalSession =
+            runCatching { remote.get(id, directory) }
+                .getOrElse { throw adapter.mapError(it) }
+
+        override suspend fun updateSize(
+            id: String,
+            directory: String,
+            cols: Int,
+            rows: Int,
+        ): TerminalSession =
+            runCatching { remote.updateSize(id, directory, cols, rows) }
+                .getOrElse { throw adapter.mapError(it) }
+
+        override suspend fun ensureRunning(directory: String): TerminalSession {
+            val running = list(directory).firstOrNull { it.status == TerminalSessionStatus.Running }
+            return running ?: create(directory, cwd = directory)
+        }
+
+        override fun connectRequest(
+            id: String,
+            directory: String,
+            protocol: ServerProtocol,
+            baseUrl: String,
+            cursor: String,
+            ticket: String?,
+            username: String,
+            password: String,
+        ): TerminalConnectRequest =
+            TerminalConnectRequest.build(
+                id = id,
+                directory = directory,
+                protocol = protocol,
+                baseUrl = baseUrl,
+                cursor = cursor,
+                ticket = ticket,
+                username = username,
+                password = password,
+            )
+    }

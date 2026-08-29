@@ -267,6 +267,24 @@ extension Container {
         }.singleton
     }
 
+    var ptyAPIClient: Factory<PtyAPIClient> {
+        self { PtyAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+    }
+
+    var terminalDomainAdapter: Factory<TerminalDomainAdapter> {
+        self { TerminalDomainAdapter() }.singleton
+    }
+
+    var terminalRepository: Factory<any TerminalRepository> {
+        self {
+            DefaultTerminalRepository(
+                api: self.ptyAPIClient(),
+                adapter: self.terminalDomainAdapter(),
+                activeConnectionManager: self.activeConnectionManager()
+            )
+        }.singleton
+    }
+
     var agentsAPIClient: Factory<AgentsAPIClient> {
         self { AgentsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
