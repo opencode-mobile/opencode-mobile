@@ -2,11 +2,13 @@
 
 ## Now
 
-Plan only. No implementation.
+Home Terminal action and Terminal screen chrome: connecting, live placeholder,
+connect failed, and exited. Dual remotes and `ensureRunning` are in place.
 
 ## Remaining
 
-Everything in scope.
+Bundled xterm.js WebView, WebSocket I/O, control strip, background
+disconnect/reconnect.
 
 ## User Goal
 

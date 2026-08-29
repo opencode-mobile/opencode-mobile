@@ -141,6 +141,50 @@ class SessionListHomeChromeTest {
     }
 
     @Test
+    fun terminalAction_zeroProjectsDoesNothing() {
+        assertEquals(
+            SessionListHomeChrome.TerminalAction.None,
+            SessionListHomeChrome.terminalAction(
+                projects = emptyList(),
+                selectedFilterId = SessionListFilterTab.ALL_ID,
+            ),
+        )
+    }
+
+    @Test
+    fun terminalAction_oneProjectOpensEvenWhenAllIdStored() {
+        assertEquals(
+            SessionListHomeChrome.TerminalAction.Open("/repo", "opencode-mobile"),
+            SessionListHomeChrome.terminalAction(
+                projects = listOf(mobile),
+                selectedFilterId = SessionListFilterTab.ALL_ID,
+            ),
+        )
+    }
+
+    @Test
+    fun terminalAction_scopedProjectOpensThere() {
+        assertEquals(
+            SessionListHomeChrome.TerminalAction.Open("/play", "playground"),
+            SessionListHomeChrome.terminalAction(
+                projects = listOf(mobile, playground),
+                selectedFilterId = "/play",
+            ),
+        )
+    }
+
+    @Test
+    fun terminalAction_allSelectedWithTwoProjectsSnacks() {
+        assertEquals(
+            SessionListHomeChrome.TerminalAction.Snack,
+            SessionListHomeChrome.terminalAction(
+                projects = listOf(mobile, playground),
+                selectedFilterId = SessionListFilterTab.ALL_ID,
+            ),
+        )
+    }
+
+    @Test
     fun newSessionLongPressAction_chipChromeDoesNothing() {
         assertEquals(
             SessionListHomeChrome.NewSessionAction.None,

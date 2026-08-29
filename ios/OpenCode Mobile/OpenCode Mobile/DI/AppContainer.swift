@@ -521,6 +521,15 @@ extension Container {
             )
         }
     }
+
+    var terminalViewModel: ParameterFactory<String, TerminalViewModel> {
+        self { @MainActor in
+            TerminalViewModel(
+                worktree: $0,
+                repository: self.terminalRepository()
+            )
+        }
+    }
 }
 
 extension Container {
@@ -555,6 +564,11 @@ extension Container {
     @MainActor
     static func makeSessionContextViewModel(sessionID: String, worktree: String) -> SessionContextViewModel {
         shared.sessionContextViewModel((sessionID: sessionID, worktree: worktree))
+    }
+
+    @MainActor
+    static func makeTerminalViewModel(worktree: String) -> TerminalViewModel {
+        shared.terminalViewModel(worktree)
     }
 
     @MainActor

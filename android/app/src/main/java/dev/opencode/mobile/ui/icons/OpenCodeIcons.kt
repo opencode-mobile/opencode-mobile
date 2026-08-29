@@ -32,6 +32,7 @@ private var _list: ImageVector? = null
 private var _more_vert: ImageVector? = null
 private var _search: ImageVector? = null
 private var _settings: ImageVector? = null
+private var _terminal: ImageVector? = null
 private var _architecture: ImageVector? = null
 private var _archive: ImageVector? = null
 private var _cloud: ImageVector? = null
@@ -479,6 +480,25 @@ private var _widgets: ImageVector? = null
     )
       }.build()
       return _settings!!
+    }
+
+  val Terminal: ImageVector
+    get() {
+      if (_terminal != null) return _terminal!!
+      _terminal = ImageVector.Builder(
+        name = "Terminal",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16c1.1 0 2-.9 2-2V6a2 2 0 0 0-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.41-1.41L8.67 13l-2.59-2.59L7.5 9l4 4-4 4z").toNodes(),
+      fill = SolidColor(Color.Black),
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _terminal!!
     }
 
   val Architecture: ImageVector

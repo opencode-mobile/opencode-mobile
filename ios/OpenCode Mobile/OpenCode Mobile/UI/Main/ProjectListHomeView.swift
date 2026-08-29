@@ -11,6 +11,7 @@ struct ProjectListHomeView: View {
     @State private var showNewSessionProjectPicker = false
     @State private var showProjectPicker = false
     @State private var selectedSessionFilterId = SessionListFilterTab.allId
+    @State private var selectProjectSnackbar: OpenCodeSnackbarMessage?
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @Environment(\.scenePhase) private var scenePhase
     @Binding private var presentConnectionSetupOnAppear: Bool
@@ -31,15 +32,7 @@ struct ProjectListHomeView: View {
                     subtitleAccessory: showsLiveUpdatesStatus
                         ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
                         : nil,
-                    actions: [
-                        .icon(.settings, accessibilityLabel: "Settings", action: {
-                            ProductAnalytics.logUserAction(
-                                screenId: ProductAnalytics.Screen.home,
-                                actionId: ProductAnalytics.Action.homeOpenSettings
-                            )
-                            showSettings = true
-                        }),
-                    ],
+                    actions: homeTopBarActions,
                     onTitleClick: viewModel.serversChrome.isSwitcher ? { viewModel.showServersSheet() } : nil,
                     titleMenuExpanded: viewModel.serversChrome.sheetVisible
                 )
@@ -53,8 +46,14 @@ struct ProjectListHomeView: View {
             .toolbar(.hidden, for: .navigationBar)
             .overlay(alignment: .bottom) {
                 OpenCodeSnackbarHost(
-                    message: viewModel.removalSnackbar,
-                    onDismissed: { viewModel.consumeProjectRemovalSnackbar() }
+                    message: selectProjectSnackbar ?? viewModel.removalSnackbar,
+                    onDismissed: {
+                        if selectProjectSnackbar != nil {
+                            selectProjectSnackbar = nil
+                        } else {
+                            viewModel.consumeProjectRemovalSnackbar()
+                        }
+                    }
                 )
             }
             .navigationDestination(isPresented: $showSettings) {
@@ -75,6 +74,9 @@ struct ProjectListHomeView: View {
             }
             .navigationDestination(for: SessionListItem.self) { session in
                 SessionChatView(session: session)
+            }
+            .navigationDestination(for: TerminalRoute.self) { route in
+                TerminalView(worktree: route.worktree, projectTitle: route.projectTitle)
             }
             .task {
                 ProductAnalytics.logScreenView(
@@ -495,6 +497,57 @@ struct ProjectListHomeView: View {
 
     private func openSession(_ session: SessionListItem) {
         navigationPath.append(session)
+    }
+
+    private var showsTerminalAction: Bool {
+        if case let .loaded(sections, _, _, _) = viewModel.state {
+            return !sections.isEmpty
+        }
+        return false
+    }
+
+    private var homeTopBarActions: [OpenCodeTopBarAction] {
+        var actions: [OpenCodeTopBarAction] = []
+        if showsTerminalAction {
+            actions.append(
+                .icon(.terminal, accessibilityLabel: "Terminal", action: handleTerminalTap)
+            )
+        }
+        actions.append(
+            .icon(.settings, accessibilityLabel: "Settings", action: {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.home,
+                    actionId: ProductAnalytics.Action.homeOpenSettings
+                )
+                showSettings = true
+            })
+        )
+        return actions
+    }
+
+    private func handleTerminalTap() {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.home,
+            actionId: ProductAnalytics.Action.homeOpenTerminal
+        )
+        guard case let .loaded(sections, _, _, _) = viewModel.state else { return }
+        let projects = sections.homeChromeProjects()
+        let tabs = SessionListHomeChrome.filterTabs(
+            projects: projects,
+            sessionCount: sections.crossProjectSessionListSessions().count
+        )
+        let filterId = SessionListHomeChrome.resolvedFilterId(
+            selectedId: selectedSessionFilterId,
+            tabs: tabs
+        )
+        switch SessionListHomeChrome.terminalAction(projects: projects, selectedFilterId: filterId) {
+        case .none:
+            break
+        case .snack:
+            selectProjectSnackbar = OpenCodeSnackbarMessage(text: SessionListHomeChrome.selectProjectSnack)
+        case let .open(worktree, projectTitle):
+            navigationPath.append(TerminalRoute(worktree: worktree, projectTitle: projectTitle))
+        }
     }
 
     private func presentNewSessionProjectPicker() {

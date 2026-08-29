@@ -13,6 +13,14 @@ enum SessionListHomeChrome {
         case create(worktree: String)
     }
 
+    enum TerminalAction: Equatable {
+        case none
+        case snack
+        case open(worktree: String, projectTitle: String)
+    }
+
+    static let selectProjectSnack = "Select a project first."
+
     static func filterTabs(projects: [Project], sessionCount: Int) -> [SessionListFilterTab] {
         let projectTabs = projects.map { project in
             SessionListFilterTab.project(
@@ -48,6 +56,20 @@ enum SessionListHomeChrome {
             return .create(worktree: projects[0].worktree)
         }
         return .presentPicker
+    }
+
+    static func terminalAction(projects: [Project], selectedFilterId: String) -> TerminalAction {
+        if projects.isEmpty {
+            return .none
+        }
+        if let selected = projects.first(where: { $0.worktree == selectedFilterId }) {
+            return .open(worktree: selected.worktree, projectTitle: selected.title)
+        }
+        if projects.count == 1 {
+            let project = projects[0]
+            return .open(worktree: project.worktree, projectTitle: project.title)
+        }
+        return .snack
     }
 
     static func newSessionLongPressAction(

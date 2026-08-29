@@ -19,6 +19,19 @@ object SessionListHomeChrome {
         ) : NewSessionAction()
     }
 
+    sealed class TerminalAction {
+        data object None : TerminalAction()
+
+        data object Snack : TerminalAction()
+
+        data class Open(
+            val worktree: String,
+            val projectTitle: String,
+        ) : TerminalAction()
+    }
+
+    const val SELECT_PROJECT_SNACK = "Select a project first."
+
     fun filterTabs(
         projects: List<Project>,
         sessionCount: Int,
@@ -66,6 +79,24 @@ object SessionListHomeChrome {
             return NewSessionAction.Create(projects.first().worktree)
         }
         return NewSessionAction.PresentPicker
+    }
+
+    fun terminalAction(
+        projects: List<Project>,
+        selectedFilterId: String,
+    ): TerminalAction {
+        if (projects.isEmpty()) {
+            return TerminalAction.None
+        }
+        val selected = projects.firstOrNull { it.worktree == selectedFilterId }
+        if (selected != null) {
+            return TerminalAction.Open(selected.worktree, selected.title)
+        }
+        if (projects.size == 1) {
+            val project = projects.first()
+            return TerminalAction.Open(project.worktree, project.title)
+        }
+        return TerminalAction.Snack
     }
 
     fun newSessionLongPressAction(

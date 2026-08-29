@@ -99,6 +99,7 @@ import dev.opencode.mobile.ui.settings.SettingsViewModel
 import dev.opencode.mobile.ui.settings.TextMateLanguagesRoute
 import dev.opencode.mobile.ui.settings.TextMateLogbookScreen
 import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
+import dev.opencode.mobile.ui.terminal.TerminalScreen
 
 @Composable
 fun MainNavigation() {
@@ -124,6 +125,7 @@ fun MainNavigation() {
                 is SessionContext,
                 is Changes,
                 is SessionToolGroup,
+                is Terminal,
                 -> backStack.removeLastOrNull()
                 else -> break
             }
@@ -201,6 +203,14 @@ fun MainNavigation() {
                                             )
                                             MainScreen(
                                                 onSettingsClick = { backStack.add(SettingsHome) },
+                                                onTerminalClick = { worktree, projectTitle ->
+                                                    backStack.add(
+                                                        Terminal(
+                                                            worktree = worktree,
+                                                            projectTitle = projectTitle,
+                                                        ),
+                                                    )
+                                                },
                                                 onSessionClick = { target ->
                                                     backStack.add(
                                                         SessionChat(
@@ -459,6 +469,18 @@ fun MainNavigation() {
                                                     }
                                                 }
                                             }
+                                        }
+                                    }
+                                    entry<Terminal> { key ->
+                                        RouteSurface {
+                                            ProductRouteScreenViewEffect(
+                                                screenId = ProductAnalytics.Screen.TERMINAL,
+                                            )
+                                            TerminalScreen(
+                                                worktree = key.worktree,
+                                                projectTitle = key.projectTitle,
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                            )
                                         }
                                     }
                                     entry<SessionChat> { key ->

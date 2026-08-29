@@ -51,6 +51,7 @@ object ProductAnalytics {
         const val HOME_FORK_RESULT = "home_fork_result"
         const val HOME_DELETE_SESSION_CONFIRM = "home_delete_session_confirm"
         const val HOME_REMOVE_PROJECT_CONFIRM = "home_remove_project_confirm"
+        const val TERMINAL = "terminal"
         const val SESSION_CHAT = "session_chat"
         const val SESSION_OVERFLOW = "session_overflow"
         const val SESSION_COMMANDS = "session_commands"
@@ -88,6 +89,7 @@ object ProductAnalytics {
 
         // Home
         const val HOME_OPEN_SETTINGS = "home_open_settings"
+        const val HOME_OPEN_TERMINAL = "home_open_terminal"
         const val HOME_PULL_TO_REFRESH = "home_pull_to_refresh"
         const val HOME_OPEN_SESSION = "home_open_session"
         const val HOME_LONG_PRESS_SESSION = "home_long_press_session"

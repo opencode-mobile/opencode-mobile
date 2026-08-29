@@ -24,6 +24,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case moreVert = "md_more_vert"
     case search = "md_search"
     case settings = "md_settings"
+    case terminal = "md_terminal"
     case architecture = "md_architecture"
     case archive = "md_archive"
     case cloud = "md_cloud"

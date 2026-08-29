@@ -49,6 +49,7 @@ enum ProductAnalytics {
         static let homeForkResult = "home_fork_result"
         static let homeDeleteSessionConfirm = "home_delete_session_confirm"
         static let homeRemoveProjectConfirm = "home_remove_project_confirm"
+        static let terminal = "terminal"
         static let sessionChat = "session_chat"
         static let sessionOverflow = "session_overflow"
         static let sessionCommands = "session_commands"
@@ -84,6 +85,7 @@ enum ProductAnalytics {
         static let setupGuideOpenDocs = "setup_guide_open_docs"
 
         static let homeOpenSettings = "home_open_settings"
+        static let homeOpenTerminal = "home_open_terminal"
         static let homePullToRefresh = "home_pull_to_refresh"
         static let homeOpenSession = "home_open_session"
         static let homeLongPressSession = "home_long_press_session"

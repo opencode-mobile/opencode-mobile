@@ -97,6 +97,42 @@ struct SessionListHomeChromeTests {
         )
     }
 
+    @Test func terminalAction_zeroProjectsDoesNothing() {
+        #expect(
+            SessionListHomeChrome.terminalAction(
+                projects: [],
+                selectedFilterId: SessionListFilterTab.allId
+            ) == .none
+        )
+    }
+
+    @Test func terminalAction_oneProjectOpensEvenWhenAllIdStored() {
+        #expect(
+            SessionListHomeChrome.terminalAction(
+                projects: [mobile],
+                selectedFilterId: SessionListFilterTab.allId
+            ) == .open(worktree: "/repo", projectTitle: "opencode-mobile")
+        )
+    }
+
+    @Test func terminalAction_scopedProjectOpensThere() {
+        #expect(
+            SessionListHomeChrome.terminalAction(
+                projects: [mobile, playground],
+                selectedFilterId: "/play"
+            ) == .open(worktree: "/play", projectTitle: "playground")
+        )
+    }
+
+    @Test func terminalAction_allSelectedWithTwoProjectsSnacks() {
+        #expect(
+            SessionListHomeChrome.terminalAction(
+                projects: [mobile, playground],
+                selectedFilterId: SessionListFilterTab.allId
+            ) == .snack
+        )
+    }
+
     @Test func newSessionLongPressAction_chipChromeDoesNothing() {
         #expect(
             SessionListHomeChrome.newSessionLongPressAction(

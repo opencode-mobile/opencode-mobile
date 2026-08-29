@@ -25,6 +25,11 @@ import kotlinx.serialization.Serializable
     val entryId: ComponentGalleryEntryId,
 ) : NavKey
 
+@Serializable data class Terminal(
+    val worktree: String,
+    val projectTitle: String,
+) : NavKey
+
 @Serializable data class SessionChat(
     val sessionId: String,
     val sessionTitle: String,
