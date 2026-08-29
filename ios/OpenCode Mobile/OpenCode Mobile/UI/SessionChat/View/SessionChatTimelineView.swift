@@ -132,6 +132,7 @@ private struct SessionChatTimelineReadyView: View {
     @State private var sessionTodosPillTotalCount = 1
     @State private var sessionTodosPillActivePreview: String?
     @State private var previousWorkingIndicatorLabel: String?
+    @State private var topOverlayInset: CGFloat = 0
 
     private var showScrollToEnd: Bool {
         scrollController.shouldShowScrollToEnd
@@ -180,7 +181,8 @@ private struct SessionChatTimelineReadyView: View {
                 onRefresh: props.onRefresh,
                 onUserScrollDismissKeyboard: props.onUserScrollDismissKeyboard,
                 bottomContentPadding: 0,
-                bottomOverlayInset: props.bottomOverlayInset
+                bottomOverlayInset: props.bottomOverlayInset,
+                topOverlayInset: topOverlayInset
             ) { message in
                 SessionChatTimelineHostRow(
                     message: message,
@@ -204,7 +206,19 @@ private struct SessionChatTimelineReadyView: View {
                 if showTopOverlayStack {
                     topOverlayContent
                         .padding(.top, 10)
+                        .background {
+                            GeometryReader { geometry in
+                                Color.clear
+                                    .onAppear { updateMeasuredTopOverlayInset(geometry.size.height) }
+                                    .onChange(of: geometry.size.height) { _, height in
+                                        updateMeasuredTopOverlayInset(height)
+                                    }
+                            }
+                        }
                 }
+            }
+            .onChange(of: showTopOverlayStack) { _, visible in
+                if !visible { updateMeasuredTopOverlayInset(0) }
             }
             .onChange(of: props.timelineFrame.frameRevision) { _, rev in
                 let layoutIDs = props.timelineFrame.layoutAffectingRowIDs
@@ -296,6 +310,12 @@ private struct SessionChatTimelineReadyView: View {
         sessionTodosPillCompletedCount = props.sessionTodoCompletedCount
         sessionTodosPillTotalCount = totalCount
         sessionTodosPillActivePreview = props.sessionTodoActivePreview
+    }
+
+    private func updateMeasuredTopOverlayInset(_ height: CGFloat) {
+        let inset = max(0, height)
+        guard abs(topOverlayInset - inset) > 0.5 else { return }
+        topOverlayInset = inset
     }
 }
 
