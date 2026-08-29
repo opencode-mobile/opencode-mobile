@@ -1140,16 +1140,18 @@ final class SessionChatViewModel {
         let sessionStatusLabel =
             isCompacting ? SessionCompactChrome.statusLabel : infoState.sessionStatusLabel
         let awaitingUser = !permissionRequests.isEmpty || !questionRequests.isEmpty
+        let lastIsThinking = WorkingTurnIndicator.lastIsThinking(messages: timelineState.messages)
         let workingIndicatorLabel = WorkingTurnIndicator.labelForActiveTurn(
             statusLabel: sessionStatusLabel,
             isCompacting: isCompacting,
-            isAwaitingUser: awaitingUser
+            isAwaitingUser: awaitingUser,
+            lastIsThinking: lastIsThinking
         )
         if !loggedWorkingLamp || lastWorkingLamp != workingIndicatorLabel {
             loggedWorkingLamp = true
             lastWorkingLamp = workingIndicatorLabel
             OpenCodeLog.sessionChat.info(
-                "workingLamp label=\(workingIndicatorLabel ?? "none", privacy: .public) status=\(sessionStatusLabel ?? "none", privacy: .public) awaitingUser=\(awaitingUser ? 1 : 0)"
+                "workingLamp label=\(workingIndicatorLabel ?? "none", privacy: .public) status=\(sessionStatusLabel ?? "none", privacy: .public) awaitingUser=\(awaitingUser ? 1 : 0) lastIsThinking=\(lastIsThinking ? 1 : 0)"
             )
         }
         uiState = SessionChatUiState(
