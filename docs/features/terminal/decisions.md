@@ -1,0 +1,17 @@
+# Terminal — Decisions
+
+Still binding:
+
+- Talk to the server PTY API. Do not use `POST /session/{id}/shell`, the
+  Session Chat bash sheet, or `/tui/*`.
+- Terminal is scoped to an added project, not to a session. Do not open it
+  from Session Chat.
+- One running PTY per worktree. Reuse it. Do not ship a list or tabs.
+- Leave and background disconnect I/O only. Do not `DELETE /pty/{id}` in
+  this slice.
+- Bundled xterm.js in a local WebView. Native markdown already rejected
+  WebView for document layout; a VT emulator is a different job. Do not
+  pull ghostty-web.
+- Dual remotes. Feature UI stays on `TerminalSession`, never on wire
+  schemas or a v1/v2 screen fork.
+- Do not persist emulator scrollback in SwiftData or Room.

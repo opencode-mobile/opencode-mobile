@@ -22,6 +22,7 @@ Do not add `progress.md`, ticket plans, or research dumps.
 | [reactive-data-layer](reactive-data-layer/plan.md) | World signals, interest, store catch-up |
 | [server-api-v2](server-api-v2/plan.md) | Dual-stack + TUI v2 projection |
 | [native-rendered-markdown](native-rendered-markdown/plan.md) | Shared highlighter |
+| [terminal](terminal/plan.md) | Project-scoped server shell |
 | [ci-pr-gating](ci-pr-gating/plan.md) | Checks / `ruleset.md` |
 | [android-release-distribution](android-release-distribution/operator-runbook.md) | Play / Firebase runbook |
 | [ios-release-distribution](ios-release-distribution/operator-runbook.md) | TestFlight / Firebase runbook |
