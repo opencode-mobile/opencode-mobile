@@ -58,6 +58,10 @@ struct OpenCodeButton: View {
 
     private var longPressExclusiveTap: some Gesture {
         LongPressGesture(minimumDuration: 0.4)
+            .onChanged { _ in
+                guard enabled else { return }
+                OpenCodeHaptics.prepareContextAction()
+            }
             .onEnded { _ in
                 guard enabled, let longPress else { return }
                 OpenCodeHaptics.contextAction()

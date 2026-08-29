@@ -60,7 +60,6 @@ struct OpenCodeListItem<Trailing: View>: View {
 
     @State private var isPressing = false
     @State private var popScale: CGFloat = 1
-    @State private var contextActionHapticTick = 0
 
     init(
         title: String,
@@ -115,17 +114,20 @@ struct OpenCodeListItem<Trailing: View>: View {
                                 pressing: { pressing in
                                     guard enabled else { return }
                                     isPressing = pressing
+                                    if pressing {
+                                        OpenCodeHaptics.prepareContextAction()
+                                    }
                                 },
                                 perform: {
                                     guard enabled else { return }
                                     isPressing = false
                                     triggerContextActionPop()
+                                    OpenCodeHaptics.contextAction()
                                     onLongPress()
                                 }
                             )
                     }
                     .allowsHitTesting(enabled)
-                    .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.9), trigger: contextActionHapticTick)
             } else if let action {
                 Button(action: action) {
                     content
@@ -152,7 +154,6 @@ struct OpenCodeListItem<Trailing: View>: View {
     }
 
     private func triggerContextActionPop() {
-        contextActionHapticTick &+= 1
         popScale = listItemPressedScale
         withAnimation(listItemPopAnimation) {
             popScale = listItemPopPeakScale

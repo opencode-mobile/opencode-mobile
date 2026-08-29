@@ -20,6 +20,11 @@ struct OpenCode_MobileApp: App {
         WindowGroup {
             rootView
                 .openCodeTheme()
+                .background {
+                    OpenCodeHapticAnchor()
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
         }
     }
 
