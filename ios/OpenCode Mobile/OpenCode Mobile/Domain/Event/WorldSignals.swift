@@ -29,16 +29,41 @@ extension WorldSignals {
 nonisolated final class SilentWorldSignals: WorldSignals, @unchecked Sendable {
     static let shared = SilentWorldSignals()
 
+    private let lock = NSLock()
+    private var signalContinuations: [UUID: AsyncStream<WorldSignal>.Continuation] = [:]
+    private var occupancyContinuations: [UUID: AsyncStream<StreamOccupancy>.Continuation] = [:]
+
     var occupancy: StreamOccupancy { .active }
 
     func occupancyUpdates() -> AsyncStream<StreamOccupancy> {
-        AsyncStream { continuation in
+        let id = UUID()
+        return AsyncStream { continuation in
+            lock.lock()
+            occupancyContinuations[id] = continuation
+            lock.unlock()
             continuation.yield(.active)
+            continuation.onTermination = { [weak self] _ in
+                guard let self else { return }
+                self.lock.lock()
+                self.occupancyContinuations.removeValue(forKey: id)
+                self.lock.unlock()
+            }
         }
     }
 
     func signals() -> AsyncStream<WorldSignal> {
-        AsyncStream { _ in }
+        let id = UUID()
+        return AsyncStream { continuation in
+            lock.lock()
+            signalContinuations[id] = continuation
+            lock.unlock()
+            continuation.onTermination = { [weak self] _ in
+                guard let self else { return }
+                self.lock.lock()
+                self.signalContinuations.removeValue(forKey: id)
+                self.lock.unlock()
+            }
+        }
     }
 }
 
