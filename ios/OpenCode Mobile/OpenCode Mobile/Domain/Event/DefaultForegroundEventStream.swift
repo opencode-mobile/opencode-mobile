@@ -191,12 +191,9 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
 
     @discardableResult
     private func handleStreamEvent(_ event: OpencodeEvent) -> Bool {
-        switch event.type {
-        case "server.heartbeat":
-            break
-        case "message.part.delta", "message.part.updated", "message.updated", "message.removed", "message.part.removed":
-            DiagnosticLog.info(.sse, "SSE event type=\(event.type) session=\(event.sessionID ?? "-")")
-        default:
+        if let line = SseDiagnosticLogging.bufferMessage(for: event) {
+            DiagnosticLog.info(.sse, line)
+        } else if event.type != "server.heartbeat" {
             DiagnosticLog.debug(.sse, "SSE event type=\(event.type) session=\(event.sessionID ?? "-")")
         }
         switch event.type {

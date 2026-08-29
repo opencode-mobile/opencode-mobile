@@ -3,6 +3,8 @@ package dev.opencode.mobile.domain.diagnostic
 import androidx.core.util.AtomicFile
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import kotlinx.serialization.Serializable
@@ -74,10 +76,19 @@ object DiagnosticLogRedactor {
 class DiagnosticLogBuffer(
     private val file: File? = null,
     private val clockEpochMilliseconds: () -> Long = System::currentTimeMillis,
+    private val persistDelayMilliseconds: Long? = 250L,
 ) {
     private val lock = ReentrantLock()
     private val entries = ArrayDeque<DiagnosticLogEntry>()
     private var droppedBySoftCap = 0
+    private val persistExecutor =
+        Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "diagnostic-log").apply { isDaemon = true }
+        }
+
+    @Volatile
+    private var persistGeneration = 0L
+    private var persistScheduled = false
 
     init {
         if (file != null) {
@@ -97,20 +108,21 @@ class DiagnosticLogBuffer(
                 level = level.wireValue,
                 message = DiagnosticLogRedactor.redact(message),
             )
-        lock.withLock {
-            entries.addLast(entry)
-            evictLocked(now = entry.timestampEpochMilliseconds)
-            persistLocked()
-        }
+        val shouldSchedule =
+            lock.withLock {
+                entries.addLast(entry)
+                evictLocked(now = entry.timestampEpochMilliseconds)
+                val schedule = file != null && persistDelayMilliseconds != null && !persistScheduled
+                if (schedule) persistScheduled = true
+                schedule
+            }
+        if (shouldSchedule) schedulePersist()
     }
 
     fun snapshot(): DiagnosticLogSnapshot =
         lock.withLock {
             val now = clockEpochMilliseconds()
-            val changed = evictLocked(now = now)
-            if (changed) {
-                persistLocked()
-            }
+            evictLocked(now = now)
             DiagnosticLogSnapshot(
                 entries = entries.toList(),
                 droppedBySoftCap = droppedBySoftCap,
@@ -119,12 +131,21 @@ class DiagnosticLogBuffer(
             )
         }
 
+    fun flushPersisted() {
+        persistExecutor.submit { writeOnPersistThread() }.get()
+    }
+
     fun clear() {
-        lock.withLock {
-            entries.clear()
-            droppedBySoftCap = 0
-            clearPersistedLocked()
-        }
+        persistExecutor
+            .submit {
+                lock.withLock {
+                    entries.clear()
+                    droppedBySoftCap = 0
+                    persistScheduled = false
+                    persistGeneration++
+                }
+                clearPersistedLocked()
+            }.get()
     }
 
     fun exportJsonl(): String {
@@ -186,25 +207,47 @@ class DiagnosticLogBuffer(
         entries.clear()
         entries.addAll(loaded)
         droppedBySoftCap = 0
-        val changed = evictLocked(now = clockEpochMilliseconds())
-        if (changed) {
-            persistLocked()
-        }
+        evictLocked(now = clockEpochMilliseconds())
     }
 
-    private fun persistLocked() {
+    private fun schedulePersist() {
+        val delay = persistDelayMilliseconds ?: return
+        persistExecutor.schedule({ writeOnPersistThread() }, delay, TimeUnit.MILLISECONDS)
+    }
+
+    private fun writeOnPersistThread() {
+        val snapshot: List<DiagnosticLogEntry>
+        val generation: Long
+        lock.withLock {
+            snapshot = entries.toList()
+            persistScheduled = false
+            persistGeneration++
+            generation = persistGeneration
+        }
+        writeEntries(snapshot, generation)
+    }
+
+    private fun writeEntries(
+        snapshot: List<DiagnosticLogEntry>,
+        generation: Long,
+    ) {
         val store = file ?: return
         runCatching {
+            val data =
+                buildString {
+                    snapshot.forEach { entry ->
+                        append(json.encodeToString(entry))
+                        append('\n')
+                    }
+                }.toByteArray()
+            lock.withLock {
+                if (generation != persistGeneration) return
+            }
             store.parentFile?.mkdirs()
             val atomicFile = AtomicFile(store)
             val output = atomicFile.startWrite()
             try {
-                val writer = output.bufferedWriter()
-                entries.forEach { entry ->
-                    writer.append(json.encodeToString(entry))
-                    writer.newLine()
-                }
-                writer.flush()
+                output.write(data)
                 atomicFile.finishWrite(output)
             } catch (failure: Throwable) {
                 atomicFile.failWrite(output)
@@ -243,8 +286,8 @@ class DiagnosticLogBuffer(
             entries.clear()
             entries.addAll(merged)
             evictLocked(now = clockEpochMilliseconds())
-            persistLocked()
         }
+        flushPersisted()
     }
 
     companion object {

@@ -94,15 +94,21 @@ nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
     private var droppedBySoftCap = 0
     private let clock: () -> Int64
     private let fileURL: URL?
+    private let persistDelayMilliseconds: Int?
+    private let persistQueue = DispatchQueue(label: "dev.opencode.mobile.diagnostic-log")
+    private var persistGeneration: UInt64 = 0
+    private var persistScheduled = false
 
     init(
         fileURL: URL? = nil,
         clock: @escaping () -> Int64 = {
             Int64(Date().timeIntervalSince1970 * 1_000)
-        }
+        },
+        persistDelayMilliseconds: Int? = 250
     ) {
         self.fileURL = fileURL
         self.clock = clock
+        self.persistDelayMilliseconds = persistDelayMilliseconds
         if fileURL != nil {
             loadFromDiskUnlocked()
         }
@@ -116,20 +122,23 @@ nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
             message: DiagnosticLogRedactor.redact(message)
         )
         lock.lock()
-        defer { lock.unlock() }
         entries.append(entry)
         evictLocked(now: entry.timestampEpochMilliseconds)
-        persistLocked()
+        let shouldSchedule = fileURL != nil && persistDelayMilliseconds != nil && !persistScheduled
+        if shouldSchedule {
+            persistScheduled = true
+        }
+        lock.unlock()
+        if shouldSchedule {
+            schedulePersist()
+        }
     }
 
     func snapshot() -> DiagnosticLogSnapshot {
         lock.lock()
         defer { lock.unlock() }
         let now = clock()
-        let changed = evictLocked(now: now)
-        if changed {
-            persistLocked()
-        }
+        _ = evictLocked(now: now)
         return DiagnosticLogSnapshot(
             entries: entries,
             droppedBySoftCap: droppedBySoftCap,
@@ -138,12 +147,20 @@ nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
         )
     }
 
+    func flushPersisted() {
+        persistQueue.sync { writeOnPersistQueue() }
+    }
+
     func clear() {
-        lock.lock()
-        defer { lock.unlock() }
-        entries.removeAll(keepingCapacity: true)
-        droppedBySoftCap = 0
-        clearPersistedLocked()
+        persistQueue.sync {
+            self.lock.lock()
+            self.entries.removeAll(keepingCapacity: true)
+            self.droppedBySoftCap = 0
+            self.persistScheduled = false
+            self.persistGeneration += 1
+            self.lock.unlock()
+            self.clearPersistedLocked()
+        }
     }
 
     func exportJSONL() throws -> Data {
@@ -198,9 +215,6 @@ nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
             entries = loaded
             droppedBySoftCap = 0
             _ = evictLocked(now: clock())
-            if entries.count != loaded.count {
-                persistLocked()
-            }
         } catch {
             // Leave memory empty when the store is unreadable; next append recreates it.
             entries = []
@@ -208,14 +222,39 @@ nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
         }
     }
 
-    private func persistLocked() {
+    private func schedulePersist() {
+        guard let delay = persistDelayMilliseconds else { return }
+        persistQueue.asyncAfter(deadline: .now() + .milliseconds(delay)) { [weak self] in
+            self?.writeOnPersistQueue()
+        }
+    }
+
+    private func writeOnPersistQueue() {
+        guard fileURL != nil else { return }
+        let snapshot: [DiagnosticLogEntry]
+        let generation: UInt64
+        lock.lock()
+        snapshot = entries
+        persistScheduled = false
+        persistGeneration += 1
+        generation = persistGeneration
+        lock.unlock()
+        writeEntries(snapshot, generation: generation)
+    }
+
+    private func writeEntries(_ entries: [DiagnosticLogEntry], generation: UInt64) {
         guard let fileURL else { return }
         do {
+            let data = try Self.encodedLines(entries)
+            lock.lock()
+            let stale = generation != persistGeneration
+            lock.unlock()
+            if stale { return }
             try FileManager.default.createDirectory(
                 at: fileURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            try Self.encodedLines(entries).write(to: fileURL, options: .atomic)
+            try data.write(to: fileURL, options: .atomic)
         } catch {
             // Persistence is best-effort; in-memory window remains authoritative for this process.
         }

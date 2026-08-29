@@ -23,7 +23,9 @@ nonisolated enum DiagnosticLog {
 
     private static func write(area: DiagnosticLogArea, level: DiagnosticLogLevel, message: String) {
         let redacted = DiagnosticLogRedactor.redact(message)
-        DiagnosticLogBuffer.shared.append(area: area, level: level, message: redacted)
+        if level != .debug {
+            DiagnosticLogBuffer.shared.append(area: area, level: level, message: redacted)
+        }
         let logger = Logger(subsystem: subsystem, category: area.rawValue)
         switch level {
         case .debug:
