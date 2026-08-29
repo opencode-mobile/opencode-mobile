@@ -78,6 +78,26 @@ struct DiagnosticLogBufferTests {
         #expect(text.contains("[REDACTED]"))
     }
 
+    @Test func appendDoesNotPersistSynchronously() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("diagnostic-logs-async-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("diagnostic-logs-v1.jsonl")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let buffer = DiagnosticLogBuffer(fileURL: file, clock: { 99 }, persistDelayMilliseconds: nil)
+        for index in 0 ..< 50 {
+            buffer.append(area: .sse, level: .info, message: "delta-\(index)")
+        }
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+        #expect(buffer.snapshot().entries.count == 50)
+
+        buffer.flushPersisted()
+        #expect(FileManager.default.fileExists(atPath: file.path))
+        let reopened = DiagnosticLogBuffer(fileURL: file, clock: { 99 })
+        #expect(reopened.snapshot().entries.count == 50)
+    }
+
     @Test func persistsAcrossRelaunchWithinWindow() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("diagnostic-logs-\(UUID().uuidString)", isDirectory: true)
@@ -89,6 +109,7 @@ struct DiagnosticLogBufferTests {
         let first = DiagnosticLogBuffer(fileURL: file, clock: { now })
         first.append(area: .sse, level: .info, message: "before restart")
         first.append(area: .session, level: .warning, message: "busy stuck")
+        first.flushPersisted()
 
         let reopened = DiagnosticLogBuffer(fileURL: file, clock: { now })
         #expect(reopened.snapshot().entries.map(\.message) == ["before restart", "busy stuck"])
@@ -108,6 +129,7 @@ struct DiagnosticLogBufferTests {
 
         let buffer = DiagnosticLogBuffer(fileURL: file, clock: { 99 })
         buffer.append(area: .permission, level: .info, message: "pending count=1")
+        buffer.flushPersisted()
         #expect(FileManager.default.fileExists(atPath: file.path))
 
         buffer.clear()

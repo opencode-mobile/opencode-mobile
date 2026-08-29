@@ -88,6 +88,28 @@ class DiagnosticLogBufferTest {
     }
 
     @Test
+    fun appendDoesNotPersistSynchronously() {
+        val directory = Files.createTempDirectory("diagnostic-logs-async").toFile()
+        val file = DiagnosticLogBuffer.fileIn(directory)
+        val buffer =
+            DiagnosticLogBuffer(
+                file = file,
+                clockEpochMilliseconds = { 99L },
+                persistDelayMilliseconds = null,
+            )
+        repeat(50) { index ->
+            buffer.append(DiagnosticLogArea.Sse, DiagnosticLogLevel.Info, "delta-$index")
+        }
+        assertFalse(file.exists())
+        assertEquals(50, buffer.snapshot().entries.size)
+
+        buffer.flushPersisted()
+        assertTrue(file.exists())
+        val reopened = DiagnosticLogBuffer(file = file, clockEpochMilliseconds = { 99L })
+        assertEquals(50, reopened.snapshot().entries.size)
+    }
+
+    @Test
     fun persistsAcrossRelaunchWithinWindow() {
         val directory = Files.createTempDirectory("diagnostic-logs-persist").toFile()
         val file = DiagnosticLogBuffer.fileIn(directory)
@@ -96,6 +118,7 @@ class DiagnosticLogBufferTest {
         val first = DiagnosticLogBuffer(file = file, clockEpochMilliseconds = { now })
         first.append(DiagnosticLogArea.Sse, DiagnosticLogLevel.Info, "before restart")
         first.append(DiagnosticLogArea.Session, DiagnosticLogLevel.Warning, "busy stuck")
+        first.flushPersisted()
 
         val reopened = DiagnosticLogBuffer(file = file, clockEpochMilliseconds = { now })
         assertEquals(
@@ -115,6 +138,7 @@ class DiagnosticLogBufferTest {
         val file = DiagnosticLogBuffer.fileIn(directory)
         val buffer = DiagnosticLogBuffer(file = file, clockEpochMilliseconds = { 99L })
         buffer.append(DiagnosticLogArea.Permission, DiagnosticLogLevel.Info, "pending count=1")
+        buffer.flushPersisted()
         assertTrue(file.exists())
 
         buffer.clear()
@@ -140,11 +164,14 @@ class DiagnosticLogBufferTest {
             )
 
             // Prior session residue on disk (separate writer, same clock).
-            DiagnosticLogBuffer(file = file, clockEpochMilliseconds = { now }).append(
+            val previous =
+                DiagnosticLogBuffer(file = file, clockEpochMilliseconds = { now })
+            previous.append(
                 DiagnosticLogArea.Session,
                 DiagnosticLogLevel.Warning,
                 "from previous process",
             )
+            previous.flushPersisted()
 
             val bound =
                 DiagnosticLogBuffer(

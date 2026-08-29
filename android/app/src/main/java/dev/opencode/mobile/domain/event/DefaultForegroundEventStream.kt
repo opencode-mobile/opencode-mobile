@@ -157,10 +157,15 @@ class DefaultForegroundEventStream
                                                             return@streamEvents
                                                         }
                                                         for (event in parsed) {
-                                                            diagnosticLogger.debug(
-                                                                DiagnosticLogArea.Sse,
-                                                                "SSE event type=${event.type} session=${event.sessionId ?: "-"}",
-                                                            )
+                                                            val bufferLine = SseDiagnosticLogging.bufferMessage(event)
+                                                            if (bufferLine != null) {
+                                                                diagnosticLogger.info(DiagnosticLogArea.Sse, bufferLine)
+                                                            } else if (event.type != "server.heartbeat") {
+                                                                diagnosticLogger.debug(
+                                                                    DiagnosticLogArea.Sse,
+                                                                    "SSE event type=${event.type} session=${event.sessionId ?: "-"}",
+                                                                )
+                                                            }
                                                             when (event.type) {
                                                                 "server.connected" -> {
                                                                     markStreamConnected()

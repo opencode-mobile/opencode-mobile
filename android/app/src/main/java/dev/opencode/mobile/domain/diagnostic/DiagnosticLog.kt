@@ -44,7 +44,9 @@ object DiagnosticLog {
         throwable: Throwable? = null,
     ) {
         val redacted = DiagnosticLogRedactor.redact(message)
-        DiagnosticLogBuffer.shared.append(area = area, level = level, message = redacted)
+        if (level != DiagnosticLogLevel.Debug) {
+            DiagnosticLogBuffer.shared.append(area = area, level = level, message = redacted)
+        }
         val tag = "OpenCode.${area.wireValue}"
         runCatching {
             when (level) {

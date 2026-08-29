@@ -1,0 +1,68 @@
+package dev.opencode.mobile.domain.event
+
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+class SseDiagnosticLoggingTest {
+    @Test
+    fun bufferMessage_skipsMessageParts() {
+        assertNull(
+            SseDiagnosticLogging.bufferMessage(
+                OpencodeEvent(type = "message.part.delta", sessionId = "ses-1"),
+            ),
+        )
+        assertNull(
+            SseDiagnosticLogging.bufferMessage(
+                OpencodeEvent(type = "message.part.updated", sessionId = "ses-1"),
+            ),
+        )
+        assertNull(
+            SseDiagnosticLogging.bufferMessage(
+                OpencodeEvent(type = "message.updated", sessionId = "ses-1"),
+            ),
+        )
+    }
+
+    @Test
+    fun bufferMessage_recordsStatusMetadata() {
+        val event =
+            OpencodeEvent(
+                type = "session.status",
+                sessionId = "ses-1",
+                rawProperties =
+                    buildJsonObject {
+                        put(
+                            "status",
+                            buildJsonObject { put("type", "busy") },
+                        )
+                    },
+            )
+        assertEquals(
+            "SSE event type=session.status session=ses-1 status=busy",
+            SseDiagnosticLogging.bufferMessage(event),
+        )
+    }
+
+    @Test
+    fun bufferMessage_recordsIdleAndError() {
+        assertEquals(
+            "SSE event type=session.idle session=ses-1",
+            SseDiagnosticLogging.bufferMessage(
+                OpencodeEvent(type = "session.idle", sessionId = "ses-1"),
+            ),
+        )
+        val error =
+            OpencodeEvent(
+                type = "session.error",
+                sessionId = "ses-1",
+                rawProperties = buildJsonObject { put("message", "model overloaded") },
+            )
+        assertEquals(
+            "SSE event type=session.error session=ses-1 error=model overloaded",
+            SseDiagnosticLogging.bufferMessage(error),
+        )
+    }
+}
