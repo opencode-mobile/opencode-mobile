@@ -65,4 +65,54 @@ class SseDiagnosticLoggingTest {
             SseDiagnosticLogging.bufferMessage(error),
         )
     }
+
+    @Test
+    fun bufferMessage_sessionErrorSkipsNonPrimitiveFields() {
+        val error =
+            OpencodeEvent(
+                type = "session.error",
+                sessionId = "ses-1",
+                rawProperties =
+                    buildJsonObject {
+                        put(
+                            "error",
+                            buildJsonObject {
+                                put(
+                                    "data",
+                                    buildJsonObject {
+                                        put("message", buildJsonObject { put("code", "x") })
+                                    },
+                                )
+                                put("message", "model overloaded")
+                            },
+                        )
+                    },
+            )
+        assertEquals(
+            "SSE event type=session.error session=ses-1 error=model overloaded",
+            SseDiagnosticLogging.bufferMessage(error),
+        )
+    }
+
+    @Test
+    fun bufferMessage_sessionStatusSkipsNonPrimitiveType() {
+        val event =
+            OpencodeEvent(
+                type = "session.status",
+                sessionId = "ses-1",
+                rawProperties =
+                    buildJsonObject {
+                        put(
+                            "status",
+                            buildJsonObject {
+                                put("type", buildJsonObject { put("nested", true) })
+                            },
+                        )
+                    },
+            )
+        assertEquals(
+            "SSE event type=session.status session=ses-1 status=-",
+            SseDiagnosticLogging.bufferMessage(event),
+        )
+    }
 }

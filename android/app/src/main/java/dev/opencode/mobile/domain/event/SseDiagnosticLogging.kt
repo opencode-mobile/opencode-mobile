@@ -1,8 +1,8 @@
 package dev.opencode.mobile.domain.event
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 object SseDiagnosticLogging {
     fun bufferMessage(event: OpencodeEvent): String? =
@@ -31,17 +31,17 @@ object SseDiagnosticLogging {
 
 private fun JsonObject?.statusType(): String? {
     val status = this?.get("status") as? JsonObject ?: return null
-    return status["type"]?.jsonPrimitive?.contentOrNull
+    return (status["type"] as? JsonPrimitive)?.contentOrNull
 }
 
 private fun JsonObject?.errorMessage(): String? {
     val error = this?.get("error") as? JsonObject
     val data = error?.get("data") as? JsonObject
-    return listOf(
-        data?.get("message")?.jsonPrimitive?.contentOrNull,
-        error?.get("message")?.jsonPrimitive?.contentOrNull,
-        this?.get("message")?.jsonPrimitive?.contentOrNull,
-        error?.get("name")?.jsonPrimitive?.contentOrNull,
-        error?.get("type")?.jsonPrimitive?.contentOrNull,
+    return sequenceOf(
+        (data?.get("message") as? JsonPrimitive)?.contentOrNull,
+        (error?.get("message") as? JsonPrimitive)?.contentOrNull,
+        (this?.get("message") as? JsonPrimitive)?.contentOrNull,
+        (error?.get("name") as? JsonPrimitive)?.contentOrNull,
+        (error?.get("type") as? JsonPrimitive)?.contentOrNull,
     ).firstOrNull { !it.isNullOrEmpty() }
 }
