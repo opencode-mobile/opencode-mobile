@@ -113,6 +113,17 @@ final class SessionChatCommands {
         notifyChange()
     }
 
+    func consumePendingTerminalOpen() {
+        state.pendingTerminalOpen = nil
+        notifyChange()
+    }
+
+    func runTerminal(projectTitle: String) {
+        dismissCommands()
+        state.pendingTerminalOpen = PendingTerminalOpen(worktree: worktree, projectTitle: projectTitle)
+        notifyChange()
+    }
+
     func runNew() {
         dismissCommands()
         state.actionErrorMessage = nil

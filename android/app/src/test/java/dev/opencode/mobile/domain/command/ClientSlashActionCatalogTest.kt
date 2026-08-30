@@ -17,7 +17,7 @@ class ClientSlashActionCatalogTest {
                     hasSelectedComposerModel = false,
                 ),
             )
-        assertEquals(listOf(ClientSlashAction.New), visible)
+        assertEquals(listOf(ClientSlashAction.New, ClientSlashAction.Terminal), visible)
     }
 
     @Test
@@ -32,7 +32,12 @@ class ClientSlashActionCatalogTest {
                 ),
             )
         assertEquals(
-            listOf(ClientSlashAction.New, ClientSlashAction.Fork, ClientSlashAction.Undo),
+            listOf(
+                ClientSlashAction.New,
+                ClientSlashAction.Terminal,
+                ClientSlashAction.Fork,
+                ClientSlashAction.Undo,
+            ),
             visible,
         )
     }
@@ -51,6 +56,7 @@ class ClientSlashActionCatalogTest {
         assertEquals(
             listOf(
                 ClientSlashAction.New,
+                ClientSlashAction.Terminal,
                 ClientSlashAction.Fork,
                 ClientSlashAction.Undo,
                 ClientSlashAction.Compact,
@@ -70,7 +76,10 @@ class ClientSlashActionCatalogTest {
                     hasSelectedComposerModel = true,
                 ),
             )
-        assertEquals(listOf(ClientSlashAction.New, ClientSlashAction.Redo), visible)
+        assertEquals(
+            listOf(ClientSlashAction.New, ClientSlashAction.Terminal, ClientSlashAction.Redo),
+            visible,
+        )
     }
 
     @Test
@@ -80,6 +89,7 @@ class ClientSlashActionCatalogTest {
         assertEquals("[undo] Undo last message", ClientSlashAction.Undo.rowTitle)
         assertEquals("[redo] Redo undone message", ClientSlashAction.Redo.rowTitle)
         assertEquals("[compact] Compact session context", ClientSlashAction.Compact.rowTitle)
+        assertEquals("[terminal] Open project shell", ClientSlashAction.Terminal.rowTitle)
     }
 
     @Test

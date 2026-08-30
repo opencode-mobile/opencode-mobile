@@ -94,6 +94,7 @@ fun SessionChatScreen(
     onChildSessionClick: (ChildSessionNavigationTarget) -> Unit = {},
     onToolGroupClick: (SessionToolGroup) -> Unit = {},
     onSessionReplaceRequested: (ChildSessionNavigationTarget) -> Unit = {},
+    onTerminalRequested: (worktree: String, projectTitle: String) -> Unit = { _, _ -> },
     viewModel: SessionChatViewModel =
         hiltViewModel(
             key = sessionChatViewModelKey(sessionId, worktree, optimisticNavigationInstanceId),
@@ -203,6 +204,13 @@ fun SessionChatScreen(
         uiState.pendingSessionReplace?.let { target ->
             onSessionReplaceRequested(target)
             viewModel.consumePendingSessionReplace()
+        }
+    }
+
+    LaunchedEffect(uiState.pendingTerminalOpen) {
+        uiState.pendingTerminalOpen?.let { target ->
+            onTerminalRequested(target.worktree, target.projectTitle)
+            viewModel.consumePendingTerminalOpen()
         }
     }
 
@@ -852,7 +860,9 @@ fun SessionChatScreen(
         ) {
             uiState.visibleClientSlashActions.forEach { action ->
                 val requiresLive =
-                    action == ClientSlashAction.New || action == ClientSlashAction.Fork
+                    action == ClientSlashAction.New ||
+                        action == ClientSlashAction.Fork ||
+                        action == ClientSlashAction.Terminal
                 OpenCodeBottomSheetEntry(
                     title = action.rowTitle,
                     enabled =

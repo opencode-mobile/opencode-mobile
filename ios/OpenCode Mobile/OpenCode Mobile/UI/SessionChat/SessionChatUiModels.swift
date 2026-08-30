@@ -236,6 +236,7 @@ struct SessionChatUiState: Equatable {
     var forkResultVisible = false
     var forkedSessionTitle = ""
     var pendingSessionReplace: ChildSessionNavigationTarget?
+    var pendingTerminalOpen: PendingTerminalOpen?
     var hasPendingRevert = false
 
     var latestCompletedUserMessageID: String? {
@@ -544,7 +545,13 @@ struct SessionChatCommandsRegionState: Equatable {
     var actionErrorMessage: String?
     var actionSuccessMessage: String?
     var pendingSessionReplace: ChildSessionNavigationTarget?
+    var pendingTerminalOpen: PendingTerminalOpen?
     var hasPendingRevert = false
+}
+
+struct PendingTerminalOpen: Equatable {
+    let worktree: String
+    let projectTitle: String
 }
 
 struct LatestModelHint: Equatable {

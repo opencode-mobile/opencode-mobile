@@ -10,6 +10,7 @@ import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.ChildSessionNavigationTarget
+import dev.opencode.mobile.ui.sessionchat.PendingTerminalOpen
 import dev.opencode.mobile.ui.sessionchat.SessionChatCommandsRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
@@ -109,6 +110,24 @@ class SessionChatCommands(
 
     fun consumePendingSessionReplace() {
         _state.update { it.copy(pendingSessionReplace = null) }
+    }
+
+    fun consumePendingTerminalOpen() {
+        _state.update { it.copy(pendingTerminalOpen = null) }
+    }
+
+    fun runTerminal(projectTitle: String) {
+        dismissCommands()
+        val worktree = boundWorktree ?: return
+        _state.update {
+            it.copy(
+                pendingTerminalOpen =
+                    PendingTerminalOpen(
+                        worktree = worktree,
+                        projectTitle = projectTitle,
+                    ),
+            )
+        }
     }
 
     fun runNew() {

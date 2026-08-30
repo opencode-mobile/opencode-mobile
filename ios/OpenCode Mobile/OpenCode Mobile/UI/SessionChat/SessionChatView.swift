@@ -18,6 +18,7 @@ struct SessionChatView: View {
     @State private var toolDetailTarget: SessionChatToolDetailTarget?
     @State private var toolGroupTarget: SessionChatToolGroupTarget?
     @State private var childSessionTarget: ChildSessionNavigationTarget?
+    @State private var terminalRoute: TerminalRoute?
     @State private var showAttachmentSources = false
     @State private var showFilesPicker = false
     @State private var showPhotosPicker = false
@@ -367,7 +368,7 @@ struct SessionChatView: View {
         }
         .openCodeBottomSheet(isPresented: commandsSheetBinding, title: "Commands") {
             ForEach(viewModel.uiState.visibleClientSlashActions, id: \.rawValue) { action in
-                let requiresLive = action == .new || action == .fork
+                let requiresLive = action == .new || action == .fork || action == .terminal
                 OpenCodeBottomSheetEntry(
                     title: action.rowTitle,
                     enabled: !requiresLive || viewModel.uiState.canMutate,
@@ -570,6 +571,15 @@ struct SessionChatView: View {
                 childSessionTarget = target
                 viewModel.consumePendingSessionReplace()
             }
+        }
+        .onChange(of: viewModel.uiState.pendingTerminalOpen) { _, _ in
+            if let target = viewModel.uiState.pendingTerminalOpen {
+                terminalRoute = TerminalRoute(worktree: target.worktree, projectTitle: target.projectTitle)
+                viewModel.consumePendingTerminalOpen()
+            }
+        }
+        .navigationDestination(item: $terminalRoute) { route in
+            TerminalView(worktree: route.worktree, projectTitle: route.projectTitle, ptyId: route.ptyId)
         }
     }
 

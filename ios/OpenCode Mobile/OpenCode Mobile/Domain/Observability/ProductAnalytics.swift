@@ -185,6 +185,7 @@ enum ProductAnalytics {
         static let commandsUndo = "commands_undo"
         static let commandsRedo = "commands_redo"
         static let commandsCompact = "commands_compact"
+        static let commandsTerminal = "commands_terminal"
         static let attachSourceDismiss = "attach_source_dismiss"
         static let attachPickPhotos = "attach_pick_photos"
         static let attachPickFiles = "attach_pick_files"

@@ -12,7 +12,7 @@ struct ClientSlashActionCatalogTests {
                 hasSelectedComposerModel: false
             )
         )
-        #expect(visible == [.new])
+        #expect(visible == [.new, .terminal])
     }
 
     @Test func visibleActions_userMessageWithoutModel_showsNewForkUndo() {
@@ -24,7 +24,7 @@ struct ClientSlashActionCatalogTests {
                 hasSelectedComposerModel: false
             )
         )
-        #expect(visible == [.new, .fork, .undo])
+        #expect(visible == [.new, .terminal, .fork, .undo])
     }
 
     @Test func visibleActions_userMessageWithModel_includesCompact() {
@@ -36,7 +36,7 @@ struct ClientSlashActionCatalogTests {
                 hasSelectedComposerModel: true
             )
         )
-        #expect(visible == [.new, .fork, .undo, .compact])
+        #expect(visible == [.new, .terminal, .fork, .undo, .compact])
     }
 
     @Test func visibleActions_activeRevert_includesRedo() {
@@ -48,7 +48,7 @@ struct ClientSlashActionCatalogTests {
                 hasSelectedComposerModel: true
             )
         )
-        #expect(visible == [.new, .redo])
+        #expect(visible == [.new, .terminal, .redo])
     }
 
     @Test func rowTitle_matchesAllowlistCopy() {
@@ -57,6 +57,7 @@ struct ClientSlashActionCatalogTests {
         #expect(ClientSlashAction.undo.rowTitle == "[undo] Undo last message")
         #expect(ClientSlashAction.redo.rowTitle == "[redo] Redo undone message")
         #expect(ClientSlashAction.compact.rowTitle == "[compact] Compact session context")
+        #expect(ClientSlashAction.terminal.rowTitle == "[terminal] Open project shell")
     }
 
     @Test func visibilityInput_filtersMessagesAtOrAfterRevertBoundary() {

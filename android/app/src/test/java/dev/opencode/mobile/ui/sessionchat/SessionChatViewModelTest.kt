@@ -2739,13 +2739,17 @@ class SessionChatViewModelTest {
             val emptyMessages = createViewModel(FakeMessageRepository(messages = emptyList()))
             emptyMessages.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals(listOf(ClientSlashAction.New), emptyMessages.uiState.value.visibleClientSlashActions)
+            assertEquals(
+                listOf(ClientSlashAction.New, ClientSlashAction.Terminal),
+                emptyMessages.uiState.value.visibleClientSlashActions,
+            )
 
             val withMessages = createViewModel(FakeMessageRepository())
             withMessages.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
             val visible = withMessages.uiState.value.visibleClientSlashActions
             assertTrue(ClientSlashAction.New in visible)
+            assertTrue(ClientSlashAction.Terminal in visible)
             assertTrue(ClientSlashAction.Fork in visible)
             assertTrue(ClientSlashAction.Undo in visible)
             assertTrue(ClientSlashAction.Compact in visible)

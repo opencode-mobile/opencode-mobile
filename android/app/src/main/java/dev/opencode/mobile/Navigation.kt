@@ -537,6 +537,14 @@ fun MainNavigation() {
                                                 onToolGroupClick = { target ->
                                                     backStack.add(target)
                                                 },
+                                                onTerminalRequested = { worktree, projectTitle ->
+                                                    backStack.add(
+                                                        Terminal(
+                                                            worktree = worktree,
+                                                            projectTitle = projectTitle,
+                                                        ),
+                                                    )
+                                                },
                                                 onSessionReplaceRequested = { target ->
                                                     backStack.removeLastOrNull()
                                                     backStack.add(
