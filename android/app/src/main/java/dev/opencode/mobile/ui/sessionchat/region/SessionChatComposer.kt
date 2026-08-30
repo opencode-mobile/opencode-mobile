@@ -663,6 +663,8 @@ class SessionChatComposer(
         supportsFollowUp: Boolean,
     ) {
         val composer = _state.value.composer
+        val submittedText = composer.text
+        val submittedMentions = composer.agentMentions
         val (prompt, mentionsForSend) =
             ComposerMentionRouting.trimForSend(composer.text, composer.agentMentions)
         val attachments = composer.attachments
@@ -733,6 +735,10 @@ class SessionChatComposer(
                         ),
                     )
                 }
+            clearAcceptedSubmission(
+                textRevision = submittedDraftRevision,
+                submittedAttachmentRevisions = submittedAttachmentRevisions,
+            )
             _state.update {
                 it.copy(
                     isSending = true,
@@ -790,14 +796,17 @@ class SessionChatComposer(
                         }
                     }
                 }
-                clearAcceptedSubmission(
-                    textRevision = submittedDraftRevision,
-                    submittedAttachmentRevisions = submittedAttachmentRevisions,
-                )
                 persistCurrentSelection(updatePreference = false)
                 onSendAccepted()
             } catch (throwable: Throwable) {
                 logSendFailure(throwable)
+                restoreFailedSubmission(
+                    textRevision = submittedDraftRevision,
+                    submittedText = submittedText,
+                    submittedMentions = submittedMentions,
+                    submittedAttachments = attachments,
+                    submittedAttachmentRevisions = submittedAttachmentRevisions,
+                )
                 _state.update { it.copy(isSending = false) }
                 onSendFailed(display.id, errorMessage(throwable))
             }
@@ -836,6 +845,46 @@ class SessionChatComposer(
                     text = clearedText,
                     cursor = clearedCursor,
                     mentions = clearedMentions,
+                )
+        }
+        persistDraftJob?.cancel()
+        scope.launch { persistDraft(boundSessionId, boundWorktree, currentDraft()) }
+    }
+
+    private fun restoreFailedSubmission(
+        textRevision: Int,
+        submittedText: String,
+        submittedMentions: List<dev.opencode.mobile.domain.agent.AgentMention>,
+        submittedAttachments: List<Attachment>,
+        submittedAttachmentRevisions: Map<String, Int>,
+    ) {
+        submittedAttachmentRevisions.forEach { (id, revision) ->
+            if (attachmentRevisions[id] == null) {
+                attachmentRevisions[id] = revision
+            }
+        }
+        _state.update { state ->
+            val restoreText = draftRevision == textRevision
+            val text = if (restoreText) submittedText else state.composer.text
+            val mentions = if (restoreText) submittedMentions else state.composer.agentMentions
+            val cursor = if (restoreText) submittedText.length else state.composer.cursor
+            val currentIds = state.composer.attachments.map { it.id }.toSet()
+            val restoredAttachments =
+                submittedAttachments.filter { it.id !in currentIds } + state.composer.attachments
+            state
+                .copy(
+                    composer =
+                        state.composer.copy(
+                            text = text,
+                            attachments = restoredAttachments,
+                            agentMentions = mentions,
+                            cursor = cursor,
+                            selectionRevision = state.composer.selectionRevision + 1,
+                        ),
+                ).withComposerSuggestions(
+                    text = text,
+                    cursor = cursor,
+                    mentions = mentions,
                 )
         }
         persistDraftJob?.cancel()

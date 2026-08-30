@@ -591,6 +591,7 @@ final class SessionChatComposer {
         supportsFollowUp: Bool
     ) async {
         let submittedText = state.composer.text
+        let submittedMentions = state.composer.agentMentions
         let (trimmed, mentionsForSend) = ComposerMentionRouting.trimForSend(
             text: submittedText,
             mentions: state.composer.agentMentions
@@ -666,6 +667,10 @@ final class SessionChatComposer {
                 preferPlainCommandHighlight: collapsedDisplay != nil
             ),
         ]
+        clearAcceptedSubmission(
+            textRevision: submittedDraftRevision,
+            attachmentRevisions: submittedAttachmentRevisions
+        )
         state.isSending = true
         state.errorMessage = nil
         notifyChange()
@@ -715,13 +720,16 @@ final class SessionChatComposer {
                     OpenCodeLog.sessionChat.info("prompt send agentParts=\(mentionsForSend.count)")
                 }
             }
-            clearAcceptedSubmission(
-                textRevision: submittedDraftRevision,
-                attachmentRevisions: submittedAttachmentRevisions
-            )
             persistCurrentSelection(updatePreference: false)
             await onSendAccepted()
         } catch {
+            restoreFailedSubmission(
+                textRevision: submittedDraftRevision,
+                submittedText: submittedText,
+                submittedMentions: submittedMentions,
+                submittedAttachments: submittedAttachments,
+                submittedAttachmentRevisions: submittedAttachmentRevisions
+            )
             let message = errorMessage(error)
             setSendError(message)
             onSendFailed(optimistic.id, message)
@@ -817,11 +825,10 @@ final class SessionChatComposer {
     private func schedulePersistDraft() {
         persistDraftTask?.cancel()
         let sessionID = sessionID
-        let draft = currentDraft()
         persistDraftTask = Task {
             try? await Task.sleep(for: .milliseconds(Self.draftPersistDebounceMs))
             guard !Task.isCancelled else { return }
-            persistDraft(sessionID: sessionID, draft: draft)
+            persistDraft(sessionID: sessionID, draft: currentDraft())
         }
     }
 
@@ -1027,6 +1034,32 @@ final class SessionChatComposer {
         }
         state.composer = composer
         refreshComposerSuggestions(for: composer.text, cursor: composer.cursor)
+        notifyChange()
+        persistDraftTask?.cancel()
+        persistDraft(sessionID: sessionID, draft: currentDraft())
+    }
+
+    private func restoreFailedSubmission(
+        textRevision: Int,
+        submittedText: String,
+        submittedMentions: [AgentMention],
+        submittedAttachments: [Attachment],
+        submittedAttachmentRevisions: [String: Int]
+    ) {
+        for (id, revision) in submittedAttachmentRevisions where attachmentRevisions[id] == nil {
+            attachmentRevisions[id] = revision
+        }
+        var composer = state.composer
+        if draftRevision == textRevision {
+            composer.text = submittedText
+            composer.agentMentions = submittedMentions
+            composer.cursor = submittedText.count
+            composer.selectionRevision += 1
+        }
+        let currentIDs = Set(composer.attachments.map(\.id))
+        composer.attachments = submittedAttachments.filter { !currentIDs.contains($0.id) } + composer.attachments
+        state.composer = composer
+        refreshComposerSuggestions(for: composer.text, cursor: composer.cursor, mentions: composer.agentMentions)
         notifyChange()
         persistDraftTask?.cancel()
         persistDraft(sessionID: sessionID, draft: currentDraft())

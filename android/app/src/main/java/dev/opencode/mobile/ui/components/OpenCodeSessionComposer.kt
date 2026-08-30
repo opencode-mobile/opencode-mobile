@@ -346,6 +346,7 @@ private fun PromptEntryContent(
     var textFieldValue by remember {
         mutableStateOf(TextFieldValue(text = state.text, selection = TextRange(state.text.length)))
     }
+    var suppressImeEcho by remember { mutableStateOf(false) }
     LaunchedEffect(state.text, state.selectionRevision) {
         val selectionStart = (state.selectionStart ?: state.text.length).coerceIn(0, state.text.length)
         val selectionEnd = (state.selectionEnd ?: selectionStart).coerceIn(0, state.text.length)
@@ -357,6 +358,7 @@ private fun PromptEntryContent(
                     text = state.text,
                     selection = TextRange(selectionStart, selectionEnd),
                 )
+            suppressImeEcho = true
         }
     }
 
@@ -365,6 +367,13 @@ private fun PromptEntryContent(
     BasicTextField(
         value = textFieldValue,
         onValueChange = { newValue ->
+            if (newValue.text != state.text && textFieldValue.text != state.text) {
+                return@BasicTextField
+            }
+            if (suppressImeEcho) {
+                suppressImeEcho = false
+                if (newValue.text != state.text) return@BasicTextField
+            }
             textFieldValue = newValue
             onAction(
                 OpenCodeSessionComposerAction.TextChanged(

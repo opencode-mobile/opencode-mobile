@@ -1390,7 +1390,10 @@ class SessionChatViewModelTest {
                     message.attachments.singleOrNull()?.filename == "photo.png"
                 },
             )
-            assertEquals(listOf(attachment), viewModel.uiState.value.composer.attachments)
+            assertTrue(
+                viewModel.uiState.value.composer.attachments
+                    .isEmpty(),
+            )
             sendGate.complete(Unit)
             advanceUntilIdle()
             assertTrue(
@@ -1482,6 +1485,49 @@ class SessionChatViewModelTest {
             assertEquals("send failed", viewModel.uiState.value.snackbar?.message)
             assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
             assertEquals(null, viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun sendPrompt_clearsComposerWhileRequestInFlight() =
+        runTest(testDispatcher) {
+            val sendGate = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository(holdSendUntil = sendGate)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("/publish-prototype")
+            viewModel.sendPrompt()
+            runCurrent()
+
+            assertEquals("", viewModel.uiState.value.composer.text)
+            sendGate.complete(Unit)
+            advanceUntilIdle()
+            assertEquals("", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
+    fun sendPrompt_serverCommand_clearsComposerWhileRequestInFlight() =
+        runTest(testDispatcher) {
+            val commandGate = CompletableDeferred<Unit>()
+            val commandRepository = FakeCommandRepository(holdRunUntil = commandGate)
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    commandRepository = commandRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("/init please")
+            viewModel.sendPrompt()
+            runCurrent()
+
+            assertEquals("", viewModel.uiState.value.composer.text)
+            assertTrue(commandRepository.runCommandCalled)
+            commandGate.complete(Unit)
+            advanceUntilIdle()
+            assertEquals("", viewModel.uiState.value.composer.text)
         }
 
     @Test
@@ -3873,6 +3919,7 @@ private class FakeCommandRepository(
             ServerCommand(name = "init", description = "Create AGENTS.md", source = ServerCommandSource.Command),
             ServerCommand(name = "my-skill", description = "A skill", source = ServerCommandSource.Skill),
         ),
+    private val holdRunUntil: CompletableDeferred<Unit>? = null,
 ) : CommandRepository {
     var runCommandCalled: Boolean = false
     var lastRunOptions: CommandRunOptions? = null
@@ -3888,6 +3935,7 @@ private class FakeCommandRepository(
         runCommandCalled = true
         lastRunSessionId = sessionId
         lastRunOptions = options
+        holdRunUntil?.await()
     }
 }
 
