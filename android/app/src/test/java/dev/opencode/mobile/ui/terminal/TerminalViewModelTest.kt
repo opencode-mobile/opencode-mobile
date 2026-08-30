@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.terminal
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.terminal.RunningTerminal
 import dev.opencode.mobile.domain.terminal.TerminalConnectRequest
 import dev.opencode.mobile.domain.terminal.TerminalError
 import dev.opencode.mobile.domain.terminal.TerminalRepository
@@ -50,6 +51,42 @@ class TerminalViewModelTest {
             val state = viewModel.uiState.value
             assertTrue(state is TerminalUiState.Live)
             assertEquals("pty_1", (state as TerminalUiState.Live).session.id)
+        }
+
+    @Test
+    fun appearWithPtyId_connectsThatIdWithoutEnsureRunning() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeTerminalRepository(
+                    ensureResults = ArrayDeque(),
+                    getResults = ArrayDeque(listOf(Result.success(runningSession("pty_specific")))),
+                )
+            val viewModel = viewModel(repository = repository)
+
+            viewModel.appear("/repo", ptyId = "pty_specific")
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertTrue(state is TerminalUiState.Live)
+            assertEquals("pty_specific", (state as TerminalUiState.Live).session.id)
+            assertEquals(0, repository.ensureRunningCalls)
+            assertEquals(listOf("pty_specific" to "/repo"), repository.getCalls)
+        }
+
+    @Test
+    fun appearWithoutPtyId_stillEnsureRunning() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeTerminalRepository(
+                    ensureResults = ArrayDeque(listOf(Result.success(runningSession()))),
+                )
+            val viewModel = viewModel(repository = repository)
+
+            viewModel.appear("/repo")
+            advanceUntilIdle()
+
+            assertEquals(1, repository.ensureRunningCalls)
+            assertTrue(repository.getCalls.isEmpty())
         }
 
     @Test
@@ -209,9 +246,9 @@ class TerminalViewModelTest {
         )
     }
 
-    private fun runningSession(): TerminalSession =
+    private fun runningSession(id: String = "pty_1"): TerminalSession =
         TerminalSession(
-            id = "pty_1",
+            id = id,
             title = "term",
             command = "/bin/zsh",
             cwd = "/repo",
@@ -249,6 +286,9 @@ private class FakeTerminalRepository(
     private val ensureResults: ArrayDeque<Result<TerminalSession>>,
     private val getResults: ArrayDeque<Result<TerminalSession>> = ArrayDeque(),
 ) : TerminalRepository {
+    var ensureRunningCalls = 0
+    val getCalls = mutableListOf<Pair<String, String>>()
+
     override suspend fun list(directory: String): List<TerminalSession> = error("unused")
 
     override suspend fun create(
@@ -259,7 +299,10 @@ private class FakeTerminalRepository(
     override suspend fun get(
         id: String,
         directory: String,
-    ): TerminalSession = getResults.removeFirst().getOrThrow()
+    ): TerminalSession {
+        getCalls += id to directory
+        return getResults.removeFirst().getOrThrow()
+    }
 
     override suspend fun updateSize(
         id: String,
@@ -268,7 +311,17 @@ private class FakeTerminalRepository(
         rows: Int,
     ): TerminalSession = error("unused")
 
-    override suspend fun ensureRunning(directory: String): TerminalSession = ensureResults.removeFirst().getOrThrow()
+    override suspend fun ensureRunning(directory: String): TerminalSession {
+        ensureRunningCalls += 1
+        return ensureResults.removeFirst().getOrThrow()
+    }
+
+    override suspend fun remove(
+        id: String,
+        directory: String,
+    ) = error("unused")
+
+    override suspend fun listRunning(directories: List<String>): List<RunningTerminal> = error("unused")
 
     override fun connectRequest(
         id: String,

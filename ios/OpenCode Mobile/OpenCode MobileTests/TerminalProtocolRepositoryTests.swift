@@ -174,6 +174,53 @@ struct TerminalProtocolRepositoryTests {
         #expect(TerminalRoutingURLProtocol.requests.first?.httpMethod == "GET")
     }
 
+    @Test func v1RemoveDeletesWithDirectoryQuery() async throws {
+        TerminalRoutingURLProtocol.reset(responses: [
+            .json("true")
+        ])
+        let repository = makeRepository(serverProtocol: .v1)
+
+        try await repository.remove(id: "pty_1", directory: "/repo")
+
+        let request = try #require(TerminalRoutingURLProtocol.requests.first)
+        #expect(request.httpMethod == "DELETE")
+        #expect(request.url?.path.hasSuffix("/pty/pty_1") == true)
+        #expect(queryValue(try #require(request.url), "directory") == "/repo")
+    }
+
+    @Test func v2RemoveDeletesApiPathWithLocationDirectory() async throws {
+        TerminalRoutingURLProtocol.reset(responses: [
+            .json("true")
+        ])
+        let repository = makeRepository(serverProtocol: .v2)
+
+        try await repository.remove(id: "pty_9", directory: "/work")
+
+        let request = try #require(TerminalRoutingURLProtocol.requests.first)
+        #expect(request.httpMethod == "DELETE")
+        #expect(request.url?.path.contains("/api/pty/pty_9") == true)
+        #expect(queryValue(try #require(request.url), "location[directory]") == "/work")
+    }
+
+    @Test func listRunningFansOutPerDirectoryAndKeepsRunningOnly() async throws {
+        TerminalRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            [\#(ptyObjectJSON(id: "pty_dead", status: "exited")),\#(ptyObjectJSON(id: "pty_live", status: "running"))]
+            """#),
+            .json(ptyArrayJSON(id: "pty_play", status: "running"))
+        ])
+        let repository = makeRepository(serverProtocol: .v1)
+
+        let running = try await repository.listRunning(directories: ["/repo", "/play"])
+
+        #expect(running.map(\.session.id) == ["pty_live", "pty_play"])
+        #expect(running.map(\.directory) == ["/repo", "/play"])
+        #expect(TerminalRoutingURLProtocol.requests.count == 2)
+        #expect(TerminalRoutingURLProtocol.requests.allSatisfy { $0.httpMethod == "GET" })
+        #expect(queryValue(try #require(TerminalRoutingURLProtocol.requests[0].url), "directory") == "/repo")
+        #expect(queryValue(try #require(TerminalRoutingURLProtocol.requests[1].url), "directory") == "/play")
+    }
+
     @Test func ensureRunningCreatesWhenNoneRunning() async throws {
         TerminalRoutingURLProtocol.reset(responses: [
             .json(#"""

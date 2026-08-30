@@ -51,6 +51,29 @@ class DefaultTerminalRepository
             return running ?: create(directory, cwd = directory)
         }
 
+        override suspend fun remove(
+            id: String,
+            directory: String,
+        ) {
+            runCatching { remote.remove(id, directory) }
+                .getOrElse { throw adapter.mapError(it) }
+        }
+
+        override suspend fun listRunning(directories: List<String>): List<RunningTerminal> {
+            val result = mutableListOf<RunningTerminal>()
+            for (directory in directories) {
+                val sessions =
+                    runCatching { remote.list(directory) }
+                        .getOrElse { throw adapter.mapError(it) }
+                sessions
+                    .filter { it.status == TerminalSessionStatus.Running }
+                    .forEach { session ->
+                        result += RunningTerminal(directory = directory, session = session)
+                    }
+            }
+            return result
+        }
+
         override fun connectRequest(
             id: String,
             directory: String,

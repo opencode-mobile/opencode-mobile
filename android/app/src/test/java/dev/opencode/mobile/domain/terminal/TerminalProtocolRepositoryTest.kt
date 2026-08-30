@@ -265,6 +265,80 @@ class TerminalProtocolRepositoryTest {
         }
 
     @Test
+    fun v1Remove_deletesWithDirectoryQuery() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson("true")
+                }
+            val repository = repository(client, ServerProtocol.V1)
+
+            repository.remove("pty_1", "/repo")
+
+            assertEquals(HttpMethod.Delete, requests.single().method)
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .endsWith("/pty/pty_1"),
+            )
+            assertEquals("/repo", requests.single().url.parameters["directory"])
+        }
+
+    @Test
+    fun v2Remove_deletesApiPathWithLocationDirectory() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson("true")
+                }
+            val repository = repository(client, ServerProtocol.V2)
+
+            repository.remove("pty_9", "/work")
+
+            assertEquals(HttpMethod.Delete, requests.single().method)
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/pty/pty_9"),
+            )
+            assertEquals("/work", requests.single().url.parameters["location[directory]"])
+        }
+
+    @Test
+    fun listRunning_fansOutPerDirectoryAndKeepsRunningOnly() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    when (request.url.parameters["directory"]) {
+                        "/repo" ->
+                            respondJson(
+                                """[${ptyObjectJson("pty_dead", "exited")},${ptyObjectJson("pty_live", "running")}]""",
+                            )
+                        "/play" -> respondJson(ptyArrayJson("pty_play", "running"))
+                        else -> respondJson("[]")
+                    }
+                }
+            val repository = repository(client, ServerProtocol.V1)
+
+            val running = repository.listRunning(listOf("/repo", "/play"))
+
+            assertEquals(listOf("pty_live", "pty_play"), running.map { it.session.id })
+            assertEquals(listOf("/repo", "/play"), running.map { it.directory })
+            assertEquals(2, requests.size)
+            assertTrue(requests.all { it.method == HttpMethod.Get })
+            assertEquals("/repo", requests[0].url.parameters["directory"])
+            assertEquals("/play", requests[1].url.parameters["directory"])
+        }
+
+    @Test
     fun ensureRunning_createsWhenNoneRunning() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()

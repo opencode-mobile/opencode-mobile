@@ -52,6 +52,7 @@ object ProductAnalytics {
         const val HOME_DELETE_SESSION_CONFIRM = "home_delete_session_confirm"
         const val HOME_REMOVE_PROJECT_CONFIRM = "home_remove_project_confirm"
         const val TERMINAL = "terminal"
+        const val TERMINALS_CATALOG = "terminals_catalog"
         const val SESSION_CHAT = "session_chat"
         const val SESSION_OVERFLOW = "session_overflow"
         const val SESSION_COMMANDS = "session_commands"

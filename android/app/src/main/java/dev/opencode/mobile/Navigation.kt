@@ -100,6 +100,7 @@ import dev.opencode.mobile.ui.settings.TextMateLanguagesRoute
 import dev.opencode.mobile.ui.settings.TextMateLogbookScreen
 import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
 import dev.opencode.mobile.ui.terminal.TerminalScreen
+import dev.opencode.mobile.ui.terminal.TerminalsCatalogScreen
 
 @Composable
 fun MainNavigation() {
@@ -203,14 +204,7 @@ fun MainNavigation() {
                                             )
                                             MainScreen(
                                                 onSettingsClick = { backStack.add(SettingsHome) },
-                                                onTerminalClick = { worktree, projectTitle ->
-                                                    backStack.add(
-                                                        Terminal(
-                                                            worktree = worktree,
-                                                            projectTitle = projectTitle,
-                                                        ),
-                                                    )
-                                                },
+                                                onTerminalClick = { backStack.add(TerminalsCatalog) },
                                                 onSessionClick = { target ->
                                                     backStack.add(
                                                         SessionChat(
@@ -471,6 +465,25 @@ fun MainNavigation() {
                                             }
                                         }
                                     }
+                                    entry<TerminalsCatalog> {
+                                        RouteSurface {
+                                            ProductRouteScreenViewEffect(
+                                                screenId = ProductAnalytics.Screen.TERMINALS_CATALOG,
+                                            )
+                                            TerminalsCatalogScreen(
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onOpenTerminal = { worktree, projectTitle, ptyId ->
+                                                    backStack.add(
+                                                        Terminal(
+                                                            worktree = worktree,
+                                                            projectTitle = projectTitle,
+                                                            ptyId = ptyId,
+                                                        ),
+                                                    )
+                                                },
+                                            )
+                                        }
+                                    }
                                     entry<Terminal> { key ->
                                         RouteSurface {
                                             ProductRouteScreenViewEffect(
@@ -479,6 +492,7 @@ fun MainNavigation() {
                                             TerminalScreen(
                                                 worktree = key.worktree,
                                                 projectTitle = key.projectTitle,
+                                                ptyId = key.ptyId,
                                                 onNavigateBack = { backStack.removeLastOrNull() },
                                             )
                                         }

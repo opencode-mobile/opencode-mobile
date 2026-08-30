@@ -34,4 +34,11 @@ internal class V1TerminalRemote(
                 directory,
             ),
         )
+
+    override suspend fun remove(
+        id: String,
+        directory: String,
+    ) {
+        api.delete(id, directory)
+    }
 }

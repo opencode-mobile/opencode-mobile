@@ -61,6 +61,7 @@ class TerminalViewModel
         val output: SharedFlow<String> = _output.asSharedFlow()
 
         private var worktree: String? = null
+        private var requestedPtyId: String? = null
         private var session: TerminalSession? = null
         private var cursor: String = "0"
         private var connectJob: Job? = null
@@ -96,9 +97,13 @@ class TerminalViewModel
                 }
             }
 
-        fun appear(worktree: String) {
+        fun appear(
+            worktree: String,
+            ptyId: String? = null,
+        ) {
             leaving = false
             this.worktree = worktree
+            requestedPtyId = ptyId
             val current = _uiState.value
             connect(resetToConnecting = current !is TerminalUiState.Live && current !is TerminalUiState.Reconnecting)
         }
@@ -108,6 +113,7 @@ class TerminalViewModel
             if (_uiState.value is TerminalUiState.Exited) {
                 cursor = "0"
                 session = null
+                requestedPtyId = null
                 socketOpenedOnce = false
             }
             connect(resetToConnecting = true)
@@ -159,7 +165,13 @@ class TerminalViewModel
             connectJob =
                 viewModelScope.launch {
                     try {
-                        val ensured = terminalRepository.ensureRunning(directory)
+                        val ptyId = requestedPtyId
+                        val ensured =
+                            if (ptyId != null) {
+                                terminalRepository.get(ptyId, directory)
+                            } else {
+                                terminalRepository.ensureRunning(directory)
+                            }
                         session = ensured
                         if (ensured.status != TerminalSessionStatus.Running) {
                             _uiState.value = TerminalUiState.Exited

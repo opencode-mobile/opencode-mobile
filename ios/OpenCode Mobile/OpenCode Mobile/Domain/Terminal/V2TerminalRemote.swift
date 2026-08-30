@@ -30,4 +30,8 @@ struct V2TerminalRemote: TerminalRemote, Sendable {
             )
         )
     }
+
+    func remove(id: String, directory: String) async throws {
+        try await api.deleteV2(id: id, directory: directory)
+    }
 }

@@ -5,6 +5,7 @@ protocol TerminalRemote: Sendable {
     func create(directory: String, cwd: String) async throws -> TerminalSession
     func get(id: String, directory: String) async throws -> TerminalSession
     func updateSize(id: String, directory: String, cols: Int, rows: Int) async throws -> TerminalSession
+    func remove(id: String, directory: String) async throws
 }
 
 struct ProtocolSelectedTerminalRemote: TerminalRemote, Sendable {
@@ -43,5 +44,9 @@ struct ProtocolSelectedTerminalRemote: TerminalRemote, Sendable {
 
     func updateSize(id: String, directory: String, cols: Int, rows: Int) async throws -> TerminalSession {
         try await selected().updateSize(id: id, directory: directory, cols: cols, rows: rows)
+    }
+
+    func remove(id: String, directory: String) async throws {
+        try await selected().remove(id: id, directory: directory)
     }
 }

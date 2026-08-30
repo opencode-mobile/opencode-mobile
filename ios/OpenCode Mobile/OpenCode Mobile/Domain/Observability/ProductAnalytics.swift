@@ -50,6 +50,7 @@ enum ProductAnalytics {
         static let homeDeleteSessionConfirm = "home_delete_session_confirm"
         static let homeRemoveProjectConfirm = "home_remove_project_confirm"
         static let terminal = "terminal"
+        static let terminalsCatalog = "terminals_catalog"
         static let sessionChat = "session_chat"
         static let sessionOverflow = "session_overflow"
         static let sessionCommands = "session_commands"

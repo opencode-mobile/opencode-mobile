@@ -9,9 +9,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -37,10 +34,11 @@ fun TerminalScreen(
     projectTitle: String,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: TerminalViewModel = hiltViewModel(key = "terminal-$worktree"),
+    ptyId: String? = null,
+    viewModel: TerminalViewModel = hiltViewModel(key = "terminal-$worktree-${ptyId.orEmpty()}"),
 ) {
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
-        viewModel.appear(worktree)
+        viewModel.appear(worktree, ptyId)
     }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
         viewModel.disappear()
@@ -90,12 +88,6 @@ fun TerminalScreen(
 private fun TerminalLivePane(viewModel: TerminalViewModel) {
     val isDark = LocalOpenCodeDarkTheme.current
     val tokens = if (isDark) ThemeManager.resolvedDark else ThemeManager.resolvedLight
-    var ctrlSticky by remember { mutableStateOf(false) }
-    val emit: (String) -> Unit = { text ->
-        val (payload, nextSticky) = applyTerminalCtrl(text, ctrlSticky)
-        ctrlSticky = nextSticky
-        viewModel.sendInput(payload)
-    }
     Column(
         modifier =
             Modifier
@@ -109,17 +101,13 @@ private fun TerminalLivePane(viewModel: TerminalViewModel) {
             onEvent = { event ->
                 when (event) {
                     TerminalEmulatorEvent.Ready -> Unit
-                    is TerminalEmulatorEvent.Data -> emit(event.text)
+                    is TerminalEmulatorEvent.Data -> viewModel.sendInput(event.text)
                     is TerminalEmulatorEvent.Resize -> viewModel.resize(event.cols, event.rows)
                 }
             },
             modifier = Modifier.weight(1f),
         )
-        TerminalControlStrip(
-            ctrlSticky = ctrlSticky,
-            onToggleCtrl = { ctrlSticky = !ctrlSticky },
-            onSend = emit,
-        )
+        TerminalControlStrip(onSend = viewModel::sendInput)
     }
 }
 

@@ -28,4 +28,11 @@ internal class ProtocolSelectedTerminalRemote(
         cols: Int,
         rows: Int,
     ): TerminalSession = selected().updateSize(id, directory, cols, rows)
+
+    override suspend fun remove(
+        id: String,
+        directory: String,
+    ) {
+        selected().remove(id, directory)
+    }
 }

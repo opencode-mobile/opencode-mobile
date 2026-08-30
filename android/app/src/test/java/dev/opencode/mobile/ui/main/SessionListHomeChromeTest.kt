@@ -141,46 +141,26 @@ class SessionListHomeChromeTest {
     }
 
     @Test
-    fun terminalAction_zeroProjectsDoesNothing() {
+    fun terminalAction_zeroProjectsHides() {
         assertEquals(
             SessionListHomeChrome.TerminalAction.None,
-            SessionListHomeChrome.terminalAction(
-                projects = emptyList(),
-                selectedFilterId = SessionListFilterTab.ALL_ID,
-            ),
+            SessionListHomeChrome.terminalAction(projects = emptyList()),
         )
     }
 
     @Test
-    fun terminalAction_oneProjectOpensEvenWhenAllIdStored() {
+    fun terminalAction_oneProjectOpensCatalog() {
         assertEquals(
-            SessionListHomeChrome.TerminalAction.Open("/repo", "opencode-mobile"),
-            SessionListHomeChrome.terminalAction(
-                projects = listOf(mobile),
-                selectedFilterId = SessionListFilterTab.ALL_ID,
-            ),
+            SessionListHomeChrome.TerminalAction.OpenCatalog,
+            SessionListHomeChrome.terminalAction(projects = listOf(mobile)),
         )
     }
 
     @Test
-    fun terminalAction_scopedProjectOpensThere() {
+    fun terminalAction_twoProjectsOpensCatalog() {
         assertEquals(
-            SessionListHomeChrome.TerminalAction.Open("/play", "playground"),
-            SessionListHomeChrome.terminalAction(
-                projects = listOf(mobile, playground),
-                selectedFilterId = "/play",
-            ),
-        )
-    }
-
-    @Test
-    fun terminalAction_allSelectedWithTwoProjectsSnacks() {
-        assertEquals(
-            SessionListHomeChrome.TerminalAction.Snack,
-            SessionListHomeChrome.terminalAction(
-                projects = listOf(mobile, playground),
-                selectedFilterId = SessionListFilterTab.ALL_ID,
-            ),
+            SessionListHomeChrome.TerminalAction.OpenCatalog,
+            SessionListHomeChrome.terminalAction(projects = listOf(mobile, playground)),
         )
     }
 

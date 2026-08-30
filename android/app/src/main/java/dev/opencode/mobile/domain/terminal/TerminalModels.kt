@@ -13,6 +13,11 @@ data class TerminalSession(
     val status: TerminalSessionStatus,
 )
 
+data class RunningTerminal(
+    val directory: String,
+    val session: TerminalSession,
+)
+
 sealed class TerminalError : Exception() {
     data class Transport(
         override val cause: Throwable,

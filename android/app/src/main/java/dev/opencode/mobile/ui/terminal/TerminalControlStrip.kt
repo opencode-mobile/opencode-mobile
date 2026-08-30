@@ -16,8 +16,6 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
 fun TerminalControlStrip(
-    ctrlSticky: Boolean,
-    onToggleCtrl: () -> Unit,
     onSend: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -30,9 +28,9 @@ fun TerminalControlStrip(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         OpenCodeButton(
-            variant = OpenCodeButtonVariant.CompactText("Ctrl"),
-            contrast = if (ctrlSticky) OpenCodeButtonContrast.High else OpenCodeButtonContrast.Low,
-            onClick = onToggleCtrl,
+            variant = OpenCodeButtonVariant.CompactText("Ctrl-C"),
+            contrast = OpenCodeButtonContrast.Destructive,
+            onClick = { onSend("\u0003") },
         )
         OpenCodeButton(
             variant = OpenCodeButtonVariant.CompactText("Esc"),
@@ -66,14 +64,4 @@ fun TerminalControlStrip(
             onClick = { onSend("\u001b[C") },
         )
     }
-}
-
-fun applyTerminalCtrl(
-    text: String,
-    ctrlSticky: Boolean,
-): Pair<String, Boolean> {
-    if (!ctrlSticky || text.isEmpty()) return text to ctrlSticky
-    val first = text[0]
-    if (first.code < 32 || first == '\u007f') return text to ctrlSticky
-    return ((first.code and 0x1f).toChar() + text.substring(1)) to false
 }

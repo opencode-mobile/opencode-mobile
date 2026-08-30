@@ -13,6 +13,11 @@ nonisolated struct TerminalSession: Sendable, Equatable {
     let status: TerminalSessionStatus
 }
 
+nonisolated struct RunningTerminal: Sendable, Equatable {
+    let directory: String
+    let session: TerminalSession
+}
+
 nonisolated enum TerminalError: Error, Equatable {
     case transport(String)
     case http(statusCode: Int, message: String?)

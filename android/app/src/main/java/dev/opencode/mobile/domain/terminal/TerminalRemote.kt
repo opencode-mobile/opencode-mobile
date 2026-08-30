@@ -19,4 +19,9 @@ internal interface TerminalRemote {
         cols: Int,
         rows: Int,
     ): TerminalSession
+
+    suspend fun remove(
+        id: String,
+        directory: String,
+    )
 }

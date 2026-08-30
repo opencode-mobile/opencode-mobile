@@ -14,7 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -89,7 +88,7 @@ data class HomeSessionActionsCallbacks(
 @Composable
 fun MainScreen(
     onSettingsClick: () -> Unit,
-    onTerminalClick: (String, String) -> Unit = { _, _ -> },
+    onTerminalClick: () -> Unit = {},
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnectionClick: (dev.opencode.mobile.domain.connection.ConnectionProfile?) -> Unit,
     onConnectClick: () -> Unit,
@@ -188,7 +187,7 @@ internal fun MainScreen(
     liveUpdatesConnectionStatus: SessionConnectionStatus,
     removalSnackbar: OpenCodeSnackbarMessage?,
     onSettingsClick: () -> Unit,
-    onTerminalClick: (String, String) -> Unit = { _, _ -> },
+    onTerminalClick: () -> Unit = {},
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnection: () -> Unit,
     onConnectClick: () -> Unit,
@@ -242,10 +241,10 @@ internal fun MainScreen(
 
     var showNewSessionProjectPicker by rememberSaveable { mutableStateOf(false) }
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
-    var selectProjectSnackbar by remember { mutableStateOf<OpenCodeSnackbarMessage?>(null) }
     val loadedSections = (uiState as? MainScreenUiState.Loaded)?.sections.orEmpty()
     val chromeProjects = loadedSections.toHomeChromeProjects()
-    val showTerminalAction = uiState is MainScreenUiState.Loaded && chromeProjects.isNotEmpty()
+    val showTerminalAction =
+        SessionListHomeChrome.terminalAction(chromeProjects) is SessionListHomeChrome.TerminalAction.OpenCatalog
     val newSessionPickerProjects =
         when (uiState) {
             is MainScreenUiState.Loaded -> uiState.sections
@@ -304,32 +303,7 @@ internal fun MainScreen(
                                             screenId = ProductAnalytics.Screen.HOME,
                                             actionId = ProductAnalytics.Action.HOME_OPEN_TERMINAL,
                                         )
-                                        val filterTabs =
-                                            SessionListHomeChrome.filterTabs(
-                                                projects = chromeProjects,
-                                                sessionCount = chromeProjects.sumOf { it.sessionCount },
-                                            )
-                                        val resolvedFilterId =
-                                            SessionListHomeChrome.resolvedFilterId(
-                                                selectedId = selectedFilterId,
-                                                tabs = filterTabs,
-                                            )
-                                        when (
-                                            val action =
-                                                SessionListHomeChrome.terminalAction(
-                                                    projects = chromeProjects,
-                                                    selectedFilterId = resolvedFilterId,
-                                                )
-                                        ) {
-                                            SessionListHomeChrome.TerminalAction.None -> Unit
-                                            SessionListHomeChrome.TerminalAction.Snack ->
-                                                selectProjectSnackbar =
-                                                    OpenCodeSnackbarMessage(
-                                                        text = SessionListHomeChrome.SELECT_PROJECT_SNACK,
-                                                    )
-                                            is SessionListHomeChrome.TerminalAction.Open ->
-                                                onTerminalClick(action.worktree, action.projectTitle)
-                                        }
+                                        onTerminalClick()
                                     },
                                 ),
                             )
@@ -432,13 +406,9 @@ internal fun MainScreen(
         }
 
         OpenCodeSnackbarHost(
-            message = selectProjectSnackbar ?: removalSnackbar,
+            message = removalSnackbar,
             onDismissed = {
-                if (selectProjectSnackbar != null) {
-                    selectProjectSnackbar = null
-                } else {
-                    onConsumeProjectRemovalSnackbar()
-                }
+                onConsumeProjectRemovalSnackbar()
             },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
@@ -1010,7 +980,7 @@ private fun HomeProjectsContent(
                         screenId = ProductAnalytics.Screen.HOME_FILTER_PROJECT_PICKER,
                         actionId = ProductAnalytics.Action.HOME_SELECT_SESSION_FILTER,
                     )
-                onSelectedFilterIdChange(filterId)
+                    onSelectedFilterIdChange(filterId)
                     showProjectPicker = false
                 },
                 onRemoveProject = onRemoveProject,

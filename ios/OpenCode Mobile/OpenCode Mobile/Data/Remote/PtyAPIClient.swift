@@ -74,6 +74,26 @@ nonisolated struct PtyAPIClient: Sendable {
         return envelope.data
     }
 
+    func delete(id: String, directory: String) async throws {
+        _ = try await data(
+            for: try requireConnection().authorizedRequest(
+                path: "pty/\(id)",
+                method: "DELETE",
+                directory: directory
+            )
+        )
+    }
+
+    func deleteV2(id: String, directory: String) async throws {
+        _ = try await data(
+            for: try requireConnection().authorizedRequest(
+                path: "api/pty/\(id)",
+                method: "DELETE",
+                locationDirectory: directory
+            )
+        )
+    }
+
     private func requireConnection() throws -> ServerConnection {
         guard let connection = connectionProvider() else {
             throw PtyAPIError.noActiveConnection

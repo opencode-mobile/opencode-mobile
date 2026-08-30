@@ -16,6 +16,35 @@ struct TerminalViewModelTests {
         #expect(session.id == "pty_1")
     }
 
+    @Test func appearWithPtyId_connectsThatIdWithoutEnsureRunning() async {
+        let repository = FakeTerminalRepository(
+            results: [],
+            getResults: [.success(runningSession(id: "pty_specific"))]
+        )
+        let viewModel = makeViewModel(repository: repository, ptyId: "pty_specific")
+
+        await viewModel.appear()
+
+        guard case let .live(session) = viewModel.state else {
+            Issue.record("expected live")
+            return
+        }
+        #expect(session.id == "pty_specific")
+        #expect(repository.ensureRunningCalls == 0)
+        #expect(repository.getCalls.map(\.0) == ["pty_specific"])
+        #expect(repository.getCalls.map(\.1) == ["/repo"])
+    }
+
+    @Test func appearWithoutPtyId_stillEnsureRunning() async {
+        let repository = FakeTerminalRepository(results: [.success(runningSession())])
+        let viewModel = makeViewModel(repository: repository)
+
+        await viewModel.appear()
+
+        #expect(repository.ensureRunningCalls == 1)
+        #expect(repository.getCalls.isEmpty)
+    }
+
     @Test func appearThrow_showsConnectFailed() async {
         let viewModel = makeViewModel(
             repository: FakeTerminalRepository(results: [
@@ -100,7 +129,8 @@ struct TerminalViewModelTests {
 
     private func makeViewModel(
         repository: FakeTerminalRepository? = nil,
-        socket: FakeTerminalSocketClient? = nil
+        socket: FakeTerminalSocketClient? = nil,
+        ptyId: String? = nil
     ) -> TerminalViewModel {
         let manager = ActiveConnectionManager()
         manager.applyConnection(
@@ -113,6 +143,7 @@ struct TerminalViewModelTests {
         )
         return TerminalViewModel(
             worktree: "/repo",
+            ptyId: ptyId,
             repository: repository ?? FakeTerminalRepository(results: [.success(runningSession())]),
             activeConnectionManager: manager,
             socketClient: socket ?? FakeTerminalSocketClient()
@@ -127,9 +158,9 @@ struct TerminalViewModelTests {
     }
 }
 
-private func runningSession(status: TerminalSessionStatus = .running) -> TerminalSession {
+private func runningSession(id: String = "pty_1", status: TerminalSessionStatus = .running) -> TerminalSession {
     TerminalSession(
-        id: "pty_1",
+        id: id,
         title: "term",
         command: "/bin/zsh",
         cwd: "/repo",
@@ -165,6 +196,8 @@ private final class FakeTerminalSocketClient: TerminalSocketClient {
 private final class FakeTerminalRepository: TerminalRepository, @unchecked Sendable {
     private var results: [Result<TerminalSession, Error>]
     private var getResults: [Result<TerminalSession, Error>]
+    var ensureRunningCalls = 0
+    var getCalls: [(String, String)] = []
 
     init(
         results: [Result<TerminalSession, Error>],
@@ -183,7 +216,8 @@ private final class FakeTerminalRepository: TerminalRepository, @unchecked Senda
     }
 
     func get(id: String, directory: String) async throws -> TerminalSession {
-        try getResults.removeFirst().get()
+        getCalls.append((id, directory))
+        return try getResults.removeFirst().get()
     }
 
     func updateSize(id: String, directory: String, cols: Int, rows: Int) async throws -> TerminalSession {
@@ -191,7 +225,16 @@ private final class FakeTerminalRepository: TerminalRepository, @unchecked Senda
     }
 
     func ensureRunning(directory: String) async throws -> TerminalSession {
-        try results.removeFirst().get()
+        ensureRunningCalls += 1
+        return try results.removeFirst().get()
+    }
+
+    func remove(id: String, directory: String) async throws {
+        throw TerminalError.transport("unused")
+    }
+
+    func listRunning(directories: [String]) async throws -> [RunningTerminal] {
+        throw TerminalError.transport("unused")
     }
 
     func connectRequest(

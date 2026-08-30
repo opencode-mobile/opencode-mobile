@@ -15,6 +15,7 @@ final class TerminalViewModel: TerminalSocketListener {
     private(set) var state: TerminalViewState = .connecting
 
     private let worktree: String
+    private var ptyId: String?
     private let repository: any TerminalRepository
     private let activeConnectionManager: ActiveConnectionManager
     private let socketClient: any TerminalSocketClient
@@ -31,11 +32,13 @@ final class TerminalViewModel: TerminalSocketListener {
 
     init(
         worktree: String,
+        ptyId: String? = nil,
         repository: any TerminalRepository,
         activeConnectionManager: ActiveConnectionManager,
         socketClient: any TerminalSocketClient
     ) {
         self.worktree = worktree
+        self.ptyId = ptyId
         self.repository = repository
         self.activeConnectionManager = activeConnectionManager
         self.socketClient = socketClient
@@ -59,6 +62,7 @@ final class TerminalViewModel: TerminalSocketListener {
         if case .exited = state {
             cursor = "0"
             session = nil
+            ptyId = nil
             socketOpenedOnce = false
         }
         await connect(resetToConnecting: true)
@@ -113,7 +117,12 @@ final class TerminalViewModel: TerminalSocketListener {
         }
         let task = Task {
             do {
-                let ensured = try await repository.ensureRunning(directory: worktree)
+                let ensured: TerminalSession
+                if let ptyId {
+                    ensured = try await repository.get(id: ptyId, directory: worktree)
+                } else {
+                    ensured = try await repository.ensureRunning(directory: worktree)
+                }
                 session = ensured
                 guard !Task.isCancelled, !leaving else { return }
                 if ensured.status != .running {

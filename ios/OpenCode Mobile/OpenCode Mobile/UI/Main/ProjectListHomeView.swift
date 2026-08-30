@@ -11,7 +11,6 @@ struct ProjectListHomeView: View {
     @State private var showNewSessionProjectPicker = false
     @State private var showProjectPicker = false
     @State private var selectedSessionFilterId = SessionListFilterTab.allId
-    @State private var selectProjectSnackbar: OpenCodeSnackbarMessage?
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @Environment(\.scenePhase) private var scenePhase
     @Binding private var presentConnectionSetupOnAppear: Bool
@@ -46,13 +45,9 @@ struct ProjectListHomeView: View {
             .toolbar(.hidden, for: .navigationBar)
             .overlay(alignment: .bottom) {
                 OpenCodeSnackbarHost(
-                    message: selectProjectSnackbar ?? viewModel.removalSnackbar,
+                    message: viewModel.removalSnackbar,
                     onDismissed: {
-                        if selectProjectSnackbar != nil {
-                            selectProjectSnackbar = nil
-                        } else {
-                            viewModel.consumeProjectRemovalSnackbar()
-                        }
+                        viewModel.consumeProjectRemovalSnackbar()
                     }
                 )
             }
@@ -75,8 +70,15 @@ struct ProjectListHomeView: View {
             .navigationDestination(for: SessionListItem.self) { session in
                 SessionChatView(session: session)
             }
+            .navigationDestination(for: TerminalsCatalogRoute.self) { _ in
+                TerminalsCatalogView { worktree, projectTitle, ptyId in
+                    navigationPath.append(
+                        TerminalRoute(worktree: worktree, projectTitle: projectTitle, ptyId: ptyId)
+                    )
+                }
+            }
             .navigationDestination(for: TerminalRoute.self) { route in
-                TerminalView(worktree: route.worktree, projectTitle: route.projectTitle)
+                TerminalView(worktree: route.worktree, projectTitle: route.projectTitle, ptyId: route.ptyId)
             }
             .task {
                 ProductAnalytics.logScreenView(
@@ -500,10 +502,8 @@ struct ProjectListHomeView: View {
     }
 
     private var showsTerminalAction: Bool {
-        if case let .loaded(sections, _, _, _) = viewModel.state {
-            return !sections.isEmpty
-        }
-        return false
+        guard case let .loaded(sections, _, _, _) = viewModel.state else { return false }
+        return SessionListHomeChrome.terminalAction(projects: sections.homeChromeProjects()) == .openCatalog
     }
 
     private var homeTopBarActions: [OpenCodeTopBarAction] {
@@ -532,21 +532,8 @@ struct ProjectListHomeView: View {
         )
         guard case let .loaded(sections, _, _, _) = viewModel.state else { return }
         let projects = sections.homeChromeProjects()
-        let tabs = SessionListHomeChrome.filterTabs(
-            projects: projects,
-            sessionCount: sections.crossProjectSessionListSessions().count
-        )
-        let filterId = SessionListHomeChrome.resolvedFilterId(
-            selectedId: selectedSessionFilterId,
-            tabs: tabs
-        )
-        switch SessionListHomeChrome.terminalAction(projects: projects, selectedFilterId: filterId) {
-        case .none:
-            break
-        case .snack:
-            selectProjectSnackbar = OpenCodeSnackbarMessage(text: SessionListHomeChrome.selectProjectSnack)
-        case let .open(worktree, projectTitle):
-            navigationPath.append(TerminalRoute(worktree: worktree, projectTitle: projectTitle))
+        if case .openCatalog = SessionListHomeChrome.terminalAction(projects: projects) {
+            navigationPath.append(TerminalsCatalogRoute())
         }
     }
 

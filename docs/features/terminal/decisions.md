@@ -6,9 +6,10 @@ Still binding:
   Session Chat bash sheet, or `/tui/*`.
 - Terminal is scoped to an added project, not to a session. Do not open it
   from Session Chat.
-- One running PTY per worktree. Reuse it. Do not ship a list or tabs.
-- Leave and background disconnect I/O only. Do not `DELETE /pty/{id}` in
-  this slice.
+- Home Terminal icon opens a running-only catalog across added projects.
+  Catalog does not create a PTY. Trailing close `DELETE`s that id.
+- Leave and background disconnect I/O only. Do not `DELETE` on leave or
+  background.
 - Bundled xterm.js in a local WebView. Native markdown already rejected
   WebView for document layout; a VT emulator is a different job. Do not
   pull ghostty-web.

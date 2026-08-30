@@ -97,39 +97,17 @@ struct SessionListHomeChromeTests {
         )
     }
 
-    @Test func terminalAction_zeroProjectsDoesNothing() {
-        #expect(
-            SessionListHomeChrome.terminalAction(
-                projects: [],
-                selectedFilterId: SessionListFilterTab.allId
-            ) == .none
-        )
+    @Test func terminalAction_zeroProjectsHides() {
+        #expect(SessionListHomeChrome.terminalAction(projects: []) == .none)
     }
 
-    @Test func terminalAction_oneProjectOpensEvenWhenAllIdStored() {
-        #expect(
-            SessionListHomeChrome.terminalAction(
-                projects: [mobile],
-                selectedFilterId: SessionListFilterTab.allId
-            ) == .open(worktree: "/repo", projectTitle: "opencode-mobile")
-        )
+    @Test func terminalAction_oneProjectOpensCatalog() {
+        #expect(SessionListHomeChrome.terminalAction(projects: [mobile]) == .openCatalog)
     }
 
-    @Test func terminalAction_scopedProjectOpensThere() {
+    @Test func terminalAction_twoProjectsOpensCatalog() {
         #expect(
-            SessionListHomeChrome.terminalAction(
-                projects: [mobile, playground],
-                selectedFilterId: "/play"
-            ) == .open(worktree: "/play", projectTitle: "playground")
-        )
-    }
-
-    @Test func terminalAction_allSelectedWithTwoProjectsSnacks() {
-        #expect(
-            SessionListHomeChrome.terminalAction(
-                projects: [mobile, playground],
-                selectedFilterId: SessionListFilterTab.allId
-            ) == .snack
+            SessionListHomeChrome.terminalAction(projects: [mobile, playground]) == .openCatalog
         )
     }
 

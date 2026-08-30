@@ -522,13 +522,24 @@ extension Container {
         }
     }
 
-    var terminalViewModel: ParameterFactory<String, TerminalViewModel> {
+    var terminalViewModel: ParameterFactory<(worktree: String, ptyId: String?), TerminalViewModel> {
         self { @MainActor in
             TerminalViewModel(
-                worktree: $0,
+                worktree: $0.worktree,
+                ptyId: $0.ptyId,
                 repository: self.terminalRepository(),
                 activeConnectionManager: self.activeConnectionManager(),
                 socketClient: URLSessionTerminalSocketClient()
+            )
+        }
+    }
+
+    var terminalsCatalogViewModel: Factory<TerminalsCatalogViewModel> {
+        self { @MainActor in
+            TerminalsCatalogViewModel(
+                repository: self.terminalRepository(),
+                activeConnectionManager: self.activeConnectionManager(),
+                connectionProfileStore: self.connectionProfileStore()
             )
         }
     }
@@ -569,8 +580,13 @@ extension Container {
     }
 
     @MainActor
-    static func makeTerminalViewModel(worktree: String) -> TerminalViewModel {
-        shared.terminalViewModel(worktree)
+    static func makeTerminalViewModel(worktree: String, ptyId: String? = nil) -> TerminalViewModel {
+        shared.terminalViewModel((worktree: worktree, ptyId: ptyId))
+    }
+
+    @MainActor
+    static func makeTerminalsCatalogViewModel() -> TerminalsCatalogViewModel {
+        shared.terminalsCatalogViewModel()
     }
 
     @MainActor

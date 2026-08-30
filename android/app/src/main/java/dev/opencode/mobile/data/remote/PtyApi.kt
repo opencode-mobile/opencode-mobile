@@ -11,10 +11,12 @@ import dev.opencode.mobile.network.setJsonBody
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ResponseException
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -119,6 +121,28 @@ class PtyApi private constructor(
         return json.decodeDataEnvelope(element)
     }
 
+    suspend fun delete(
+        id: String,
+        directory: String,
+    ) {
+        httpClient
+            .get()
+            .delete("pty/$id") {
+                applyDirectory(directory)
+            }.ensureSuccess()
+    }
+
+    suspend fun deleteV2(
+        id: String,
+        directory: String,
+    ) {
+        httpClient
+            .get()
+            .delete("api/pty/$id") {
+                applyLocationDirectory(directory)
+            }.ensureSuccess()
+    }
+
     private suspend inline fun <reified T> HttpResponse.bodyOnSuccess(): T {
         if (!status.isSuccess()) {
             throw ResponseException(this, "HTTP ${status.value}: ${status.description}")
@@ -131,6 +155,13 @@ class PtyApi private constructor(
             throw ResponseException(this, "HTTP ${status.value}: ${status.description}")
         }
         return body()
+    }
+
+    private suspend fun HttpResponse.ensureSuccess() {
+        if (!status.isSuccess()) {
+            throw ResponseException(this, "HTTP ${status.value}: ${status.description}")
+        }
+        bodyAsText()
     }
 
     private fun interface ClientProvider {

@@ -6,6 +6,8 @@ protocol TerminalRepository: Sendable {
     func get(id: String, directory: String) async throws -> TerminalSession
     func updateSize(id: String, directory: String, cols: Int, rows: Int) async throws -> TerminalSession
     func ensureRunning(directory: String) async throws -> TerminalSession
+    func remove(id: String, directory: String) async throws
+    func listRunning(directories: [String]) async throws -> [RunningTerminal]
     func connectRequest(
         id: String,
         directory: String,
@@ -63,6 +65,23 @@ struct DefaultTerminalRepository: TerminalRepository, Sendable {
             return running
         }
         return try await create(directory: directory, cwd: directory)
+    }
+
+    func remove(id: String, directory: String) async throws {
+        try await run { try await remote.remove(id: id, directory: directory) }
+    }
+
+    func listRunning(directories: [String]) async throws -> [RunningTerminal] {
+        var result: [RunningTerminal] = []
+        for directory in directories {
+            let sessions = try await list(directory: directory)
+            result.append(
+                contentsOf: sessions
+                    .filter { $0.status == .running }
+                    .map { RunningTerminal(directory: directory, session: $0) }
+            )
+        }
+        return result
     }
 
     func connectRequest(

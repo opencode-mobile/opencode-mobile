@@ -4,6 +4,7 @@ import SwiftUI
 struct TerminalRoute: Hashable {
     let worktree: String
     let projectTitle: String
+    var ptyId: String? = nil
 }
 
 struct TerminalView: View {
@@ -11,15 +12,14 @@ struct TerminalView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel: TerminalViewModel
-    @State private var ctrlSticky = false
     private let worktree: String
     private let projectTitle: String
 
-    init(worktree: String, projectTitle: String, viewModel: TerminalViewModel? = nil) {
+    init(worktree: String, projectTitle: String, ptyId: String? = nil, viewModel: TerminalViewModel? = nil) {
         self.worktree = worktree
         self.projectTitle = projectTitle
         _viewModel = State(
-            initialValue: viewModel ?? Container.makeTerminalViewModel(worktree: worktree)
+            initialValue: viewModel ?? Container.makeTerminalViewModel(worktree: worktree, ptyId: ptyId)
         )
     }
 
@@ -90,18 +90,12 @@ struct TerminalView: View {
                     viewModel.resize(cols: cols, rows: rows)
                 }
             )
-            TerminalControlStrip(
-                ctrlSticky: ctrlSticky,
-                onToggleCtrl: { ctrlSticky.toggle() },
-                onSend: emit
-            )
+            TerminalControlStrip(onSend: emit)
         }
     }
 
     private func emit(_ text: String) {
-        let (payload, nextSticky) = applyTerminalCtrl(text, ctrlSticky: ctrlSticky)
-        ctrlSticky = nextSticky
-        viewModel.sendInput(payload)
+        viewModel.sendInput(text)
     }
 
     private func errorContent(title: String, message: String) -> some View {

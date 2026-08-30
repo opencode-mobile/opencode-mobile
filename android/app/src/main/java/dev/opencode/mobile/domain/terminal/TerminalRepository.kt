@@ -24,6 +24,13 @@ interface TerminalRepository {
 
     suspend fun ensureRunning(directory: String): TerminalSession
 
+    suspend fun remove(
+        id: String,
+        directory: String,
+    )
+
+    suspend fun listRunning(directories: List<String>): List<RunningTerminal>
+
     fun connectRequest(
         id: String,
         directory: String,
