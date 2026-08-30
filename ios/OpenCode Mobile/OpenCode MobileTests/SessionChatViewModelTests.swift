@@ -943,8 +943,8 @@ struct SessionChatViewModelTests {
         let task = Task { await viewModel.sendPrompt() }
         await waitUntil { viewModel.uiState.isSending }
 
-        #expect(viewModel.uiState.composer.text == "Submitted")
-        #expect(viewModel.uiState.composer.attachments == [submitted])
+        #expect(viewModel.uiState.composer.text == "")
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
 
         viewModel.updateComposerText("New draft")
         viewModel.addAttachments([newlySelected])
@@ -953,6 +953,20 @@ struct SessionChatViewModelTests {
 
         #expect(viewModel.uiState.composer.text == "New draft")
         #expect(viewModel.uiState.composer.attachments == [newlySelected])
+    }
+
+    @Test func sendPrompt_clearsComposerWhileRequestInFlight() async {
+        let repository = FakeMessageRepository(holdSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("/publish-prototype")
+        let task = Task { await viewModel.sendPrompt() }
+        await waitUntil { viewModel.uiState.isSending }
+        #expect(viewModel.uiState.composer.text == "")
+        repository.releaseSend()
+        await task.value
+        #expect(viewModel.uiState.composer.text == "")
+        viewModel.stopObserving()
     }
 
     @Test func composerDraft_restoresTextAndMentionsForSameSessionOnly() async {
