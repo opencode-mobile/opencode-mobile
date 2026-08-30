@@ -33,6 +33,35 @@ struct SessionChatTimelineOffMainTests {
         timeline.reset()
     }
 
+    @Test func startObserving_warmReopen_doesNotShowSyncing() async {
+        let message = Message(
+            id: "m1",
+            role: .user,
+            text: "Hello",
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: 1
+        )
+        let repository = OffMainTimelineMessageRepository(
+            messages: [message],
+            warmPeek: true,
+            holdObservation: true
+        )
+        let timeline = SessionChatTimeline(
+            sessionID: "ses-1",
+            worktree: "/repo",
+            messageRepository: repository
+        )
+        timeline.startObserving()
+        let ready = await waitUntil {
+            timeline.state.timeline == .ready && !timeline.state.messages.isEmpty
+        }
+        #expect(ready)
+        #expect(!timeline.state.isSyncingMessages)
+        #expect(!timeline.state.messagesFromCache)
+        timeline.reset()
+    }
+
     @Test func applyLoadedDisplayMessages_dropsStaleDetachedResult() async {
         let repository = OffMainTimelineMessageRepository(
             messages: [
@@ -67,13 +96,18 @@ struct SessionChatTimelineOffMainTests {
 
 private final class OffMainTimelineMessageRepository: MessageRepository, @unchecked Sendable {
     private let messages: [Message]
+    private let warmPeek: Bool
+    private let holdObservation: Bool
 
-    init(messages: [Message]) {
+    init(messages: [Message], warmPeek: Bool = false, holdObservation: Bool = false) {
         self.messages = messages
+        self.warmPeek = warmPeek
+        self.holdObservation = holdObservation
     }
 
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
         AsyncStream { continuation in
+            if holdObservation { return }
             continuation.yield(.messages(messages, isFromCache: false))
             continuation.finish()
         }
@@ -81,13 +115,15 @@ private final class OffMainTimelineMessageRepository: MessageRepository, @unchec
 
     func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate> {
         AsyncStream { continuation in
+            if holdObservation { return }
             continuation.yield(.messages(messages.map { DisplayMessage(message: $0) }, isFromCache: false))
             continuation.finish()
         }
     }
 
     func peekWarmDisplayMessages(sessionID: String, directory: String?) -> [DisplayMessage]? {
-        nil
+        guard warmPeek else { return nil }
+        return messages.map { DisplayMessage(message: $0) }
     }
 
     func refreshMessages(sessionID: String, directory: String?) async throws -> [Message] {

@@ -278,6 +278,11 @@ nonisolated final class MessageSync: @unchecked Sendable {
         )
         let cacheHandle = openMessageCacheHandle(for: key)
         let resumeState = ObservationResumeState()
+        func confirmCacheSyncIfAwaiting() {
+            guard isAwaitingCacheSyncConfirm(for: key.storeSlot) else { return }
+            setAwaitingCacheSyncConfirm(false, for: key.storeSlot)
+            yield(.cacheSyncConfirmed)
+        }
         func requestResumeCatchUp(reason: String = StoreRefreshReason.streamReconnected) -> Bool {
             guard resumeState.hasSeenConnected else { return false }
             let health = self.syncHealth(
@@ -290,10 +295,12 @@ nonisolated final class MessageSync: @unchecked Sendable {
             }()
             if !needsCatchUp {
                 DiagnosticLog.info(.chat, "fullReload skip session=\(key.sessionID) reason=\(reason)")
+                confirmCacheSyncIfAwaiting()
                 return false
             }
             guard resumeState.claimResume(epoch: connectionEpoch.current()) else {
                 DiagnosticLog.info(.chat, "fullReload skip session=\(key.sessionID) reason=\(reason)")
+                confirmCacheSyncIfAwaiting()
                 return false
             }
             staging.requestTransportResume(reason: reason)
@@ -505,7 +512,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
             key: key,
             staging: staging,
             observationEpoch: observationEpoch,
-            publishMessages: { publishMessages($0, false) }
+            publishMessages: { publishMessages($0, false) },
+            confirmCacheSync: confirmCacheSyncIfAwaiting
         )
         _ = await (eventLoop, pollLoop)
     }
@@ -534,7 +542,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
         observationEpoch: ObservationEpoch,
         reason: MessageSyncRecoveryReason,
         fetchReason: String = "overflow-recovery",
-        publishMessages: @escaping @Sendable ([Message]) -> Void
+        publishMessages: @escaping @Sendable ([Message]) -> Void,
+        confirmCacheSync: @escaping @Sendable () -> Void = {}
     ) async {
         guard observationStillCurrent(key: key),
               connectionEpoch.current() == observationEpoch.current else {
@@ -565,6 +574,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     observationEpoch.adopt(connectionEpoch.current())
                     if fingerprintBefore != messageFingerprint(messages) {
                         publishMessages(messages)
+                    } else {
+                        confirmCacheSync()
                     }
                 }
                 if becameHealthy {
@@ -716,7 +727,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
         key: MessageSessionKey,
         staging: MessageEventStaging,
         observationEpoch: ObservationEpoch,
-        publishMessages: @escaping @Sendable ([Message]) -> Void
+        publishMessages: @escaping @Sendable ([Message]) -> Void,
+        confirmCacheSync: @escaping @Sendable () -> Void
     ) async {
         var debounceTask: Task<Void, Never>?
         // One authoritative reconnect catch-up per ConnectionEpoch (OPE-165).
@@ -736,7 +748,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
                         if case .recovering(let reason) = staging.currentHealth { return reason }
                         return .overflow
                     }(),
-                    publishMessages: publishMessages
+                    publishMessages: publishMessages,
+                    confirmCacheSync: confirmCacheSync
                 )
                 continue
             case .transportResumed(let reason):
@@ -744,6 +757,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 debounceTask = nil
                 guard catchUpGate.claim(connectionEpoch.current()) else {
                     DiagnosticLog.info(.chat, "fullReload skip session=\(key.sessionID) reason=\(reason)")
+                    confirmCacheSync()
                     continue
                 }
                 observationEpoch.adopt(connectionEpoch.current())
@@ -755,7 +769,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     observationEpoch: observationEpoch,
                     reason: .reconnect,
                     fetchReason: reason,
-                    publishMessages: publishMessages
+                    publishMessages: publishMessages,
+                    confirmCacheSync: confirmCacheSync
                 )
                 continue
             case .event(let event, let eventEpoch, _):
@@ -769,7 +784,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
                             if case .recovering(let reason) = staging.currentHealth { return reason }
                             return .overflow
                         }(),
-                        publishMessages: publishMessages
+                        publishMessages: publishMessages,
+                        confirmCacheSync: confirmCacheSync
                     )
                     continue
                 }
@@ -781,7 +797,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     observationEpoch: observationEpoch,
                     debounceTask: &debounceTask,
                     catchUpGate: catchUpGate,
-                    publishMessages: publishMessages
+                    publishMessages: publishMessages,
+                    confirmCacheSync: confirmCacheSync
                 )
             }
         }
@@ -794,7 +811,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
         observationEpoch: ObservationEpoch,
         debounceTask: inout Task<Void, Never>?,
         catchUpGate: ReconnectCatchUpGate,
-        publishMessages: @escaping @Sendable ([Message]) -> Void
+        publishMessages: @escaping @Sendable ([Message]) -> Void,
+        confirmCacheSync: @escaping @Sendable () -> Void
     ) async {
         if event.type == "stream.reconnected" {
             debounceTask?.cancel()
@@ -804,6 +822,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     .chat,
                     "fullReload skip session=\(key.sessionID) reason=\(StoreRefreshReason.streamReconnected)"
                 )
+                confirmCacheSync()
                 return
             }
             observationEpoch.adopt(connectionEpoch.current())
@@ -815,7 +834,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 observationEpoch: observationEpoch,
                 reason: .reconnect,
                 fetchReason: StoreRefreshReason.streamReconnected,
-                publishMessages: publishMessages
+                publishMessages: publishMessages,
+                confirmCacheSync: confirmCacheSync
             )
             return
         }
@@ -830,6 +850,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                         .chat,
                         "fullReload skip session=\(key.sessionID) reason=\(StoreRefreshReason.serverConnected)"
                     )
+                    confirmCacheSync()
                     return
                 }
                 observationEpoch.adopt(self.connectionEpoch.current())
@@ -841,7 +862,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     observationEpoch: observationEpoch,
                     reason: .reconnect,
                     fetchReason: StoreRefreshReason.serverConnected,
-                    publishMessages: publishMessages
+                    publishMessages: publishMessages,
+                    confirmCacheSync: confirmCacheSync
                 )
             }
             return

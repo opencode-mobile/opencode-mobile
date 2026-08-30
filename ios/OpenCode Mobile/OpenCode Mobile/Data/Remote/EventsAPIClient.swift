@@ -1,19 +1,19 @@
 import Foundation
 
 nonisolated final class EventsAPIClient: Sendable {
-    private static let defaultStreamingSession: URLSession = {
-        let configuration = URLSessionConfiguration.default
+    private static func makeStreamingSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = TimeInterval.infinity
         configuration.timeoutIntervalForResource = TimeInterval.infinity
         configuration.waitsForConnectivity = false
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.urlCache = nil
         return URLSession(configuration: configuration)
-    }()
+    }
 
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let protocolResolver: (@Sendable () async -> ServerProtocol)?
-    private let urlSession: URLSession
+    private let injectedSession: URLSession?
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
@@ -21,7 +21,7 @@ nonisolated final class EventsAPIClient: Sendable {
     ) {
         self.connectionProvider = connectionProvider
         self.protocolResolver = protocolResolver
-        self.urlSession = Self.defaultStreamingSession
+        self.injectedSession = nil
     }
 
     init(
@@ -31,7 +31,7 @@ nonisolated final class EventsAPIClient: Sendable {
     ) {
         self.connectionProvider = connectionProvider
         self.protocolResolver = protocolResolver
-        self.urlSession = urlSession
+        self.injectedSession = urlSession
     }
 
     func streamGlobalEvents(
@@ -109,10 +109,17 @@ nonisolated final class EventsAPIClient: Sendable {
         }
 
         let startedAt = OpenCodeAPITrace.start(request)
+        let ownedSession = injectedSession == nil
+        let session = injectedSession ?? Self.makeStreamingSession()
+        defer {
+            if ownedSession {
+                session.finishTasksAndInvalidate()
+            }
+        }
         let bytes: URLSession.AsyncBytes
         let response: URLResponse
         do {
-            (bytes, response) = try await urlSession.bytes(for: request)
+            (bytes, response) = try await session.bytes(for: request)
         } catch {
             OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
             throw error

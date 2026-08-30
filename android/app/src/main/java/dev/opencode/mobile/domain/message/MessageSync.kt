@@ -308,7 +308,12 @@ class MessageSync(
                 observationEpoch.set(connectionEpoch.current())
             }
 
-            fun requestResumeCatchUp(fetchReason: String = StoreRefreshReason.STREAM_RECONNECTED): Boolean {
+            suspend fun confirmCacheSyncIfAwaiting() {
+                if (!awaitingCacheSyncConfirm.remove(storeSlot)) return
+                send(MessageListUpdate.CacheSyncConfirmed)
+            }
+
+            suspend fun requestResumeCatchUp(fetchReason: String = StoreRefreshReason.STREAM_RECONNECTED): Boolean {
                 if (!seenConnected.get()) return false
                 val needsCatchUp =
                     health.get() is MessageSyncHealth.Stale || !isCurrentEpoch()
@@ -316,6 +321,7 @@ class MessageSync(
                     logI(
                         "fullReload skip session=${key.sessionId} reason=$fetchReason",
                     )
+                    confirmCacheSyncIfAwaiting()
                     return false
                 }
                 val epoch = connectionEpoch.current()
@@ -325,6 +331,7 @@ class MessageSync(
                         logI(
                             "fullReload skip session=${key.sessionId} reason=$fetchReason",
                         )
+                        confirmCacheSyncIfAwaiting()
                         return false
                     }
                     if (resumeCatchUpRequestedEpoch.compareAndSet(previous, epoch)) {
@@ -480,6 +487,7 @@ class MessageSync(
                                         "observeMessages skip session=${key.sessionId} " +
                                             "source=overflow-recovery fingerprint-unchanged",
                                     )
+                                    confirmCacheSyncIfAwaiting()
                                 }
                                 adoptCurrentEpoch()
                             }
@@ -512,6 +520,7 @@ class MessageSync(
                     serverConnectedReloadJob = null
                     if (!claimReconnectCatchUp()) {
                         logI("fullReload skip session=${key.sessionId} reason=${StoreRefreshReason.STREAM_RECONNECTED}")
+                        confirmCacheSyncIfAwaiting()
                         return
                     }
                     adoptCurrentEpoch()
@@ -533,6 +542,7 @@ class MessageSync(
                                     "fullReload skip session=${key.sessionId} " +
                                         "reason=${StoreRefreshReason.SERVER_CONNECTED}",
                                 )
+                                confirmCacheSyncIfAwaiting()
                                 return@launch
                             }
                             adoptCurrentEpoch()
@@ -780,6 +790,7 @@ class MessageSync(
                                 logI(
                                     "fullReload skip session=${key.sessionId} reason=${item.reason}",
                                 )
+                                confirmCacheSyncIfAwaiting()
                                 continue
                             }
                             adoptCurrentEpoch()
