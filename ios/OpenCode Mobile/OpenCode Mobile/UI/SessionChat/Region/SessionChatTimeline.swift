@@ -101,10 +101,10 @@ final class SessionChatTimeline {
 
     func startObserving() {
         cancelObservationTasks()
-        networkCacheSyncConfirmed = false
         let generation = observationGeneration
         if let warm = messageRepository.peekWarmDisplayMessages(sessionID: sessionID, directory: worktree), !warm.isEmpty {
-            // Warm reopen: show store rows immediately (styled when cache is complete).
+            // In-memory rows already on screen. Not unconfirmed disk cache — resume
+            // skip/same-fingerprint catch-up never confirms Syncing if we raise it here.
             state.timeline = .ready
             state.errorMessage = nil
             notifyChange()
@@ -113,7 +113,7 @@ final class SessionChatTimeline {
                     warm,
                     isRefreshing: false,
                     fromQuietRefresh: true,
-                    messagesFromCache: true
+                    messagesFromCache: false
                 )
                 await Task.yield()
                 guard !Task.isCancelled, self.observationGeneration == generation else { return }
@@ -471,6 +471,9 @@ final class SessionChatTimeline {
         state.timeline = resolvedTimeline
         state.messages = rows
         state.isRefreshing = isRefreshing
+        if !messagesFromCache {
+            networkCacheSyncConfirmed = true
+        }
         let fromCache = messagesFromCache && !networkCacheSyncConfirmed
         state.messagesFromCache = fromCache
         state.isSyncingMessages = fromCache
