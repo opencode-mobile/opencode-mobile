@@ -2455,7 +2455,7 @@ struct SessionChatViewModelTests {
         await viewModel.abortSession()
 
         #expect(Set(sessionRepository.abortSessionIDs) == ["ses-1", "ses-child"])
-        #expect(viewModel.uiState.sessionStatusLabel == nil)
+        await waitUntil { viewModel.uiState.sessionStatusLabel == nil }
         #expect(viewModel.uiState.snackbar == nil)
     }
 
