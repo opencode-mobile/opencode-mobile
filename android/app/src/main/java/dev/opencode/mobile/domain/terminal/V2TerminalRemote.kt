@@ -9,7 +9,7 @@ internal class V2TerminalRemote(
     private val api: PtyApi,
     private val adapter: TerminalDomainAdapter,
 ) : TerminalRemote {
-    override suspend fun list(directory: String): List<TerminalSession> = api.listV2(directory).map(adapter::toSession)
+    override suspend fun list(directory: String?): List<TerminalSession> = api.listV2(directory).map(adapter::toSession)
 
     override suspend fun create(
         directory: String,

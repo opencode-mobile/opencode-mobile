@@ -204,6 +204,7 @@ struct TerminalProtocolRepositoryTests {
 
     @Test func listRunningFansOutPerDirectoryAndKeepsRunningOnly() async throws {
         TerminalRoutingURLProtocol.reset(responses: [
+            .json("[]"),
             .json(#"""
             [\#(ptyObjectJSON(id: "pty_dead", status: "exited")),\#(ptyObjectJSON(id: "pty_live", status: "running"))]
             """#),
@@ -215,10 +216,52 @@ struct TerminalProtocolRepositoryTests {
 
         #expect(running.map(\.session.id) == ["pty_live", "pty_play"])
         #expect(running.map(\.directory) == ["/repo", "/play"])
-        #expect(TerminalRoutingURLProtocol.requests.count == 2)
+        #expect(TerminalRoutingURLProtocol.requests.count == 3)
         #expect(TerminalRoutingURLProtocol.requests.allSatisfy { $0.httpMethod == "GET" })
-        #expect(queryValue(try #require(TerminalRoutingURLProtocol.requests[0].url), "directory") == "/repo")
-        #expect(queryValue(try #require(TerminalRoutingURLProtocol.requests[1].url), "directory") == "/play")
+        #expect(queryValue(try #require(TerminalRoutingURLProtocol.requests[0].url), "directory") == nil)
+        #expect(queryValue(try #require(TerminalRoutingURLProtocol.requests[1].url), "directory") == "/repo")
+        #expect(queryValue(try #require(TerminalRoutingURLProtocol.requests[2].url), "directory") == "/play")
+    }
+
+    @Test func listRunningUnscopedListReturnsRunningWithoutFanOut() async throws {
+        TerminalRoutingURLProtocol.reset(responses: [
+            .json(ptyArrayJSON(id: "pty_live", status: "running"))
+        ])
+        let repository = makeRepository(serverProtocol: .v1)
+
+        let running = try await repository.listRunning(directories: ["/repo", "/play"])
+
+        #expect(running.map(\.session.id) == ["pty_live"])
+        #expect(running.map(\.directory) == ["/repo"])
+        #expect(TerminalRoutingURLProtocol.requests.count == 1)
+        #expect(queryValue(try #require(TerminalRoutingURLProtocol.requests[0].url), "directory") == nil)
+    }
+
+    @Test func listRunningSkipsFailedDirectoryAndKeepsOthers() async throws {
+        TerminalRoutingURLProtocol.reset(responses: [
+            .json("[]"),
+            TerminalStubResponse(statusCode: 500, body: "no"),
+            .json(ptyArrayJSON(id: "pty_play", status: "running"))
+        ])
+        let repository = makeRepository(serverProtocol: .v1)
+
+        let running = try await repository.listRunning(directories: ["/bad", "/play"])
+
+        #expect(running.map(\.session.id) == ["pty_play"])
+        #expect(running.map(\.directory) == ["/play"])
+    }
+
+    @Test func listBlankStatusMapsToRunning() async throws {
+        TerminalRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            [{"id":"pty_1","title":"term","command":"/bin/zsh","cwd":"/repo"}]
+            """#)
+        ])
+        let repository = makeRepository(serverProtocol: .v1)
+
+        let sessions = try await repository.list(directory: "/repo")
+
+        #expect(sessions.first?.status == .running)
     }
 
     @Test func ensureRunningCreatesWhenNoneRunning() async throws {

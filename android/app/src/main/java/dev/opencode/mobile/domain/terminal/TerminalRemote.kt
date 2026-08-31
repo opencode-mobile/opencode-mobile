@@ -1,7 +1,7 @@
 package dev.opencode.mobile.domain.terminal
 
 internal interface TerminalRemote {
-    suspend fun list(directory: String): List<TerminalSession>
+    suspend fun list(directory: String?): List<TerminalSession>
 
     suspend fun create(
         directory: String,

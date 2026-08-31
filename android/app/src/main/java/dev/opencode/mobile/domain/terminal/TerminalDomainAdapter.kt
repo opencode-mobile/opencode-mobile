@@ -27,9 +27,9 @@ class TerminalDomainAdapter {
         }
 
     private fun toStatus(raw: String): TerminalSessionStatus =
-        if (raw.equals("running", ignoreCase = true)) {
-            TerminalSessionStatus.Running
-        } else {
+        if (raw.equals("exited", ignoreCase = true)) {
             TerminalSessionStatus.Exited
+        } else {
+            TerminalSessionStatus.Running
         }
 }

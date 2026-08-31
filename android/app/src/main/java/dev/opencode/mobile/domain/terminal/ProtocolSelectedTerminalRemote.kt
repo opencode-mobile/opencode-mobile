@@ -10,7 +10,7 @@ internal class ProtocolSelectedTerminalRemote(
 ) : TerminalRemote {
     private suspend fun selected(): TerminalRemote = if (activeConnectionManager?.currentProtocolOrProbe() == ServerProtocol.V2) v2 else v1
 
-    override suspend fun list(directory: String): List<TerminalSession> = selected().list(directory)
+    override suspend fun list(directory: String?): List<TerminalSession> = selected().list(directory)
 
     override suspend fun create(
         directory: String,

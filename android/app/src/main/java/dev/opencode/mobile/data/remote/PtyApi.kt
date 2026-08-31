@@ -29,14 +29,14 @@ class PtyApi private constructor(
 
     internal constructor(httpClient: HttpClient, json: Json) : this(ClientProvider { httpClient }, json)
 
-    suspend fun list(directory: String): List<PtyDto> =
+    suspend fun list(directory: String? = null): List<PtyDto> =
         httpClient
             .get()
             .get("pty") {
                 applyDirectory(directory)
             }.bodyOnSuccess()
 
-    suspend fun listV2(directory: String): List<PtyDto> {
+    suspend fun listV2(directory: String? = null): List<PtyDto> {
         val element =
             httpClient
                 .get()

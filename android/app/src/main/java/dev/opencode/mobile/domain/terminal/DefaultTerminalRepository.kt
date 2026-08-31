@@ -60,19 +60,31 @@ class DefaultTerminalRepository
         }
 
         override suspend fun listRunning(directories: List<String>): List<RunningTerminal> {
+            val unscoped = runCatching { remote.list(null) }.getOrNull()
+            if (unscoped != null) {
+                val running = unscoped.running()
+                if (running.isNotEmpty()) {
+                    return running.map { session ->
+                        RunningTerminal(
+                            directory = session.cwd.ifBlank { "" },
+                            session = session,
+                        )
+                    }
+                }
+                if (directories.isEmpty()) return emptyList()
+            }
             val result = mutableListOf<RunningTerminal>()
             for (directory in directories) {
-                val sessions =
-                    runCatching { remote.list(directory) }
-                        .getOrElse { throw adapter.mapError(it) }
-                sessions
-                    .filter { it.status == TerminalSessionStatus.Running }
-                    .forEach { session ->
-                        result += RunningTerminal(directory = directory, session = session)
-                    }
+                val sessions = runCatching { remote.list(directory) }.getOrNull() ?: continue
+                sessions.running().forEach { session ->
+                    result += RunningTerminal(directory = directory, session = session)
+                }
             }
             return result
         }
+
+        private fun List<TerminalSession>.running(): List<TerminalSession> =
+            filter { it.status == TerminalSessionStatus.Running }
 
         override fun connectRequest(
             id: String,

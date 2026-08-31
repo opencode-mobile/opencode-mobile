@@ -72,9 +72,21 @@ struct DefaultTerminalRepository: TerminalRepository, Sendable {
     }
 
     func listRunning(directories: [String]) async throws -> [RunningTerminal] {
+        if let sessions = try? await remote.list(directory: nil) {
+            let running = sessions.filter { $0.status == .running }
+            if !running.isEmpty {
+                return running.map { session in
+                    RunningTerminal(
+                        directory: session.cwd.isEmpty ? "" : session.cwd,
+                        session: session
+                    )
+                }
+            }
+            if directories.isEmpty { return [] }
+        }
         var result: [RunningTerminal] = []
         for directory in directories {
-            let sessions = try await list(directory: directory)
+            let sessions = (try? await remote.list(directory: directory)) ?? []
             result.append(
                 contentsOf: sessions
                     .filter { $0.status == .running }

@@ -7,7 +7,7 @@ struct TerminalDomainAdapter: Sendable {
             title: dto.title,
             command: dto.command,
             cwd: dto.cwd,
-            status: dto.status.lowercased() == "running" ? .running : .exited
+            status: dto.status.lowercased() == "exited" ? .exited : .running
         )
     }
 

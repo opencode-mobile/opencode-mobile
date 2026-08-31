@@ -9,7 +9,7 @@ struct V2TerminalRemote: TerminalRemote, Sendable {
         self.adapter = adapter
     }
 
-    func list(directory: String) async throws -> [TerminalSession] {
+    func list(directory: String?) async throws -> [TerminalSession] {
         try await api.listV2(directory: directory).map { adapter.session(from: $0) }
     }
 

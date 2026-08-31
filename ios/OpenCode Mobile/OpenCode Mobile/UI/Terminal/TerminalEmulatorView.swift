@@ -140,9 +140,7 @@ struct TerminalEmulatorView: UIViewRepresentable {
         }
 
         private func evaluateWrite(_ text: String) {
-            guard let data = try? JSONSerialization.data(withJSONObject: text),
-                  let encoded = String(data: data, encoding: .utf8)
-            else { return }
+            guard let encoded = terminalJsStringLiteral(text) else { return }
             webView?.evaluateJavaScript("window.terminalWrite(\(encoded))", completionHandler: nil)
         }
 
@@ -152,6 +150,13 @@ struct TerminalEmulatorView: UIViewRepresentable {
             return 0
         }
     }
+}
+
+func terminalJsStringLiteral(_ text: String) -> String? {
+    guard let data = try? JSONSerialization.data(withJSONObject: text, options: [.fragmentsAllowed]),
+          let encoded = String(data: data, encoding: .utf8)
+    else { return nil }
+    return encoded
 }
 
 private func terminalIndexURL() -> URL? {

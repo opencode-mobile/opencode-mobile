@@ -332,10 +332,70 @@ class TerminalProtocolRepositoryTest {
 
             assertEquals(listOf("pty_live", "pty_play"), running.map { it.session.id })
             assertEquals(listOf("/repo", "/play"), running.map { it.directory })
-            assertEquals(2, requests.size)
+            assertEquals(3, requests.size)
             assertTrue(requests.all { it.method == HttpMethod.Get })
-            assertEquals("/repo", requests[0].url.parameters["directory"])
-            assertEquals("/play", requests[1].url.parameters["directory"])
+            assertEquals(null, requests[0].url.parameters["directory"])
+            assertEquals("/repo", requests[1].url.parameters["directory"])
+            assertEquals("/play", requests[2].url.parameters["directory"])
+        }
+
+    @Test
+    fun listRunning_unscopedListReturnsRunningWithoutFanOut() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(ptyArrayJson("pty_live", "running"))
+                }
+            val repository = repository(client, ServerProtocol.V1)
+
+            val running = repository.listRunning(listOf("/repo", "/play"))
+
+            assertEquals(listOf("pty_live"), running.map { it.session.id })
+            assertEquals(listOf("/repo"), running.map { it.directory })
+            assertEquals(1, requests.size)
+            assertEquals(null, requests.single().url.parameters["directory"])
+        }
+
+    @Test
+    fun listRunning_skipsFailedDirectoryAndKeepsOthers() =
+        runTest {
+            val client =
+                testClient { request ->
+                    when (request.url.parameters["directory"]) {
+                        "/bad" ->
+                            respond(
+                                content = "no",
+                                status = HttpStatusCode.InternalServerError,
+                                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                            )
+                        "/play" -> respondJson(ptyArrayJson("pty_play", "running"))
+                        else -> respondJson("[]")
+                    }
+                }
+            val repository = repository(client, ServerProtocol.V1)
+
+            val running = repository.listRunning(listOf("/bad", "/play"))
+
+            assertEquals(listOf("pty_play"), running.map { it.session.id })
+            assertEquals(listOf("/play"), running.map { it.directory })
+        }
+
+    @Test
+    fun list_blankStatusMapsToRunning() =
+        runTest {
+            val client =
+                testClient {
+                    respondJson(
+                        """[{"id":"pty_1","title":"term","command":"/bin/zsh","cwd":"/repo"}]""",
+                    )
+                }
+            val repository = repository(client, ServerProtocol.V1)
+
+            val sessions = repository.list("/repo")
+
+            assertEquals(TerminalSessionStatus.Running, sessions.single().status)
         }
 
     @Test

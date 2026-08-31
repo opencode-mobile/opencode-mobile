@@ -20,11 +20,11 @@ nonisolated struct PtyAPIClient: Sendable {
         self.urlSession = urlSession
     }
 
-    func list(directory: String) async throws -> [PtyDTO] {
+    func list(directory: String?) async throws -> [PtyDTO] {
         try await get(path: "pty", directory: directory)
     }
 
-    func listV2(directory: String) async throws -> [PtyDTO] {
+    func listV2(directory: String?) async throws -> [PtyDTO] {
         let data = try await data(
             for: try requireConnection().authorizedRequest(
                 path: "api/pty",

@@ -1,7 +1,7 @@
 import Foundation
 
 protocol TerminalRemote: Sendable {
-    func list(directory: String) async throws -> [TerminalSession]
+    func list(directory: String?) async throws -> [TerminalSession]
     func create(directory: String, cwd: String) async throws -> TerminalSession
     func get(id: String, directory: String) async throws -> TerminalSession
     func updateSize(id: String, directory: String, cols: Int, rows: Int) async throws -> TerminalSession
@@ -30,7 +30,7 @@ struct ProtocolSelectedTerminalRemote: TerminalRemote, Sendable {
         return v1
     }
 
-    func list(directory: String) async throws -> [TerminalSession] {
+    func list(directory: String?) async throws -> [TerminalSession] {
         try await selected().list(directory: directory)
     }
 
