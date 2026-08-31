@@ -3,8 +3,8 @@
 ## Now
 
 Home Terminal action opens a Terminals catalog of running shells across added
-projects. Tap a row to attach that PTY. Trailing close deletes it. Empty catalog
-does not create a shell. Session Chat `[terminal]` pushes a project shell and
+projects. Tap a row to attach that PTY. Trailing close confirms, then deletes
+it. Empty catalog does not create a shell. Session Chat `[terminal]` pushes a project shell and
 Back returns to the same chat. Dual remotes, bundled xterm.js WebView with
 native WebSocket I/O, Ctrl-C / Esc / Tab / arrows strip, reconnecting after a
 dropped socket.
@@ -29,7 +29,8 @@ project, type commands, and see output, without leaving the app for SSH.
   no added projects.
 - Catalog rows: letter badge, title (`zsh` or server title), subtitle project
   label, trailing close. Tap pushes Terminal for that worktree and that PTY id.
-  Close is `DELETE /pty/{id}` then drop the row. Empty: `No running shells`.
+  Close confirms, then `DELETE /pty/{id}` and drop the row. Empty: `No running
+  shells`.
   Do not create a PTY from this page. Back returns to the same home session list.
 - One Terminal screen on iOS and Android. Opening a catalog row connects that
   id. Opening without an id still `ensureRunning` for that worktree.
@@ -107,7 +108,8 @@ enough to detect exited.
 Immutable UI state plus explicit actions. They do not live under
 `SessionChatViewModel`.
 
-Catalog actions: `appear`, `close(id, directory)`. Terminal actions:
+Catalog actions: `appear`, `requestClose(row)`, `confirmClose`,
+`dismissClose`. Terminal actions:
 `appear`, `disappear`, `retry`, `foreground`, `background`,
 `resize(cols, rows)`. Byte I/O stays in the WebView host, not in UI state.
 
@@ -115,8 +117,10 @@ Catalog actions: `appear`, `close(id, directory)`. Terminal actions:
 
 Catalog:
 
+- Loading (`OpenCodeStatusStack`)
 - Loaded rows
 - Empty (`No running shells`)
+- Close confirmation (`OpenCodeDialog`)
 
 Terminal:
 
@@ -148,7 +152,7 @@ requests stay in Session Chat.
 ## Design-System Components Needed
 
 - Reuse `OpenCodeTopBar`, `OpenCodeEmptyState`, `OpenCodeSnackbar`,
-  `OpenCodeListItem`.
+  `OpenCodeListItem`, `OpenCodeDialog`, `OpenCodeStatusStack`.
 - Catalog icon `terminal` through the design-system icon workflow. Product
   meaning: open Terminals from home.
 - Emulator canvas and control strip are feature-local. They are a VT host
@@ -163,7 +167,8 @@ requests stay in Session Chat.
 - [x] Tap opens the Terminals catalog. All vs a project chip does not
   change that. Session list is unchanged.
 - [x] Catalog lists running PTYs across all added projects. Tap a row
-  connects that PTY id. Close deletes it and drops the row.
+  connects that PTY id. Close confirms, then deletes it and drops the row.
+- [x] First catalog open shows loading until the running list returns.
 - [x] Empty catalog shows `No running shells` and does not create a PTY.
 - [x] First open without an id creates a server PTY in that worktree and
   shows a live shell. Second open while it is still running reconnects to

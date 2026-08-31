@@ -14,6 +14,8 @@ struct TerminalCatalogRow: Equatable {
 @Observable
 final class TerminalsCatalogViewModel {
     private(set) var rows: [TerminalCatalogRow] = []
+    private(set) var isLoading = true
+    private(set) var pendingClose: TerminalCatalogRow?
 
     private let repository: any TerminalRepository
     private let activeConnectionManager: ActiveConnectionManager
@@ -30,7 +32,10 @@ final class TerminalsCatalogViewModel {
     }
 
     func appear() async {
-        guard let connection = activeConnectionManager.connection else { return }
+        guard let connection = activeConnectionManager.connection else {
+            isLoading = false
+            return
+        }
         let worktrees = await connectionProfileStore.addedWorktrees(serverBaseURL: connection.baseURL.absoluteString)
         let running = (try? await repository.listRunning(directories: worktrees)) ?? []
         rows = running.map { item in
@@ -41,12 +46,23 @@ final class TerminalsCatalogViewModel {
                 worktree: item.directory
             )
         }
+        isLoading = false
     }
 
-    func close(id: String, directory: String) async {
+    func requestClose(_ row: TerminalCatalogRow) {
+        pendingClose = row
+    }
+
+    func dismissClose() {
+        pendingClose = nil
+    }
+
+    func confirmClose() async {
+        guard let pending = pendingClose else { return }
+        pendingClose = nil
         do {
-            try await repository.remove(id: id, directory: directory)
-            rows.removeAll { $0.id == id && $0.worktree == directory }
+            try await repository.remove(id: pending.id, directory: pending.worktree)
+            rows.removeAll { $0.id == pending.id && $0.worktree == pending.worktree }
         } catch {
             return
         }

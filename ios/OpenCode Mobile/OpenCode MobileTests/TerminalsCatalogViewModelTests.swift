@@ -4,6 +4,16 @@ import Testing
 
 @MainActor
 struct TerminalsCatalogViewModelTests {
+    @Test func startsLoading() {
+        let viewModel = makeViewModel(
+            repository: FakeCatalogTerminalRepository(running: []),
+            worktrees: ["/repo"]
+        )
+
+        #expect(viewModel.isLoading)
+        #expect(viewModel.rows.isEmpty)
+    }
+
     @Test func appear_loadsRunningRows() async {
         let repository = FakeCatalogTerminalRepository(
             running: [
@@ -41,6 +51,7 @@ struct TerminalsCatalogViewModelTests {
             ]
         )
         #expect(repository.listedDirectories == [["/Users/ivan/Projects/opencode-mobile", "/Users/ivan/Projects/playground"]])
+        #expect(!viewModel.isLoading)
     }
 
     @Test func appear_emptyList() async {
@@ -52,6 +63,7 @@ struct TerminalsCatalogViewModelTests {
         await viewModel.appear()
 
         #expect(viewModel.rows.isEmpty)
+        #expect(!viewModel.isLoading)
     }
 
     @Test func catalogTitle_emptyCommandFallsBackToZsh() {
@@ -76,7 +88,36 @@ struct TerminalsCatalogViewModelTests {
         #expect(catalogTitle(session) == "bash")
     }
 
-    @Test func close_removesViaRepositoryAndUpdatesState() async {
+    @Test func requestClose_setsPendingWithoutRemoving() async {
+        let repository = FakeCatalogTerminalRepository(
+            running: [RunningTerminal(directory: "/repo", session: session(id: "pty_1", title: "zsh"))]
+        )
+        let viewModel = makeViewModel(repository: repository, worktrees: ["/repo"])
+
+        await viewModel.appear()
+        let row = viewModel.rows[0]
+        viewModel.requestClose(row)
+
+        #expect(viewModel.pendingClose == row)
+        #expect(repository.removed.isEmpty)
+    }
+
+    @Test func dismissClose_clearsPendingWithoutRemoving() async {
+        let repository = FakeCatalogTerminalRepository(
+            running: [RunningTerminal(directory: "/repo", session: session(id: "pty_1", title: "zsh"))]
+        )
+        let viewModel = makeViewModel(repository: repository, worktrees: ["/repo"])
+
+        await viewModel.appear()
+        viewModel.requestClose(viewModel.rows[0])
+        viewModel.dismissClose()
+
+        #expect(viewModel.pendingClose == nil)
+        #expect(repository.removed.isEmpty)
+        #expect(viewModel.rows.map(\.id) == ["pty_1"])
+    }
+
+    @Test func confirmClose_removesViaRepositoryAndUpdatesState() async {
         let repository = FakeCatalogTerminalRepository(
             running: [
                 RunningTerminal(directory: "/repo", session: session(id: "pty_1", title: "zsh")),
@@ -86,11 +127,26 @@ struct TerminalsCatalogViewModelTests {
         let viewModel = makeViewModel(repository: repository, worktrees: ["/repo", "/play"])
 
         await viewModel.appear()
-        await viewModel.close(id: "pty_1", directory: "/repo")
+        viewModel.requestClose(viewModel.rows[0])
+        await viewModel.confirmClose()
 
+        #expect(viewModel.pendingClose == nil)
         #expect(repository.removed.map { $0.0 } == ["pty_1"])
         #expect(repository.removed.map { $0.1 } == ["/repo"])
         #expect(viewModel.rows.map(\.id) == ["pty_2"])
+    }
+
+    @Test func confirmClose_withoutPending_isNoOp() async {
+        let repository = FakeCatalogTerminalRepository(
+            running: [RunningTerminal(directory: "/repo", session: session(id: "pty_1", title: "zsh"))]
+        )
+        let viewModel = makeViewModel(repository: repository, worktrees: ["/repo"])
+
+        await viewModel.appear()
+        await viewModel.confirmClose()
+
+        #expect(repository.removed.isEmpty)
+        #expect(viewModel.rows.map(\.id) == ["pty_1"])
     }
 
     private func makeViewModel(

@@ -25,6 +25,8 @@ data class TerminalCatalogRow(
 
 data class TerminalsCatalogUiState(
     val rows: List<TerminalCatalogRow> = emptyList(),
+    val isLoading: Boolean = true,
+    val pendingClose: TerminalCatalogRow? = null,
 )
 
 @HiltViewModel
@@ -40,27 +42,38 @@ class TerminalsCatalogViewModel
 
         fun appear() {
             viewModelScope.launch {
-                val connection = activeConnectionManager.current() ?: return@launch
+                val connection = activeConnectionManager.current()
+                if (connection == null) {
+                    _uiState.update { it.copy(isLoading = false) }
+                    return@launch
+                }
                 val worktrees = connectionProfileStore.addedWorktrees(connection.baseUrl)
                 val running =
                     runCatching { terminalRepository.listRunning(worktrees) }
                         .getOrDefault(emptyList())
-                _uiState.value = TerminalsCatalogUiState(rows = running.map { it.toRow() })
+                _uiState.update { it.copy(rows = running.map { it.toRow() }, isLoading = false) }
             }
         }
 
-        fun close(
-            id: String,
-            directory: String,
-        ) {
+        fun requestClose(row: TerminalCatalogRow) {
+            _uiState.update { it.copy(pendingClose = row) }
+        }
+
+        fun dismissClose() {
+            _uiState.update { it.copy(pendingClose = null) }
+        }
+
+        fun confirmClose() {
+            val pending = _uiState.value.pendingClose ?: return
+            _uiState.update { it.copy(pendingClose = null) }
             viewModelScope.launch {
-                runCatching { terminalRepository.remove(id, directory) }
+                runCatching { terminalRepository.remove(pending.id, pending.worktree) }
                     .onSuccess {
                         _uiState.update { state ->
                             state.copy(
                                 rows =
                                     state.rows.filterNot { row ->
-                                        row.id == id && row.worktree == directory
+                                        row.id == pending.id && row.worktree == pending.worktree
                                     },
                             )
                         }

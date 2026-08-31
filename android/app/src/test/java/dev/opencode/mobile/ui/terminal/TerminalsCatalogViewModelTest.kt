@@ -37,6 +37,22 @@ class TerminalsCatalogViewModelTest {
     }
 
     @Test
+    fun startsLoading() =
+        runTest(testDispatcher) {
+            val viewModel =
+                viewModel(
+                    repository = FakeCatalogTerminalRepository(running = emptyList()),
+                    worktrees = listOf("/repo"),
+                )
+
+            assertTrue(viewModel.uiState.value.isLoading)
+            assertTrue(
+                viewModel.uiState.value.rows
+                    .isEmpty(),
+            )
+        }
+
+    @Test
     fun appear_loadsRunningRows() =
         runTest(testDispatcher) {
             val repository =
@@ -77,6 +93,7 @@ class TerminalsCatalogViewModelTest {
                 listOf("/Users/ivan/Projects/opencode-mobile", "/Users/ivan/Projects/playground"),
                 repository.listedDirectories.single(),
             )
+            assertEquals(false, viewModel.uiState.value.isLoading)
         }
 
     @Test
@@ -95,6 +112,7 @@ class TerminalsCatalogViewModelTest {
                 viewModel.uiState.value.rows
                     .isEmpty(),
             )
+            assertEquals(false, viewModel.uiState.value.isLoading)
         }
 
     @Test
@@ -124,7 +142,48 @@ class TerminalsCatalogViewModelTest {
     }
 
     @Test
-    fun close_removesViaRepositoryAndUpdatesState() =
+    fun requestClose_setsPendingWithoutRemoving() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeCatalogTerminalRepository(
+                    running = listOf(RunningTerminal("/repo", session("pty_1", "zsh"))),
+                )
+            val viewModel = viewModel(repository = repository, worktrees = listOf("/repo"))
+
+            viewModel.appear()
+            advanceUntilIdle()
+            val row = viewModel.uiState.value.rows.single()
+            viewModel.requestClose(row)
+
+            assertEquals(row, viewModel.uiState.value.pendingClose)
+            assertTrue(repository.removed.isEmpty())
+        }
+
+    @Test
+    fun dismissClose_clearsPendingWithoutRemoving() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeCatalogTerminalRepository(
+                    running = listOf(RunningTerminal("/repo", session("pty_1", "zsh"))),
+                )
+            val viewModel = viewModel(repository = repository, worktrees = listOf("/repo"))
+
+            viewModel.appear()
+            advanceUntilIdle()
+            viewModel.requestClose(viewModel.uiState.value.rows.single())
+            viewModel.dismissClose()
+
+            assertEquals(null, viewModel.uiState.value.pendingClose)
+            assertTrue(repository.removed.isEmpty())
+            assertEquals(
+                listOf("pty_1"),
+                viewModel.uiState.value.rows
+                    .map { it.id },
+            )
+        }
+
+    @Test
+    fun confirmClose_removesViaRepositoryAndUpdatesState() =
         runTest(testDispatcher) {
             val repository =
                 FakeCatalogTerminalRepository(
@@ -138,12 +197,39 @@ class TerminalsCatalogViewModelTest {
 
             viewModel.appear()
             advanceUntilIdle()
-            viewModel.close("pty_1", "/repo")
+            viewModel.requestClose(
+                viewModel.uiState.value.rows
+                    .first(),
+            )
+            viewModel.confirmClose()
             advanceUntilIdle()
 
+            assertEquals(null, viewModel.uiState.value.pendingClose)
             assertEquals(listOf("pty_1" to "/repo"), repository.removed)
             assertEquals(
                 listOf("pty_2"),
+                viewModel.uiState.value.rows
+                    .map { it.id },
+            )
+        }
+
+    @Test
+    fun confirmClose_withoutPending_isNoOp() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeCatalogTerminalRepository(
+                    running = listOf(RunningTerminal("/repo", session("pty_1", "zsh"))),
+                )
+            val viewModel = viewModel(repository = repository, worktrees = listOf("/repo"))
+
+            viewModel.appear()
+            advanceUntilIdle()
+            viewModel.confirmClose()
+            advanceUntilIdle()
+
+            assertTrue(repository.removed.isEmpty())
+            assertEquals(
+                listOf("pty_1"),
                 viewModel.uiState.value.rows
                     .map { it.id },
             )
