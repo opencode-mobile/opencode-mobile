@@ -637,6 +637,32 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_worldBackgroundStopThenForeground_refreshes() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val world = FakeWorldSignals()
+            val sync = createMessageSync(repository, eventStream, worldSignals = world)
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(1)
+            val afterInitial = repository.listMessagesCallCount
+
+            world.emit(WorldSignal.BackgroundStop)
+            advanceTimeBy(1)
+            world.emit(WorldSignal.Foreground)
+            advanceTimeBy(1)
+
+            assertTrue(repository.listMessagesCallCount > afterInitial)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
     fun observeMessages_backgroundReturn_emitsWhenEpochBumpsDuringCatchUp() =
         runTest(testDispatcher) {
             // Pixel 9 OPE-198: background while streaming, turn finishes off-device,
