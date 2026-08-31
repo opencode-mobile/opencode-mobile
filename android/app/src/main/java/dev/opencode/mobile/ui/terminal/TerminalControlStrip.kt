@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
@@ -28,9 +30,10 @@ fun TerminalControlStrip(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         OpenCodeButton(
-            variant = OpenCodeButtonVariant.CompactText("Ctrl-C"),
+            variant = OpenCodeButtonVariant.CompactText("^C"),
             contrast = OpenCodeButtonContrast.Destructive,
             onClick = { onSend("\u0003") },
+            modifier = Modifier.clearAndSetSemantics { contentDescription = "Ctrl-C" },
         )
         OpenCodeButton(
             variant = OpenCodeButtonVariant.CompactText("Esc"),
@@ -59,7 +62,7 @@ fun TerminalControlStrip(
             onClick = { onSend("\u001b[D") },
         )
         OpenCodeButton(
-            variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ChevronRight, "Right"),
+            variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowForward, "Right"),
             contrast = OpenCodeButtonContrast.Low,
             onClick = { onSend("\u001b[C") },
         )

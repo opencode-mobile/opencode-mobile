@@ -86,6 +86,7 @@ struct OpenCodeButton: View {
         case let .compactText(title):
             Text(title)
                 .font(OpenCodeTypography.button)
+                .lineLimit(1)
         case let .iconSquare(icon, accessibilityLabel):
             OpenCodeIconImage(icon: icon, size: 18)
                 .accessibilityLabel(accessibilityLabel ?? "")

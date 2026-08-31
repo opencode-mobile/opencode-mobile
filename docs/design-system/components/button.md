@@ -68,7 +68,8 @@ variant. Map: Android `MaterialTheme.colorScheme.error` /
 Disabled state stays muted, blocks interaction, and overrides contrast.
 
 `fullWidthText` always fills its container width and keeps a minimum touch
-height. `compactText` keeps the same visual language but sizes to content.
+height. `compactText` keeps the same visual language but sizes to content
+on one line.
 `iconSquare` and `iconCircle` enforce a 1:1 fixed frame with centered icon
 content; `size` scales that frame between **40×40** and **48×48**. `iconCircle`
 differs from `iconSquare` by geometry only; contrast behavior is shared across
