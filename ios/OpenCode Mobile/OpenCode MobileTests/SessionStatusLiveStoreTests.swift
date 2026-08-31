@@ -229,7 +229,29 @@ struct SessionStatusLiveStoreTests {
         #expect(collector.emissions.last?["ses-1"] == nil)
     }
 
-    @Test func clearLocalBusy_removesEvenIfRestBusy() async throws {
+    @Test func clearLocalBusy_keepsRestBusy() async throws {
+        let repository = StatusLiveStoreFakeSessionRepository(
+            statuses: [SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
+        )
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionStatusLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream
+        )
+
+        let collector = StatusCollector(store: store, directory: "/repo")
+        _ = try await collector.awaitEmission { $0["ses-1"]?.raw["type"] == "busy" }
+        let emissionsBeforeClear = collector.emissions.count
+
+        store.clearLocalBusy(directory: "/repo", sessionID: "ses-1")
+        try await Task.sleep(for: .milliseconds(80))
+        collector.cancel()
+
+        #expect(collector.emissions.count == emissionsBeforeClear)
+        #expect(collector.emissions.last?["ses-1"]?.raw["type"] == "busy")
+    }
+
+    @Test func clearLocalBusy_afterMarkBusyWhileRestBusy_keepsBusy() async throws {
         let repository = StatusLiveStoreFakeSessionRepository(
             statuses: [SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
         )
@@ -242,7 +264,49 @@ struct SessionStatusLiveStoreTests {
         let collector = StatusCollector(store: store, directory: "/repo")
         _ = try await collector.awaitEmission { $0["ses-1"]?.raw["type"] == "busy" }
 
+        store.markBusy(directory: "/repo", sessionID: "ses-1")
         store.clearLocalBusy(directory: "/repo", sessionID: "ses-1")
+        try await Task.sleep(for: .milliseconds(80))
+        collector.cancel()
+
+        #expect(collector.emissions.last?["ses-1"]?.raw["type"] == "busy")
+    }
+
+    @Test func clearLocalBusy_dropsUnconfirmedPending() async throws {
+        let repository = StatusLiveStoreFakeSessionRepository(statuses: [])
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionStatusLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream
+        )
+
+        let collector = StatusCollector(store: store, directory: "/repo")
+        _ = try await collector.awaitEmission(matching: { _ in true })
+
+        store.markBusy(directory: "/repo", sessionID: "ses-1")
+        _ = try await collector.awaitEmission { $0["ses-1"]?.raw["type"] == "busy" }
+
+        store.clearLocalBusy(directory: "/repo", sessionID: "ses-1")
+        let statuses = try await collector.awaitEmission { $0["ses-1"] == nil }
+        collector.cancel()
+
+        #expect(statuses["ses-1"] == nil)
+    }
+
+    @Test func markIdle_removesRestBusy() async throws {
+        let repository = StatusLiveStoreFakeSessionRepository(
+            statuses: [SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
+        )
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionStatusLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream
+        )
+
+        let collector = StatusCollector(store: store, directory: "/repo")
+        _ = try await collector.awaitEmission { $0["ses-1"]?.raw["type"] == "busy" }
+
+        store.markIdle(directory: "/repo", sessionID: "ses-1")
         let statuses = try await collector.awaitEmission { $0["ses-1"] == nil }
         collector.cancel()
 

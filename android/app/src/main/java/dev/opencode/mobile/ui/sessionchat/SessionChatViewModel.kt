@@ -707,7 +707,7 @@ class SessionChatViewModel
             if (!isConnectionLive()) return
             composer.abort { success ->
                 if (!success) return@abort
-                sessionInfo.clearOptimisticBusy()
+                sessionInfo.markIdle()
             }
         }
 

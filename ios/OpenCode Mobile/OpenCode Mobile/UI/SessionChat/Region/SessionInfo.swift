@@ -179,6 +179,11 @@ final class SessionInfo {
         sessionStatusLiveStore.clearLocalBusy(directory: worktree, sessionID: state.sessionID)
     }
 
+    func markIdle() {
+        guard !state.sessionID.isEmpty else { return }
+        sessionStatusLiveStore.markIdle(directory: worktree, sessionID: state.sessionID)
+    }
+
     func archiveSession() {
         guard !state.sessionID.isEmpty, !state.isLifecycleActionInFlight else { return }
         let sessionID = state.sessionID

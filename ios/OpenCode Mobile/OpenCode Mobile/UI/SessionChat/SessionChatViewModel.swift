@@ -578,7 +578,7 @@ final class SessionChatViewModel {
         guard isConnectionLive else { return }
         await composer.abortSession(timelineIsReady: timeline.state.timeline == .ready)
         if composer.state.abortErrorMessage == nil {
-            sessionInfo.clearOptimisticBusy()
+            sessionInfo.markIdle()
         }
     }
 

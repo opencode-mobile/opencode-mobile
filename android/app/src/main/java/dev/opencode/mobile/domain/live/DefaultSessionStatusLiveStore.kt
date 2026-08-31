@@ -67,6 +67,14 @@ class DefaultSessionStatusLiveStore
             mutationBus.tryEmit(StatusMutation.ClearLocalBusy(directory, sessionId))
         }
 
+        override fun markIdle(
+            directory: String,
+            sessionId: String,
+        ) {
+            pendingBusy[directory]?.remove(sessionId)
+            mutationBus.tryEmit(StatusMutation.MarkIdle(directory, sessionId))
+        }
+
         override suspend fun invalidate(directory: String?) {
             val keys =
                 if (directory != null) {
@@ -96,32 +104,33 @@ class DefaultSessionStatusLiveStore
 
         private fun buildStatusFlow(directory: String): Flow<Map<String, SessionStatus>> =
             channelFlow {
+                var server = emptyMap<String, SessionStatus>()
                 var current = emptyMap<String, SessionStatus>()
                 var reconnectRefresh: Job? = null
                 var stale = false
                 activeDirectories.add(directory)
                 try {
+                    suspend fun emitOverlay(base: Map<String, SessionStatus>) {
+                        val next = overlayPending(directory, base, confirmFrom = emptyMap())
+                        if (next != current) {
+                            current = next
+                            send(current)
+                        }
+                    }
+
                     suspend fun commitLoaded(
                         loaded: Map<String, SessionStatus>,
                         emptyActiveGuard: Boolean = false,
                     ) {
                         // Empty active maps are a between-step gap on v2, not idle.
                         // True idle is session.idle / execution.*. Overlay pending
-                        // onto the kept current map; do not skip overlay because
+                        // onto the kept server map; do not skip overlay because
                         // pending is set.
-                        if (emptyActiveGuard && loaded.isEmpty() && current.isNotEmpty()) {
-                            val next =
-                                overlayPending(
-                                    directory,
-                                    current,
-                                    confirmFrom = emptyMap(),
-                                )
-                            if (next != current) {
-                                current = next
-                                send(current)
-                            }
+                        if (emptyActiveGuard && loaded.isEmpty() && server.isNotEmpty()) {
+                            emitOverlay(server)
                             return
                         }
+                        server = loaded
                         current = overlayPending(directory, loaded)
                         send(current)
                     }
@@ -160,18 +169,14 @@ class DefaultSessionStatusLiveStore
                                         if (pendingBusy[directory]?.contains(mutation.sessionId) != true) {
                                             return@collect
                                         }
-                                        val next = current + (mutation.sessionId to localBusy(mutation.sessionId))
-                                        if (next != current) {
-                                            current = next
-                                            send(current)
-                                        }
+                                        emitOverlay(server)
                                     }
                                     is StatusMutation.ClearLocalBusy -> {
-                                        val next = current - mutation.sessionId
-                                        if (next != current) {
-                                            current = next
-                                            send(current)
-                                        }
+                                        emitOverlay(server)
+                                    }
+                                    is StatusMutation.MarkIdle -> {
+                                        server = server - mutation.sessionId
+                                        emitOverlay(server)
                                     }
                                 }
                             }
@@ -230,11 +235,8 @@ class DefaultSessionStatusLiveStore
                                         }
                                 }
                                 event.triggersStatusRefresh -> {
-                                    val next = applyStatusEvent(directory, current, event) ?: return@collect
-                                    if (next != current) {
-                                        current = next
-                                        send(current)
-                                    }
+                                    applyStatusEvent(directory, server, event)?.let { server = it }
+                                    emitOverlay(server)
                                 }
                             }
                         }
@@ -307,6 +309,11 @@ private sealed class StatusMutation {
     ) : StatusMutation()
 
     data class ClearLocalBusy(
+        override val directory: String,
+        override val sessionId: String,
+    ) : StatusMutation()
+
+    data class MarkIdle(
         override val directory: String,
         override val sessionId: String,
     ) : StatusMutation()

@@ -7,10 +7,12 @@ protocol SessionStatusLiveStore: AnyObject, Sendable {
     func invalidate(directory: String?) async
     func markBusy(directory: String, sessionID: String)
     func clearLocalBusy(directory: String, sessionID: String)
+    func markIdle(directory: String, sessionID: String)
 }
 
 extension SessionStatusLiveStore {
     func invalidate(directory: String?) async {}
     func markBusy(directory: String, sessionID: String) {}
     func clearLocalBusy(directory: String, sessionID: String) {}
+    func markIdle(directory: String, sessionID: String) {}
 }

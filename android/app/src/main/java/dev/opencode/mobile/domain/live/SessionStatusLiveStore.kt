@@ -19,4 +19,9 @@ interface SessionStatusLiveStore {
         directory: String,
         sessionId: String,
     ) {}
+
+    fun markIdle(
+        directory: String,
+        sessionId: String,
+    ) {}
 }

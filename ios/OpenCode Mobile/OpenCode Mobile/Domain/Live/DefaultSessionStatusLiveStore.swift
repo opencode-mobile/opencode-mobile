@@ -84,6 +84,11 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         mutationBus.yield(.clearLocalBusy(directory: directory, sessionID: sessionID))
     }
 
+    func markIdle(directory: String, sessionID: String) {
+        pendingBusy.remove(directory: directory, sessionID: sessionID)
+        mutationBus.yield(.markIdle(directory: directory, sessionID: sessionID))
+    }
+
     func clearCache() {
         cache.removeAll()
         pendingBusy.removeAll()
@@ -103,6 +108,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     ) async {
         activeDirectories.insert(directory)
         defer { activeDirectories.remove(directory) }
+        let serverBox = StatusBox()
         let currentBox = StatusBox()
         let stale = StaleBit()
 
@@ -123,22 +129,26 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             return result
         }
 
+        func emitOverlay(_ base: [String: SessionStatus]) {
+            let next = overlayPending(base, confirmFrom: [:])
+            guard next != currentBox.snapshot() else { return }
+            currentBox.replace(next)
+            yield(next)
+        }
+
         func commitLoaded(_ loaded: [String: SessionStatus], emptyActiveGuard: Bool = false) {
             // Empty active maps are a between-step gap on v2, not idle.
             // True idle is session.idle / execution.*. Overlay pending
-            // onto the kept current map; do not skip overlay because
+            // onto the kept server map; do not skip overlay because
             // pending is set.
             if emptyActiveGuard, loaded.isEmpty {
-                let current = currentBox.snapshot()
-                if !current.isEmpty {
-                    let next = overlayPending(current, confirmFrom: [:])
-                    if next != current {
-                        currentBox.replace(next)
-                        yield(next)
-                    }
+                let server = serverBox.snapshot()
+                if !server.isEmpty {
+                    emitOverlay(server)
                     return
                 }
             }
+            serverBox.replace(loaded)
             let next = overlayPending(loaded)
             currentBox.replace(next)
             yield(next)
@@ -172,16 +182,14 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                     guard pendingBusy.contains(directory: directory, sessionID: sessionID) else {
                         continue
                     }
-                    var next = currentBox.snapshot()
-                    next[sessionID] = SessionStatus(sessionID: sessionID, raw: ["type": "busy"])
-                    guard next != currentBox.snapshot() else { continue }
-                    currentBox.replace(next)
-                    yield(next)
-                case let .clearLocalBusy(_, sessionID):
-                    var next = currentBox.snapshot()
-                    guard next.removeValue(forKey: sessionID) != nil else { continue }
-                    currentBox.replace(next)
-                    yield(next)
+                    emitOverlay(serverBox.snapshot())
+                case .clearLocalBusy:
+                    emitOverlay(serverBox.snapshot())
+                case let .markIdle(_, sessionID):
+                    var server = serverBox.snapshot()
+                    server.removeValue(forKey: sessionID)
+                    serverBox.replace(server)
+                    emitOverlay(server)
                 }
             }
         }
@@ -249,17 +257,17 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         continue
                     }
                     guard event.triggersStatusRefresh else { continue }
-                    let current = currentBox.snapshot()
-                    guard let next = applyStatusEvent(
+                    let server = serverBox.snapshot()
+                    if let nextServer = applyStatusEvent(
                         directory: directory,
-                        current: current,
+                        current: server,
                         event: event,
                         eventAdapter: eventAdapter,
                         pendingBusy: pendingBusy
-                    ), next != current
-                    else { continue }
-                    currentBox.replace(next)
-                    yield(next)
+                    ) {
+                        serverBox.replace(nextServer)
+                    }
+                    emitOverlay(serverBox.snapshot())
                 }
             }
             await group.next()
@@ -314,10 +322,11 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
 private nonisolated enum StatusMutation: Sendable {
     case markBusy(directory: String, sessionID: String)
     case clearLocalBusy(directory: String, sessionID: String)
+    case markIdle(directory: String, sessionID: String)
 
     var directory: String {
         switch self {
-        case let .markBusy(directory, _), let .clearLocalBusy(directory, _):
+        case let .markBusy(directory, _), let .clearLocalBusy(directory, _), let .markIdle(directory, _):
             directory
         }
     }

@@ -206,6 +206,12 @@ class SessionInfo(
         sessionStatusLiveStore.clearLocalBusy(worktree, sessionId)
     }
 
+    fun markIdle() {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        sessionStatusLiveStore.markIdle(worktree, sessionId)
+    }
+
     fun archiveSession() {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return

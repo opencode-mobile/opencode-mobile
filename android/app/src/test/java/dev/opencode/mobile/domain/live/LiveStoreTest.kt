@@ -2423,7 +2423,7 @@ class SessionStatusLiveStoreTest {
         }
 
     @Test
-    fun clearLocalBusy_removesEvenIfRestBusy() =
+    fun clearLocalBusy_keepsRestBusy() =
         runTest(testDispatcher) {
             val repository =
                 FakeSessionRepository(
@@ -2439,6 +2439,76 @@ class SessionStatusLiveStoreTest {
             assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
 
             store.clearLocalBusy("/repo", "ses-1")
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+        }
+
+    @Test
+    fun clearLocalBusy_afterMarkBusyWhileRestBusy_keepsBusy() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            val store = createStatusStore(repository, FakeForegroundEventStream())
+            val emissions = mutableListOf<Map<String, SessionStatus>>()
+            val collectJob =
+                launch {
+                    store.observeStatuses("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+
+            store.markBusy("/repo", "ses-1")
+            advanceUntilIdle()
+            store.clearLocalBusy("/repo", "ses-1")
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+        }
+
+    @Test
+    fun clearLocalBusy_dropsUnconfirmedPending() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(statuses = emptyList())
+            val store = createStatusStore(repository, FakeForegroundEventStream())
+            val emissions = mutableListOf<Map<String, SessionStatus>>()
+            val collectJob =
+                launch {
+                    store.observeStatuses("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+
+            store.markBusy("/repo", "ses-1")
+            advanceUntilIdle()
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+
+            store.clearLocalBusy("/repo", "ses-1")
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertTrue(emissions.last()["ses-1"] == null)
+        }
+
+    @Test
+    fun markIdle_removesRestBusy() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            val store = createStatusStore(repository, FakeForegroundEventStream())
+            val emissions = mutableListOf<Map<String, SessionStatus>>()
+            val collectJob =
+                launch {
+                    store.observeStatuses("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+
+            store.markIdle("/repo", "ses-1")
             advanceUntilIdle()
             collectJob.cancel()
 
