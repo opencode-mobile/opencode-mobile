@@ -19,7 +19,11 @@ Still binding:
   revoked except for last-row Thinking.
   `WorkingTurnIndicator` collapses to status + compacting +
   awaiting-user + last-is-thinking. SessionInfo owns session status;
-  the timeline owns last-row layout.
+  the timeline owns last-row layout. Optimistic busy is write-through
+  to `SessionStatusLiveStore` so home Running and chat Working share
+  one map. Send-fail calls `clearLocalBusy`, which drops only the
+  local overlay so REST/SSE busy stays. Abort calls `markIdle` so
+  Working hides without waiting for SSE.
 - Child sessions are read-only from the composer.
 - Device attachments use Photos/Files. Project `file://` browse was not in
   the first attachment slice.

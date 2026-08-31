@@ -6,18 +6,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.domain.agent.AgentRepository
+import dev.opencode.mobile.domain.command.ClientSlashAction
+import dev.opencode.mobile.domain.command.CommandRepository
+import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.FixedLiveUpdates
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdates
-import dev.opencode.mobile.domain.project.ProjectDomainAdapter
-import dev.opencode.mobile.domain.project.smartProjectLabel
-import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
-import dev.opencode.mobile.theme.LetterAccent
-import dev.opencode.mobile.theme.letterAccentForWorktree
-import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.EmptySessionTodoLiveStore
 import dev.opencode.mobile.domain.live.PermissionLiveStore
@@ -25,28 +23,30 @@ import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.live.SessionTodoLiveStore
-import dev.opencode.mobile.domain.agent.AgentRepository
-import dev.opencode.mobile.domain.command.ClientSlashAction
-import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
-import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
+import dev.opencode.mobile.domain.project.ProjectDomainAdapter
+import dev.opencode.mobile.domain.project.smartProjectLabel
+import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.OptimisticSessionCreateCoordinator
 import dev.opencode.mobile.domain.session.PermissionDecision
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
-import dev.opencode.mobile.domain.session.OptimisticSessionCreate
-import dev.opencode.mobile.domain.session.OptimisticSessionCreateCoordinator
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.network.ActiveConnectionManager
+import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.theme.letterAccentForWorktree
+import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
@@ -59,7 +59,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -294,15 +293,16 @@ class SessionChatViewModel
             logI("bind optimistic create worktree=$worktree title=$sessionTitle")
             seedProjectIdentity(worktree)
             _uiState.value =
-                SessionChatUiState.initial(
-                    sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
-                    sessionTitle = sessionTitle,
-                    timeline = SessionChatTimelineState.Creating,
-                ).copy(
-                    projectLabel = projectLabel,
-                    projectLetter = projectLetter,
-                    projectLetterAccent = projectLetterAccent,
-                )
+                SessionChatUiState
+                    .initial(
+                        sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                        sessionTitle = sessionTitle,
+                        timeline = SessionChatTimelineState.Creating,
+                    ).copy(
+                        projectLabel = projectLabel,
+                        projectLetter = projectLetter,
+                        projectLetterAccent = projectLetterAccent,
+                    )
             scheduleProjectIdentityRefine(worktree)
             timeline.bindCreating(worktree)
             composer.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
@@ -535,10 +535,6 @@ class SessionChatViewModel
                         modelId = model.option.modelId,
                         beforeContextFraction = beforeFraction,
                         awaitAfterContextFraction = {
-                            // Prefer SSE-streamed timeline for the after fraction. A full
-                            // refresh is optional and must not gate clearing Compacting…
-                            // (see iOS freeze when refresh rebuilt the transcript on MainActor).
-                            sessionInfo.refreshStatusSuspending()
                             sessionInfo.contextUsageFraction(
                                 messages = timeline.state.value.messages,
                                 modelOptions = composer.state.value.composer.modelOptions,
@@ -693,7 +689,6 @@ class SessionChatViewModel
                 onSendAccepted = {
                     commands.consumePendingRevert()
                     sessionReadyStore.notifyPromptSent(sessionId, worktree)
-                    sessionInfo.refreshStatus()
                     timeline.reloadAfterSend(
                         onComplete = { composer.clearSending() },
                         onReloadFailed = { composer.clearSending() },
@@ -712,8 +707,7 @@ class SessionChatViewModel
             if (!isConnectionLive()) return
             composer.abort { success ->
                 if (!success) return@abort
-                sessionInfo.clearOptimisticBusy()
-                sessionInfo.refreshStatus()
+                sessionInfo.markIdle()
             }
         }
 

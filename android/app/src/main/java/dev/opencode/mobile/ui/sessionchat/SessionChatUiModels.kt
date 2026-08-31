@@ -20,7 +20,6 @@ import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.changes.ChangeSource
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
-import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 
 data class SessionChatComposerState(
     val text: String = "",
@@ -376,8 +375,6 @@ data class SessionInfoRegionState(
     val sessionId: String = "",
     val sessionTitle: String = "",
     val sessionStatusLabel: String? = null,
-    val authoritativeStatusLabel: String? = null,
-    val optimisticBusy: Boolean = false,
     val hasResolvedSessionStatus: Boolean = false,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val canMutate: Boolean = false,
@@ -388,31 +385,14 @@ data class SessionInfoRegionState(
     val errorMessage: String? = null,
 )
 
-/**
- * Effective Working/Retrying label: authoritative status, else optimistic busy.
- *
- * Non-null [authoritative] always clears optimistic. Resolved idle (`authoritative == null`
- * with [hasResolved]) also clears unless [optimisticBusy] is set explicitly (send mark).
- */
 fun SessionInfoRegionState.withStatus(
     authoritative: String?,
-    optimisticBusy: Boolean? = null,
-    hasResolved: Boolean = hasResolvedSessionStatus || authoritative != null,
-): SessionInfoRegionState {
-    val nextOptimistic =
-        when {
-            authoritative != null -> false
-            optimisticBusy != null -> optimisticBusy
-            hasResolved -> false
-            else -> this.optimisticBusy
-        }
-    return copy(
-        authoritativeStatusLabel = authoritative,
-        optimisticBusy = nextOptimistic,
-        sessionStatusLabel = authoritative ?: if (nextOptimistic) "Working" else null,
+    hasResolved: Boolean = true,
+): SessionInfoRegionState =
+    copy(
+        sessionStatusLabel = authoritative,
         hasResolvedSessionStatus = hasResolved,
     )
-}
 
 data class SessionChatReviewChangesRegionState(
     val messageId: String? = null,

@@ -4,16 +4,16 @@ import android.util.Log
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
-import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.FixedLiveUpdates
+import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
-import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionInfoRegionState
@@ -87,12 +87,13 @@ class SessionInfo(
             SessionInfoRegionState(
                 sessionId = sessionId,
                 sessionTitle = sessionTitle,
-                connectionStatus = liveUpdates.chrome.value.label.toSessionConnectionStatus(),
+                connectionStatus =
+                    liveUpdates.chrome.value.label
+                        .toSessionConnectionStatus(),
                 canMutate = liveUpdates.chrome.value.canMutate,
             )
         logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
         startObserving(sessionId, worktree)
-        refreshStatus()
     }
 
     fun requestLeaveSession() {
@@ -140,7 +141,9 @@ class SessionInfo(
         val worktree = boundWorktree ?: return
         if (_state.value.rename.isSubmitting) return
 
-        val trimmed = _state.value.rename.draftTitle.trim()
+        val trimmed =
+            _state.value.rename.draftTitle
+                .trim()
         if (trimmed.isEmpty()) {
             _state.update {
                 it.copy(rename = it.rename.copy(errorMessage = EMPTY_TITLE_ERROR))
@@ -191,32 +194,22 @@ class SessionInfo(
             }
     }
 
-    fun refreshStatus() {
-        scope.launch { refreshStatusSuspending() }
-    }
-
-    suspend fun refreshStatusSuspending() {
+    fun markOptimisticBusy() {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
-        runCatching { sessionRepository.getAllSessionStatuses(directory = worktree) }
-            .onSuccess { statuses ->
-                if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
-                val status = statuses.firstOrNull { it.sessionId == sessionId }
-                val label = status?.let(eventDomainAdapter::statusLabel)
-                _state.update { it.withStatus(authoritative = label, hasResolved = true) }
-            }
-    }
-
-    fun markOptimisticBusy() {
-        _state.update {
-            if (it.sessionStatusLabel != null) it else it.withStatus(authoritative = it.authoritativeStatusLabel, optimisticBusy = true)
-        }
+        sessionStatusLiveStore.markBusy(worktree, sessionId)
     }
 
     fun clearOptimisticBusy() {
-        _state.update {
-            if (!it.optimisticBusy) it else it.withStatus(authoritative = it.authoritativeStatusLabel, optimisticBusy = false)
-        }
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        sessionStatusLiveStore.clearLocalBusy(worktree, sessionId)
+    }
+
+    fun markIdle() {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        sessionStatusLiveStore.markIdle(worktree, sessionId)
     }
 
     fun archiveSession() {

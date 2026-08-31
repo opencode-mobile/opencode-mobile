@@ -133,9 +133,11 @@ row already occupies the bottom. Do not hide for settled Thought, tools, or
 streaming text. Always the last list entry while visible; do not pin it to
 the composer.
 
-`SessionInfo` owns session status. The timeline owns last-row layout and a
-stable list identity. `WorkingTurnIndicator` collapses to status + compacting +
-awaiting-user + last-is-thinking.
+`SessionInfo` owns session status. Optimistic busy is write-through to
+`SessionStatusLiveStore` so home Running and chat Working share one map.
+The timeline owns last-row layout and a stable list identity.
+`WorkingTurnIndicator` collapses to status + compacting + awaiting-user +
+last-is-thinking.
 
 ### Labels (one slot, status only)
 

@@ -261,6 +261,8 @@ One immutable UI state plus explicit actions, unchanged. Home and Session
 Chat keep collecting Live Store / Message Repository streams. Optimistic
 send and quiet merge stay in the Session Chat Screen Model. Catch-up is
 quiet: it must not clear an in-flight optimistic bubble or `isSending`.
+Screen Models may `markBusy` / `clearLocalBusy` / `markIdle` on
+`SessionStatusLiveStore`. They still do not REST status themselves.
 
 Pull-to-refresh remains a user action on the Screen Model. The action
 invalidates the store. It does not implement a second fetch policy.

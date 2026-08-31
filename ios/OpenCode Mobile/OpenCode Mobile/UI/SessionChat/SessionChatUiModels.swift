@@ -495,8 +495,6 @@ struct SessionInfoRegionState: Equatable {
     var sessionID: String = ""
     var sessionTitle: String = ""
     var sessionStatusLabel: String?
-    var authoritativeStatusLabel: String?
-    var optimisticBusy = false
     var hasResolvedSessionStatus = false
     var connectionStatus: SessionConnectionStatus = .offline
     var canMutate = false
@@ -506,24 +504,9 @@ struct SessionInfoRegionState: Equatable {
     var shouldLeaveSession = false
     var errorMessage: String?
 
-    /// Effective Working/Retrying label: authoritative status, else optimistic busy.
-    /// Non-null `authoritative` always clears optimistic. Resolved idle (`authoritative == nil`
-    /// with `hasResolved`) also clears unless `optimisticBusy` is set explicitly (send mark).
-    mutating func applyStatus(authoritative: String?, optimisticBusy: Bool? = nil, hasResolved: Bool? = nil) {
-        authoritativeStatusLabel = authoritative
-        if let hasResolved {
-            hasResolvedSessionStatus = hasResolved
-        } else if authoritative != nil {
-            hasResolvedSessionStatus = true
-        }
-        if authoritative != nil {
-            self.optimisticBusy = false
-        } else if let optimisticBusy {
-            self.optimisticBusy = optimisticBusy
-        } else if hasResolvedSessionStatus {
-            self.optimisticBusy = false
-        }
-        sessionStatusLabel = authoritative ?? (self.optimisticBusy ? "Working" : nil)
+    mutating func applyStatus(authoritative: String?, hasResolved: Bool = true) {
+        sessionStatusLabel = authoritative
+        hasResolvedSessionStatus = hasResolved
     }
 }
 

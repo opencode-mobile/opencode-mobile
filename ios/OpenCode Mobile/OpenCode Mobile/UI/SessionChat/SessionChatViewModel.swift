@@ -184,7 +184,6 @@ final class SessionChatViewModel {
         async let catalogLoad: Void = composer.loadCatalog()
         _ = await catalogLoad
         await waitForTimelineResolution()
-        await sessionInfo.refreshStatus()
     }
 
     func refreshMessages() async {
@@ -346,10 +345,6 @@ final class SessionChatViewModel {
                 beforeContextFraction: beforeFraction,
                 awaitAfterContextFraction: { [weak self] in
                     guard let self else { return nil }
-                    // SSE already streamed the compacted transcript. Do not await a full
-                    // refreshDisplayMessages + MainActor timeline rebuild here — that froze
-                    // Session Chat with Compacting… still showing until kill/relaunch.
-                    await self.sessionInfo.refreshStatus()
                     guard let after = self.sessionInfo.contextUsageFraction(
                         messages: self.timeline.state.messages,
                         modelOptions: self.composer.state.composer.modelOptions,
@@ -549,7 +544,6 @@ final class SessionChatViewModel {
                 DiagnosticLog.info(.chat, "sendPrompt accepted session=\(self.sessionID)")
                 self.commands.consumePendingRevert()
                 self.sessionReadyStore.notifyPromptSent(sessionID: self.sessionID, directory: self.worktree)
-                await self.sessionInfo.refreshStatus()
                 DiagnosticLog.info(.chat, "sendPrompt reloadAfterSend start")
                 await self.timeline.reloadAfterSend(
                     onComplete: { [weak self] in
@@ -584,8 +578,7 @@ final class SessionChatViewModel {
         guard isConnectionLive else { return }
         await composer.abortSession(timelineIsReady: timeline.state.timeline == .ready)
         if composer.state.abortErrorMessage == nil {
-            sessionInfo.clearOptimisticBusy()
-            await sessionInfo.refreshStatus()
+            sessionInfo.markIdle()
         }
     }
 

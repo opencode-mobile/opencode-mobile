@@ -18,12 +18,14 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -41,9 +43,36 @@ class DefaultSessionStatusLiveStore
         private val cache = ConcurrentHashMap<String, SharedFlow<Map<String, SessionStatus>>>()
         private val invalidationBus = StoreInvalidationBus()
         private val activeDirectories = ConcurrentHashMap.newKeySet<String>()
+        private val pendingBusy = ConcurrentHashMap<String, MutableSet<String>>()
+        private val mutationBus = MutableSharedFlow<StatusMutation>(extraBufferCapacity = 32)
 
         override fun clearCache() {
             cache.clear()
+            pendingBusy.clear()
+        }
+
+        override fun markBusy(
+            directory: String,
+            sessionId: String,
+        ) {
+            pendingIds(directory).add(sessionId)
+            mutationBus.tryEmit(StatusMutation.MarkBusy(directory, sessionId))
+        }
+
+        override fun clearLocalBusy(
+            directory: String,
+            sessionId: String,
+        ) {
+            pendingBusy[directory]?.remove(sessionId)
+            mutationBus.tryEmit(StatusMutation.ClearLocalBusy(directory, sessionId))
+        }
+
+        override fun markIdle(
+            directory: String,
+            sessionId: String,
+        ) {
+            pendingBusy[directory]?.remove(sessionId)
+            mutationBus.tryEmit(StatusMutation.MarkIdle(directory, sessionId))
         }
 
         override suspend fun invalidate(directory: String?) {
@@ -55,9 +84,10 @@ class DefaultSessionStatusLiveStore
                 }
             if (keys.isEmpty()) return
             coroutineScope {
-                keys.map { key ->
-                    async { invalidationBus.invalidateAndWait(key, StoreRefreshReason.PULL_TO_REFRESH) }
-                }.awaitAll()
+                keys
+                    .map { key ->
+                        async { invalidationBus.invalidateAndWait(key, StoreRefreshReason.PULL_TO_REFRESH) }
+                    }.awaitAll()
             }
         }
 
@@ -74,113 +104,152 @@ class DefaultSessionStatusLiveStore
 
         private fun buildStatusFlow(directory: String): Flow<Map<String, SessionStatus>> =
             channelFlow {
+                var server = emptyMap<String, SessionStatus>()
                 var current = emptyMap<String, SessionStatus>()
                 var reconnectRefresh: Job? = null
                 var stale = false
                 activeDirectories.add(directory)
                 try {
-                suspend fun reloadFromServer(
-                    reason: String,
-                    force: Boolean,
-                ): Map<String, SessionStatus>? {
-                    if (!force && !stale) {
-                        DiagnosticLog.info(
-                            DiagnosticLogArea.Session,
-                            "statusLiveStore skip directory=$directory reason=$reason",
-                        )
-                        return null
-                    }
-                    val loaded =
-                        runCatching {
-                            sessionRepository
-                                .getAllSessionStatuses(directory = directory)
-                                .associateBy(SessionStatus::sessionId)
-                        }.getOrNull() ?: return null
-                    stale = false
-                    DiagnosticLog.info(
-                        DiagnosticLogArea.Session,
-                        "statusLiveStore refresh directory=$directory reason=$reason",
-                    )
-                    return loaded
-                }
-
-                reloadFromServer(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)?.let {
-                    current = it
-                    send(current)
-                }
-
-                launch {
-                    worldSignals.signals.collect { signal ->
-                        if (signal.marksStale()) {
-                            stale = true
-                            return@collect
-                        }
-                        val reason = signal.catchUpReason() ?: return@collect
-                        reloadFromServer(reason, force = false)?.let { statuses ->
-                            current = statuses
+                    suspend fun emitOverlay(base: Map<String, SessionStatus>) {
+                        val next = overlayPending(directory, base, confirmFrom = emptyMap())
+                        if (next != current) {
+                            current = next
                             send(current)
                         }
                     }
-                }
-                launch {
-                    invalidationBus.events
-                        .filter { it.key == null || it.key == directory }
-                        .collect {
-                            stale = true
-                            reloadFromServer(it.reason, force = true)?.let { statuses ->
-                                current = statuses
-                                send(current)
-                            }
-                            it.ack?.complete(Unit)
-                        }
-                }
 
-                try {
-                    eventStream.events.collect { event ->
-                        when {
-                            event.type == "stream.reconnected" || event.type == "server.connected" -> {
-                                reconnectRefresh?.cancel()
-                                reconnectRefresh =
-                                    launch {
-                                        delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
-                                        reloadFromServer(event.type, force = true)?.let { statuses ->
-                                            current = statuses
-                                            send(current)
+                    suspend fun commitLoaded(
+                        loaded: Map<String, SessionStatus>,
+                        emptyActiveGuard: Boolean = false,
+                    ) {
+                        // Empty active maps are a between-step gap on v2, not idle.
+                        // True idle is session.idle / execution.*. Overlay pending
+                        // onto the kept server map; do not skip overlay because
+                        // pending is set.
+                        if (emptyActiveGuard && loaded.isEmpty() && server.isNotEmpty()) {
+                            emitOverlay(server)
+                            return
+                        }
+                        server = loaded
+                        current = overlayPending(directory, loaded)
+                        send(current)
+                    }
+
+                    suspend fun reloadFromServer(
+                        reason: String,
+                        force: Boolean,
+                    ): Map<String, SessionStatus>? {
+                        if (!force && !stale) {
+                            DiagnosticLog.info(
+                                DiagnosticLogArea.Session,
+                                "statusLiveStore skip directory=$directory reason=$reason",
+                            )
+                            return null
+                        }
+                        val loaded =
+                            runCatching {
+                                sessionRepository
+                                    .getAllSessionStatuses(directory = directory)
+                                    .associateBy(SessionStatus::sessionId)
+                            }.getOrNull() ?: return null
+                        stale = false
+                        DiagnosticLog.info(
+                            DiagnosticLogArea.Session,
+                            "statusLiveStore refresh directory=$directory reason=$reason",
+                        )
+                        return loaded
+                    }
+
+                    launch {
+                        mutationBus
+                            .filter { it.directory == directory }
+                            .collect { mutation ->
+                                when (mutation) {
+                                    is StatusMutation.MarkBusy -> {
+                                        if (pendingBusy[directory]?.contains(mutation.sessionId) != true) {
+                                            return@collect
                                         }
+                                        emitOverlay(server)
                                     }
-                            }
-                            event.type == "session.active.snapshot" -> {
-                                reconnectRefresh?.cancel()
-                                reconnectRefresh =
-                                    launch {
-                                        delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
-                                        reloadFromServer(event.type, force = true)?.let { statuses ->
-                                            // Empty active maps are a between-step gap on v2,
-                                            // not idle. True idle is session.idle / execution.*.
-                                            if (statuses.isEmpty() && current.isNotEmpty()) return@let
-                                            current = statuses
-                                            send(current)
-                                        }
+                                    is StatusMutation.ClearLocalBusy -> {
+                                        emitOverlay(server)
                                     }
-                            }
-                            event.triggersStatusRefresh -> {
-                                val next = applyStatusEvent(current, event) ?: return@collect
-                                if (next != current) {
-                                    current = next
-                                    send(current)
+                                    is StatusMutation.MarkIdle -> {
+                                        server = server - mutation.sessionId
+                                        emitOverlay(server)
+                                    }
                                 }
+                            }
+                    }
+                    yield()
+
+                    reloadFromServer(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)?.let {
+                        commitLoaded(it)
+                    }
+
+                    launch {
+                        worldSignals.signals.collect { signal ->
+                            if (signal.marksStale()) {
+                                stale = true
+                                return@collect
+                            }
+                            val reason = signal.catchUpReason() ?: return@collect
+                            reloadFromServer(reason, force = false)?.let { statuses ->
+                                commitLoaded(statuses)
                             }
                         }
                     }
-                } finally {
-                    reconnectRefresh?.cancel()
-                }
+                    launch {
+                        invalidationBus.events
+                            .filter { it.key == null || it.key == directory }
+                            .collect {
+                                stale = true
+                                reloadFromServer(it.reason, force = true)?.let { statuses ->
+                                    commitLoaded(statuses)
+                                }
+                                it.ack?.complete(Unit)
+                            }
+                    }
+
+                    try {
+                        eventStream.events.collect { event ->
+                            when {
+                                event.type == "stream.reconnected" || event.type == "server.connected" -> {
+                                    reconnectRefresh?.cancel()
+                                    reconnectRefresh =
+                                        launch {
+                                            delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
+                                            reloadFromServer(event.type, force = true)?.let { statuses ->
+                                                commitLoaded(statuses)
+                                            }
+                                        }
+                                }
+                                event.type == "session.active.snapshot" -> {
+                                    reconnectRefresh?.cancel()
+                                    reconnectRefresh =
+                                        launch {
+                                            delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
+                                            reloadFromServer(event.type, force = true)?.let { statuses ->
+                                                commitLoaded(statuses, emptyActiveGuard = true)
+                                            }
+                                        }
+                                }
+                                event.triggersStatusRefresh -> {
+                                    applyStatusEvent(directory, server, event)?.let { server = it }
+                                    emitOverlay(server)
+                                }
+                            }
+                        }
+                    } finally {
+                        reconnectRefresh?.cancel()
+                    }
                 } finally {
                     activeDirectories.remove(directory)
                 }
             }
 
         private fun applyStatusEvent(
+            directory: String,
             current: Map<String, SessionStatus>,
             event: OpencodeEvent,
         ): Map<String, SessionStatus>? {
@@ -188,18 +257,64 @@ class DefaultSessionStatusLiveStore
                 "session.status" -> {
                     val status = eventDomainAdapter.sessionStatusFromEvent(event) ?: return null
                     if (status.raw["type"] == "idle") {
+                        pendingBusy[directory]?.remove(status.sessionId)
                         if (status.sessionId !in current) return null
                         current - status.sessionId
                     } else {
+                        pendingBusy[directory]?.remove(status.sessionId)
                         current + (status.sessionId to status)
                     }
                 }
                 "session.idle" -> {
                     val sessionId = event.sessionId ?: return null
+                    pendingBusy[directory]?.remove(sessionId)
                     if (sessionId !in current) return null
                     current - sessionId
                 }
                 else -> null
             }
         }
+
+        private fun pendingIds(directory: String): MutableSet<String> = pendingBusy.getOrPut(directory) { ConcurrentHashMap.newKeySet() }
+
+        private fun overlayPending(
+            directory: String,
+            base: Map<String, SessionStatus>,
+            confirmFrom: Map<String, SessionStatus> = base,
+        ): Map<String, SessionStatus> {
+            val pending = pendingBusy[directory]?.toSet().orEmpty()
+            if (pending.isEmpty()) return base
+            var result = base
+            for (sessionId in pending) {
+                val restType = confirmFrom[sessionId]?.raw?.get("type")
+                if (restType == "busy" || restType == "retry") {
+                    pendingBusy[directory]?.remove(sessionId)
+                } else {
+                    result = result + (sessionId to localBusy(sessionId))
+                }
+            }
+            return result
+        }
     }
+
+private fun localBusy(sessionId: String) = SessionStatus(sessionId = sessionId, raw = mapOf("type" to "busy"))
+
+private sealed class StatusMutation {
+    abstract val directory: String
+    abstract val sessionId: String
+
+    data class MarkBusy(
+        override val directory: String,
+        override val sessionId: String,
+    ) : StatusMutation()
+
+    data class ClearLocalBusy(
+        override val directory: String,
+        override val sessionId: String,
+    ) : StatusMutation()
+
+    data class MarkIdle(
+        override val directory: String,
+        override val sessionId: String,
+    ) : StatusMutation()
+}

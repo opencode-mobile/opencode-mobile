@@ -9,4 +9,19 @@ interface SessionStatusLiveStore {
     fun clearCache()
 
     suspend fun invalidate(directory: String?) {}
+
+    fun markBusy(
+        directory: String,
+        sessionId: String,
+    ) {}
+
+    fun clearLocalBusy(
+        directory: String,
+        sessionId: String,
+    ) {}
+
+    fun markIdle(
+        directory: String,
+        sessionId: String,
+    ) {}
 }
