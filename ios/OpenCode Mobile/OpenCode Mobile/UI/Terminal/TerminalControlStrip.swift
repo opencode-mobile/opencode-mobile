@@ -6,10 +6,11 @@ struct TerminalControlStrip: View {
     var body: some View {
         HStack(spacing: 6) {
             OpenCodeButton(
-                variant: .compactText(title: "Ctrl-C"),
+                variant: .compactText(title: "^C"),
                 contrast: .destructive,
                 action: { onSend("\u{0003}") }
             )
+            .accessibilityLabel("Ctrl-C")
             OpenCodeButton(
                 variant: .compactText(title: "Esc"),
                 contrast: .low,
@@ -37,7 +38,7 @@ struct TerminalControlStrip: View {
                 action: { onSend("\u{001b}[D") }
             )
             OpenCodeButton(
-                variant: .iconSquare(.chevronRight, accessibilityLabel: "Right"),
+                variant: .iconSquare(.arrowForward, accessibilityLabel: "Right"),
                 contrast: .low,
                 action: { onSend("\u{001b}[C") }
             )

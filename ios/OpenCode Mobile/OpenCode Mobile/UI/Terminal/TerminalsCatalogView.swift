@@ -23,7 +23,12 @@ struct TerminalsCatalogView: View {
                 leading: .back(action: { dismiss() }),
                 showDivider: true
             )
-            if viewModel.rows.isEmpty {
+            if viewModel.isLoading {
+                OpenCodeStatusStack(
+                    title: "Loading terminals",
+                    subtitle: "Checking server…"
+                )
+            } else if viewModel.rows.isEmpty {
                 OpenCodeEmptyState(
                     title: "No running shells",
                     message: "Open a session and use / terminal to start one for that project."
@@ -48,12 +53,11 @@ struct TerminalsCatalogView: View {
                                         variant: .iconCircle(.close, accessibilityLabel: "Close"),
                                         contrast: .low,
                                         action: {
-                                            Task { await viewModel.close(id: row.id, directory: row.worktree) }
+                                            viewModel.requestClose(row)
                                         }
                                     )
                                 }
                             )
-                            .padding(.horizontal, 16)
                         }
                     }
                 }
@@ -71,5 +75,19 @@ struct TerminalsCatalogView: View {
         .onAppear {
             Task { await viewModel.appear() }
         }
+        .openCodeDialog(
+            isPresented: Binding(
+                get: { viewModel.pendingClose != nil },
+                set: { if !$0 { viewModel.dismissClose() } }
+            ),
+            title: viewModel.pendingClose.map { "Close “\($0.title)”?" } ?? "Close this shell?",
+            subtitle: "This ends the shell on the server.",
+            primaryOption: OpenCodeDialogOption(title: "Close", destructive: true) {
+                Task { await viewModel.confirmClose() }
+            },
+            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+                viewModel.dismissClose()
+            }
+        )
     }
 }

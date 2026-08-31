@@ -6,6 +6,9 @@ icons:
   - name: arrow_back
     style: filled
     notes: SF Symbol chevron.left
+  - name: arrow_forward
+    style: filled
+    notes: SF Symbol chevron.right; pair of arrow_back
   - name: arrow_upward
     style: filled
     notes: SF Symbol arrow.up; Queue / default Send

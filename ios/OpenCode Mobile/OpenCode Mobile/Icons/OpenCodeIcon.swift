@@ -4,6 +4,7 @@ import SwiftUI
 enum OpenCodeIcon: String, CaseIterable, Hashable {
     case add = "md_add"
     case arrowBack = "md_arrow_back"
+    case arrowForward = "md_arrow_forward"
     case arrowUpward = "md_arrow_upward"
     case arrowWarmUp = "md_arrow_warm_up"
     case arrowDownward = "md_arrow_downward"

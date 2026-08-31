@@ -29,6 +29,7 @@ fun IconsGalleryScreen(modifier: Modifier = Modifier) {
         listOf(
             "add" to OpenCodeIcons.Add,
             "arrow_back" to OpenCodeIcons.ArrowBack,
+            "arrow_forward" to OpenCodeIcons.ArrowForward,
             "arrow_upward" to OpenCodeIcons.ArrowUpward,
             "arrow_warm_up" to OpenCodeIcons.ArrowWarmUp,
             "check" to OpenCodeIcons.Check,

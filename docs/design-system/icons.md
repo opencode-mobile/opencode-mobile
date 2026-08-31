@@ -60,6 +60,7 @@ Some catalog icons have a stable product meaning beyond gallery samples:
 | `terminal` | open Terminal from home |
 | `folder_check` | **Current directory** row in Add project sheet |
 | `subdirectory_arrow_right` | Subdirectory rows in Add project sheet |
+| `arrow_forward` | Terminal control strip Right |
 | `arrow_upward` | **Go up** row in Add project sheet; Queue / default Send |
 | `arrow_warm_up` | Steer follow-up send |
 | `edit` | Edit/rename affordances in gallery and samples; not the gallery entry on home |

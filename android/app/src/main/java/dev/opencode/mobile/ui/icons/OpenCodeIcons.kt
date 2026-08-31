@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 object OpenCodeIcons {
 private var _add: ImageVector? = null
 private var _arrow_back: ImageVector? = null
+private var _arrow_forward: ImageVector? = null
 private var _arrow_upward: ImageVector? = null
 private var _arrow_warm_up: ImageVector? = null
 private var _arrow_downward: ImageVector? = null
@@ -80,6 +81,25 @@ private var _widgets: ImageVector? = null
     )
       }.build()
       return _arrow_back!!
+    }
+
+  val ArrowForward: ImageVector
+    get() {
+      if (_arrow_forward != null) return _arrow_forward!!
+      _arrow_forward = ImageVector.Builder(
+        name = "ArrowForward",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("m12 4-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z").toNodes(),
+      fill = SolidColor(Color.Black),
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _arrow_forward!!
     }
 
   val ArrowUpward: ImageVector
