@@ -9,6 +9,7 @@ enum class ClientSlashAction(
     Undo("undo", "Undo last message"),
     Redo("redo", "Redo undone message"),
     Compact("compact", "Compact session context"),
+    Terminal("terminal", "Open project shell"),
     ;
 
     val rowTitle: String
@@ -34,6 +35,7 @@ object ClientSlashActionCatalog {
     fun visibleActions(input: ClientSlashActionVisibilityInput): List<ClientSlashAction> =
         buildList {
             add(ClientSlashAction.New)
+            add(ClientSlashAction.Terminal)
             if (input.visibleUserMessageCount > 0) {
                 add(ClientSlashAction.Fork)
             }

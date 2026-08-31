@@ -1933,13 +1933,14 @@ struct SessionChatViewModelTests {
         let emptyMessages = makeViewModel(messageRepository: FakeMessageRepository(messages: []))
         defer { emptyMessages.stopObserving() }
         await emptyMessages.loadMessages()
-        #expect(emptyMessages.uiState.visibleClientSlashActions == [.new])
+        #expect(emptyMessages.uiState.visibleClientSlashActions == [.new, .terminal])
 
         let withMessages = makeViewModel(messageRepository: FakeMessageRepository())
         defer { withMessages.stopObserving() }
         await withMessages.loadMessages()
         let visible = withMessages.uiState.visibleClientSlashActions
         #expect(visible.contains(.new))
+        #expect(visible.contains(.terminal))
         #expect(visible.contains(.fork))
         #expect(visible.contains(.undo))
         #expect(visible.contains(.compact))

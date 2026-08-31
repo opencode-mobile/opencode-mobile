@@ -31,15 +31,7 @@ struct ProjectListHomeView: View {
                     subtitleAccessory: showsLiveUpdatesStatus
                         ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
                         : nil,
-                    actions: [
-                        .icon(.settings, accessibilityLabel: "Settings", action: {
-                            ProductAnalytics.logUserAction(
-                                screenId: ProductAnalytics.Screen.home,
-                                actionId: ProductAnalytics.Action.homeOpenSettings
-                            )
-                            showSettings = true
-                        }),
-                    ],
+                    actions: homeTopBarActions,
                     onTitleClick: viewModel.serversChrome.isSwitcher ? { viewModel.showServersSheet() } : nil,
                     titleMenuExpanded: viewModel.serversChrome.sheetVisible
                 )
@@ -54,7 +46,9 @@ struct ProjectListHomeView: View {
             .overlay(alignment: .bottom) {
                 OpenCodeSnackbarHost(
                     message: viewModel.removalSnackbar,
-                    onDismissed: { viewModel.consumeProjectRemovalSnackbar() }
+                    onDismissed: {
+                        viewModel.consumeProjectRemovalSnackbar()
+                    }
                 )
             }
             .navigationDestination(isPresented: $showSettings) {
@@ -75,6 +69,16 @@ struct ProjectListHomeView: View {
             }
             .navigationDestination(for: SessionListItem.self) { session in
                 SessionChatView(session: session)
+            }
+            .navigationDestination(for: TerminalsCatalogRoute.self) { _ in
+                TerminalsCatalogView { worktree, projectTitle, ptyId in
+                    navigationPath.append(
+                        TerminalRoute(worktree: worktree, projectTitle: projectTitle, ptyId: ptyId)
+                    )
+                }
+            }
+            .navigationDestination(for: TerminalRoute.self) { route in
+                TerminalView(worktree: route.worktree, projectTitle: route.projectTitle, ptyId: route.ptyId)
             }
             .task {
                 ProductAnalytics.logScreenView(
@@ -495,6 +499,42 @@ struct ProjectListHomeView: View {
 
     private func openSession(_ session: SessionListItem) {
         navigationPath.append(session)
+    }
+
+    private var showsTerminalAction: Bool {
+        guard case let .loaded(sections, _, _, _) = viewModel.state else { return false }
+        return SessionListHomeChrome.terminalAction(projects: sections.homeChromeProjects()) == .openCatalog
+    }
+
+    private var homeTopBarActions: [OpenCodeTopBarAction] {
+        var actions: [OpenCodeTopBarAction] = []
+        if showsTerminalAction {
+            actions.append(
+                .icon(.terminal, accessibilityLabel: "Terminal", action: handleTerminalTap)
+            )
+        }
+        actions.append(
+            .icon(.settings, accessibilityLabel: "Settings", action: {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.home,
+                    actionId: ProductAnalytics.Action.homeOpenSettings
+                )
+                showSettings = true
+            })
+        )
+        return actions
+    }
+
+    private func handleTerminalTap() {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.home,
+            actionId: ProductAnalytics.Action.homeOpenTerminal
+        )
+        guard case let .loaded(sections, _, _, _) = viewModel.state else { return }
+        let projects = sections.homeChromeProjects()
+        if case .openCatalog = SessionListHomeChrome.terminalAction(projects: projects) {
+            navigationPath.append(TerminalsCatalogRoute())
+        }
     }
 
     private func presentNewSessionProjectPicker() {

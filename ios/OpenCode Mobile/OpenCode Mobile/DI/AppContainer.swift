@@ -267,6 +267,24 @@ extension Container {
         }.singleton
     }
 
+    var ptyAPIClient: Factory<PtyAPIClient> {
+        self { PtyAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+    }
+
+    var terminalDomainAdapter: Factory<TerminalDomainAdapter> {
+        self { TerminalDomainAdapter() }.singleton
+    }
+
+    var terminalRepository: Factory<any TerminalRepository> {
+        self {
+            DefaultTerminalRepository(
+                api: self.ptyAPIClient(),
+                adapter: self.terminalDomainAdapter(),
+                activeConnectionManager: self.activeConnectionManager()
+            )
+        }.singleton
+    }
+
     var agentsAPIClient: Factory<AgentsAPIClient> {
         self { AgentsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
@@ -503,6 +521,28 @@ extension Container {
             )
         }
     }
+
+    var terminalViewModel: ParameterFactory<(worktree: String, ptyId: String?), TerminalViewModel> {
+        self { @MainActor in
+            TerminalViewModel(
+                worktree: $0.worktree,
+                ptyId: $0.ptyId,
+                repository: self.terminalRepository(),
+                activeConnectionManager: self.activeConnectionManager(),
+                socketClient: URLSessionTerminalSocketClient()
+            )
+        }
+    }
+
+    var terminalsCatalogViewModel: Factory<TerminalsCatalogViewModel> {
+        self { @MainActor in
+            TerminalsCatalogViewModel(
+                repository: self.terminalRepository(),
+                activeConnectionManager: self.activeConnectionManager(),
+                connectionProfileStore: self.connectionProfileStore()
+            )
+        }
+    }
 }
 
 extension Container {
@@ -537,6 +577,16 @@ extension Container {
     @MainActor
     static func makeSessionContextViewModel(sessionID: String, worktree: String) -> SessionContextViewModel {
         shared.sessionContextViewModel((sessionID: sessionID, worktree: worktree))
+    }
+
+    @MainActor
+    static func makeTerminalViewModel(worktree: String, ptyId: String? = nil) -> TerminalViewModel {
+        shared.terminalViewModel((worktree: worktree, ptyId: ptyId))
+    }
+
+    @MainActor
+    static func makeTerminalsCatalogViewModel() -> TerminalsCatalogViewModel {
+        shared.terminalsCatalogViewModel()
     }
 
     @MainActor

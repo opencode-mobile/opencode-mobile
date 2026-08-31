@@ -97,6 +97,20 @@ struct SessionListHomeChromeTests {
         )
     }
 
+    @Test func terminalAction_zeroProjectsHides() {
+        #expect(SessionListHomeChrome.terminalAction(projects: []) == .none)
+    }
+
+    @Test func terminalAction_oneProjectOpensCatalog() {
+        #expect(SessionListHomeChrome.terminalAction(projects: [mobile]) == .openCatalog)
+    }
+
+    @Test func terminalAction_twoProjectsOpensCatalog() {
+        #expect(
+            SessionListHomeChrome.terminalAction(projects: [mobile, playground]) == .openCatalog
+        )
+    }
+
     @Test func newSessionLongPressAction_chipChromeDoesNothing() {
         #expect(
             SessionListHomeChrome.newSessionLongPressAction(

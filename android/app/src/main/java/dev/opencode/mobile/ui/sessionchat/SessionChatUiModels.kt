@@ -138,7 +138,8 @@ data class SessionChatUiState(
     val atSuggestionsVisible: Boolean = false,
     val atSuggestions: List<SessionChatAtSuggestion> = emptyList(),
     val commandsSheetVisible: Boolean = false,
-    val visibleClientSlashActions: List<ClientSlashAction> = listOf(ClientSlashAction.New),
+    val visibleClientSlashActions: List<ClientSlashAction> =
+        listOf(ClientSlashAction.New, ClientSlashAction.Terminal),
     val forkDialogVisible: Boolean = false,
     val forkDraftTitle: String = "",
     val forkSubmitting: Boolean = false,
@@ -146,6 +147,7 @@ data class SessionChatUiState(
     val forkResultVisible: Boolean = false,
     val forkedSessionTitle: String = "",
     val pendingSessionReplace: ChildSessionNavigationTarget? = null,
+    val pendingTerminalOpen: PendingTerminalOpen? = null,
     val hasPendingRevert: Boolean = false,
     /** Smart project label for top-bar chrome; null when worktree missing. */
     val projectLabel: String? = null,
@@ -287,6 +289,11 @@ data class ChildSessionNavigationTarget(
     val optimisticNavigationInstanceId: String? = null,
 )
 
+data class PendingTerminalOpen(
+    val worktree: String,
+    val projectTitle: String,
+)
+
 data class SessionChatTimelineRegionState(
     val timeline: SessionChatTimelineState = SessionChatTimelineState.Loading,
     val messages: List<SessionChatMessageItem> = emptyList(),
@@ -414,7 +421,7 @@ data class SessionChatReviewChangesRegionState(
 
 data class SessionChatCommandsRegionState(
     val commandsSheetVisible: Boolean = false,
-    val visibleActions: List<ClientSlashAction> = listOf(ClientSlashAction.New),
+    val visibleActions: List<ClientSlashAction> = listOf(ClientSlashAction.New, ClientSlashAction.Terminal),
     val hasPendingRevert: Boolean = false,
     val forkDialogVisible: Boolean = false,
     val forkDraftTitle: String = "",
@@ -426,6 +433,7 @@ data class SessionChatCommandsRegionState(
     val actionErrorMessage: String? = null,
     val actionSuccessMessage: String? = null,
     val pendingSessionReplace: ChildSessionNavigationTarget? = null,
+    val pendingTerminalOpen: PendingTerminalOpen? = null,
 )
 
 data class LatestModelHint(

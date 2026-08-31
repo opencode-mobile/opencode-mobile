@@ -335,6 +335,8 @@ final class SessionChatViewModel {
                 isBusy: uiState.sessionStatusLabel != nil || effectiveCompacting(),
                 clearComposerRestore: { [weak self] in self?.composer.restoreComposerText("") }
             )
+        case .terminal:
+            commands.runTerminal(projectTitle: uiState.projectLabel ?? uiState.sessionTitle)
         case .compact:
             guard let model = composer.state.composer.selectedModel else { return }
             let beforeFraction = uiState.contextUsageFraction.map { Float($0) }
@@ -376,6 +378,7 @@ final class SessionChatViewModel {
             case .undo: ProductAnalytics.Action.commandsUndo
             case .redo: ProductAnalytics.Action.commandsRedo
             case .compact: ProductAnalytics.Action.commandsCompact
+            case .terminal: ProductAnalytics.Action.commandsTerminal
             }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.sessionCommands,
@@ -433,6 +436,10 @@ final class SessionChatViewModel {
             )
         }
         commands.chooseForkStay()
+    }
+
+    func consumePendingTerminalOpen() {
+        commands.consumePendingTerminalOpen()
     }
 
     func consumePendingSessionReplace() {
@@ -1225,6 +1232,7 @@ final class SessionChatViewModel {
             forkResultVisible: commandsState.forkResultVisible,
             forkedSessionTitle: commandsState.forkedSessionTitle,
             pendingSessionReplace: commandsState.pendingSessionReplace,
+            pendingTerminalOpen: commandsState.pendingTerminalOpen,
             hasPendingRevert: commandsState.hasPendingRevert
         )
     }

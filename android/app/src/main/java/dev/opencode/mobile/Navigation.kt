@@ -99,6 +99,8 @@ import dev.opencode.mobile.ui.settings.SettingsViewModel
 import dev.opencode.mobile.ui.settings.TextMateLanguagesRoute
 import dev.opencode.mobile.ui.settings.TextMateLogbookScreen
 import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
+import dev.opencode.mobile.ui.terminal.TerminalScreen
+import dev.opencode.mobile.ui.terminal.TerminalsCatalogScreen
 
 @Composable
 fun MainNavigation() {
@@ -124,6 +126,8 @@ fun MainNavigation() {
                 is SessionContext,
                 is Changes,
                 is SessionToolGroup,
+                is Terminal,
+                is TerminalsCatalog,
                 -> backStack.removeLastOrNull()
                 else -> break
             }
@@ -201,6 +205,7 @@ fun MainNavigation() {
                                             )
                                             MainScreen(
                                                 onSettingsClick = { backStack.add(SettingsHome) },
+                                                onTerminalClick = { backStack.add(TerminalsCatalog) },
                                                 onSessionClick = { target ->
                                                     backStack.add(
                                                         SessionChat(
@@ -461,6 +466,38 @@ fun MainNavigation() {
                                             }
                                         }
                                     }
+                                    entry<TerminalsCatalog> {
+                                        RouteSurface {
+                                            ProductRouteScreenViewEffect(
+                                                screenId = ProductAnalytics.Screen.TERMINALS_CATALOG,
+                                            )
+                                            TerminalsCatalogScreen(
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onOpenTerminal = { worktree, projectTitle, ptyId ->
+                                                    backStack.add(
+                                                        Terminal(
+                                                            worktree = worktree,
+                                                            projectTitle = projectTitle,
+                                                            ptyId = ptyId,
+                                                        ),
+                                                    )
+                                                },
+                                            )
+                                        }
+                                    }
+                                    entry<Terminal> { key ->
+                                        RouteSurface {
+                                            ProductRouteScreenViewEffect(
+                                                screenId = ProductAnalytics.Screen.TERMINAL,
+                                            )
+                                            TerminalScreen(
+                                                worktree = key.worktree,
+                                                projectTitle = key.projectTitle,
+                                                ptyId = key.ptyId,
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                            )
+                                        }
+                                    }
                                     entry<SessionChat> { key ->
                                         RouteSurface {
                                             ProductRouteScreenViewEffect(
@@ -500,6 +537,14 @@ fun MainNavigation() {
                                                 },
                                                 onToolGroupClick = { target ->
                                                     backStack.add(target)
+                                                },
+                                                onTerminalRequested = { worktree, projectTitle ->
+                                                    backStack.add(
+                                                        Terminal(
+                                                            worktree = worktree,
+                                                            projectTitle = projectTitle,
+                                                        ),
+                                                    )
                                                 },
                                                 onSessionReplaceRequested = { target ->
                                                     backStack.removeLastOrNull()

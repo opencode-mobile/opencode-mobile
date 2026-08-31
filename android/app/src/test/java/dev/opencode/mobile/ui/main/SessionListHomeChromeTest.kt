@@ -141,6 +141,30 @@ class SessionListHomeChromeTest {
     }
 
     @Test
+    fun terminalAction_zeroProjectsHides() {
+        assertEquals(
+            SessionListHomeChrome.TerminalAction.None,
+            SessionListHomeChrome.terminalAction(projects = emptyList()),
+        )
+    }
+
+    @Test
+    fun terminalAction_oneProjectOpensCatalog() {
+        assertEquals(
+            SessionListHomeChrome.TerminalAction.OpenCatalog,
+            SessionListHomeChrome.terminalAction(projects = listOf(mobile)),
+        )
+    }
+
+    @Test
+    fun terminalAction_twoProjectsOpensCatalog() {
+        assertEquals(
+            SessionListHomeChrome.TerminalAction.OpenCatalog,
+            SessionListHomeChrome.terminalAction(projects = listOf(mobile, playground)),
+        )
+    }
+
+    @Test
     fun newSessionLongPressAction_chipChromeDoesNothing() {
         assertEquals(
             SessionListHomeChrome.NewSessionAction.None,

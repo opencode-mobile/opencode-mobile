@@ -19,6 +19,12 @@ object SessionListHomeChrome {
         ) : NewSessionAction()
     }
 
+    sealed class TerminalAction {
+        data object None : TerminalAction()
+
+        data object OpenCatalog : TerminalAction()
+    }
+
     fun filterTabs(
         projects: List<Project>,
         sessionCount: Int,
@@ -66,6 +72,13 @@ object SessionListHomeChrome {
             return NewSessionAction.Create(projects.first().worktree)
         }
         return NewSessionAction.PresentPicker
+    }
+
+    fun terminalAction(projects: List<Project>): TerminalAction {
+        if (projects.isEmpty()) {
+            return TerminalAction.None
+        }
+        return TerminalAction.OpenCatalog
     }
 
     fun newSessionLongPressAction(

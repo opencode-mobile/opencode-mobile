@@ -69,6 +69,16 @@ When the mobile client sends `directory={worktree}` on API calls, **current
 project** means that worktree. With no `directory` parameter, it means the
 server process boot worktree (`GET /project/current` without a query).
 
+### Terminal
+
+A live shell on the connected opencode server for one **added project**.
+
+Home opens one Terminal screen for the selected worktree. The app talks to
+the server PTY over a foreground WebSocket. Leaving the screen or
+backgrounding drops I/O and does not kill the process. Terminal is not a
+session and is not part of Session Chat.
+_Avoid_: PTY as a product word; SSH; TUI attach; session shell command.
+
 ### session
 
 A conversation and work stream managed by opencode for the current project.

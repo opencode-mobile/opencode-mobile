@@ -88,6 +88,7 @@ data class HomeSessionActionsCallbacks(
 @Composable
 fun MainScreen(
     onSettingsClick: () -> Unit,
+    onTerminalClick: () -> Unit = {},
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnectionClick: (dev.opencode.mobile.domain.connection.ConnectionProfile?) -> Unit,
     onConnectClick: () -> Unit,
@@ -146,6 +147,7 @@ fun MainScreen(
                 onDismissDeleteConfirm = viewModel::dismissDeleteConfirm,
             ),
         onSettingsClick = onSettingsClick,
+        onTerminalClick = onTerminalClick,
         onSessionClick = onSessionClick,
         onRetryProbe = viewModel::retryProbe,
         onEditConnection = { viewModel.requestEditConnection(onEditConnectionClick) },
@@ -185,6 +187,7 @@ internal fun MainScreen(
     liveUpdatesConnectionStatus: SessionConnectionStatus,
     removalSnackbar: OpenCodeSnackbarMessage?,
     onSettingsClick: () -> Unit,
+    onTerminalClick: () -> Unit = {},
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnection: () -> Unit,
     onConnectClick: () -> Unit,
@@ -237,6 +240,11 @@ internal fun MainScreen(
         }
 
     var showNewSessionProjectPicker by rememberSaveable { mutableStateOf(false) }
+    var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
+    val loadedSections = (uiState as? MainScreenUiState.Loaded)?.sections.orEmpty()
+    val chromeProjects = loadedSections.toHomeChromeProjects()
+    val showTerminalAction =
+        SessionListHomeChrome.terminalAction(chromeProjects) is SessionListHomeChrome.TerminalAction.OpenCatalog
     val newSessionPickerProjects =
         when (uiState) {
             is MainScreenUiState.Loaded -> uiState.sections
@@ -284,19 +292,36 @@ internal fun MainScreen(
                         null
                     },
                 actions =
-                    listOf(
-                        OpenCodeTopBarAction.Icon(
-                            imageVector = OpenCodeIcons.Settings,
-                            contentDescription = "Settings",
-                            onClick = {
-                                ProductAnalytics.logUserAction(
-                                    screenId = ProductAnalytics.Screen.HOME,
-                                    actionId = ProductAnalytics.Action.HOME_OPEN_SETTINGS,
-                                )
-                                onSettingsClick()
-                            },
-                        ),
-                    ),
+                    buildList {
+                        if (showTerminalAction) {
+                            add(
+                                OpenCodeTopBarAction.Icon(
+                                    imageVector = OpenCodeIcons.Terminal,
+                                    contentDescription = "Terminal",
+                                    onClick = {
+                                        ProductAnalytics.logUserAction(
+                                            screenId = ProductAnalytics.Screen.HOME,
+                                            actionId = ProductAnalytics.Action.HOME_OPEN_TERMINAL,
+                                        )
+                                        onTerminalClick()
+                                    },
+                                ),
+                            )
+                        }
+                        add(
+                            OpenCodeTopBarAction.Icon(
+                                imageVector = OpenCodeIcons.Settings,
+                                contentDescription = "Settings",
+                                onClick = {
+                                    ProductAnalytics.logUserAction(
+                                        screenId = ProductAnalytics.Screen.HOME,
+                                        actionId = ProductAnalytics.Action.HOME_OPEN_SETTINGS,
+                                    )
+                                    onSettingsClick()
+                                },
+                            ),
+                        )
+                    },
             )
 
             when (uiState) {
@@ -372,6 +397,8 @@ internal fun MainScreen(
                         revealNewestToken = revealNewestToken,
                         pendingSelectedFilterId = pendingSelectedFilterId,
                         onConsumePendingSelectedFilter = onConsumePendingSelectedFilter,
+                        selectedFilterId = selectedFilterId,
+                        onSelectedFilterIdChange = { selectedFilterId = it },
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -380,7 +407,9 @@ internal fun MainScreen(
 
         OpenCodeSnackbarHost(
             message = removalSnackbar,
-            onDismissed = onConsumeProjectRemovalSnackbar,
+            onDismissed = {
+                onConsumeProjectRemovalSnackbar()
+            },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
@@ -811,6 +840,8 @@ private fun HomeProjectsContent(
     revealNewestToken: Int = 0,
     pendingSelectedFilterId: String? = null,
     onConsumePendingSelectedFilter: () -> Unit = {},
+    selectedFilterId: String,
+    onSelectedFilterIdChange: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     PullToRefreshBox(
@@ -825,9 +856,6 @@ private fun HomeProjectsContent(
                 projects = chromeProjects,
                 sessionCount = sessions.size,
             )
-        var selectedFilterId by rememberSaveable {
-            mutableStateOf(SessionListFilterTab.ALL_ID)
-        }
         var showProjectPicker by rememberSaveable { mutableStateOf(false) }
         val resolvedFilterId =
             SessionListHomeChrome.resolvedFilterId(
@@ -836,13 +864,13 @@ private fun HomeProjectsContent(
             )
         LaunchedEffect(resolvedFilterId) {
             if (selectedFilterId != resolvedFilterId) {
-                selectedFilterId = resolvedFilterId
+                onSelectedFilterIdChange(resolvedFilterId)
             }
         }
         LaunchedEffect(pendingSelectedFilterId) {
             pendingSelectedFilterId?.let { filterId ->
                 if (resolvedFilterId != SessionListFilterTab.ALL_ID) {
-                    selectedFilterId = filterId
+                    onSelectedFilterIdChange(filterId)
                 }
                 onConsumePendingSelectedFilter()
             }
@@ -880,7 +908,7 @@ private fun HomeProjectsContent(
                     screenId = ProductAnalytics.Screen.HOME,
                     actionId = ProductAnalytics.Action.HOME_SELECT_SESSION_FILTER,
                 )
-                selectedFilterId = filterId
+                onSelectedFilterIdChange(filterId)
             },
             onRemoveProject = onRemoveProject,
             onSessionSelected = { session ->
@@ -952,7 +980,7 @@ private fun HomeProjectsContent(
                         screenId = ProductAnalytics.Screen.HOME_FILTER_PROJECT_PICKER,
                         actionId = ProductAnalytics.Action.HOME_SELECT_SESSION_FILTER,
                     )
-                    selectedFilterId = filterId
+                    onSelectedFilterIdChange(filterId)
                     showProjectPicker = false
                 },
                 onRemoveProject = onRemoveProject,

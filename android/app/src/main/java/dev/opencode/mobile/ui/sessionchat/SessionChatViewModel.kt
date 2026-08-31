@@ -523,6 +523,10 @@ class SessionChatViewModel
                         isBusy = isSessionBusy(),
                         clearComposerRestore = { composer.restoreComposerText("") },
                     )
+                ClientSlashAction.Terminal ->
+                    commands.runTerminal(
+                        projectTitle = _uiState.value.projectLabel ?: sessionInfo.state.value.sessionTitle,
+                    )
                 ClientSlashAction.Compact -> {
                     val model = composer.state.value.composer.selectedModel ?: return
                     val beforeFraction = _uiState.value.contextUsageFraction
@@ -594,6 +598,10 @@ class SessionChatViewModel
 
         fun consumePendingSessionReplace() {
             commands.consumePendingSessionReplace()
+        }
+
+        fun consumePendingTerminalOpen() {
+            commands.consumePendingTerminalOpen()
         }
 
         fun consumeSnackbar() {
@@ -1311,6 +1319,7 @@ class SessionChatViewModel
                 forkResultVisible = commandsState.forkResultVisible,
                 forkedSessionTitle = commandsState.forkedSessionTitle,
                 pendingSessionReplace = commandsState.pendingSessionReplace,
+                pendingTerminalOpen = commandsState.pendingTerminalOpen,
                 hasPendingRevert = commandsState.hasPendingRevert,
                 projectLabel = projectLabel,
                 projectLetter = projectLetter,
@@ -1406,6 +1415,7 @@ private val ClientSlashAction.productActionId: String
             ClientSlashAction.Undo -> ProductAnalytics.Action.COMMANDS_UNDO
             ClientSlashAction.Redo -> ProductAnalytics.Action.COMMANDS_REDO
             ClientSlashAction.Compact -> ProductAnalytics.Action.COMMANDS_COMPACT
+            ClientSlashAction.Terminal -> ProductAnalytics.Action.COMMANDS_TERMINAL
         }
 
 private object EmptyPermissionLiveStore : PermissionLiveStore {

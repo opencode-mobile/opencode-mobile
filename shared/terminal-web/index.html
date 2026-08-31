@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <link rel="stylesheet" href="xterm.css">
+  <style>
+    html, body, #terminal {
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #000000;
+    }
+    #terminal {
+      padding: 4px;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <div id="terminal"></div>
+  <script src="xterm.js"></script>
+  <script src="addon-fit.js"></script>
+  <script>
+    (function () {
+      var pending = [];
+      var term = null;
+      var fitAddon = null;
+
+      function post(msg) {
+        var payload = JSON.stringify(msg);
+        if (window.AndroidTerminal) {
+          window.AndroidTerminal.postMessage(payload);
+        } else if (
+          window.webkit &&
+          window.webkit.messageHandlers &&
+          window.webkit.messageHandlers.terminal
+        ) {
+          window.webkit.messageHandlers.terminal.postMessage(payload);
+        }
+      }
+
+      window.terminalWrite = function (text) {
+        if (term) {
+          term.write(text);
+        } else {
+          pending.push(text);
+        }
+      };
+
+      window.terminalSetTheme = function (theme) {
+        if (!theme) return;
+        if (theme.background) {
+          document.body.style.background = theme.background;
+          document.documentElement.style.background = theme.background;
+        }
+        if (term) {
+          term.options.theme = theme;
+        }
+      };
+
+      window.terminalFit = function () {
+        if (fitAddon) fitAddon.fit();
+      };
+
+      term = new Terminal({
+        cursorBlink: true,
+        fontSize: 12,
+        fontFamily: "Menlo, Monaco, monospace",
+        theme: { background: "#000000", foreground: "#ffffff", cursor: "#ffffff" },
+        scrollback: 5000,
+        convertEol: true
+      });
+      fitAddon = new FitAddon.FitAddon();
+      term.loadAddon(fitAddon);
+      term.open(document.getElementById("terminal"));
+      for (var i = 0; i < pending.length; i++) {
+        term.write(pending[i]);
+      }
+      pending = [];
+      term.onData(function (data) {
+        post({ type: "data", data: data });
+      });
+      term.onResize(function (size) {
+        post({ type: "resize", cols: size.cols, rows: size.rows });
+      });
+      window.addEventListener("resize", function () {
+        fitAddon.fit();
+      });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", function () {
+          fitAddon.fit();
+        });
+      }
+      document.addEventListener("click", function () {
+        term.focus();
+      });
+      fitAddon.fit();
+      term.focus();
+      post({ type: "ready" });
+    })();
+  </script>
+</body>
+</html>

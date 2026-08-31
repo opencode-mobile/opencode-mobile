@@ -8,6 +8,7 @@ import dev.opencode.mobile.data.remote.AgentsApi
 import dev.opencode.mobile.data.remote.CommandsApi
 import dev.opencode.mobile.data.remote.MessagesApi
 import dev.opencode.mobile.data.remote.ModelsApi
+import dev.opencode.mobile.data.remote.PtyApi
 import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.network.OpencodeHttpClient
 import kotlinx.serialization.json.Json
@@ -52,6 +53,13 @@ object NetworkModule {
         httpClient: OpencodeHttpClient,
         json: Json,
     ): CommandsApi = CommandsApi(httpClient, json)
+
+    @Provides
+    @Singleton
+    fun providePtyApi(
+        httpClient: OpencodeHttpClient,
+        json: Json,
+    ): PtyApi = PtyApi(httpClient, json)
 
     @Provides
     @Singleton
