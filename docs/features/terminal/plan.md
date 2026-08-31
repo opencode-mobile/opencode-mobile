@@ -4,14 +4,15 @@
 
 Home Terminal action opens a Terminals catalog of running shells across added
 projects. Tap a row to attach that PTY. Trailing close deletes it. Empty catalog
-does not create a shell. Dual remotes, bundled xterm.js WebView with native
-WebSocket I/O, Ctrl-C / Esc / Tab / arrows strip, reconnecting after a dropped
-socket.
+does not create a shell. Session Chat `[terminal]` pushes a project shell and
+Back returns to the same chat. Dual remotes, bundled xterm.js WebView with
+native WebSocket I/O, Ctrl-C / Esc / Tab / arrows strip, reconnecting after a
+dropped socket.
 
 ## Remaining
 
-Connect-token HTTP when the server requires `x-opencode-ticket`. Client `/terminal`
-slash to start a PTY from Session Chat. Hardware keyboard shortcuts.
+Connect-token HTTP when the server requires `x-opencode-ticket`. Hardware
+keyboard shortcuts. Confirm CI/Xcode packaging of `shared/terminal-web`.
 
 ## User Goal
 
@@ -48,7 +49,7 @@ project, type commands, and see output, without leaving the app for SSH.
   agent tool output, not a terminal.
 - `/tui/*`. That drives a desktop TUI that is already running.
 - Session Chat embedding, split view, or a tab inside chat.
-- Creating a PTY from the catalog. Client `/terminal` slash is remaining.
+- Creating a PTY from the catalog. Start from Session Chat `[terminal]`.
 - Local scrollback persistence. The server process is the source of truth.
 - SSH, mosh, or a shell on the phone.
 - ghostty-web / WASM, SwiftTerm, or a from-scratch ANSI parser in this slice.
@@ -172,4 +173,7 @@ requests stay in Session Chat.
 - [x] Resize updates server cols/rows. Background closes the socket and
   does not delete the PTY. Foreground reconnects if still running.
 - [x] Process exit shows `Shell ended` and Retry starts a new PTY.
-- [x] v1-only and v2-only servers both work. Session Chat is unchanged.
+- [x] v1-only and v2-only servers both work. Session Chat is unchanged except
+  `[terminal]` pushing a project shell.
+- [x] Session Chat `[terminal]` starts or reuses the worktree PTY and Back
+  returns to the same chat.

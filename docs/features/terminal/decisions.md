@@ -4,8 +4,8 @@ Still binding:
 
 - Talk to the server PTY API. Do not use `POST /session/{id}/shell`, the
   Session Chat bash sheet, or `/tui/*`.
-- Terminal is scoped to an added project, not to a session. Do not open it
-  from Session Chat.
+- Terminal is scoped to an added project, not to a session. Session Chat
+  `[terminal]` pushes the project shell; it does not embed a PTY in chat.
 - Home Terminal icon opens a running-only catalog across added projects.
   Catalog does not create a PTY. Trailing close `DELETE`s that id.
 - Leave and background disconnect I/O only. Do not `DELETE` on leave or
