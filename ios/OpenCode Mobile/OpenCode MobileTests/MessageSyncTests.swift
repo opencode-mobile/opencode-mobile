@@ -89,6 +89,27 @@ struct MessageSyncTests {
         #expect(refreshed)
     }
 
+    @Test func observeMessages_worldBackgroundStopThenForeground_refreshes() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let world = FakeWorldSignals()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, worldSignals: world)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+        eventStream.setConnectionState(.connected)
+        try? await Task.sleep(for: .milliseconds(40))
+        let afterInitial = repo.listMessagesCallCount
+
+        world.emit(.backgroundStop)
+        try? await Task.sleep(for: .milliseconds(20))
+        world.emit(.foreground)
+        let refreshed = await waitUntil { repo.listMessagesCallCount > afterInitial }
+        task.cancel()
+        #expect(refreshed)
+    }
+
     @Test func observeMessages_worldForegroundWithoutBackground_doesNotRefresh() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()

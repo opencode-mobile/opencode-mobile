@@ -45,7 +45,9 @@
   `SceneWorldSignals` are the prod adapters. `FakeWorldSignals` is the
   test adapter. Stores subscribe. The world adapter starts and stops
   `ForegroundEventStream` and does not call feature REST. `Background`
-  sets the stale bit immediately; `BackgroundStop` after 5s stops SSE.
+  and `BackgroundStop` both set the stale bit; `BackgroundStop` after 5s
+  also stops SSE. Idle-timeout can emit `BackgroundStop` without
+  `Background`, and catch-up must still run on the next `Foreground`.
   `.inactive` does not stop the stream. Device network path stays its own
   OS seam for chrome, `EventStreamConnectionState` composed with
   `DeviceNetworkPathStatus`, and for `waitUntilReady` inside
