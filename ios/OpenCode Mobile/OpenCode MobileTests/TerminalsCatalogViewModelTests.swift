@@ -54,6 +54,28 @@ struct TerminalsCatalogViewModelTests {
         #expect(viewModel.rows.isEmpty)
     }
 
+    @Test func catalogTitle_emptyCommandFallsBackToZsh() {
+        let session = TerminalSession(
+            id: "pty_1",
+            title: "  ",
+            command: "",
+            cwd: "/repo",
+            status: .running
+        )
+        #expect(catalogTitle(session) == "zsh")
+    }
+
+    @Test func catalogTitle_usesCommandBasename() {
+        let session = TerminalSession(
+            id: "pty_1",
+            title: "",
+            command: "/bin/bash",
+            cwd: "/repo",
+            status: .running
+        )
+        #expect(catalogTitle(session) == "bash")
+    }
+
     @Test func close_removesViaRepositoryAndUpdatesState() async {
         let repository = FakeCatalogTerminalRepository(
             running: [

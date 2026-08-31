@@ -98,6 +98,32 @@ class TerminalsCatalogViewModelTest {
         }
 
     @Test
+    fun catalogTitle_emptyCommandFallsBackToZsh() {
+        val session =
+            TerminalSession(
+                id = "pty_1",
+                title = "  ",
+                command = "",
+                cwd = "/repo",
+                status = TerminalSessionStatus.Running,
+            )
+        assertEquals("zsh", catalogTitle(session))
+    }
+
+    @Test
+    fun catalogTitle_usesCommandBasename() {
+        val session =
+            TerminalSession(
+                id = "pty_1",
+                title = "",
+                command = "/bin/bash",
+                cwd = "/repo",
+                status = TerminalSessionStatus.Running,
+            )
+        assertEquals("bash", catalogTitle(session))
+    }
+
+    @Test
     fun close_removesViaRepositoryAndUpdatesState() =
         runTest(testDispatcher) {
             val repository =

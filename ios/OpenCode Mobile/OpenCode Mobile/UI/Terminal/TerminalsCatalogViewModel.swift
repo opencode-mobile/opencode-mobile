@@ -58,9 +58,12 @@ func catalogTitle(_ session: TerminalSession) -> String {
     if !titled.isEmpty {
         return titled
     }
-    let commandName = URL(fileURLWithPath: session.command).lastPathComponent
-    if !commandName.isEmpty {
-        return commandName
+    let command = session.command.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !command.isEmpty {
+        let commandName = (command as NSString).lastPathComponent
+        if !commandName.isEmpty {
+            return commandName
+        }
     }
     return "zsh"
 }

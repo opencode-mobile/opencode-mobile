@@ -9,12 +9,19 @@ final class URLSessionTerminalSocketClient: NSObject, TerminalSocketClient, URLS
 
     func open(url: String, listener: TerminalSocketListener) {
         let id: Int
+        let previousTask: URLSessionWebSocketTask?
+        let previousSession: URLSession?
         lock.lock()
         generation += 1
         id = generation
-        task?.cancel(with: .goingAway, reason: nil)
+        previousTask = task
+        previousSession = session
+        task = nil
+        session = nil
         self.listener = listener
         lock.unlock()
+        previousTask?.cancel(with: .goingAway, reason: nil)
+        previousSession?.invalidateAndCancel()
 
         guard let wsURL = URL(string: url) else {
             notifyClose(id: id, code: 1006)
@@ -23,9 +30,15 @@ final class URLSessionTerminalSocketClient: NSObject, TerminalSocketClient, URLS
         let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
         let task = session.webSocketTask(with: wsURL)
         lock.lock()
-        self.session = session
-        self.task = task
-        lock.unlock()
+        if generation == id {
+            self.session = session
+            self.task = task
+            lock.unlock()
+        } else {
+            lock.unlock()
+            session.invalidateAndCancel()
+            return
+        }
         task.resume()
         receive(id: id, task: task)
     }
@@ -41,10 +54,12 @@ final class URLSessionTerminalSocketClient: NSObject, TerminalSocketClient, URLS
         lock.lock()
         generation += 1
         let current = task
+        let currentSession = session
         task = nil
         session = nil
         lock.unlock()
         current?.cancel(with: .normalClosure, reason: nil)
+        currentSession?.invalidateAndCancel()
     }
 
     func urlSession(
@@ -52,7 +67,11 @@ final class URLSessionTerminalSocketClient: NSObject, TerminalSocketClient, URLS
         webSocketTask: URLSessionWebSocketTask,
         didOpenWithProtocol protocol: String?
     ) {
-        let id = currentGeneration()
+        lock.lock()
+        let matches = webSocketTask === task
+        let id = generation
+        lock.unlock()
+        guard matches else { return }
         notifyOpen(id: id)
     }
 
@@ -62,7 +81,11 @@ final class URLSessionTerminalSocketClient: NSObject, TerminalSocketClient, URLS
         didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
         reason: Data?
     ) {
-        let id = currentGeneration()
+        lock.lock()
+        let matches = webSocketTask === task
+        let id = generation
+        lock.unlock()
+        guard matches else { return }
         notifyClose(id: id, code: Int(closeCode.rawValue))
     }
 

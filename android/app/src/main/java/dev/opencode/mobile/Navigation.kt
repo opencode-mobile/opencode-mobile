@@ -127,6 +127,7 @@ fun MainNavigation() {
                 is Changes,
                 is SessionToolGroup,
                 is Terminal,
+                is TerminalsCatalog,
                 -> backStack.removeLastOrNull()
                 else -> break
             }
