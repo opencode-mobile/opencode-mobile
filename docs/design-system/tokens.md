@@ -569,6 +569,22 @@ entries.
 | `bottomSheet.drag.dismissThreshold` | 96 (logical px) |
 | `bottomSheet.formMaxHeight` | 560 (logical px; iOS form detent cap after first measure) |
 
+### Action tile
+
+Labeled icon tile for compact action palettes such as the Commands sheet.
+
+| Token | Value |
+| --- | --- |
+| `actionTile.cornerRadius` | 14 (logical px) |
+| `actionTile.minHeight` | 88 (logical px) |
+| `actionTile.paddingTop` | 18 (logical px) |
+| `actionTile.paddingHorizontal` | 14 (logical px) |
+| `actionTile.paddingBottom` | 16 (logical px) |
+| `actionTile.iconSize` | 24 (logical px) |
+| `actionTile.contentGap` | 12 (logical px) |
+| `actionTile.grid.gap` | 10 (logical px) |
+| `actionTile.grid.paddingHorizontal` | 16 (logical px) |
+
 ### Snackbar
 
 Short auto-dismissing feedback overlay for transient success or error copy.

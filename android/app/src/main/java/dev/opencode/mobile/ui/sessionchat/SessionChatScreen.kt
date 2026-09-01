@@ -3,8 +3,11 @@ package dev.opencode.mobile.ui.sessionchat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -23,6 +26,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -40,6 +44,7 @@ import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomFade
 import dev.opencode.mobile.ui.components.OpenCodeBottomFadeOverhang
+import dev.opencode.mobile.ui.components.OpenCodeActionTile
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionItem
@@ -858,18 +863,11 @@ fun SessionChatScreen(
             title = "Commands",
             onDismissRequest = viewModel::dismissCommands,
         ) {
-            uiState.visibleClientSlashActions.forEach { action ->
-                val requiresLive =
-                    action == ClientSlashAction.New ||
-                        action == ClientSlashAction.Fork ||
-                        action == ClientSlashAction.Terminal
-                OpenCodeBottomSheetEntry(
-                    title = action.rowTitle,
-                    enabled =
-                        !requiresLive || uiState.canMutate,
-                    onClick = { viewModel.runClientSlashAction(action) },
-                )
-            }
+            CommandsActionTileGrid(
+                actions = uiState.visibleClientSlashActions,
+                canMutate = uiState.canMutate,
+                onAction = viewModel::runClientSlashAction,
+            )
         }
 
         OpenCodeDialog(
@@ -969,6 +967,53 @@ private fun SessionChatSnackbar.toOpenCodeSnackbarMessage(): OpenCodeSnackbarMes
             },
         id = id,
     )
+
+@Composable
+private fun CommandsActionTileGrid(
+    actions: List<ClientSlashAction>,
+    canMutate: Boolean,
+    onAction: (ClientSlashAction) -> Unit,
+) {
+    Column(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        actions.chunked(2).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                row.forEach { action ->
+                    val requiresLive =
+                        action == ClientSlashAction.New ||
+                            action == ClientSlashAction.Fork ||
+                            action == ClientSlashAction.Terminal
+                    OpenCodeActionTile(
+                        icon = action.tileIcon(),
+                        label = action.tileLabel,
+                        onClick = { onAction(action) },
+                        enabled = !requiresLive || canMutate,
+                        accessibilityLabel = action.description,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (row.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+private fun ClientSlashAction.tileIcon(): ImageVector =
+    when (this) {
+        ClientSlashAction.New -> OpenCodeIcons.Add
+        ClientSlashAction.Terminal -> OpenCodeIcons.Terminal
+        ClientSlashAction.Fork -> OpenCodeIcons.CallSplit
+        ClientSlashAction.Undo -> OpenCodeIcons.Undo
+        ClientSlashAction.Redo -> OpenCodeIcons.Redo
+        ClientSlashAction.Compact -> OpenCodeIcons.VerticalAlignCenter
+    }
 
 internal fun sessionChatViewModelKey(
     sessionId: String,

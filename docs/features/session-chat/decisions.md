@@ -54,3 +54,8 @@ Still binding:
 - Waiting caption is feed-only and only until pickup. Copy: `Waiting
   to steer` / `Held until idle`, caption type, no badge. After
   `session.next.prompted` the row is a normal outgoing message.
+- Commands sheet is a two-column `OpenCodeActionTile` grid inside
+  `OpenCodeBottomSheet`. Each tile is catalog icon plus short label
+  (New, Terminal, Fork, Undo, Redo, Compact). No `/cmd` subtitle.
+  Accessibility uses the full action description. Icons: `add`,
+  `terminal`, `call_split`, `undo`, `redo`, `vertical_align_center`.

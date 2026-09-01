@@ -14,6 +14,9 @@ enum class ClientSlashAction(
 
     val rowTitle: String
         get() = "[$command] $description"
+
+    val tileLabel: String
+        get() = command.replaceFirstChar { it.uppercase() }
 }
 
 data class ClientSlashMessageRef(

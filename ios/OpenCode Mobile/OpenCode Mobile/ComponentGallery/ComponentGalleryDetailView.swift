@@ -108,6 +108,8 @@ struct ComponentGalleryDetailView: View {
             FilterTabsGalleryView()
         case .actionPill:
             ActionPillGalleryView()
+        case .actionTile:
+            ActionTileGalleryView()
         case .syncingPill:
             SyncingPillGalleryView()
         case .reviewChangesPill:

@@ -41,6 +41,9 @@ private var _stop: ImageVector? = null
 private var _stop_circle: ImageVector? = null
 private var _subdirectory_arrow_right: ImageVector? = null
 private var _undo: ImageVector? = null
+private var _redo: ImageVector? = null
+private var _call_split: ImageVector? = null
+private var _vertical_align_center: ImageVector? = null
 private var _radio_button_checked: ImageVector? = null
 private var _radio_button_unchecked: ImageVector? = null
 private var _widgets: ImageVector? = null
@@ -652,6 +655,63 @@ private var _widgets: ImageVector? = null
     )
       }.build()
       return _undo!!
+    }
+
+  val Redo: ImageVector
+    get() {
+      if (_redo != null) return _redo!!
+      _redo = ImageVector.Builder(
+        name = "Redo",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16a8.002 8.002 0 0 1 7.6-5.5c1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z").toNodes(),
+      fill = SolidColor(Color.Black),
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _redo!!
+    }
+
+  val CallSplit: ImageVector
+    get() {
+      if (_call_split != null) return _call_split!!
+      _call_split = ImageVector.Builder(
+        name = "CallSplit",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("m14 4 2.29 2.29-2.88 2.88 1.42 1.42 2.88-2.88L20 10V4zm-4 0H4v6l2.29-2.29 4.71 4.7V20h2v-8.41l-5.29-5.3z").toNodes(),
+      fill = SolidColor(Color.Black),
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _call_split!!
+    }
+
+  val VerticalAlignCenter: ImageVector
+    get() {
+      if (_vertical_align_center != null) return _vertical_align_center!!
+      _vertical_align_center = ImageVector.Builder(
+        name = "VerticalAlignCenter",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M8 19h3v4h2v-4h3l-4-4-4 4zm8-14h-3V1h-2v4H8l4 4 4-4zM4 11v2h16v-2H4z").toNodes(),
+      fill = SolidColor(Color.Black),
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _vertical_align_center!!
     }
 
   val RadioButtonChecked: ImageVector
