@@ -44,8 +44,37 @@ class CommandProtocolRepositoryTest {
 
             assertEquals("init", commands.single().name)
             assertEquals("Setup", commands.single().description)
-            assertTrue(requests.single().url.encodedPath.contains("/api/command"))
-            assertEquals("/repo", requests.single().url.parameters["location[directory]"])
+            assertTrue(requests.any { it.url.encodedPath.contains("/api/command") })
+            assertEquals("/repo", requests.single { it.url.encodedPath.contains("/api/command") }.url.parameters["location[directory]"])
+            assertTrue(requests.any { it.url.encodedPath.contains("/api/skill") })
+        }
+
+    @Test
+    fun v2ListCommands_mergesSkillsFromSkillEndpoint() =
+        runTest {
+            val client =
+                testClient { request ->
+                    when {
+                        request.url.encodedPath.contains("/api/skill") ->
+                            respondJson(
+                                """{"data":[{"name":"prototype","description":"A skill","location":"/skills/prototype/SKILL.md","content":"Do it"}]}""",
+                            )
+                        else ->
+                            respondJson("""{"data":[{"name":"init","template":"do init","description":"Setup"}]}""")
+                    }
+                }
+            val repository =
+                DefaultCommandRepository(
+                    CommandsApi(client, json),
+                    CommandDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val commands = repository.listCommands("/repo")
+
+            assertEquals(listOf("init", "prototype"), commands.map { it.name })
+            assertEquals(ServerCommandSource.Command, commands[0].source)
+            assertEquals(ServerCommandSource.Skill, commands[1].source)
         }
 
     @Test

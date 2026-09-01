@@ -17,7 +17,9 @@ class DefaultCommandRepository
         override suspend fun listCommands(directory: String?): List<ServerCommand> =
             try {
                 if (activeConnectionManager?.currentProtocolOrProbe() == ServerProtocol.V2) {
-                    adapter.toServerCommandsFromV2(api.listCommandsV2(directory))
+                    val commands = adapter.toServerCommandsFromV2(api.listCommandsV2(directory))
+                    val skills = runCatching { api.listSkillsV2(directory) }.getOrDefault(emptyList())
+                    adapter.mergeV2SlashCatalog(commands, skills)
                 } else {
                     adapter.toServerCommands(api.listCommands(directory))
                 }

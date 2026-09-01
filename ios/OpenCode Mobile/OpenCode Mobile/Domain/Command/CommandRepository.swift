@@ -23,7 +23,9 @@ struct DefaultCommandRepository: CommandRepository, Sendable {
     func listCommands(directory: String?) async throws -> [ServerCommand] {
         do {
             if await activeConnectionManager?.currentProtocolOrProbe() == .v2 {
-                return adapter.toServerCommands(try await api.listCommandsV2(directory: directory))
+                let commands = adapter.toServerCommands(try await api.listCommandsV2(directory: directory))
+                let skills = (try? await api.listSkillsV2(directory: directory)) ?? []
+                return adapter.mergeV2SlashCatalog(commands: commands, skills: skills)
             }
             return adapter.toServerCommands(try await api.listCommands(directory: directory))
         } catch {

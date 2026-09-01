@@ -5,7 +5,16 @@ nonisolated struct V2CommandDTO: Decodable, Sendable {
     let template: String?
     let description: String?
     let agent: String?
+    let source: String?
     let subtask: Bool?
+}
+
+nonisolated struct V2SkillDTO: Decodable, Sendable {
+    let name: String
+    let description: String?
+    let slash: Bool?
+    let location: String?
+    let content: String?
 }
 
 nonisolated struct V2AgentDTO: Decodable, Sendable {

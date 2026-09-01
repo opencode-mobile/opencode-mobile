@@ -45,6 +45,42 @@ struct CommandDomainAdapterTests {
         #expect(commands[0].description == "Setup")
     }
 
+    @Test func toServerCommandsV2_mapsSource() {
+        let commands = adapter.toServerCommands([
+            V2CommandDTO(name: "init", template: nil, description: "Setup", agent: nil, source: "command", subtask: nil),
+            V2CommandDTO(name: "prompt", template: nil, description: nil, agent: nil, source: "mcp", subtask: nil),
+            V2CommandDTO(name: "skill-a", template: nil, description: nil, agent: nil, source: "skill", subtask: nil),
+        ])
+        #expect(commands[0].source == .command)
+        #expect(commands[1].source == .mcp)
+        #expect(commands[2].source == .skill)
+    }
+
+    @Test func mergeV2SlashCatalog_appendsSkillsSkippingDuplicatesAndSlashFalse() {
+        let commands = adapter.toServerCommands([
+            V2CommandDTO(name: "init", template: "x", description: "Setup", agent: nil, source: nil, subtask: nil),
+        ])
+        let merged = adapter.mergeV2SlashCatalog(
+            commands: commands,
+            skills: [
+                V2SkillDTO(name: "init", description: "dup", slash: nil, location: nil, content: "ignored"),
+                V2SkillDTO(name: "hidden", description: nil, slash: false, location: nil, content: "nope"),
+                V2SkillDTO(
+                    name: "prototype",
+                    description: "A skill",
+                    slash: nil,
+                    location: "/skills/prototype/SKILL.md",
+                    content: "Do the thing"
+                ),
+            ]
+        )
+        #expect(merged.map(\.name) == ["init", "prototype"])
+        #expect(merged[1].source == .skill)
+        #expect(merged[1].description == "A skill")
+        #expect(merged[1].template?.contains("Do the thing") == true)
+        #expect(merged[1].template?.contains("Base directory for this skill: /skills/prototype") == true)
+    }
+
     @Test func toRunRequest_mapsComposerSnapshotWithoutMessageId() {
         let request = adapter.toRunRequest(
             CommandRunOptions(

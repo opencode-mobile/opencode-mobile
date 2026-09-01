@@ -7,6 +7,7 @@ import dev.opencode.mobile.data.remote.dto.V2CommandDto
 import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
 import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
 import dev.opencode.mobile.data.remote.dto.V2RunCommandRequestDto
+import dev.opencode.mobile.data.remote.dto.V2SkillDto
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
 
@@ -26,10 +27,44 @@ class CommandDomainAdapter {
             ServerCommand(
                 name = dto.name,
                 description = dto.description?.takeIf { it.isNotBlank() },
-                source = ServerCommandSource.Command,
+                source = toSource(dto.source),
                 template = dto.template?.takeIf { it.isNotBlank() },
             )
         }
+
+    fun mergeV2SlashCatalog(
+        commands: List<ServerCommand>,
+        skills: List<V2SkillDto>,
+    ): List<ServerCommand> {
+        val names = commands.map { it.name }.toSet()
+        return commands +
+            skills.mapNotNull(::toSkillCommand).filter { it.name !in names }
+    }
+
+    fun toSkillCommand(dto: V2SkillDto): ServerCommand? {
+        if (dto.slash == false) return null
+        return ServerCommand(
+            name = dto.name,
+            description = dto.description?.takeIf { it.isNotBlank() },
+            source = ServerCommandSource.Skill,
+            template = skillTemplate(dto.content, dto.location),
+        )
+    }
+
+    internal fun skillTemplate(
+        content: String?,
+        location: String?,
+    ): String? {
+        val body = content?.takeIf { it.isNotBlank() } ?: return null
+        val directory =
+            location
+                ?.takeIf { it.isNotBlank() && it != BUILT_IN_SKILL_LOCATION }
+                ?.substringBeforeLast('/', missingDelimiterValue = "")
+                ?.takeIf { it.isNotBlank() }
+        if (directory == null) return body
+        return "$body\n\nBase directory for this skill: $directory\n" +
+            "Relative paths in this skill (e.g., scripts/, references/) are relative to this base directory."
+    }
 
     fun toRunRequest(options: CommandRunOptions): RunCommandRequestDto =
         RunCommandRequestDto(
@@ -94,4 +129,8 @@ class CommandDomainAdapter {
             "skill" -> ServerCommandSource.Skill
             else -> ServerCommandSource.Command
         }
+
+    private companion object {
+        const val BUILT_IN_SKILL_LOCATION = "<built-in>"
+    }
 }
