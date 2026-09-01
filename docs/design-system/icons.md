@@ -53,11 +53,11 @@ Some catalog icons have a stable product meaning beyond gallery samples:
 | Icon | Usage |
 | --- | --- |
 | `widgets` | All-projects mark on the Session List scope control and Filter by project sheet |
-| `add` | Generic add / plus affordances |
+| `add` | Generic add / plus affordances; Commands tile **New** |
 | `create_new_folder` | **Add project** (Session List Dock and home add-project actions) |
 | `keyboard_arrow_down` | Session List Dock scope-control chevron; title switcher chevron after home server name |
 | `search` | Gallery and Top Bar search samples |
-| `terminal` | open Terminal from home |
+| `terminal` | open Terminal from home; Commands tile **Terminal** |
 | `folder_check` | **Current directory** row in Add project sheet |
 | `subdirectory_arrow_right` | Subdirectory rows in Add project sheet |
 | `arrow_forward` | Terminal control strip Right |
@@ -69,6 +69,10 @@ Some catalog icons have a stable product meaning beyond gallery samples:
 | `arrow_downward` | **Scroll to end** action pill on session chat |
 | `radio_button_checked` | Selected question-request option / custom answer |
 | `radio_button_unchecked` | Unselected question-request option / custom answer |
+| `undo` | Commands tile **Undo** |
+| `redo` | Commands tile **Redo** |
+| `call_split` | Commands tile **Fork** |
+| `vertical_align_center` | Commands tile **Compact** |
 
 Manifest `notes` may mention SF Symbol equivalents; feature decisions live under
 `docs/features/<feature-slug>/decisions.md`.

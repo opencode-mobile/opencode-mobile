@@ -22,6 +22,10 @@ enum ClientSlashAction: String, Sendable, Equatable, CaseIterable {
     }
 
     var rowTitle: String { "[\(command)] \(descriptionText)" }
+
+    var tileLabel: String {
+        command.prefix(1).uppercased() + command.dropFirst()
+    }
 }
 
 struct ClientSlashMessageRef: Sendable, Equatable {

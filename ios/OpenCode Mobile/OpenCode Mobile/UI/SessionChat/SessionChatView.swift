@@ -367,14 +367,11 @@ struct SessionChatView: View {
             }
         }
         .openCodeBottomSheet(isPresented: commandsSheetBinding, title: "Commands") {
-            ForEach(viewModel.uiState.visibleClientSlashActions, id: \.rawValue) { action in
-                let requiresLive = action == .new || action == .fork || action == .terminal
-                OpenCodeBottomSheetEntry(
-                    title: action.rowTitle,
-                    enabled: !requiresLive || viewModel.uiState.canMutate,
-                    action: { viewModel.runClientSlashAction(action) }
-                )
-            }
+            CommandsActionTileGrid(
+                actions: viewModel.uiState.visibleClientSlashActions,
+                canMutate: viewModel.uiState.canMutate,
+                run: { viewModel.runClientSlashAction($0) }
+            )
         }
         .photosPicker(
             isPresented: $showPhotosPicker,
@@ -1012,6 +1009,52 @@ private extension SessionChatSnackbar {
 private extension Optional where Wrapped == SessionChatSnackbar {
     func mapToOpenCodeSnackbarMessage() -> OpenCodeSnackbarMessage? {
         self?.mapToOpenCodeSnackbarMessage()
+    }
+}
+
+private struct CommandsActionTileGrid: View {
+    let actions: [ClientSlashAction]
+    let canMutate: Bool
+    let run: (ClientSlashAction) -> Void
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ForEach(Array(stride(from: 0, to: actions.count, by: 2)), id: \.self) { index in
+                HStack(spacing: 10) {
+                    tile(actions[index])
+                    if index + 1 < actions.count {
+                        tile(actions[index + 1])
+                    } else {
+                        Color.clear.frame(maxWidth: .infinity)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private func tile(_ action: ClientSlashAction) -> some View {
+        let requiresLive = action == .new || action == .fork || action == .terminal
+        return OpenCodeActionTile(
+            icon: action.tileIcon,
+            label: action.tileLabel,
+            accessibilityLabel: action.descriptionText,
+            enabled: !requiresLive || canMutate,
+            action: { run(action) }
+        )
+    }
+}
+
+private extension ClientSlashAction {
+    var tileIcon: OpenCodeIcon {
+        switch self {
+        case .new: .add
+        case .terminal: .terminal
+        case .fork: .callSplit
+        case .undo: .undo
+        case .redo: .redo
+        case .compact: .verticalAlignCenter
+        }
     }
 }
 

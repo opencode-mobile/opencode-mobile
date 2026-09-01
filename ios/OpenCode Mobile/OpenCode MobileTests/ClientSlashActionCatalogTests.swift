@@ -60,6 +60,15 @@ struct ClientSlashActionCatalogTests {
         #expect(ClientSlashAction.terminal.rowTitle == "[terminal] Open project shell")
     }
 
+    @Test func tileLabel_isCapitalizedCommand() {
+        #expect(ClientSlashAction.new.tileLabel == "New")
+        #expect(ClientSlashAction.fork.tileLabel == "Fork")
+        #expect(ClientSlashAction.undo.tileLabel == "Undo")
+        #expect(ClientSlashAction.redo.tileLabel == "Redo")
+        #expect(ClientSlashAction.compact.tileLabel == "Compact")
+        #expect(ClientSlashAction.terminal.tileLabel == "Terminal")
+    }
+
     @Test func visibilityInput_filtersMessagesAtOrAfterRevertBoundary() {
         let input = ClientSlashActionCatalog.visibilityInput(
             messages: [

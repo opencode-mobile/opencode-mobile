@@ -51,6 +51,9 @@ fun IconsGalleryScreen(modifier: Modifier = Modifier) {
             "stop_circle" to OpenCodeIcons.StopCircle,
             "subdirectory_arrow_right" to OpenCodeIcons.SubdirectoryArrowRight,
             "undo" to OpenCodeIcons.Undo,
+            "redo" to OpenCodeIcons.Redo,
+            "call_split" to OpenCodeIcons.CallSplit,
+            "vertical_align_center" to OpenCodeIcons.VerticalAlignCenter,
             "widgets" to OpenCodeIcons.Widgets,
         )
 

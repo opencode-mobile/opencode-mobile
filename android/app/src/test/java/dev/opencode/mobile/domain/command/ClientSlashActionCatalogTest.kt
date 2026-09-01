@@ -93,6 +93,16 @@ class ClientSlashActionCatalogTest {
     }
 
     @Test
+    fun tileLabel_isCapitalizedCommand() {
+        assertEquals("New", ClientSlashAction.New.tileLabel)
+        assertEquals("Fork", ClientSlashAction.Fork.tileLabel)
+        assertEquals("Undo", ClientSlashAction.Undo.tileLabel)
+        assertEquals("Redo", ClientSlashAction.Redo.tileLabel)
+        assertEquals("Compact", ClientSlashAction.Compact.tileLabel)
+        assertEquals("Terminal", ClientSlashAction.Terminal.tileLabel)
+    }
+
+    @Test
     fun visibilityInput_filtersMessagesAtOrAfterRevertBoundary() {
         val input =
             ClientSlashActionCatalog.visibilityInput(

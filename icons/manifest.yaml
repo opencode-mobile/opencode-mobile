@@ -95,7 +95,16 @@ icons:
     notes: Subdirectory rows in Add project sheet
   - name: undo
     style: filled
-    notes: SF Symbol arrow.uturn.backward
+    notes: SF Symbol arrow.uturn.backward; Commands tile Undo
+  - name: redo
+    style: filled
+    notes: Commands tile Redo; pair of undo
+  - name: call_split
+    style: filled
+    notes: Commands tile Fork
+  - name: vertical_align_center
+    style: filled
+    notes: Commands tile Compact
   - name: radio_button_checked
     style: filled
     notes: SF Symbol circle.inset.filled; question option selected
