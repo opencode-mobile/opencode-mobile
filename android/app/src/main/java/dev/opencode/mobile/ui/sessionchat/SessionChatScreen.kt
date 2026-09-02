@@ -38,7 +38,10 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.SessionToolGroup
 import dev.opencode.mobile.domain.command.ClientSlashAction
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
+import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
@@ -121,6 +124,7 @@ fun SessionChatScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val attachmentSources = uiState.composer.attachmentSources(DeveloperToolsPreferences.unlocked)
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
@@ -180,6 +184,21 @@ fun SessionChatScreen(
             val result = withContext(Dispatchers.IO) { attachmentIngestion.ingest(uris) }
             viewModel.addAttachments(result.attachments)
             result.errors.firstOrNull()?.let(viewModel::reportAttachmentError)
+        }
+    }
+
+    fun attachDiagnosticLog() {
+        coroutineScope.launch {
+            val attachment =
+                runCatching {
+                    withContext(Dispatchers.Default) {
+                        DiagnosticLogAttachment.from(DiagnosticLogBuffer.shared)
+                    }
+                }.getOrElse {
+                    viewModel.reportAttachmentError(AttachmentIngestionService.READ_ERROR)
+                    return@launch
+                }
+            viewModel.addAttachments(listOf(attachment))
         }
     }
 
@@ -657,7 +676,9 @@ fun SessionChatScreen(
                                             !uiState.isSending &&
                                             uiState.timeline != SessionChatTimelineState.Creating &&
                                             uiState.canMutate,
-                                    attachEnabled = uiState.composer.canAttach && uiState.composer.isModelSelectionReady,
+                                    attachEnabled =
+                                        attachmentSources.isAttachEnabled &&
+                                            uiState.composer.isModelSelectionReady,
                                     showStop = uiState.sessionStatusLabel != null,
                                     stopEnabled =
                                         !uiState.isAborting &&
@@ -697,15 +718,13 @@ fun SessionChatScreen(
                                 OpenCodeSessionComposerAction.OpenCommands -> viewModel.openCommands()
                                 OpenCodeSessionComposerAction.Attach -> {
                                     logChatAction(ProductAnalytics.Action.COMPOSER_ATTACH)
-                                    val photos = uiState.composer.canAttachPhotos
-                                    val files = uiState.composer.canAttachFiles
                                     when {
-                                        photos && files -> showAttachmentSource = true
-                                        photos ->
+                                        attachmentSources.showsSourceSheet -> showAttachmentSource = true
+                                        attachmentSources.photos ->
                                             photoPicker.launch(
                                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                                             )
-                                        files -> documentPicker.launch(arrayOf("*/*"))
+                                        attachmentSources.files -> documentPicker.launch(arrayOf("*/*"))
                                     }
                                 }
                                 is OpenCodeSessionComposerAction.RemoveAttachment -> viewModel.removeAttachment(action.id)
@@ -769,7 +788,7 @@ fun SessionChatScreen(
                 showAttachmentSource = false
             },
         ) {
-            if (uiState.composer.canAttachPhotos) {
+            if (attachmentSources.photos) {
                 OpenCodeBottomSheetEntry(
                     title = "Photos",
                     startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description),
@@ -780,7 +799,7 @@ fun SessionChatScreen(
                     },
                 )
             }
-            if (uiState.composer.canAttachFiles) {
+            if (attachmentSources.files) {
                 OpenCodeBottomSheetEntry(
                     title = "Files",
                     startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
@@ -788,6 +807,17 @@ fun SessionChatScreen(
                         logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_PICK_FILES)
                         showAttachmentSource = false
                         documentPicker.launch(arrayOf("*/*"))
+                    },
+                )
+            }
+            if (attachmentSources.logFile) {
+                OpenCodeBottomSheetEntry(
+                    title = "Log file",
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.List),
+                    onClick = {
+                        logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_PICK_LOG_FILE)
+                        showAttachmentSource = false
+                        attachDiagnosticLog()
                     },
                 )
             }

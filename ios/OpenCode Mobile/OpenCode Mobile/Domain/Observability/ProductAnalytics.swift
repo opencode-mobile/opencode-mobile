@@ -189,6 +189,7 @@ enum ProductAnalytics {
         static let attachSourceDismiss = "attach_source_dismiss"
         static let attachPickPhotos = "attach_pick_photos"
         static let attachPickFiles = "attach_pick_files"
+        static let attachPickLogFile = "attach_pick_log_file"
         static let modelPickerDismiss = "model_picker_dismiss"
         static let modelPickerSelectProvider = "model_picker_select_provider"
         static let modelPickerBackToProviders = "model_picker_back_to_providers"

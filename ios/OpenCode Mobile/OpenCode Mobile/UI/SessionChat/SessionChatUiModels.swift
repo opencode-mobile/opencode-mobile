@@ -144,6 +144,23 @@ struct SessionChatComposerState: Equatable {
     var canAttachFiles: Bool {
         selectedModel?.option.canAttachFiles == true
     }
+
+    func attachmentSources(developerToolsUnlocked: Bool) -> ComposerAttachmentSources {
+        ComposerAttachmentSources(
+            photos: canAttachPhotos,
+            files: canAttachFiles,
+            logFile: developerToolsUnlocked
+        )
+    }
+}
+
+struct ComposerAttachmentSources: Equatable {
+    let photos: Bool
+    let files: Bool
+    let logFile: Bool
+
+    var isAttachEnabled: Bool { photos || files || logFile }
+    var showsSourceSheet: Bool { logFile || (photos && files) }
 }
 
 enum SessionChatTimelineState: Equatable {

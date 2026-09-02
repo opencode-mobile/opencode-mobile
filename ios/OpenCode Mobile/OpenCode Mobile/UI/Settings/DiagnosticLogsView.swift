@@ -62,7 +62,7 @@ final class DiagnosticLogsViewModel {
         do {
             let data = try buffer.exportJSONL()
             let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("opencode-diagnostic-logs.jsonl")
+                .appendingPathComponent(DiagnosticLogAttachment.filename)
             if FileManager.default.fileExists(atPath: url.path) {
                 try FileManager.default.removeItem(at: url)
             }
