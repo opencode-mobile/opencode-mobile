@@ -96,7 +96,6 @@ class DefaultSessionStatusLiveStore
         override fun observeStatuses(directory: String): Flow<Map<String, SessionStatus>> =
             cache.observe(directory) { scope -> buildSharedFlow(directory, scope) }
 
-        /** Test seam: number of live status upstreams, one per observed directory. */
         internal fun activeUpstreamCount(): Int = cache.activeEntryCount()
 
         private fun buildSharedFlow(
@@ -116,10 +115,6 @@ class DefaultSessionStatusLiveStore
                 var current = emptyMap<String, SessionStatus>()
                 var reconnectRefresh: Job? = null
                 var stale = false
-                // Single-flight plus revision gate for this observation. Every mutation
-                // of the authoritative `server` map that does not come from a REST commit
-                // bumps it, so a REST response captured before such a mutation is dropped
-                // instead of resurrecting the pre-patch snapshot.
                 val gate = LiveStoreRefreshGate()
                 try {
                     suspend fun emitOverlay(base: Map<String, SessionStatus>) {
@@ -147,11 +142,6 @@ class DefaultSessionStatusLiveStore
                         send(current)
                     }
 
-                    /**
-                     * Reloads statuses and commits them, unless an SSE patch (or a local
-                     * [markIdle]) moved the server map while the GET was in flight — that
-                     * patch is strictly newer than the snapshot this response describes.
-                     */
                     suspend fun reloadFromServer(
                         reason: String,
                         force: Boolean,
@@ -206,8 +196,6 @@ class DefaultSessionStatusLiveStore
                                         emitOverlay(server)
                                     }
                                     is StatusMutation.MarkIdle -> {
-                                        // Mutates the authoritative map: a REST snapshot
-                                        // taken before this would put the session back.
                                         server = server - mutation.sessionId
                                         gate.bump()
                                         emitOverlay(server)
@@ -217,13 +205,6 @@ class DefaultSessionStatusLiveStore
                     }
                     yield()
 
-                    // Subscribe to the invalidation bus BEFORE publishing this directory
-                    // as invalidatable. `invalidateAndWait` drops an event no collector is
-                    // listening for, and `invalidate` targets whatever is in
-                    // `activeDirectories`, so the window between those two facts is a window
-                    // where a pull-to-refresh is silently swallowed: no catch-up GET, and a
-                    // spinner that vanishes instantly. UNDISPATCHED registers the SharedFlow
-                    // subscription synchronously, so the two facts become true together.
                     launch(start = CoroutineStart.UNDISPATCHED) {
                         invalidationBus.events
                             .filter { it.key == null || it.key == directory }
@@ -232,9 +213,6 @@ class DefaultSessionStatusLiveStore
                                     stale = true
                                     reloadFromServer(invalidation.reason, force = true)
                                 } finally {
-                                    // Ack even when the reload was cancelled or failed:
-                                    // the ack releases the caller's spinner, it is not a
-                                    // "data is fresh" signal.
                                     invalidation.ack?.complete(Unit)
                                 }
                             }
@@ -279,9 +257,6 @@ class DefaultSessionStatusLiveStore
                                 }
                                 event.triggersStatusRefresh -> {
                                     applyStatusEvent(directory, server, event)?.let {
-                                        // A live patch outranks any REST snapshot that was
-                                        // captured before it: bump so an in-flight reload
-                                        // cannot write the pre-patch map back.
                                         server = it
                                         gate.bump()
                                     }

@@ -76,11 +76,6 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
                             }
                         }
                         group.addTask {
-                            // `stream.reconnected` and `server.connected` land within
-                            // milliseconds of each other on every foreground, so each
-                            // reconnect otherwise costs two full todo GETs. Collapse just
-                            // that pair with the same cancel-and-delay shape the status
-                            // store uses; `todo.updated` stays immediate.
                             var reconnectTask: Task<Void, Never>?
                             defer { reconnectTask?.cancel() }
                             for await event in eventStream.events() {

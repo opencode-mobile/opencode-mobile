@@ -2649,11 +2649,6 @@ class SessionLiveStoreTest {
         }
 }
 
-/**
- * Profile-switch teardown: the ready store and the status store share one upstream
- * per directory, and switching profiles must replace it rather than stack a second
- * one on top of an observation nobody can stop.
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveObservationTeardownTest {
     private val testDispatcher = StandardTestDispatcher()
@@ -2669,7 +2664,6 @@ class LiveObservationTeardownTest {
             var homeJob = observeHome(statusStore, readyStore, mutableListOf())
             advanceUntilIdle()
 
-            // Profile switch, in the order MainScreenViewModel performs it.
             homeJob.cancel()
             readyStore.bindProfile("profile-b")
             statusStore.clearCache()
@@ -2729,7 +2723,6 @@ class LiveObservationTeardownTest {
             assertEquals(1, statusStore.activeUpstreamCount())
         }
 
-    /** Home collects statuses directly and ready ids alongside them, like MainScreenViewModel. */
     private fun CoroutineScope.observeHome(
         statusStore: SessionStatusLiveStore,
         readyStore: SessionReadyStore,
@@ -2766,11 +2759,6 @@ class LiveObservationTeardownTest {
         )
 }
 
-/**
- * The invalidation ack is a spinner release, not a freshness signal, so waiting on it
- * must always be bounded: a collector can be torn down (profile switch, Clear All Data)
- * or stalled on a slow radio at any point inside the refresh it was asked to run.
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 class InvalidationAckTest {
     private val testDispatcher = StandardTestDispatcher()
@@ -2818,7 +2806,6 @@ class InvalidationAckTest {
             val observer = launch { store.observeSessions("/repo").collect { } }
             advanceUntilIdle()
 
-            // Park the invalidation refresh after its REST response, before the emit.
             val gate = CompletableDeferred<Unit>()
             sessionCache.nextRememberGate = gate
             var returned = false
@@ -2832,7 +2819,6 @@ class InvalidationAckTest {
             runCurrent()
             assertFalse("invalidate must still be waiting while its refresh is in flight", returned)
 
-            // Profile switch / Clear All Data cancels the collector mid-refresh.
             val tornDownAt = testScheduler.currentTime
             store.clearCache()
             runCurrent()
@@ -2849,20 +2835,10 @@ class InvalidationAckTest {
         }
 }
 
-/**
- * Revision gating: three concurrent collectors refresh the same state, so a REST
- * response can land after a newer source already moved it. Both failures below are
- * sticky — the event that would correct them has already fired.
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveStoreRevisionGateTest {
     private val testDispatcher = StandardTestDispatcher()
 
-    /**
-     * `session.idle` fires once. If the status GET that was already in flight when it
-     * arrived commits its pre-idle snapshot, the home row and the chat chrome stay
-     * stuck on a spinner for a finished session until the user pulls to refresh.
-     */
     @Test
     fun statusReload_isDiscarded_whenSessionIdleLandsWhileTheGetIsInFlight() =
         runTest(testDispatcher) {
@@ -2886,7 +2862,6 @@ class LiveStoreRevisionGateTest {
             advanceUntilIdle()
             assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
 
-            // The next reload stalls on the radio, still reporting ses-1 as busy.
             repository.statusDelayMs = 10_000
             eventStream.emit(OpencodeEvent(type = "server.connected"))
             advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
@@ -2896,7 +2871,6 @@ class LiveStoreRevisionGateTest {
                 repository.statusFetchCount,
             )
 
-            // The session finishes while that GET is in flight.
             eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
             advanceUntilIdle()
             collectJob.cancel()
@@ -2909,18 +2883,10 @@ class LiveStoreRevisionGateTest {
             )
         }
 
-    /**
-     * Tap Allow, then the agent asks the next permission: two overlapping GETs from two
-     * different collectors. If the older, empty response lands last the sheet never
-     * appears and the agent stays blocked server-side with no event left to self-heal it.
-     */
     @Test
     fun permissionRefreshes_completingOutOfOrder_endWithTheNewestList() =
         runTest(testDispatcher) {
             val repository = FakeSessionRepository()
-            // Consumed in call order: initial subscribe, then the stalled
-            // `permission.replied` GET that answers with the pre-P2 empty list, then the
-            // pull-to-refresh GET that already sees P2.
             repository.permissionScript += 0L to emptyList<PermissionRequest>()
             repository.permissionScript += 5_000L to emptyList<PermissionRequest>()
             repository.permissionScript += 0L to listOf(testPermissionRequest("perm-2"))
@@ -2949,7 +2915,6 @@ class LiveStoreRevisionGateTest {
                 repository.permissionFetchCount,
             )
 
-            // A second trigger arrives from another collector while that GET is stalled.
             store.invalidate("/repo")
             runCurrent()
             assertEquals(
@@ -2971,12 +2936,6 @@ class LiveStoreRevisionGateTest {
         }
 }
 
-/**
- * Refresh economy for the permission store. Two costs are cut without slowing the
- * interactive path: the reconnect pair (`stream.reconnected` + `server.connected`,
- * milliseconds apart on every foreground) collapses into one catch-up GET, and a
- * refresh that reloads an unchanged list stops re-emitting downstream.
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultPermissionLiveStoreTest {
     private val testDispatcher = StandardTestDispatcher()
@@ -2992,11 +2951,6 @@ class DefaultPermissionLiveStoreTest {
         DiagnosticLogger(DiagnosticLogBuffer(clockEpochMilliseconds = { 0L })),
     )
 
-    /**
-     * A prompt is blocking: `permission.asked` must reach the sheet without waiting on
-     * any debounce window, and a burst must not be collapsed into fewer GETs than the
-     * events that asked for them.
-     */
     @Test
     fun permissionBurst_isNeitherDelayedNorAmplified() =
         runTest(testDispatcher) {
@@ -3054,10 +3008,6 @@ class DefaultPermissionLiveStoreTest {
             )
         }
 
-    /**
-     * Every foreground fires both reconnect events milliseconds apart. Two catch-up GETs
-     * per store per foreground is pure waste; one is enough.
-     */
     @Test
     fun reconnectPair_coalescesIntoOneRefresh() =
         runTest(testDispatcher) {
@@ -3088,10 +3038,6 @@ class DefaultPermissionLiveStoreTest {
             )
         }
 
-    /**
-     * Nothing downstream benefits from an identical list: the ViewModel re-runs its
-     * ordering walk and republishes UI state for a snapshot it already holds.
-     */
     @Test
     fun unchangedList_isNotReEmitted() =
         runTest(testDispatcher) {
@@ -3104,7 +3050,6 @@ class DefaultPermissionLiveStoreTest {
             advanceUntilIdle()
             assertEquals(1, emissions.size)
 
-            // Same list, second fetch.
             eventStream.emit(OpencodeEvent(type = "permission.asked", sessionId = "ses-1"))
             advanceUntilIdle()
             collectJob.cancel()
@@ -3123,7 +3068,6 @@ class DefaultPermissionLiveStoreTest {
         }
 }
 
-/** The question store mirrors [DefaultPermissionLiveStoreTest] exactly. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultQuestionLiveStoreTest {
     private val testDispatcher = StandardTestDispatcher()
@@ -3282,7 +3226,6 @@ private fun testQuestionRequest(id: String) =
         toolCallId = null,
     )
 
-/** Parks [rememberSessions] so a refresh can be cancelled after its REST call returned. */
 private class GatedSessionCache : SessionCache {
     var nextRememberGate: CompletableDeferred<Unit>? = null
 
@@ -3413,26 +3356,11 @@ private class FakeSessionRepository(
     var listSessionsCallCount = 0
     var permissionFetchCount = 0
     var questionFetchCount = 0
-
-    /** Blocks the next [listSessions] until completed. Models an in-flight REST call. */
     var nextListGate: CompletableDeferred<Unit>? = null
-
-    /** Virtual-time latency for [getAllSessionStatuses]. Models a stalled radio. */
     var statusDelayMs: Long = 0
-
-    /**
-     * Scripted `latencyMs to response` pairs for [listPendingPermissions], consumed in
-     * call order. Lets a test give an earlier call a later completion.
-     */
     val permissionScript: MutableList<Pair<Long, List<PermissionRequest>>> = mutableListOf()
-
-    /** Responses handed to [listPendingPermissions] once [permissionScript] is empty. */
     var permissions: List<PermissionRequest> = emptyList()
-
-    /** Same shape as [permissionScript], for [listPendingQuestions]. */
     val questionScript: MutableList<Pair<Long, List<QuestionRequest>>> = mutableListOf()
-
-    /** Responses handed to [listPendingQuestions] once [questionScript] is empty. */
     var questions: List<QuestionRequest> = emptyList()
 
     override suspend fun listSessions(directory: String?): List<Session> {

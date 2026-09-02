@@ -2,14 +2,9 @@ import Foundation
 import Testing
 @testable import OpenCode_Mobile
 
-/// The invalidation ack is a spinner release, not a freshness signal, so waiting on it
-/// must always be bounded: a collector can be torn down (profile switch, Clear All Data)
-/// or stalled on a slow radio at any point inside the refresh it was asked to run, and
-/// the waiting pull-to-refresh Task can itself be cancelled.
 struct InvalidationAckTests {
     @Test func invalidateAndWait_stopsWaiting_whenNoCollectorEverAcks() async {
         let bus = StoreInvalidationBus(ackTimeoutMs: 200)
-        // Subscribe before invalidating: with no subscribers the bus takes its fast path.
         let stream = bus.events()
         let received = AckCounter()
         let collector = Task {
@@ -19,8 +14,6 @@ struct InvalidationAckTests {
 
         let done = AckFlag()
         let startedAt = Date()
-        // Detached, not a child task: without the fix this wait never resumes, and a
-        // child would hang the test itself instead of failing it.
         Task.detached {
             await bus.invalidateAndWait(key: nil, reason: StoreRefreshReason.pullToRefresh)
             done.mark()
@@ -36,7 +29,6 @@ struct InvalidationAckTests {
     }
 
     @Test func invalidateAndWait_stopsWaiting_whenTheCallingTaskIsCancelled() async {
-        // A long ceiling: only cancellation can end this wait in time.
         let bus = StoreInvalidationBus(ackTimeoutMs: 60_000)
         let stream = bus.events()
         let collector = Task {
@@ -49,7 +41,6 @@ struct InvalidationAckTests {
             await bus.invalidateAndWait(key: nil, reason: StoreRefreshReason.pullToRefresh)
             done.mark()
         }
-        // Let the wait get established before cancelling it.
         try? await Task.sleep(for: .milliseconds(100))
         waiter.cancel()
 

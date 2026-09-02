@@ -71,8 +71,6 @@ final class DefaultSessionLiveStore: SessionLiveStore {
     }
 
     func clearCache() {
-        // Finish before dropping: a dropped-but-unfinished observation leaves every
-        // subscriber suspended forever instead of letting it re-subscribe.
         cache.values.forEach { $0.finish() }
         cache.removeAll()
     }
@@ -87,23 +85,10 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         activeDirectories: ActiveDirectorySet,
         yield: @escaping @Sendable (SessionListSnapshot) -> Void
     ) async {
-        // Subscribe to the invalidation bus BEFORE publishing this directory as
-        // invalidatable. `invalidateAndWait` drops an event no collector is listening
-        // for, and `invalidate` targets whatever is in `activeDirectories`, so the
-        // window between those two facts is a window where a pull-to-refresh is
-        // silently swallowed: no catch-up GET, and a spinner that vanishes instantly.
-        // The window is real — the collectors only start after the initial load — and
-        // grew with the refresh gate's extra hops. `AsyncStream` buffers, so an
-        // invalidation that lands while the first load runs is still delivered.
         let invalidations = invalidationBus.events()
         activeDirectories.insert(directory)
         defer { activeDirectories.remove(directory) }
         let stale = StaleBit()
-        // Single-flight gate for this observation: the world-signal, invalidation
-        // and event collectors all call refreshFromNetwork, and two overlapping
-        // `listSessions` responses can land in the wrong order. Nothing else
-        // mutates this store's state, so the revision half never discards here —
-        // serialising the GETs is what keeps the newest response last.
         let gate = LiveStoreRefreshGate()
 
         @Sendable func refreshFromNetwork(reason: String, force: Bool) async -> Bool {
@@ -155,9 +140,6 @@ final class DefaultSessionLiveStore: SessionLiveStore {
             group.addTask {
                 for await invalidation in invalidations {
                     if let key = invalidation.key, key != directory { continue }
-                    // Ack on every exit from the iteration, including a torn-down or
-                    // failed refresh: the ack releases the caller's spinner, it is not
-                    // a "data is fresh" signal.
                     let ack = invalidation.ack
                     defer { ack?() }
                     stale.mark()

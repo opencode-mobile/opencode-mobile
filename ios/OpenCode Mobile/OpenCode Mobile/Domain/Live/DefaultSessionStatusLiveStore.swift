@@ -92,8 +92,6 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     }
 
     func clearCache() {
-        // Finish before dropping: a dropped-but-unfinished observation leaves every
-        // subscriber suspended forever instead of letting it re-subscribe.
         cache.values.forEach { $0.finish() }
         cache.removeAll()
         pendingBusy.removeAll()
@@ -111,24 +109,12 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         mutationBus: StatusMutationBus,
         yield: @escaping @Sendable ([String: SessionStatus]) -> Void
     ) async {
-        // Subscribe to the invalidation bus BEFORE publishing this directory as
-        // invalidatable. `invalidateAndWait` drops an event no collector is listening
-        // for, and `invalidate` targets whatever is in `activeDirectories`, so the
-        // window between those two facts is a window where a pull-to-refresh is
-        // silently swallowed: no catch-up GET, and a spinner that vanishes instantly.
-        // The window is real — the collectors only start after the initial load — and
-        // grew with the refresh gate's extra hops. `AsyncStream` buffers, so an
-        // invalidation that lands while the first load runs is still delivered.
         let invalidations = invalidationBus.events()
         activeDirectories.insert(directory)
         defer { activeDirectories.remove(directory) }
         let serverBox = StatusBox()
         let currentBox = StatusBox()
         let stale = StaleBit()
-        // Single-flight plus revision gate for this observation. Every mutation
-        // of the authoritative `server` map that does not come from a REST commit
-        // bumps it, so a REST response captured before such a mutation is dropped
-        // instead of resurrecting the pre-patch snapshot.
         let gate = LiveStoreRefreshGate()
 
         @Sendable func overlayPending(
@@ -173,9 +159,6 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             yield(next)
         }
 
-        /// Reloads statuses and commits them, unless an SSE patch (or a local
-        /// `markIdle`) moved the server map while the GET was in flight — that
-        /// patch is strictly newer than the snapshot this response describes.
         @discardableResult
         @Sendable func reloadFromServer(
             reason: String,
@@ -230,8 +213,6 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                 case let .markIdle(_, sessionID):
                     var server = serverBox.snapshot()
                     server.removeValue(forKey: sessionID)
-                    // Mutates the authoritative map: a REST snapshot taken before
-                    // this would put the session back.
                     serverBox.replace(server)
                     await gate.bump()
                     emitOverlay(server)
@@ -256,9 +237,6 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             group.addTask {
                 for await invalidation in invalidations {
                     if let key = invalidation.key, key != directory { continue }
-                    // Ack on every exit from the iteration, including a torn-down or
-                    // failed reload: the ack releases the caller's spinner, it is not
-                    // a "data is fresh" signal.
                     let ack = invalidation.ack
                     defer { ack?() }
                     stale.mark()
@@ -302,9 +280,6 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         eventAdapter: eventAdapter,
                         pendingBusy: pendingBusy
                     ) {
-                        // A live patch outranks any REST snapshot that was captured
-                        // before it: bump so an in-flight reload cannot write the
-                        // pre-patch map back.
                         serverBox.replace(nextServer)
                         await gate.bump()
                     }

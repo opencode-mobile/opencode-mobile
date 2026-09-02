@@ -340,7 +340,6 @@ final class SessionReadyStoreTests: XCTestCase {
         store.bindProfile(profileID: "profile-a")
         await settle()
 
-        // Profile switch, in the order ProjectListHomeViewModel performs it.
         store.bindProfile(profileID: "profile-b")
         statusStore.clearCache()
         await settle()
@@ -353,8 +352,6 @@ final class SessionReadyStoreTests: XCTestCase {
         ready.cancel()
 
         XCTAssertTrue(ready.latest.contains("ses-1"))
-        // Exactly one live observation: not zero (the stranded-task bug) and not two
-        // (a stale observation left running alongside the replacement).
         XCTAssertEqual(statusStore.liveSubscriberCount(directory: "/repo"), 1)
     }
 
@@ -365,7 +362,6 @@ final class SessionReadyStoreTests: XCTestCase {
         let ready = ReadyCollector(store: store, directory: "/repo")
         await ready.waitForSubscription()
 
-        // Settings -> Clear All Data clears both stores without stopping observations.
         statusStore.clearCache()
         store.clearCache()
         await settle()
@@ -454,8 +450,6 @@ private final class FakeReadyStatusStore: SessionStatusLiveStore {
         }
     }
 
-    /// Mirrors `DefaultSessionStatusLiveStore.clearCache()`: the shared observations are
-    /// torn down, so every subscriber stream completes rather than hanging.
     func clearCache() {
         let live = continuations
         continuations.removeAll()

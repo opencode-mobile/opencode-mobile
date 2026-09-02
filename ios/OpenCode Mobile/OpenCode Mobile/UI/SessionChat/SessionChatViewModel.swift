@@ -818,11 +818,6 @@ final class SessionChatViewModel {
     }
 
     private func applyPermissionSnapshot(_ requests: [PermissionRequest]) async {
-        // The session list only feeds the ordering walk from the root session, so it is
-        // needed only when a request belongs to a session that is neither the root nor
-        // already cached. Subagent child sessions are brand new and absent from the
-        // cache, and without this refetch the walk would drop their requests entirely —
-        // so the unknown-session fallback is mandatory, not an optimisation.
         let needsSessionFetch = requests.contains { request in
             request.sessionID != sessionID
                 && !permissionSessions.contains { $0.id == request.sessionID }
@@ -833,8 +828,6 @@ final class SessionChatViewModel {
                 permissionSessions = sessions
                 permissionTopologyError = nil
             } catch {
-                // Emptying the cache is what makes this self-healing: the next snapshot
-                // carrying a subagent request finds nothing cached and retries.
                 permissionSessions = []
                 permissionTopologyError = "Unable to refresh permission session tree"
             }
@@ -854,10 +847,6 @@ final class SessionChatViewModel {
     }
 
     private func applyQuestionSnapshot(_ requests: [QuestionRequest]) async {
-        // Same rule as `applyPermissionSnapshot`: fetch the session tree only when a
-        // request names a session that is neither the root nor already cached. The two
-        // caches stay separate so one feature's failed fetch cannot blank the other's
-        // ordering.
         let needsSessionFetch = requests.contains { request in
             request.sessionID != sessionID
                 && !questionSessions.contains { $0.id == request.sessionID }

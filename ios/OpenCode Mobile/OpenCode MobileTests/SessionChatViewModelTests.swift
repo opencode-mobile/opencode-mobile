@@ -170,12 +170,6 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.permissionRequest == nil)
     }
 
-    /// The permission snapshot arrives on every `permission.asked` / `permission.replied`
-    /// and used to drag a full `listSessions` along with it. The session tree is only
-    /// needed to order requests by walking down from the root, so it must be fetched
-    /// only when a request names a session that is neither the root nor already cached —
-    /// and it must still be fetched then, or a brand-new subagent's request is dropped
-    /// by the ordering walk.
     @Test func permissionSnapshot_fetchesSessionTreeOnlyForUnknownSubagentSessions() async throws {
         let sessionRepository = FakeChatSessionRepository(
             sessions: [
@@ -201,7 +195,6 @@ struct SessionChatViewModelTests {
         try #require(await waitUntil { viewModel.uiState.permissionQueueCount == 2 })
         #expect(sessionRepository.listSessionsCallCount == 1)
 
-        // "child" is cached now, so a later snapshot naming it must not refetch.
         permissionLiveStore.emit([permissionRequest(id: "permission-child", sessionID: "child")])
         try #require(await waitUntil { viewModel.uiState.permissionRequest?.id == "permission-child" })
         #expect(sessionRepository.listSessionsCallCount == 1)
@@ -3588,8 +3581,6 @@ private final class FakePermissionLiveStore: PermissionLiveStore {
     func clearCache() {}
 }
 
-/// A permission live store the test drives snapshot by snapshot, so successive
-/// snapshots can be compared against the session-list fetch count.
 @MainActor
 private final class ScriptedPermissionLiveStore: PermissionLiveStore {
     private var continuation: AsyncStream<[PermissionRequest]>.Continuation?

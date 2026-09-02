@@ -39,20 +39,7 @@ class DefaultQuestionLiveStore
                 channelFlow {
                     var stale = false
                     var reconnectRefresh: Job? = null
-                    // Last list actually sent downstream, per observation (reset naturally
-                    // when the observation restarts). A refresh that reloads the same list
-                    // still commits — the gate revision still bumps — but does not re-emit.
-                    //
-                    // This relies on `QuestionRequest` value equality (it is a Kotlin
-                    // `data class`). A field deliberately excluded from equality would make
-                    // updates to that field vanish silently here.
                     var lastEmitted: List<QuestionRequest>? = null
-                    // Single-flight gate for this observation. `question.asked` and
-                    // `question.replied` fire back to back, so two GETs overlap and their
-                    // responses can land in the wrong order — the older, emptier list
-                    // last. That strands a live prompt: the sheet never appears and the
-                    // agent stays blocked server-side with no further event to self-heal
-                    // it. Serialising the GETs keeps the newest response last.
                     val gate = LiveStoreRefreshGate()
 
                     suspend fun refresh(
@@ -80,8 +67,6 @@ class DefaultQuestionLiveStore
                                     "question refresh reason=$reason count=${requests.size}",
                                 )
                                 if (requests == lastEmitted) {
-                                    // Safe because the flow is shared with `replay = 1`: a
-                                    // late subscriber already gets the equal value.
                                     diagnosticLogger.info(
                                         DiagnosticLogArea.Question,
                                         "question emit skipped reason=$reason cause=unchanged",
@@ -128,10 +113,6 @@ class DefaultQuestionLiveStore
                                     it.type == "server.connected"
                             }.collect { event ->
                                 if (event.type == "stream.reconnected" || event.type == "server.connected") {
-                                    // The reconnect pair lands within milliseconds of each
-                                    // other on every foreground, so coalesce it into one
-                                    // catch-up GET with the same cancel-and-delay shape as
-                                    // DefaultSessionStatusLiveStore.
                                     reconnectRefresh?.cancel()
                                     reconnectRefresh =
                                         launch {
@@ -139,14 +120,10 @@ class DefaultQuestionLiveStore
                                             refresh(event.type, force = true)
                                         }
                                 } else {
-                                    // `question.asked` / `question.replied` /
-                                    // `question.rejected` stay immediate: a blocking
-                                    // interactive prompt must not wait on a debounce window.
                                     refresh(event.type, force = true)
                                 }
                             }
                     } finally {
-                        // A torn-down observation must not fire a late fetch.
                         reconnectRefresh?.cancel()
                     }
                 }.shareIn(

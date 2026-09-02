@@ -19,13 +19,6 @@ nonisolated final class SharedLiveObservation<Value: Sendable>: @unchecked Senda
         upstreamTask?.cancel()
     }
 
-    /// Tears the observation down for good: stops the upstream and *completes* every
-    /// subscriber stream.
-    ///
-    /// Dropping the cache entry on its own only cancels the upstream (via `deinit`) and
-    /// leaves every `for await` loop suspended forever, so a store that cleared its cache
-    /// could never hand those consumers live data again. Callers must drop the observation
-    /// from their cache right after calling this; a finished observation never restarts.
     func finish() {
         lock.lock()
         isFinished = true
@@ -114,9 +107,6 @@ nonisolated final class SharedLiveObservation<Value: Sendable>: @unchecked Senda
         let upstream = makeUpstream { [weak self] value in
             self?.publish(value)
         }
-        // Wrap the upstream so a loop that returns on its own clears `upstreamTask`.
-        // Otherwise the `upstreamTask == nil` guard above keeps believing a finished
-        // task is still running and the observation never restarts.
         upstreamTask = Task { [weak self] in
             await withTaskCancellationHandler {
                 await upstream.value

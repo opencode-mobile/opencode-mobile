@@ -229,17 +229,10 @@ final class DefaultSessionReadyStore: SessionReadyStore {
                 self.onStatuses(directory: directory, statuses: statuses)
             }
             guard !Task.isCancelled else { return }
-            // The status store finished this stream (cache cleared on a profile switch or
-            // Clear All Data). Without this the `statusTask == nil` guard above would keep
-            // believing a dead task is live and Ready would never light up again.
             self.restartStatusObservation(directory: directory)
         }
     }
 
-    /// Stops the status observation for `handle`, leaving `ensureStatusObservation` free to
-    /// build a new one. Callers clear `previousTypes` in the same breath: cancelling aborts
-    /// any in-flight status fetch, so the next snapshot has to re-seed rather than continue
-    /// from types captured before the switch.
     private func cancelStatusObservation(handle: DirectoryHandle) {
         handle.statusTask?.cancel()
         handle.statusTask = nil

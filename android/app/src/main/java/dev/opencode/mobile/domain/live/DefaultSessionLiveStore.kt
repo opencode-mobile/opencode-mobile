@@ -81,11 +81,6 @@ class DefaultSessionLiveStore
         private fun buildSessionFlow(directory: String): Flow<SessionListSnapshot> =
             channelFlow {
                 var stale = false
-                // Single-flight gate for this observation: the world-signal, invalidation
-                // and event collectors all call refreshFromNetwork, and two overlapping
-                // `listSessions` responses can land in the wrong order. Nothing else
-                // mutates this store's state, so the revision half never discards here —
-                // serialising the GETs is what keeps the newest response last.
                 val gate = LiveStoreRefreshGate()
                 try {
                     suspend fun refreshFromNetwork(
@@ -118,13 +113,6 @@ class DefaultSessionLiveStore
                         return outcome == LiveStoreRefreshOutcome.COMMITTED
                     }
 
-                    // Subscribe to the invalidation bus BEFORE publishing this directory
-                    // as invalidatable. `invalidateAndWait` drops an event no collector is
-                    // listening for, and `invalidate` targets whatever is in
-                    // `activeDirectories`, so the window between those two facts is a window
-                    // where a pull-to-refresh is silently swallowed: no catch-up GET, and a
-                    // spinner that vanishes instantly. UNDISPATCHED registers the SharedFlow
-                    // subscription synchronously, so the two facts become true together.
                     launch(start = CoroutineStart.UNDISPATCHED) {
                         invalidationBus.events
                             .filter { it.key == null || it.key == directory }
@@ -133,9 +121,6 @@ class DefaultSessionLiveStore
                                     stale = true
                                     refreshFromNetwork(invalidation.reason, force = true)
                                 } finally {
-                                    // Ack even when the refresh was cancelled or failed:
-                                    // the ack releases the caller's spinner, it is not a
-                                    // "data is fresh" signal.
                                     invalidation.ack?.complete(Unit)
                                 }
                             }

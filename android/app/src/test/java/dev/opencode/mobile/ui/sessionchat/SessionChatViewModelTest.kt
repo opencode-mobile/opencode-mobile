@@ -349,13 +349,6 @@ class SessionChatViewModelTest {
             assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
-    /**
-     * Every permission snapshot used to piggyback a full `listSessions`, so an idle
-     * session with a single root-session prompt paid a session-list GET on every
-     * `permission.asked` / `permission.replied` / reconnect. The list is only used to
-     * order requests down the session tree, so it is only needed for a request whose
-     * session is neither the root nor already cached.
-     */
     @Test
     fun permissionSnapshot_fetchesSessionList_onlyForUnknownSubagentSessions() =
         runTest(testDispatcher) {
@@ -389,7 +382,6 @@ class SessionChatViewModelTest {
                 sessionRepository.listSessionsCallCount,
             )
 
-            // A second root-only snapshot still must not fetch.
             permissionLiveStore.requests.value =
                 listOf(
                     permissionRequest("permission-1", "ses-1"),
@@ -402,8 +394,6 @@ class SessionChatViewModelTest {
                 sessionRepository.listSessionsCallCount,
             )
 
-            // A subagent request arrives for a session the cache has never seen. Without
-            // the refetch the ordering walk would drop it entirely.
             permissionLiveStore.requests.value =
                 listOf(
                     permissionRequest("permission-1", "ses-1"),
@@ -416,7 +406,6 @@ class SessionChatViewModelTest {
                 sessionRepository.listSessionsCallCount,
             )
 
-            // The tree now knows `child`, so a snapshot repeating it must not refetch.
             permissionLiveStore.requests.value =
                 listOf(permissionRequest("permission-3", "child"))
             advanceUntilIdle()
@@ -427,7 +416,6 @@ class SessionChatViewModelTest {
             )
         }
 
-    /** Same refresh economy on the question path, with its own separate session cache. */
     @Test
     fun questionSnapshot_fetchesSessionList_onlyForUnknownSubagentSessions() =
         runTest(testDispatcher) {

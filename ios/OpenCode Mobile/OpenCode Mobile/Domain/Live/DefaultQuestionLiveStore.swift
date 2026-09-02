@@ -45,8 +45,6 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
     }
 
     func clearCache() {
-        // Finish before dropping: a dropped-but-unfinished observation leaves every
-        // subscriber suspended forever instead of letting it re-subscribe.
         cache.values.forEach { $0.finish() }
         cache.removeAll()
     }
@@ -60,16 +58,7 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
         yield: @escaping @Sendable ([QuestionRequest]) -> Void
     ) async {
         let stale = StaleBit()
-        // Single-flight gate for this observation. `question.asked` and
-        // `question.replied` fire back to back, so two GETs overlap and their
-        // responses can land in the wrong order — the older, emptier list
-        // last. That strands a live prompt: the sheet never appears and the
-        // agent stays blocked server-side with no further event to self-heal
-        // it. Serialising the GETs keeps the newest response last.
         let gate = LiveStoreRefreshGate()
-        // Per-observation memory of the last list handed downstream, so a refresh that
-        // returns an unchanged list does not wake every subscriber for nothing. Reset
-        // naturally when the observation restarts.
         let lastEmitted = QuestionEmitCache()
         await refresh(
             directory: directory,
@@ -118,12 +107,6 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
                 }
             }
             group.addTask {
-                // `stream.reconnected` and `server.connected` land within milliseconds of
-                // each other on every foreground, so each reconnect otherwise costs two
-                // full question GETs. Collapse just that pair with the same
-                // cancel-and-delay shape the status store uses. `question.asked` /
-                // `question.replied` / `question.rejected` stay immediate: a blocking
-                // prompt must not wait.
                 var reconnectTask: Task<Void, Never>?
                 defer { reconnectTask?.cancel() }
                 for await event in eventStream.events() {
@@ -188,8 +171,6 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
                 try? await sessionRepository.listPendingQuestions(directory: directory)
             },
             commit: { requests in
-                // The commit still runs in full — the revision still bumps and the
-                // outcome is still `.committed`. Only the downstream emit is suppressed.
                 stale.clear()
                 DiagnosticLog.info(.question, "question refresh reason=\(reason) count=\(requests.count)")
                 guard lastEmitted.shouldEmit(requests) else {
@@ -208,21 +189,10 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
     }
 }
 
-/// Remembers the last question list this observation handed downstream so an
-/// unchanged refresh does not re-emit.
-///
-/// This leans on `QuestionRequest` value equality (`Equatable`, synthesised from
-/// every stored property). A field deliberately excluded from `==` would make an
-/// update that only touches that field vanish silently here.
-///
-/// Suppressing an emit cannot starve a late subscriber: `SharedLiveObservation`
-/// replays `lastValue`, so a new subscriber already holds the equal list.
 private nonisolated final class QuestionEmitCache: @unchecked Sendable {
     private let lock = NSLock()
     private var value: [QuestionRequest]?
 
-    /// Returns `true` when `next` differs from the last emitted list, recording it as
-    /// the new last emitted list; `false` when it is equal and the emit should be skipped.
     func shouldEmit(_ next: [QuestionRequest]) -> Bool {
         lock.lock()
         defer { lock.unlock() }

@@ -54,7 +54,6 @@ struct ProjectListHomeViewModelTests {
         }
         #expect(loaded)
 
-        // The catch-up REST stalls and never comes back on its own.
         sessionRepository.holdNextListSessions()
         let refreshTask = Task { await viewModel.pullToRefresh() }
         let blocked = await waitUntil(timeoutMs: 5_000) {
@@ -69,7 +68,6 @@ struct ProjectListHomeViewModelTests {
         )
         refreshTask.cancel()
 
-        // The stalled call lands late; pull-to-refresh must not be permanently latched.
         sessionRepository.resumeListSessions()
         let settled = await waitUntil(timeoutMs: 5_000) { !sessionRepository.isListBlocked }
         #expect(settled)

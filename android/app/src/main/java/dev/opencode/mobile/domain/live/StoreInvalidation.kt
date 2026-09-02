@@ -12,10 +12,6 @@ data class StoreInvalidate(
     val ack: CompletableDeferred<Unit>? = null,
 )
 
-/**
- * @param ackTimeoutMs ceiling for [invalidateAndWait]. Injectable so tests can bound
- *   the wait without waiting on the production ceiling.
- */
 class StoreInvalidationBus(
     private val ackTimeoutMs: Long = LiveStoreRefreshPolicy.INVALIDATION_ACK_TIMEOUT_MS,
 ) {
@@ -29,15 +25,6 @@ class StoreInvalidationBus(
         _events.tryEmit(StoreInvalidate(key = key, reason = reason))
     }
 
-    /**
-     * Emits an invalidation and waits for a collector to acknowledge it.
-     *
-     * The zero-subscriber check is only a fast path: a subscriber can disappear
-     * between the check and the emit, and a collector can be cancelled after
-     * receiving the event, so the wait is always bounded. Returning here means
-     * "stop waiting", never "the store now holds fresh data" — callers must not
-     * read it as a freshness guarantee.
-     */
     suspend fun invalidateAndWait(
         key: String?,
         reason: String,

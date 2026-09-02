@@ -566,7 +566,6 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             assertTrue(viewModel.uiState.value is MainScreenUiState.Loaded)
 
-            // The catch-up REST never comes back (stalled radio / torn-down collector).
             val stalled = CompletableDeferred<Unit>()
             sessionRepository.nextListGate = stalled
             viewModel.pullToRefresh()
@@ -578,7 +577,6 @@ class MainScreenViewModelTest {
                 viewModel.isRefreshing.value,
             )
 
-            // The stalled call finally lands, and pull-to-refresh must still work.
             stalled.complete(Unit)
             advanceUntilIdle()
             val listCallsBefore = sessionRepository.listSessionsCallCount

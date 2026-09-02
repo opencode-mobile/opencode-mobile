@@ -211,17 +211,6 @@ class DefaultSessionReadyStore
             }
         }
 
-        /**
-         * Stops every status observation and returns the directories that were being
-         * observed so the caller can re-subscribe.
-         *
-         * A profile switch or Clear All Data replaces the status upstreams underneath
-         * us. Leaving the old collectors running pins the previous upstream, so the
-         * next [ensureStatusObservationLocked] would keep believing an observation is
-         * live while the ready flags stopped arriving. `previousTypes` is cleared by
-         * the callers: cancelling aborts any in-flight status fetch, so the next
-         * snapshot has to re-seed rather than continue from the pre-switch types.
-         */
         private fun cancelStatusObservationsLocked(): Set<String> {
             val directories = statusJobs.keys.toSet()
             statusJobs.values.forEach { it.cancel() }
