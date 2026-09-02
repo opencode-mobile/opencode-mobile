@@ -1,8 +1,9 @@
 package dev.opencode.mobile.theme
 
 import android.content.Context
-import android.util.Log
 import androidx.compose.runtime.getValue
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.serialization.encodeToString
@@ -71,7 +72,7 @@ object ThemeManager {
             loadError = null
         } catch (e: Exception) {
             loadError = e.message ?: "Failed to apply theme preset"
-            Log.e("ThemeManager", "Failed to apply preset $id", e)
+            DiagnosticLog.error(DiagnosticLogArea.Connection, "Failed to apply preset $id", e)
         }
     }
 
@@ -102,7 +103,7 @@ object ThemeManager {
             currentTheme = previousTheme
             resolve()
             loadError = e.message ?: "Unknown error importing theme"
-            Log.e("ThemeManager", "Failed to import theme", e)
+            DiagnosticLog.error(DiagnosticLogArea.Connection, "Failed to import theme", e)
         }
     }
 
@@ -118,7 +119,7 @@ object ThemeManager {
             importTheme(jsonData)
         } catch (e: Exception) {
             loadError = e.message ?: "Could not read theme file"
-            Log.e("ThemeManager", "Failed to read theme file", e)
+            DiagnosticLog.error(DiagnosticLogArea.Connection, "Failed to read theme file", e)
         }
     }
 
@@ -130,7 +131,7 @@ object ThemeManager {
                 ctx.assets.open("$PRESET_ASSET_DIR/manifest.json").bufferedReader().use { it.readText() }
             json.decodeFromString<List<ThemePreset>>(manifest).also { cachedManifestPresets = it }
         } catch (e: Exception) {
-            Log.e("ThemeManager", "Failed to load theme preset manifest", e)
+            DiagnosticLog.error(DiagnosticLogArea.Connection, "Failed to load theme preset manifest", e)
             emptyList()
         }
     }
@@ -147,7 +148,7 @@ object ThemeManager {
             try {
                 json.decodeFromString<Map<String, String>>(importedThemesJson)
             } catch (e: Exception) {
-                Log.w("ThemeManager", "Failed to decode imported themes", e)
+                DiagnosticLog.warning(DiagnosticLogArea.Connection, "Failed to decode imported themes", e)
                 return emptyList()
             }
         return importedThemes.mapNotNull { (_, themeJson) ->
@@ -155,7 +156,7 @@ object ThemeManager {
                 val theme = json.decodeFromString<OpenCodeTheme>(themeJson)
                 ThemePreset(id = theme.id, name = theme.name)
             } catch (e: Exception) {
-                Log.w("ThemeManager", "Failed to decode imported theme preset", e)
+                DiagnosticLog.warning(DiagnosticLogArea.Connection, "Failed to decode imported theme preset", e)
                 null
             }
         }
@@ -179,14 +180,14 @@ object ThemeManager {
             try {
                 json.decodeFromString<Map<String, String>>(importedThemesJson)
             } catch (e: Exception) {
-                Log.w("ThemeManager", "Failed to decode imported themes", e)
+                DiagnosticLog.warning(DiagnosticLogArea.Connection, "Failed to decode imported themes", e)
                 return null
             }
         val themeJson = importedThemes[selectedId] ?: return null
         return try {
             json.decodeFromString<OpenCodeTheme>(themeJson)
         } catch (e: Exception) {
-            Log.w("ThemeManager", "Failed to restore imported theme $selectedId", e)
+            DiagnosticLog.warning(DiagnosticLogArea.Connection, "Failed to restore imported theme $selectedId", e)
             null
         }
     }
@@ -194,9 +195,9 @@ object ThemeManager {
     private fun loadBundledTheme(): OpenCodeTheme {
         loadPreset(DEFAULT_PRESET_ID)?.let { return it }
         if (appContext == null) {
-            Log.w("ThemeManager", "App context not set, using fallback theme")
+            DiagnosticLog.warning(DiagnosticLogArea.Connection, "App context not set, using fallback theme")
         } else {
-            Log.e("ThemeManager", "Failed to load bundled preset $DEFAULT_PRESET_ID")
+            DiagnosticLog.error(DiagnosticLogArea.Connection, "Failed to load bundled preset $DEFAULT_PRESET_ID")
         }
         return createFallbackTheme()
     }

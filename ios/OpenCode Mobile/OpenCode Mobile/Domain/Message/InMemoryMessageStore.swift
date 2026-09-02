@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
     private let lock = NSLock()
@@ -1146,7 +1145,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         let to = ThoughtPartChrome.paintLabel(storedReasoning)
         guard inserted || from != to else { return }
         OpenCodeLog.messageStore.info(
-            "reasoning overlay session=\(sessionID, privacy: .public) message=\(messageID, privacy: .public) part=\(partID, privacy: .public) from=\(from, privacy: .public) to=\(to, privacy: .public) inserted=\(inserted ? 1 : 0) chars=\(storedReasoning.text.count) streaming=\(storedReasoning.isStreaming ? 1 : 0) end=\(storedReasoning.timeEndEpochMs == nil ? 0 : 1)"
+            "reasoning overlay session=\(sessionID) message=\(messageID) part=\(partID) from=\(from) to=\(to) inserted=\(inserted ? 1 : 0) chars=\(storedReasoning.text.count) streaming=\(storedReasoning.isStreaming ? 1 : 0) end=\(storedReasoning.timeEndEpochMs == nil ? 0 : 1)"
         )
     }
 }

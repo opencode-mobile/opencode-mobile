@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 @MainActor
 final class SessionChatTimeline {
@@ -442,10 +441,10 @@ final class SessionChatTimeline {
         )
         if applyMs >= 50 || rows.count >= 20 || layoutAffectingCount > 0 || !stamped.grewBottomRowIDs.isEmpty {
             OpenCodeLog.sessionChat.info(
-                "timelineApply rows=\(rows.count) rebuilt=\(rebuiltCount) kinds=\(TimelineApply.kindsLabel(apply.kinds), privacy: .public) required=\(isRequired) changed=\(stamped.changedRowIDs.count) layout=\(stamped.layoutChangedRowIDs.count) layoutAffecting=\(layoutAffectingCount) decorate=\(stamped.decorateRowIDs.count) grewBottom=\(stamped.grewBottomRowIDs.count) inserted=\(stamped.insertedRowIDs.count) rev=\(stamped.frameRevision) ms=\(applyMs) \(thoughtChrome, privacy: .public)"
+                "timelineApply rows=\(rows.count) rebuilt=\(rebuiltCount) kinds=\(TimelineApply.kindsLabel(apply.kinds)) required=\(isRequired) changed=\(stamped.changedRowIDs.count) layout=\(stamped.layoutChangedRowIDs.count) layoutAffecting=\(layoutAffectingCount) decorate=\(stamped.decorateRowIDs.count) grewBottom=\(stamped.grewBottomRowIDs.count) inserted=\(stamped.insertedRowIDs.count) rev=\(stamped.frameRevision) ms=\(applyMs) \(thoughtChrome)"
             )
         } else {
-            OpenCodeLog.sessionChat.info("\(thoughtChrome, privacy: .public)")
+            OpenCodeLog.sessionChat.info("\(thoughtChrome)")
         }
         guard !Task.isCancelled else { return }
 

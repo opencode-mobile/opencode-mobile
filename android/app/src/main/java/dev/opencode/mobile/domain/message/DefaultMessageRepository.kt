@@ -1,7 +1,8 @@
 package dev.opencode.mobile.domain.message
 
-import android.util.Log
 import dev.opencode.mobile.data.remote.MessagesApi
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import kotlin.system.measureTimeMillis
@@ -100,10 +101,6 @@ class DefaultMessageRepository
         }
 
         private fun logI(message: String) {
-            runCatching { Log.i(TAG, message) }
-        }
-
-        private companion object {
-            private const val TAG = "MessageRepo"
+            DiagnosticLog.info(DiagnosticLogArea.Chat, message)
         }
     }

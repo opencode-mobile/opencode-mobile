@@ -42,7 +42,7 @@ nonisolated struct DiagnosticLogEntry: Identifiable, Codable, Hashable, Sendable
 nonisolated struct DiagnosticLogSnapshot: Sendable {
     let entries: [DiagnosticLogEntry]
     let droppedBySoftCap: Int
-    let windowMinutes: Int
+    let retainMinutes: Int
     let softCap: Int
 }
 
@@ -85,9 +85,9 @@ nonisolated enum DiagnosticLogRedactor: Sendable {
 nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
     static let shared = DiagnosticLogBuffer(fileURL: defaultFileURL())
 
-    static let windowMilliseconds: Int64 = 5 * 60 * 1_000
-    static let softCap = 2_000
-    static let windowMinutes = 5
+    static let retainMinutes = 60
+    static let retainMilliseconds: Int64 = 60 * 60 * 1_000
+    static let softCap = 10_000
 
     private let lock = NSLock()
     private var entries: [DiagnosticLogEntry] = []
@@ -142,7 +142,7 @@ nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
         return DiagnosticLogSnapshot(
             entries: entries,
             droppedBySoftCap: droppedBySoftCap,
-            windowMinutes: Self.windowMinutes,
+            retainMinutes: Self.retainMinutes,
             softCap: Self.softCap
         )
     }
@@ -163,20 +163,25 @@ nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
         }
     }
 
-    func exportJSONL() throws -> Data {
+    func exportJSONL(window: DiagnosticLogExportWindow = .default) throws -> Data {
         let snapshot = snapshot()
+        let now = clock()
+        let cutoff = now - window.milliseconds
+        let exported = snapshot.entries.filter { $0.timestampEpochMilliseconds >= cutoff }
         var lines: [String] = [
             try jsonObjectLine([
                 "type": "meta",
                 "schemaVersion": 1,
-                "windowMinutes": snapshot.windowMinutes,
+                "windowMinutes": window.minutes,
+                "retainMinutes": snapshot.retainMinutes,
+                "exportWindowMinutes": window.minutes,
                 "softCap": snapshot.softCap,
                 "droppedBySoftCap": snapshot.droppedBySoftCap,
-                "entryCount": snapshot.entries.count,
-                "exportedAtEpochMilliseconds": clock(),
+                "entryCount": exported.count,
+                "exportedAtEpochMilliseconds": now,
             ]),
         ]
-        for entry in snapshot.entries {
+        for entry in exported {
             lines.append(
                 try jsonObjectLine([
                     "type": "entry",
@@ -194,7 +199,7 @@ nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
     @discardableResult
     private func evictLocked(now: Int64) -> Bool {
         let beforeCount = entries.count
-        let cutoff = now - Self.windowMilliseconds
+        let cutoff = now - Self.retainMilliseconds
         entries.removeAll { $0.timestampEpochMilliseconds < cutoff }
         while entries.count > Self.softCap {
             entries.removeFirst()

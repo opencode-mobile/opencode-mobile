@@ -1,6 +1,7 @@
 package dev.opencode.mobile.network
 
-import android.util.Log
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -81,9 +82,7 @@ object KtorClientFactory {
 
     private object AndroidApiLogger : Logger {
         override fun log(message: String) {
-            runCatching { Log.i(TAG, message) }
+            DiagnosticLog.debug(DiagnosticLogArea.Connection, message)
         }
     }
-
-    private const val TAG = "OpencodeApi"
 }

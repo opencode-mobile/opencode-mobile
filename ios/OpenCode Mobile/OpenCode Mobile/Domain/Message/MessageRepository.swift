@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 protocol MessageRepository: Sendable {
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate>
@@ -102,7 +101,7 @@ final class DefaultMessageRepository: MessageRepository {
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {
         OpenCodeLog.sessionChat.info(
-            "prompt_async session=\(sessionID, privacy: .public) fileParts=\(options.attachments.count) textCharacters=\(options.text.count)"
+            "prompt_async session=\(sessionID) fileParts=\(options.attachments.count) textCharacters=\(options.text.count)"
         )
         DiagnosticLog.info(
             .chat,

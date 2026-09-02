@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 /// iOS warm prepared-history retention budgets (Phase 5).
 enum PreparedHistoryCacheLimits {
@@ -82,7 +81,7 @@ nonisolated final class PreparedHistoryCache: @unchecked Sendable {
             entries.removeValue(forKey: key)
         }
         OpenCodeLog.messageContent.info(
-            "preparedCacheEvict reason=session-delete session=\(sessionID, privacy: .public) count=\(matching.count)"
+            "preparedCacheEvict reason=session-delete session=\(sessionID) count=\(matching.count)"
         )
     }
 
@@ -93,7 +92,7 @@ nonisolated final class PreparedHistoryCache: @unchecked Sendable {
         entries.removeAll()
         if count > 0 {
             OpenCodeLog.messageContent.info(
-                "preparedCacheEvict reason=\(reason, privacy: .public) count=\(count)"
+                "preparedCacheEvict reason=\(reason) count=\(count)"
             )
         }
     }
@@ -125,7 +124,7 @@ nonisolated final class PreparedHistoryCache: @unchecked Sendable {
             }
             entries.removeValue(forKey: victim.key)
             OpenCodeLog.messageContent.info(
-                "preparedCacheEvict reason=\(reason, privacy: .public) session=\(victim.key.sessionID, privacy: .public) cost=\(victim.value.characterCost)"
+                "preparedCacheEvict reason=\(reason) session=\(victim.key.sessionID) cost=\(victim.value.characterCost)"
             )
         }
     }

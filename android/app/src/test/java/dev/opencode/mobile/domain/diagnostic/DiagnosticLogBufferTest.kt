@@ -8,17 +8,32 @@ import org.junit.Test
 
 class DiagnosticLogBufferTest {
     @Test
-    fun evictsEntriesOlderThanFiveMinutes() {
+    fun evictsEntriesOlderThanRetainWindow() {
         var now = 10_000_000L
         val buffer = DiagnosticLogBuffer(clockEpochMilliseconds = { now })
 
         buffer.append(DiagnosticLogArea.Sse, DiagnosticLogLevel.Info, "old")
-        now += DiagnosticLogBuffer.WINDOW_MILLISECONDS + 1
+        now += DiagnosticLogBuffer.RETAIN_MILLISECONDS + 1
         buffer.append(DiagnosticLogArea.Sse, DiagnosticLogLevel.Info, "new")
 
         val snapshot = buffer.snapshot()
         assertEquals(listOf("new"), snapshot.entries.map { it.message })
-        assertEquals(5, snapshot.windowMinutes)
+        assertEquals(60, snapshot.retainMinutes)
+    }
+
+    @Test
+    fun keepsEntriesAcrossRestartInsideRetainWindow() {
+        val directory = Files.createTempDirectory("diagnostic-logs-restart").toFile()
+        val file = DiagnosticLogBuffer.fileIn(directory)
+        var now = 1_700_000_000_000L
+
+        val first = DiagnosticLogBuffer(file = file, clockEpochMilliseconds = { now })
+        first.append(DiagnosticLogArea.Sse, DiagnosticLogLevel.Info, "before restart")
+        first.flushPersisted()
+
+        now += 6 * 60 * 1_000L
+        val reopened = DiagnosticLogBuffer(file = file, clockEpochMilliseconds = { now })
+        assertEquals(listOf("before restart"), reopened.snapshot().entries.map { it.message })
     }
 
     @Test
@@ -81,7 +96,9 @@ class DiagnosticLogBufferTest {
 
         val text = buffer.exportJsonl()
         assertTrue(text.contains("\"type\":\"meta\""))
-        assertTrue(text.contains("\"windowMinutes\":5"))
+        assertTrue(text.contains("\"windowMinutes\":15"))
+        assertTrue(text.contains("\"retainMinutes\":60"))
+        assertTrue(text.contains("\"exportWindowMinutes\":15"))
         assertTrue(text.contains("\"area\":\"sse\""))
         assertFalse(text.contains("nope"))
         assertTrue(text.contains("[REDACTED]"))
@@ -127,9 +144,28 @@ class DiagnosticLogBufferTest {
         )
         assertTrue(file.exists())
 
-        now += DiagnosticLogBuffer.WINDOW_MILLISECONDS + 1
+        now += DiagnosticLogBuffer.RETAIN_MILLISECONDS + 1
         val expired = DiagnosticLogBuffer(file = file, clockEpochMilliseconds = { now })
         assertTrue(expired.snapshot().entries.isEmpty())
+    }
+
+    @Test
+    fun exportJsonlFiltersToChosenWindow() {
+        var now = 1_700_000_000_000L
+        val buffer = DiagnosticLogBuffer(clockEpochMilliseconds = { now })
+        buffer.append(DiagnosticLogArea.Sse, DiagnosticLogLevel.Info, "old")
+        now += 20 * 60 * 1_000L
+        buffer.append(DiagnosticLogArea.Sse, DiagnosticLogLevel.Info, "recent")
+
+        val fifteen = buffer.exportJsonl(DiagnosticLogExportWindow.FifteenMinutes)
+        assertTrue(fifteen.contains("recent"))
+        assertFalse(fifteen.contains("\"message\":\"old\""))
+        assertTrue(fifteen.contains("\"exportWindowMinutes\":15"))
+
+        val sixty = buffer.exportJsonl(DiagnosticLogExportWindow.SixtyMinutes)
+        assertTrue(sixty.contains("old"))
+        assertTrue(sixty.contains("recent"))
+        assertTrue(sixty.contains("\"exportWindowMinutes\":60"))
     }
 
     @Test

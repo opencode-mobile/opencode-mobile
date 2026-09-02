@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 struct NewSessionModelSelectionResolver: Sendable {
     private let store: any SessionModelSelectionStore

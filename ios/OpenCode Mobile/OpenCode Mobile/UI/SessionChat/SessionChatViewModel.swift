@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import OSLog
 
 @MainActor
 @Observable
@@ -142,7 +141,7 @@ final class SessionChatViewModel {
         lastSnackbarKey = nil
         suppressedSnackbarKey = nil
         snackbarSequence = 0
-        OpenCodeLog.sessionChat.info("bind session=\(sessionID, privacy: .public) worktree=\(worktree, privacy: .private) title=\(sessionTitle, privacy: .public)")
+        OpenCodeLog.sessionChat.info("bind session=\(sessionID) worktree=\(worktree) title=\(sessionTitle)")
         sessionInfo.bind(sessionID: sessionID, sessionTitle: sessionTitle)
         timeline.onChange = { [weak self] in self?.publishUiState() }
         composer.onChange = { [weak self] in
@@ -163,7 +162,7 @@ final class SessionChatViewModel {
             beginOptimisticCreate()
             return
         }
-        OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID, privacy: .public)")
+        OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID)")
         sessionReadyStore.setFocusedSession(sessionID: sessionID, directory: worktree)
         // Peers may have changed while the screen was away; re-resolve smart label.
         refreshProjectIdentity()
@@ -675,7 +674,7 @@ final class SessionChatViewModel {
         )
         questionSubmittingID = request.id
         questionError = nil
-        OpenCodeLog.sessionChat.info("question reply request=\(request.id, privacy: .public) session=\(request.sessionID, privacy: .public)")
+        OpenCodeLog.sessionChat.info("question reply request=\(request.id) session=\(request.sessionID)")
         publishUiState()
         do {
             _ = try await sessionRepository.replyToQuestion(
@@ -696,7 +695,7 @@ final class SessionChatViewModel {
         logChatAction(ProductAnalytics.Action.questionDismiss)
         questionSubmittingID = request.id
         questionError = nil
-        OpenCodeLog.sessionChat.info("question dismiss request=\(request.id, privacy: .public) session=\(request.sessionID, privacy: .public)")
+        OpenCodeLog.sessionChat.info("question dismiss request=\(request.id) session=\(request.sessionID)")
         publishUiState()
         do {
             _ = try await sessionRepository.rejectQuestion(
@@ -874,7 +873,7 @@ final class SessionChatViewModel {
         }
         let visibleID = questionRequests.first?.id
         if visibleID != previousVisibleID {
-            OpenCodeLog.sessionChat.info("question visible=\(visibleID ?? "none", privacy: .public) queue=\(self.questionRequests.count, privacy: .public)")
+            OpenCodeLog.sessionChat.info("question visible=\(visibleID ?? "none") queue=\(self.questionRequests.count)")
         }
         publishUiState()
     }
@@ -961,7 +960,7 @@ final class SessionChatViewModel {
     }
 
     func stopObserving() {
-        OpenCodeLog.sessionChat.info("stop observing session=\(self.sessionID, privacy: .public)")
+        OpenCodeLog.sessionChat.info("stop observing session=\(self.sessionID)")
         composer.flushDraft()
         optimisticCreateTask?.cancel()
         optimisticCreateTask = nil
@@ -1030,7 +1029,7 @@ final class SessionChatViewModel {
         if optimisticCreateTask != nil || !OptimisticSessionCreate.isPlaceholder(sessionID) {
             return
         }
-        OpenCodeLog.sessionChat.info("optimistic create start worktree=\(self.worktree, privacy: .private)")
+        OpenCodeLog.sessionChat.info("optimistic create start worktree=\(self.worktree)")
         timeline.prepareForOptimisticCreate()
         composer.startCatalogLoads()
         publishUiState()
@@ -1058,13 +1057,13 @@ final class SessionChatViewModel {
                     }
                 }
                 guard !Task.isCancelled else { return }
-                OpenCodeLog.sessionChat.info("optimistic create success id=\(session.id, privacy: .public)")
+                OpenCodeLog.sessionChat.info("optimistic create success id=\(session.id)")
                 optimisticCreateTask = nil
                 promoteOptimisticSession(id: session.id, title: session.title)
             } catch {
                 guard !Task.isCancelled else { return }
                 OpenCodeLog.sessionChat.warning(
-                    "optimistic create failed error=\(error.localizedDescription, privacy: .public)"
+                    "optimistic create failed error=\(error.localizedDescription)"
                 )
                 optimisticCreateTask = nil
                 OptimisticSessionCreateCoordinator.shared.reportCreateFailed(
@@ -1167,7 +1166,7 @@ final class SessionChatViewModel {
             loggedWorkingLamp = true
             lastWorkingLamp = workingIndicatorLabel
             OpenCodeLog.sessionChat.info(
-                "workingLamp label=\(workingIndicatorLabel ?? "none", privacy: .public) status=\(sessionStatusLabel ?? "none", privacy: .public) awaitingUser=\(awaitingUser ? 1 : 0) lastIsThinking=\(lastIsThinking ? 1 : 0)"
+                "workingLamp label=\(workingIndicatorLabel ?? "none") status=\(sessionStatusLabel ?? "none") awaitingUser=\(awaitingUser ? 1 : 0) lastIsThinking=\(lastIsThinking ? 1 : 0)"
             )
         }
         uiState = SessionChatUiState(

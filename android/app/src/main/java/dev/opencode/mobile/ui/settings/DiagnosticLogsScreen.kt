@@ -33,6 +33,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogExportWindow
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
@@ -67,7 +68,8 @@ data class DiagnosticLogsUiState(
     val loading: Boolean = true,
     val entryCount: Int = 0,
     val droppedBySoftCap: Int = 0,
-    val windowMinutes: Int = DiagnosticLogBuffer.WINDOW_MINUTES,
+    val retainMinutes: Int = DiagnosticLogBuffer.RETAIN_MINUTES,
+    val exportWindow: DiagnosticLogExportWindow = DiagnosticLogExportWindow.DEFAULT,
     val softCap: Int = DiagnosticLogBuffer.SOFT_CAP,
     val areaCounts: List<Pair<String, Int>> = emptyList(),
     val oldestTimestampLabel: String? = null,
@@ -108,7 +110,8 @@ class DiagnosticLogsViewModel
                         loading = false,
                         entryCount = snapshot.entries.size,
                         droppedBySoftCap = snapshot.droppedBySoftCap,
-                        windowMinutes = snapshot.windowMinutes,
+                        retainMinutes = snapshot.retainMinutes,
+                        exportWindow = mutableState.value.exportWindow,
                         softCap = snapshot.softCap,
                         areaCounts = counts.toList(),
                         oldestTimestampLabel = oldest?.let(::formatTimestamp),
@@ -117,6 +120,10 @@ class DiagnosticLogsViewModel
                         saveMessage = mutableState.value.saveMessage,
                     )
             }
+        }
+
+        fun setExportWindow(window: DiagnosticLogExportWindow) {
+            mutableState.value = mutableState.value.copy(exportWindow = window)
         }
 
         fun clear() {
@@ -159,7 +166,7 @@ class DiagnosticLogsViewModel
         ) {
             viewModelScope.launch {
                 runCatching {
-                    val jsonl = withContext(Dispatchers.Default) { buffer.exportJsonl() }
+                    val jsonl = withContext(Dispatchers.Default) { buffer.exportJsonl(mutableState.value.exportWindow) }
                     withContext(Dispatchers.IO) {
                         context.contentResolver.openOutputStream(uri)?.use { output ->
                             output.write(jsonl.toByteArray(Charsets.UTF_8))
@@ -186,7 +193,7 @@ class DiagnosticLogsViewModel
         }
 
         private suspend fun writeCacheExport(): Uri {
-            val jsonl = withContext(Dispatchers.Default) { buffer.exportJsonl() }
+            val jsonl = withContext(Dispatchers.Default) { buffer.exportJsonl(mutableState.value.exportWindow) }
             val file =
                 withContext(Dispatchers.IO) {
                     File(context.cacheDir, EXPORT_FILE_NAME).also { it.writeText(jsonl) }
@@ -210,10 +217,12 @@ fun DiagnosticLogsScreen(
     onShareViaApps: () -> Unit,
     onSaveToUri: (Uri) -> Unit,
     onClear: () -> Unit,
+    onExportWindowChange: (DiagnosticLogExportWindow) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var showClearConfirmation by remember { mutableStateOf(false) }
     var showExportSheet by remember { mutableStateOf(false) }
+    var showExportWindowPicker by remember { mutableStateOf(false) }
 
     val saveLauncher =
         rememberLauncherForActivityResult(
@@ -255,16 +264,22 @@ fun DiagnosticLogsScreen(
                         title = "Entries",
                         subtitle =
                             if (state.hasEntries) {
-                                "${state.entryCount} redacted lines in the current window"
+                                "${state.entryCount} redacted lines in the kept window"
                             } else {
-                                "No entries in the current window yet"
+                                "No entries in the kept window yet"
                             },
                         style = OpenCodeListItemStyle.Card,
                     )
                     OpenCodeListItem(
-                        title = "Window",
-                        subtitle = "Last ${state.windowMinutes} minutes",
+                        title = "Kept",
+                        subtitle = "Last ${state.retainMinutes} minutes",
                         style = OpenCodeListItemStyle.Card,
+                    )
+                    OpenCodeListItem(
+                        title = "Export",
+                        subtitle = state.exportWindow.label,
+                        style = OpenCodeListItemStyle.Card,
+                        onClick = { showExportWindowPicker = true },
                     )
                     OpenCodeListItem(
                         title = "Soft cap",
@@ -277,7 +292,7 @@ fun DiagnosticLogsScreen(
                         style = OpenCodeListItemStyle.Card,
                     )
                     OpenCodeListItem(
-                        title = "Export",
+                        title = "Format",
                         subtitle = "JSONL · secrets and message bodies redacted",
                         style = OpenCodeListItemStyle.Card,
                     )
@@ -341,6 +356,28 @@ fun DiagnosticLogsScreen(
     }
 
     OpenCodeBottomSheet(
+        visible = showExportWindowPicker,
+        title = "Export window",
+        onDismissRequest = { showExportWindowPicker = false },
+    ) {
+        DiagnosticLogExportWindow.entries.forEach { window ->
+            OpenCodeBottomSheetEntry(
+                title = window.label,
+                endDecorator =
+                    if (window == state.exportWindow) {
+                        BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
+                    } else {
+                        BottomSheetEntryDecorator.None
+                    },
+                onClick = {
+                    onExportWindowChange(window)
+                    showExportWindowPicker = false
+                },
+            )
+        }
+    }
+
+    OpenCodeBottomSheet(
         visible = showExportSheet,
         title = "Export diagnostic logs",
         onDismissRequest = { showExportSheet = false },
@@ -366,7 +403,7 @@ fun DiagnosticLogsScreen(
     OpenCodeDialog(
         visible = showClearConfirmation,
         title = "Clear diagnostic logs?",
-        subtitle = "This removes the stored diagnostic window.",
+        subtitle = "This removes the stored diagnostic log.",
         primaryOption =
             OpenCodeDialogOption(
                 title = "Clear",

@@ -422,7 +422,7 @@ class SessionInfo(
     }
 
     private fun logI(message: String) {
-        runCatching { Log.i(TAG, message) }
+        DiagnosticLog.info(DiagnosticLogArea.Chat, message)
     }
 
     private fun logD(message: String) {
@@ -430,7 +430,7 @@ class SessionInfo(
     }
 
     private fun logW(message: String) {
-        runCatching { Log.w(TAG, message) }
+        DiagnosticLog.warning(DiagnosticLogArea.Chat, message)
     }
 
     fun clearTransientErrors() {

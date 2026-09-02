@@ -18,6 +18,7 @@ enum class DiagnosticLogArea(
     Permission("permission"),
     Question("question"),
     Session("session"),
+    Chat("chat"),
     Hang("hang"),
     Connection("connection"),
 }
@@ -43,7 +44,7 @@ data class DiagnosticLogEntry(
 data class DiagnosticLogSnapshot(
     val entries: List<DiagnosticLogEntry>,
     val droppedBySoftCap: Int,
-    val windowMinutes: Int,
+    val retainMinutes: Int,
     val softCap: Int,
 )
 
@@ -126,7 +127,7 @@ class DiagnosticLogBuffer(
             DiagnosticLogSnapshot(
                 entries = entries.toList(),
                 droppedBySoftCap = droppedBySoftCap,
-                windowMinutes = WINDOW_MINUTES,
+                retainMinutes = RETAIN_MINUTES,
                 softCap = SOFT_CAP,
             )
         }
@@ -148,20 +149,25 @@ class DiagnosticLogBuffer(
             }.get()
     }
 
-    fun exportJsonl(): String {
+    fun exportJsonl(window: DiagnosticLogExportWindow = DiagnosticLogExportWindow.DEFAULT): String {
         val snapshot = snapshot()
-        val lines = ArrayList<String>(snapshot.entries.size + 1)
+        val now = clockEpochMilliseconds()
+        val cutoff = now - window.milliseconds
+        val exported = snapshot.entries.filter { it.timestampEpochMilliseconds >= cutoff }
+        val lines = ArrayList<String>(exported.size + 1)
         lines +=
             json.encodeToString(
                 DiagnosticExportMeta(
-                    windowMinutes = snapshot.windowMinutes,
+                    windowMinutes = window.minutes,
+                    retainMinutes = snapshot.retainMinutes,
+                    exportWindowMinutes = window.minutes,
                     softCap = snapshot.softCap,
                     droppedBySoftCap = snapshot.droppedBySoftCap,
-                    entryCount = snapshot.entries.size,
-                    exportedAtEpochMilliseconds = clockEpochMilliseconds(),
+                    entryCount = exported.size,
+                    exportedAtEpochMilliseconds = now,
                 ),
             )
-        for (entry in snapshot.entries) {
+        for (entry in exported) {
             lines +=
                 json.encodeToString(
                     DiagnosticExportEntry(
@@ -178,7 +184,7 @@ class DiagnosticLogBuffer(
 
     private fun evictLocked(now: Long): Boolean {
         val beforeCount = entries.size
-        val cutoff = now - WINDOW_MILLISECONDS
+        val cutoff = now - RETAIN_MILLISECONDS
         while (entries.isNotEmpty() && entries.first().timestampEpochMilliseconds < cutoff) {
             entries.removeFirst()
         }
@@ -291,9 +297,9 @@ class DiagnosticLogBuffer(
     }
 
     companion object {
-        const val WINDOW_MINUTES = 5
-        const val WINDOW_MILLISECONDS: Long = WINDOW_MINUTES * 60L * 1_000L
-        const val SOFT_CAP = 2_000
+        const val RETAIN_MINUTES = 60
+        const val RETAIN_MILLISECONDS: Long = RETAIN_MINUTES * 60L * 1_000L
+        const val SOFT_CAP = 10_000
 
         private val json =
             Json {
@@ -344,6 +350,8 @@ private data class DiagnosticExportMeta(
     val type: String = "meta",
     val schemaVersion: Int = 1,
     val windowMinutes: Int,
+    val retainMinutes: Int,
+    val exportWindowMinutes: Int,
     val softCap: Int,
     val droppedBySoftCap: Int,
     val entryCount: Int,

@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.live
 
-import android.util.Log
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.coroutines.Job
@@ -440,7 +441,7 @@ class DefaultSessionReadyStore
             }
 
         private fun logI(message: String) {
-            runCatching { Log.i(TAG, message) }
+            DiagnosticLog.info(DiagnosticLogArea.Session, message)
         }
 
         private data class ReadyRecord(
@@ -455,7 +456,7 @@ class DefaultSessionReadyStore
         )
 
         companion object {
-            private const val TAG = "SessionReadyStore"
+
             const val READY_TTL_MS: Long = 24L * 60L * 60L * 1000L
         }
     }

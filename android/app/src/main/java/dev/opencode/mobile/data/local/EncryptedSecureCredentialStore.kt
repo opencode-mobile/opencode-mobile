@@ -2,11 +2,12 @@ package dev.opencode.mobile.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,7 +32,11 @@ class EncryptedSecureCredentialStore
                         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
                     )
                 }.getOrElse { error ->
-                    Log.w(TAG, "Unable to open encrypted credential store; degrading to empty", error)
+                    DiagnosticLog.warning(
+                        DiagnosticLogArea.Connection,
+                        "Unable to open encrypted credential store; degrading to empty",
+                        error,
+                    )
                     null
                 }
             cachedPreferences = built
@@ -62,6 +67,5 @@ class EncryptedSecureCredentialStore
 
         private companion object {
             const val PREFS_NAME = "secure_connection_credentials"
-            const val TAG = "EncryptedCredentialStore"
         }
     }

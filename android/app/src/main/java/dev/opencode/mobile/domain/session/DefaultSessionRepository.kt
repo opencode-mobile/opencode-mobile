@@ -1,7 +1,8 @@
 package dev.opencode.mobile.domain.session
 
-import android.util.Log
 import dev.opencode.mobile.data.remote.SessionsApi
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
@@ -82,10 +83,10 @@ class DefaultSessionRepository
                 val identity = ModelSelectionConnectionIdentity(profile.baseUrl, profile.username)
                 runCatching {
                     sessionModelSelectionStore?.deleteSessionEntries(identity, id)
-                }.onFailure { Log.w("SessionRepository", "delete model selection failed", it) }
+                }.onFailure { DiagnosticLog.warning(DiagnosticLogArea.Session, "delete model selection failed", it) }
                 runCatching {
                     composerDraftStore?.deleteSessionEntries(identity, id)
-                }.onFailure { Log.w("SessionRepository", "delete composer draft failed", it) }
+                }.onFailure { DiagnosticLog.warning(DiagnosticLogArea.Session, "delete composer draft failed", it) }
             }
             return deleted
         }

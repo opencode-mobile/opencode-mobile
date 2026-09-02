@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.message
 
-import android.util.Log
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.domain.textmate.NoOpTextMateLogbookRecorder
 import dev.opencode.mobile.domain.textmate.TextMateLogbookRecorder
@@ -427,12 +428,11 @@ class MessageContentPreparer
         }
 
         private fun logI(message: String) {
-            runCatching { Log.i(TAG, message) }
+            DiagnosticLog.info(DiagnosticLogArea.Chat, message)
         }
 
         companion object {
             private const val MAX_CACHE_ENTRIES = 32
-            private const val TAG = "MessageContentPreparer"
 
             /**
              * Legacy size gate still used by disposable streaming decoration and

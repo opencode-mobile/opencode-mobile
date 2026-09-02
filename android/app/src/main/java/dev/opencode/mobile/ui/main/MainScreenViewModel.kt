@@ -1,6 +1,5 @@
 package dev.opencode.mobile.ui.main
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -10,6 +9,8 @@ import dev.opencode.mobile.domain.command.ClientSlashMessageRef
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.FixedLiveUpdates
 import dev.opencode.mobile.domain.event.ForegroundEventStream
@@ -867,11 +868,11 @@ class MainScreenViewModel
         }
 
         private fun logI(message: String) {
-            runCatching { Log.i(TAG, message) }
+            DiagnosticLog.info(DiagnosticLogArea.Chat, message)
         }
 
         private fun logW(message: String) {
-            runCatching { Log.w(TAG, message) }
+            DiagnosticLog.warning(DiagnosticLogArea.Chat, message)
         }
 
         private suspend fun runHomeLoad(
@@ -1242,7 +1243,6 @@ class MainScreenViewModel
         }
 
         private companion object {
-            const val TAG = "MainScreenViewModel"
             const val EMPTY_TITLE_ERROR = "Enter a session title"
             const val ARCHIVE_ERROR = "Couldn't archive session."
             const val DELETE_ERROR = "Couldn't delete session."

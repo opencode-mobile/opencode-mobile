@@ -2,6 +2,8 @@ package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
 import dev.opencode.mobile.domain.command.ServerCommand
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.message.BlockDecorationCache
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
@@ -804,7 +806,7 @@ class SessionChatTimeline(
         }
 
     private fun logI(message: String) {
-        runCatching { Log.i(TAG, message) }
+        DiagnosticLog.info(DiagnosticLogArea.Chat, message)
     }
 
     private fun logD(message: String) {
@@ -815,7 +817,7 @@ class SessionChatTimeline(
         message: String,
         throwable: Throwable,
     ) {
-        runCatching { Log.e(TAG, message, throwable) }
+        DiagnosticLog.error(DiagnosticLogArea.Chat, message, throwable)
     }
 
     companion object {

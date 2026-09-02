@@ -1,11 +1,12 @@
 package dev.opencode.mobile.ui.changes
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.connection.ServerCapabilities
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
@@ -295,13 +296,11 @@ class ChangesViewModel(
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Throwable) {
-                    runCatching {
-                        Log.w(
-                            TAG,
-                            "load source=${activeSource.logValue()} session=${target.sessionId} directory=${target.worktree} files=0 result=failure durationMs=${System.currentTimeMillis() - startedAt}",
-                            error,
-                        )
-                    }
+                    DiagnosticLog.warning(
+                        DiagnosticLogArea.Chat,
+                        "load source=${activeSource.logValue()} session=${target.sessionId} directory=${target.worktree} files=0 result=failure durationMs=${System.currentTimeMillis() - startedAt}",
+                        error,
+                    )
                     _uiState.value =
                         if (preservedPhase != null) {
                             val restoredPhase =
@@ -376,12 +375,10 @@ class ChangesViewModel(
         result: String,
         startedAt: Long,
     ) {
-        runCatching {
-            Log.i(
-                TAG,
-                "load source=${source.logValue()} session=${target.sessionId} directory=${target.worktree} files=$fileCount result=$result durationMs=${System.currentTimeMillis() - startedAt}",
-            )
-        }
+        DiagnosticLog.info(
+            DiagnosticLogArea.Chat,
+            "load source=${source.logValue()} session=${target.sessionId} directory=${target.worktree} files=$fileCount result=$result durationMs=${System.currentTimeMillis() - startedAt}",
+        )
     }
 
     private fun logAction(
@@ -407,11 +404,7 @@ class ChangesViewModel(
         val messageId: String?,
         val initialSource: ChangeSource,
     )
-
-    private companion object {
-        const val TAG = "Changes"
-    }
-    }
+}
 
 private fun ChangeSource.logValue() = name.replace(Regex("([a-z])([A-Z])"), "$1-$2").lowercase()
 

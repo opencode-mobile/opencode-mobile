@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 import UIKit
 
 /// Open window that coalesces a burst of streaming tokens into one UI frame.
@@ -173,7 +172,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
 
                 if !previousByID.isEmpty {
                     OpenCodeLog.messageContent.info(
-                        "displayCache hit session=\(sessionID, privacy: .public) count=\(previousByID.count)"
+                        "displayCache hit session=\(sessionID) count=\(previousByID.count)"
                     )
                 }
 
@@ -478,7 +477,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                             // Format-first history is publishable; do not hold Ready on
                             // unprocessed plain while TextMate enrichment catches up.
                             OpenCodeLog.messageContent.info(
-                                "displayPublish reason=\(reason, privacy: .public) streaming=\(streaming) chars=\(streamingChars) sinceLastMs=\(meta.sinceLastPublishMs) generation=\(generation)"
+                                "displayPublish reason=\(reason) streaming=\(streaming) chars=\(streamingChars) sinceLastMs=\(meta.sinceLastPublishMs) generation=\(generation)"
                             )
                             emitDisplayMessages(prepared)
                             onCommitted?()
@@ -520,7 +519,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                                     lastPublishedAt = clock.now
                                 }
                                 OpenCodeLog.messageContent.info(
-                                    "displayPublish reason=\(reason, privacy: .public)-\(label, privacy: .public) generation=\(generation)"
+                                    "displayPublish reason=\(reason)-\(label) generation=\(generation)"
                                 )
                                 emitDisplayMessages(frame)
                             }
@@ -646,7 +645,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                                 lastPublishedAt = clock.now
                             }
                             OpenCodeLog.messageContent.info(
-                                "displayPublish reason=\(reason, privacy: .public) count=\(count) generation=\(generation)"
+                                "displayPublish reason=\(reason) count=\(count) generation=\(generation)"
                             )
                             emitDisplayMessages(snapshot)
                         }

@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 @MainActor
 final class SessionInfo {
@@ -51,7 +50,7 @@ final class SessionInfo {
 
     func startObserving() {
         stopObserving()
-        OpenCodeLog.sessionChat.info("session info observing session=\(self.state.sessionID, privacy: .public)")
+        OpenCodeLog.sessionChat.info("session info observing session=\(self.state.sessionID)")
         let boundSessionID = state.sessionID
         let eventStream = foregroundEventStream
         let eventAdapter = eventAdapter
@@ -69,7 +68,7 @@ final class SessionInfo {
                     }
                 if event.type != "message.part.delta" {
                     OpenCodeLog.sessionChat.debug(
-                        "SSE event observed session=\(boundSessionID, privacy: .public) type=\(event.type, privacy: .public) eventSession=\(event.sessionID ?? "-", privacy: .public) scope=\(scope, privacy: .public)"
+                        "SSE event observed session=\(boundSessionID) type=\(event.type) eventSession=\(event.sessionID ?? "-") scope=\(scope)"
                     )
                 }
                 let boundError =
@@ -141,7 +140,7 @@ final class SessionInfo {
         state.rename.isSubmitting = true
         state.rename.errorMessage = nil
         notifyChange()
-        OpenCodeLog.sessionChat.info("rename submit session=\(sessionID, privacy: .public)")
+        OpenCodeLog.sessionChat.info("rename submit session=\(sessionID)")
 
         renameTask?.cancel()
         renameTask = Task {
@@ -155,11 +154,11 @@ final class SessionInfo {
                 state.sessionTitle = session.title
                 state.rename = SessionRenameUiState()
                 notifyChange()
-                OpenCodeLog.sessionChat.info("rename success session=\(sessionID, privacy: .public)")
+                OpenCodeLog.sessionChat.info("rename success session=\(sessionID)")
             } catch {
                 guard !Task.isCancelled, state.sessionID == sessionID else { return }
                 OpenCodeLog.sessionChat.error(
-                    "rename failed session=\(sessionID, privacy: .public) message=\(error.localizedDescription, privacy: .public)"
+                    "rename failed session=\(sessionID) message=\(error.localizedDescription)"
                 )
                 state.rename.isSubmitting = false
                 state.rename.errorMessage = renameErrorMessage(error)
@@ -190,19 +189,19 @@ final class SessionInfo {
         state.isLifecycleActionInFlight = true
         state.lifecycleErrorMessage = nil
         notifyChange()
-        OpenCodeLog.sessionChat.info("archive start session=\(sessionID, privacy: .public)")
+        OpenCodeLog.sessionChat.info("archive start session=\(sessionID)")
         Task {
             do {
                 _ = try await sessionRepository.archiveSession(id: sessionID, directory: worktree)
                 guard state.sessionID == sessionID else { return }
-                OpenCodeLog.sessionChat.info("archive success session=\(sessionID, privacy: .public)")
+                OpenCodeLog.sessionChat.info("archive success session=\(sessionID)")
                 state.isLifecycleActionInFlight = false
                 state.shouldLeaveSession = true
                 notifyChange()
             } catch {
                 guard state.sessionID == sessionID else { return }
                 OpenCodeLog.sessionChat.info(
-                    "archive failure session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    "archive failure session=\(sessionID) error=\(error.localizedDescription)"
                 )
                 state.isLifecycleActionInFlight = false
                 state.lifecycleErrorMessage = Self.archiveError
@@ -217,24 +216,24 @@ final class SessionInfo {
         state.isLifecycleActionInFlight = true
         state.lifecycleErrorMessage = nil
         notifyChange()
-        OpenCodeLog.sessionChat.info("delete start session=\(sessionID, privacy: .public)")
+        OpenCodeLog.sessionChat.info("delete start session=\(sessionID)")
         Task {
             do {
                 let deleted = try await sessionRepository.deleteSession(id: sessionID, directory: worktree)
                 guard state.sessionID == sessionID else { return }
                 state.isLifecycleActionInFlight = false
                 if deleted {
-                    OpenCodeLog.sessionChat.info("delete success session=\(sessionID, privacy: .public)")
+                    OpenCodeLog.sessionChat.info("delete success session=\(sessionID)")
                     state.shouldLeaveSession = true
                 } else {
-                    OpenCodeLog.sessionChat.info("delete rejected session=\(sessionID, privacy: .public)")
+                    OpenCodeLog.sessionChat.info("delete rejected session=\(sessionID)")
                     state.lifecycleErrorMessage = Self.deleteError
                 }
                 notifyChange()
             } catch {
                 guard state.sessionID == sessionID else { return }
                 OpenCodeLog.sessionChat.info(
-                    "delete failure session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    "delete failure session=\(sessionID) error=\(error.localizedDescription)"
                 )
                 state.isLifecycleActionInFlight = false
                 state.lifecycleErrorMessage = Self.deleteError
@@ -268,7 +267,7 @@ final class SessionInfo {
             for await statuses in sessionStatusLiveStore.observeStatuses(directory: worktree) {
                 let status = statuses[state.sessionID]
                 OpenCodeLog.sessionChat.debug(
-                    "live status session=\(self.state.sessionID, privacy: .public) type=\(status?.raw["type"] ?? "-", privacy: .public)"
+                    "live status session=\(self.state.sessionID) type=\(status?.raw["type"] ?? "-")"
                 )
                 DiagnosticLog.debug(
                     .session,
@@ -299,7 +298,7 @@ final class SessionInfo {
     private func applyComposedConnectionStatus() {
         let chrome = liveUpdates.chrome
         OpenCodeLog.sessionChat.debug(
-            "live connection session=\(self.state.sessionID, privacy: .public) label=\(chrome.label.rawValue, privacy: .public) canMutate=\(chrome.canMutate)"
+            "live connection session=\(self.state.sessionID) label=\(chrome.label.rawValue) canMutate=\(chrome.canMutate)"
         )
         DiagnosticLog.debug(
             .session,
@@ -318,7 +317,7 @@ final class SessionInfo {
         state.sessionTitle = update.title
         notifyChange()
         OpenCodeLog.sessionChat.info(
-            "session.updated title session=\(self.state.sessionID, privacy: .public) title=\(update.title, privacy: .public)"
+            "session.updated title session=\(self.state.sessionID) title=\(update.title)"
         )
         DiagnosticLog.info(.session, "session.updated title session=\(state.sessionID)")
     }

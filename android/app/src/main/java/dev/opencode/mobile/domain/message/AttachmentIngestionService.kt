@@ -5,7 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
-import android.util.Log
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import java.io.ByteArrayOutputStream
 import java.util.Locale
 import java.util.UUID
@@ -24,9 +25,16 @@ class AttachmentIngestionService private constructor(
         uris.forEach { uri ->
             runCatching { ingest(uri) }
                 .onSuccess { attachments += it }
-                .onFailure { throwable -> errors += throwable.message ?: READ_ERROR }
+                .onFailure { throwable ->
+                    val message = throwable.message ?: READ_ERROR
+                    errors += message
+                    DiagnosticLog.warning(DiagnosticLogArea.Chat, "attachment rejected error=$message")
+                }
         }
-        logI("ingest accepted=${attachments.size} rejected=${errors.size}")
+        DiagnosticLog.info(
+            DiagnosticLogArea.Chat,
+            "attachments selected accepted=${attachments.size} rejected=${errors.size}",
+        )
         return AttachmentIngestionResult(attachments, errors)
     }
 
@@ -61,7 +69,7 @@ class AttachmentIngestionService private constructor(
             } else {
                 null
             }
-        logI("ingest accepted mime=${accepted.mime} bytes=${bytes.size}")
+        DiagnosticLog.info(DiagnosticLogArea.Chat, "attachment accepted mime=${accepted.mime} bytes=${bytes.size}")
         return Attachment(
             id = UUID.randomUUID().toString(),
             filename = filename.ifBlank { "Attachment" },
@@ -108,17 +116,12 @@ class AttachmentIngestionService private constructor(
         }
     }
 
-    private fun logI(message: String) {
-        runCatching { Log.i(TAG, message) }
-    }
-
     private data class AttachmentMetadata(val filename: String)
     private data class AcceptedType(val mime: String, val kind: AttachmentKind)
 
     companion object {
         const val UNSUPPORTED_ERROR = "Only images, PDFs, or text files can be attached here."
         const val READ_ERROR = "The attachment could not be read."
-        private const val TAG = "AttachmentIngestion"
         internal const val MAX_PREVIEW_BYTES = 128 * 1024
         private val IMAGE_MIMES = setOf("image/png", "image/jpeg", "image/gif", "image/webp")
         private val TEXT_EXTENSIONS =

@@ -1,38 +1,70 @@
 import Foundation
-import OSLog
 
 nonisolated enum OpenCodeLog {
-    static let api = Logger(subsystem: subsystem, category: "api")
-    static let sse = Logger(subsystem: subsystem, category: "sse")
-    static let sessionChat = Logger(subsystem: subsystem, category: "session-chat")
-    static let messageStore = Logger(subsystem: subsystem, category: "MessageStore")
-    static let changes = Logger(subsystem: subsystem, category: "changes")
-    static let messageContent = Logger(subsystem: subsystem, category: "MessageContentPreparer")
+    enum api {
+        static func info(_ message: String) { DiagnosticLog.info(.connection, message) }
+        static func warning(_ message: String) { DiagnosticLog.warning(.connection, message) }
+        static func error(_ message: String) { DiagnosticLog.error(.connection, message) }
+        static func debug(_ message: String) { DiagnosticLog.debug(.connection, message) }
+    }
 
-    private static let subsystem = "dev.opencode.mobile"
+    enum sse {
+        static func info(_ message: String) { DiagnosticLog.info(.sse, message) }
+        static func warning(_ message: String) { DiagnosticLog.warning(.sse, message) }
+        static func error(_ message: String) { DiagnosticLog.error(.sse, message) }
+        static func debug(_ message: String) { DiagnosticLog.debug(.sse, message) }
+    }
+
+    enum sessionChat {
+        static func info(_ message: String) { DiagnosticLog.info(.chat, message) }
+        static func warning(_ message: String) { DiagnosticLog.warning(.chat, message) }
+        static func error(_ message: String) { DiagnosticLog.error(.chat, message) }
+        static func debug(_ message: String) { DiagnosticLog.debug(.chat, message) }
+    }
+
+    enum messageStore {
+        static func info(_ message: String) { DiagnosticLog.info(.chat, message) }
+        static func warning(_ message: String) { DiagnosticLog.warning(.chat, message) }
+        static func error(_ message: String) { DiagnosticLog.error(.chat, message) }
+        static func debug(_ message: String) { DiagnosticLog.debug(.chat, message) }
+    }
+
+    enum changes {
+        static func info(_ message: String) { DiagnosticLog.info(.chat, message) }
+        static func warning(_ message: String) { DiagnosticLog.warning(.chat, message) }
+        static func error(_ message: String) { DiagnosticLog.error(.chat, message) }
+        static func debug(_ message: String) { DiagnosticLog.debug(.chat, message) }
+    }
+
+    enum messageContent {
+        static func info(_ message: String) { DiagnosticLog.info(.chat, message) }
+        static func warning(_ message: String) { DiagnosticLog.warning(.chat, message) }
+        static func error(_ message: String) { DiagnosticLog.error(.chat, message) }
+        static func debug(_ message: String) { DiagnosticLog.debug(.chat, message) }
+    }
 }
 
 nonisolated enum OpenCodeAPITrace {
     static func start(_ request: URLRequest) -> Date {
-        OpenCodeLog.api.info("API request \(method(request), privacy: .public) \(path(request), privacy: .public)")
+        OpenCodeLog.api.info("API request \(method(request)) \(path(request))")
         return Date()
     }
 
     static func finish(_ request: URLRequest, statusCode: Int, startedAt: Date) {
         OpenCodeLog.api.info(
-            "API response \(method(request), privacy: .public) \(path(request), privacy: .public) status=\(statusCode) durationMs=\(durationMs(since: startedAt))"
+            "API response \(method(request)) \(path(request)) status=\(statusCode) durationMs=\(durationMs(since: startedAt))"
         )
     }
 
     static func invalidResponse(_ request: URLRequest, startedAt: Date) {
         OpenCodeLog.api.warning(
-            "API invalid-response \(method(request), privacy: .public) \(path(request), privacy: .public) durationMs=\(durationMs(since: startedAt))"
+            "API invalid-response \(method(request)) \(path(request)) durationMs=\(durationMs(since: startedAt))"
         )
     }
 
     static func failure(_ request: URLRequest, error: Error, startedAt: Date) {
         OpenCodeLog.api.warning(
-            "API failure \(method(request), privacy: .public) \(path(request), privacy: .public) durationMs=\(durationMs(since: startedAt)) error=\(String(describing: error), privacy: .public)"
+            "API failure \(method(request)) \(path(request)) durationMs=\(durationMs(since: startedAt)) error=\(String(describing: error))"
         )
     }
 
