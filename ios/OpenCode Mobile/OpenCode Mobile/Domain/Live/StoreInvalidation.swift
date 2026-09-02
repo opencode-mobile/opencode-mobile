@@ -19,6 +19,11 @@ nonisolated struct StoreInvalidate: Sendable, Equatable {
 nonisolated final class StoreInvalidationBus: @unchecked Sendable {
     private let lock = NSLock()
     private var continuations: [UUID: AsyncStream<StoreInvalidate>.Continuation] = [:]
+    private let ackTimeoutMs: Int
+
+    init(ackTimeoutMs: Int = LiveStoreRefreshPolicy.invalidationAckTimeoutMs) {
+        self.ackTimeoutMs = ackTimeoutMs
+    }
 
     func events() -> AsyncStream<StoreInvalidate> {
         let id = UUID()
@@ -40,16 +45,24 @@ nonisolated final class StoreInvalidationBus: @unchecked Sendable {
     }
 
     func invalidateAndWait(key: String?, reason: String) async {
-        await withCheckedContinuation { continuation in
-            let resume = OnceResume(continuation)
-            lock.lock()
-            let subscribers = Array(continuations.values)
-            lock.unlock()
-            if subscribers.isEmpty {
-                resume.go()
-                return
+        lock.lock()
+        let hasSubscribers = !continuations.isEmpty
+        lock.unlock()
+        if !hasSubscribers { return }
+
+        let waiter = AckWaiter()
+        let timeoutMs = ackTimeoutMs
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                waiter.attach(OnceResume(continuation))
+                waiter.setTimeoutTask(Task {
+                    try? await Task.sleep(for: .milliseconds(timeoutMs))
+                    waiter.finish()
+                })
+                yield(StoreInvalidate(key: key, reason: reason, ack: { waiter.finish() }))
             }
-            yield(StoreInvalidate(key: key, reason: reason, ack: { resume.go() }))
+        } onCancel: {
+            waiter.finish()
         }
     }
 
@@ -60,6 +73,51 @@ nonisolated final class StoreInvalidationBus: @unchecked Sendable {
         for continuation in subscribers {
             continuation.yield(event)
         }
+    }
+}
+
+private final class AckWaiter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var resume: OnceResume?
+    private var timeoutTask: Task<Void, Never>?
+    private var finished = false
+
+    func attach(_ value: OnceResume) {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            value.go()
+            return
+        }
+        resume = value
+        lock.unlock()
+    }
+
+    func setTimeoutTask(_ task: Task<Void, Never>) {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            task.cancel()
+            return
+        }
+        timeoutTask = task
+        lock.unlock()
+    }
+
+    func finish() {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            return
+        }
+        finished = true
+        let pending = resume
+        let task = timeoutTask
+        resume = nil
+        timeoutTask = nil
+        lock.unlock()
+        task?.cancel()
+        pending?.go()
     }
 }
 

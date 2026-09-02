@@ -57,6 +57,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.Json
@@ -535,13 +536,58 @@ class MainScreenViewModelTest {
             val gate = CompletableDeferred<Unit>()
             sessionRepository.nextListGate = gate
             viewModel.pullToRefresh()
-            advanceUntilIdle()
+            // runCurrent, not advanceUntilIdle: the catch-up ack is bounded by
+            // LiveStoreRefreshPolicy.INVALIDATION_ACK_TIMEOUT_MS, and advancing the
+            // virtual clock would burn through that ceiling before the assert.
+            runCurrent()
 
             assertTrue(viewModel.isRefreshing.value)
 
             gate.complete(Unit)
             advanceUntilIdle()
 
+            assertFalse(viewModel.isRefreshing.value)
+        }
+
+    @Test
+    fun pullToRefresh_recoversFromAStalledCatchUp_andStillWorksAfterwards() =
+        runTest(testDispatcher) {
+            val sessionsByWorktree =
+                mutableMapOf(
+                    "/repo" to listOf(Session(id = "1", title = "Session 1", updatedAtEpochMs = 1L)),
+                )
+            val sessionRepository = FakeSessionRepository(sessionsByWorktree)
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree = sessionsByWorktree,
+                    sessionRepository = sessionRepository,
+                )
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value is MainScreenUiState.Loaded)
+
+            val stalled = CompletableDeferred<Unit>()
+            sessionRepository.nextListGate = stalled
+            viewModel.pullToRefresh()
+            advanceUntilIdle()
+
+            assertFalse(
+                "the spinner must drop once the ack ceiling passes; a never-acked invalidate " +
+                    "leaves isRefreshing latched true forever",
+                viewModel.isRefreshing.value,
+            )
+
+            stalled.complete(Unit)
+            advanceUntilIdle()
+            val listCallsBefore = sessionRepository.listSessionsCallCount
+            viewModel.pullToRefresh()
+            advanceUntilIdle()
+
+            assertTrue(
+                "a later pull-to-refresh must still reach the server; the isRefreshing guard " +
+                    "makes a lost ack a permanent no-op",
+                sessionRepository.listSessionsCallCount > listCallsBefore,
+            )
             assertFalse(viewModel.isRefreshing.value)
         }
 

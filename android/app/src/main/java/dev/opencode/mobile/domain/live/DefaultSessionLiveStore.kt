@@ -10,6 +10,8 @@ import dev.opencode.mobile.domain.event.catchUpReason
 import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.sessioncache.SessionCache
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
@@ -39,7 +41,7 @@ class DefaultSessionLiveStore
         private val sessionCache: SessionCache,
         private val worldSignals: WorldSignals = SilentWorldSignals,
     ) : SessionLiveStore {
-        private val cache = ConcurrentHashMap<String, SharedFlow<SessionListSnapshot>>()
+        private val cache = LiveStoreFlowCache<SessionListSnapshot>(liveStoreScope)
         private val invalidationBus = StoreInvalidationBus()
         private val activeDirectories = ConcurrentHashMap.newKeySet<String>()
 
@@ -63,12 +65,15 @@ class DefaultSessionLiveStore
         }
 
         override fun observeSessions(directory: String): Flow<SessionListSnapshot> =
-            cache.getOrPut(directory) { buildSharedFlow(directory) }
+            cache.observe(directory) { scope -> buildSharedFlow(directory, scope) }
 
-        private fun buildSharedFlow(directory: String): SharedFlow<SessionListSnapshot> =
+        private fun buildSharedFlow(
+            directory: String,
+            sharingScope: CoroutineScope,
+        ): SharedFlow<SessionListSnapshot> =
             buildSessionFlow(directory)
                 .shareIn(
-                    scope = liveStoreScope.coroutineScope,
+                    scope = sharingScope,
                     started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
                     replay = 1,
                 )
@@ -76,7 +81,7 @@ class DefaultSessionLiveStore
         private fun buildSessionFlow(directory: String): Flow<SessionListSnapshot> =
             channelFlow {
                 var stale = false
-                activeDirectories.add(directory)
+                val gate = LiveStoreRefreshGate()
                 try {
                     suspend fun refreshFromNetwork(
                         reason: String,
@@ -89,18 +94,38 @@ class DefaultSessionLiveStore
                             )
                             return false
                         }
-                        val sessions =
-                            runCatching { sessionRepository.listSessions(directory = directory) }.getOrNull()
-                                ?: return false
-                        sessionCache.rememberSessions(directory, sessions)
-                        send(SessionListSnapshot(sessions = sessions, isFromCache = false))
-                        stale = false
-                        DiagnosticLog.info(
-                            DiagnosticLogArea.Session,
-                            "sessionLiveStore refresh directory=$directory reason=$reason count=${sessions.size}",
-                        )
-                        return true
+                        val outcome =
+                            gate.refresh(
+                                load = {
+                                    runCatching { sessionRepository.listSessions(directory = directory) }.getOrNull()
+                                },
+                                commit = { sessions ->
+                                    sessionCache.rememberSessions(directory, sessions)
+                                    send(SessionListSnapshot(sessions = sessions, isFromCache = false))
+                                    stale = false
+                                    DiagnosticLog.info(
+                                        DiagnosticLogArea.Session,
+                                        "sessionLiveStore refresh directory=$directory reason=$reason " +
+                                            "count=${sessions.size}",
+                                    )
+                                },
+                            )
+                        return outcome == LiveStoreRefreshOutcome.COMMITTED
                     }
+
+                    launch(start = CoroutineStart.UNDISPATCHED) {
+                        invalidationBus.events
+                            .filter { it.key == null || it.key == directory }
+                            .collect { invalidation ->
+                                try {
+                                    stale = true
+                                    refreshFromNetwork(invalidation.reason, force = true)
+                                } finally {
+                                    invalidation.ack?.complete(Unit)
+                                }
+                            }
+                    }
+                    activeDirectories.add(directory)
 
                     sessionCache.seedSessions(directory)?.let { seeded ->
                         send(SessionListSnapshot(sessions = seeded, isFromCache = true))
@@ -118,15 +143,6 @@ class DefaultSessionLiveStore
                                 refreshFromNetwork(reason, force = false)
                             }
                         }
-                    }
-                    launch {
-                        invalidationBus.events
-                            .filter { it.key == null || it.key == directory }
-                            .collect {
-                                stale = true
-                                refreshFromNetwork(it.reason, force = true)
-                                it.ack?.complete(Unit)
-                            }
                     }
 
                     merge(

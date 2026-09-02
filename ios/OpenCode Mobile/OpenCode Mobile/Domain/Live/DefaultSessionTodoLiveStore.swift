@@ -34,6 +34,13 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
     }
 
     func observeTodos(sessionID: String, directory: String?) -> AsyncStream<[SessionTodo]> {
+        resubscribingLiveStream { [weak self] in
+            guard let self else { return AsyncStream { $0.finish() } }
+            return self.todoStream(sessionID: sessionID, directory: directory)
+        }
+    }
+
+    private func todoStream(sessionID: String, directory: String?) -> AsyncStream<[SessionTodo]> {
         let key = SessionKey(sessionID: sessionID, directory: directory ?? "")
         let handle = handles[key] ?? SessionHandle()
         handles[key] = handle
@@ -76,6 +83,8 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
                             }
                         }
                         group.addTask {
+                            var reconnectTask: Task<Void, Never>?
+                            defer { reconnectTask?.cancel() }
                             for await event in eventStream.events() {
                                 if event.type == "todo.updated", event.sessionID == key.sessionID {
                                     if let todos = adapter.todos(fromEventProperties: event.rawProperties) {
@@ -86,12 +95,20 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
                                     continue
                                 }
                                 if event.type == "stream.reconnected" || event.type == "server.connected" {
-                                    let isObserved = await MainActor.run {
-                                        store?.handles[key]?.continuations.isEmpty == false
-                                    }
-                                    guard isObserved else { continue }
-                                    if await store?.fetch(key: key, force: true, reason: event.type) == true {
-                                        stale.clear()
+                                    reconnectTask?.cancel()
+                                    let reason = event.type
+                                    reconnectTask = Task {
+                                        try? await Task.sleep(
+                                            for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs)
+                                        )
+                                        guard !Task.isCancelled else { return }
+                                        let isObserved = await MainActor.run {
+                                            store?.handles[key]?.continuations.isEmpty == false
+                                        }
+                                        guard isObserved else { return }
+                                        if await store?.fetch(key: key, force: true, reason: reason) == true {
+                                            stale.clear()
+                                        }
                                     }
                                 }
                             }
@@ -132,13 +149,13 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
     }
 
     func clearCache() {
-        for handle in handles.values {
-            handle.eventTask?.cancel()
-            for continuation in handle.continuations.values {
-                continuation.finish()
-            }
-        }
+        let stale = Array(handles.values)
         handles.removeAll()
+        for handle in stale {
+            handle.eventTask?.cancel()
+            handle.continuations.values.forEach { $0.finish() }
+            handle.continuations.removeAll()
+        }
     }
 
     private func removeContinuation(key: SessionKey, id: UUID) {

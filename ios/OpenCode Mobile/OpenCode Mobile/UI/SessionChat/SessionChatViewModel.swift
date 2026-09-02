@@ -818,13 +818,21 @@ final class SessionChatViewModel {
     }
 
     private func applyPermissionSnapshot(_ requests: [PermissionRequest]) async {
-        do {
-            let sessions = try await sessionRepository.listSessions(directory: worktree)
-            permissionSessions = sessions
+        let needsSessionFetch = requests.contains { request in
+            request.sessionID != sessionID
+                && !permissionSessions.contains { $0.id == request.sessionID }
+        }
+        if needsSessionFetch {
+            do {
+                let sessions = try await sessionRepository.listSessions(directory: worktree)
+                permissionSessions = sessions
+                permissionTopologyError = nil
+            } catch {
+                permissionSessions = []
+                permissionTopologyError = "Unable to refresh permission session tree"
+            }
+        } else {
             permissionTopologyError = nil
-        } catch {
-            permissionSessions = []
-            permissionTopologyError = "Unable to refresh permission session tree"
         }
         permissionRequests = Self.orderedPermissionRequests(
             rootSessionID: sessionID,
@@ -839,12 +847,20 @@ final class SessionChatViewModel {
     }
 
     private func applyQuestionSnapshot(_ requests: [QuestionRequest]) async {
-        do {
-            questionSessions = try await sessionRepository.listSessions(directory: worktree)
+        let needsSessionFetch = requests.contains { request in
+            request.sessionID != sessionID
+                && !questionSessions.contains { $0.id == request.sessionID }
+        }
+        if needsSessionFetch {
+            do {
+                questionSessions = try await sessionRepository.listSessions(directory: worktree)
+                questionTopologyError = nil
+            } catch {
+                questionSessions = []
+                questionTopologyError = "Unable to refresh question session tree"
+            }
+        } else {
             questionTopologyError = nil
-        } catch {
-            questionSessions = []
-            questionTopologyError = "Unable to refresh question session tree"
         }
         let previousVisibleID = questionRequests.first?.id
         questionRequests = dropOrphanQuestionRequests(

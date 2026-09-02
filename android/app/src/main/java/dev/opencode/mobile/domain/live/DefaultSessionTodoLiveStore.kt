@@ -10,6 +10,7 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionTodo
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -131,20 +132,31 @@ class DefaultSessionTodoLiveStore
                             }
                         }
                     }
-                    eventStream.events.collect { event ->
-                        if (state.observerCount <= 0) return@collect
-                        when {
-                            event.type == "todo.updated" && event.sessionId == key.sessionId -> {
-                                adapter.toTodosFromEventProperties(event.rawProperties)?.let { todos ->
-                                    replace(state, todos, markCache = true)
+                    var reconnectRefresh: Job? = null
+                    try {
+                        eventStream.events.collect { event ->
+                            if (state.observerCount <= 0) return@collect
+                            when {
+                                event.type == "todo.updated" && event.sessionId == key.sessionId -> {
+                                    adapter.toTodosFromEventProperties(event.rawProperties)?.let { todos ->
+                                        replace(state, todos, markCache = true)
+                                    }
                                 }
-                            }
-                            event.type == "stream.reconnected" || event.type == "server.connected" -> {
-                                if (fetch(key, state, force = true)) {
-                                    stale = false
+                                event.type == "stream.reconnected" || event.type == "server.connected" -> {
+                                    reconnectRefresh?.cancel()
+                                    reconnectRefresh =
+                                        launch {
+                                            delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
+                                            if (state.observerCount <= 0) return@launch
+                                            if (fetch(key, state, force = true)) {
+                                                stale = false
+                                            }
+                                        }
                                 }
                             }
                         }
+                    } finally {
+                        reconnectRefresh?.cancel()
                     }
                 }
         }

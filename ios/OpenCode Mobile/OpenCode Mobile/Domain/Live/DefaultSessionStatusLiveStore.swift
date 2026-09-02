@@ -6,7 +6,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     private let eventStream: any ForegroundEventStream
     private let eventAdapter: EventDomainAdapter
     private let worldSignals: any WorldSignals
-    private let invalidationBus = StoreInvalidationBus()
+    private let invalidationBus: StoreInvalidationBus
     private let activeDirectories = ActiveDirectorySet()
     private let pendingBusy = PendingBusySet()
     private let mutationBus = StatusMutationBus()
@@ -16,42 +16,21 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         sessionRepository: any SessionRepository,
         eventStream: any ForegroundEventStream,
         eventAdapter: EventDomainAdapter = EventDomainAdapter(),
-        worldSignals: any WorldSignals = SilentWorldSignals.shared
+        worldSignals: any WorldSignals = SilentWorldSignals.shared,
+        invalidationAckTimeoutMs: Int = LiveStoreRefreshPolicy.invalidationAckTimeoutMs
     ) {
         self.sessionRepository = sessionRepository
         self.eventStream = eventStream
         self.eventAdapter = eventAdapter
         self.worldSignals = worldSignals
+        invalidationBus = StoreInvalidationBus(ackTimeoutMs: invalidationAckTimeoutMs)
     }
 
     func observeStatuses(directory: String) -> AsyncStream<[String: SessionStatus]> {
-        if cache[directory] == nil {
-            let sessionRepository = sessionRepository
-            let eventStream = eventStream
-            let eventAdapter = eventAdapter
-            let worldSignals = worldSignals
-            let invalidationBus = invalidationBus
-            let activeDirectories = activeDirectories
-            let pendingBusy = pendingBusy
-            let mutationBus = mutationBus
-            cache[directory] = SharedLiveObservation { yield in
-                Task.detached {
-                    await Self.runStatusLoop(
-                        directory: directory,
-                        sessionRepository: sessionRepository,
-                        eventStream: eventStream,
-                        eventAdapter: eventAdapter,
-                        worldSignals: worldSignals,
-                        invalidationBus: invalidationBus,
-                        activeDirectories: activeDirectories,
-                        pendingBusy: pendingBusy,
-                        mutationBus: mutationBus,
-                        yield: yield
-                    )
-                }
-            }
+        resubscribingLiveStream { [weak self] in
+            guard let self else { return AsyncStream { $0.finish() } }
+            return self.observation(for: directory).stream()
         }
-        return cache[directory]!.stream()
     }
 
     func invalidate(directory: String?) async {
@@ -90,8 +69,42 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     }
 
     func clearCache() {
+        let stale = Array(cache.values)
         cache.removeAll()
         pendingBusy.removeAll()
+        stale.forEach { $0.finish() }
+    }
+
+    private func observation(for directory: String) -> SharedLiveObservation<[String: SessionStatus]> {
+        if let existing = cache[directory], !existing.isTerminated {
+            return existing
+        }
+        let sessionRepository = sessionRepository
+        let eventStream = eventStream
+        let eventAdapter = eventAdapter
+        let worldSignals = worldSignals
+        let invalidationBus = invalidationBus
+        let activeDirectories = activeDirectories
+        let pendingBusy = pendingBusy
+        let mutationBus = mutationBus
+        let observation = SharedLiveObservation<[String: SessionStatus]> { yield in
+            Task.detached {
+                await Self.runStatusLoop(
+                    directory: directory,
+                    sessionRepository: sessionRepository,
+                    eventStream: eventStream,
+                    eventAdapter: eventAdapter,
+                    worldSignals: worldSignals,
+                    invalidationBus: invalidationBus,
+                    activeDirectories: activeDirectories,
+                    pendingBusy: pendingBusy,
+                    mutationBus: mutationBus,
+                    yield: yield
+                )
+            }
+        }
+        cache[directory] = observation
+        return observation
     }
 
     private nonisolated static func runStatusLoop(
@@ -106,13 +119,15 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         mutationBus: StatusMutationBus,
         yield: @escaping @Sendable ([String: SessionStatus]) -> Void
     ) async {
+        let invalidations = invalidationBus.events()
         activeDirectories.insert(directory)
         defer { activeDirectories.remove(directory) }
         let serverBox = StatusBox()
         let currentBox = StatusBox()
         let stale = StaleBit()
+        let gate = LiveStoreRefreshGate()
 
-        func overlayPending(
+        @Sendable func overlayPending(
             _ base: [String: SessionStatus],
             confirmFrom: [String: SessionStatus]? = nil
         ) -> [String: SessionStatus] {
@@ -129,14 +144,14 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             return result
         }
 
-        func emitOverlay(_ base: [String: SessionStatus]) {
+        @Sendable func emitOverlay(_ base: [String: SessionStatus]) {
             let next = overlayPending(base, confirmFrom: [:])
             guard next != currentBox.snapshot() else { return }
             currentBox.replace(next)
             yield(next)
         }
 
-        func commitLoaded(_ loaded: [String: SessionStatus], emptyActiveGuard: Bool = false) {
+        @Sendable func commitLoaded(_ loaded: [String: SessionStatus], emptyActiveGuard: Bool = false) {
             // Empty active maps are a between-step gap on v2, not idle.
             // True idle is session.idle / execution.*. Overlay pending
             // onto the kept server map; do not skip overlay because
@@ -154,24 +169,43 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             yield(next)
         }
 
-        func reloadFromServer(reason: String, force: Bool) async -> [String: SessionStatus]? {
+        @discardableResult
+        @Sendable func reloadFromServer(
+            reason: String,
+            force: Bool,
+            emptyActiveGuard: Bool = false
+        ) async -> LiveStoreRefreshOutcome {
             if !force, !stale.isSet {
                 DiagnosticLog.info(
                     .session,
                     "statusLiveStore skip directory=\(directory) reason=\(reason)"
                 )
-                return nil
+                return .failed
             }
-            guard let loaded = await loadStatuses(
-                directory: directory,
-                sessionRepository: sessionRepository
-            ) else { return nil }
-            stale.clear()
-            DiagnosticLog.info(
-                .session,
-                "statusLiveStore refresh directory=\(directory) reason=\(reason)"
+            let outcome = await gate.refresh(
+                load: { () async -> [String: SessionStatus]? in
+                    await Self.loadStatuses(
+                        directory: directory,
+                        sessionRepository: sessionRepository
+                    )
+                },
+                commit: { loaded in
+                    stale.clear()
+                    DiagnosticLog.info(
+                        .session,
+                        "statusLiveStore refresh directory=\(directory) reason=\(reason)"
+                    )
+                    commitLoaded(loaded, emptyActiveGuard: emptyActiveGuard)
+                }
             )
-            return loaded
+            if outcome == .discarded {
+                DiagnosticLog.info(
+                    .session,
+                    "statusLiveStore discard directory=\(directory) reason=\(reason) "
+                        + "cause=superseded-by-live-patch"
+                )
+            }
+            return outcome
         }
 
         let mutationTask = Task {
@@ -189,18 +223,14 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                     var server = serverBox.snapshot()
                     server.removeValue(forKey: sessionID)
                     serverBox.replace(server)
+                    await gate.bump()
                     emitOverlay(server)
                 }
             }
         }
         defer { mutationTask.cancel() }
 
-        if let statuses = await reloadFromServer(
-            reason: StoreRefreshReason.initialSubscribe,
-            force: true
-        ) {
-            commitLoaded(statuses)
-        }
+        await reloadFromServer(reason: StoreRefreshReason.initialSubscribe, force: true)
 
         await withTaskGroup(of: Void.self) { group in
             group.addTask {
@@ -210,22 +240,16 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         continue
                     }
                     guard let reason = signal.catchUpReason else { continue }
-                    if let statuses = await reloadFromServer(reason: reason, force: false) {
-                        commitLoaded(statuses)
-                    }
+                    await reloadFromServer(reason: reason, force: false)
                 }
             }
             group.addTask {
-                for await invalidation in invalidationBus.events() {
+                for await invalidation in invalidations {
                     if let key = invalidation.key, key != directory { continue }
+                    let ack = invalidation.ack
+                    defer { ack?() }
                     stale.mark()
-                    if let statuses = await reloadFromServer(
-                        reason: invalidation.reason,
-                        force: true
-                    ) {
-                        commitLoaded(statuses)
-                    }
-                    invalidation.ack?()
+                    await reloadFromServer(reason: invalidation.reason, force: true)
                 }
             }
             group.addTask {
@@ -238,9 +262,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         reconnectTask = Task {
                             try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs))
                             guard !Task.isCancelled else { return }
-                            if let statuses = await reloadFromServer(reason: reason, force: true) {
-                                commitLoaded(statuses)
-                            }
+                            await reloadFromServer(reason: reason, force: true)
                         }
                         continue
                     }
@@ -250,9 +272,11 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         reconnectTask = Task {
                             try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs))
                             guard !Task.isCancelled else { return }
-                            if let statuses = await reloadFromServer(reason: reason, force: true) {
-                                commitLoaded(statuses, emptyActiveGuard: true)
-                            }
+                            await reloadFromServer(
+                                reason: reason,
+                                force: true,
+                                emptyActiveGuard: true
+                            )
                         }
                         continue
                     }
@@ -266,6 +290,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         pendingBusy: pendingBusy
                     ) {
                         serverBox.replace(nextServer)
+                        await gate.bump()
                     }
                     emitOverlay(serverBox.snapshot())
                 }

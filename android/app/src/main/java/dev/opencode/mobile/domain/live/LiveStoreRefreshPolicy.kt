@@ -6,6 +6,7 @@ internal object LiveStoreRefreshPolicy {
     const val STATUS_DEBOUNCE_MS = 300L
     const val WORKING_POLL_INTERVAL_MS = 10_000L
     const val SUBSCRIBER_STOP_TIMEOUT_MS = 5_000L
+    const val INVALIDATION_ACK_TIMEOUT_MS = 15_000L
 }
 
 internal data class MessageObservationKey(

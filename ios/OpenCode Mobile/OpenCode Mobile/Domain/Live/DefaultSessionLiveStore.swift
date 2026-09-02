@@ -6,7 +6,7 @@ final class DefaultSessionLiveStore: SessionLiveStore {
     private let eventStream: any ForegroundEventStream
     private let sessionCache: any SessionCache
     private let worldSignals: any WorldSignals
-    private let invalidationBus = StoreInvalidationBus()
+    private let invalidationBus: StoreInvalidationBus
     private let activeDirectories = ActiveDirectorySet()
     private var cache: [String: SharedLiveObservation<SessionListSnapshot>] = [:]
 
@@ -14,38 +14,21 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         sessionRepository: any SessionRepository,
         eventStream: any ForegroundEventStream,
         sessionCache: any SessionCache,
-        worldSignals: any WorldSignals = SilentWorldSignals.shared
+        worldSignals: any WorldSignals = SilentWorldSignals.shared,
+        invalidationAckTimeoutMs: Int = LiveStoreRefreshPolicy.invalidationAckTimeoutMs
     ) {
         self.sessionRepository = sessionRepository
         self.eventStream = eventStream
         self.sessionCache = sessionCache
         self.worldSignals = worldSignals
+        invalidationBus = StoreInvalidationBus(ackTimeoutMs: invalidationAckTimeoutMs)
     }
 
     func observeSessions(directory: String) -> AsyncStream<SessionListSnapshot> {
-        if cache[directory] == nil {
-            let sessionRepository = sessionRepository
-            let eventStream = eventStream
-            let sessionCache = sessionCache
-            let worldSignals = worldSignals
-            let invalidationBus = invalidationBus
-            let activeDirectories = activeDirectories
-            cache[directory] = SharedLiveObservation { yield in
-                Task.detached {
-                    await Self.runSessionLoop(
-                        directory: directory,
-                        sessionRepository: sessionRepository,
-                        eventStream: eventStream,
-                        sessionCache: sessionCache,
-                        worldSignals: worldSignals,
-                        invalidationBus: invalidationBus,
-                        activeDirectories: activeDirectories,
-                        yield: yield
-                    )
-                }
-            }
+        resubscribingLiveStream { [weak self] in
+            guard let self else { return AsyncStream { $0.finish() } }
+            return self.observation(for: directory).stream()
         }
-        return cache[directory]!.stream()
     }
 
     func invalidate(directory: String?) async {
@@ -69,7 +52,37 @@ final class DefaultSessionLiveStore: SessionLiveStore {
     }
 
     func clearCache() {
+        let stale = Array(cache.values)
         cache.removeAll()
+        stale.forEach { $0.finish() }
+    }
+
+    private func observation(for directory: String) -> SharedLiveObservation<SessionListSnapshot> {
+        if let existing = cache[directory], !existing.isTerminated {
+            return existing
+        }
+        let sessionRepository = sessionRepository
+        let eventStream = eventStream
+        let sessionCache = sessionCache
+        let worldSignals = worldSignals
+        let invalidationBus = invalidationBus
+        let activeDirectories = activeDirectories
+        let observation = SharedLiveObservation<SessionListSnapshot> { yield in
+            Task.detached {
+                await Self.runSessionLoop(
+                    directory: directory,
+                    sessionRepository: sessionRepository,
+                    eventStream: eventStream,
+                    sessionCache: sessionCache,
+                    worldSignals: worldSignals,
+                    invalidationBus: invalidationBus,
+                    activeDirectories: activeDirectories,
+                    yield: yield
+                )
+            }
+        }
+        cache[directory] = observation
+        return observation
     }
 
     private nonisolated static func runSessionLoop(
@@ -82,11 +95,13 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         activeDirectories: ActiveDirectorySet,
         yield: @escaping @Sendable (SessionListSnapshot) -> Void
     ) async {
+        let invalidations = invalidationBus.events()
         activeDirectories.insert(directory)
         defer { activeDirectories.remove(directory) }
         let stale = StaleBit()
+        let gate = LiveStoreRefreshGate()
 
-        func refreshFromNetwork(reason: String, force: Bool) async -> Bool {
+        @Sendable func refreshFromNetwork(reason: String, force: Bool) async -> Bool {
             if !force, !stale.isSet {
                 DiagnosticLog.info(
                     .session,
@@ -94,18 +109,25 @@ final class DefaultSessionLiveStore: SessionLiveStore {
                 )
                 return false
             }
-            guard let sessions = await loadSessions(
-                directory: directory,
-                sessionRepository: sessionRepository
-            ) else { return false }
-            await sessionCache.rememberSessions(worktree: directory, sessions: sessions)
-            yield(SessionListSnapshot(sessions: sessions, isFromCache: false))
-            stale.clear()
-            DiagnosticLog.info(
-                .session,
-                "sessionLiveStore refresh directory=\(directory) reason=\(reason) count=\(sessions.count)"
+            let outcome = await gate.refresh(
+                load: { () async -> [Session]? in
+                    await Self.loadSessions(
+                        directory: directory,
+                        sessionRepository: sessionRepository
+                    )
+                },
+                commit: { sessions in
+                    await sessionCache.rememberSessions(worktree: directory, sessions: sessions)
+                    yield(SessionListSnapshot(sessions: sessions, isFromCache: false))
+                    stale.clear()
+                    DiagnosticLog.info(
+                        .session,
+                        "sessionLiveStore refresh directory=\(directory) reason=\(reason) "
+                            + "count=\(sessions.count)"
+                    )
+                }
             )
-            return true
+            return outcome == .committed
         }
 
         if let seeded = await sessionCache.seedSessions(worktree: directory) {
@@ -126,11 +148,12 @@ final class DefaultSessionLiveStore: SessionLiveStore {
                 }
             }
             group.addTask {
-                for await invalidation in invalidationBus.events() {
+                for await invalidation in invalidations {
                     if let key = invalidation.key, key != directory { continue }
+                    let ack = invalidation.ack
+                    defer { ack?() }
                     stale.mark()
                     _ = await refreshFromNetwork(reason: invalidation.reason, force: true)
-                    invalidation.ack?()
                 }
             }
             group.addTask {

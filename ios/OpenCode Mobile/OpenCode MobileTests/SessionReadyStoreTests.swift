@@ -331,6 +331,52 @@ final class SessionReadyStoreTests: XCTestCase {
         XCTAssertTrue(reloaded.latest.isEmpty)
     }
 
+    func testProfileSwitch_statusStoreTearsDownStreams_readyStoreResubscribes() async {
+        let statusStore = FakeReadyStatusStore()
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionReadyStore(sessionStatusLiveStore: statusStore, eventStream: eventStream)
+        let ready = ReadyCollector(store: store, directory: "/repo")
+        await ready.waitForSubscription()
+        store.bindProfile(profileID: "profile-a")
+        await settle()
+
+        store.bindProfile(profileID: "profile-b")
+        statusStore.clearCache()
+        await settle()
+
+        store.notifyPromptSent(sessionID: "ses-1", directory: "/repo")
+        statusStore.emit(directory: "/repo", statuses: ["ses-1": status(type: "busy")])
+        await settle()
+        statusStore.emit(directory: "/repo", statuses: [:])
+        await ready.waitUntil { $0.contains("ses-1") }
+        ready.cancel()
+
+        XCTAssertTrue(ready.latest.contains("ses-1"))
+        XCTAssertEqual(statusStore.liveSubscriberCount(directory: "/repo"), 1)
+    }
+
+    func testClearCache_statusStoreTearsDownStreams_readyStoreResubscribes() async {
+        let statusStore = FakeReadyStatusStore()
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionReadyStore(sessionStatusLiveStore: statusStore, eventStream: eventStream)
+        let ready = ReadyCollector(store: store, directory: "/repo")
+        await ready.waitForSubscription()
+
+        statusStore.clearCache()
+        store.clearCache()
+        await settle()
+
+        store.notifyPromptSent(sessionID: "ses-1", directory: "/repo")
+        statusStore.emit(directory: "/repo", statuses: ["ses-1": status(type: "busy")])
+        await settle()
+        statusStore.emit(directory: "/repo", statuses: [:])
+        await ready.waitUntil { $0.contains("ses-1") }
+        ready.cancel()
+
+        XCTAssertTrue(ready.latest.contains("ses-1"))
+        XCTAssertEqual(statusStore.liveSubscriberCount(directory: "/repo"), 1)
+    }
+
     private func status(type: String) -> SessionStatus {
         SessionStatus(sessionID: "ses-1", raw: ["type": type])
     }
@@ -385,6 +431,10 @@ private final class FakeReadyStatusStore: SessionStatusLiveStore {
         continuations[directory]?.values.forEach { $0.yield(statuses) }
     }
 
+    func liveSubscriberCount(directory: String) -> Int {
+        continuations[directory]?.count ?? 0
+    }
+
     func observeStatuses(directory: String) -> AsyncStream<[String: SessionStatus]> {
         AsyncStream { continuation in
             let id = UUID()
@@ -400,5 +450,10 @@ private final class FakeReadyStatusStore: SessionStatusLiveStore {
         }
     }
 
-    func clearCache() {}
+    func clearCache() {
+        let live = continuations
+        continuations.removeAll()
+        latest.removeAll()
+        live.values.forEach { bucket in bucket.values.forEach { $0.finish() } }
+    }
 }

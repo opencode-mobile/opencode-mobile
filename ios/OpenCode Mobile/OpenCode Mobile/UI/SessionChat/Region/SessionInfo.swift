@@ -261,22 +261,32 @@ final class SessionInfo {
         return min(max(Double(inputTokens) / Double(contextLimit), 0), 1)
     }
 
+    private static let statusResubscribeLimit = 16
+
     private func observeStatuses() async {
-        for await statuses in sessionStatusLiveStore.observeStatuses(directory: worktree) {
-            let status = statuses[state.sessionID]
-            OpenCodeLog.sessionChat.debug(
-                "live status session=\(self.state.sessionID, privacy: .public) type=\(status?.raw["type"] ?? "-", privacy: .public)"
-            )
-            DiagnosticLog.debug(
-                .session,
-                "live status session=\(state.sessionID) type=\(status?.raw["type"] ?? "-")"
-            )
-            state.applyStatus(
-                authoritative: status.flatMap(eventAdapter.statusLabel(from:)),
-                hasResolved: true
-            )
-            notifyChange()
+        for _ in 0...Self.statusResubscribeLimit {
+            for await statuses in sessionStatusLiveStore.observeStatuses(directory: worktree) {
+                let status = statuses[state.sessionID]
+                OpenCodeLog.sessionChat.debug(
+                    "live status session=\(self.state.sessionID, privacy: .public) type=\(status?.raw["type"] ?? "-", privacy: .public)"
+                )
+                DiagnosticLog.debug(
+                    .session,
+                    "live status session=\(state.sessionID) type=\(status?.raw["type"] ?? "-")"
+                )
+                state.applyStatus(
+                    authoritative: status.flatMap(eventAdapter.statusLabel(from:)),
+                    hasResolved: true
+                )
+                notifyChange()
+            }
+            if Task.isCancelled { return }
+            await Task.yield()
         }
+        DiagnosticLog.warning(
+            .session,
+            "live status gave up resubscribing session=\(state.sessionID) after \(Self.statusResubscribeLimit) rounds"
+        )
     }
 
     private func observeConnectionState() async {

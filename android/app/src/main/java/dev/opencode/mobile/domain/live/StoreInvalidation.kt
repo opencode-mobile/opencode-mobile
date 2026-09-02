@@ -4,6 +4,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.withTimeoutOrNull
 
 data class StoreInvalidate(
     val key: String?,
@@ -11,7 +12,9 @@ data class StoreInvalidate(
     val ack: CompletableDeferred<Unit>? = null,
 )
 
-class StoreInvalidationBus {
+class StoreInvalidationBus(
+    private val ackTimeoutMs: Long = LiveStoreRefreshPolicy.INVALIDATION_ACK_TIMEOUT_MS,
+) {
     private val _events = MutableSharedFlow<StoreInvalidate>(extraBufferCapacity = 32)
     val events: SharedFlow<StoreInvalidate> = _events.asSharedFlow()
 
@@ -28,7 +31,9 @@ class StoreInvalidationBus {
     ) {
         if (_events.subscriptionCount.value == 0) return
         val ack = CompletableDeferred<Unit>()
-        _events.emit(StoreInvalidate(key = key, reason = reason, ack = ack))
-        ack.await()
+        withTimeoutOrNull(ackTimeoutMs) {
+            _events.emit(StoreInvalidate(key = key, reason = reason, ack = ack))
+            ack.await()
+        }
     }
 }

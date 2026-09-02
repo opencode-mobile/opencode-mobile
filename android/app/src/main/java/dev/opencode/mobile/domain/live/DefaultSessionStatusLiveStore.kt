@@ -12,6 +12,8 @@ import dev.opencode.mobile.domain.event.catchUpReason
 import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -40,7 +42,7 @@ class DefaultSessionStatusLiveStore
         private val eventDomainAdapter: EventDomainAdapter,
         private val worldSignals: WorldSignals = SilentWorldSignals,
     ) : SessionStatusLiveStore {
-        private val cache = ConcurrentHashMap<String, SharedFlow<Map<String, SessionStatus>>>()
+        private val cache = LiveStoreFlowCache<Map<String, SessionStatus>>(liveStoreScope)
         private val invalidationBus = StoreInvalidationBus()
         private val activeDirectories = ConcurrentHashMap.newKeySet<String>()
         private val pendingBusy = ConcurrentHashMap<String, MutableSet<String>>()
@@ -92,12 +94,17 @@ class DefaultSessionStatusLiveStore
         }
 
         override fun observeStatuses(directory: String): Flow<Map<String, SessionStatus>> =
-            cache.getOrPut(directory) { buildSharedFlow(directory) }
+            cache.observe(directory) { scope -> buildSharedFlow(directory, scope) }
 
-        private fun buildSharedFlow(directory: String): SharedFlow<Map<String, SessionStatus>> =
+        internal fun activeUpstreamCount(): Int = cache.activeEntryCount()
+
+        private fun buildSharedFlow(
+            directory: String,
+            sharingScope: CoroutineScope,
+        ): SharedFlow<Map<String, SessionStatus>> =
             buildStatusFlow(directory)
                 .shareIn(
-                    scope = liveStoreScope.coroutineScope,
+                    scope = sharingScope,
                     started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
                     replay = 1,
                 )
@@ -108,7 +115,7 @@ class DefaultSessionStatusLiveStore
                 var current = emptyMap<String, SessionStatus>()
                 var reconnectRefresh: Job? = null
                 var stale = false
-                activeDirectories.add(directory)
+                val gate = LiveStoreRefreshGate()
                 try {
                     suspend fun emitOverlay(base: Map<String, SessionStatus>) {
                         val next = overlayPending(directory, base, confirmFrom = emptyMap())
@@ -138,26 +145,41 @@ class DefaultSessionStatusLiveStore
                     suspend fun reloadFromServer(
                         reason: String,
                         force: Boolean,
-                    ): Map<String, SessionStatus>? {
+                        emptyActiveGuard: Boolean = false,
+                    ): LiveStoreRefreshOutcome {
                         if (!force && !stale) {
                             DiagnosticLog.info(
                                 DiagnosticLogArea.Session,
                                 "statusLiveStore skip directory=$directory reason=$reason",
                             )
-                            return null
+                            return LiveStoreRefreshOutcome.FAILED
                         }
-                        val loaded =
-                            runCatching {
-                                sessionRepository
-                                    .getAllSessionStatuses(directory = directory)
-                                    .associateBy(SessionStatus::sessionId)
-                            }.getOrNull() ?: return null
-                        stale = false
-                        DiagnosticLog.info(
-                            DiagnosticLogArea.Session,
-                            "statusLiveStore refresh directory=$directory reason=$reason",
-                        )
-                        return loaded
+                        val outcome =
+                            gate.refresh(
+                                load = {
+                                    runCatching {
+                                        sessionRepository
+                                            .getAllSessionStatuses(directory = directory)
+                                            .associateBy(SessionStatus::sessionId)
+                                    }.getOrNull()
+                                },
+                                commit = { loaded ->
+                                    stale = false
+                                    DiagnosticLog.info(
+                                        DiagnosticLogArea.Session,
+                                        "statusLiveStore refresh directory=$directory reason=$reason",
+                                    )
+                                    commitLoaded(loaded, emptyActiveGuard)
+                                },
+                            )
+                        if (outcome == LiveStoreRefreshOutcome.DISCARDED) {
+                            DiagnosticLog.info(
+                                DiagnosticLogArea.Session,
+                                "statusLiveStore discard directory=$directory reason=$reason " +
+                                    "cause=superseded-by-live-patch",
+                            )
+                        }
+                        return outcome
                     }
 
                     launch {
@@ -176,6 +198,7 @@ class DefaultSessionStatusLiveStore
                                     }
                                     is StatusMutation.MarkIdle -> {
                                         server = server - mutation.sessionId
+                                        gate.bump()
                                         emitOverlay(server)
                                     }
                                 }
@@ -183,9 +206,21 @@ class DefaultSessionStatusLiveStore
                     }
                     yield()
 
-                    reloadFromServer(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)?.let {
-                        commitLoaded(it)
+                    launch(start = CoroutineStart.UNDISPATCHED) {
+                        invalidationBus.events
+                            .filter { it.key == null || it.key == directory }
+                            .collect { invalidation ->
+                                try {
+                                    stale = true
+                                    reloadFromServer(invalidation.reason, force = true)
+                                } finally {
+                                    invalidation.ack?.complete(Unit)
+                                }
+                            }
                     }
+                    activeDirectories.add(directory)
+
+                    reloadFromServer(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)
 
                     launch {
                         worldSignals.signals.collect { signal ->
@@ -194,21 +229,8 @@ class DefaultSessionStatusLiveStore
                                 return@collect
                             }
                             val reason = signal.catchUpReason() ?: return@collect
-                            reloadFromServer(reason, force = false)?.let { statuses ->
-                                commitLoaded(statuses)
-                            }
+                            reloadFromServer(reason, force = false)
                         }
-                    }
-                    launch {
-                        invalidationBus.events
-                            .filter { it.key == null || it.key == directory }
-                            .collect {
-                                stale = true
-                                reloadFromServer(it.reason, force = true)?.let { statuses ->
-                                    commitLoaded(statuses)
-                                }
-                                it.ack?.complete(Unit)
-                            }
                     }
 
                     try {
@@ -219,9 +241,7 @@ class DefaultSessionStatusLiveStore
                                     reconnectRefresh =
                                         launch {
                                             delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
-                                            reloadFromServer(event.type, force = true)?.let { statuses ->
-                                                commitLoaded(statuses)
-                                            }
+                                            reloadFromServer(event.type, force = true)
                                         }
                                 }
                                 event.type == "session.active.snapshot" -> {
@@ -229,13 +249,18 @@ class DefaultSessionStatusLiveStore
                                     reconnectRefresh =
                                         launch {
                                             delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
-                                            reloadFromServer(event.type, force = true)?.let { statuses ->
-                                                commitLoaded(statuses, emptyActiveGuard = true)
-                                            }
+                                            reloadFromServer(
+                                                event.type,
+                                                force = true,
+                                                emptyActiveGuard = true,
+                                            )
                                         }
                                 }
                                 event.triggersStatusRefresh -> {
-                                    applyStatusEvent(directory, server, event)?.let { server = it }
+                                    applyStatusEvent(directory, server, event)?.let {
+                                        server = it
+                                        gate.bump()
+                                    }
                                     emitOverlay(server)
                                 }
                             }

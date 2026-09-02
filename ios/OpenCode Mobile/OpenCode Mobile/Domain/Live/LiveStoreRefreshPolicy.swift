@@ -6,4 +6,5 @@ enum LiveStoreRefreshPolicy {
     nonisolated static let statusDebounceMs = 300
     nonisolated static let workingPollIntervalMs = 10_000
     nonisolated static let subscriberStopTimeoutMs = 5_000
+    nonisolated static let invalidationAckTimeoutMs = 15_000
 }

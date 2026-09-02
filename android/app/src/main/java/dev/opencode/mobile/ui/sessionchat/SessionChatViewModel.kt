@@ -951,14 +951,23 @@ class SessionChatViewModel
             worktree: String,
             requests: List<PermissionRequest>,
         ) {
-            runCatching { sessionRepository.listSessions(worktree) }
-                .onSuccess {
-                    permissionSessions = it
-                    permissionTopologyError = null
-                }.onFailure {
-                    permissionSessions = emptyList()
-                    permissionTopologyError = "Unable to refresh permission session tree"
+            val needsSessionTree =
+                requests.any { request ->
+                    request.sessionId != sessionId &&
+                        permissionSessions.none { session -> session.id == request.sessionId }
                 }
+            if (needsSessionTree) {
+                runCatching { sessionRepository.listSessions(worktree) }
+                    .onSuccess {
+                        permissionSessions = it
+                        permissionTopologyError = null
+                    }.onFailure {
+                        permissionSessions = emptyList()
+                        permissionTopologyError = "Unable to refresh permission session tree"
+                    }
+            } else {
+                permissionTopologyError = null
+            }
             permissionRequests = orderedPermissionRequests(sessionId, permissionSessions, requests)
             if (
                 permissionSubmittingId != null &&
@@ -983,14 +992,23 @@ class SessionChatViewModel
             worktree: String,
             requests: List<QuestionRequest>,
         ) {
-            runCatching { sessionRepository.listSessions(worktree) }
-                .onSuccess {
-                    questionSessions = it
-                    questionTopologyError = null
-                }.onFailure {
-                    questionSessions = emptyList()
-                    questionTopologyError = "Unable to refresh question session tree"
+            val needsSessionTree =
+                requests.any { request ->
+                    request.sessionId != sessionId &&
+                        questionSessions.none { session -> session.id == request.sessionId }
                 }
+            if (needsSessionTree) {
+                runCatching { sessionRepository.listSessions(worktree) }
+                    .onSuccess {
+                        questionSessions = it
+                        questionTopologyError = null
+                    }.onFailure {
+                        questionSessions = emptyList()
+                        questionTopologyError = "Unable to refresh question session tree"
+                    }
+            } else {
+                questionTopologyError = null
+            }
             val ordered = orderedQuestionRequests(sessionId, questionSessions, requests)
             val previousVisibleId = questionRequests.firstOrNull()?.id
             questionRequests = dropOrphanQuestionRequests(ordered, timeline.loadedMessages())

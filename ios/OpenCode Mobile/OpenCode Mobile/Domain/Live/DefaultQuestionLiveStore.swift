@@ -19,32 +19,45 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
     }
 
     func observeQuestions(directory: String) -> AsyncStream<[QuestionRequest]> {
-        if cache[directory] == nil {
-            let sessionRepository = sessionRepository
-            let eventStream = eventStream
-            let worldSignals = worldSignals
-            let invalidationBus = invalidationBus
-            cache[directory] = SharedLiveObservation { yield in
-                Task.detached {
-                    await Self.runLoop(
-                        directory: directory,
-                        sessionRepository: sessionRepository,
-                        eventStream: eventStream,
-                        worldSignals: worldSignals,
-                        invalidationBus: invalidationBus,
-                        yield: yield
-                    )
-                }
-            }
+        resubscribingLiveStream { [weak self] in
+            guard let self else { return AsyncStream { $0.finish() } }
+            return self.observation(for: directory).stream()
         }
-        return cache[directory]!.stream()
     }
 
     func invalidate(directory: String?) {
         invalidationBus.invalidate(key: directory, reason: StoreRefreshReason.pullToRefresh)
     }
 
-    func clearCache() { cache.removeAll() }
+    func clearCache() {
+        let stale = Array(cache.values)
+        cache.removeAll()
+        stale.forEach { $0.finish() }
+    }
+
+    private func observation(for directory: String) -> SharedLiveObservation<[QuestionRequest]> {
+        if let existing = cache[directory], !existing.isTerminated {
+            return existing
+        }
+        let sessionRepository = sessionRepository
+        let eventStream = eventStream
+        let worldSignals = worldSignals
+        let invalidationBus = invalidationBus
+        let observation = SharedLiveObservation<[QuestionRequest]> { yield in
+            Task.detached {
+                await Self.runLoop(
+                    directory: directory,
+                    sessionRepository: sessionRepository,
+                    eventStream: eventStream,
+                    worldSignals: worldSignals,
+                    invalidationBus: invalidationBus,
+                    yield: yield
+                )
+            }
+        }
+        cache[directory] = observation
+        return observation
+    }
 
     private nonisolated static func runLoop(
         directory: String,
@@ -55,11 +68,15 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
         yield: @escaping @Sendable ([QuestionRequest]) -> Void
     ) async {
         let stale = StaleBit()
+        let gate = LiveStoreRefreshGate()
+        let lastEmitted = QuestionEmitCache()
         await refresh(
             directory: directory,
             reason: StoreRefreshReason.initialSubscribe,
             force: true,
             stale: stale,
+            gate: gate,
+            lastEmitted: lastEmitted,
             sessionRepository: sessionRepository,
             yield: yield
         )
@@ -76,6 +93,8 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
                         reason: reason,
                         force: false,
                         stale: stale,
+                        gate: gate,
+                        lastEmitted: lastEmitted,
                         sessionRepository: sessionRepository,
                         yield: yield
                     )
@@ -90,24 +109,49 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
                         reason: invalidation.reason,
                         force: true,
                         stale: stale,
+                        gate: gate,
+                        lastEmitted: lastEmitted,
                         sessionRepository: sessionRepository,
                         yield: yield
                     )
                 }
             }
             group.addTask {
+                var reconnectTask: Task<Void, Never>?
+                defer { reconnectTask?.cancel() }
                 for await event in eventStream.events() {
+                    if event.type == "stream.reconnected" || event.type == "server.connected" {
+                        reconnectTask?.cancel()
+                        let reason = event.type
+                        reconnectTask = Task {
+                            try? await Task.sleep(
+                                for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs)
+                            )
+                            guard !Task.isCancelled else { return }
+                            await refresh(
+                                directory: directory,
+                                reason: reason,
+                                force: true,
+                                stale: stale,
+                                gate: gate,
+                                lastEmitted: lastEmitted,
+                                sessionRepository: sessionRepository,
+                                yield: yield
+                            )
+                        }
+                        continue
+                    }
                     guard event.type == "question.asked" ||
                         event.type == "question.replied" ||
-                        event.type == "question.rejected" ||
-                        event.type == "stream.reconnected" ||
-                        event.type == "server.connected"
+                        event.type == "question.rejected"
                     else { continue }
                     await refresh(
                         directory: directory,
                         reason: event.type,
                         force: true,
                         stale: stale,
+                        gate: gate,
+                        lastEmitted: lastEmitted,
                         sessionRepository: sessionRepository,
                         yield: yield
                     )
@@ -123,6 +167,8 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
         reason: String,
         force: Bool,
         stale: StaleBit,
+        gate: LiveStoreRefreshGate,
+        lastEmitted: QuestionEmitCache,
         sessionRepository: any SessionRepository,
         yield: @escaping @Sendable ([QuestionRequest]) -> Void
     ) async {
@@ -130,13 +176,38 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
             DiagnosticLog.info(.question, "question skip reason=\(reason)")
             return
         }
-        do {
-            let requests = try await sessionRepository.listPendingQuestions(directory: directory)
-            stale.clear()
-            DiagnosticLog.info(.question, "question refresh reason=\(reason) count=\(requests.count)")
-            yield(requests)
-        } catch {
+        let outcome = await gate.refresh(
+            load: { () async -> [QuestionRequest]? in
+                try? await sessionRepository.listPendingQuestions(directory: directory)
+            },
+            commit: { requests in
+                stale.clear()
+                DiagnosticLog.info(.question, "question refresh reason=\(reason) count=\(requests.count)")
+                guard lastEmitted.shouldEmit(requests) else {
+                    DiagnosticLog.info(
+                        .question,
+                        "question emit skip reason=\(reason) cause=unchanged"
+                    )
+                    return
+                }
+                yield(requests)
+            }
+        )
+        if outcome == .failed {
             DiagnosticLog.warning(.question, "question refresh failed reason=\(reason)")
         }
+    }
+}
+
+private nonisolated final class QuestionEmitCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: [QuestionRequest]?
+
+    func shouldEmit(_ next: [QuestionRequest]) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if let value, value == next { return false }
+        value = next
+        return true
     }
 }
