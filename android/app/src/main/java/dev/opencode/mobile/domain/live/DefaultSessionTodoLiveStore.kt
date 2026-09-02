@@ -10,6 +10,7 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionTodo
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -131,20 +132,42 @@ class DefaultSessionTodoLiveStore
                             }
                         }
                     }
-                    eventStream.events.collect { event ->
-                        if (state.observerCount <= 0) return@collect
-                        when {
-                            event.type == "todo.updated" && event.sessionId == key.sessionId -> {
-                                adapter.toTodosFromEventProperties(event.rawProperties)?.let { todos ->
-                                    replace(state, todos, markCache = true)
+                    var reconnectRefresh: Job? = null
+                    try {
+                        eventStream.events.collect { event ->
+                            if (state.observerCount <= 0) return@collect
+                            when {
+                                event.type == "todo.updated" && event.sessionId == key.sessionId -> {
+                                    // Immediate and undebounced: a todo patch is the live
+                                    // signal the list is rendering.
+                                    adapter.toTodosFromEventProperties(event.rawProperties)?.let { todos ->
+                                        replace(state, todos, markCache = true)
+                                    }
                                 }
-                            }
-                            event.type == "stream.reconnected" || event.type == "server.connected" -> {
-                                if (fetch(key, state, force = true)) {
-                                    stale = false
+                                event.type == "stream.reconnected" || event.type == "server.connected" -> {
+                                    // The reconnect pair lands within milliseconds of each
+                                    // other on every foreground, so coalesce it into one
+                                    // catch-up GET with the same cancel-and-delay shape as
+                                    // DefaultSessionStatusLiveStore.
+                                    reconnectRefresh?.cancel()
+                                    reconnectRefresh =
+                                        launch {
+                                            delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
+                                            // Re-check: the last observer can leave during
+                                            // the debounce window, and a catch-up nobody is
+                                            // watching is pure traffic. Matches iOS, which
+                                            // checks observation inside the delayed task.
+                                            if (state.observerCount <= 0) return@launch
+                                            if (fetch(key, state, force = true)) {
+                                                stale = false
+                                            }
+                                        }
                                 }
                             }
                         }
+                    } finally {
+                        // A torn-down observation must not fire a late fetch.
+                        reconnectRefresh?.cancel()
                     }
                 }
         }

@@ -818,13 +818,28 @@ final class SessionChatViewModel {
     }
 
     private func applyPermissionSnapshot(_ requests: [PermissionRequest]) async {
-        do {
-            let sessions = try await sessionRepository.listSessions(directory: worktree)
-            permissionSessions = sessions
+        // The session list only feeds the ordering walk from the root session, so it is
+        // needed only when a request belongs to a session that is neither the root nor
+        // already cached. Subagent child sessions are brand new and absent from the
+        // cache, and without this refetch the walk would drop their requests entirely —
+        // so the unknown-session fallback is mandatory, not an optimisation.
+        let needsSessionFetch = requests.contains { request in
+            request.sessionID != sessionID
+                && !permissionSessions.contains { $0.id == request.sessionID }
+        }
+        if needsSessionFetch {
+            do {
+                let sessions = try await sessionRepository.listSessions(directory: worktree)
+                permissionSessions = sessions
+                permissionTopologyError = nil
+            } catch {
+                // Emptying the cache is what makes this self-healing: the next snapshot
+                // carrying a subagent request finds nothing cached and retries.
+                permissionSessions = []
+                permissionTopologyError = "Unable to refresh permission session tree"
+            }
+        } else {
             permissionTopologyError = nil
-        } catch {
-            permissionSessions = []
-            permissionTopologyError = "Unable to refresh permission session tree"
         }
         permissionRequests = Self.orderedPermissionRequests(
             rootSessionID: sessionID,
@@ -839,12 +854,24 @@ final class SessionChatViewModel {
     }
 
     private func applyQuestionSnapshot(_ requests: [QuestionRequest]) async {
-        do {
-            questionSessions = try await sessionRepository.listSessions(directory: worktree)
+        // Same rule as `applyPermissionSnapshot`: fetch the session tree only when a
+        // request names a session that is neither the root nor already cached. The two
+        // caches stay separate so one feature's failed fetch cannot blank the other's
+        // ordering.
+        let needsSessionFetch = requests.contains { request in
+            request.sessionID != sessionID
+                && !questionSessions.contains { $0.id == request.sessionID }
+        }
+        if needsSessionFetch {
+            do {
+                questionSessions = try await sessionRepository.listSessions(directory: worktree)
+                questionTopologyError = nil
+            } catch {
+                questionSessions = []
+                questionTopologyError = "Unable to refresh question session tree"
+            }
+        } else {
             questionTopologyError = nil
-        } catch {
-            questionSessions = []
-            questionTopologyError = "Unable to refresh question session tree"
         }
         let previousVisibleID = questionRequests.first?.id
         questionRequests = dropOrphanQuestionRequests(

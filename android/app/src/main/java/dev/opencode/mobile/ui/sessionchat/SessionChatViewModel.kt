@@ -951,14 +951,31 @@ class SessionChatViewModel
             worktree: String,
             requests: List<PermissionRequest>,
         ) {
-            runCatching { sessionRepository.listSessions(worktree) }
-                .onSuccess {
-                    permissionSessions = it
-                    permissionTopologyError = null
-                }.onFailure {
-                    permissionSessions = emptyList()
-                    permissionTopologyError = "Unable to refresh permission session tree"
+            // The session list is used only to order requests by walking the tree down from
+            // the root session, so it is needed only when a request belongs to a session
+            // that is neither the root nor already cached. The unknown-session refetch is
+            // mandatory: subagent child sessions are brand new and absent from the cache,
+            // and without it the ordering walk drops their requests entirely.
+            val needsSessionTree =
+                requests.any { request ->
+                    request.sessionId != sessionId &&
+                        permissionSessions.none { session -> session.id == request.sessionId }
                 }
+            if (needsSessionTree) {
+                runCatching { sessionRepository.listSessions(worktree) }
+                    .onSuccess {
+                        permissionSessions = it
+                        permissionTopologyError = null
+                    }.onFailure {
+                        // Emptying the cache is what makes this self-healing: the next
+                        // snapshot carrying an unknown session retries the fetch.
+                        permissionSessions = emptyList()
+                        permissionTopologyError = "Unable to refresh permission session tree"
+                    }
+            } else {
+                // Nothing is missing from the tree, so there is nothing to report.
+                permissionTopologyError = null
+            }
             permissionRequests = orderedPermissionRequests(sessionId, permissionSessions, requests)
             if (
                 permissionSubmittingId != null &&
@@ -983,14 +1000,28 @@ class SessionChatViewModel
             worktree: String,
             requests: List<QuestionRequest>,
         ) {
-            runCatching { sessionRepository.listSessions(worktree) }
-                .onSuccess {
-                    questionSessions = it
-                    questionTopologyError = null
-                }.onFailure {
-                    questionSessions = emptyList()
-                    questionTopologyError = "Unable to refresh question session tree"
+            // See applyPermissionSnapshot: the session list is only needed when a request
+            // belongs to a session that is neither the root nor already cached.
+            val needsSessionTree =
+                requests.any { request ->
+                    request.sessionId != sessionId &&
+                        questionSessions.none { session -> session.id == request.sessionId }
                 }
+            if (needsSessionTree) {
+                runCatching { sessionRepository.listSessions(worktree) }
+                    .onSuccess {
+                        questionSessions = it
+                        questionTopologyError = null
+                    }.onFailure {
+                        // Emptying the cache is what makes this self-healing: the next
+                        // snapshot carrying an unknown session retries the fetch.
+                        questionSessions = emptyList()
+                        questionTopologyError = "Unable to refresh question session tree"
+                    }
+            } else {
+                // Nothing is missing from the tree, so there is nothing to report.
+                questionTopologyError = null
+            }
             val ordered = orderedQuestionRequests(sessionId, questionSessions, requests)
             val previousVisibleId = questionRequests.firstOrNull()?.id
             questionRequests = dropOrphanQuestionRequests(ordered, timeline.loadedMessages())

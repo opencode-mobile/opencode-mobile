@@ -147,13 +147,15 @@ class DefaultSessionReadyStore
                 readyFlows.keys.toList().forEach { directory ->
                     publishReadyLocked(directory, prune = false)
                 }
-                directoriesToObserve = watched.values.map { it.directory }.toSet()
+                directoriesToObserve =
+                    cancelStatusObservationsLocked() + watched.values.map { it.directory }
                 logI("bindProfile profile=$next ready=${ready.size} watched=${watched.size}")
             }
             directoriesToObserve.forEach { ensureStatusObservation(it) }
         }
 
         override fun clearCache() {
+            val directoriesToObserve: Set<String>
             synchronized(lock) {
                 watched.clear()
                 ready.clear()
@@ -164,8 +166,10 @@ class DefaultSessionReadyStore
                 readyFlows.keys.toList().forEach { directory ->
                     readyFlows[directory]?.value = emptySet()
                 }
+                directoriesToObserve = cancelStatusObservationsLocked()
                 logI("clearCache")
             }
+            directoriesToObserve.forEach { ensureStatusObservation(it) }
         }
 
         private fun onEvent(
@@ -205,6 +209,24 @@ class DefaultSessionReadyStore
                     }
                 }
             }
+        }
+
+        /**
+         * Stops every status observation and returns the directories that were being
+         * observed so the caller can re-subscribe.
+         *
+         * A profile switch or Clear All Data replaces the status upstreams underneath
+         * us. Leaving the old collectors running pins the previous upstream, so the
+         * next [ensureStatusObservationLocked] would keep believing an observation is
+         * live while the ready flags stopped arriving. `previousTypes` is cleared by
+         * the callers: cancelling aborts any in-flight status fetch, so the next
+         * snapshot has to re-seed rather than continue from the pre-switch types.
+         */
+        private fun cancelStatusObservationsLocked(): Set<String> {
+            val directories = statusJobs.keys.toSet()
+            statusJobs.values.forEach { it.cancel() }
+            statusJobs.clear()
+            return directories
         }
 
         private fun onStatuses(

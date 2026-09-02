@@ -76,6 +76,13 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
                             }
                         }
                         group.addTask {
+                            // `stream.reconnected` and `server.connected` land within
+                            // milliseconds of each other on every foreground, so each
+                            // reconnect otherwise costs two full todo GETs. Collapse just
+                            // that pair with the same cancel-and-delay shape the status
+                            // store uses; `todo.updated` stays immediate.
+                            var reconnectTask: Task<Void, Never>?
+                            defer { reconnectTask?.cancel() }
                             for await event in eventStream.events() {
                                 if event.type == "todo.updated", event.sessionID == key.sessionID {
                                     if let todos = adapter.todos(fromEventProperties: event.rawProperties) {
@@ -86,12 +93,20 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
                                     continue
                                 }
                                 if event.type == "stream.reconnected" || event.type == "server.connected" {
-                                    let isObserved = await MainActor.run {
-                                        store?.handles[key]?.continuations.isEmpty == false
-                                    }
-                                    guard isObserved else { continue }
-                                    if await store?.fetch(key: key, force: true, reason: event.type) == true {
-                                        stale.clear()
+                                    reconnectTask?.cancel()
+                                    let reason = event.type
+                                    reconnectTask = Task {
+                                        try? await Task.sleep(
+                                            for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs)
+                                        )
+                                        guard !Task.isCancelled else { return }
+                                        let isObserved = await MainActor.run {
+                                            store?.handles[key]?.continuations.isEmpty == false
+                                        }
+                                        guard isObserved else { return }
+                                        if await store?.fetch(key: key, force: true, reason: reason) == true {
+                                            stale.clear()
+                                        }
                                     }
                                 }
                             }

@@ -45,7 +45,12 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
         invalidationBus.invalidate(key: directory, reason: StoreRefreshReason.pullToRefresh)
     }
 
-    func clearCache() { cache.removeAll() }
+    func clearCache() {
+        // Finish before dropping: a dropped-but-unfinished observation leaves every
+        // subscriber suspended forever instead of letting it re-subscribe.
+        cache.values.forEach { $0.finish() }
+        cache.removeAll()
+    }
 
     private nonisolated static func runLoop(
         directory: String,
@@ -56,11 +61,24 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
         yield: @escaping @Sendable ([PermissionRequest]) -> Void
     ) async {
         let stale = StaleBit()
+        // Single-flight gate for this observation. `permission.asked` and
+        // `permission.replied` fire back to back, so two GETs overlap and their
+        // responses can land in the wrong order — the older, emptier list
+        // last. That strands a live prompt: the sheet never appears and the
+        // agent stays blocked server-side with no further event to self-heal
+        // it. Serialising the GETs keeps the newest response last.
+        let gate = LiveStoreRefreshGate()
+        // Per-observation memory of the last list handed downstream, so a refresh that
+        // returns an unchanged list does not wake every subscriber for nothing. Reset
+        // naturally when the observation restarts.
+        let lastEmitted = PermissionEmitCache()
         await refresh(
             directory: directory,
             reason: StoreRefreshReason.initialSubscribe,
             force: true,
             stale: stale,
+            gate: gate,
+            lastEmitted: lastEmitted,
             sessionRepository: sessionRepository,
             yield: yield
         )
@@ -77,6 +95,8 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
                         reason: reason,
                         force: false,
                         stale: stale,
+                        gate: gate,
+                        lastEmitted: lastEmitted,
                         sessionRepository: sessionRepository,
                         yield: yield
                     )
@@ -91,23 +111,53 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
                         reason: invalidation.reason,
                         force: true,
                         stale: stale,
+                        gate: gate,
+                        lastEmitted: lastEmitted,
                         sessionRepository: sessionRepository,
                         yield: yield
                     )
                 }
             }
             group.addTask {
+                // `stream.reconnected` and `server.connected` land within milliseconds of
+                // each other on every foreground, so each reconnect otherwise costs two
+                // full permission GETs. Collapse just that pair with the same
+                // cancel-and-delay shape the status store uses. `permission.asked` /
+                // `permission.replied` stay immediate: a blocking prompt must not wait.
+                var reconnectTask: Task<Void, Never>?
+                defer { reconnectTask?.cancel() }
                 for await event in eventStream.events() {
+                    if event.type == "stream.reconnected" || event.type == "server.connected" {
+                        reconnectTask?.cancel()
+                        let reason = event.type
+                        reconnectTask = Task {
+                            try? await Task.sleep(
+                                for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs)
+                            )
+                            guard !Task.isCancelled else { return }
+                            await refresh(
+                                directory: directory,
+                                reason: reason,
+                                force: true,
+                                stale: stale,
+                                gate: gate,
+                                lastEmitted: lastEmitted,
+                                sessionRepository: sessionRepository,
+                                yield: yield
+                            )
+                        }
+                        continue
+                    }
                     guard event.type == "permission.asked"
                         || event.type == "permission.replied"
-                        || event.type == "stream.reconnected"
-                        || event.type == "server.connected"
                     else { continue }
                     await refresh(
                         directory: directory,
                         reason: event.type,
                         force: true,
                         stale: stale,
+                        gate: gate,
+                        lastEmitted: lastEmitted,
                         sessionRepository: sessionRepository,
                         yield: yield
                     )
@@ -123,6 +173,8 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
         reason: String,
         force: Bool,
         stale: StaleBit,
+        gate: LiveStoreRefreshGate,
+        lastEmitted: PermissionEmitCache,
         sessionRepository: any SessionRepository,
         yield: @escaping @Sendable ([PermissionRequest]) -> Void
     ) async {
@@ -130,13 +182,51 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
             DiagnosticLog.info(.permission, "permission skip reason=\(reason)")
             return
         }
-        do {
-            let requests = try await sessionRepository.listPendingPermissions(directory: directory)
-            stale.clear()
-            DiagnosticLog.info(.permission, "permission refresh reason=\(reason) count=\(requests.count)")
-            yield(requests)
-        } catch {
+        let outcome = await gate.refresh(
+            load: { () async -> [PermissionRequest]? in
+                try? await sessionRepository.listPendingPermissions(directory: directory)
+            },
+            commit: { requests in
+                // The commit still runs in full — the revision still bumps and the
+                // outcome is still `.committed`. Only the downstream emit is suppressed.
+                stale.clear()
+                DiagnosticLog.info(.permission, "permission refresh reason=\(reason) count=\(requests.count)")
+                guard lastEmitted.shouldEmit(requests) else {
+                    DiagnosticLog.info(
+                        .permission,
+                        "permission emit skip reason=\(reason) cause=unchanged"
+                    )
+                    return
+                }
+                yield(requests)
+            }
+        )
+        if outcome == .failed {
             DiagnosticLog.warning(.permission, "permission refresh failed reason=\(reason)")
         }
+    }
+}
+
+/// Remembers the last permission list this observation handed downstream so an
+/// unchanged refresh does not re-emit.
+///
+/// This leans on `PermissionRequest` value equality (`Equatable`, synthesised from
+/// every stored property). A field deliberately excluded from `==` would make an
+/// update that only touches that field vanish silently here.
+///
+/// Suppressing an emit cannot starve a late subscriber: `SharedLiveObservation`
+/// replays `lastValue`, so a new subscriber already holds the equal list.
+private nonisolated final class PermissionEmitCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: [PermissionRequest]?
+
+    /// Returns `true` when `next` differs from the last emitted list, recording it as
+    /// the new last emitted list; `false` when it is equal and the emit should be skipped.
+    func shouldEmit(_ next: [PermissionRequest]) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if let value, value == next { return false }
+        value = next
+        return true
     }
 }

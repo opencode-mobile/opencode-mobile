@@ -6,7 +6,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     private let eventStream: any ForegroundEventStream
     private let eventAdapter: EventDomainAdapter
     private let worldSignals: any WorldSignals
-    private let invalidationBus = StoreInvalidationBus()
+    private let invalidationBus: StoreInvalidationBus
     private let activeDirectories = ActiveDirectorySet()
     private let pendingBusy = PendingBusySet()
     private let mutationBus = StatusMutationBus()
@@ -16,12 +16,14 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         sessionRepository: any SessionRepository,
         eventStream: any ForegroundEventStream,
         eventAdapter: EventDomainAdapter = EventDomainAdapter(),
-        worldSignals: any WorldSignals = SilentWorldSignals.shared
+        worldSignals: any WorldSignals = SilentWorldSignals.shared,
+        invalidationAckTimeoutMs: Int = LiveStoreRefreshPolicy.invalidationAckTimeoutMs
     ) {
         self.sessionRepository = sessionRepository
         self.eventStream = eventStream
         self.eventAdapter = eventAdapter
         self.worldSignals = worldSignals
+        invalidationBus = StoreInvalidationBus(ackTimeoutMs: invalidationAckTimeoutMs)
     }
 
     func observeStatuses(directory: String) -> AsyncStream<[String: SessionStatus]> {
@@ -90,6 +92,9 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     }
 
     func clearCache() {
+        // Finish before dropping: a dropped-but-unfinished observation leaves every
+        // subscriber suspended forever instead of letting it re-subscribe.
+        cache.values.forEach { $0.finish() }
         cache.removeAll()
         pendingBusy.removeAll()
     }
@@ -106,13 +111,27 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         mutationBus: StatusMutationBus,
         yield: @escaping @Sendable ([String: SessionStatus]) -> Void
     ) async {
+        // Subscribe to the invalidation bus BEFORE publishing this directory as
+        // invalidatable. `invalidateAndWait` drops an event no collector is listening
+        // for, and `invalidate` targets whatever is in `activeDirectories`, so the
+        // window between those two facts is a window where a pull-to-refresh is
+        // silently swallowed: no catch-up GET, and a spinner that vanishes instantly.
+        // The window is real — the collectors only start after the initial load — and
+        // grew with the refresh gate's extra hops. `AsyncStream` buffers, so an
+        // invalidation that lands while the first load runs is still delivered.
+        let invalidations = invalidationBus.events()
         activeDirectories.insert(directory)
         defer { activeDirectories.remove(directory) }
         let serverBox = StatusBox()
         let currentBox = StatusBox()
         let stale = StaleBit()
+        // Single-flight plus revision gate for this observation. Every mutation
+        // of the authoritative `server` map that does not come from a REST commit
+        // bumps it, so a REST response captured before such a mutation is dropped
+        // instead of resurrecting the pre-patch snapshot.
+        let gate = LiveStoreRefreshGate()
 
-        func overlayPending(
+        @Sendable func overlayPending(
             _ base: [String: SessionStatus],
             confirmFrom: [String: SessionStatus]? = nil
         ) -> [String: SessionStatus] {
@@ -129,14 +148,14 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             return result
         }
 
-        func emitOverlay(_ base: [String: SessionStatus]) {
+        @Sendable func emitOverlay(_ base: [String: SessionStatus]) {
             let next = overlayPending(base, confirmFrom: [:])
             guard next != currentBox.snapshot() else { return }
             currentBox.replace(next)
             yield(next)
         }
 
-        func commitLoaded(_ loaded: [String: SessionStatus], emptyActiveGuard: Bool = false) {
+        @Sendable func commitLoaded(_ loaded: [String: SessionStatus], emptyActiveGuard: Bool = false) {
             // Empty active maps are a between-step gap on v2, not idle.
             // True idle is session.idle / execution.*. Overlay pending
             // onto the kept server map; do not skip overlay because
@@ -154,24 +173,47 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             yield(next)
         }
 
-        func reloadFromServer(reason: String, force: Bool) async -> [String: SessionStatus]? {
+        /// Reloads statuses and commits them, unless an SSE patch (or a local
+        /// `markIdle`) moved the server map while the GET was in flight — that
+        /// patch is strictly newer than the snapshot this response describes.
+        @discardableResult
+        @Sendable func reloadFromServer(
+            reason: String,
+            force: Bool,
+            emptyActiveGuard: Bool = false
+        ) async -> LiveStoreRefreshOutcome {
             if !force, !stale.isSet {
                 DiagnosticLog.info(
                     .session,
                     "statusLiveStore skip directory=\(directory) reason=\(reason)"
                 )
-                return nil
+                return .failed
             }
-            guard let loaded = await loadStatuses(
-                directory: directory,
-                sessionRepository: sessionRepository
-            ) else { return nil }
-            stale.clear()
-            DiagnosticLog.info(
-                .session,
-                "statusLiveStore refresh directory=\(directory) reason=\(reason)"
+            let outcome = await gate.refresh(
+                load: { () async -> [String: SessionStatus]? in
+                    guard let loaded = await Self.loadStatuses(
+                        directory: directory,
+                        sessionRepository: sessionRepository
+                    ) else { return nil }
+                    stale.clear()
+                    DiagnosticLog.info(
+                        .session,
+                        "statusLiveStore refresh directory=\(directory) reason=\(reason)"
+                    )
+                    return loaded
+                },
+                commit: { loaded in
+                    commitLoaded(loaded, emptyActiveGuard: emptyActiveGuard)
+                }
             )
-            return loaded
+            if outcome == .discarded {
+                DiagnosticLog.info(
+                    .session,
+                    "statusLiveStore discard directory=\(directory) reason=\(reason) "
+                        + "cause=superseded-by-live-patch"
+                )
+            }
+            return outcome
         }
 
         let mutationTask = Task {
@@ -188,19 +230,17 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                 case let .markIdle(_, sessionID):
                     var server = serverBox.snapshot()
                     server.removeValue(forKey: sessionID)
+                    // Mutates the authoritative map: a REST snapshot taken before
+                    // this would put the session back.
                     serverBox.replace(server)
+                    await gate.bump()
                     emitOverlay(server)
                 }
             }
         }
         defer { mutationTask.cancel() }
 
-        if let statuses = await reloadFromServer(
-            reason: StoreRefreshReason.initialSubscribe,
-            force: true
-        ) {
-            commitLoaded(statuses)
-        }
+        await reloadFromServer(reason: StoreRefreshReason.initialSubscribe, force: true)
 
         await withTaskGroup(of: Void.self) { group in
             group.addTask {
@@ -210,22 +250,19 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         continue
                     }
                     guard let reason = signal.catchUpReason else { continue }
-                    if let statuses = await reloadFromServer(reason: reason, force: false) {
-                        commitLoaded(statuses)
-                    }
+                    await reloadFromServer(reason: reason, force: false)
                 }
             }
             group.addTask {
-                for await invalidation in invalidationBus.events() {
+                for await invalidation in invalidations {
                     if let key = invalidation.key, key != directory { continue }
+                    // Ack on every exit from the iteration, including a torn-down or
+                    // failed reload: the ack releases the caller's spinner, it is not
+                    // a "data is fresh" signal.
+                    let ack = invalidation.ack
+                    defer { ack?() }
                     stale.mark()
-                    if let statuses = await reloadFromServer(
-                        reason: invalidation.reason,
-                        force: true
-                    ) {
-                        commitLoaded(statuses)
-                    }
-                    invalidation.ack?()
+                    await reloadFromServer(reason: invalidation.reason, force: true)
                 }
             }
             group.addTask {
@@ -238,9 +275,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         reconnectTask = Task {
                             try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs))
                             guard !Task.isCancelled else { return }
-                            if let statuses = await reloadFromServer(reason: reason, force: true) {
-                                commitLoaded(statuses)
-                            }
+                            await reloadFromServer(reason: reason, force: true)
                         }
                         continue
                     }
@@ -250,9 +285,11 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         reconnectTask = Task {
                             try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs))
                             guard !Task.isCancelled else { return }
-                            if let statuses = await reloadFromServer(reason: reason, force: true) {
-                                commitLoaded(statuses, emptyActiveGuard: true)
-                            }
+                            await reloadFromServer(
+                                reason: reason,
+                                force: true,
+                                emptyActiveGuard: true
+                            )
                         }
                         continue
                     }
@@ -265,7 +302,11 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         eventAdapter: eventAdapter,
                         pendingBusy: pendingBusy
                     ) {
+                        // A live patch outranks any REST snapshot that was captured
+                        // before it: bump so an in-flight reload cannot write the
+                        // pre-patch map back.
                         serverBox.replace(nextServer)
+                        await gate.bump()
                     }
                     emitOverlay(serverBox.snapshot())
                 }

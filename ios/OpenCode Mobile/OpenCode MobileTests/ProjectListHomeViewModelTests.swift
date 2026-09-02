@@ -34,6 +34,57 @@ struct ProjectListHomeViewModelTests {
         #expect(!viewModel.isRefreshing)
     }
 
+    @Test func pullToRefresh_recoversFromAStalledCatchUp_andStillWorksAfterwards() async {
+        let sessions = [
+            Session(id: "1", title: "Alpha", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
+        ]
+        let sessionRepository = FakeSessionRepository(sessions: sessions)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            invalidationAckTimeoutMs: 400
+        )
+        await viewModel.refresh()
+        let loaded = await waitUntil {
+            if case let .loaded(sections, _, _, _) = viewModel.state {
+                return sections.first?.allSessions.isEmpty == false
+            }
+            return false
+        }
+        #expect(loaded)
+
+        // The catch-up REST stalls and never comes back on its own.
+        sessionRepository.holdNextListSessions()
+        let refreshTask = Task { await viewModel.pullToRefresh() }
+        let blocked = await waitUntil(timeoutMs: 5_000) {
+            viewModel.isRefreshing && sessionRepository.isListBlocked
+        }
+        #expect(blocked)
+
+        let released = await waitUntil(timeoutMs: 5_000) { !viewModel.isRefreshing }
+        #expect(
+            released,
+            "the spinner must drop once the ack ceiling passes; a never-acked invalidate leaves isRefreshing latched true forever"
+        )
+        refreshTask.cancel()
+
+        // The stalled call lands late; pull-to-refresh must not be permanently latched.
+        sessionRepository.resumeListSessions()
+        let settled = await waitUntil(timeoutMs: 5_000) { !sessionRepository.isListBlocked }
+        #expect(settled)
+        let callsBefore = sessionRepository.listCallCount
+        await viewModel.pullToRefresh()
+        let refetched = await waitUntil(timeoutMs: 5_000) {
+            sessionRepository.listCallCount > callsBefore
+        }
+        #expect(
+            refetched,
+            "a later pull-to-refresh must still reach the server; the isRefreshing guard makes a lost ack a permanent no-op"
+        )
+        #expect(!viewModel.isRefreshing)
+    }
+
     @Test func refresh_probeFailed() async {
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(shouldFailProbe: true)
@@ -707,7 +758,8 @@ private func makeViewModel(
     messageRepository: any MessageRepository = FakeMessageRepository(),
     connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
     eventStream: FakeForegroundEventStream? = nil,
-    newSessionModelSelectionResolver: NewSessionModelSelectionResolver? = nil
+    newSessionModelSelectionResolver: NewSessionModelSelectionResolver? = nil,
+    invalidationAckTimeoutMs: Int = LiveStoreRefreshPolicy.invalidationAckTimeoutMs
 ) -> ProjectListHomeViewModel {
     let eventStream = eventStream ?? FakeForegroundEventStream()
     // Mutations (createSession) require Connected; default fakes start Idle.
@@ -720,12 +772,14 @@ private func makeViewModel(
     )
     let sessionStatusLiveStore = DefaultSessionStatusLiveStore(
         sessionRepository: sessionRepository,
-        eventStream: eventStream
+        eventStream: eventStream,
+        invalidationAckTimeoutMs: invalidationAckTimeoutMs
     )
     let sessionLiveStore = DefaultSessionLiveStore(
         sessionRepository: sessionRepository,
         eventStream: eventStream,
-        sessionCache: NoOpSessionCache.shared
+        sessionCache: NoOpSessionCache.shared,
+        invalidationAckTimeoutMs: invalidationAckTimeoutMs
     )
     let sessionReadyStore = DefaultSessionReadyStore(
         sessionStatusLiveStore: sessionStatusLiveStore,
@@ -974,6 +1028,13 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
     private var holdNextList = false
     private var blockedListContinuation: CheckedContinuation<Void, Never>?
     private let listLock = NSLock()
+    private var listSessionsCallCount = 0
+
+    var listCallCount: Int {
+        listLock.lock()
+        defer { listLock.unlock() }
+        return listSessionsCallCount
+    }
 
     var isListBlocked: Bool {
         listLock.lock()
@@ -1014,6 +1075,9 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
     }
 
     func listSessions(directory: String?) async throws -> [Session] {
+        listLock.lock()
+        listSessionsCallCount += 1
+        listLock.unlock()
         if holdNextList {
             holdNextList = false
             await withCheckedContinuation { continuation in

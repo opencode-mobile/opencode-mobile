@@ -19,6 +19,14 @@ nonisolated struct StoreInvalidate: Sendable, Equatable {
 nonisolated final class StoreInvalidationBus: @unchecked Sendable {
     private let lock = NSLock()
     private var continuations: [UUID: AsyncStream<StoreInvalidate>.Continuation] = [:]
+    private let ackTimeoutMs: Int
+
+    /// - Parameter ackTimeoutMs: ceiling for ``invalidateAndWait(key:reason:)``.
+    ///   Injectable so tests can bound the wait without waiting on the production
+    ///   ceiling.
+    init(ackTimeoutMs: Int = LiveStoreRefreshPolicy.invalidationAckTimeoutMs) {
+        self.ackTimeoutMs = ackTimeoutMs
+    }
 
     func events() -> AsyncStream<StoreInvalidate> {
         let id = UUID()
@@ -39,17 +47,34 @@ nonisolated final class StoreInvalidationBus: @unchecked Sendable {
         yield(StoreInvalidate(key: key, reason: reason))
     }
 
+    /// Emits an invalidation and waits for a collector to acknowledge it.
+    ///
+    /// The zero-subscriber check is only a fast path: a subscriber can disappear
+    /// between the check and the yield, and a collector can be torn down after
+    /// receiving the event, so the wait is bounded by `ackTimeoutMs` and also ends
+    /// when the calling task is cancelled. Returning means "stop waiting", never
+    /// "the store now holds fresh data" — callers must not read it as a freshness
+    /// guarantee.
     func invalidateAndWait(key: String?, reason: String) async {
-        await withCheckedContinuation { continuation in
-            let resume = OnceResume(continuation)
-            lock.lock()
-            let subscribers = Array(continuations.values)
-            lock.unlock()
-            if subscribers.isEmpty {
-                resume.go()
-                return
+        lock.lock()
+        let hasSubscribers = !continuations.isEmpty
+        lock.unlock()
+        if !hasSubscribers { return }
+
+        let waiter = AckWaiter()
+        let timeoutMs = ackTimeoutMs
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                // Attach before yielding: a collector can ack synchronously.
+                waiter.attach(OnceResume(continuation))
+                waiter.setTimeoutTask(Task {
+                    try? await Task.sleep(for: .milliseconds(timeoutMs))
+                    waiter.finish()
+                })
+                yield(StoreInvalidate(key: key, reason: reason, ack: { waiter.finish() }))
             }
-            yield(StoreInvalidate(key: key, reason: reason, ack: { resume.go() }))
+        } onCancel: {
+            waiter.finish()
         }
     }
 
@@ -60,6 +85,54 @@ nonisolated final class StoreInvalidationBus: @unchecked Sendable {
         for continuation in subscribers {
             continuation.yield(event)
         }
+    }
+}
+
+/// Bounds one ack wait: resumes exactly once, whichever of ack, timeout, or task
+/// cancellation happens first. Cancellation can win before the continuation exists,
+/// so a `finish()` that arrives early is replayed on `attach`.
+private final class AckWaiter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var resume: OnceResume?
+    private var timeoutTask: Task<Void, Never>?
+    private var finished = false
+
+    func attach(_ value: OnceResume) {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            value.go()
+            return
+        }
+        resume = value
+        lock.unlock()
+    }
+
+    func setTimeoutTask(_ task: Task<Void, Never>) {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            task.cancel()
+            return
+        }
+        timeoutTask = task
+        lock.unlock()
+    }
+
+    func finish() {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            return
+        }
+        finished = true
+        let pending = resume
+        let task = timeoutTask
+        resume = nil
+        timeoutTask = nil
+        lock.unlock()
+        task?.cancel()
+        pending?.go()
     }
 }
 

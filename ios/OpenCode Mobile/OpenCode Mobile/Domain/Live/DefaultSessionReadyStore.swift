@@ -172,9 +172,12 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         loadPersisted()
         for (directory, handle) in handles {
             handle.previousTypes.removeAll()
+            cancelStatusObservation(handle: handle)
             publishReady(directory: directory, handle: handle, prune: false)
         }
-        for directory in Set(watched.values.map(\.directory)) {
+        var directoriesToObserve = Set(watched.values.map(\.directory))
+        directoriesToObserve.formUnion(handles.filter { !$0.value.continuations.isEmpty }.keys)
+        for directory in directoriesToObserve {
             let handle = handles[directory] ?? DirectoryHandle()
             handles[directory] = handle
             ensureStatusObservation(directory: directory, handle: handle)
@@ -192,7 +195,11 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         persistence.save(SessionReadyPersistedState())
         for (directory, handle) in handles {
             handle.previousTypes.removeAll()
+            cancelStatusObservation(handle: handle)
             publishReady(directory: directory, handle: handle, prune: false)
+        }
+        for (directory, handle) in handles where !handle.continuations.isEmpty {
+            ensureStatusObservation(directory: directory, handle: handle)
         }
         logger.info("clearCache")
     }
@@ -221,7 +228,28 @@ final class DefaultSessionReadyStore: SessionReadyStore {
             for await statuses in self.sessionStatusLiveStore.observeStatuses(directory: directory) {
                 self.onStatuses(directory: directory, statuses: statuses)
             }
+            guard !Task.isCancelled else { return }
+            // The status store finished this stream (cache cleared on a profile switch or
+            // Clear All Data). Without this the `statusTask == nil` guard above would keep
+            // believing a dead task is live and Ready would never light up again.
+            self.restartStatusObservation(directory: directory)
         }
+    }
+
+    /// Stops the status observation for `handle`, leaving `ensureStatusObservation` free to
+    /// build a new one. Callers clear `previousTypes` in the same breath: cancelling aborts
+    /// any in-flight status fetch, so the next snapshot has to re-seed rather than continue
+    /// from types captured before the switch.
+    private func cancelStatusObservation(handle: DirectoryHandle) {
+        handle.statusTask?.cancel()
+        handle.statusTask = nil
+    }
+
+    private func restartStatusObservation(directory: String) {
+        guard let handle = handles[directory] else { return }
+        handle.statusTask = nil
+        handle.previousTypes.removeAll()
+        ensureStatusObservation(directory: directory, handle: handle)
     }
 
     private func onStatuses(directory: String, statuses: [String: SessionStatus]) {

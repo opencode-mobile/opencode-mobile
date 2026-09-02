@@ -10,14 +10,14 @@ import dev.opencode.mobile.domain.event.catchUpReason
 import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.SessionRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,13 +31,30 @@ class DefaultPermissionLiveStore
         private val diagnosticLogger: DiagnosticLogger,
         private val worldSignals: WorldSignals = SilentWorldSignals,
     ) : PermissionLiveStore {
-        private val cache = ConcurrentHashMap<String, SharedFlow<List<PermissionRequest>>>()
+        private val cache = LiveStoreFlowCache<List<PermissionRequest>>(liveStoreScope)
         private val invalidationBus = StoreInvalidationBus()
 
         override fun observePermissions(directory: String): Flow<List<PermissionRequest>> =
-            cache.getOrPut(directory) {
+            cache.observe(directory) { sharingScope ->
                 channelFlow {
                     var stale = false
+                    var reconnectRefresh: Job? = null
+                    // Last list actually sent downstream, per observation (reset naturally
+                    // when the observation restarts). A refresh that reloads the same list
+                    // still commits — the gate revision still bumps — but does not re-emit.
+                    //
+                    // This relies on `PermissionRequest` value equality (it is a Kotlin
+                    // `data class`). A field deliberately excluded from equality would make
+                    // updates to that field vanish silently here.
+                    var lastEmitted: List<PermissionRequest>? = null
+                    // Single-flight gate for this observation. `permission.asked` and
+                    // `permission.replied` fire back to back, so two GETs overlap and their
+                    // responses can land in the wrong order — the older, emptier list
+                    // last. That strands a live prompt: the sheet never appears and the
+                    // agent stays blocked server-side with no further event to self-heal
+                    // it. Serialising the GETs keeps the newest response last.
+                    val gate = LiveStoreRefreshGate()
+
                     suspend fun refresh(
                         reason: String,
                         force: Boolean,
@@ -49,22 +66,39 @@ class DefaultPermissionLiveStore
                             )
                             return
                         }
-                        runCatching { sessionRepository.listPendingPermissions(directory) }
-                            .onSuccess { requests ->
+                        var failure: Throwable? = null
+                        gate.refresh(
+                            load = {
+                                runCatching { sessionRepository.listPendingPermissions(directory) }
+                                    .onFailure { failure = it }
+                                    .getOrNull()
+                            },
+                            commit = { requests ->
                                 stale = false
                                 diagnosticLogger.info(
                                     DiagnosticLogArea.Permission,
                                     "permission refresh reason=$reason count=${requests.size}",
                                 )
-                                send(requests)
-                            }
-                            .onFailure {
-                                diagnosticLogger.warning(
-                                    DiagnosticLogArea.Permission,
-                                    "permission refresh failed reason=$reason",
-                                    it,
-                                )
-                            }
+                                if (requests == lastEmitted) {
+                                    // Safe because the flow is shared with `replay = 1`: a
+                                    // late subscriber already gets the equal value.
+                                    diagnosticLogger.info(
+                                        DiagnosticLogArea.Permission,
+                                        "permission emit skipped reason=$reason cause=unchanged",
+                                    )
+                                } else {
+                                    lastEmitted = requests
+                                    send(requests)
+                                }
+                            },
+                        )
+                        failure?.let {
+                            diagnosticLogger.warning(
+                                DiagnosticLogArea.Permission,
+                                "permission refresh failed reason=$reason",
+                                it,
+                            )
+                        }
                     }
                     refresh(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)
                     launch {
@@ -84,16 +118,38 @@ class DefaultPermissionLiveStore
                                 refresh(it.reason, force = true)
                             }
                     }
-                    eventStream.events
-                        .filter {
-                            it.type == "permission.asked" ||
-                                it.type == "permission.replied" ||
-                                it.type == "stream.reconnected" ||
-                                it.type == "server.connected"
-                        }
-                        .collect { refresh(it.type, force = true) }
+                    try {
+                        eventStream.events
+                            .filter {
+                                it.type == "permission.asked" ||
+                                    it.type == "permission.replied" ||
+                                    it.type == "stream.reconnected" ||
+                                    it.type == "server.connected"
+                            }.collect { event ->
+                                if (event.type == "stream.reconnected" || event.type == "server.connected") {
+                                    // The reconnect pair lands within milliseconds of each
+                                    // other on every foreground, so coalesce it into one
+                                    // catch-up GET with the same cancel-and-delay shape as
+                                    // DefaultSessionStatusLiveStore.
+                                    reconnectRefresh?.cancel()
+                                    reconnectRefresh =
+                                        launch {
+                                            delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
+                                            refresh(event.type, force = true)
+                                        }
+                                } else {
+                                    // `permission.asked` / `permission.replied` stay
+                                    // immediate: a blocking interactive prompt must not wait
+                                    // on a debounce window.
+                                    refresh(event.type, force = true)
+                                }
+                            }
+                    } finally {
+                        // A torn-down observation must not fire a late fetch.
+                        reconnectRefresh?.cancel()
+                    }
                 }.shareIn(
-                    liveStoreScope.coroutineScope,
+                    sharingScope,
                     SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
                     replay = 1,
                 )

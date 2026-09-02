@@ -261,22 +261,41 @@ final class SessionInfo {
         return min(max(Double(inputTokens) / Double(contextLimit), 0), 1)
     }
 
+    /// Upper bound on re-subscriptions after the shared status stream is torn down.
+    /// A bound rather than an open loop so a stream that terminates immediately cannot
+    /// spin; real teardowns come from profile switches and Clear All Data, which a
+    /// single chat binding sees at most a handful of times.
+    private static let statusResubscribeLimit = 16
+
     private func observeStatuses() async {
-        for await statuses in sessionStatusLiveStore.observeStatuses(directory: worktree) {
-            let status = statuses[state.sessionID]
-            OpenCodeLog.sessionChat.debug(
-                "live status session=\(self.state.sessionID, privacy: .public) type=\(status?.raw["type"] ?? "-", privacy: .public)"
-            )
-            DiagnosticLog.debug(
-                .session,
-                "live status session=\(state.sessionID) type=\(status?.raw["type"] ?? "-")"
-            )
-            state.applyStatus(
-                authoritative: status.flatMap(eventAdapter.statusLabel(from:)),
-                hasResolved: true
-            )
-            notifyChange()
+        // The store completes this stream when it clears its cache. Re-subscribe so chat
+        // chrome keeps tracking the session instead of freezing on the last status it saw.
+        for _ in 0...Self.statusResubscribeLimit {
+            for await statuses in sessionStatusLiveStore.observeStatuses(directory: worktree) {
+                let status = statuses[state.sessionID]
+                OpenCodeLog.sessionChat.debug(
+                    "live status session=\(self.state.sessionID, privacy: .public) type=\(status?.raw["type"] ?? "-", privacy: .public)"
+                )
+                DiagnosticLog.debug(
+                    .session,
+                    "live status session=\(state.sessionID) type=\(status?.raw["type"] ?? "-")"
+                )
+                state.applyStatus(
+                    authoritative: status.flatMap(eventAdapter.statusLabel(from:)),
+                    hasResolved: true
+                )
+                notifyChange()
+            }
+            if Task.isCancelled { return }
+            await Task.yield()
         }
+        // Exhausting the bound means the stream kept ending immediately, which is a store
+        // bug rather than a normal teardown. Say so: from here the chrome is frozen on the
+        // last status seen, and a silent stop is exactly what this whole change removed.
+        DiagnosticLog.warning(
+            .session,
+            "live status gave up resubscribing session=\(state.sessionID) after \(Self.statusResubscribeLimit) rounds"
+        )
     }
 
     private func observeConnectionState() async {

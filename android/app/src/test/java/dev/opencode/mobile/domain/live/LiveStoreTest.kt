@@ -1,11 +1,14 @@
 package dev.opencode.mobile.domain.live
 
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.FakeWorldSignals
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.SilentWorldSignals
+import dev.opencode.mobile.domain.event.StoreRefreshReason
 import dev.opencode.mobile.domain.event.WorldSignal
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.message.ConnectionEpoch
@@ -30,11 +33,17 @@ import dev.opencode.mobile.domain.message.SessionMessageEngine
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionDecision
+import dev.opencode.mobile.domain.session.PermissionRequest
+import dev.opencode.mobile.domain.session.QuestionInfo
+import dev.opencode.mobile.domain.session.QuestionOption
+import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
+import dev.opencode.mobile.domain.sessioncache.SessionCache
+import dev.opencode.mobile.domain.sessioncache.SessionMessageCacheHandle
 import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
 import dev.opencode.mobile.markdown.OpenCodeTextMateHighlightingEngine
 import kotlinx.coroutines.CompletableDeferred
@@ -43,12 +52,14 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -2638,6 +2649,670 @@ class SessionLiveStoreTest {
         }
 }
 
+/**
+ * Profile-switch teardown: the ready store and the status store share one upstream
+ * per directory, and switching profiles must replace it rather than stack a second
+ * one on top of an observation nobody can stop.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class LiveObservationTeardownTest {
+    private val testDispatcher = StandardTestDispatcher()
+
+    @Test
+    fun profileSwitch_readyStoreResubscribes_andStillFlagsReady() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(statuses = emptyList())
+            val eventStream = FakeForegroundEventStream()
+            val statusStore = createStatusStore(repository, eventStream)
+            val readyStore = createReadyStore(statusStore, eventStream)
+            readyStore.bindProfile("profile-a")
+            var homeJob = observeHome(statusStore, readyStore, mutableListOf())
+            advanceUntilIdle()
+
+            // Profile switch, in the order MainScreenViewModel performs it.
+            homeJob.cancel()
+            readyStore.bindProfile("profile-b")
+            statusStore.clearCache()
+            val readyEmissions = mutableListOf<Set<String>>()
+            homeJob = observeHome(statusStore, readyStore, readyEmissions)
+            advanceUntilIdle()
+
+            readyStore.notifyPromptSent("ses-1", "/repo")
+            repository.statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy")))
+            eventStream.emit(OpencodeEvent(type = "server.connected"))
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
+            advanceUntilIdle()
+            repository.statuses = emptyList()
+            eventStream.emit(OpencodeEvent(type = "server.connected"))
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
+            advanceUntilIdle()
+            homeJob.cancel()
+
+            assertTrue(readyEmissions.last().contains("ses-1"))
+        }
+
+    @Test
+    fun profileSwitch_doesNotDoubleStatusUpstreams() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(statuses = emptyList())
+            val eventStream = FakeForegroundEventStream()
+            val statusStore = createStatusStore(repository, eventStream)
+            val readyStore = createReadyStore(statusStore, eventStream)
+            readyStore.bindProfile("profile-a")
+            var homeJob = observeHome(statusStore, readyStore, mutableListOf())
+            advanceUntilIdle()
+
+            eventStream.emit(OpencodeEvent(type = "server.connected"))
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
+            advanceUntilIdle()
+            val fetchesPerEventBefore = repository.statusFetchCount
+            eventStream.emit(OpencodeEvent(type = "server.connected"))
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
+            advanceUntilIdle()
+            val fetchesPerEvent = repository.statusFetchCount - fetchesPerEventBefore
+
+            homeJob.cancel()
+            readyStore.bindProfile("profile-b")
+            statusStore.clearCache()
+            homeJob = observeHome(statusStore, readyStore, mutableListOf())
+            advanceUntilIdle()
+
+            val fetchesAfterSwitch = repository.statusFetchCount
+            eventStream.emit(OpencodeEvent(type = "server.connected"))
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
+            advanceUntilIdle()
+            val fetchesPerEventAfterSwitch = repository.statusFetchCount - fetchesAfterSwitch
+            homeJob.cancel()
+
+            assertEquals(1, fetchesPerEvent)
+            assertEquals(fetchesPerEvent, fetchesPerEventAfterSwitch)
+            assertEquals(1, statusStore.activeUpstreamCount())
+        }
+
+    /** Home collects statuses directly and ready ids alongside them, like MainScreenViewModel. */
+    private fun CoroutineScope.observeHome(
+        statusStore: SessionStatusLiveStore,
+        readyStore: SessionReadyStore,
+        readyEmissions: MutableList<Set<String>>,
+    ) = launch {
+        combine(
+            statusStore.observeStatuses("/repo"),
+            readyStore.observeReadyIds("/repo"),
+        ) { _, readyIds -> readyIds }
+            .collect { readyEmissions.add(it) }
+    }
+
+    private fun createStatusStore(
+        repository: FakeSessionRepository,
+        eventStream: FakeForegroundEventStream,
+    ): DefaultSessionStatusLiveStore =
+        DefaultSessionStatusLiveStore(
+            repository,
+            eventStream,
+            LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
+            EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+        )
+
+    private fun createReadyStore(
+        statusStore: SessionStatusLiveStore,
+        eventStream: FakeForegroundEventStream,
+    ): DefaultSessionReadyStore =
+        DefaultSessionReadyStore(
+            sessionStatusLiveStore = statusStore,
+            eventStream = eventStream,
+            liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
+            persistence = InMemorySessionReadyPersistence(),
+            clock = SessionReadyClock { 1_000_000L },
+        )
+}
+
+/**
+ * The invalidation ack is a spinner release, not a freshness signal, so waiting on it
+ * must always be bounded: a collector can be torn down (profile switch, Clear All Data)
+ * or stalled on a slow radio at any point inside the refresh it was asked to run.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class InvalidationAckTest {
+    private val testDispatcher = StandardTestDispatcher()
+
+    @Test
+    fun invalidateAndWait_stopsWaiting_whenNoCollectorEverAcks() =
+        runTest(testDispatcher) {
+            val bus = StoreInvalidationBus(ackTimeoutMs = 5_000L)
+            val received = mutableListOf<StoreInvalidate>()
+            val collector = launch { bus.events.collect { received.add(it) } }
+            advanceUntilIdle()
+
+            var returned = false
+            val startedAt = testScheduler.currentTime
+            val waiter =
+                launch {
+                    bus.invalidateAndWait(null, StoreRefreshReason.PULL_TO_REFRESH)
+                    returned = true
+                }
+            advanceUntilIdle()
+            val elapsed = testScheduler.currentTime - startedAt
+            waiter.cancel()
+            collector.cancel()
+
+            assertTrue(
+                "invalidateAndWait must stop waiting when the collector never acks (elapsed=$elapsed ms)",
+                returned,
+            )
+            assertEquals(1, received.size)
+            assertEquals(5_000L, elapsed)
+        }
+
+    @Test
+    fun invalidate_returnsWithoutWaitingOutTheCeiling_whenObservationIsTornDownMidRefresh() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(sessions = listOf(testSession("1", "Alpha")))
+            val sessionCache = GatedSessionCache()
+            val store =
+                DefaultSessionLiveStore(
+                    repository,
+                    FakeForegroundEventStream(),
+                    LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
+                    sessionCache = sessionCache,
+                )
+            val observer = launch { store.observeSessions("/repo").collect { } }
+            advanceUntilIdle()
+
+            // Park the invalidation refresh after its REST response, before the emit.
+            val gate = CompletableDeferred<Unit>()
+            sessionCache.nextRememberGate = gate
+            var returned = false
+            val invalidateJob =
+                launch {
+                    store.invalidate(null)
+                    returned = true
+                }
+            // runCurrent, not advanceUntilIdle: advancing the clock would let the ack
+            // ceiling fire and hide whether the cancelled collector acked on its own.
+            runCurrent()
+            assertFalse("invalidate must still be waiting while its refresh is in flight", returned)
+
+            // Profile switch / Clear All Data cancels the collector mid-refresh.
+            val tornDownAt = testScheduler.currentTime
+            store.clearCache()
+            runCurrent()
+            val elapsed = testScheduler.currentTime - tornDownAt
+            observer.cancel()
+            invalidateJob.cancel()
+
+            assertTrue("invalidate must return after its collector was cancelled mid-refresh", returned)
+            assertTrue(
+                "the cancelled collector must ack from its finally, not leave the caller " +
+                    "waiting out the ${LiveStoreRefreshPolicy.INVALIDATION_ACK_TIMEOUT_MS} ms ceiling (elapsed=$elapsed ms)",
+                elapsed < LiveStoreRefreshPolicy.INVALIDATION_ACK_TIMEOUT_MS,
+            )
+        }
+}
+
+/**
+ * Revision gating: three concurrent collectors refresh the same state, so a REST
+ * response can land after a newer source already moved it. Both failures below are
+ * sticky — the event that would correct them has already fired.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class LiveStoreRevisionGateTest {
+    private val testDispatcher = StandardTestDispatcher()
+
+    /**
+     * `session.idle` fires once. If the status GET that was already in flight when it
+     * arrived commits its pre-idle snapshot, the home row and the chat chrome stay
+     * stuck on a spinner for a finished session until the user pulls to refresh.
+     */
+    @Test
+    fun statusReload_isDiscarded_whenSessionIdleLandsWhileTheGetIsInFlight() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store =
+                DefaultSessionStatusLiveStore(
+                    repository,
+                    eventStream,
+                    LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
+                    EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                )
+            val emissions = mutableListOf<Map<String, SessionStatus>>()
+            val collectJob =
+                launch {
+                    store.observeStatuses("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+
+            // The next reload stalls on the radio, still reporting ses-1 as busy.
+            repository.statusDelayMs = 10_000
+            eventStream.emit(OpencodeEvent(type = "server.connected"))
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
+            assertEquals(
+                "the reconnect reload must be in flight before the idle event lands",
+                2,
+                repository.statusFetchCount,
+            )
+
+            // The session finishes while that GET is in flight.
+            eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertTrue(
+                "session.idle must outrank the status GET that was already in flight: the " +
+                    "pre-idle REST snapshot put ses-1 back and the row is stuck busy " +
+                    "(last emission: ${emissions.last()})",
+                emissions.last()["ses-1"] == null,
+            )
+        }
+
+    /**
+     * Tap Allow, then the agent asks the next permission: two overlapping GETs from two
+     * different collectors. If the older, empty response lands last the sheet never
+     * appears and the agent stays blocked server-side with no event left to self-heal it.
+     */
+    @Test
+    fun permissionRefreshes_completingOutOfOrder_endWithTheNewestList() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository()
+            // Consumed in call order: initial subscribe, then the stalled
+            // `permission.replied` GET that answers with the pre-P2 empty list, then the
+            // pull-to-refresh GET that already sees P2.
+            repository.permissionScript += 0L to emptyList<PermissionRequest>()
+            repository.permissionScript += 5_000L to emptyList<PermissionRequest>()
+            repository.permissionScript += 0L to listOf(testPermissionRequest("perm-2"))
+            val eventStream = FakeForegroundEventStream()
+            val store =
+                DefaultPermissionLiveStore(
+                    repository,
+                    eventStream,
+                    LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
+                    DiagnosticLogger(DiagnosticLogBuffer(clockEpochMilliseconds = { 0L })),
+                )
+            val emissions = mutableListOf<List<PermissionRequest>>()
+            val collectJob =
+                launch {
+                    store.observePermissions("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+            assertEquals(1, repository.permissionFetchCount)
+
+            eventStream.emit(OpencodeEvent(type = "permission.replied", sessionId = "ses-1"))
+            // runCurrent, not advanceUntilIdle: the stalled GET must still be in flight.
+            runCurrent()
+            assertEquals(
+                "the permission.replied refresh must be in flight before the second trigger",
+                2,
+                repository.permissionFetchCount,
+            )
+
+            // A second trigger arrives from another collector while that GET is stalled.
+            store.invalidate("/repo")
+            runCurrent()
+            assertEquals(
+                "the second refresh must collapse onto the in-flight one rather than racing it",
+                2,
+                repository.permissionFetchCount,
+            )
+
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals(
+                "the newest permission list must be the last one emitted; the stale empty " +
+                    "response overwrote it and the prompt is gone " +
+                    "(emissions: ${emissions.map { requests -> requests.map { it.id } }})",
+                listOf("perm-2"),
+                emissions.last().map { it.id },
+            )
+        }
+}
+
+/**
+ * Refresh economy for the permission store. Two costs are cut without slowing the
+ * interactive path: the reconnect pair (`stream.reconnected` + `server.connected`,
+ * milliseconds apart on every foreground) collapses into one catch-up GET, and a
+ * refresh that reloads an unchanged list stops re-emitting downstream.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class DefaultPermissionLiveStoreTest {
+    private val testDispatcher = StandardTestDispatcher()
+
+    private fun store(
+        repository: FakeSessionRepository,
+        eventStream: FakeForegroundEventStream,
+        scope: CoroutineScope,
+    ) = DefaultPermissionLiveStore(
+        repository,
+        eventStream,
+        LiveStoreScope(scope),
+        DiagnosticLogger(DiagnosticLogBuffer(clockEpochMilliseconds = { 0L })),
+    )
+
+    /**
+     * A prompt is blocking: `permission.asked` must reach the sheet without waiting on
+     * any debounce window, and a burst must not be collapsed into fewer GETs than the
+     * events that asked for them.
+     */
+    @Test
+    fun permissionBurst_isNeitherDelayedNorAmplified() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = store(repository, eventStream, CoroutineScope(SupervisorJob() + testDispatcher))
+            val emissions = mutableListOf<List<PermissionRequest>>()
+            val collectJob = launch { store.observePermissions("/repo").collect { emissions.add(it) } }
+            advanceUntilIdle()
+            assertEquals(1, repository.permissionFetchCount)
+            val emissionsAfterSubscribe = emissions.size
+
+            repository.permissions = listOf(testPermissionRequest("perm-1"))
+            eventStream.emit(OpencodeEvent(type = "permission.asked", sessionId = "ses-1"))
+            // runCurrent only: no virtual time is advanced, so a debounced refresh would
+            // still be parked and the prompt would not be on screen yet.
+            runCurrent()
+            assertEquals(
+                "permission.asked must refresh immediately, not behind a debounce window",
+                2,
+                repository.permissionFetchCount,
+            )
+            assertEquals(
+                "the first prompt must already be emitted without advancing time",
+                listOf("perm-1"),
+                emissions.last().map { it.id },
+            )
+
+            repository.permissions = listOf(testPermissionRequest("perm-1"), testPermissionRequest("perm-2"))
+            eventStream.emit(OpencodeEvent(type = "permission.asked", sessionId = "ses-1"))
+            repository.permissions =
+                listOf(
+                    testPermissionRequest("perm-1"),
+                    testPermissionRequest("perm-2"),
+                    testPermissionRequest("perm-3"),
+                )
+            eventStream.emit(OpencodeEvent(type = "permission.asked", sessionId = "ses-1"))
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals(
+                "three permission.asked events must produce three GETs, serialised by the gate",
+                4,
+                repository.permissionFetchCount,
+            )
+            assertEquals(
+                "the burst must land as the newest list, not a stale intermediate one",
+                listOf("perm-1", "perm-2", "perm-3"),
+                emissions.last().map { it.id },
+            )
+            assertTrue(
+                "the burst must reach the collector (emissions: " +
+                    "${emissions.map { requests -> requests.map { it.id } }})",
+                emissions.size > emissionsAfterSubscribe,
+            )
+        }
+
+    /**
+     * Every foreground fires both reconnect events milliseconds apart. Two catch-up GETs
+     * per store per foreground is pure waste; one is enough.
+     */
+    @Test
+    fun reconnectPair_coalescesIntoOneRefresh() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = store(repository, eventStream, CoroutineScope(SupervisorJob() + testDispatcher))
+            val collectJob = launch { store.observePermissions("/repo").collect { } }
+            advanceUntilIdle()
+            assertEquals(1, repository.permissionFetchCount)
+
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
+            eventStream.emit(OpencodeEvent(type = "server.connected"))
+            runCurrent()
+            assertEquals(
+                "neither reconnect event may fetch before the debounce window elapses",
+                1,
+                repository.permissionFetchCount,
+            )
+
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals(
+                "the reconnect pair must collapse into exactly one catch-up GET",
+                2,
+                repository.permissionFetchCount,
+            )
+        }
+
+    /**
+     * Nothing downstream benefits from an identical list: the ViewModel re-runs its
+     * ordering walk and republishes UI state for a snapshot it already holds.
+     */
+    @Test
+    fun unchangedList_isNotReEmitted() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository()
+            repository.permissions = listOf(testPermissionRequest("perm-1"))
+            val eventStream = FakeForegroundEventStream()
+            val store = store(repository, eventStream, CoroutineScope(SupervisorJob() + testDispatcher))
+            val emissions = mutableListOf<List<PermissionRequest>>()
+            val collectJob = launch { store.observePermissions("/repo").collect { emissions.add(it) } }
+            advanceUntilIdle()
+            assertEquals(1, emissions.size)
+
+            // Same list, second fetch.
+            eventStream.emit(OpencodeEvent(type = "permission.asked", sessionId = "ses-1"))
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals(
+                "the second refresh really must have run",
+                2,
+                repository.permissionFetchCount,
+            )
+            assertEquals(
+                "an unchanged list must not be emitted again (emissions: " +
+                    "${emissions.map { requests -> requests.map { it.id } }})",
+                1,
+                emissions.size,
+            )
+        }
+}
+
+/** The question store mirrors [DefaultPermissionLiveStoreTest] exactly. */
+@OptIn(ExperimentalCoroutinesApi::class)
+class DefaultQuestionLiveStoreTest {
+    private val testDispatcher = StandardTestDispatcher()
+
+    private fun store(
+        repository: FakeSessionRepository,
+        eventStream: FakeForegroundEventStream,
+        scope: CoroutineScope,
+    ) = DefaultQuestionLiveStore(
+        repository,
+        eventStream,
+        LiveStoreScope(scope),
+        DiagnosticLogger(DiagnosticLogBuffer(clockEpochMilliseconds = { 0L })),
+    )
+
+    @Test
+    fun questionBurst_isNeitherDelayedNorAmplified() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = store(repository, eventStream, CoroutineScope(SupervisorJob() + testDispatcher))
+            val emissions = mutableListOf<List<QuestionRequest>>()
+            val collectJob = launch { store.observeQuestions("/repo").collect { emissions.add(it) } }
+            advanceUntilIdle()
+            assertEquals(1, repository.questionFetchCount)
+            val emissionsAfterSubscribe = emissions.size
+
+            repository.questions = listOf(testQuestionRequest("que-1"))
+            eventStream.emit(OpencodeEvent(type = "question.asked", sessionId = "ses-1"))
+            runCurrent()
+            assertEquals(
+                "question.asked must refresh immediately, not behind a debounce window",
+                2,
+                repository.questionFetchCount,
+            )
+            assertEquals(
+                "the first question must already be emitted without advancing time",
+                listOf("que-1"),
+                emissions.last().map { it.id },
+            )
+
+            repository.questions = listOf(testQuestionRequest("que-1"), testQuestionRequest("que-2"))
+            eventStream.emit(OpencodeEvent(type = "question.asked", sessionId = "ses-1"))
+            repository.questions =
+                listOf(
+                    testQuestionRequest("que-1"),
+                    testQuestionRequest("que-2"),
+                    testQuestionRequest("que-3"),
+                )
+            eventStream.emit(OpencodeEvent(type = "question.asked", sessionId = "ses-1"))
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals(
+                "three question.asked events must produce three GETs, serialised by the gate",
+                4,
+                repository.questionFetchCount,
+            )
+            assertEquals(
+                "the burst must land as the newest list, not a stale intermediate one",
+                listOf("que-1", "que-2", "que-3"),
+                emissions.last().map { it.id },
+            )
+            assertTrue(
+                "the burst must reach the collector (emissions: " +
+                    "${emissions.map { requests -> requests.map { it.id } }})",
+                emissions.size > emissionsAfterSubscribe,
+            )
+        }
+
+    @Test
+    fun reconnectPair_coalescesIntoOneRefresh() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = store(repository, eventStream, CoroutineScope(SupervisorJob() + testDispatcher))
+            val collectJob = launch { store.observeQuestions("/repo").collect { } }
+            advanceUntilIdle()
+            assertEquals(1, repository.questionFetchCount)
+
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
+            eventStream.emit(OpencodeEvent(type = "server.connected"))
+            runCurrent()
+            assertEquals(
+                "neither reconnect event may fetch before the debounce window elapses",
+                1,
+                repository.questionFetchCount,
+            )
+
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals(
+                "the reconnect pair must collapse into exactly one catch-up GET",
+                2,
+                repository.questionFetchCount,
+            )
+        }
+
+    @Test
+    fun unchangedList_isNotReEmitted() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository()
+            repository.questions = listOf(testQuestionRequest("que-1"))
+            val eventStream = FakeForegroundEventStream()
+            val store = store(repository, eventStream, CoroutineScope(SupervisorJob() + testDispatcher))
+            val emissions = mutableListOf<List<QuestionRequest>>()
+            val collectJob = launch { store.observeQuestions("/repo").collect { emissions.add(it) } }
+            advanceUntilIdle()
+            assertEquals(1, emissions.size)
+
+            eventStream.emit(OpencodeEvent(type = "question.asked", sessionId = "ses-1"))
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals(
+                "the second refresh really must have run",
+                2,
+                repository.questionFetchCount,
+            )
+            assertEquals(
+                "an unchanged list must not be emitted again (emissions: " +
+                    "${emissions.map { requests -> requests.map { it.id } }})",
+                1,
+                emissions.size,
+            )
+        }
+}
+
+private fun testPermissionRequest(id: String) =
+    PermissionRequest(
+        id = id,
+        sessionId = "ses-1",
+        permission = "bash",
+        patterns = emptyList(),
+        metadata = buildJsonObject { },
+        always = emptyList(),
+        toolMessageId = null,
+        toolCallId = null,
+    )
+
+private fun testQuestionRequest(id: String) =
+    QuestionRequest(
+        id = id,
+        sessionId = "ses-1",
+        questions =
+            listOf(
+                QuestionInfo(
+                    question = "Which approach?",
+                    header = "Approach",
+                    options = listOf(QuestionOption(label = "A", description = "First")),
+                ),
+            ),
+        toolMessageId = null,
+        toolCallId = null,
+    )
+
+/** Parks [rememberSessions] so a refresh can be cancelled after its REST call returned. */
+private class GatedSessionCache : SessionCache {
+    var nextRememberGate: CompletableDeferred<Unit>? = null
+
+    override suspend fun seedSessions(worktree: String): List<Session>? = null
+
+    override suspend fun rememberSessions(
+        worktree: String,
+        sessions: List<Session>,
+    ) {
+        nextRememberGate?.also {
+            nextRememberGate = null
+            it.await()
+        }
+    }
+
+    override fun openMessages(
+        sessionId: String,
+        worktree: String,
+    ): SessionMessageCacheHandle = NoOpSessionCache.openMessages(sessionId, worktree)
+
+    override suspend fun purgeWorktree(
+        serverBaseUrl: String,
+        worktree: String,
+    ) = Unit
+
+    override suspend fun clearAll() = Unit
+
+    override suspend fun estimatedSizeBytes(): Long = 0L
+}
+
 private fun testSession(
     id: String,
     title: String,
@@ -2735,7 +3410,37 @@ private class FakeSessionRepository(
     var shouldFailList: Boolean = false,
     var shouldFailStatuses: Boolean = false,
 ) : SessionRepository {
+    var listSessionsCallCount = 0
+    var permissionFetchCount = 0
+    var questionFetchCount = 0
+
+    /** Blocks the next [listSessions] until completed. Models an in-flight REST call. */
+    var nextListGate: CompletableDeferred<Unit>? = null
+
+    /** Virtual-time latency for [getAllSessionStatuses]. Models a stalled radio. */
+    var statusDelayMs: Long = 0
+
+    /**
+     * Scripted `latencyMs to response` pairs for [listPendingPermissions], consumed in
+     * call order. Lets a test give an earlier call a later completion.
+     */
+    val permissionScript: MutableList<Pair<Long, List<PermissionRequest>>> = mutableListOf()
+
+    /** Responses handed to [listPendingPermissions] once [permissionScript] is empty. */
+    var permissions: List<PermissionRequest> = emptyList()
+
+    /** Same shape as [permissionScript], for [listPendingQuestions]. */
+    val questionScript: MutableList<Pair<Long, List<QuestionRequest>>> = mutableListOf()
+
+    /** Responses handed to [listPendingQuestions] once [questionScript] is empty. */
+    var questions: List<QuestionRequest> = emptyList()
+
     override suspend fun listSessions(directory: String?): List<Session> {
+        listSessionsCallCount += 1
+        nextListGate?.also {
+            nextListGate = null
+            it.await()
+        }
         if (shouldFailList) error("list failed")
         return sessions
     }
@@ -2748,8 +3453,25 @@ private class FakeSessionRepository(
 
     override suspend fun getAllSessionStatuses(directory: String?): List<SessionStatus> {
         statusFetchCount += 1
+        if (statusDelayMs > 0) delay(statusDelayMs)
         if (shouldFailStatuses) error("status failed")
         return statuses
+    }
+
+    override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> {
+        permissionFetchCount += 1
+        val scripted = if (permissionScript.isEmpty()) null else permissionScript.removeAt(0)
+        if (scripted == null) return permissions
+        delay(scripted.first)
+        return scripted.second
+    }
+
+    override suspend fun listPendingQuestions(directory: String?): List<QuestionRequest> {
+        questionFetchCount += 1
+        val scripted = if (questionScript.isEmpty()) null else questionScript.removeAt(0)
+        if (scripted == null) return questions
+        delay(scripted.first)
+        return scripted.second
     }
 
     override suspend fun getSession(

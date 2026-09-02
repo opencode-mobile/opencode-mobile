@@ -170,6 +170,43 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.permissionRequest == nil)
     }
 
+    /// The permission snapshot arrives on every `permission.asked` / `permission.replied`
+    /// and used to drag a full `listSessions` along with it. The session tree is only
+    /// needed to order requests by walking down from the root, so it must be fetched
+    /// only when a request names a session that is neither the root nor already cached —
+    /// and it must still be fetched then, or a brand-new subagent's request is dropped
+    /// by the ordering walk.
+    @Test func permissionSnapshot_fetchesSessionTreeOnlyForUnknownSubagentSessions() async throws {
+        let sessionRepository = FakeChatSessionRepository(
+            sessions: [
+                Session(id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: nil),
+                Session(id: "child", title: "Child", slug: nil, projectID: nil, directory: "/repo", parentID: "ses-1", updatedAtEpochMs: nil),
+            ]
+        )
+        let permissionLiveStore = ScriptedPermissionLiveStore()
+        let viewModel = makeViewModel(
+            sessionRepository: sessionRepository,
+            permissionLiveStore: permissionLiveStore
+        )
+        defer { viewModel.stopObserving() }
+
+        permissionLiveStore.emit([permissionRequest(id: "permission-root", sessionID: "ses-1")])
+        try #require(await waitUntil { viewModel.uiState.permissionRequest?.id == "permission-root" })
+        #expect(sessionRepository.listSessionsCallCount == 0)
+
+        permissionLiveStore.emit([
+            permissionRequest(id: "permission-root", sessionID: "ses-1"),
+            permissionRequest(id: "permission-child", sessionID: "child"),
+        ])
+        try #require(await waitUntil { viewModel.uiState.permissionQueueCount == 2 })
+        #expect(sessionRepository.listSessionsCallCount == 1)
+
+        // "child" is cached now, so a later snapshot naming it must not refetch.
+        permissionLiveStore.emit([permissionRequest(id: "permission-child", sessionID: "child")])
+        try #require(await waitUntil { viewModel.uiState.permissionRequest?.id == "permission-child" })
+        #expect(sessionRepository.listSessionsCallCount == 1)
+    }
+
     @Test func permissionRequest_takesPriorityOverQuestionRequest() async {
         let viewModel = makeViewModel(
             sessionRepository: FakeChatSessionRepository(
@@ -3271,6 +3308,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private(set) var responseDirectory: String?
     private(set) var responsePermissionID: String?
     private(set) var responseSessionID: String?
+    private(set) var listSessionsCallCount = 0
     private(set) var pendingPermissionLoads = 0
     private(set) var pendingQuestionLoads = 0
     private(set) var repliedQuestionID: String?
@@ -3372,6 +3410,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     }
 
     func listSessions(directory: String?) async throws -> [Session] {
+        listSessionsCallCount += 1
         if let listSessionsError { throw listSessionsError }
         return sessions
     }
@@ -3543,6 +3582,34 @@ private final class FakePermissionLiveStore: PermissionLiveStore {
         AsyncStream { continuation in
             continuation.yield(requests)
             continuation.finish()
+        }
+    }
+
+    func clearCache() {}
+}
+
+/// A permission live store the test drives snapshot by snapshot, so successive
+/// snapshots can be compared against the session-list fetch count.
+@MainActor
+private final class ScriptedPermissionLiveStore: PermissionLiveStore {
+    private var continuation: AsyncStream<[PermissionRequest]>.Continuation?
+    private var buffered: [[PermissionRequest]] = []
+
+    func observePermissions(directory: String) -> AsyncStream<[PermissionRequest]> {
+        AsyncStream { continuation in
+            self.continuation = continuation
+            for snapshot in self.buffered {
+                continuation.yield(snapshot)
+            }
+            self.buffered.removeAll()
+        }
+    }
+
+    func emit(_ requests: [PermissionRequest]) {
+        if let continuation {
+            continuation.yield(requests)
+        } else {
+            buffered.append(requests)
         }
     }
 

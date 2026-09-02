@@ -349,6 +349,131 @@ class SessionChatViewModelTest {
             assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
+    /**
+     * Every permission snapshot used to piggyback a full `listSessions`, so an idle
+     * session with a single root-session prompt paid a session-list GET on every
+     * `permission.asked` / `permission.replied` / reconnect. The list is only used to
+     * order requests down the session tree, so it is only needed for a request whose
+     * session is neither the root nor already cached.
+     */
+    @Test
+    fun permissionSnapshot_fetchesSessionList_onlyForUnknownSubagentSessions() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessions =
+                        listOf(
+                            Session(id = "ses-1", title = "Title"),
+                            Session(id = "child", title = "Child", parentId = "ses-1"),
+                        ),
+                )
+            val permissionLiveStore =
+                FakePermissionLiveStore(listOf(permissionRequest("permission-1", "ses-1")))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    permissionLiveStore = permissionLiveStore,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(
+                "permission-1",
+                viewModel.uiState.value.permissionRequest
+                    ?.id,
+            )
+            assertEquals(
+                "a root-session-only snapshot must not fan out to listSessions",
+                0,
+                sessionRepository.listSessionsCallCount,
+            )
+
+            // A second root-only snapshot still must not fetch.
+            permissionLiveStore.requests.value =
+                listOf(
+                    permissionRequest("permission-1", "ses-1"),
+                    permissionRequest("permission-2", "ses-1"),
+                )
+            advanceUntilIdle()
+            assertEquals(
+                "repeated root-session snapshots must stay free of listSessions",
+                0,
+                sessionRepository.listSessionsCallCount,
+            )
+
+            // A subagent request arrives for a session the cache has never seen. Without
+            // the refetch the ordering walk would drop it entirely.
+            permissionLiveStore.requests.value =
+                listOf(
+                    permissionRequest("permission-1", "ses-1"),
+                    permissionRequest("permission-3", "child"),
+                )
+            advanceUntilIdle()
+            assertEquals(
+                "an unknown subagent session must trigger exactly one listSessions",
+                1,
+                sessionRepository.listSessionsCallCount,
+            )
+
+            // The tree now knows `child`, so a snapshot repeating it must not refetch.
+            permissionLiveStore.requests.value =
+                listOf(permissionRequest("permission-3", "child"))
+            advanceUntilIdle()
+            assertEquals(
+                "a session already in the cached tree must not trigger another listSessions",
+                1,
+                sessionRepository.listSessionsCallCount,
+            )
+        }
+
+    /** Same refresh economy on the question path, with its own separate session cache. */
+    @Test
+    fun questionSnapshot_fetchesSessionList_onlyForUnknownSubagentSessions() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessions =
+                        listOf(
+                            Session(id = "ses-1", title = "Title"),
+                            Session(id = "child", title = "Child", parentId = "ses-1"),
+                        ),
+                )
+            val questionLiveStore =
+                FakeQuestionLiveStore(listOf(questionRequest("que-1", "ses-1")))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    questionLiveStore = questionLiveStore,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(
+                "a root-session-only snapshot must not fan out to listSessions",
+                0,
+                sessionRepository.listSessionsCallCount,
+            )
+
+            questionLiveStore.requests.value = listOf(questionRequest("que-2", "child"))
+            advanceUntilIdle()
+            assertEquals(
+                "an unknown subagent session must trigger exactly one listSessions",
+                1,
+                sessionRepository.listSessionsCallCount,
+            )
+
+            questionLiveStore.requests.value =
+                listOf(questionRequest("que-2", "child"), questionRequest("que-3", "child"))
+            advanceUntilIdle()
+            assertEquals(
+                "a session already in the cached tree must not trigger another listSessions",
+                1,
+                sessionRepository.listSessionsCallCount,
+            )
+        }
+
     @Test
     fun permissionRequest_takesPriorityOverQuestionRequest() =
         runTest(testDispatcher) {
@@ -4246,6 +4371,8 @@ private class FakeSessionRepository(
         private set
     var abortSessionIds: List<String> = emptyList()
         private set
+    var listSessionsCallCount: Int = 0
+        private set
 
     override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> {
         pendingPermissionLoads += 1
@@ -4258,6 +4385,7 @@ private class FakeSessionRepository(
     }
 
     override suspend fun listSessions(directory: String?): List<Session> {
+        listSessionsCallCount += 1
         listSessionsError?.let { throw it }
         return sessions
     }
@@ -4452,7 +4580,7 @@ private class FakeSessionRepository(
 private class FakePermissionLiveStore(
     initialRequests: List<PermissionRequest>,
 ) : PermissionLiveStore {
-    private val requests = MutableStateFlow(initialRequests)
+    val requests = MutableStateFlow(initialRequests)
 
     override fun observePermissions(directory: String): Flow<List<PermissionRequest>> = requests
 
@@ -4476,7 +4604,7 @@ private fun permissionRequest(
 private class FakeQuestionLiveStore(
     initialRequests: List<QuestionRequest>,
 ) : QuestionLiveStore {
-    private val requests = MutableStateFlow(initialRequests)
+    val requests = MutableStateFlow(initialRequests)
 
     override fun observeQuestions(directory: String): Flow<List<QuestionRequest>> = requests
 

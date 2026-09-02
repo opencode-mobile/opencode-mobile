@@ -43,7 +43,23 @@ deleted. Screens subscribe and mutate; process adapters start and stop SSE.
   instance `GET /event`, v2 `GET /api/event`. Both carry session lifecycle,
   message/part, status, permissions, and questions. Heartbeat-only is a bug.
 - In-flight REST must not overwrite a newer store revision. Expected: an SSE
-  patch during `listSessions` / `GET …/message` discards that response.
+  patch during `listSessions` / `GET …/message` discards that response. The
+  four small stores enforce this through a shared single-flight revision gate
+  (`LiveStoreRefreshGate`), so duplicate in-flight GETs collapse instead of
+  racing. Expected: `session.idle` landing during a status reload wins, and
+  out-of-order permission responses still leave the newest list last.
+- Clearing a store's cache tears its observations down rather than orphaning
+  them: the upstream is cancelled and every subscriber stream is completed, so
+  consumers re-subscribe instead of hanging. Expected: after a profile switch
+  or Clear All Data, Ready chips reappear and no directory carries two
+  upstreams.
+- The pull-to-refresh ack is bounded, never unbounded. Expected: a collector
+  cancelled mid-refresh still releases the spinner, and the next
+  pull-to-refresh works. The ack means "stop waiting", never "data is fresh".
+- Stores do not re-emit an unchanged list, and `stream.reconnected` /
+  `server.connected` coalesce into one catch-up fetch. `*.asked` / `*.replied`
+  stay undebounced so a blocking prompt is never delayed. Session-tree fetches
+  happen only for a request whose session is neither the root nor cached.
 - Profile switch keeps today's `clearCache` on live stores and `MessageSync`,
   pops session routes, and treats missing session as terminal. Expected: no
   5s 404 loop on the previous server's session ids.
