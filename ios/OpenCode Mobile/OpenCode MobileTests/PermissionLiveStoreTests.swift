@@ -80,6 +80,22 @@ struct PermissionLiveStoreTests {
         #expect(collector.emissions.count == 1)
         #expect(repository.permissionFetchCount == 3)
     }
+
+    @Test func clearCache_existingCollectorKeepsReceiving() async throws {
+        let later = testPermission("perm-1")
+        let repository = PermissionLiveStoreFakeSessionRepository(script: [[], [later]])
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultPermissionLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream
+        )
+        let collector = PermissionCollector(store: store, directory: "/repo")
+        defer { collector.cancel() }
+
+        _ = try await collector.awaitEmission { $0.isEmpty }
+        store.clearCache()
+        _ = try await collector.awaitEmission { $0.map(\.id) == ["perm-1"] }
+    }
 }
 
 @MainActor

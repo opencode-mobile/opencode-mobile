@@ -161,15 +161,16 @@ class DefaultSessionStatusLiveStore
                                         sessionRepository
                                             .getAllSessionStatuses(directory = directory)
                                             .associateBy(SessionStatus::sessionId)
-                                    }.getOrNull()?.also {
-                                        stale = false
-                                        DiagnosticLog.info(
-                                            DiagnosticLogArea.Session,
-                                            "statusLiveStore refresh directory=$directory reason=$reason",
-                                        )
-                                    }
+                                    }.getOrNull()
                                 },
-                                commit = { loaded -> commitLoaded(loaded, emptyActiveGuard) },
+                                commit = { loaded ->
+                                    stale = false
+                                    DiagnosticLog.info(
+                                        DiagnosticLogArea.Session,
+                                        "statusLiveStore refresh directory=$directory reason=$reason",
+                                    )
+                                    commitLoaded(loaded, emptyActiveGuard)
+                                },
                             )
                         if (outcome == LiveStoreRefreshOutcome.DISCARDED) {
                             DiagnosticLog.info(

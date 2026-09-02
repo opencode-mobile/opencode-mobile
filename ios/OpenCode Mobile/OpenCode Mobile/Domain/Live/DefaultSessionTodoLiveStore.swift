@@ -34,6 +34,13 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
     }
 
     func observeTodos(sessionID: String, directory: String?) -> AsyncStream<[SessionTodo]> {
+        resubscribingLiveStream { [weak self] in
+            guard let self else { return AsyncStream { $0.finish() } }
+            return self.todoStream(sessionID: sessionID, directory: directory)
+        }
+    }
+
+    private func todoStream(sessionID: String, directory: String?) -> AsyncStream<[SessionTodo]> {
         let key = SessionKey(sessionID: sessionID, directory: directory ?? "")
         let handle = handles[key] ?? SessionHandle()
         handles[key] = handle
@@ -142,13 +149,13 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
     }
 
     func clearCache() {
-        for handle in handles.values {
-            handle.eventTask?.cancel()
-            for continuation in handle.continuations.values {
-                continuation.finish()
-            }
-        }
+        let stale = Array(handles.values)
         handles.removeAll()
+        for handle in stale {
+            handle.eventTask?.cancel()
+            handle.continuations.values.forEach { $0.finish() }
+            handle.continuations.removeAll()
+        }
     }
 
     private func removeContinuation(key: SessionKey, id: UUID) {

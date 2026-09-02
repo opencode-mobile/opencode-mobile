@@ -19,25 +19,10 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
     }
 
     func observeQuestions(directory: String) -> AsyncStream<[QuestionRequest]> {
-        if cache[directory] == nil {
-            let sessionRepository = sessionRepository
-            let eventStream = eventStream
-            let worldSignals = worldSignals
-            let invalidationBus = invalidationBus
-            cache[directory] = SharedLiveObservation { yield in
-                Task.detached {
-                    await Self.runLoop(
-                        directory: directory,
-                        sessionRepository: sessionRepository,
-                        eventStream: eventStream,
-                        worldSignals: worldSignals,
-                        invalidationBus: invalidationBus,
-                        yield: yield
-                    )
-                }
-            }
+        resubscribingLiveStream { [weak self] in
+            guard let self else { return AsyncStream { $0.finish() } }
+            return self.observation(for: directory).stream()
         }
-        return cache[directory]!.stream()
     }
 
     func invalidate(directory: String?) {
@@ -45,8 +30,33 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
     }
 
     func clearCache() {
-        cache.values.forEach { $0.finish() }
+        let stale = Array(cache.values)
         cache.removeAll()
+        stale.forEach { $0.finish() }
+    }
+
+    private func observation(for directory: String) -> SharedLiveObservation<[QuestionRequest]> {
+        if let existing = cache[directory], !existing.isTerminated {
+            return existing
+        }
+        let sessionRepository = sessionRepository
+        let eventStream = eventStream
+        let worldSignals = worldSignals
+        let invalidationBus = invalidationBus
+        let observation = SharedLiveObservation<[QuestionRequest]> { yield in
+            Task.detached {
+                await Self.runLoop(
+                    directory: directory,
+                    sessionRepository: sessionRepository,
+                    eventStream: eventStream,
+                    worldSignals: worldSignals,
+                    invalidationBus: invalidationBus,
+                    yield: yield
+                )
+            }
+        }
+        cache[directory] = observation
+        return observation
     }
 
     private nonisolated static func runLoop(

@@ -25,29 +25,10 @@ final class DefaultSessionLiveStore: SessionLiveStore {
     }
 
     func observeSessions(directory: String) -> AsyncStream<SessionListSnapshot> {
-        if cache[directory] == nil {
-            let sessionRepository = sessionRepository
-            let eventStream = eventStream
-            let sessionCache = sessionCache
-            let worldSignals = worldSignals
-            let invalidationBus = invalidationBus
-            let activeDirectories = activeDirectories
-            cache[directory] = SharedLiveObservation { yield in
-                Task.detached {
-                    await Self.runSessionLoop(
-                        directory: directory,
-                        sessionRepository: sessionRepository,
-                        eventStream: eventStream,
-                        sessionCache: sessionCache,
-                        worldSignals: worldSignals,
-                        invalidationBus: invalidationBus,
-                        activeDirectories: activeDirectories,
-                        yield: yield
-                    )
-                }
-            }
+        resubscribingLiveStream { [weak self] in
+            guard let self else { return AsyncStream { $0.finish() } }
+            return self.observation(for: directory).stream()
         }
-        return cache[directory]!.stream()
     }
 
     func invalidate(directory: String?) async {
@@ -71,8 +52,37 @@ final class DefaultSessionLiveStore: SessionLiveStore {
     }
 
     func clearCache() {
-        cache.values.forEach { $0.finish() }
+        let stale = Array(cache.values)
         cache.removeAll()
+        stale.forEach { $0.finish() }
+    }
+
+    private func observation(for directory: String) -> SharedLiveObservation<SessionListSnapshot> {
+        if let existing = cache[directory], !existing.isTerminated {
+            return existing
+        }
+        let sessionRepository = sessionRepository
+        let eventStream = eventStream
+        let sessionCache = sessionCache
+        let worldSignals = worldSignals
+        let invalidationBus = invalidationBus
+        let activeDirectories = activeDirectories
+        let observation = SharedLiveObservation<SessionListSnapshot> { yield in
+            Task.detached {
+                await Self.runSessionLoop(
+                    directory: directory,
+                    sessionRepository: sessionRepository,
+                    eventStream: eventStream,
+                    sessionCache: sessionCache,
+                    worldSignals: worldSignals,
+                    invalidationBus: invalidationBus,
+                    activeDirectories: activeDirectories,
+                    yield: yield
+                )
+            }
+        }
+        cache[directory] = observation
+        return observation
     }
 
     private nonisolated static func runSessionLoop(

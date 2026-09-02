@@ -19,26 +19,10 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
     }
 
     func observePermissions(directory: String) -> AsyncStream<[PermissionRequest]> {
-        if cache[directory] == nil {
-            let sessionRepository = sessionRepository
-            let eventStream = eventStream
-            let worldSignals = worldSignals
-            let invalidationBus = invalidationBus
-            cache[directory] = SharedLiveObservation { yield in
-                // Detach so dense message deltas do not resume this loop on MainActor.
-                Task.detached {
-                    await Self.runLoop(
-                        directory: directory,
-                        sessionRepository: sessionRepository,
-                        eventStream: eventStream,
-                        worldSignals: worldSignals,
-                        invalidationBus: invalidationBus,
-                        yield: yield
-                    )
-                }
-            }
+        resubscribingLiveStream { [weak self] in
+            guard let self else { return AsyncStream { $0.finish() } }
+            return self.observation(for: directory).stream()
         }
-        return cache[directory]!.stream()
     }
 
     func invalidate(directory: String?) {
@@ -46,8 +30,33 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
     }
 
     func clearCache() {
-        cache.values.forEach { $0.finish() }
+        let stale = Array(cache.values)
         cache.removeAll()
+        stale.forEach { $0.finish() }
+    }
+
+    private func observation(for directory: String) -> SharedLiveObservation<[PermissionRequest]> {
+        if let existing = cache[directory], !existing.isTerminated {
+            return existing
+        }
+        let sessionRepository = sessionRepository
+        let eventStream = eventStream
+        let worldSignals = worldSignals
+        let invalidationBus = invalidationBus
+        let observation = SharedLiveObservation<[PermissionRequest]> { yield in
+            Task.detached {
+                await Self.runLoop(
+                    directory: directory,
+                    sessionRepository: sessionRepository,
+                    eventStream: eventStream,
+                    worldSignals: worldSignals,
+                    invalidationBus: invalidationBus,
+                    yield: yield
+                )
+            }
+        }
+        cache[directory] = observation
+        return observation
     }
 
     private nonisolated static func runLoop(

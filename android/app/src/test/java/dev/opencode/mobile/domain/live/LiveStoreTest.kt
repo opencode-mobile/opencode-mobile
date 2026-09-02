@@ -2884,6 +2884,52 @@ class LiveStoreRevisionGateTest {
         }
 
     @Test
+    fun discardedStatusReload_doesNotClearStale_soLaterCatchUpStillRuns() =
+        runTest(testDispatcher) {
+            val world = FakeWorldSignals()
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store =
+                DefaultSessionStatusLiveStore(
+                    repository,
+                    eventStream,
+                    LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
+                    EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    world,
+                )
+            val collectJob = launch { store.observeStatuses("/repo").collect { } }
+            advanceUntilIdle()
+            assertEquals(1, repository.statusFetchCount)
+
+            world.emit(WorldSignal.Background)
+            runCurrent()
+            repository.statusDelayMs = 10_000
+            world.emit(WorldSignal.Foreground)
+            runCurrent()
+            assertEquals(2, repository.statusFetchCount)
+
+            eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            advanceUntilIdle()
+
+            repository.statusDelayMs = 0
+            repository.statuses =
+                listOf(SessionStatus(sessionId = "ses-2", raw = mapOf("type" to "busy")))
+            val fetchesAfterDiscard = repository.statusFetchCount
+            world.emit(WorldSignal.PathReady)
+            runCurrent()
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertTrue(
+                "a discarded reload must not clear stale, or force=false catch-up is skipped",
+                repository.statusFetchCount > fetchesAfterDiscard,
+            )
+        }
+
+    @Test
     fun permissionRefreshes_completingOutOfOrder_endWithTheNewestList() =
         runTest(testDispatcher) {
             val repository = FakeSessionRepository()

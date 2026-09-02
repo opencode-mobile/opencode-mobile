@@ -27,33 +27,10 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     }
 
     func observeStatuses(directory: String) -> AsyncStream<[String: SessionStatus]> {
-        if cache[directory] == nil {
-            let sessionRepository = sessionRepository
-            let eventStream = eventStream
-            let eventAdapter = eventAdapter
-            let worldSignals = worldSignals
-            let invalidationBus = invalidationBus
-            let activeDirectories = activeDirectories
-            let pendingBusy = pendingBusy
-            let mutationBus = mutationBus
-            cache[directory] = SharedLiveObservation { yield in
-                Task.detached {
-                    await Self.runStatusLoop(
-                        directory: directory,
-                        sessionRepository: sessionRepository,
-                        eventStream: eventStream,
-                        eventAdapter: eventAdapter,
-                        worldSignals: worldSignals,
-                        invalidationBus: invalidationBus,
-                        activeDirectories: activeDirectories,
-                        pendingBusy: pendingBusy,
-                        mutationBus: mutationBus,
-                        yield: yield
-                    )
-                }
-            }
+        resubscribingLiveStream { [weak self] in
+            guard let self else { return AsyncStream { $0.finish() } }
+            return self.observation(for: directory).stream()
         }
-        return cache[directory]!.stream()
     }
 
     func invalidate(directory: String?) async {
@@ -92,9 +69,42 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     }
 
     func clearCache() {
-        cache.values.forEach { $0.finish() }
+        let stale = Array(cache.values)
         cache.removeAll()
         pendingBusy.removeAll()
+        stale.forEach { $0.finish() }
+    }
+
+    private func observation(for directory: String) -> SharedLiveObservation<[String: SessionStatus]> {
+        if let existing = cache[directory], !existing.isTerminated {
+            return existing
+        }
+        let sessionRepository = sessionRepository
+        let eventStream = eventStream
+        let eventAdapter = eventAdapter
+        let worldSignals = worldSignals
+        let invalidationBus = invalidationBus
+        let activeDirectories = activeDirectories
+        let pendingBusy = pendingBusy
+        let mutationBus = mutationBus
+        let observation = SharedLiveObservation<[String: SessionStatus]> { yield in
+            Task.detached {
+                await Self.runStatusLoop(
+                    directory: directory,
+                    sessionRepository: sessionRepository,
+                    eventStream: eventStream,
+                    eventAdapter: eventAdapter,
+                    worldSignals: worldSignals,
+                    invalidationBus: invalidationBus,
+                    activeDirectories: activeDirectories,
+                    pendingBusy: pendingBusy,
+                    mutationBus: mutationBus,
+                    yield: yield
+                )
+            }
+        }
+        cache[directory] = observation
+        return observation
     }
 
     private nonisolated static func runStatusLoop(
@@ -174,18 +184,17 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             }
             let outcome = await gate.refresh(
                 load: { () async -> [String: SessionStatus]? in
-                    guard let loaded = await Self.loadStatuses(
+                    await Self.loadStatuses(
                         directory: directory,
                         sessionRepository: sessionRepository
-                    ) else { return nil }
+                    )
+                },
+                commit: { loaded in
                     stale.clear()
                     DiagnosticLog.info(
                         .session,
                         "statusLiveStore refresh directory=\(directory) reason=\(reason)"
                     )
-                    return loaded
-                },
-                commit: { loaded in
                     commitLoaded(loaded, emptyActiveGuard: emptyActiveGuard)
                 }
             )

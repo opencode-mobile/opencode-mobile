@@ -19,6 +19,12 @@ nonisolated final class SharedLiveObservation<Value: Sendable>: @unchecked Senda
         upstreamTask?.cancel()
     }
 
+    var isTerminated: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return isFinished
+    }
+
     func finish() {
         lock.lock()
         isFinished = true
@@ -134,5 +140,23 @@ nonisolated final class SharedLiveObservation<Value: Sendable>: @unchecked Senda
         for continuation in conts {
             continuation.yield(value)
         }
+    }
+}
+
+func resubscribingLiveStream<Value: Sendable>(
+    _ make: @escaping @MainActor @Sendable () -> AsyncStream<Value>
+) -> AsyncStream<Value> {
+    AsyncStream { continuation in
+        let task = Task { @MainActor in
+            while !Task.isCancelled {
+                for await value in make() {
+                    continuation.yield(value)
+                }
+                if Task.isCancelled { break }
+                await Task.yield()
+            }
+            continuation.finish()
+        }
+        continuation.onTermination = { _ in task.cancel() }
     }
 }
