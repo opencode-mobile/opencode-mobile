@@ -1161,7 +1161,8 @@ final class SessionChatViewModel {
             statusLabel: sessionStatusLabel,
             isCompacting: isCompacting,
             isAwaitingUser: awaitingUser,
-            lastIsThinking: lastIsThinking
+            lastIsThinking: lastIsThinking,
+            sendProgressPercent: composerState.sendProgressPercent
         )
         if !loggedWorkingLamp || lastWorkingLamp != workingIndicatorLabel {
             loggedWorkingLamp = true

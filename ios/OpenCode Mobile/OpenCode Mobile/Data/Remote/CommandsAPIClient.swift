@@ -9,15 +9,18 @@ nonisolated enum CommandsAPIError: Error {
 nonisolated struct CommandsAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let urlSession: URLSession
+    private let bodyUploader: DurableJSONUploader?
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession = .shared
+        urlSession: URLSession = .shared,
+        bodyUploader: DurableJSONUploader? = nil
     ) {
         self.connectionProvider = connectionProvider
         self.urlSession = urlSession
+        self.bodyUploader = bodyUploader
     }
 
     func listCommands(directory: String? = nil) async throws -> [CommandDTO] {
@@ -86,7 +89,22 @@ nonisolated struct CommandsAPIClient: Sendable {
             locationDirectory: locationDirectory
         )
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try encoder.encode(body)
+        let bodyData = try encoder.encode(body)
+        if let bodyUploader {
+            let (data, response) = try await bodyUploader.upload(
+                request,
+                body: bodyData,
+                onProgress: PromptSendProgressReporting.handler
+            )
+            guard let http = response as? HTTPURLResponse else {
+                throw CommandsAPIError.invalidResponse
+            }
+            guard (200 ..< 300).contains(http.statusCode) else {
+                throw CommandsAPIError.httpStatus(http.statusCode, String(data: data, encoding: .utf8))
+            }
+            return
+        }
+        request.httpBody = bodyData
         _ = try await data(for: request)
     }
 

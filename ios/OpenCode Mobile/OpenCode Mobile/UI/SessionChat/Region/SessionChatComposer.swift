@@ -681,43 +681,50 @@ final class SessionChatComposer {
                 text: trimmed,
                 serverCommandNames: Set(state.serverCommands.map(\.name))
             )
-            switch intent {
-            case let .serverCommand(command, arguments):
-                try await commandRepository.runCommand(
-                    sessionID: sessionID,
-                    options: CommandRunOptions(
-                        command: command,
-                        arguments: arguments,
-                        attachments: submittedAttachments,
-                        model: PromptModelSelection(
-                            providerID: selectedModel.option.providerID,
-                            modelID: selectedModel.option.modelID
+            let hasAttachments = !submittedAttachments.isEmpty
+            try await PromptSendProgressReporting.$handler.withValue({ [weak self] sent, total in
+                Task { @MainActor in
+                    self?.applySendProgress(sent: sent, total: total, hasAttachments: hasAttachments)
+                }
+            }) {
+                switch intent {
+                case let .serverCommand(command, arguments):
+                    try await commandRepository.runCommand(
+                        sessionID: sessionID,
+                        options: CommandRunOptions(
+                            command: command,
+                            arguments: arguments,
+                            attachments: submittedAttachments,
+                            model: PromptModelSelection(
+                                providerID: selectedModel.option.providerID,
+                                modelID: selectedModel.option.modelID
+                            ),
+                            variant: composer.selectedVariant,
+                            mode: composer.selectedMode,
+                            delivery: composer.followUpDelivery
                         ),
-                        variant: composer.selectedVariant,
-                        mode: composer.selectedMode,
-                        delivery: composer.followUpDelivery
-                    ),
-                    directory: worktree
-                )
-            case let .prompt(text):
-                try await messageRepository.sendPromptAsync(
-                    sessionID: sessionID,
-                    options: PromptSendOptions(
-                        text: text,
-                        attachments: submittedAttachments,
-                        model: PromptModelSelection(
-                            providerID: selectedModel.option.providerID,
-                            modelID: selectedModel.option.modelID
+                        directory: worktree
+                    )
+                case let .prompt(text):
+                    try await messageRepository.sendPromptAsync(
+                        sessionID: sessionID,
+                        options: PromptSendOptions(
+                            text: text,
+                            attachments: submittedAttachments,
+                            model: PromptModelSelection(
+                                providerID: selectedModel.option.providerID,
+                                modelID: selectedModel.option.modelID
+                            ),
+                            variant: composer.selectedVariant,
+                            mode: composer.selectedMode,
+                            agentMentions: mentionsForSend,
+                            delivery: composer.followUpDelivery
                         ),
-                        variant: composer.selectedVariant,
-                        mode: composer.selectedMode,
-                        agentMentions: mentionsForSend,
-                        delivery: composer.followUpDelivery
-                    ),
-                    directory: worktree
-                )
-                if !mentionsForSend.isEmpty {
-                    OpenCodeLog.sessionChat.info("prompt send agentParts=\(mentionsForSend.count)")
+                        directory: worktree
+                    )
+                    if !mentionsForSend.isEmpty {
+                        OpenCodeLog.sessionChat.info("prompt send agentParts=\(mentionsForSend.count)")
+                    }
                 }
             }
             persistCurrentSelection(updatePreference: false)
@@ -738,6 +745,7 @@ final class SessionChatComposer {
 
     func clearSending() {
         state.isSending = false
+        state.sendProgressPercent = nil
         notifyChange()
     }
 
@@ -749,7 +757,16 @@ final class SessionChatComposer {
 
     func setSendError(_ error: String) {
         state.isSending = false
+        state.sendProgressPercent = nil
         state.errorMessage = error
+        notifyChange()
+    }
+
+    private func applySendProgress(sent: Int64, total: Int64, hasAttachments: Bool) {
+        guard PromptSendProgress.shouldShow(bytesTotal: total, hasAttachments: hasAttachments) else { return }
+        let percent = PromptSendProgress.percent(bytesSent: sent, bytesTotal: total)
+        guard state.sendProgressPercent != percent else { return }
+        state.sendProgressPercent = percent
         notifyChange()
     }
 

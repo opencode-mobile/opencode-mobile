@@ -896,6 +896,19 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.errorMessage == nil)
     }
 
+    @Test func sendPrompt_attachmentInFlight_showsSendingPercent() async {
+        let repository = FakeMessageRepository(holdSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        viewModel.addAttachments([testAttachment(id: "one", filename: "notes.txt")])
+        let task = Task { await viewModel.sendPrompt() }
+        await waitUntil { viewModel.uiState.isSending }
+        await waitUntil { viewModel.uiState.workingIndicatorLabel == "Sending 25%" }
+        repository.releaseSend()
+        await task.value
+        viewModel.stopObserving()
+    }
+
     @Test func sendPrompt_attachmentOnly_sendsAndRendersOptimistically() async {
         let repository = FakeMessageRepository(failListMessagesAfterSend: true)
         let viewModel = makeViewModel(messageRepository: repository)
@@ -3003,6 +3016,9 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {
         sendPromptAsyncCalled = true
         sentOptions = options
+        if let handler = PromptSendProgressReporting.handler, !options.attachments.isEmpty {
+            handler(1, 4)
+        }
         if shouldFailSend {
             if holdSend, !sendReleaseRequested {
                 await withCheckedContinuation { sendContinuation = $0 }

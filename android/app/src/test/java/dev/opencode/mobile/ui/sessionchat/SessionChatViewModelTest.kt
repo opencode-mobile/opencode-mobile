@@ -30,6 +30,7 @@ import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.PromptSendOptions
+import dev.opencode.mobile.domain.message.PromptSendProgressReporter
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
@@ -1478,6 +1479,22 @@ class SessionChatViewModelTest {
                 viewModel.uiState.value.messages
                     .any { it.isPending },
             )
+        }
+
+    @Test
+    fun sendPrompt_attachmentInFlight_showsSendingPercent() =
+        runTest(testDispatcher) {
+            val sendGate = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository(holdSendUntil = sendGate)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.addAttachments(listOf(testAttachment()))
+            viewModel.sendPrompt()
+            runCurrent()
+            assertEquals("Sending 25%", viewModel.uiState.value.workingIndicatorLabel)
+            sendGate.complete(Unit)
+            advanceUntilIdle()
         }
 
     @Test
@@ -4194,6 +4211,9 @@ private class FakeMessageRepository(
     ) {
         sendPromptAsyncCalled = true
         sentOptions = options
+        if (options.attachments.isNotEmpty()) {
+            kotlin.coroutines.coroutineContext[PromptSendProgressReporter]?.onProgress?.invoke(1, 4)
+        }
         holdSendUntil?.await()
         if (shouldFailSend) error("send failed")
         if (echoSentPrompt && options.text.isNotEmpty()) {

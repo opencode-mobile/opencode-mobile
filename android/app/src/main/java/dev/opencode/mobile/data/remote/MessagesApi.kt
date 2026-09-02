@@ -7,8 +7,10 @@ import dev.opencode.mobile.data.remote.dto.V2PromptRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionMessageDto
 import dev.opencode.mobile.data.remote.dto.V2SwitchAgentRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
+import dev.opencode.mobile.domain.message.PromptSendProgressReporter
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
+import dev.opencode.mobile.network.applyDurableSend
 import dev.opencode.mobile.network.setJsonBody
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -18,6 +20,7 @@ import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
+import kotlin.coroutines.coroutineContext
 import kotlinx.serialization.json.Json
 
 class MessagesApi private constructor(
@@ -95,8 +98,10 @@ class MessagesApi private constructor(
         body: SendMessageRequestDto,
         directory: String? = null,
     ) {
+        val progress = coroutineContext[PromptSendProgressReporter]
         val response =
             httpClient.get().post("session/$sessionId/prompt_async") {
+                applyDurableSend(progress)
                 applyDirectory(directory)
                 setJsonBody(json, body)
             }
@@ -136,8 +141,10 @@ class MessagesApi private constructor(
         body: T,
         directory: String?,
     ) {
+        val progress = coroutineContext[PromptSendProgressReporter]
         val response =
             httpClient.get().post(path) {
+                applyDurableSend(progress)
                 setJsonBody(json, body)
             }
         if (!response.status.isSuccess()) {

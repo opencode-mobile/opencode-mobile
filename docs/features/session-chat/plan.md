@@ -136,12 +136,15 @@ the composer.
 `SessionInfo` owns session status. Optimistic busy is write-through to
 `SessionStatusLiveStore` so home Running and chat Working share one map.
 The timeline owns last-row layout and a stable list identity.
-`WorkingTurnIndicator` collapses to status + compacting + awaiting-user +
-last-is-thinking.
+`WorkingTurnIndicator` collapses to status + send progress + compacting +
+awaiting-user + last-is-thinking.
 
 ### Labels (one slot, status only)
 
-- `Working` — busy, including optimistic busy after send, before SSE busy
+- `Sending…` / `Sending N%` — large prompt body still on the wire (Attachment
+  or body ≥ 32KB). Home does not cancel that POST.
+- `Working` — busy after the server accepts, including optimistic busy for
+  small sends, before SSE busy
 - `Retrying` — retry
 - `Compacting…` — compact in flight
 
@@ -149,8 +152,9 @@ Not `Thinking`. That word stays on the thought row while reasoning is open.
 
 ### Expected results (iOS and Android)
 
-- [x] After Send, `Working` appears immediately (optimistic busy) as the last
-  timeline row, left-aligned.
+- [x] After Send, Session Running chrome appears immediately as the last
+  timeline row, left-aligned. Large bodies show `Sending N%` until the POST
+  completes, then `Working`. Small sends stay `Working`.
 - [x] While SSE reports busy, `Working` stays visible as that same last row,
   including while tools run and after a thought row settles to `Thought` /
   `Thought · Nms`.

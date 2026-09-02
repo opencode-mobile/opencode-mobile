@@ -13,6 +13,8 @@ import dev.opencode.mobile.domain.command.ComposerSubmitRouting
 import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.MessageError
@@ -20,6 +22,8 @@ import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.PromptModelSelection
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.PromptSendOptions
+import dev.opencode.mobile.domain.message.PromptSendProgress
+import dev.opencode.mobile.domain.message.PromptSendProgressReporter
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelection
@@ -53,6 +57,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -752,47 +757,54 @@ class SessionChatComposer(
                         text = prompt,
                         serverCommandNames = _state.value.serverCommands.map { it.name }.toSet(),
                     )
-                when (intent) {
-                    is ComposerSubmitIntent.ServerCommand ->
-                        commandRepository.runCommand(
-                            sessionId = sessionId,
-                            options =
-                                CommandRunOptions(
-                                    command = intent.command,
-                                    arguments = intent.arguments,
-                                    attachments = attachments,
-                                    model =
-                                        PromptModelSelection(
-                                            selectedModel.option.providerId,
-                                            selectedModel.option.modelId,
-                                        ),
-                                    variant = composer.selectedVariant,
-                                    mode = composer.selectedMode,
-                                    delivery = composer.followUpDelivery,
-                                ),
-                            directory = worktree,
-                        )
-                    is ComposerSubmitIntent.Prompt -> {
-                        messageRepository.sendPromptAsync(
-                            sessionId = sessionId,
-                            options =
-                                PromptSendOptions(
-                                    text = intent.text,
-                                    attachments = attachments,
-                                    model =
-                                        PromptModelSelection(
-                                            selectedModel.option.providerId,
-                                            selectedModel.option.modelId,
-                                        ),
-                                    variant = composer.selectedVariant,
-                                    mode = composer.selectedMode,
-                                    agentMentions = mentionsForSend,
-                                    delivery = composer.followUpDelivery,
-                                ),
-                            directory = worktree,
-                        )
-                        if (mentionsForSend.isNotEmpty()) {
-                            logI("prompt send agentParts=${mentionsForSend.size}")
+                val hasAttachments = attachments.isNotEmpty()
+                val progress =
+                    PromptSendProgressReporter { sent, total ->
+                        applySendProgress(sent = sent, total = total, hasAttachments = hasAttachments)
+                    }
+                withContext(NonCancellable + progress) {
+                    when (intent) {
+                        is ComposerSubmitIntent.ServerCommand ->
+                            commandRepository.runCommand(
+                                sessionId = sessionId,
+                                options =
+                                    CommandRunOptions(
+                                        command = intent.command,
+                                        arguments = intent.arguments,
+                                        attachments = attachments,
+                                        model =
+                                            PromptModelSelection(
+                                                selectedModel.option.providerId,
+                                                selectedModel.option.modelId,
+                                            ),
+                                        variant = composer.selectedVariant,
+                                        mode = composer.selectedMode,
+                                        delivery = composer.followUpDelivery,
+                                    ),
+                                directory = worktree,
+                            )
+                        is ComposerSubmitIntent.Prompt -> {
+                            messageRepository.sendPromptAsync(
+                                sessionId = sessionId,
+                                options =
+                                    PromptSendOptions(
+                                        text = intent.text,
+                                        attachments = attachments,
+                                        model =
+                                            PromptModelSelection(
+                                                selectedModel.option.providerId,
+                                                selectedModel.option.modelId,
+                                            ),
+                                        variant = composer.selectedVariant,
+                                        mode = composer.selectedMode,
+                                        agentMentions = mentionsForSend,
+                                        delivery = composer.followUpDelivery,
+                                    ),
+                                directory = worktree,
+                            )
+                            if (mentionsForSend.isNotEmpty()) {
+                                logI("prompt send agentParts=${mentionsForSend.size}")
+                            }
                         }
                     }
                 }
@@ -807,7 +819,7 @@ class SessionChatComposer(
                     submittedAttachments = attachments,
                     submittedAttachmentRevisions = submittedAttachmentRevisions,
                 )
-                _state.update { it.copy(isSending = false) }
+                _state.update { it.copy(isSending = false, sendProgressPercent = null) }
                 onSendFailed(display.id, errorMessage(throwable))
             }
         }
@@ -902,7 +914,19 @@ class SessionChatComposer(
     }
 
     fun clearSending() {
-        _state.update { it.copy(isSending = false) }
+        _state.update { it.copy(isSending = false, sendProgressPercent = null) }
+    }
+
+    private fun applySendProgress(
+        sent: Long,
+        total: Long,
+        hasAttachments: Boolean,
+    ) {
+        if (!PromptSendProgress.shouldShow(total, hasAttachments)) return
+        val percent = PromptSendProgress.percent(sent, total)
+        val current = _state.value.sendProgressPercent
+        if (current == percent) return
+        _state.update { it.copy(sendProgressPercent = percent) }
     }
 
     fun clearTransientErrors() {
@@ -1269,6 +1293,11 @@ class SessionChatComposer(
         }
 
     private fun logSendFailure(throwable: Throwable) {
+        DiagnosticLog.error(
+            DiagnosticLogArea.Session,
+            "sendPromptAsync failed error=${throwable.message ?: throwable::class.java.simpleName}",
+            throwable,
+        )
         runCatching { Log.e(TAG, "sendPromptAsync failed", throwable) }
     }
 

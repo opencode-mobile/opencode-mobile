@@ -6,8 +6,10 @@ import dev.opencode.mobile.data.remote.dto.RunCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CommandDto
 import dev.opencode.mobile.data.remote.dto.V2RunCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SkillDto
+import dev.opencode.mobile.domain.message.PromptSendProgressReporter
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
+import dev.opencode.mobile.network.applyDurableSend
 import dev.opencode.mobile.network.applyLocationDirectory
 import dev.opencode.mobile.network.setJsonBody
 import io.ktor.client.HttpClient
@@ -17,6 +19,7 @@ import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
+import kotlin.coroutines.coroutineContext
 import kotlinx.serialization.json.Json
 
 class CommandsApi private constructor(
@@ -62,8 +65,10 @@ class CommandsApi private constructor(
         sessionId: String,
         body: V2RunCommandRequestDto,
     ) {
+        val progress = coroutineContext[PromptSendProgressReporter]
         val response =
             httpClient.get().post("api/session/$sessionId/command") {
+                applyDurableSend(progress)
                 setJsonBody(json, body)
             }
         if (!response.status.isSuccess()) {
@@ -77,8 +82,10 @@ class CommandsApi private constructor(
         body: RunCommandRequestDto,
         directory: String?,
     ) {
+        val progress = coroutineContext[PromptSendProgressReporter]
         val response =
             httpClient.get().post(path) {
+                applyDurableSend(progress)
                 applyDirectory(directory)
                 setJsonBody(json, body)
             }

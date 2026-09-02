@@ -13,6 +13,44 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
+    @Test func labelForActiveTurn_showsSendingPercentWhileBodyIsOnTheWire() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                sendProgressPercent: 25
+            ) == "Sending 25%"
+        )
+    }
+
+    @Test func labelForActiveTurn_showsSendingEllipsisAtZero() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                sendProgressPercent: 0
+            ) == "Sending…"
+        )
+    }
+
+    @Test func labelForActiveTurn_compactingWinsOverSending() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                isCompacting: true,
+                sendProgressPercent: 40
+            ) == SessionCompactChrome.statusLabel
+        )
+    }
+
+    @Test func labelForActiveTurn_hidesSendingWhenAwaitingUser() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                isAwaitingUser: true,
+                sendProgressPercent: 40
+            ) == nil
+        )
+    }
+
     @Test func labelForActiveTurn_showsRetrying() {
         #expect(
             WorkingTurnIndicator.labelForActiveTurn(statusLabel: "Retrying") == "Retrying"

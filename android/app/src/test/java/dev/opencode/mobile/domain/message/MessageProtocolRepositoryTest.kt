@@ -11,6 +11,7 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.MockRequestHandler
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
@@ -232,6 +233,7 @@ class MessageProtocolRepositoryTest {
     private fun testClient(handler: MockRequestHandler): HttpClient =
         HttpClient(MockEngine(handler)) {
             expectSuccess = false
+            install(HttpTimeout)
             install(ContentNegotiation) { json(json) }
         }
 
