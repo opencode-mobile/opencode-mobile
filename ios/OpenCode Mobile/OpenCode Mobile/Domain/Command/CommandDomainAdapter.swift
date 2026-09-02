@@ -17,10 +17,39 @@ struct CommandDomainAdapter: Sendable {
             ServerCommand(
                 name: dto.name,
                 description: dto.description?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-                source: .command,
+                source: toSource(dto.source),
                 template: dto.template?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
             )
         }
+    }
+
+    func mergeV2SlashCatalog(commands: [ServerCommand], skills: [V2SkillDTO]) -> [ServerCommand] {
+        let names = Set(commands.map(\.name))
+        return commands + skills.compactMap(toSkillCommand).filter { !names.contains($0.name) }
+    }
+
+    func toSkillCommand(_ dto: V2SkillDTO) -> ServerCommand? {
+        if dto.slash == false { return nil }
+        return ServerCommand(
+            name: dto.name,
+            description: dto.description?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            source: .skill,
+            template: Self.skillTemplate(content: dto.content, location: dto.location)
+        )
+    }
+
+    static func skillTemplate(content: String?, location: String?) -> String? {
+        let body = content?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        guard let body else { return nil }
+        guard let location, !location.isEmpty, location != builtInSkillLocation else { return body }
+        let directory = (location as NSString).deletingLastPathComponent
+        guard !directory.isEmpty, directory != "/" else { return body }
+        return """
+        \(body)
+
+        Base directory for this skill: \(directory)
+        Relative paths in this skill (e.g., scripts/, references/) are relative to this base directory.
+        """
     }
 
     func toRunRequest(_ options: CommandRunOptions) -> RunCommandRequestDTO {
@@ -83,6 +112,8 @@ struct CommandDomainAdapter: Sendable {
             .command
         }
     }
+
+    private static let builtInSkillLocation = "<built-in>"
 }
 
 private extension String {

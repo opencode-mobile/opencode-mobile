@@ -32,6 +32,14 @@ nonisolated struct CommandsAPIClient: Sendable {
         return envelope.data
     }
 
+    func listSkillsV2(directory: String? = nil) async throws -> [V2SkillDTO] {
+        let envelope: APIListEnvelope<V2SkillDTO> = try await get(
+            path: "api/skill",
+            locationDirectory: directory
+        )
+        return envelope.data
+    }
+
     func runCommand(sessionID: String, body: RunCommandRequestDTO, directory: String? = nil) async throws {
         try await post(path: "session/\(sessionID)/command", body: body, directory: directory)
     }

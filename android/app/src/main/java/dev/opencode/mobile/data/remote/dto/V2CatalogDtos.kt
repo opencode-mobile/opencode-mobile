@@ -9,7 +9,17 @@ data class V2CommandDto(
     val template: String? = null,
     val description: String? = null,
     val agent: String? = null,
+    val source: String? = null,
     val subtask: Boolean? = null,
+)
+
+@Serializable
+data class V2SkillDto(
+    val name: String,
+    val description: String? = null,
+    val slash: Boolean? = null,
+    val location: String? = null,
+    val content: String? = null,
 )
 
 @Serializable

@@ -1,6 +1,8 @@
 package dev.opencode.mobile.domain.command
 
 import dev.opencode.mobile.data.remote.dto.CommandDto
+import dev.opencode.mobile.data.remote.dto.V2CommandDto
+import dev.opencode.mobile.data.remote.dto.V2SkillDto
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.PromptModelSelection
@@ -25,6 +27,48 @@ class CommandDomainAdapterTest {
         assertEquals(ServerCommandSource.Mcp, commands[1].source)
         assertEquals(ServerCommandSource.Skill, commands[2].source)
         assertEquals("Setup", commands[0].description)
+    }
+
+    @Test
+    fun toServerCommandsFromV2_mapsSource() {
+        val commands =
+            adapter.toServerCommandsFromV2(
+                listOf(
+                    V2CommandDto(name = "init", description = "Setup", source = "command"),
+                    V2CommandDto(name = "prompt", source = "mcp"),
+                    V2CommandDto(name = "skill-a", source = "skill"),
+                ),
+            )
+        assertEquals(ServerCommandSource.Command, commands[0].source)
+        assertEquals(ServerCommandSource.Mcp, commands[1].source)
+        assertEquals(ServerCommandSource.Skill, commands[2].source)
+    }
+
+    @Test
+    fun mergeV2SlashCatalog_appendsSkillsSkippingDuplicatesAndSlashFalse() {
+        val commands =
+            adapter.toServerCommandsFromV2(
+                listOf(V2CommandDto(name = "init", description = "Setup", template = "x")),
+            )
+        val merged =
+            adapter.mergeV2SlashCatalog(
+                commands,
+                listOf(
+                    V2SkillDto(name = "init", description = "dup", content = "ignored"),
+                    V2SkillDto(name = "hidden", slash = false, content = "nope"),
+                    V2SkillDto(
+                        name = "prototype",
+                        description = "A skill",
+                        location = "/skills/prototype/SKILL.md",
+                        content = "Do the thing",
+                    ),
+                ),
+            )
+        assertEquals(listOf("init", "prototype"), merged.map { it.name })
+        assertEquals(ServerCommandSource.Skill, merged[1].source)
+        assertEquals("A skill", merged[1].description)
+        assertTrue(merged[1].template!!.contains("Do the thing"))
+        assertTrue(merged[1].template!!.contains("Base directory for this skill: /skills/prototype"))
     }
 
     @Test

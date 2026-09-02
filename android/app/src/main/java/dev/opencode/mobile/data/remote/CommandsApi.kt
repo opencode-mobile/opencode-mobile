@@ -5,6 +5,7 @@ import dev.opencode.mobile.data.remote.dto.CommandDto
 import dev.opencode.mobile.data.remote.dto.RunCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CommandDto
 import dev.opencode.mobile.data.remote.dto.V2RunCommandRequestDto
+import dev.opencode.mobile.data.remote.dto.V2SkillDto
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
 import dev.opencode.mobile.network.applyLocationDirectory
@@ -39,6 +40,14 @@ class CommandsApi private constructor(
             .get("api/command") {
                 applyLocationDirectory(directory)
             }.body<ApiListEnvelope<V2CommandDto>>()
+            .data
+
+    suspend fun listSkillsV2(directory: String? = null): List<V2SkillDto> =
+        httpClient
+            .get()
+            .get("api/skill") {
+                applyLocationDirectory(directory)
+            }.body<ApiListEnvelope<V2SkillDto>>()
             .data
 
     suspend fun runCommand(

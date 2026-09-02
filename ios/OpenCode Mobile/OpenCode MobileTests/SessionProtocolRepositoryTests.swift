@@ -552,9 +552,30 @@ struct SessionProtocolRepositoryTests {
 
         #expect(commands.map(\.name) == ["init"])
         #expect(commands.first?.description == "Setup")
-        let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
-        #expect(url.path.hasSuffix("/api/command"))
-        #expect(queryValue(url, "location[directory]") == "/repo")
+        let urls = ProtocolRoutingURLProtocol.requests.compactMap(\.url)
+        #expect(urls.contains { $0.path.hasSuffix("/api/command") })
+        #expect(urls.contains { $0.path.hasSuffix("/api/skill") })
+        let commandURL = try #require(urls.first { $0.path.hasSuffix("/api/command") })
+        #expect(queryValue(commandURL, "location[directory]") == "/repo")
+    }
+
+    @Test func v2ListCommandsMergesSkillsFromSkillEndpoint() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"{"data":[{"name":"init","template":"do init","description":"Setup"}]}"#),
+            .json(#"{"data":[{"name":"prototype","description":"A skill","location":"/skills/prototype/SKILL.md","content":"Do it"}]}"#),
+        ])
+        let manager = makeManager(serverProtocol: .v2)
+        let repository = DefaultCommandRepository(
+            api: CommandsAPIClient(connectionProvider: { manager.connection }, urlSession: makeURLSession()),
+            adapter: CommandDomainAdapter(),
+            activeConnectionManager: manager
+        )
+
+        let commands = try await repository.listCommands(directory: "/repo")
+
+        #expect(commands.map(\.name) == ["init", "prototype"])
+        #expect(commands[0].source == .command)
+        #expect(commands[1].source == .skill)
     }
 
     @Test func v2RunCommandPostsModelFilesAndDeliveryWithoutDirectory() async throws {
