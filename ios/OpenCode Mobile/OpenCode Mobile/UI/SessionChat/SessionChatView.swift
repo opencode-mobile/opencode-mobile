@@ -19,6 +19,7 @@ struct SessionChatView: View {
     @State private var toolGroupTarget: SessionChatToolGroupTarget?
     @State private var childSessionTarget: ChildSessionNavigationTarget?
     @State private var terminalRoute: TerminalRoute?
+    @State private var developerToolsPreferences = DeveloperToolsPreferences.shared
     @State private var showAttachmentSources = false
     @State private var showFilesPicker = false
     @State private var showPhotosPicker = false
@@ -343,7 +344,8 @@ struct SessionChatView: View {
             onSelectVariant: { viewModel.selectVariant($0) }
         )
         .openCodeBottomSheet(isPresented: attachmentSourcesBinding, title: "Add attachment") {
-            if viewModel.uiState.composer.canAttachPhotos {
+            let sources = composerAttachmentSources
+            if sources.photos {
                 OpenCodeBottomSheetEntry(
                     title: "Photos",
                     startDecorator: .icon(.description, accessibilityLabel: "Photos"),
@@ -354,7 +356,7 @@ struct SessionChatView: View {
                     }
                 )
             }
-            if viewModel.uiState.composer.canAttachFiles {
+            if sources.files {
                 OpenCodeBottomSheetEntry(
                     title: "Files",
                     startDecorator: .icon(.folder, accessibilityLabel: "Files"),
@@ -362,6 +364,17 @@ struct SessionChatView: View {
                         logAttachmentSourceAction(ProductAnalytics.Action.attachPickFiles)
                         showAttachmentSources = false
                         showFilesPicker = true
+                    }
+                )
+            }
+            if sources.logFile {
+                OpenCodeBottomSheetEntry(
+                    title: "Log file",
+                    startDecorator: .icon(.list, accessibilityLabel: "Log file"),
+                    action: {
+                        logAttachmentSourceAction(ProductAnalytics.Action.attachPickLogFile)
+                        showAttachmentSources = false
+                        attachDiagnosticLog()
                     }
                 )
             }
@@ -859,7 +872,7 @@ struct SessionChatView: View {
                         !isSending &&
                         viewModel.uiState.timeline != .creating &&
                         viewModel.uiState.canMutate,
-                    attachEnabled: composer.canAttach && composer.isModelSelectionReady,
+                    attachEnabled: composerAttachmentSources.isAttachEnabled && composer.isModelSelectionReady,
                     showStop: viewModel.uiState.sessionStatusLabel != nil,
                     stopEnabled: !viewModel.uiState.isAborting &&
                         viewModel.uiState.canMutate,
@@ -890,18 +903,17 @@ struct SessionChatView: View {
                     activePicker = .variant
                 case .attach:
                     logChatAction(ProductAnalytics.Action.composerAttach)
-                    let photos = composer.canAttachPhotos
-                    let files = composer.canAttachFiles
-                    if photos, files {
+                    let sources = composerAttachmentSources
+                    if sources.showsSourceSheet {
                         ProductAnalytics.logScreenView(
                             screenId: ProductAnalytics.Screen.sessionAttachmentSource,
                             presentation: ProductAnalytics.Presentation.sheet,
                             trigger: ProductAnalytics.Trigger.present
                         )
                         showAttachmentSources = true
-                    } else if photos {
+                    } else if sources.photos {
                         showPhotosPicker = true
-                    } else if files {
+                    } else if sources.files {
                         showFilesPicker = true
                     }
                 case let .removeAttachment(id):
@@ -944,6 +956,20 @@ struct SessionChatView: View {
 
     private func attachmentPresentation(_ attachment: Attachment) -> OpenCodeAttachmentPresentation {
         AttachmentPresentationMapper.presentation(from: attachment)
+    }
+
+    private var composerAttachmentSources: ComposerAttachmentSources {
+        viewModel.uiState.composer.attachmentSources(
+            developerToolsUnlocked: developerToolsPreferences.unlocked
+        )
+    }
+
+    private func attachDiagnosticLog() {
+        do {
+            viewModel.addAttachments([try DiagnosticLogAttachment.make()])
+        } catch {
+            viewModel.reportAttachmentReadFailure()
+        }
     }
 
     private func logChatAction(_ actionId: String) {

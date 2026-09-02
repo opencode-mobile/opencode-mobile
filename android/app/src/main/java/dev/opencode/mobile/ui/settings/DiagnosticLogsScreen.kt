@@ -31,6 +31,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -59,8 +60,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val EXPORT_FILE_NAME = "opencode-diagnostic-logs.jsonl"
-private const val EXPORT_MIME_TYPE = "text/plain"
+private const val EXPORT_FILE_NAME = DiagnosticLogAttachment.FILENAME
+private const val EXPORT_MIME_TYPE = DiagnosticLogAttachment.MIME
 
 data class DiagnosticLogsUiState(
     val loading: Boolean = true,

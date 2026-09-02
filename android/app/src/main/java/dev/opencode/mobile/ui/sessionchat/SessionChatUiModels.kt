@@ -66,6 +66,25 @@ data class SessionChatComposerState(
 
     val canAttachFiles: Boolean
         get() = selectedModel?.option?.canAttachFiles == true
+
+    fun attachmentSources(developerToolsUnlocked: Boolean): ComposerAttachmentSources =
+        ComposerAttachmentSources(
+            photos = canAttachPhotos,
+            files = canAttachFiles,
+            logFile = developerToolsUnlocked,
+        )
+}
+
+data class ComposerAttachmentSources(
+    val photos: Boolean,
+    val files: Boolean,
+    val logFile: Boolean,
+) {
+    val isAttachEnabled: Boolean
+        get() = photos || files || logFile
+
+    val showsSourceSheet: Boolean
+        get() = logFile || (photos && files)
 }
 
 data class SessionRenameUiState(
