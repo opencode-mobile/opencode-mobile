@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 import SwiftData
 
 @Model
@@ -39,7 +38,6 @@ final class SessionCacheSnapshotRecord {
 
 nonisolated final class SwiftDataSessionCacheStore: SessionCacheStore, @unchecked Sendable {
     private let container: ModelContainer
-    private let logger = Logger(subsystem: "dev.opencode.mobile", category: "SessionCache")
 
     init(container: ModelContainer) {
         self.container = container
@@ -79,7 +77,7 @@ nonisolated final class SwiftDataSessionCacheStore: SessionCacheStore, @unchecke
                 retainedAtEpochMs: row.retainedAtEpochMs
             )
         } catch {
-            logger.warning("SwiftData session cache load failed: \(error.localizedDescription, privacy: .public)")
+            DiagnosticLog.warning(.session, "SwiftData session cache load failed: \(error.localizedDescription)")
             return nil
         }
     }
@@ -115,7 +113,7 @@ nonisolated final class SwiftDataSessionCacheStore: SessionCacheStore, @unchecke
             }
             try context.save()
         } catch {
-            logger.warning("SwiftData session cache commit failed: \(error.localizedDescription, privacy: .public)")
+            DiagnosticLog.warning(.session, "SwiftData session cache commit failed: \(error.localizedDescription)")
         }
     }
 
@@ -144,7 +142,7 @@ nonisolated final class SwiftDataSessionCacheStore: SessionCacheStore, @unchecke
                 try context.save()
             }
         } catch {
-            logger.warning("SwiftData session cache retain failed: \(error.localizedDescription, privacy: .public)")
+            DiagnosticLog.warning(.session, "SwiftData session cache retain failed: \(error.localizedDescription)")
         }
     }
 
@@ -174,7 +172,7 @@ nonisolated final class SwiftDataSessionCacheStore: SessionCacheStore, @unchecke
             }
             try context.save()
         } catch {
-            logger.warning("SwiftData session cache evict failed: \(error.localizedDescription, privacy: .public)")
+            DiagnosticLog.warning(.session, "SwiftData session cache evict failed: \(error.localizedDescription)")
         }
     }
 
@@ -203,7 +201,7 @@ nonisolated final class SwiftDataSessionCacheStore: SessionCacheStore, @unchecke
             }
             return SessionCacheReport(totalBytes: totalBytes, entryCount: Int64(rows.count))
         } catch {
-            logger.warning("SwiftData session cache report failed: \(error.localizedDescription, privacy: .public)")
+            DiagnosticLog.warning(.session, "SwiftData session cache report failed: \(error.localizedDescription)")
             return SessionCacheReport(totalBytes: 0, entryCount: 0)
         }
     }

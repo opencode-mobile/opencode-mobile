@@ -7,7 +7,8 @@ import UIKit
 final class DiagnosticLogsViewModel {
     private(set) var entryCount = 0
     private(set) var droppedBySoftCap = 0
-    private(set) var windowMinutes = DiagnosticLogBuffer.windowMinutes
+    private(set) var retainMinutes = DiagnosticLogBuffer.retainMinutes
+    private(set) var exportWindow = DiagnosticLogExportWindow.default
     private(set) var softCap = DiagnosticLogBuffer.softCap
     private(set) var areaCounts: [(area: String, count: Int)] = []
     private(set) var oldestTimestampLabel: String?
@@ -29,7 +30,7 @@ final class DiagnosticLogsViewModel {
         let snapshot = buffer.snapshot()
         entryCount = snapshot.entries.count
         droppedBySoftCap = snapshot.droppedBySoftCap
-        windowMinutes = snapshot.windowMinutes
+        retainMinutes = snapshot.retainMinutes
         softCap = snapshot.softCap
 
         var counts: [DiagnosticLogArea: Int] = [:]
@@ -57,10 +58,14 @@ final class DiagnosticLogsViewModel {
         shareFileURL = nil
     }
 
+    func setExportWindow(_ window: DiagnosticLogExportWindow) {
+        exportWindow = window
+    }
+
     func prepareShare() {
         shareError = nil
         do {
-            let data = try buffer.exportJSONL()
+            let data = try buffer.exportJSONL(window: exportWindow)
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent(DiagnosticLogAttachment.filename)
             if FileManager.default.fileExists(atPath: url.path) {
@@ -86,6 +91,7 @@ struct DiagnosticLogsView: View {
     @State private var model = DiagnosticLogsViewModel()
     @State private var showClearConfirmation = false
     @State private var showShareSheet = false
+    @State private var showExportWindowPicker = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -105,14 +111,20 @@ struct DiagnosticLogsView: View {
                         OpenCodeListItem(
                             title: "Entries",
                             subtitle: model.hasEntries
-                                ? "\(model.entryCount) redacted lines in the current window"
-                                : "No entries in the current window yet",
+                                ? "\(model.entryCount) redacted lines in the kept window"
+                                : "No entries in the kept window yet",
                             style: .card
                         )
                         OpenCodeListItem(
-                            title: "Window",
-                            subtitle: "Last \(model.windowMinutes) minutes",
+                            title: "Kept",
+                            subtitle: "Last \(model.retainMinutes) minutes",
                             style: .card
+                        )
+                        OpenCodeListItem(
+                            title: "Export",
+                            subtitle: model.exportWindow.label,
+                            style: .card,
+                            action: { showExportWindowPicker = true }
                         )
                         OpenCodeListItem(
                             title: "Soft cap",
@@ -122,7 +134,7 @@ struct DiagnosticLogsView: View {
                             style: .card
                         )
                         OpenCodeListItem(
-                            title: "Export",
+                            title: "Format",
                             subtitle: "JSONL · secrets and message bodies redacted",
                             style: .card
                         )
@@ -187,7 +199,7 @@ struct DiagnosticLogsView: View {
         .openCodeDialog(
             isPresented: $showClearConfirmation,
             title: "Clear diagnostic logs?",
-            subtitle: "This removes the stored diagnostic window.",
+            subtitle: "This removes the stored diagnostic log.",
             primaryOption: OpenCodeDialogOption(title: "Clear") {
                 model.clear()
                 showClearConfirmation = false
@@ -196,6 +208,20 @@ struct DiagnosticLogsView: View {
                 showClearConfirmation = false
             }
         )
+        .openCodeBottomSheet(isPresented: $showExportWindowPicker, title: "Export window") {
+            ForEach(DiagnosticLogExportWindow.allCases, id: \.self) { window in
+                OpenCodeBottomSheetEntry(
+                    title: window.label,
+                    endDecorator: window == model.exportWindow
+                        ? .icon(.check, accessibilityLabel: "Selected")
+                        : .none,
+                    action: {
+                        model.setExportWindow(window)
+                        showExportWindowPicker = false
+                    }
+                )
+            }
+        }
         .sheet(isPresented: $showShareSheet, onDismiss: {
             model.dismissShare()
         }) {

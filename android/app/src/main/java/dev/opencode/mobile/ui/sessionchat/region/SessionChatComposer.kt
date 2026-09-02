@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
-import android.util.Log
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.agent.AgentRepository
 import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.agent.ComposerMentionRouting
@@ -563,6 +564,12 @@ class SessionChatComposer(
                 composer.copy(attachments = ordered)
             }
         }
+        if (accepted.isNotEmpty()) {
+            DiagnosticLog.info(
+                DiagnosticLogArea.Chat,
+                "attachments selected accepted=${accepted.size} rejected=${rejected.size}",
+            )
+        }
         if (rejected.isNotEmpty()) {
             reportAttachmentError(unsupportedAttachmentMessage(rejected))
         } else if (accepted.isNotEmpty()) {
@@ -577,6 +584,7 @@ class SessionChatComposer(
 
     fun reportAttachmentError(message: String) {
         _state.update { it.copy(errorMessage = message) }
+        DiagnosticLog.warning(DiagnosticLogArea.Chat, "attachment rejected error=$message")
     }
 
     fun selectModel(option: ModelSelectionOption) {
@@ -1269,19 +1277,18 @@ class SessionChatComposer(
         }
 
     private fun logSendFailure(throwable: Throwable) {
-        runCatching { Log.e(TAG, "sendPromptAsync failed", throwable) }
+        DiagnosticLog.error(DiagnosticLogArea.Chat, "sendPromptAsync failed", throwable)
     }
 
     private fun logI(message: String) {
-        runCatching { Log.i(TAG, message) }
+        DiagnosticLog.info(DiagnosticLogArea.Chat, message)
     }
 
     private fun logW(message: String) {
-        runCatching { Log.w(TAG, message) }
+        DiagnosticLog.warning(DiagnosticLogArea.Chat, message)
     }
 
     companion object {
-        private const val TAG = "SessionChatComposer"
         private const val DRAFT_PERSIST_DEBOUNCE_MS = 300L
         const val ModelFilterThreshold = 10
         private val SentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)

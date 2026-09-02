@@ -391,6 +391,7 @@ fun MainNavigation() {
                                                 },
                                                 onSaveToUri = diagnosticLogsViewModel::saveToUri,
                                                 onClear = diagnosticLogsViewModel::clear,
+                                                onExportWindowChange = diagnosticLogsViewModel::setExportWindow,
                                             )
                                         }
                                     }

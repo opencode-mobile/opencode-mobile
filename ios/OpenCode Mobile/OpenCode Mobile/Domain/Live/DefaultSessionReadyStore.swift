@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 @MainActor
 final class DefaultSessionReadyStore: SessionReadyStore {
@@ -27,7 +26,6 @@ final class DefaultSessionReadyStore: SessionReadyStore {
     private let eventStream: any ForegroundEventStream
     private let persistence: any SessionReadyPersistence
     private let clock: any SessionReadyClock
-    private let logger = Logger(subsystem: "dev.opencode.mobile", category: "SessionReadyStore")
 
     private var watched: [String: WatchRecord] = [:]
     private var ready: [String: ReadyRecord] = [:]
@@ -114,7 +112,7 @@ final class DefaultSessionReadyStore: SessionReadyStore {
             focusedSessionID = nil
             focusedDirectory = nil
             if let priorID {
-                logger.info("focus cleared session=\(priorID, privacy: .public)")
+                DiagnosticLog.info(.session, "focus cleared session=\(priorID)")
             }
             return
         }
@@ -129,10 +127,10 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         let watchRecord = watched.removeValue(forKey: sessionID)
         if readyRecord != nil || watchRecord != nil {
             if readyRecord != nil {
-                logger.info("ready cleared on focus session=\(sessionID, privacy: .public)")
+                DiagnosticLog.info(.session, "ready cleared on focus session=\(sessionID)")
             }
             if watchRecord != nil {
-                logger.info("watch cleared on focus session=\(sessionID, privacy: .public)")
+                DiagnosticLog.info(.session, "watch cleared on focus session=\(sessionID)")
             }
             persistState()
             publishReady(directory: readyRecord?.directory ?? watchRecord?.directory)
@@ -160,7 +158,7 @@ final class DefaultSessionReadyStore: SessionReadyStore {
             for handle in handles.values {
                 handle.previousTypes.removeAll()
             }
-            logger.info("bindProfile migrated unscoped profile=\(next, privacy: .public)")
+            DiagnosticLog.info(.session, "bindProfile migrated unscoped profile=\(next)")
             return
         }
         persistState()
@@ -182,8 +180,8 @@ final class DefaultSessionReadyStore: SessionReadyStore {
             handles[directory] = handle
             ensureStatusObservation(directory: directory, handle: handle)
         }
-        logger.info(
-            "bindProfile profile=\(next, privacy: .public) ready=\(self.ready.count, privacy: .public) watched=\(self.watched.count, privacy: .public)"
+        DiagnosticLog.info(.session, 
+            "bindProfile profile=\(next) ready=\(self.ready.count) watched=\(self.watched.count)"
         )
     }
 
@@ -201,7 +199,7 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         for (directory, handle) in handles where !handle.continuations.isEmpty {
             ensureStatusObservation(directory: directory, handle: handle)
         }
-        logger.info("clearCache")
+        DiagnosticLog.info(.session, "clearCache")
     }
 
     private func onEvent(type: String, sessionID: String?) {
@@ -305,8 +303,8 @@ final class DefaultSessionReadyStore: SessionReadyStore {
             watchedAtEpochMs: clock.nowEpochMs(),
             allowIdleCatchUp: allowIdleCatchUp
         )
-        logger.info(
-            "watch started reason=\(reason, privacy: .public) session=\(sessionID, privacy: .public) directory=\(directory, privacy: .public)"
+        DiagnosticLog.info(.session, 
+            "watch started reason=\(reason) session=\(sessionID) directory=\(directory)"
         )
         persistState()
         return true
@@ -323,14 +321,14 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         }
         if sessionID == focusedSessionID {
             persistState()
-            logger.info(
-                "idle handled outcome=suppressed-open session=\(sessionID, privacy: .public) directory=\(directory, privacy: .public)"
+            DiagnosticLog.info(.session, 
+                "idle handled outcome=suppressed-open session=\(sessionID) directory=\(directory)"
             )
             return false
         }
         ready[sessionID] = ReadyRecord(directory: directory, readyAtEpochMs: clock.nowEpochMs())
-        logger.info(
-            "idle handled outcome=ready session=\(sessionID, privacy: .public) directory=\(directory, privacy: .public)"
+        DiagnosticLog.info(.session, 
+            "idle handled outcome=ready session=\(sessionID) directory=\(directory)"
         )
         persistState()
         publishReady(directory: directory)
@@ -369,10 +367,10 @@ final class DefaultSessionReadyStore: SessionReadyStore {
             persistState()
         }
         if !ready.isEmpty {
-            logger.info("loaded persisted ready count=\(self.ready.count, privacy: .public)")
+            DiagnosticLog.info(.session, "loaded persisted ready count=\(self.ready.count)")
         }
         if !watched.isEmpty {
-            logger.info("loaded persisted watched count=\(self.watched.count, privacy: .public)")
+            DiagnosticLog.info(.session, "loaded persisted watched count=\(self.watched.count)")
         }
     }
 
@@ -386,13 +384,13 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         for sessionID in expiredReady {
             if let record = ready.removeValue(forKey: sessionID) {
                 directories.insert(record.directory)
-                logger.info("ready expired session=\(sessionID, privacy: .public)")
+                DiagnosticLog.info(.session, "ready expired session=\(sessionID)")
             }
         }
         for sessionID in expiredWatched {
             if let record = watched.removeValue(forKey: sessionID) {
                 directories.insert(record.directory)
-                logger.info("watch expired session=\(sessionID, privacy: .public)")
+                DiagnosticLog.info(.session, "watch expired session=\(sessionID)")
             }
         }
         persistState()

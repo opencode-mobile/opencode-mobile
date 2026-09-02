@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 @MainActor
 final class SessionChatReviewChanges {
@@ -95,7 +94,7 @@ final class SessionChatReviewChanges {
     private func logRequest(summary: ReviewChangesSummary?, result: String, startedAt: Date) {
         let duration = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
         OpenCodeLog.sessionChat.info(
-            "pill-summary source=last-turn session=\(self.sessionID, privacy: .public) directory=\(self.worktree, privacy: .private) files=\(summary?.fileCount ?? 0) additions=\(summary?.additions ?? 0) deletions=\(summary?.deletions ?? 0) result=\(result, privacy: .public) durationMs=\(duration)"
+            "pill-summary source=last-turn session=\(self.sessionID) directory=\(self.worktree) files=\(summary?.fileCount ?? 0) additions=\(summary?.additions ?? 0) deletions=\(summary?.deletions ?? 0) result=\(result) durationMs=\(duration)"
         )
     }
 

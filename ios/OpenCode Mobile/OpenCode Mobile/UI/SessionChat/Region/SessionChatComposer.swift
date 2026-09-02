@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 @MainActor
 final class SessionChatComposer {
@@ -132,7 +131,7 @@ final class SessionChatComposer {
             let catalog = try await modelRepository.listModelOptions(directory: worktree)
             applyCatalog(catalog)
         } catch {
-            OpenCodeLog.sessionChat.warning("loadCatalog failed error=\(error.localizedDescription, privacy: .public)")
+            OpenCodeLog.sessionChat.warning("loadCatalog failed error=\(error.localizedDescription)")
             updateComposer {
                 $0.isModelSelectionReady = false
                 $0.modelCatalogError = "Unable to load models. Tap Model to retry."
@@ -154,7 +153,7 @@ final class SessionChatComposer {
             } catch {
                 guard !Task.isCancelled else { return }
                 OpenCodeLog.sessionChat.warning(
-                    "server command catalog failed error=\(error.localizedDescription, privacy: .public)"
+                    "server command catalog failed error=\(error.localizedDescription)"
                 )
                 // Keep any previously loaded catalog on transient refresh failures.
                 refreshComposerSuggestions(for: state.composer.text, cursor: state.composer.cursor)
@@ -175,7 +174,7 @@ final class SessionChatComposer {
             } catch {
                 guard !Task.isCancelled else { return }
                 OpenCodeLog.sessionChat.warning(
-                    "selectable agent catalog failed error=\(error.localizedDescription, privacy: .public)"
+                    "selectable agent catalog failed error=\(error.localizedDescription)"
                 )
                 loadedSelectableAgents = true
                 applyInitialSelectionIfReady()
@@ -196,7 +195,7 @@ final class SessionChatComposer {
             } catch {
                 guard !Task.isCancelled else { return }
                 OpenCodeLog.sessionChat.warning(
-                    "mentionable agent catalog failed error=\(error.localizedDescription, privacy: .public)"
+                    "mentionable agent catalog failed error=\(error.localizedDescription)"
                 )
                 // Keep any previously loaded catalog on transient refresh failures.
                 refreshComposerSuggestions(for: state.composer.text, cursor: state.composer.cursor)
@@ -300,7 +299,7 @@ final class SessionChatComposer {
             }
         }
         let source = chosen?.sourceName ?? (catalog.serverDefault == nil ? "first-usable" : "server-default")
-        OpenCodeLog.sessionChat.info("modelSelection source=\(source, privacy: .public)")
+        OpenCodeLog.sessionChat.info("modelSelection source=\(source)")
         if case .cached? = chosen {
             // Keep the original timestamp when the session cache wins.
         } else if staleCached == nil {
@@ -468,7 +467,7 @@ final class SessionChatComposer {
             let attachment = try AttachmentLoader().load(data: data, filename: filename, declaredMime: declaredMime)
             addAttachments([attachment])
             if state.composer.attachments.contains(where: { $0.id == attachment.id }) {
-                OpenCodeLog.sessionChat.info("attachment accepted mime=\(attachment.mime, privacy: .public) bytes=\(data.count) count=1")
+                OpenCodeLog.sessionChat.info("attachment accepted mime=\(attachment.mime) bytes=\(data.count) count=1")
             }
         } catch {
             setAttachmentError(error.localizedDescription)
@@ -500,7 +499,7 @@ final class SessionChatComposer {
 
     private func setAttachmentError(_ message: String) {
         state.errorMessage = message
-        OpenCodeLog.sessionChat.warning("attachment rejected error=\(message, privacy: .public)")
+        OpenCodeLog.sessionChat.warning("attachment rejected error=\(message)")
         notifyChange()
     }
 
@@ -759,7 +758,7 @@ final class SessionChatComposer {
         notifyChange()
         let extraIDs = latestTimelineState?.knownChildSessionIDs.subtracting([sessionID]) ?? []
         OpenCodeLog.sessionChat.info(
-            "abort start session=\(self.sessionID, privacy: .public) children=\(extraIDs.sorted().joined(separator: ","), privacy: .public)"
+            "abort start session=\(self.sessionID) children=\(extraIDs.sorted().joined(separator: ","))"
         )
         do {
             _ = try await sessionRepository.abortSession(id: sessionID, directory: worktree)
@@ -768,16 +767,16 @@ final class SessionChatComposer {
                     _ = try await sessionRepository.abortSession(id: childID, directory: worktree)
                 } catch {
                     OpenCodeLog.sessionChat.error(
-                        "abort child failed session=\(self.sessionID, privacy: .public) child=\(childID, privacy: .public) message=\(error.localizedDescription, privacy: .public)"
+                        "abort child failed session=\(self.sessionID) child=\(childID) message=\(error.localizedDescription)"
                     )
                 }
             }
             state.isAborting = false
             state.abortErrorMessage = nil
-            OpenCodeLog.sessionChat.info("abort success session=\(self.sessionID, privacy: .public)")
+            OpenCodeLog.sessionChat.info("abort success session=\(self.sessionID)")
         } catch {
             OpenCodeLog.sessionChat.error(
-                "abort failed session=\(self.sessionID, privacy: .public) message=\(error.localizedDescription, privacy: .public)"
+                "abort failed session=\(self.sessionID) message=\(error.localizedDescription)"
             )
             state.isAborting = false
             if timelineIsReady {

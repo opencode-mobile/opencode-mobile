@@ -1,12 +1,10 @@
 import Foundation
-import OSLog
 
 nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
     private let store: any SessionCacheStore
     private let connectionIdProvider: @Sendable () -> String?
     private let clock: @Sendable () -> Int64
     private let debounceNanoseconds: UInt64
-    private let logger = Logger(subsystem: "dev.opencode.mobile", category: "SessionCache")
 
     init(
         store: any SessionCacheStore,
@@ -40,7 +38,7 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
                 meta: SessionCacheCommitMeta(syncedAtEpochMs: clock())
             )
         } catch {
-            logger.warning("encode/commit sessions failed: \(error.localizedDescription, privacy: .public)")
+            DiagnosticLog.warning(.session, "encode/commit sessions failed: \(error.localizedDescription)")
         }
     }
 
@@ -51,8 +49,7 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
             store: store,
             connectionIdProvider: connectionIdProvider,
             clock: clock,
-            debounceNanoseconds: debounceNanoseconds,
-            logger: logger
+            debounceNanoseconds: debounceNanoseconds
         )
     }
 
@@ -91,7 +88,6 @@ private nonisolated final class DefaultSessionMessageCacheHandle: SessionMessage
     private let connectionIdProvider: @Sendable () -> String?
     private let clock: @Sendable () -> Int64
     private let debounceNanoseconds: UInt64
-    private let logger: Logger
 
     private let lock = NSLock()
     private var pending: [Message]?
@@ -104,8 +100,7 @@ private nonisolated final class DefaultSessionMessageCacheHandle: SessionMessage
         store: any SessionCacheStore,
         connectionIdProvider: @escaping @Sendable () -> String?,
         clock: @escaping @Sendable () -> Int64,
-        debounceNanoseconds: UInt64,
-        logger: Logger
+        debounceNanoseconds: UInt64
     ) {
         self.sessionID = sessionID
         self.worktree = worktree
@@ -113,7 +108,6 @@ private nonisolated final class DefaultSessionMessageCacheHandle: SessionMessage
         self.connectionIdProvider = connectionIdProvider
         self.clock = clock
         self.debounceNanoseconds = debounceNanoseconds
-        self.logger = logger
     }
 
     private func keyOrNil() -> SessionCacheKey? {
@@ -191,7 +185,7 @@ private nonisolated final class DefaultSessionMessageCacheHandle: SessionMessage
                 meta: SessionCacheCommitMeta(syncedAtEpochMs: clock())
             )
         } catch {
-            logger.warning("encode/commit messages failed: \(error.localizedDescription, privacy: .public)")
+            DiagnosticLog.warning(.session, "encode/commit messages failed: \(error.localizedDescription)")
         }
     }
 }

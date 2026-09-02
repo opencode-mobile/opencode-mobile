@@ -1,4 +1,3 @@
-import os
 import SwiftUI
 
 struct SessionChatTimelineViewProps {
@@ -265,7 +264,7 @@ private struct SessionChatTimelineReadyView: View {
     }
 
     private func logScroll(_ message: String) {
-        OpenCodeLog.sessionChat.debug("scroll \(message, privacy: .public)")
+        OpenCodeLog.sessionChat.debug("scroll \(message)")
     }
 
     @ViewBuilder

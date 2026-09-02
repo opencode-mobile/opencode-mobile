@@ -1,7 +1,8 @@
 package dev.opencode.mobile.domain.message
 
-import android.util.Log
 import dev.opencode.mobile.data.remote.dto.MessageInfoDto
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.data.remote.dto.MessagePartDto
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -937,16 +938,14 @@ class InMemoryMessageStore
             val from = previousReasoning?.let(ThoughtPartChrome::paintLabel) ?: "none"
             val to = ThoughtPartChrome.paintLabel(storedReasoning)
             if (!inserted && from == to) return
-            runCatching {
-                Log.i(
-                    STORE_TAG,
-                    "reasoning overlay session=$sessionId message=$messageId part=$partId " +
-                        "from=$from to=$to inserted=${if (inserted) 1 else 0} " +
-                        "chars=${storedReasoning.text.length} " +
-                        "streaming=${if (storedReasoning.isStreaming) 1 else 0} " +
-                        "end=${if (storedReasoning.timeEndEpochMs != null) 1 else 0}",
-                )
-            }
+            DiagnosticLog.info(
+                DiagnosticLogArea.Chat,
+                "reasoning overlay session=$sessionId message=$messageId part=$partId " +
+                    "from=$from to=$to inserted=${if (inserted) 1 else 0} " +
+                    "chars=${storedReasoning.text.length} " +
+                    "streaming=${if (storedReasoning.isStreaming) 1 else 0} " +
+                    "end=${if (storedReasoning.timeEndEpochMs != null) 1 else 0}",
+            )
         }
 
         private fun tryParsePartDto(jsonObject: JsonObject): MessagePartDto? =
@@ -962,6 +961,6 @@ class InMemoryMessageStore
         private fun Message.hasRenderableContent(): Boolean = text.isNotBlank() || parts.isNotEmpty()
 
         companion object {
-            private const val STORE_TAG = "MessageStore"
+
         }
     }

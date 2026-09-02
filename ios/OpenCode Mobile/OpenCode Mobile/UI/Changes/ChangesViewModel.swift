@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import OSLog
 
 enum ChangeSource: String, CaseIterable, Sendable, Equatable, Hashable {
     case workingTree
@@ -324,7 +323,7 @@ final class ChangesViewModel {
     private func log(source: ChangeSource, fileCount: Int, startedAt: Date, result: String) {
         let duration = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
         OpenCodeLog.changes.info(
-            "load source=\(source.logValue, privacy: .public) session=\(self.sessionID, privacy: .public) directory=\(self.worktree, privacy: .private) files=\(fileCount) result=\(result, privacy: .public) durationMs=\(duration)"
+            "load source=\(source.logValue) session=\(self.sessionID) directory=\(self.worktree) files=\(fileCount) result=\(result) durationMs=\(duration)"
         )
     }
 }

@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.sessioncache
 
-import android.util.Log
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.session.Session
 import kotlinx.coroutines.CoroutineScope
@@ -119,13 +120,11 @@ class DefaultSessionCache(
     }
 }
 
-private const val SESSION_CACHE_TAG = "SessionCache"
-
 private fun logSessionCacheIo(
     action: String,
     error: Throwable,
 ) {
-    Log.w(SESSION_CACHE_TAG, action, error)
+    DiagnosticLog.warning(DiagnosticLogArea.Session, action, error)
 }
 
 private class DefaultSessionMessageCacheHandle(

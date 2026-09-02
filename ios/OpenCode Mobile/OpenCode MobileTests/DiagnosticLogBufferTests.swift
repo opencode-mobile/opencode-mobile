@@ -3,17 +3,34 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct DiagnosticLogBufferTests {
-    @Test func evictsEntriesOlderThanFiveMinutes() {
+    @Test func evictsEntriesOlderThanRetainWindow() {
         var now: Int64 = 10_000_000
         let buffer = DiagnosticLogBuffer(clock: { now })
 
         buffer.append(area: .sse, level: .info, message: "old")
-        now += DiagnosticLogBuffer.windowMilliseconds + 1
+        now += DiagnosticLogBuffer.retainMilliseconds + 1
         buffer.append(area: .sse, level: .info, message: "new")
 
         let snapshot = buffer.snapshot()
         #expect(snapshot.entries.map(\.message) == ["new"])
-        #expect(snapshot.windowMinutes == 5)
+        #expect(snapshot.retainMinutes == 60)
+    }
+
+    @Test func keepsEntriesAcrossRestartInsideRetainWindow() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("diagnostic-logs-restart-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("diagnostic-logs-v1.jsonl")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        var now: Int64 = 1_700_000_000_000
+        let first = DiagnosticLogBuffer(fileURL: file, clock: { now })
+        first.append(area: .sse, level: .info, message: "before restart")
+        first.flushPersisted()
+
+        now += 6 * 60 * 1_000
+        let reopened = DiagnosticLogBuffer(fileURL: file, clock: { now })
+        #expect(reopened.snapshot().entries.map(\.message) == ["before restart"])
     }
 
     @Test func softCapDropsOldestAndRecordsCount() {
@@ -72,7 +89,9 @@ struct DiagnosticLogBufferTests {
         let data = try buffer.exportJSONL()
         let text = String(data: data, encoding: .utf8) ?? ""
         #expect(text.contains(#""type":"meta""#))
-        #expect(text.contains(#""windowMinutes":5"#))
+        #expect(text.contains(#""windowMinutes":15"#))
+        #expect(text.contains(#""retainMinutes":60"#))
+        #expect(text.contains(#""exportWindowMinutes":15"#))
         #expect(text.contains(#""area":"sse""#))
         #expect(!text.contains("nope"))
         #expect(text.contains("[REDACTED]"))
@@ -115,9 +134,27 @@ struct DiagnosticLogBufferTests {
         #expect(reopened.snapshot().entries.map(\.message) == ["before restart", "busy stuck"])
         #expect(FileManager.default.fileExists(atPath: file.path))
 
-        now += DiagnosticLogBuffer.windowMilliseconds + 1
+        now += DiagnosticLogBuffer.retainMilliseconds + 1
         let expired = DiagnosticLogBuffer(fileURL: file, clock: { now })
         #expect(expired.snapshot().entries.isEmpty)
+    }
+
+    @Test func exportJSONLFiltersToChosenWindow() throws {
+        var now: Int64 = 1_700_000_000_000
+        let buffer = DiagnosticLogBuffer(clock: { now })
+        buffer.append(area: .sse, level: .info, message: "old")
+        now += 20 * 60 * 1_000
+        buffer.append(area: .sse, level: .info, message: "recent")
+
+        let fifteen = String(data: try buffer.exportJSONL(window: .fifteenMinutes), encoding: .utf8) ?? ""
+        #expect(fifteen.contains("recent"))
+        #expect(!fifteen.contains(#""message":"old""#))
+        #expect(fifteen.contains(#""exportWindowMinutes":15"#))
+
+        let sixty = String(data: try buffer.exportJSONL(window: .sixtyMinutes), encoding: .utf8) ?? ""
+        #expect(sixty.contains("old"))
+        #expect(sixty.contains("recent"))
+        #expect(sixty.contains(#""exportWindowMinutes":60"#))
     }
 
     @Test func clearRemovesPersistedFile() throws {

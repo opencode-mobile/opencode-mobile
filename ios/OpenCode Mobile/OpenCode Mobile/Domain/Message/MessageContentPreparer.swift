@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 nonisolated func stableMarkdownSourceHash(_ markdown: String) -> Int {
     var hash = 0x811c9dc5
@@ -165,7 +164,7 @@ nonisolated final class MessageContentPreparer: @unchecked Sendable {
             }
             let elapsedMs = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
             OpenCodeLog.messageContent.info(
-                "prepareMessages count=\(messages.count) parsed=\(parsedCount) reused=\(reusedCount) markdown=\(prepared.count { $0.renderedMarkdown != nil }) streamingChars=\(streamingChars) mode=\(mode.rawValue, privacy: .public) ms=\(elapsedMs)"
+                "prepareMessages count=\(messages.count) parsed=\(parsedCount) reused=\(reusedCount) markdown=\(prepared.count { $0.renderedMarkdown != nil }) streamingChars=\(streamingChars) mode=\(mode.rawValue) ms=\(elapsedMs)"
             )
             return prepared
         }.value

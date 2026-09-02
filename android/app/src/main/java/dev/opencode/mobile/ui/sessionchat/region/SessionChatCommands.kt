@@ -1,7 +1,8 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
-import android.util.Log
 import dev.opencode.mobile.domain.command.ClientSlashActionCatalog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.command.ClientSlashMessageRef
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.message.Message
@@ -423,14 +424,11 @@ class SessionChatCommands(
     }
 
     private fun logI(message: String) {
-        runCatching { Log.i(TAG, message) }
+        DiagnosticLog.info(DiagnosticLogArea.Chat, message)
     }
 
     private fun logW(message: String) {
-        runCatching { Log.w(TAG, message) }
+        DiagnosticLog.warning(DiagnosticLogArea.Chat, message)
     }
 
-    companion object {
-        private const val TAG = "SessionChatCommands"
-    }
 }
