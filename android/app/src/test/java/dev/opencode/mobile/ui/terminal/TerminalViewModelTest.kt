@@ -265,6 +265,7 @@ private class FakeTerminalSocketClient(
     override fun open(
         url: String,
         listener: TerminalSocketListener,
+        authorization: String?,
     ) {
         closed = false
         this.listener = listener

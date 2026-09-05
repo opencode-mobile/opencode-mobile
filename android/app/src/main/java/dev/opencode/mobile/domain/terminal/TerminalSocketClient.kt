@@ -4,6 +4,7 @@ interface TerminalSocketClient {
     fun open(
         url: String,
         listener: TerminalSocketListener,
+        authorization: String? = null,
     )
 
     fun sendText(text: String)

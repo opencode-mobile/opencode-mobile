@@ -22,10 +22,11 @@ struct TerminalConnectRequestTests {
         #expect(queryValue(components, "cursor") == "0")
         #expect(queryValue(components, "location[directory]") == nil)
         #expect(queryValue(components, "auth_token") == nil)
+        #expect(request.authorization == nil)
         #expect(queryValue(components, "ticket") == nil)
     }
 
-    @Test func v2HttpsUsesWssLocationDirectoryAndCursor() throws {
+    @Test func v2HttpsUsesWssLocationDirectoryCursorAndAuthToken() throws {
         let request = connectRequest(
             id: "pty_2",
             directory: "/repo",
@@ -43,7 +44,10 @@ struct TerminalConnectRequestTests {
         #expect(queryValue(components, "location[directory]") == "/repo")
         #expect(queryValue(components, "cursor") == "12")
         #expect(queryValue(components, "directory") == nil)
-        #expect(queryValue(components, "auth_token") == nil)
+        let expected = Data("opencode:secret".utf8).base64EncodedString()
+        #expect(queryValue(components, "auth_token") == expected)
+        #expect(request.authorization == "Basic \(expected)")
+        #expect(queryValue(components, "ticket") == nil)
     }
 
     @Test func v1HttpUsesWsAndAuthToken() throws {
@@ -63,6 +67,7 @@ struct TerminalConnectRequestTests {
         #expect(components.path == "/pty/pty_1/connect")
         let expected = Data("opencode:secret".utf8).base64EncodedString()
         #expect(queryValue(components, "auth_token") == expected)
+        #expect(request.authorization == "Basic \(expected)")
         #expect(queryValue(components, "ticket") == nil)
     }
 
@@ -82,6 +87,7 @@ struct TerminalConnectRequestTests {
         let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
         #expect(queryValue(components, "ticket") == "tick-1")
         #expect(queryValue(components, "auth_token") == nil)
+        #expect(request.authorization == nil)
     }
 
     @Test func v2TicketSetsTicketWithoutAuthToken() throws {
@@ -102,6 +108,7 @@ struct TerminalConnectRequestTests {
         #expect(queryValue(components, "location[directory]") == "/work")
         #expect(queryValue(components, "ticket") == "tick-2")
         #expect(queryValue(components, "auth_token") == nil)
+        #expect(request.authorization == nil)
     }
 
     private func queryValue(_ components: URLComponents, _ name: String) -> String? {

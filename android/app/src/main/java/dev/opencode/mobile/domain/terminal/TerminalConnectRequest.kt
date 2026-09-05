@@ -7,6 +7,7 @@ import java.util.Base64
 
 data class TerminalConnectRequest(
     val url: String,
+    val authorization: String? = null,
 ) {
     companion object {
         fun build(
@@ -31,6 +32,14 @@ data class TerminalConnectRequest(
                     "ws"
                 }
             val withoutScheme = httpUrl.substringAfter("://")
+            val trimmedTicket = ticket?.takeIf { it.isNotBlank() }
+            val token =
+                if (trimmedTicket == null && password.isNotEmpty()) {
+                    val user = username.ifBlank { "opencode" }
+                    basicToken(user, password)
+                } else {
+                    null
+                }
             val query =
                 buildList {
                     if (isV1) {
@@ -39,17 +48,18 @@ data class TerminalConnectRequest(
                         add("location[directory]" to directory)
                     }
                     add("cursor" to cursor)
-                    val trimmedTicket = ticket?.takeIf { it.isNotBlank() }
                     if (trimmedTicket != null) {
                         add("ticket" to trimmedTicket)
-                    } else if (isV1 && password.isNotEmpty()) {
-                        val user = username.ifBlank { "opencode" }
-                        add("auth_token" to basicToken(user, password))
+                    } else if (token != null) {
+                        add("auth_token" to token)
                     }
                 }.joinToString("&") { (name, value) ->
                     "${queryEncode(name)}=${queryEncode(value)}"
                 }
-            return TerminalConnectRequest("$scheme://$withoutScheme?$query")
+            return TerminalConnectRequest(
+                url = "$scheme://$withoutScheme?$query",
+                authorization = token?.let { "Basic $it" },
+            )
         }
     }
 }

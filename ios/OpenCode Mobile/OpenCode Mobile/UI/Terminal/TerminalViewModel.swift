@@ -158,7 +158,7 @@ final class TerminalViewModel: TerminalSocketListener {
             username: connection.username,
             password: connection.password ?? ""
         )
-        socketClient.open(url: request.url, listener: self)
+        socketClient.open(url: request.url, listener: self, authorization: request.authorization)
     }
 
     func didOpen() {

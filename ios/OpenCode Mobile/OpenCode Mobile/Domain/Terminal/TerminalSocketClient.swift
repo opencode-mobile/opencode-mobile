@@ -1,7 +1,7 @@
 import Foundation
 
 protocol TerminalSocketClient: AnyObject {
-    func open(url: String, listener: TerminalSocketListener)
+    func open(url: String, listener: TerminalSocketListener, authorization: String?)
     func sendText(_ text: String)
     func close()
 }

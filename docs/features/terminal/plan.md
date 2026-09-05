@@ -80,7 +80,8 @@ WebSocket (match official web):
 
 - `ws` / `wss` from the Connection Profile base URL
 - query `cursor`, plus v1 `directory` or v2 `location[directory]`
-- v1 may pass `auth_token` or `ticket`; never log those
+- v1 and v2 pass `auth_token` when a password is set and no ticket is present;
+  native sockets also send `Authorization: Basic`. Never log those
 - `binaryType = arraybuffer`
 - string frames are PTY output, written to the emulator
 - binary frames with first byte `0` are JSON control (`cursor`); ignore other

@@ -174,7 +174,7 @@ private final class FakeTerminalSocketClient: TerminalSocketClient {
     var closed = false
     private var listener: TerminalSocketListener?
 
-    func open(url: String, listener: TerminalSocketListener) {
+    func open(url: String, listener: TerminalSocketListener, authorization: String?) {
         closed = false
         self.listener = listener
         if autoOpen {
