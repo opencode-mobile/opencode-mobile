@@ -1,7 +1,12 @@
 package dev.opencode.mobile.ui.terminal
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.os.Build
+import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -85,6 +90,7 @@ fun TerminalEmulator(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
+                configureTerminalWebView(this, parseTerminalBackgroundColor(backgroundState))
                 settings.javaScriptEnabled = true
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
@@ -133,6 +139,7 @@ fun TerminalEmulator(
             }
         },
         update = { target ->
+            target.setBackgroundColor(parseTerminalBackgroundColor(backgroundState))
             if (pageReady.value) {
                 applyTheme(target)
             }
@@ -165,5 +172,47 @@ private fun parseEmulatorMessage(message: String): TerminalEmulatorEvent? {
                 rows = obj.optInt("rows"),
             )
         else -> null
+    }
+}
+
+internal fun parseTerminalBackgroundColor(hex: String): Int {
+    val clean = hex.trim().removePrefix("#")
+    val rgb =
+        when (clean.length) {
+            6, 8 -> clean.take(6).toLongOrNull(16)
+            else -> null
+        } ?: return 0xFF000000.toInt()
+    return (0xFF000000L or rgb).toInt()
+}
+
+@SuppressLint("ClickableViewAccessibility")
+private fun configureTerminalWebView(
+    webView: WebView,
+    backgroundColor: Int,
+) {
+    webView.setBackgroundColor(backgroundColor)
+    webView.overScrollMode = View.OVER_SCROLL_NEVER
+    webView.isVerticalScrollBarEnabled = false
+    webView.isHorizontalScrollBarEnabled = false
+    webView.isNestedScrollingEnabled = false
+    webView.scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
+    webView.settings.useWideViewPort = true
+    webView.settings.loadWithOverviewMode = false
+    webView.settings.textZoom = 100
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        @Suppress("DEPRECATION")
+        webView.settings.forceDark = WebSettings.FORCE_DARK_OFF
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        webView.settings.isAlgorithmicDarkeningAllowed = false
+    }
+    webView.setOnTouchListener { view, event ->
+        if (event.action == MotionEvent.ACTION_DOWN) {
+            view.requestFocus()
+            val imm =
+                view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
+        }
+        false
     }
 }

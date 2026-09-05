@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import WebKit
 
 struct TerminalEmulatorView: UIViewRepresentable {
@@ -22,7 +23,8 @@ struct TerminalEmulatorView: UIViewRepresentable {
         config.preferences.setValue(false, forKey: "allowFileAccessFromFileURLs")
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.isOpaque = false
-        webView.backgroundColor = .black
+        webView.backgroundColor = UIColor(Color(hex: backgroundHex))
+        webView.scrollView.backgroundColor = UIColor(Color(hex: backgroundHex))
         webView.scrollView.isScrollEnabled = false
         webView.scrollView.bounces = false
         webView.navigationDelegate = context.coordinator
@@ -43,6 +45,8 @@ struct TerminalEmulatorView: UIViewRepresentable {
         context.coordinator.foregroundHex = foregroundHex
         context.coordinator.onData = onData
         context.coordinator.onResize = onResize
+        uiView.backgroundColor = UIColor(Color(hex: backgroundHex))
+        uiView.scrollView.backgroundColor = UIColor(Color(hex: backgroundHex))
         if context.coordinator.pageReady {
             context.coordinator.applyTheme()
             context.coordinator.fit()
