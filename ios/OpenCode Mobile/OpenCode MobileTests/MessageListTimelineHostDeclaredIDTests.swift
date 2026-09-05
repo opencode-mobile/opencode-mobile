@@ -258,6 +258,93 @@ struct MessageListTimelineHostDeclaredIDTests {
         #expect(collapsed.frameRevision != expanded.frameRevision)
     }
 
+    @Test func pendingApply_coalescesCollapseDeltaWhenLaterPacketDropsIt() {
+        let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
+            itemContent: { Text($0.label) },
+            horizontalContentPadding: 0,
+            topContentPadding: 0,
+            bottomContentPadding: 0,
+            bottomOverlayInset: 0,
+            interItemSpacing: 0
+        )
+        controller.loadViewIfNeeded()
+        controller.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+
+        let workingID = SessionChatStatusChrome.workingRowID
+        let items = [
+            EqualityCountingItem(id: "a", label: "Thought"),
+            EqualityCountingItem(id: workingID, label: "Working"),
+        ]
+        let idleFrame = TimelineFrame(
+            frameRevision: 8,
+            rows: [],
+            insertedRowIDs: ["a", workingID],
+            changedRowIDs: [],
+            removedRowIDs: [],
+            layoutChangedRowIDs: ["a", workingID],
+            grewBottomRowIDs: [],
+            decorateRowIDs: [],
+            isRequired: false
+        )
+        controller.apply(
+            items: items,
+            packet: .from(
+                idleFrame,
+                workingIndicatorLabel: "Working",
+                previousWorkingIndicatorLabel: nil
+            ),
+            animatingDifferences: false
+        )
+
+        let scroll = TimelineScrollController()
+        controller.scrollController = scroll
+        scroll.beginUserScrolling()
+
+        let collapsePacket = MessageListTimelineApplyPacket.from(
+            TimelineFrame(
+                frameRevision: 9,
+                rows: [],
+                insertedRowIDs: [],
+                changedRowIDs: ["a"],
+                removedRowIDs: [],
+                layoutChangedRowIDs: [],
+                grewBottomRowIDs: [],
+                decorateRowIDs: [],
+                isRequired: false
+            ),
+            workingIndicatorLabel: "Working",
+            previousWorkingIndicatorLabel: "Working",
+            workingIndicatorCollapsed: true,
+            previousWorkingIndicatorCollapsed: false
+        )
+        controller.apply(items: items, packet: collapsePacket, animatingDifferences: false)
+
+        let droppedDeltaPacket = MessageListTimelineApplyPacket.from(
+            TimelineFrame(
+                frameRevision: 9,
+                rows: [],
+                insertedRowIDs: [],
+                changedRowIDs: ["a"],
+                removedRowIDs: [],
+                layoutChangedRowIDs: [],
+                grewBottomRowIDs: [],
+                decorateRowIDs: [],
+                isRequired: false
+            ),
+            workingIndicatorLabel: "Working",
+            previousWorkingIndicatorLabel: "Working",
+            workingIndicatorCollapsed: true,
+            previousWorkingIndicatorCollapsed: true
+        )
+        #expect(!droppedDeltaPacket.layoutChangedRowIDs.contains(workingID))
+        controller.apply(items: items, packet: droppedDeltaPacket, animatingDifferences: false)
+
+        scroll.endUserScrolling()
+        controller.testFlushPendingApply()
+        #expect(controller.lastReconfiguredIDs.contains(workingID))
+        #expect(controller.lastReconfiguredIDs.contains("a"))
+    }
+
     @Test func nilPacket_identityStable_doesNotReconfigureAllOnRepeatApply() {
         let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
             itemContent: { Text($0.label) },

@@ -208,6 +208,28 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
         changedRowIDs.union(layoutChangedRowIDs)
     }
 
+    /// Latest-wins items still replace the pending snapshot; declared ID sets
+    /// union so a later no-delta chrome packet cannot drop a collapse or
+    /// label change that was pended under user scroll.
+    static func coalescing(
+        _ prior: MessageListTimelineApplyPacket?,
+        with next: MessageListTimelineApplyPacket?
+    ) -> MessageListTimelineApplyPacket? {
+        guard let prior else { return next }
+        guard let next else { return prior }
+        return MessageListTimelineApplyPacket(
+            frameRevision: max(prior.frameRevision, next.frameRevision),
+            insertedRowIDs: prior.insertedRowIDs.union(next.insertedRowIDs),
+            changedRowIDs: prior.changedRowIDs.union(next.changedRowIDs),
+            removedRowIDs: prior.removedRowIDs.union(next.removedRowIDs),
+            layoutChangedRowIDs: prior.layoutChangedRowIDs.union(next.layoutChangedRowIDs),
+            grewBottomRowIDs: prior.grewBottomRowIDs.union(next.grewBottomRowIDs),
+            decorateRowIDs: prior.decorateRowIDs.union(next.decorateRowIDs),
+            isRequired: prior.isRequired || next.isRequired,
+            kinds: prior.kinds.union(next.kinds)
+        )
+    }
+
     static func from(_ frame: TimelineFrame) -> MessageListTimelineApplyPacket {
         let apply = TimelineApply.classify(frame)
         return MessageListTimelineApplyPacket(

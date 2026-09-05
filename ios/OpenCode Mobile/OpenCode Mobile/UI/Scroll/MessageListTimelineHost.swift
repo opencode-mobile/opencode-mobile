@@ -135,6 +135,10 @@ where Item.ID == String {
         reportGeometry()
     }
 
+    func testFlushPendingApply() {
+        flushPendingApplyIfNeeded()
+    }
+
     init(
         itemContent: @escaping (Item) -> ItemContent,
         horizontalContentPadding: CGFloat,
@@ -283,7 +287,10 @@ where Item.ID == String {
         // Required applies (load / refresh / post-send) must never pend under drag.
         if isActivelyScrolling, packet?.isRequired != true {
             pendingApplyItems = items
-            pendingApplyPacket = packet
+            pendingApplyPacket = MessageListTimelineApplyPacket.coalescing(
+                pendingApplyPacket,
+                with: packet
+            )
             pendingApplyAnimated = animatingDifferences
             return
         }
