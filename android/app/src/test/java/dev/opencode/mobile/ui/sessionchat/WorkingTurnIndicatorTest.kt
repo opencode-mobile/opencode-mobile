@@ -120,22 +120,52 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
-    fun labelForActiveTurn_hidesWhenLastIsThinking() {
-        assertNull(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
+    fun labelForActiveTurn_keepsWorkingWhenLastIsThinking() {
+        assertEquals(
+            "Working",
+            WorkingTurnIndicator.labelForActiveTurn(statusLabel = "Working"),
+        )
+        assertTrue(
+            WorkingTurnIndicator.shouldCollapseReservedRow(
                 lastIsThinking = true,
+                label = "Working",
             ),
         )
     }
 
     @Test
-    fun labelForActiveTurn_hidesCompactingWhenLastIsThinking() {
-        assertNull(
+    fun labelForActiveTurn_keepsCompactingWhenLastIsThinking() {
+        assertEquals(
+            SessionCompactChrome.STATUS_LABEL,
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel = "Working",
                 isCompacting = true,
+            ),
+        )
+        assertTrue(
+            WorkingTurnIndicator.shouldCollapseReservedRow(
                 lastIsThinking = true,
+                label = SessionCompactChrome.STATUS_LABEL,
+            ),
+        )
+    }
+
+    @Test
+    fun shouldCollapseReservedRow_falseWhenNotThinking() {
+        assertFalse(
+            WorkingTurnIndicator.shouldCollapseReservedRow(
+                lastIsThinking = false,
+                label = "Working",
+            ),
+        )
+    }
+
+    @Test
+    fun shouldCollapseReservedRow_falseWhenLabelMissing() {
+        assertFalse(
+            WorkingTurnIndicator.shouldCollapseReservedRow(
+                lastIsThinking = true,
+                label = null,
             ),
         )
     }

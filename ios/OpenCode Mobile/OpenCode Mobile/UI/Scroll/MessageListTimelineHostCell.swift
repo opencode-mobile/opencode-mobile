@@ -34,11 +34,18 @@ final class MessageListTimelineHostCell: UICollectionViewCell {
         CATransaction.setDisableActions(true)
         UIView.performWithoutAnimation {
             let attributes = layoutAttributes.copy() as! UICollectionViewLayoutAttributes
-            let seed =
-                (itemID.flatMap { heightCache?.height(for: $0) })
-                ?? estimatedHeightSeed
+            let seed: CGFloat
+            if estimatedHeightSeed < 0.5 {
+                seed = 0
+            } else {
+                seed =
+                    (itemID.flatMap { heightCache?.height(for: $0) })
+                    ?? estimatedHeightSeed
+            }
             if seed > 0.5, abs(attributes.size.height - seed) > 0.5 {
                 attributes.frame.size.height = seed
+            } else if seed < 0.5 {
+                attributes.frame.size.height = 0
             }
             fitted = super.preferredLayoutAttributesFitting(attributes)
         }

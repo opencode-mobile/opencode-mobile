@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -92,6 +93,7 @@ internal data class SessionChatTimelineViewProps(
     val reviewChangesSummary: ReviewChangesSummary?,
     val syncingIndicatorLabel: String? = null,
     val workingIndicatorLabel: String? = null,
+    val workingIndicatorCollapsed: Boolean = false,
     val sessionTodosVisible: Boolean = false,
     val sessionTodoCompletedCount: Int = 0,
     val sessionTodoTotalCount: Int = 0,
@@ -165,6 +167,7 @@ internal fun SessionChatTimelineView(
                 reviewChangesSummary = props.reviewChangesSummary,
                 syncingIndicatorLabel = props.syncingIndicatorLabel,
                 workingIndicatorLabel = props.workingIndicatorLabel,
+                workingIndicatorCollapsed = props.workingIndicatorCollapsed,
                 sessionTodosVisible = props.sessionTodosVisible,
                 sessionTodoCompletedCount = props.sessionTodoCompletedCount,
                 sessionTodoTotalCount = props.sessionTodoTotalCount,
@@ -195,6 +198,7 @@ private fun SessionChatTimelineReadyView(
     reviewChangesSummary: ReviewChangesSummary?,
     syncingIndicatorLabel: String?,
     workingIndicatorLabel: String?,
+    workingIndicatorCollapsed: Boolean,
     sessionTodosVisible: Boolean,
     sessionTodoCompletedCount: Int,
     sessionTodoTotalCount: Int,
@@ -226,7 +230,15 @@ private fun SessionChatTimelineReadyView(
     // Required frames flush immediately; other kinds keep the committed snapshot.
     var committedMessages by remember { mutableStateOf(messages) }
     var committedFrame by remember { mutableStateOf(timelineFrame) }
-    LaunchedEffect(messages, timelineFrame, isUserScrollInProgress) {
+    var committedWorkingLabel by remember { mutableStateOf(workingIndicatorLabel) }
+    var committedWorkingCollapsed by remember { mutableStateOf(workingIndicatorCollapsed) }
+    LaunchedEffect(
+        messages,
+        timelineFrame,
+        workingIndicatorLabel,
+        workingIndicatorCollapsed,
+        isUserScrollInProgress,
+    ) {
         val hold =
             MessageListTimelineApplyHold.shouldHold(
                 isUserScrollInProgress = isUserScrollInProgress,
@@ -235,6 +247,8 @@ private fun SessionChatTimelineReadyView(
         if (!hold) {
             committedMessages = messages
             committedFrame = timelineFrame
+            committedWorkingLabel = workingIndicatorLabel
+            committedWorkingCollapsed = workingIndicatorCollapsed
         } else {
             runCatching {
                 Log.d(
@@ -289,18 +303,21 @@ private fun SessionChatTimelineReadyView(
                     ),
                 key = { message -> message.id },
                 statusIndicatorKey =
-                    if (workingIndicatorLabel != null) {
+                    if (committedWorkingLabel != null) {
                         SESSION_CHAT_STATUS_INDICATOR_KEY
                     } else {
                         null
                     },
+                statusIndicatorCollapsed = committedWorkingCollapsed,
                 statusIndicatorContent =
-                    if (workingIndicatorLabel != null) {
+                    committedWorkingLabel?.let { label ->
                         {
-                            SessionChatWorkingIndicatorRow(label = workingIndicatorLabel)
+                            if (committedWorkingCollapsed) {
+                                Spacer(modifier = Modifier.height(0.dp))
+                            } else {
+                                SessionChatWorkingIndicatorRow(label = label)
+                            }
                         }
-                    } else {
-                        null
                     },
             ) { message, isNewestMessage, onContentSizeSettled ->
                 SessionChatMessageRow(

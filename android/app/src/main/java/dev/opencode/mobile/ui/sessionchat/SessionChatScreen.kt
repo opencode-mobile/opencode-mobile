@@ -456,6 +456,7 @@ fun SessionChatScreen(
                             reviewChangesSummary = uiState.reviewChangesSummary,
                             syncingIndicatorLabel = uiState.syncingIndicatorLabel,
                             workingIndicatorLabel = uiState.workingIndicatorLabel,
+                            workingIndicatorCollapsed = uiState.workingIndicatorCollapsed,
                             sessionTodosVisible = sessionTodosPillVisible,
                             sessionTodoCompletedCount = uiState.sessionTodoCompletedCount,
                             sessionTodoTotalCount = uiState.sessionTodoTotalCount,

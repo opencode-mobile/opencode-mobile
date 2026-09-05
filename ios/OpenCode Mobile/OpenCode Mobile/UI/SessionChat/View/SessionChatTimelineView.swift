@@ -9,6 +9,7 @@ struct SessionChatTimelineViewProps {
     let reviewChangesSummary: ReviewChangesSummary?
     let syncingIndicatorLabel: String?
     let workingIndicatorLabel: String?
+    let workingIndicatorCollapsed: Bool
     let sessionTodosVisible: Bool
     let sessionTodoCompletedCount: Int
     let sessionTodoTotalCount: Int
@@ -36,6 +37,7 @@ struct SessionChatTimelineViewProps {
         reviewChangesSummary: ReviewChangesSummary?,
         syncingIndicatorLabel: String? = nil,
         workingIndicatorLabel: String? = nil,
+        workingIndicatorCollapsed: Bool = false,
         sessionTodosVisible: Bool = false,
         sessionTodoCompletedCount: Int = 0,
         sessionTodoTotalCount: Int = 0,
@@ -61,6 +63,7 @@ struct SessionChatTimelineViewProps {
         self.reviewChangesSummary = reviewChangesSummary
         self.syncingIndicatorLabel = syncingIndicatorLabel
         self.workingIndicatorLabel = workingIndicatorLabel
+        self.workingIndicatorCollapsed = workingIndicatorCollapsed
         self.sessionTodosVisible = sessionTodosVisible
         self.sessionTodoCompletedCount = sessionTodoCompletedCount
         self.sessionTodoTotalCount = sessionTodoTotalCount
@@ -131,6 +134,7 @@ private struct SessionChatTimelineReadyView: View {
     @State private var sessionTodosPillTotalCount = 1
     @State private var sessionTodosPillActivePreview: String?
     @State private var previousWorkingIndicatorLabel: String?
+    @State private var previousWorkingIndicatorCollapsed = false
     @State private var topOverlayInset: CGFloat = 0
 
     private var showScrollToEnd: Bool {
@@ -157,7 +161,8 @@ private struct SessionChatTimelineReadyView: View {
                     id: SessionChatStatusChrome.workingRowID,
                     role: .assistant,
                     text: label,
-                    metadataLabel: ""
+                    metadataLabel: "",
+                    isLayoutCollapsed: props.workingIndicatorCollapsed
                 )
             )
         }
@@ -174,7 +179,9 @@ private struct SessionChatTimelineReadyView: View {
                 applyPacket: .from(
                     props.timelineFrame,
                     workingIndicatorLabel: props.workingIndicatorLabel,
-                    previousWorkingIndicatorLabel: previousWorkingIndicatorLabel
+                    previousWorkingIndicatorLabel: previousWorkingIndicatorLabel,
+                    workingIndicatorCollapsed: props.workingIndicatorCollapsed,
+                    previousWorkingIndicatorCollapsed: previousWorkingIndicatorCollapsed
                 ),
                 scrollController: scrollController,
                 onRefresh: props.onRefresh,
@@ -251,12 +258,16 @@ private struct SessionChatTimelineReadyView: View {
         }
         .onAppear {
             previousWorkingIndicatorLabel = props.workingIndicatorLabel
+            previousWorkingIndicatorCollapsed = props.workingIndicatorCollapsed
             refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
             scrollController.autoFollowEnabled = true
             logScroll("appear count=\(props.messages.count) pinned=\(scrollController.isPinnedToEnd)")
         }
         .onChange(of: props.workingIndicatorLabel) { _, newValue in
             previousWorkingIndicatorLabel = newValue
+        }
+        .onChange(of: props.workingIndicatorCollapsed) { _, newValue in
+            previousWorkingIndicatorCollapsed = newValue
         }
         .onChange(of: props.messages.count) { _, newCount in
             logScroll("message-count changed count=\(newCount)")
@@ -329,7 +340,10 @@ private struct SessionChatTimelineHostRow: View {
 
     var body: some View {
         if message.id == SessionChatStatusChrome.workingRowID {
-            SessionChatWorkingIndicatorRow(label: message.text)
+            SessionChatWorkingIndicatorRow(
+                label: message.text,
+                collapsed: message.isLayoutCollapsed
+            )
         } else {
             HStack {
                 if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
@@ -363,6 +377,7 @@ private struct SessionChatTimelineHostRow: View {
 /// Feature-local Working/Retrying/Compacting status chrome (not prose).
 private struct SessionChatWorkingIndicatorRow: View {
     let label: String
+    var collapsed: Bool = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
@@ -372,11 +387,15 @@ private struct SessionChatWorkingIndicatorRow: View {
                 .foregroundStyle(OpenCodeColors.textWeak)
             Spacer(minLength: 0)
         }
-        .padding(.leading, 4)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+        .padding(.leading, collapsed ? 0 : 4)
+        .padding(.top, collapsed ? 0 : 12)
+        .padding(.bottom, collapsed ? 0 : 8)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: collapsed ? 0 : nil)
+        .opacity(collapsed ? 0 : 1)
+        .clipped()
         .accessibilityElement(children: .ignore)
+        .accessibilityHidden(collapsed)
         .accessibilityLabel(label)
     }
 }

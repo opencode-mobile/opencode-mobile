@@ -1182,14 +1182,19 @@ final class SessionChatViewModel {
             statusLabel: sessionStatusLabel,
             isCompacting: isCompacting,
             isAwaitingUser: awaitingUser,
-            lastIsThinking: lastIsThinking,
             sendProgressPercent: composerState.sendProgressPercent
         )
-        if !loggedWorkingLamp || lastWorkingLamp != workingIndicatorLabel {
+        let workingIndicatorCollapsed = WorkingTurnIndicator.shouldCollapseReservedRow(
+            lastIsThinking: lastIsThinking,
+            label: workingIndicatorLabel
+        )
+        let workingLampKey =
+            "\(workingIndicatorLabel ?? "none"):\(workingIndicatorCollapsed ? 1 : 0)"
+        if !loggedWorkingLamp || lastWorkingLamp != workingLampKey {
             loggedWorkingLamp = true
-            lastWorkingLamp = workingIndicatorLabel
+            lastWorkingLamp = workingLampKey
             OpenCodeLog.sessionChat.info(
-                "workingLamp label=\(workingIndicatorLabel ?? "none") status=\(sessionStatusLabel ?? "none") awaitingUser=\(awaitingUser ? 1 : 0) lastIsThinking=\(lastIsThinking ? 1 : 0)"
+                "workingLamp label=\(workingIndicatorLabel ?? "none") collapsed=\(workingIndicatorCollapsed ? 1 : 0) status=\(sessionStatusLabel ?? "none") awaitingUser=\(awaitingUser ? 1 : 0) lastIsThinking=\(lastIsThinking ? 1 : 0)"
             )
         }
         uiState = SessionChatUiState(
@@ -1211,6 +1216,7 @@ final class SessionChatViewModel {
             isAborting: composerState.isAborting,
             sessionStatusLabel: sessionStatusLabel,
             workingIndicatorLabel: workingIndicatorLabel,
+            workingIndicatorCollapsed: workingIndicatorCollapsed,
             syncingIndicatorLabel: timelineState.isSyncingMessages
                 ? SessionMessageSyncChrome.statusLabel
                 : nil,

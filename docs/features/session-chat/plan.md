@@ -116,7 +116,8 @@ is a thin facade. Any change to the facade is an architectural decision — see
   flips the next send. A waiting follow-up shows a quiet caption under the
   outgoing footer until the server prompts it; then the caption is gone.
 - When this session’s status is not idle, Session Running chrome is the last
-  timeline row unless the last painted row is Thinking. See
+  timeline row. While that last painted row is Thinking, the Working identity
+  stays mounted and collapsed. See
   [Session Running accessory](#session-running-accessory).
 
 ## Session Running accessory
@@ -128,16 +129,18 @@ timeline status only, the same visual as the thought-row streaming
 dot, and is not used on other screens.
 
 Show iff this session’s status is not idle. Optimistic busy on send counts as
-the same status. Hide while the last painted timeline row is Thinking — that
-row already occupies the bottom. Do not hide for settled Thought, tools, or
-streaming text. Always the last list entry while visible; do not pin it to
-the composer.
+the same status. While the last painted timeline row is Thinking, keep that
+Working list identity mounted and collapse it in place so the chrome does
+not stack and does not flash a gap when Thinking settles. Do not hide for
+settled Thought, tools, or streaming text. Always the last list entry while
+visible; do not pin it to the composer.
 
 `SessionInfo` owns session status. Optimistic busy is write-through to
 `SessionStatusLiveStore` so home Running and chat Working share one map.
 The timeline owns last-row layout and a stable list identity.
 `WorkingTurnIndicator` collapses to status + send progress + compacting +
-awaiting-user + last-is-thinking.
+awaiting-user. Last-is-thinking collapses the reserved Working row; it does
+not drop the label or the list identity.
 
 ### Labels (one slot, status only)
 
@@ -165,8 +168,9 @@ Not `Thinking`. That word stays on the thought row while reasoning is open.
 - [x] While SSE reports busy, `Working` stays visible as that same last row,
   including while tools run and after a thought row settles to `Thought` /
   `Thought · Nms`.
-- [x] While the last painted row is `Thinking`, the Working footer is hidden.
-  Thinking and Working never stack.
+- [x] While the last painted row is `Thinking`, the Working footer is
+  collapsed in place (same list identity, not painted). Thinking and
+  Working never stack, and the chrome does not unmount between them.
 - [x] Retry shows `Retrying`. Compact in flight shows `Compacting…`.
 - [x] The row hides when session status is idle.
 - [x] The row hides while the permission or question dock is up. Child

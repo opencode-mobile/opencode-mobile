@@ -3,8 +3,9 @@ import Foundation
 /// Last-timeline-row Session Running chrome. Show iff this session's
 /// status is not idle, or a large prompt body is still on the wire.
 /// Optimistic busy on send is the same status. Hide when a permission
-/// or question dock is waiting on the user, or when the last painted
-/// row is Thinking (that row already occupies the bottom).
+/// or question dock is waiting on the user. When the last painted row
+/// is Thinking, keep this label so the timeline can collapse the reserved
+/// Working row in place — do not drop the list identity.
 /// Do not hide for settled Thought, tools, or streaming text.
 enum WorkingTurnIndicator {
     static func lastIsThinking(messages: [SessionChatRow]) -> Bool {
@@ -14,15 +15,17 @@ enum WorkingTurnIndicator {
         return isStreaming
     }
 
+    static func shouldCollapseReservedRow(lastIsThinking: Bool, label: String?) -> Bool {
+        lastIsThinking && label != nil
+    }
+
     static func labelForActiveTurn(
         statusLabel: String?,
         isCompacting: Bool = false,
         isAwaitingUser: Bool = false,
-        lastIsThinking: Bool = false,
         sendProgressPercent: Int? = nil
     ) -> String? {
         if isAwaitingUser { return nil }
-        if lastIsThinking { return nil }
         if isCompacting { return SessionCompactChrome.statusLabel }
         if let sendProgressPercent {
             return PromptSendProgress.label(percent: sendProgressPercent)
