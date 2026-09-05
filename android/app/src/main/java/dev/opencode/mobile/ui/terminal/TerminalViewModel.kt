@@ -205,7 +205,7 @@ class TerminalViewModel
                     username = connection.username,
                     password = connection.password.orEmpty(),
                 )
-            socketClient.open(request.url, socketListener)
+            socketClient.open(request.url, socketListener, request.authorization)
         }
 
         private fun handleOpen() {

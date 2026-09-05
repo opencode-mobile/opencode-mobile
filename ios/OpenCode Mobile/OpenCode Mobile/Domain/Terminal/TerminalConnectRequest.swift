@@ -2,6 +2,12 @@ import Foundation
 
 nonisolated struct TerminalConnectRequest: Sendable, Equatable {
     let url: String
+    let authorization: String?
+
+    init(url: String, authorization: String? = nil) {
+        self.url = url
+        self.authorization = authorization
+    }
 
     static func build(
         id: String,
@@ -36,20 +42,29 @@ nonisolated struct TerminalConnectRequest: Sendable, Equatable {
             pairs.append(("location[directory]", directory))
         }
         pairs.append(("cursor", cursor))
+        let token: String?
         if let ticket, !ticket.isEmpty {
             pairs.append(("ticket", ticket))
-        } else if isV1, !password.isEmpty {
+            token = nil
+        } else if !password.isEmpty {
             let user = username.isEmpty ? "opencode" : username
-            pairs.append(("auth_token", basicToken(username: user, password: password)))
+            let authToken = basicToken(username: user, password: password)
+            token = authToken
+            pairs.append(("auth_token", authToken))
+        } else {
+            token = nil
         }
         components.percentEncodedQuery = pairs
             .map { "\(queryEncode($0.0))=\(queryEncode($0.1))" }
             .joined(separator: "&")
-        return TerminalConnectRequest(url: components.url?.absoluteString ?? "")
+        return TerminalConnectRequest(
+            url: components.url?.absoluteString ?? "",
+            authorization: token.map { "Basic \($0)" }
+        )
     }
 }
 
-func connectRequest(
+nonisolated func connectRequest(
     id: String,
     directory: String,
     serverProtocol: ServerProtocol,
@@ -71,11 +86,11 @@ func connectRequest(
     )
 }
 
-private func basicToken(username: String, password: String) -> String {
+private nonisolated func basicToken(username: String, password: String) -> String {
     Data("\(username):\(password)".utf8).base64EncodedString()
 }
 
-private func queryEncode(_ value: String) -> String {
+private nonisolated func queryEncode(_ value: String) -> String {
     var allowed = CharacterSet.alphanumerics
     allowed.insert(charactersIn: "-._~")
     return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value

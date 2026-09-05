@@ -7,7 +7,7 @@ final class URLSessionTerminalSocketClient: NSObject, TerminalSocketClient, URLS
     private var task: URLSessionWebSocketTask?
     private weak var listener: TerminalSocketListener?
 
-    func open(url: String, listener: TerminalSocketListener) {
+    func open(url: String, listener: TerminalSocketListener, authorization: String?) {
         let id: Int
         let previousTask: URLSessionWebSocketTask?
         let previousSession: URLSession?
@@ -27,8 +27,12 @@ final class URLSessionTerminalSocketClient: NSObject, TerminalSocketClient, URLS
             notifyClose(id: id, code: 1006)
             return
         }
+        var request = URLRequest(url: wsURL)
+        if let authorization, !authorization.isEmpty {
+            request.setValue(authorization, forHTTPHeaderField: "Authorization")
+        }
         let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
-        let task = session.webSocketTask(with: wsURL)
+        let task = session.webSocketTask(with: request)
         lock.lock()
         if generation == id {
             self.session = session

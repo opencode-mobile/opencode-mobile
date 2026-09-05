@@ -27,10 +27,20 @@ class OkHttpTerminalSocketClient
         override fun open(
             url: String,
             listener: TerminalSocketListener,
+            authorization: String?,
         ) {
             val id = generation.incrementAndGet()
             webSocket?.cancel()
-            val request = Request.Builder().url(url).build()
+            val request =
+                Request
+                    .Builder()
+                    .url(url)
+                    .apply {
+                        if (!authorization.isNullOrEmpty()) {
+                            header("Authorization", authorization)
+                        }
+                    }
+                    .build()
             webSocket =
                 client.newWebSocket(
                     request,

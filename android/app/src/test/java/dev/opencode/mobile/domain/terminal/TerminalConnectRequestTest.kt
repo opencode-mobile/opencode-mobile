@@ -28,11 +28,12 @@ class TerminalConnectRequestTest {
         assertEquals("0", url.parameters["cursor"])
         assertNull(url.parameters["location[directory]"])
         assertNull(url.parameters["auth_token"])
+        assertNull(request.authorization)
         assertNull(url.parameters["ticket"])
     }
 
     @Test
-    fun v2Https_usesWssLocationDirectoryAndCursor() {
+    fun v2Https_usesWssLocationDirectoryCursorAndAuthToken() {
         val request =
             connectRequest(
                 id = "pty_2",
@@ -50,7 +51,11 @@ class TerminalConnectRequestTest {
         assertEquals("/repo", url.parameters["location[directory]"])
         assertEquals("12", url.parameters["cursor"])
         assertNull(url.parameters["directory"])
-        assertNull(url.parameters["auth_token"])
+        val expected =
+            Base64.getEncoder().encodeToString("opencode:secret".toByteArray(Charsets.UTF_8))
+        assertEquals(expected, url.parameters["auth_token"])
+        assertEquals("Basic $expected", request.authorization)
+        assertNull(url.parameters["ticket"])
     }
 
     @Test
@@ -72,6 +77,7 @@ class TerminalConnectRequestTest {
         val expected =
             Base64.getEncoder().encodeToString("opencode:secret".toByteArray(Charsets.UTF_8))
         assertEquals(expected, url.parameters["auth_token"])
+        assertEquals("Basic $expected", request.authorization)
         assertNull(url.parameters["ticket"])
     }
 
@@ -92,6 +98,7 @@ class TerminalConnectRequestTest {
         val url = Url(request.url)
         assertEquals("tick-1", url.parameters["ticket"])
         assertNull(url.parameters["auth_token"])
+        assertNull(request.authorization)
     }
 
     @Test
@@ -113,5 +120,6 @@ class TerminalConnectRequestTest {
         assertEquals("/work", url.parameters["location[directory]"])
         assertEquals("tick-2", url.parameters["ticket"])
         assertNull(url.parameters["auth_token"])
+        assertNull(request.authorization)
     }
 }
