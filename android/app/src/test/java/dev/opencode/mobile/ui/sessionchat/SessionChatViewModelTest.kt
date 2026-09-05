@@ -47,7 +47,6 @@ import dev.opencode.mobile.domain.session.QuestionOption
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
-import dev.opencode.mobile.domain.session.OptimisticSessionCreateCoordinator
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionRevert
@@ -3023,19 +3022,14 @@ class SessionChatViewModelTest {
         }
 
     @Test
-    fun bindOptimisticCreate_failureLeavesSessionAndReportsCoordinator() =
+    fun bindOptimisticCreate_failureStaysOnChatWithError() =
         runTest(testDispatcher) {
-            val coordinator = OptimisticSessionCreateCoordinator()
-            val failures = mutableListOf<String>()
-            val job = launch { coordinator.createFailed.collect { failures += it } }
-            runCurrent()
             val sessionRepository =
                 FakeSessionRepository(createSessionError = SessionError.Http(500, "boom"))
             val viewModel =
                 createViewModel(
                     repository = FakeMessageRepository(),
                     sessionRepository = sessionRepository,
-                    optimisticSessionCreateCoordinator = coordinator,
                 )
             viewModel.bind(
                 OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
@@ -3044,9 +3038,34 @@ class SessionChatViewModelTest {
             )
             advanceUntilIdle()
 
-            assertTrue(viewModel.uiState.value.shouldLeaveSession)
-            assertEquals(listOf("boom"), failures)
-            job.cancel()
+            assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
+            assertEquals(SessionChatTimelineState.Error, viewModel.uiState.value.timeline)
+            assertEquals("boom", viewModel.uiState.value.errorMessage)
+            assertEquals(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, viewModel.uiState.value.sessionId)
+        }
+
+    @Test
+    fun bindOptimisticCreate_transportFailureShowsReachabilityError() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    createSessionError = SessionError.Transport(RuntimeException()),
+                )
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind(
+                OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                "New Session",
+                "/repo",
+            )
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
+            assertEquals(SessionChatTimelineState.Error, viewModel.uiState.value.timeline)
+            assertEquals("Unable to reach the server", viewModel.uiState.value.errorMessage)
         }
 
     @Test
@@ -3815,7 +3834,6 @@ class SessionChatViewModelTest {
         permissionLiveStore: PermissionLiveStore = FakePermissionLiveStore(emptyList()),
         questionLiveStore: QuestionLiveStore = FakeQuestionLiveStore(emptyList()),
         sessionReadyStore: SessionReadyStore = EmptySessionReadyStore,
-        optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator = OptimisticSessionCreateCoordinator(),
         connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
         serverProtocol: ServerProtocol = ServerProtocol.V1,
     ): SessionChatViewModel {
@@ -3860,7 +3878,6 @@ class SessionChatViewModelTest {
                     store = sessionModelSelectionStore,
                     modelRepository = modelRepository,
                 ),
-            optimisticSessionCreateCoordinator = optimisticSessionCreateCoordinator,
             connectionProfileStore = connectionProfileStore,
             activeConnectionManager = activeConnectionManager,
         ).apply {

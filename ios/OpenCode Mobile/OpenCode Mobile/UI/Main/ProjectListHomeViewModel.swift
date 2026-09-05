@@ -194,9 +194,6 @@ final class ProjectListHomeViewModel {
                 self?.serversChrome = HomeServersChrome()
             }
         }
-        OptimisticSessionCreateCoordinator.shared.onCreateFailed(owner: self) { [weak self] message in
-            self?.setProjectSessionCreateError(message)
-        }
         startObservingConnectionState()
     }
 

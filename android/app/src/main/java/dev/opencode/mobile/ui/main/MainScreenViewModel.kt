@@ -29,7 +29,6 @@ import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
-import dev.opencode.mobile.domain.session.OptimisticSessionCreateCoordinator
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionError
@@ -82,7 +81,6 @@ class MainScreenViewModel
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
         private val newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         private val sessionCache: SessionCache,
-        private val optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator,
         private val liveUpdates: LiveUpdates = FixedLiveUpdates(),
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
@@ -141,11 +139,6 @@ class MainScreenViewModel
                     messageRepository.clearMessageCache()
                     _uiState.value = MainScreenUiState.Disconnected
                     _serversChrome.value = HomeServersChrome()
-                }
-            }
-            viewModelScope.launch {
-                optimisticSessionCreateCoordinator.createFailed.collect { message ->
-                    setProjectSessionCreateError(message)
                 }
             }
         }

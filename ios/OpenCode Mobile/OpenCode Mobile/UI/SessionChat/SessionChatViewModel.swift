@@ -1060,18 +1060,31 @@ final class SessionChatViewModel {
                 OpenCodeLog.sessionChat.info("optimistic create success id=\(session.id)")
                 optimisticCreateTask = nil
                 promoteOptimisticSession(id: session.id, title: session.title)
+            } catch is CancellationError {
+                return
             } catch {
                 guard !Task.isCancelled else { return }
                 OpenCodeLog.sessionChat.warning(
                     "optimistic create failed error=\(error.localizedDescription)"
                 )
                 optimisticCreateTask = nil
-                OptimisticSessionCreateCoordinator.shared.reportCreateFailed(
-                    error.localizedDescription
-                )
-                sessionInfo.requestLeaveSession()
+                timeline.showCreateFailed(createSessionErrorMessage(error))
                 publishUiState()
             }
+        }
+    }
+
+    private func createSessionErrorMessage(_ error: Error) -> String {
+        guard let sessionError = error as? SessionError else {
+            return error.localizedDescription
+        }
+        switch sessionError {
+        case let .http(_, message):
+            return message ?? "Unable to create session"
+        case .transport:
+            return "Unable to reach the server"
+        case .decoding:
+            return "Unable to read server response"
         }
     }
 

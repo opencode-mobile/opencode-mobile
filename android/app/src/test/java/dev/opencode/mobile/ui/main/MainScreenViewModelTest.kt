@@ -38,7 +38,6 @@ import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
-import dev.opencode.mobile.domain.session.OptimisticSessionCreateCoordinator
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -472,21 +471,7 @@ class MainScreenViewModelTest {
             assertEquals(0, viewModel.revealNewestToken.value)
         }
 
-    @Test
-    fun optimisticCreateFailureStoresInlineError() =
-        runTest(testDispatcher) {
-            val coordinator = OptimisticSessionCreateCoordinator()
-            val viewModel =
-                createViewModel(
-                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
-                    optimisticSessionCreateCoordinator = coordinator,
-                )
-            advanceUntilIdle()
-            coordinator.reportCreateFailed("nope")
-            advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals("nope", loaded.projectSessionCreateError)
-        }
+
 
     @Test
     fun pullToRefresh_keepsLoadedContentWithoutFullScreenLoading() =
@@ -924,7 +909,6 @@ class MainScreenViewModelTest {
             object : ModelRepository {
                 override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog = ModelSelectionCatalog(emptyList(), null)
             },
-        optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator = OptimisticSessionCreateCoordinator(),
     ): MainScreenViewModel {
         val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
         runBlocking {
@@ -973,7 +957,6 @@ class MainScreenViewModelTest {
                     modelRepository,
                 ),
             sessionCache = NoOpSessionCache,
-            optimisticSessionCreateCoordinator = optimisticSessionCreateCoordinator,
         )
     }
 }

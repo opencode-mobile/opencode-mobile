@@ -2104,6 +2104,43 @@ struct SessionChatViewModelTests {
         #expect(sessionRepository.createSessionCallCount == 1)
     }
 
+    @Test func startObservingOptimisticCreate_failureStaysOnChatWithError() async {
+        let sessionRepository = FakeChatSessionRepository(
+            createSessionError: .http(statusCode: 500, message: "boom")
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            sessionRepository: sessionRepository,
+            sessionID: OptimisticSessionCreate.placeholderSessionID,
+            sessionTitle: "New Session"
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        #expect(viewModel.uiState.shouldLeaveSession == false)
+        #expect(viewModel.uiState.timeline == .error)
+        #expect(viewModel.uiState.errorMessage == "boom")
+        #expect(viewModel.uiState.sessionID == OptimisticSessionCreate.placeholderSessionID)
+    }
+
+    @Test func startObservingOptimisticCreate_transportFailureShowsReachabilityError() async {
+        let sessionRepository = FakeChatSessionRepository(
+            createSessionError: .transport("offline")
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            sessionRepository: sessionRepository,
+            sessionID: OptimisticSessionCreate.placeholderSessionID,
+            sessionTitle: "New Session"
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        #expect(viewModel.uiState.shouldLeaveSession == false)
+        #expect(viewModel.uiState.timeline == .error)
+        #expect(viewModel.uiState.errorMessage == "Unable to reach the server")
+    }
+
     @Test func startObservingAgainWhileCreatingOrAfterPromotion_issuesSingleCreate() async {
         let sessionRepository = FakeChatSessionRepository(
             createSessionResult: Session(
