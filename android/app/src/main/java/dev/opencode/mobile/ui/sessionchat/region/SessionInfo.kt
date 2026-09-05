@@ -215,6 +215,7 @@ class SessionInfo(
     fun archiveSession() {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
         if (_state.value.isLifecycleActionInFlight) return
         scope.launch {
             _state.update {
@@ -244,6 +245,7 @@ class SessionInfo(
     fun deleteSession() {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
         if (_state.value.isLifecycleActionInFlight) return
         scope.launch {
             _state.update {

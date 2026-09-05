@@ -3024,11 +3024,12 @@ class SessionChatViewModelTest {
     @Test
     fun bindOptimisticCreate_failureStaysOnChatWithError() =
         runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
             val sessionRepository =
                 FakeSessionRepository(createSessionError = SessionError.Http(500, "boom"))
             val viewModel =
                 createViewModel(
-                    repository = FakeMessageRepository(),
+                    repository = repository,
                     sessionRepository = sessionRepository,
                 )
             viewModel.bind(
@@ -3042,6 +3043,15 @@ class SessionChatViewModelTest {
             assertEquals(SessionChatTimelineState.Error, viewModel.uiState.value.timeline)
             assertEquals("boom", viewModel.uiState.value.errorMessage)
             assertEquals(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, viewModel.uiState.value.sessionId)
+
+            viewModel.updateComposerText("hi")
+            viewModel.sendPrompt()
+            viewModel.archiveSession()
+            viewModel.deleteSession()
+            advanceUntilIdle()
+            assertEquals(false, repository.sendPromptAsyncCalled)
+            assertEquals(0, sessionRepository.archiveCallCount)
+            assertEquals(0, sessionRepository.deleteCallCount)
         }
 
     @Test

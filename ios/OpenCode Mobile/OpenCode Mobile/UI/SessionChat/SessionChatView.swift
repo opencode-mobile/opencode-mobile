@@ -382,7 +382,8 @@ struct SessionChatView: View {
         .openCodeBottomSheet(isPresented: commandsSheetBinding, title: "Commands") {
             CommandsActionTileGrid(
                 actions: viewModel.uiState.visibleClientSlashActions,
-                canMutate: viewModel.uiState.canMutate,
+                canMutate: !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
+                    viewModel.uiState.canMutate,
                 run: { viewModel.runClientSlashAction($0) }
             )
         }
@@ -710,11 +711,13 @@ struct SessionChatView: View {
     }
 
     private var sessionOverflowMenuEntries: [OpenCodeOverflowMenuEntry] {
-        let lifecycleEnabled = !viewModel.uiState.isLifecycleActionInFlight
+        let sessionCreated = !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID)
+        let lifecycleEnabled = sessionCreated && !viewModel.uiState.isLifecycleActionInFlight
         var entries = [
             OpenCodeOverflowMenuEntry(
                 title: "Rename session",
                 icon: .edit,
+                enabled: sessionCreated,
                 action: {
                     logOverflowAction(ProductAnalytics.Action.chatOverflowRename)
                     menuExpanded = false
@@ -724,6 +727,7 @@ struct SessionChatView: View {
             OpenCodeOverflowMenuEntry(
                 title: "Review changes",
                 icon: .description,
+                enabled: sessionCreated,
                 action: {
                     logOverflowAction(ProductAnalytics.Action.chatOverflowReviewChanges)
                     menuExpanded = false
@@ -733,6 +737,7 @@ struct SessionChatView: View {
             OpenCodeOverflowMenuEntry(
                 title: "Session context",
                 icon: .architecture,
+                enabled: sessionCreated,
                 action: {
                     logOverflowAction(ProductAnalytics.Action.chatOverflowSessionContext)
                     menuExpanded = false
@@ -742,6 +747,7 @@ struct SessionChatView: View {
             OpenCodeOverflowMenuEntry(
                 title: "Copy session ID",
                 icon: .contentCopy,
+                enabled: sessionCreated,
                 action: {
                     logOverflowAction(ProductAnalytics.Action.chatOverflowCopySessionId)
                     menuExpanded = false
@@ -870,9 +876,12 @@ struct SessionChatView: View {
                         composer.selectedModel != nil &&
                         composer.isModelSelectionReady &&
                         !isSending &&
+                        !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
                         viewModel.uiState.timeline != .creating &&
                         viewModel.uiState.canMutate,
-                    attachEnabled: composerAttachmentSources.isAttachEnabled && composer.isModelSelectionReady,
+                    attachEnabled: composerAttachmentSources.isAttachEnabled &&
+                        !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
+                        composer.isModelSelectionReady,
                     showStop: viewModel.uiState.sessionStatusLabel != nil,
                     stopEnabled: !viewModel.uiState.isAborting &&
                         viewModel.uiState.canMutate,

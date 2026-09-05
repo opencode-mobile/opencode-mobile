@@ -192,10 +192,12 @@ final class SessionChatViewModel {
     }
 
     func archiveSession() {
+        guard hasCreatedSession else { return }
         sessionInfo.archiveSession()
     }
 
     func deleteSession() {
+        guard hasCreatedSession else { return }
         sessionInfo.deleteSession()
     }
 
@@ -309,6 +311,7 @@ final class SessionChatViewModel {
     }
 
     func runClientSlashAction(_ action: ClientSlashAction) {
+        guard hasCreatedSession else { return }
         logCommandsAction(action)
         switch action {
         case .new:
@@ -455,6 +458,7 @@ final class SessionChatViewModel {
     }
 
     func openRenameSession() {
+        guard hasCreatedSession else { return }
         ProductAnalytics.logScreenView(
             screenId: ProductAnalytics.Screen.sessionRename,
             presentation: ProductAnalytics.Presentation.dialog,
@@ -503,6 +507,7 @@ final class SessionChatViewModel {
     }
 
     func sendPrompt() async {
+        guard hasCreatedSession else { return }
         let hasAttachments = !composer.state.composer.attachments.isEmpty
         guard isConnectionLive else {
             logChatAction(
@@ -917,6 +922,10 @@ final class SessionChatViewModel {
 
     private var isConnectionLive: Bool {
         sessionInfo.state.canMutate
+    }
+
+    private var hasCreatedSession: Bool {
+        !OptimisticSessionCreate.isPlaceholder(sessionID)
     }
 
     private func visibleQuestionRequest() -> QuestionRequest? {

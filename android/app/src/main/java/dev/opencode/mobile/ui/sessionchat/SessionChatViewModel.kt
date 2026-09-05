@@ -386,6 +386,7 @@ class SessionChatViewModel
         }
 
         fun archiveSession() {
+            if (!hasCreatedSession()) return
             logAction(
                 actionId = ProductAnalytics.Action.CHAT_OVERFLOW_ARCHIVE,
                 screenId = ProductAnalytics.Screen.SESSION_OVERFLOW,
@@ -394,6 +395,7 @@ class SessionChatViewModel
         }
 
         fun deleteSession() {
+            if (!hasCreatedSession()) return
             logAction(
                 actionId = ProductAnalytics.Action.CHAT_DELETE_CONFIRM,
                 screenId = ProductAnalytics.Screen.SESSION_DELETE_CONFIRM,
@@ -504,6 +506,7 @@ class SessionChatViewModel
         }
 
         fun runClientSlashAction(action: ClientSlashAction) {
+            if (!hasCreatedSession()) return
             logAction(
                 actionId = action.productActionId,
                 screenId = ProductAnalytics.Screen.SESSION_COMMANDS,
@@ -625,6 +628,7 @@ class SessionChatViewModel
         }
 
         fun openRenameSession() {
+            if (!hasCreatedSession()) return
             renameDraftEditReported = false
             logAction(
                 actionId = ProductAnalytics.Action.CHAT_OVERFLOW_RENAME,
@@ -669,6 +673,7 @@ class SessionChatViewModel
         }
 
         fun sendPrompt() {
+            if (!hasCreatedSession()) return
             val composerState = composer.state.value.composer
             logAction(
                 actionId = ProductAnalytics.Action.COMPOSER_SEND,
@@ -1082,6 +1087,11 @@ class SessionChatViewModel
         }
 
         private fun isConnectionLive(): Boolean = sessionInfo.state.value.canMutate
+
+        private fun hasCreatedSession(): Boolean {
+            val sessionId = boundSessionId ?: return false
+            return !OptimisticSessionCreate.isPlaceholder(sessionId)
+        }
 
         private fun visibleQuestionRequest(): QuestionRequest? =
             if (permissionRequests.isNotEmpty()) null else questionRequests.firstOrNull()

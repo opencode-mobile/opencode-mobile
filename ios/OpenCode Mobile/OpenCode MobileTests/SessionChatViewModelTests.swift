@@ -2105,11 +2105,12 @@ struct SessionChatViewModelTests {
     }
 
     @Test func startObservingOptimisticCreate_failureStaysOnChatWithError() async {
+        let repository = FakeMessageRepository()
         let sessionRepository = FakeChatSessionRepository(
             createSessionError: .http(statusCode: 500, message: "boom")
         )
         let viewModel = makeViewModel(
-            messageRepository: FakeMessageRepository(),
+            messageRepository: repository,
             sessionRepository: sessionRepository,
             sessionID: OptimisticSessionCreate.placeholderSessionID,
             sessionTitle: "New Session"
@@ -2121,6 +2122,14 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.timeline == .error)
         #expect(viewModel.uiState.errorMessage == "boom")
         #expect(viewModel.uiState.sessionID == OptimisticSessionCreate.placeholderSessionID)
+
+        viewModel.updateComposerText("hi")
+        await viewModel.sendPrompt()
+        viewModel.archiveSession()
+        viewModel.deleteSession()
+        #expect(repository.sendPromptAsyncCalled == false)
+        #expect(sessionRepository.archiveCallCount == 0)
+        #expect(sessionRepository.deleteCallCount == 0)
     }
 
     @Test func startObservingOptimisticCreate_transportFailureShowsReachabilityError() async {
