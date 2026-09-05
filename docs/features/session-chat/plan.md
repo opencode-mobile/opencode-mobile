@@ -144,7 +144,8 @@ awaiting-user + last-is-thinking.
 - `Sending…` / `Sending N%` — large prompt body still on the wire (Attachment
   or body ≥ 32KB). Home does not cancel that POST. Attachment bytes stay in an
   app-owned file and the JSON `data:` URL is streamed onto that POST. Pick
-  rejects files larger than 20 MiB decoded.
+  rejects files larger than 20 MiB decoded. That pending file is deleted when
+  the chip is removed, the model drops it, or send succeeds.
 - `Working` — busy after the server accepts, including optimistic busy for
   small sends, before SSE busy
 - `Retrying` — retry
@@ -159,7 +160,8 @@ Not `Thinking`. That word stays on the thought row while reasoning is open.
   completes, then `Working`. Small sends stay `Working`.
 - [x] Attachments larger than 20 MiB decoded are rejected at pick. Pending
   bytes stay in an app-owned file; the prompt JSON streams the `data:` URL
-  from that file.
+  from that file. The pending file is deleted when the chip is removed, the
+  model drops it, or send succeeds.
 - [x] While SSE reports busy, `Working` stays visible as that same last row,
   including while tools run and after a thought row settles to `Thought` /
   `Thought · Nms`.

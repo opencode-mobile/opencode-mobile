@@ -21,6 +21,7 @@ import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
+import dev.opencode.mobile.domain.message.AttachmentLimits
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.Message
@@ -1495,6 +1496,26 @@ class SessionChatViewModelTest {
             assertEquals("Sending 25%", viewModel.uiState.value.workingIndicatorLabel)
             sendGate.complete(Unit)
             advanceUntilIdle()
+            assertFalse(
+                viewModel.uiState.value.workingIndicatorLabel.orEmpty().startsWith("Sending"),
+            )
+        }
+
+    @Test
+    fun removeAttachment_deletesOwnedPendingFile() =
+        runTest(testDispatcher) {
+            val directory =
+                java.io.File(System.getProperty("java.io.tmpdir"), AttachmentLimits.STORE_DIRECTORY_NAME)
+                    .apply { mkdirs() }
+            val file = java.io.File(directory, "pending-remove.bin").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.addAttachments(listOf(testAttachment().copy(localPath = file.absolutePath)))
+            runCurrent()
+            viewModel.removeAttachment(testAttachment().id)
+            runCurrent()
+            assertFalse(file.exists())
         }
 
     @Test

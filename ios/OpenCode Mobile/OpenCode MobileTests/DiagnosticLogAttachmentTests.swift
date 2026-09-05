@@ -18,4 +18,22 @@ import Testing
         #expect(decoded.contains("[REDACTED]"))
         #expect(!decoded.contains("secret"))
     }
+
+    @Test func discard_deletesOwnedPendingFileAndIgnoresForeignPaths() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(AttachmentLimits.storeDirectoryName, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let owned = directory.appendingPathComponent("pending.bin")
+        try Data([1, 2, 3]).write(to: owned)
+        let foreign = FileManager.default.temporaryDirectory.appendingPathComponent("foreign.bin")
+        try Data([4]).write(to: foreign)
+
+        AttachmentLimits.discard(owned)
+        AttachmentLimits.discard(foreign)
+
+        #expect(!FileManager.default.fileExists(atPath: owned.path))
+        #expect(FileManager.default.fileExists(atPath: foreign.path))
+        try? FileManager.default.removeItem(at: foreign)
+        try? FileManager.default.removeItem(at: directory)
+    }
 }

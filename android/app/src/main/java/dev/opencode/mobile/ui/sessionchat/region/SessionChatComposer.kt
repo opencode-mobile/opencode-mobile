@@ -16,6 +16,7 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
+import dev.opencode.mobile.domain.message.AttachmentLimits
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.PromptModelSelection
@@ -48,15 +49,16 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.knownChildSessionIds
 import dev.opencode.mobile.ui.sessionchat.toAtSuggestion
 import dev.opencode.mobile.ui.sessionchat.toSlashSuggestion
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -129,6 +131,7 @@ class SessionChatComposer(
             val snapshot = currentDraft()
             scope.launch { persistDraft(previousSessionId, previousWorktree, snapshot) }
         }
+        discardStoredAttachments(_state.value.composer.attachments)
         boundSessionId = sessionId
         boundWorktree = worktree
         loadedCatalog = null
@@ -338,11 +341,11 @@ class SessionChatComposer(
             } else {
                 InitialSelectionState.Resolved
             }
+        val droppedForModel =
+            _state.value.composer.attachments.filterNot { option.acceptsAttachmentKind(it.kind) }
+        droppedForModel.forEach { attachmentRevisions.remove(it.id) }
         _state.update { state ->
             val keptAttachments = state.composer.attachments.filter { option.acceptsAttachmentKind(it.kind) }
-            state.composer.attachments
-                .filterNot { option.acceptsAttachmentKind(it.kind) }
-                .forEach { attachmentRevisions.remove(it.id) }
             state.copy(
                 composer =
                     state.composer.copy(
@@ -371,6 +374,7 @@ class SessionChatComposer(
                     ),
             )
         }
+        discardStoredAttachments(droppedForModel)
         logI("modelSelection source=${chosen?.sourceName ?: if (catalog.serverDefault != null) "server-default" else "first-usable"}")
         if (chosen !is InitialSelection.Cached && staleCached == null) {
             persistCurrentSelection(updatePreference = false)
@@ -559,6 +563,10 @@ class SessionChatComposer(
                     attachmentRevisions[attachment.id] = nextAttachmentRevision++
                     val index = ordered.indexOfFirst { it.id == attachment.id }
                     if (index >= 0) {
+                        val previous = ordered[index]
+                        if (previous.localPath != attachment.localPath) {
+                            AttachmentLimits.discard(previous.localPath)
+                        }
                         ordered[index] = attachment
                     } else {
                         ordered.add(attachment)
@@ -574,6 +582,7 @@ class SessionChatComposer(
             )
         }
         if (rejected.isNotEmpty()) {
+            discardStoredAttachments(rejected)
             reportAttachmentError(unsupportedAttachmentMessage(rejected))
         } else if (accepted.isNotEmpty()) {
             _state.update { it.copy(errorMessage = null) }
@@ -581,8 +590,10 @@ class SessionChatComposer(
     }
 
     fun removeAttachment(id: String) {
+        val removed = _state.value.composer.attachments.filter { it.id == id }
         attachmentRevisions.remove(id)
         updateComposer { composer -> composer.copy(attachments = composer.attachments.filterNot { it.id == id }) }
+        discardStoredAttachments(removed)
     }
 
     fun reportAttachmentError(message: String) {
@@ -591,13 +602,12 @@ class SessionChatComposer(
     }
 
     fun selectModel(option: ModelSelectionOption) {
+        val dropped = _state.value.composer.attachments.filterNot { option.acceptsAttachmentKind(it.kind) }
+        dropped.forEach { attachmentRevisions.remove(it.id) }
         updateComposer { composer ->
             val previousVariant = composer.selectedVariant
             val variant = previousVariant?.takeIf { it in option.variants }
             val keptAttachments = composer.attachments.filter { option.acceptsAttachmentKind(it.kind) }
-            composer.attachments
-                .filterNot { option.acceptsAttachmentKind(it.kind) }
-                .forEach { attachmentRevisions.remove(it.id) }
             composer.copy(
                 selectedModel = ModelSelection(option, variant),
                 selectedVariant = variant,
@@ -606,6 +616,7 @@ class SessionChatComposer(
             )
         }
         persistCurrentSelection(updatePreference = true)
+        discardStoredAttachments(dropped)
     }
 
     fun selectMode(mode: String) {
@@ -813,9 +824,13 @@ class SessionChatComposer(
                             }
                         }
                     }
+                    persistCurrentSelection(updatePreference = false)
+                    _state.update { it.copy(sendProgressPercent = null) }
+                    onSendAccepted()
+                    discardStoredAttachments(attachments)
                 }
-                persistCurrentSelection(updatePreference = false)
-                onSendAccepted()
+            } catch (throwable: CancellationException) {
+                throw throwable
             } catch (throwable: Throwable) {
                 logSendFailure(throwable)
                 restoreFailedSubmission(
@@ -921,6 +936,10 @@ class SessionChatComposer(
 
     fun clearSending() {
         _state.update { it.copy(isSending = false, sendProgressPercent = null) }
+    }
+
+    private fun discardStoredAttachments(attachments: Collection<Attachment>) {
+        attachments.forEach { AttachmentLimits.discard(it.localPath) }
     }
 
     private fun applySendProgress(

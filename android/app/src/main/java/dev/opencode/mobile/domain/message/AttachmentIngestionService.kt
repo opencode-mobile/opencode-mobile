@@ -96,7 +96,7 @@ class AttachmentIngestionService private constructor(
         bytes: ByteArray,
         filename: String,
     ): File {
-        val directory = File(System.getProperty("java.io.tmpdir"), "opencode-attachments").apply { mkdirs() }
+        val directory = File(System.getProperty("java.io.tmpdir"), AttachmentLimits.STORE_DIRECTORY_NAME).apply { mkdirs() }
         val safeName = filename.replace("/", "_").ifBlank { "attachment" }
         return File(directory, "${UUID.randomUUID()}-$safeName").apply { writeBytes(bytes) }
     }

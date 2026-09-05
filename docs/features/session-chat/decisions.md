@@ -29,7 +29,8 @@ Still binding:
   the first attachment slice. Pending Attachment bytes stay in an app-owned
   file. Pick rejects more than 20 MiB decoded. The prompt still sends a
   `data:` URL; that string is streamed from the file. Optimistic FilePart
-  and session cache do not persist `data:` bodies.
+  and session cache do not persist `data:` bodies. Pending files are deleted
+  when the chip is removed, the model drops them, or send succeeds.
 - Live frames may coalesce; required load / send completions must not be
   dropped.
 - Context usage is derived from best available session + message data.

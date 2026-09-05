@@ -172,6 +172,23 @@ nonisolated struct FilePart: Equatable, Sendable {
     let mime: String
     let kind: AttachmentKind
     let dataURL: String
+    let previewData: Data?
+
+    init(
+        id: String,
+        filename: String,
+        mime: String,
+        kind: AttachmentKind,
+        dataURL: String,
+        previewData: Data? = nil
+    ) {
+        self.id = id
+        self.filename = filename
+        self.mime = mime
+        self.kind = kind
+        self.dataURL = dataURL
+        self.previewData = previewData
+    }
 }
 
 nonisolated struct ToolPart: Equatable, Sendable {

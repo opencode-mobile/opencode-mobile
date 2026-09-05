@@ -14,7 +14,7 @@ object DiagnosticLogAttachment {
         if (bytes.size.toLong() > AttachmentLimits.MAX_DECODED_BYTES) {
             throw IllegalArgumentException(AttachmentLimits.TOO_LARGE_ERROR)
         }
-        val directory = java.io.File(System.getProperty("java.io.tmpdir"), "opencode-attachments").apply { mkdirs() }
+        val directory = java.io.File(System.getProperty("java.io.tmpdir"), AttachmentLimits.STORE_DIRECTORY_NAME).apply { mkdirs() }
         val file = java.io.File(directory, "${UUID.randomUUID()}-$FILENAME").apply { writeBytes(bytes) }
         return Attachment(
             id = UUID.randomUUID().toString(),

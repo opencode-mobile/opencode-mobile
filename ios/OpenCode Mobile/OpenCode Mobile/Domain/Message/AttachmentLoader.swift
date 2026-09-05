@@ -121,7 +121,7 @@ struct AttachmentLoader: Sendable {
 
     nonisolated private func persist(data: Data, filename: String) throws -> URL {
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("attachments", isDirectory: true)
+            .appendingPathComponent(AttachmentLimits.storeDirectoryName, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let safeName = filename.replacingOccurrences(of: "/", with: "_")
         let stored = directory.appendingPathComponent("\(UUID().uuidString)-\(safeName.isEmpty ? "attachment" : safeName)")

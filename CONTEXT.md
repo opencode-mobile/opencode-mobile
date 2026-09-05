@@ -323,7 +323,8 @@ An Attachment has two lifecycle states: **pending** in the Session Chat
 composer (removable chips before send) and **sent** on a user message as a
 **FilePart**. Pending bytes stay in an app-owned file. The prompt still carries
 them as a data URL on the wire; there is no separate upload API. Files larger
-than 20 MiB decoded are rejected at pick.
+than 20 MiB decoded are rejected at pick. The pending file is deleted when the
+chip is removed, the model drops it, or send succeeds.
 _Avoid_: upload; Attach context (legacy composer label for device files);
 project `@` / `file://` context (different concept); **agent mention** (different
 concept).
