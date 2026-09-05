@@ -105,6 +105,7 @@ class SessionChatTimeline(
 
     /** After network confirms the cache, ignore late isFromCache publishes for Syncing. */
     private var networkCacheSyncConfirmed = false
+    private var catchUpSyncing = false
 
     fun bindCreating(worktree: String) {
         observeJob?.cancel()
@@ -121,6 +122,7 @@ class SessionChatTimeline(
         lastTimelineFrame = null
         nextFrameRevision = 1L
         networkCacheSyncConfirmed = false
+        catchUpSyncing = false
         BlockDecorationCache.clear()
         _state.value = SessionChatTimelineRegionState()
         _state.update {
@@ -155,12 +157,19 @@ class SessionChatTimeline(
         lastTimelineFrame = null
         nextFrameRevision = 1L
         networkCacheSyncConfirmed = false
+        catchUpSyncing = false
         BlockDecorationCache.clear()
         _state.value = SessionChatTimelineRegionState()
         _state.update {
             it.copy(timeline = SessionChatTimelineState.Loading, errorMessage = null)
         }
         logI("bind session=$sessionId worktree=$worktree")
+        startLiveObservation(sessionId, worktree)
+    }
+
+    fun restartLiveObservation() {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
         startLiveObservation(sessionId, worktree)
     }
 
@@ -429,8 +438,16 @@ class SessionChatTimeline(
         sessionId: String,
         worktree: String,
     ) {
+        observeJob?.cancel()
         observeJob =
             scope.launch {
+                launch {
+                    messageRepository.observeCatchUpChrome(sessionId, worktree).collect { catchingUp ->
+                        if (!isCurrentBinding(sessionId, worktree)) return@collect
+                        catchUpSyncing = catchingUp
+                        publishSyncingMessages()
+                    }
+                }
                 messageRepository
                     .observeDisplayMessages(sessionId, worktree)
                     // Do not conflate: CacheSyncConfirmed must not be dropped when a late
@@ -626,7 +643,8 @@ class SessionChatTimeline(
                 timelineFrame = stamped,
                 isRefreshing = isRefreshing,
                 messagesFromCache = pending.messagesFromCache && !networkCacheSyncConfirmed,
-                isSyncingMessages = pending.messagesFromCache && !networkCacheSyncConfirmed,
+                isSyncingMessages =
+                    (pending.messagesFromCache && !networkCacheSyncConfirmed) || catchUpSyncing,
                 errorMessage =
                     if (fromQuietRefresh) {
                         if (merged.isNotEmpty() && state.timeline == SessionChatTimelineState.Error) {
@@ -648,8 +666,16 @@ class SessionChatTimeline(
         _state.update {
             it.copy(
                 messagesFromCache = false,
-                isSyncingMessages = false,
+                isSyncingMessages = catchUpSyncing,
             )
+        }
+    }
+
+    private fun publishSyncingMessages() {
+        _state.update { state ->
+            val fromCache = state.messagesFromCache && !networkCacheSyncConfirmed
+            val next = fromCache || catchUpSyncing
+            if (state.isSyncingMessages == next) state else state.copy(isSyncingMessages = next)
         }
     }
 

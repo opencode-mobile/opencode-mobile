@@ -24,6 +24,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private var lastPublishedFrame: [String: [Message]] = [:]
     private var lastPublishedRevision: [String: UInt64] = [:]
     private var healthByKey: [MessageSessionKey: MessageSyncHealth] = [:]
+    private var catchUpSlots: Set<String> = []
+    private var catchUpChromeSubscribers: [UUID: (slot: String?, continuation: AsyncStream<Bool>.Continuation)] = [:]
     private var messageCacheHandles: [MessageSessionKey: any SessionMessageCacheHandle] = [:]
     /// Store slots that painted from cache and still need network confirmation.
     private var awaitingCacheSyncConfirm: Set<String> = []
@@ -148,9 +150,14 @@ nonisolated final class MessageSync: @unchecked Sendable {
         lastPublishedFrame.removeAll()
         lastPublishedRevision.removeAll()
         healthByKey.removeAll()
+        catchUpSlots.removeAll()
+        let subscribers = catchUpChromeSubscribers
         awaitingCacheSyncConfirm.removeAll()
         lock.unlock()
         store.clear()
+        for subscriber in subscribers.values {
+            subscriber.continuation.yield(false)
+        }
     }
 
     func peekStoreMessages(sessionID: String, directory: String? = nil) -> [Message] {
@@ -166,10 +173,75 @@ nonisolated final class MessageSync: @unchecked Sendable {
         return healthByKey[key] ?? .healthy
     }
 
+    func observeCatchUpChrome() -> AsyncStream<Bool> {
+        catchUpChromeStream(slot: nil)
+    }
+
+    func observeCatchUpChrome(sessionID: String, directory: String?) -> AsyncStream<Bool> {
+        catchUpChromeStream(slot: sessionKey(sessionID: sessionID, directory: directory).storeSlot)
+    }
+
+    private func catchUpChromeStream(slot: String?) -> AsyncStream<Bool> {
+        AsyncStream { continuation in
+            let id = UUID()
+            lock.lock()
+            catchUpChromeSubscribers[id] = (slot, continuation)
+            let current =
+                if let slot {
+                    catchUpSlots.contains(slot)
+                } else {
+                    !catchUpSlots.isEmpty
+                }
+            lock.unlock()
+            continuation.yield(current)
+            continuation.onTermination = { [weak self] _ in
+                guard let self else { return }
+                self.lock.lock()
+                self.catchUpChromeSubscribers.removeValue(forKey: id)
+                self.lock.unlock()
+            }
+        }
+    }
+
     private func setHealth(_ health: MessageSyncHealth, for key: MessageSessionKey) {
         lock.lock()
         healthByKey[key] = health
+        if health.showsCatchUpChrome {
+            catchUpSlots.insert(key.storeSlot)
+        } else {
+            catchUpSlots.remove(key.storeSlot)
+        }
+        let subscribers = catchUpChromeSubscribers
+        let slots = catchUpSlots
         lock.unlock()
+        for subscriber in subscribers.values {
+            let value =
+                if let slot = subscriber.slot {
+                    slots.contains(slot)
+                } else {
+                    !slots.isEmpty
+                }
+            subscriber.continuation.yield(value)
+        }
+    }
+
+    private func clearCatchUp(for key: MessageSessionKey) {
+        setHealth(.healthy, for: key)
+        lock.lock()
+        healthByKey.removeValue(forKey: key)
+        catchUpSlots.remove(key.storeSlot)
+        let subscribers = catchUpChromeSubscribers
+        let slots = catchUpSlots
+        lock.unlock()
+        for subscriber in subscribers.values {
+            let value =
+                if let slot = subscriber.slot {
+                    slots.contains(slot)
+                } else {
+                    !slots.isEmpty
+                }
+            subscriber.continuation.yield(value)
+        }
     }
 
     private func fingerprint(for storeSlot: String) -> String? {
@@ -277,6 +349,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         )
         let cacheHandle = openMessageCacheHandle(for: key)
         let resumeState = ObservationResumeState()
+        defer { clearCatchUp(for: key) }
         func confirmCacheSyncIfAwaiting() {
             guard isAwaitingCacheSyncConfirm(for: key.storeSlot) else { return }
             setAwaitingCacheSyncConfirm(false, for: key.storeSlot)

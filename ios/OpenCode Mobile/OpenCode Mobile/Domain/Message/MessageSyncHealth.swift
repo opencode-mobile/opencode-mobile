@@ -15,6 +15,18 @@ nonisolated enum MessageSyncHealth: Equatable, Sendable {
         if case .recovering = self { return true }
         return false
     }
+
+    /// Home refresh + Session Chat Syncing pill. Overflow stays quiet (live stream).
+    var showsCatchUpChrome: Bool {
+        switch self {
+        case .healthy:
+            false
+        case .stale:
+            true
+        case .recovering(let reason):
+            reason != .overflow
+        }
+    }
 }
 
 nonisolated enum MessageSyncRecoveryReason: String, Equatable, Sendable {

@@ -76,6 +76,9 @@ is a thin facade. Any change to the facade is an architectural decision — see
 - Session Running chrome as the last timeline row when session status is not idle
   (`Working`, `Retrying`, `Compacting…`), except while the last painted row is
   Thinking.
+- Top **Syncing…** pill while cached messages or resume/reconnect REST catch-up
+  still wait for network confirmation. Not a full-screen spinner. Home uses the
+  existing pull-to-refresh indicator for the same catch-up.
 
 ## Error States
 

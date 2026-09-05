@@ -24,11 +24,15 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
@@ -65,6 +69,7 @@ class MessageSync(
     private val lastPublishedFrames = ConcurrentHashMap<String, List<Message>>()
     private val lastPublishedRevisions = ConcurrentHashMap<String, Long>()
     private val healthByKey = ConcurrentHashMap<MessageSessionKey, MessageSyncHealth>()
+    private val catchUpSlots = MutableStateFlow<Set<String>>(emptySet())
     private val messageCacheHandles = ConcurrentHashMap<MessageSessionKey, SessionMessageCacheHandle>()
     /** Store slots that painted from cache and still need network confirmation. */
     private val awaitingCacheSyncConfirm = ConcurrentHashMap.newKeySet<String>()
@@ -113,6 +118,7 @@ class MessageSync(
         lastPublishedFrames.clear()
         lastPublishedRevisions.clear()
         healthByKey.clear()
+        catchUpSlots.value = emptySet()
         awaitingCacheSyncConfirm.clear()
         messageCacheHandles.keys.toList().forEach { closeMessageCacheHandle(it) }
         engine.clear()
@@ -123,6 +129,26 @@ class MessageSync(
         sessionId: String,
         directory: String?,
     ): MessageSyncHealth = healthByKey[sessionKey(sessionId, directory)] ?: MessageSyncHealth.Healthy
+
+    fun observeCatchUpChrome(): Flow<Boolean> =
+        catchUpSlots.map { it.isNotEmpty() }.distinctUntilChanged()
+
+    fun observeCatchUpChrome(
+        sessionId: String,
+        directory: String?,
+    ): Flow<Boolean> {
+        val slot = sessionKey(sessionId, directory).storeSlot
+        return catchUpSlots.map { slot in it }.distinctUntilChanged()
+    }
+
+    private fun setCatchUpSlot(
+        key: MessageSessionKey,
+        catchingUp: Boolean,
+    ) {
+        catchUpSlots.update { current ->
+            if (catchingUp) current + key.storeSlot else current - key.storeSlot
+        }
+    }
 
     private fun sessionKey(
         sessionId: String,
@@ -227,6 +253,7 @@ class MessageSync(
             fun publishHealth(next: MessageSyncHealth) {
                 health.set(next)
                 healthByKey[key] = next
+                setCatchUpSlot(key, next.showsCatchUpChrome)
             }
 
             fun requiresRecovery(): Boolean = health.get().requiresAuthoritativeRecovery
@@ -825,6 +852,8 @@ class MessageSync(
                 invalidationWatcher.cancel()
                 staging.close()
                 closeMessageCacheHandle(key)
+                healthByKey.remove(key)
+                setCatchUpSlot(key, false)
             }
         }
 

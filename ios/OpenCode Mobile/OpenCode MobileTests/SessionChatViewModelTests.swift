@@ -1687,6 +1687,22 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.errorMessage == nil)
     }
 
+    @Test func catchUpChrome_showsSyncingPill() async {
+        let eventStream = FakeForegroundEventStream()
+        let viewModel = makeViewModel(eventStream: eventStream)
+        let ready = await waitUntil { viewModel.uiState.timeline == .ready }
+        #expect(ready)
+        #expect(viewModel.uiState.syncingIndicatorLabel == nil)
+
+        eventStream.start()
+        eventStream.setConnectionState(.disconnected)
+        let shown = await waitUntil {
+            viewModel.uiState.syncingIndicatorLabel == SessionMessageSyncChrome.statusLabel
+        }
+        #expect(shown)
+        viewModel.stopObserving()
+    }
+
     @Test func quietRefreshDuringSend_keepsPendingMessageAndSendingFlag() async {
         let repository = FakeMessageRepository(holdSend: true)
         let eventStream = FakeForegroundEventStream()
@@ -2910,6 +2926,14 @@ private final class SyncingTestMessageRepository: MessageRepository, @unchecked 
 
     func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate> {
         displayPipeline.observeDisplayMessages(sessionID: sessionID, directory: directory)
+    }
+
+    func observeCatchUpChrome() -> AsyncStream<Bool> {
+        sync.observeCatchUpChrome()
+    }
+
+    func observeCatchUpChrome(sessionID: String, directory: String?) -> AsyncStream<Bool> {
+        sync.observeCatchUpChrome(sessionID: sessionID, directory: directory)
     }
 
     func refreshMessages(sessionID: String, directory: String?) async throws -> [Message] {

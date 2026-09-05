@@ -244,6 +244,7 @@ class SessionChatViewModel
                 bindTitleIfChanged(sessionId, sessionTitle, worktree)
                 // Peers may have changed while the screen was away; re-resolve smart label.
                 scheduleProjectIdentityRefine(worktree)
+                timeline.restartLiveObservation()
                 return
             }
             boundSessionId = sessionId

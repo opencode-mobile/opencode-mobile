@@ -568,8 +568,17 @@ struct MessageSyncTests {
             }
             return false
         }
+        var chrome = false
+        let chromeTask = Task {
+            for await value in sync.observeCatchUpChrome(sessionID: "ses-1", directory: "/repo") {
+                chrome = value
+            }
+        }
+        let catchingUp = await waitUntil { chrome }
+        chromeTask.cancel()
         task.cancel()
         #expect(stale)
+        #expect(catchingUp)
         #expect(collector.latest()?.first?.text == "Hello")
     }
 

@@ -3,6 +3,8 @@ import Foundation
 protocol MessageRepository: Sendable {
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate>
     func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate>
+    func observeCatchUpChrome() -> AsyncStream<Bool>
+    func observeCatchUpChrome(sessionID: String, directory: String?) -> AsyncStream<Bool>
     func peekWarmDisplayMessages(sessionID: String, directory: String?) -> [DisplayMessage]?
     func refreshMessages(sessionID: String, directory: String?) async throws -> [Message]
     func refreshDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage]
@@ -16,6 +18,17 @@ protocol MessageRepository: Sendable {
 }
 
 extension MessageRepository {
+    func observeCatchUpChrome() -> AsyncStream<Bool> {
+        AsyncStream { continuation in
+            continuation.yield(false)
+            continuation.finish()
+        }
+    }
+
+    func observeCatchUpChrome(sessionID: String, directory: String?) -> AsyncStream<Bool> {
+        observeCatchUpChrome()
+    }
+
     func peekWarmDisplayMessages(sessionID: String, directory: String?) -> [DisplayMessage]? { nil }
 
     func sendPromptAsync(sessionID: String, text: String, directory: String?) async throws {
@@ -54,6 +67,14 @@ final class DefaultMessageRepository: MessageRepository {
 
     func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate> {
         displayMessagePipeline.observeDisplayMessages(sessionID: sessionID, directory: directory)
+    }
+
+    func observeCatchUpChrome() -> AsyncStream<Bool> {
+        messageSync.observeCatchUpChrome()
+    }
+
+    func observeCatchUpChrome(sessionID: String, directory: String?) -> AsyncStream<Bool> {
+        messageSync.observeCatchUpChrome(sessionID: sessionID, directory: directory)
     }
 
     func peekWarmDisplayMessages(sessionID: String, directory: String?) -> [DisplayMessage]? {

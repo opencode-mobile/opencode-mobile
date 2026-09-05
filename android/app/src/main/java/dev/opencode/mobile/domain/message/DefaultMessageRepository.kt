@@ -27,6 +27,13 @@ class DefaultMessageRepository
             directory: String?,
         ): Flow<DisplayMessageListUpdate> = displayMessagePipeline.observeDisplayMessages(sessionId, directory)
 
+        override fun observeCatchUpChrome(): Flow<Boolean> = messageSync.observeCatchUpChrome()
+
+        override fun observeCatchUpChrome(
+            sessionId: String,
+            directory: String?,
+        ): Flow<Boolean> = messageSync.observeCatchUpChrome(sessionId, directory)
+
         override suspend fun refreshMessages(
             sessionId: String,
             directory: String?,

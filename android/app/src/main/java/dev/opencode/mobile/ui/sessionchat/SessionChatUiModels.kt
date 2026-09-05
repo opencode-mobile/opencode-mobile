@@ -121,7 +121,7 @@ data class SessionChatUiState(
     val workingIndicatorLabel: String? = null,
     /** True while Working is reserved but collapsed under last-row Thinking. */
     val workingIndicatorCollapsed: Boolean = false,
-    /** Top Syncing pill label while cached messages wait for network confirmation. */
+    /** Top Syncing pill label while cached or catching-up messages wait for network confirmation. */
     val syncingIndicatorLabel: String? = null,
     val sessionTodos: List<SessionTodo> = emptyList(),
     val sessionTodosVisible: Boolean = false,

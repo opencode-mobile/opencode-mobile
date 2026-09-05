@@ -92,7 +92,10 @@ enum ProjectListHomeState: Equatable {
 final class ProjectListHomeViewModel {
     private(set) var state: ProjectListHomeState = .probing
     /// Soft pull-to-refresh indicator; content stays on Loaded/Empty.
+    private var userRefreshing = false
+    private var catchUpRefreshing = false
     private(set) var isRefreshing = false
+    private var catchUpChromeTask: Task<Void, Never>?
     /// Sheet presentation is tracked here so SwiftUI `.sheet` can observe it directly.
     private(set) var isAddProjectPresented = false
     private(set) var addProjectNavigator = AddProjectNavigatorState.empty
@@ -195,6 +198,24 @@ final class ProjectListHomeViewModel {
             }
         }
         startObservingConnectionState()
+        startObservingCatchUpChrome()
+    }
+
+    private func startObservingCatchUpChrome() {
+        catchUpChromeTask?.cancel()
+        catchUpChromeTask = Task {
+            for await catchingUp in messageRepository.observeCatchUpChrome() {
+                catchUpRefreshing = catchingUp
+                publishRefreshing()
+            }
+        }
+    }
+
+    private func publishRefreshing() {
+        let next = userRefreshing || catchUpRefreshing
+        if isRefreshing != next {
+            isRefreshing = next
+        }
     }
 
     private func startObservingConnectionState() {
@@ -246,13 +267,17 @@ final class ProjectListHomeViewModel {
     func pullToRefresh() async {
         switch state {
         case .loaded, .empty:
-            guard !isRefreshing else { return }
+            guard !userRefreshing else { return }
             ProductAnalytics.logUserAction(
                 screenId: ProductAnalytics.Screen.home,
                 actionId: ProductAnalytics.Action.homePullToRefresh
             )
-            isRefreshing = true
-            defer { isRefreshing = false }
+            userRefreshing = true
+            publishRefreshing()
+            defer {
+                userRefreshing = false
+                publishRefreshing()
+            }
             await sessionLiveStore.invalidate(directory: nil)
             await sessionStatusLiveStore.invalidate(directory: nil)
         default:

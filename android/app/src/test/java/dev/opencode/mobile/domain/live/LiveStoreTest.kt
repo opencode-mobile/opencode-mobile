@@ -617,6 +617,14 @@ class MessageSyncTest {
                 (health as MessageSyncHealth.Stale).reason,
             )
             assertEquals("Hello", emissions.last().single().text)
+            val chrome = mutableListOf<Boolean>()
+            val chromeJob =
+                launch {
+                    sync.observeCatchUpChrome("ses-1", "/repo").collect { chrome.add(it) }
+                }
+            advanceTimeBy(1)
+            assertEquals(true, chrome.lastOrNull())
+            chromeJob.cancel()
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
         }
