@@ -42,6 +42,7 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
+import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
@@ -144,7 +145,8 @@ fun SessionChatScreen(
         } else {
             0.dp
         }
-    val lifecycleActionsEnabled = !uiState.isLifecycleActionInFlight
+    val sessionCreated = !OptimisticSessionCreate.isPlaceholder(uiState.sessionId)
+    val lifecycleActionsEnabled = sessionCreated && !uiState.isLifecycleActionInFlight
     var showAttachmentSource by rememberSaveable { mutableStateOf(false) }
 
     val blocksSessionTodosSheet = uiState.permissionRequest != null || uiState.questionRequest != null
@@ -317,6 +319,7 @@ fun SessionChatScreen(
                             OpenCodeOverflowMenuEntry(
                                 title = "Rename session",
                                 icon = OpenCodeIcons.Edit,
+                                enabled = sessionCreated,
                                 onClick = {
                                     menuExpanded = false
                                     viewModel.openRenameSession()
@@ -327,6 +330,7 @@ fun SessionChatScreen(
                             OpenCodeOverflowMenuEntry(
                                 title = "Review changes",
                                 icon = OpenCodeIcons.Description,
+                                enabled = sessionCreated,
                                 onClick = {
                                     logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_REVIEW_CHANGES)
                                     menuExpanded = false
@@ -338,6 +342,7 @@ fun SessionChatScreen(
                             OpenCodeOverflowMenuEntry(
                                 title = "Session context",
                                 icon = OpenCodeIcons.Architecture,
+                                enabled = sessionCreated,
                                 onClick = {
                                     logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_SESSION_CONTEXT)
                                     menuExpanded = false
@@ -349,6 +354,7 @@ fun SessionChatScreen(
                             OpenCodeOverflowMenuEntry(
                                 title = "Copy session ID",
                                 icon = OpenCodeIcons.ContentCopy,
+                                enabled = sessionCreated,
                                 onClick = {
                                     logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_COPY_SESSION_ID)
                                     menuExpanded = false
@@ -674,10 +680,12 @@ fun SessionChatScreen(
                                             uiState.composer.selectedModel != null &&
                                             uiState.composer.isModelSelectionReady &&
                                             !uiState.isSending &&
+                                            sessionCreated &&
                                             uiState.timeline != SessionChatTimelineState.Creating &&
                                             uiState.canMutate,
                                     attachEnabled =
                                         attachmentSources.isAttachEnabled &&
+                                            sessionCreated &&
                                             uiState.composer.isModelSelectionReady,
                                     showStop = uiState.sessionStatusLabel != null,
                                     stopEnabled =
@@ -895,7 +903,7 @@ fun SessionChatScreen(
         ) {
             CommandsActionTileGrid(
                 actions = uiState.visibleClientSlashActions,
-                canMutate = uiState.canMutate,
+                canMutate = sessionCreated && uiState.canMutate,
                 onAction = viewModel::runClientSlashAction,
             )
         }

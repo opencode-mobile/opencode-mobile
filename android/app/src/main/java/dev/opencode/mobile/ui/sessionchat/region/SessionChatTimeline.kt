@@ -129,6 +129,13 @@ class SessionChatTimeline(
         logI("bind creating worktree=$worktree")
     }
 
+    fun showCreateFailed(message: String) {
+        _state.update {
+            it.copy(timeline = SessionChatTimelineState.Error, errorMessage = message)
+        }
+        logI("create failed message=$message")
+    }
+
     fun bind(
         sessionId: String,
         worktree: String,

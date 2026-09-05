@@ -184,7 +184,9 @@ final class SessionInfo {
     }
 
     func archiveSession() {
-        guard !state.sessionID.isEmpty, !state.isLifecycleActionInFlight else { return }
+        guard !state.sessionID.isEmpty,
+              !OptimisticSessionCreate.isPlaceholder(state.sessionID),
+              !state.isLifecycleActionInFlight else { return }
         let sessionID = state.sessionID
         state.isLifecycleActionInFlight = true
         state.lifecycleErrorMessage = nil
@@ -211,7 +213,9 @@ final class SessionInfo {
     }
 
     func deleteSession() {
-        guard !state.sessionID.isEmpty, !state.isLifecycleActionInFlight else { return }
+        guard !state.sessionID.isEmpty,
+              !OptimisticSessionCreate.isPlaceholder(state.sessionID),
+              !state.isLifecycleActionInFlight else { return }
         let sessionID = state.sessionID
         state.isLifecycleActionInFlight = true
         state.lifecycleErrorMessage = nil

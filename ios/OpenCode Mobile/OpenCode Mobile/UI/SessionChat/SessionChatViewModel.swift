@@ -192,10 +192,12 @@ final class SessionChatViewModel {
     }
 
     func archiveSession() {
+        guard hasCreatedSession else { return }
         sessionInfo.archiveSession()
     }
 
     func deleteSession() {
+        guard hasCreatedSession else { return }
         sessionInfo.deleteSession()
     }
 
@@ -309,6 +311,7 @@ final class SessionChatViewModel {
     }
 
     func runClientSlashAction(_ action: ClientSlashAction) {
+        guard hasCreatedSession else { return }
         logCommandsAction(action)
         switch action {
         case .new:
@@ -455,6 +458,7 @@ final class SessionChatViewModel {
     }
 
     func openRenameSession() {
+        guard hasCreatedSession else { return }
         ProductAnalytics.logScreenView(
             screenId: ProductAnalytics.Screen.sessionRename,
             presentation: ProductAnalytics.Presentation.dialog,
@@ -503,6 +507,7 @@ final class SessionChatViewModel {
     }
 
     func sendPrompt() async {
+        guard hasCreatedSession else { return }
         let hasAttachments = !composer.state.composer.attachments.isEmpty
         guard isConnectionLive else {
             logChatAction(
@@ -919,6 +924,10 @@ final class SessionChatViewModel {
         sessionInfo.state.canMutate
     }
 
+    private var hasCreatedSession: Bool {
+        !OptimisticSessionCreate.isPlaceholder(sessionID)
+    }
+
     private func visibleQuestionRequest() -> QuestionRequest? {
         permissionRequests.isEmpty ? questionRequests.first : nil
     }
@@ -1060,18 +1069,31 @@ final class SessionChatViewModel {
                 OpenCodeLog.sessionChat.info("optimistic create success id=\(session.id)")
                 optimisticCreateTask = nil
                 promoteOptimisticSession(id: session.id, title: session.title)
+            } catch is CancellationError {
+                return
             } catch {
                 guard !Task.isCancelled else { return }
                 OpenCodeLog.sessionChat.warning(
                     "optimistic create failed error=\(error.localizedDescription)"
                 )
                 optimisticCreateTask = nil
-                OptimisticSessionCreateCoordinator.shared.reportCreateFailed(
-                    error.localizedDescription
-                )
-                sessionInfo.requestLeaveSession()
+                timeline.showCreateFailed(createSessionErrorMessage(error))
                 publishUiState()
             }
+        }
+    }
+
+    private func createSessionErrorMessage(_ error: Error) -> String {
+        guard let sessionError = error as? SessionError else {
+            return error.localizedDescription
+        }
+        switch sessionError {
+        case let .http(_, message):
+            return message ?? "Unable to create session"
+        case .transport:
+            return "Unable to reach the server"
+        case .decoding:
+            return "Unable to read server response"
         }
     }
 

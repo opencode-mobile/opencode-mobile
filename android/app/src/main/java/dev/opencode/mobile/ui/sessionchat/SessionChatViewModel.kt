@@ -35,7 +35,6 @@ import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.smartProjectLabel
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
-import dev.opencode.mobile.domain.session.OptimisticSessionCreateCoordinator
 import dev.opencode.mobile.domain.session.PermissionDecision
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
@@ -53,6 +52,7 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimeline
 import dev.opencode.mobile.ui.sessionchat.region.SessionInfo
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -84,7 +84,6 @@ class SessionChatViewModel
         sessionModelSelectionStore: SessionModelSelectionStore,
         composerDraftStore: ComposerDraftStore,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
-        private val optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator,
         private val connectionProfileStore: ConnectionProfileStore,
         private val activeConnectionManager: ActiveConnectionManager,
         liveUpdates: LiveUpdates = FixedLiveUpdates(),
@@ -326,14 +325,20 @@ class SessionChatViewModel
                         logI("optimistic create success id=${session.id}")
                         promoteOptimisticSession(session.id, session.title, worktree)
                     }.onFailure { error ->
+                        if (error is CancellationException) throw error
                         logI("optimistic create failed error=${error.message}")
-                        optimisticSessionCreateCoordinator.reportCreateFailed(
-                            error.message ?: "Unable to create session",
-                        )
-                        sessionInfo.requestLeaveSession()
+                        timeline.showCreateFailed(createSessionErrorMessage(error))
                     }
                 }
         }
+
+        private fun createSessionErrorMessage(error: Throwable): String =
+            when (error) {
+                is SessionError.Http -> error.message ?: "Unable to create session"
+                is SessionError.Transport -> "Unable to reach the server"
+                is SessionError.Decoding -> "Unable to read server response"
+                else -> error.message ?: "Unable to create session"
+            }
 
         private fun promoteOptimisticSession(
             sessionId: String,
@@ -381,6 +386,7 @@ class SessionChatViewModel
         }
 
         fun archiveSession() {
+            if (!hasCreatedSession()) return
             logAction(
                 actionId = ProductAnalytics.Action.CHAT_OVERFLOW_ARCHIVE,
                 screenId = ProductAnalytics.Screen.SESSION_OVERFLOW,
@@ -389,6 +395,7 @@ class SessionChatViewModel
         }
 
         fun deleteSession() {
+            if (!hasCreatedSession()) return
             logAction(
                 actionId = ProductAnalytics.Action.CHAT_DELETE_CONFIRM,
                 screenId = ProductAnalytics.Screen.SESSION_DELETE_CONFIRM,
@@ -499,6 +506,7 @@ class SessionChatViewModel
         }
 
         fun runClientSlashAction(action: ClientSlashAction) {
+            if (!hasCreatedSession()) return
             logAction(
                 actionId = action.productActionId,
                 screenId = ProductAnalytics.Screen.SESSION_COMMANDS,
@@ -620,6 +628,7 @@ class SessionChatViewModel
         }
 
         fun openRenameSession() {
+            if (!hasCreatedSession()) return
             renameDraftEditReported = false
             logAction(
                 actionId = ProductAnalytics.Action.CHAT_OVERFLOW_RENAME,
@@ -664,6 +673,7 @@ class SessionChatViewModel
         }
 
         fun sendPrompt() {
+            if (!hasCreatedSession()) return
             val composerState = composer.state.value.composer
             logAction(
                 actionId = ProductAnalytics.Action.COMPOSER_SEND,
@@ -1077,6 +1087,11 @@ class SessionChatViewModel
         }
 
         private fun isConnectionLive(): Boolean = sessionInfo.state.value.canMutate
+
+        private fun hasCreatedSession(): Boolean {
+            val sessionId = boundSessionId ?: return false
+            return !OptimisticSessionCreate.isPlaceholder(sessionId)
+        }
 
         private fun visibleQuestionRequest(): QuestionRequest? =
             if (permissionRequests.isNotEmpty()) null else questionRequests.firstOrNull()

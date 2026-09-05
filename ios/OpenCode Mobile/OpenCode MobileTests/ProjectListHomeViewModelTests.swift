@@ -451,34 +451,6 @@ struct ProjectListHomeViewModelTests {
         #expect(viewModel.revealNewestToken == 0)
     }
 
-    @Test func optimisticCreateFailureStoresInlineError() async {
-        let viewModel = makeViewModel(
-            projectRepository: FakeProjectRepository(),
-            sessionRepository: FakeSessionRepository(),
-            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
-        )
-        await viewModel.refresh()
-        OptimisticSessionCreateCoordinator.shared.reportCreateFailed("nope")
-        guard case let .loaded(_, _, _, createError) = viewModel.state else {
-            Issue.record("Expected loaded")
-            return
-        }
-        #expect(createError == "nope")
-    }
-
-    @Test func coordinator_prunesHandlersForDeallocatedOwners() {
-        let coordinator = OptimisticSessionCreateCoordinator()
-        var received: [String] = []
-        var owner: AnyObject? = NSObject()
-        coordinator.onCreateFailed(owner: owner!) { received.append($0) }
-        coordinator.reportCreateFailed("first")
-        #expect(received == ["first"])
-
-        owner = nil
-        coordinator.reportCreateFailed("second")
-        #expect(received == ["first"])
-    }
-
     @Test func onSessionLongPress_opensSheetAndKeepsForkHiddenWithoutUserMessages() async {
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),

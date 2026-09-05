@@ -91,6 +91,12 @@ final class SessionChatTimeline {
         notifyChange()
     }
 
+    func showCreateFailed(_ message: String) {
+        state.timeline = .error
+        state.errorMessage = message
+        notifyChange()
+    }
+
     func rebind(sessionID: String) {
         guard sessionID != self.sessionID else { return }
         cancelObservationTasks()

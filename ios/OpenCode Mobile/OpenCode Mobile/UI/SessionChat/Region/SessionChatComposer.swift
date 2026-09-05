@@ -609,6 +609,7 @@ final class SessionChatComposer {
                 attachmentRevisions[attachment.id].map { (attachment.id, $0) }
             }
         )
+        guard !OptimisticSessionCreate.isPlaceholder(sessionID) else { return }
         guard (!trimmed.isEmpty || !submittedAttachments.isEmpty),
               let selectedModel = state.composer.selectedModel,
               state.composer.isModelSelectionReady,

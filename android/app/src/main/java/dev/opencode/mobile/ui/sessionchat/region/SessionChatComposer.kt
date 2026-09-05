@@ -696,6 +696,7 @@ class SessionChatComposer(
                 attachmentRevisions[attachment.id]?.let { attachment.id to it }
             }.toMap()
         val selectedModel = composer.selectedModel ?: return
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
         if ((prompt.isEmpty() && attachments.isEmpty()) || _state.value.isSending || !composer.isModelSelectionReady) return
 
         val collapsedDisplay =
