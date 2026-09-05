@@ -40,7 +40,7 @@ object KtorClientFactory {
                     // cutting long ops like POST …/summarize mid-compaction.
                     connectTimeout(if (probe) 3 else 10, TimeUnit.SECONDS)
                     readTimeout(0, TimeUnit.MILLISECONDS)
-                    writeTimeout(if (sse) 0 else 60, TimeUnit.SECONDS)
+                    writeTimeout(if (probe) 60 else 0, TimeUnit.SECONDS)
                     callTimeout(0, TimeUnit.MILLISECONDS)
                 }
             }

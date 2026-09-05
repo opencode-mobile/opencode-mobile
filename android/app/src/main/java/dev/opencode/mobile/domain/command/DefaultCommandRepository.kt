@@ -34,9 +34,9 @@ class DefaultCommandRepository
         ) {
             try {
                 if (activeConnectionManager?.currentProtocolOrProbe() == ServerProtocol.V2) {
-                    api.runCommandV2(sessionId, adapter.toV2RunRequest(options))
+                    api.runCommandV2(sessionId, adapter.toV2RunRequest(options), options.attachments)
                 } else {
-                    api.runCommand(sessionId, adapter.toRunRequest(options), directory)
+                    api.runCommand(sessionId, adapter.toRunRequest(options), directory, options.attachments)
                 }
             } catch (throwable: Throwable) {
                 throw adapter.mapError(throwable)

@@ -163,7 +163,7 @@ import Testing
                             filename: "a.png",
                             mime: "image/png",
                             kind: .image,
-                            dataURL: "data:image/png;base64,abc"
+                            dataURL: ""
                         )
                     ),
                 ],
@@ -175,6 +175,7 @@ import Testing
         let encoded = try SessionCacheCodec.encodeMessages(messages)
         let decoded = SessionCacheCodec.decodeMessages(encoded)
         #expect(decoded == messages)
+        #expect(!encoded.contains("data:image/png"))
         #expect(encoded.contains("\"schemaVersion\":1"))
     }
 }

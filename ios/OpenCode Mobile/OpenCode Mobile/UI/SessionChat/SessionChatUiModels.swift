@@ -467,6 +467,7 @@ struct SessionChatComposerRegionState: Equatable {
         modelNotice: nil
     )
     var isSending: Bool = false
+    var sendProgressPercent: Int? = nil
     var isAborting: Bool = false
     var errorMessage: String?
     var abortErrorMessage: String?

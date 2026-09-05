@@ -24,6 +24,51 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
+    fun labelForActiveTurn_showsSendingPercentWhileBodyIsOnTheWire() {
+        assertEquals(
+            "Sending 25%",
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Working",
+                sendProgressPercent = 25,
+            ),
+        )
+    }
+
+    @Test
+    fun labelForActiveTurn_showsSendingEllipsisAtZero() {
+        assertEquals(
+            "Sending…",
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Working",
+                sendProgressPercent = 0,
+            ),
+        )
+    }
+
+    @Test
+    fun labelForActiveTurn_compactingWinsOverSending() {
+        assertEquals(
+            SessionCompactChrome.STATUS_LABEL,
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Working",
+                isCompacting = true,
+                sendProgressPercent = 40,
+            ),
+        )
+    }
+
+    @Test
+    fun labelForActiveTurn_hidesSendingWhenAwaitingUser() {
+        assertNull(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Working",
+                isAwaitingUser = true,
+                sendProgressPercent = 40,
+            ),
+        )
+    }
+
+    @Test
     fun labelForActiveTurn_showsRetrying() {
         assertEquals(
             "Retrying",

@@ -8,6 +8,7 @@ import android.provider.OpenableColumns
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.Locale
 import java.util.UUID
 
@@ -41,6 +42,9 @@ class AttachmentIngestionService private constructor(
     private fun ingest(uri: Uri): Attachment {
         val contentResolver = requireNotNull(contentResolver)
         val metadata = metadata(uri)
+        if (metadata.size != null && metadata.size > AttachmentLimits.MAX_DECODED_BYTES) {
+            throw IllegalArgumentException(AttachmentLimits.TOO_LARGE_ERROR)
+        }
         val accepted = acceptedType(contentResolver.getType(uri), metadata.filename)
             ?: throw IllegalArgumentException(UNSUPPORTED_ERROR)
         val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
@@ -62,35 +66,63 @@ class AttachmentIngestionService private constructor(
         accepted: AcceptedType,
         bytes: ByteArray,
     ): Attachment {
-        val dataUrl = AttachmentDataUrl.make(bytes, accepted.mime) ?: throw IllegalArgumentException(UNSUPPORTED_ERROR)
+        if (bytes.size.toLong() > AttachmentLimits.MAX_DECODED_BYTES) {
+            throw IllegalArgumentException(AttachmentLimits.TOO_LARGE_ERROR)
+        }
+        if (AttachmentDataUrl.kind(accepted.mime) == null) {
+            throw IllegalArgumentException(UNSUPPORTED_ERROR)
+        }
         val preview =
             if (accepted.kind == AttachmentKind.Image) {
                 thumbnailer(bytes)?.takeIf { it.size <= MAX_PREVIEW_BYTES }
             } else {
                 null
             }
+        val stored = persist(bytes, filename)
         DiagnosticLog.info(DiagnosticLogArea.Chat, "attachment accepted mime=${accepted.mime} bytes=${bytes.size}")
         return Attachment(
             id = UUID.randomUUID().toString(),
             filename = filename.ifBlank { "Attachment" },
             mime = accepted.mime,
             kind = accepted.kind,
-            dataUrl = dataUrl,
+            dataUrl = "",
             byteCount = bytes.size.toLong(),
             previewBytes = preview,
+            localPath = stored.absolutePath,
         )
+    }
+
+    private fun persist(
+        bytes: ByteArray,
+        filename: String,
+    ): File {
+        val directory = File(System.getProperty("java.io.tmpdir"), AttachmentLimits.STORE_DIRECTORY_NAME).apply { mkdirs() }
+        val safeName = filename.replace("/", "_").ifBlank { "attachment" }
+        return File(directory, "${UUID.randomUUID()}-$safeName").apply { writeBytes(bytes) }
     }
 
     private fun metadata(uri: Uri): AttachmentMetadata {
         val contentResolver = requireNotNull(contentResolver)
         var filename: String? = null
-        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+        var size: Long? = null
+        contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
             if (cursor.moveToFirst()) {
-                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (index >= 0) filename = cursor.getString(index)
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (nameIndex >= 0) filename = cursor.getString(nameIndex)
+                val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) size = cursor.getLong(sizeIndex)
             }
         }
-        return AttachmentMetadata(filename?.takeIf { it.isNotBlank() } ?: uri.lastPathSegment ?: "Attachment")
+        return AttachmentMetadata(
+            filename = filename?.takeIf { it.isNotBlank() } ?: uri.lastPathSegment ?: "Attachment",
+            size = size,
+        )
     }
 
     private fun acceptedType(
@@ -116,7 +148,10 @@ class AttachmentIngestionService private constructor(
         }
     }
 
-    private data class AttachmentMetadata(val filename: String)
+    private data class AttachmentMetadata(
+        val filename: String,
+        val size: Long? = null,
+    )
     private data class AcceptedType(val mime: String, val kind: AttachmentKind)
 
     companion object {

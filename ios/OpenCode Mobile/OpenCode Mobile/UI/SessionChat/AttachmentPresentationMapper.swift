@@ -9,7 +9,7 @@ enum AttachmentPresentationMapper {
             id: attachment.id,
             filename: attachment.filename,
             variant: variant(for: attachment.kind),
-            image: previewImage(dataURL: attachment.dataURL, mime: attachment.mime, kind: attachment.kind)
+            image: previewImage(previewData: attachment.previewData, dataURL: attachment.dataURL, mime: attachment.mime, kind: attachment.kind)
         )
     }
 
@@ -18,7 +18,7 @@ enum AttachmentPresentationMapper {
             id: file.id,
             filename: file.filename,
             variant: variant(for: file.kind),
-            image: previewImage(dataURL: file.dataURL, mime: file.mime, kind: file.kind)
+            image: previewImage(previewData: file.previewData, dataURL: file.dataURL, mime: file.mime, kind: file.kind)
         )
     }
 
@@ -30,8 +30,12 @@ enum AttachmentPresentationMapper {
         }
     }
 
-    private static func previewImage(dataURL: String, mime: String, kind: AttachmentKind) -> UIImage? {
-        guard kind == .image,
+    private static func previewImage(previewData: Data?, dataURL: String, mime: String, kind: AttachmentKind) -> UIImage? {
+        guard kind == .image else { return nil }
+        if let previewData, let image = UIImage(data: previewData) {
+            return image
+        }
+        guard dataURL.count <= maxPreviewBytes * 4,
               let data = AttachmentDataURL.decodedData(from: dataURL, expectedMime: mime),
               let image = UIImage(data: data)
         else { return nil }

@@ -816,6 +816,29 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.composer.attachments.isEmpty)
     }
 
+    @Test func removeAttachment_deletesOwnedPendingFile() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(AttachmentLimits.storeDirectoryName, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("pending-remove.bin")
+        try Data([1, 2, 3]).write(to: file)
+        let viewModel = makeViewModel()
+        await viewModel.loadMessages()
+        let attachment = OpenCode_Mobile.Attachment(
+            id: "owned",
+            filename: "notes.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "",
+            fileURL: file,
+            byteCount: 3
+        )
+        viewModel.addAttachments([attachment])
+        viewModel.removeAttachment(id: attachment.id)
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+        try? FileManager.default.removeItem(at: directory)
+    }
+
     @Test func attach_disabledForTextOnlyModelAndStripsUnsupportedPendingAttachments() async {
         let textOnly = ModelSelectionOption(
             providerID: "openai",
@@ -878,7 +901,9 @@ struct SessionChatViewModelTests {
             #expect(attachment?.filename == filename)
             #expect(attachment?.mime == expectedMime)
             #expect(attachment?.kind == expectedKind)
-            #expect(attachment?.dataURL == "data:\(expectedMime);base64,Y29udGVudA==")
+            #expect(attachment?.dataURL == "")
+            #expect(attachment?.fileURL != nil)
+            #expect(attachment?.byteCount == Int64(Data("content".utf8).count))
         }
         #expect(viewModel.uiState.composer.attachments.count == cases.count)
     }
@@ -894,6 +919,20 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.snackbar?.message == "Only images, PDFs, or text files can be attached here.")
         #expect(viewModel.uiState.snackbar?.tone == .error)
         #expect(viewModel.uiState.errorMessage == nil)
+    }
+
+    @Test func sendPrompt_attachmentInFlight_showsSendingPercent() async {
+        let repository = FakeMessageRepository(holdSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        viewModel.addAttachments([testAttachment(id: "one", filename: "notes.txt")])
+        let task = Task { await viewModel.sendPrompt() }
+        await waitUntil { viewModel.uiState.isSending }
+        await waitUntil { viewModel.uiState.workingIndicatorLabel == "Sending 25%" }
+        repository.releaseSend()
+        await task.value
+        #expect(!(viewModel.uiState.workingIndicatorLabel ?? "").hasPrefix("Sending"))
+        viewModel.stopObserving()
     }
 
     @Test func sendPrompt_attachmentOnly_sendsAndRendersOptimistically() async {
@@ -914,6 +953,39 @@ struct SessionChatViewModelTests {
                 return file.filename == "notes.txt"
             }
         })
+    }
+
+    @Test func sendPrompt_optimisticImage_keepsPickPreview() async {
+        let repository = FakeMessageRepository(failListMessagesAfterSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        let preview = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
+        let attachment = testAttachment(
+            id: "img",
+            filename: "shot.png",
+            kind: .image,
+            mime: "image/png",
+            previewData: preview
+        )
+        viewModel.addAttachments([attachment])
+
+        await viewModel.sendPrompt()
+
+        #expect(viewModel.uiState.messages.contains { row in
+            row.blocks.contains {
+                guard case let .attachment(_, file) = $0 else { return false }
+                return file.filename == "shot.png" && file.previewData == preview
+            }
+        })
+        let file = FilePart(
+            id: attachment.id,
+            filename: attachment.filename,
+            mime: attachment.mime,
+            kind: attachment.kind,
+            dataURL: "",
+            previewData: preview
+        )
+        #expect(AttachmentPresentationMapper.presentation(from: file).image != nil)
     }
 
     @Test func sendPrompt_httpFailure_restoresDraftAndAttachments() async {
@@ -2724,14 +2796,16 @@ struct SessionChatViewModelTests {
         id: String,
         filename: String,
         kind: AttachmentKind = .text,
-        mime: String = "text/plain"
+        mime: String = "text/plain",
+        previewData: Data? = nil
     ) -> OpenCode_Mobile.Attachment {
         OpenCode_Mobile.Attachment(
             id: id,
             filename: filename,
             mime: mime,
             kind: kind,
-            dataURL: "data:\(mime);base64,SGVsbG8="
+            dataURL: "data:\(mime);base64,SGVsbG8=",
+            previewData: previewData
         )
     }
 
@@ -3003,6 +3077,9 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {
         sendPromptAsyncCalled = true
         sentOptions = options
+        if let handler = PromptSendProgressReporting.handler, !options.attachments.isEmpty {
+            handler(1, 4)
+        }
         if shouldFailSend {
             if holdSend, !sendReleaseRequested {
                 await withCheckedContinuation { sendContinuation = $0 }

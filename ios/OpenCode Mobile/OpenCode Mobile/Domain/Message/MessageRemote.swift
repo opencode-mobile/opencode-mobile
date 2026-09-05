@@ -22,6 +22,7 @@ struct V1MessageRemote: MessageRemote, Sendable {
         try await api.sendPromptAsync(
             sessionID: sessionID,
             body: adapter.sendRequest(options: options),
+            attachments: options.attachments,
             directory: directory
         )
     }
@@ -50,6 +51,7 @@ struct V2MessageRemote: MessageRemote, Sendable {
         try await api.sendPromptV2(
             sessionID: sessionID,
             body: adapter.v2PromptRequest(options: options),
+            attachments: options.attachments,
             directory: directory
         )
     }

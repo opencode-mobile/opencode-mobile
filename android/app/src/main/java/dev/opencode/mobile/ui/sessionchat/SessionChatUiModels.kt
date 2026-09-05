@@ -356,6 +356,7 @@ data class SessionChatAtSuggestion(
 data class SessionChatComposerRegionState(
     val composer: SessionChatComposerState = SessionChatComposerState(),
     val isSending: Boolean = false,
+    val sendProgressPercent: Int? = null,
     val isAborting: Boolean = false,
     val errorMessage: String? = null,
     val abortErrorMessage: String? = null,

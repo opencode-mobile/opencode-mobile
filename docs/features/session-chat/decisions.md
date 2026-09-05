@@ -17,7 +17,7 @@ Still binding:
   hide it if that session is still busy. The old hide-when-tools-run /
   hide-when-last-turn-has-in-progress-assistant-content rule stays
   revoked except for last-row Thinking.
-  `WorkingTurnIndicator` collapses to status + compacting +
+  `WorkingTurnIndicator` collapses to status + send progress + compacting +
   awaiting-user + last-is-thinking. SessionInfo owns session status;
   the timeline owns last-row layout. Optimistic busy is write-through
   to `SessionStatusLiveStore` so home Running and chat Working share
@@ -26,7 +26,11 @@ Still binding:
   Working hides without waiting for SSE.
 - Child sessions are read-only from the composer.
 - Device attachments use Photos/Files. Project `file://` browse was not in
-  the first attachment slice.
+  the first attachment slice. Pending Attachment bytes stay in an app-owned
+  file. Pick rejects more than 20 MiB decoded. The prompt still sends a
+  `data:` URL; that string is streamed from the file. Optimistic FilePart
+  and session cache do not persist `data:` bodies. Pending files are deleted
+  when the chip is removed, the model drops them, or send succeeds.
 - Live frames may coalesce; required load / send completions must not be
   dropped.
 - Context usage is derived from best available session + message data.

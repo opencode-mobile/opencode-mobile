@@ -63,7 +63,11 @@ data class Attachment(
     val dataUrl: String,
     val byteCount: Long,
     val previewBytes: ByteArray? = null,
-)
+    val localPath: String? = null,
+) {
+    val usesFileBackedBody: Boolean
+        get() = localPath != null
+}
 
 sealed class MessagePart {
     data class Text(

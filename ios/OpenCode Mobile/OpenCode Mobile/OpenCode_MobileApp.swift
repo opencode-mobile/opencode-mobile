@@ -26,6 +26,9 @@ struct OpenCode_MobileApp: App {
                         .accessibilityHidden(true)
                 }
         }
+        .backgroundTask(.urlSession(DurableJSONUploader.sessionIdentifier)) {
+            await DurableJSONUploader.shared.waitForBackgroundEvents()
+        }
     }
 
     @ViewBuilder

@@ -107,7 +107,12 @@ extension Container {
     }
 
     var messagesAPIClient: Factory<MessagesAPIClient> {
-        self { MessagesAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+        self {
+            MessagesAPIClient(
+                connectionProvider: self.connectionProvider(),
+                bodyUploader: DurableJSONUploader.shared
+            )
+        }.singleton
     }
 
     var messageDomainAdapter: Factory<MessageDomainAdapter> {
@@ -250,7 +255,12 @@ extension Container {
     }
 
     var commandsAPIClient: Factory<CommandsAPIClient> {
-        self { CommandsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+        self {
+            CommandsAPIClient(
+                connectionProvider: self.connectionProvider(),
+                bodyUploader: DurableJSONUploader.shared
+            )
+        }.singleton
     }
 
     var commandDomainAdapter: Factory<CommandDomainAdapter> {

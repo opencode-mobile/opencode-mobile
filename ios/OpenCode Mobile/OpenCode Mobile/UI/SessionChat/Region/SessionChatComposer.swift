@@ -81,6 +81,7 @@ final class SessionChatComposer {
             }
         persistDraftTask?.cancel()
         persistDraft(sessionID: previousSessionID, draft: currentDraft())
+        discardStoredAttachments(state.composer.attachments)
         self.sessionID = sessionID
         loadedCatalog = nil
         loadedSelectableAgents = false
@@ -121,6 +122,7 @@ final class SessionChatComposer {
         draftRevision = 0
         attachmentRevision = 0
         attachmentRevisions = [:]
+        discardStoredAttachments(state.composer.attachments)
         state = SessionChatComposerRegionState()
         state.composer.followUpDelivery = SessionChatDisplayPreferences.shared.followUpDelivery
         notifyChange()
@@ -272,11 +274,11 @@ final class SessionChatComposer {
             !$0.isEmpty && !option.variants.contains($0) ? "Remembered Variant is unavailable. Using Default." : nil
         }
         initialSelectionState = initialSelectionState == .waitingForFallback ? .failedWithFallback : .resolved
+        let droppedForModel = state.composer.attachments.filter { !option.acceptsAttachmentKind($0.kind) }
+        for attachment in droppedForModel {
+            attachmentRevisions[attachment.id] = nil
+        }
         updateComposer {
-            let removed = $0.attachments.filter { !option.acceptsAttachmentKind($0.kind) }
-            for attachment in removed {
-                attachmentRevisions[attachment.id] = nil
-            }
             $0.attachments.removeAll { !option.acceptsAttachmentKind($0.kind) }
             $0.modelOptions = catalog.options
             $0.selectedModel = ModelSelection(option: option, selectedVariant: variant)
@@ -298,6 +300,7 @@ final class SessionChatComposer {
                 $0.modelNotice = variantNotice
             }
         }
+        discardStoredAttachments(droppedForModel)
         let source = chosen?.sourceName ?? (catalog.serverDefault == nil ? "first-usable" : "server-default")
         OpenCodeLog.sessionChat.info("modelSelection source=\(source)")
         if case .cached? = chosen {
@@ -450,6 +453,7 @@ final class SessionChatComposer {
             }
         }
         if !rejected.isEmpty {
+            discardStoredAttachments(rejected)
             setAttachmentError(Self.unsupportedAttachmentMessage(for: rejected))
         } else if !accepted.isEmpty {
             state.errorMessage = nil
@@ -458,8 +462,10 @@ final class SessionChatComposer {
     }
 
     func removeAttachment(id: String) {
+        let removed = state.composer.attachments.filter { $0.id == id }
         attachmentRevisions[id] = nil
         updateComposer { $0.attachments.removeAll { $0.id == id } }
+        discardStoredAttachments(removed)
     }
 
     func addAttachmentData(_ data: Data, filename: String, declaredMime: String?) {
@@ -515,12 +521,12 @@ final class SessionChatComposer {
     }
 
     func selectModel(_ option: ModelSelectionOption) {
+        let dropped = state.composer.attachments.filter { !option.acceptsAttachmentKind($0.kind) }
+        for attachment in dropped {
+            attachmentRevisions[attachment.id] = nil
+        }
         updateComposer { composer in
             let previousVariant = composer.selectedVariant
-            let removed = composer.attachments.filter { !option.acceptsAttachmentKind($0.kind) }
-            for attachment in removed {
-                attachmentRevisions[attachment.id] = nil
-            }
             composer.attachments.removeAll { !option.acceptsAttachmentKind($0.kind) }
             composer.selectedModel = ModelSelection(
                 option: option,
@@ -530,6 +536,7 @@ final class SessionChatComposer {
             composer.modelNotice = nil
         }
         persistCurrentSelection(updatePreference: true)
+        discardStoredAttachments(dropped)
     }
 
     func selectMode(_ mode: String) {
@@ -618,7 +625,8 @@ final class SessionChatComposer {
                     filename: attachment.filename,
                     mime: attachment.mime,
                     kind: attachment.kind,
-                    dataURL: attachment.dataURL
+                    dataURL: "",
+                    previewData: attachment.previewData
                 )
             )
         }
@@ -680,47 +688,57 @@ final class SessionChatComposer {
                 text: trimmed,
                 serverCommandNames: Set(state.serverCommands.map(\.name))
             )
-            switch intent {
-            case let .serverCommand(command, arguments):
-                try await commandRepository.runCommand(
-                    sessionID: sessionID,
-                    options: CommandRunOptions(
-                        command: command,
-                        arguments: arguments,
-                        attachments: submittedAttachments,
-                        model: PromptModelSelection(
-                            providerID: selectedModel.option.providerID,
-                            modelID: selectedModel.option.modelID
+            let hasAttachments = !submittedAttachments.isEmpty
+            try await PromptSendProgressReporting.$handler.withValue({ [weak self] sent, total in
+                Task { @MainActor in
+                    self?.applySendProgress(sent: sent, total: total, hasAttachments: hasAttachments)
+                }
+            }) {
+                switch intent {
+                case let .serverCommand(command, arguments):
+                    try await commandRepository.runCommand(
+                        sessionID: sessionID,
+                        options: CommandRunOptions(
+                            command: command,
+                            arguments: arguments,
+                            attachments: submittedAttachments,
+                            model: PromptModelSelection(
+                                providerID: selectedModel.option.providerID,
+                                modelID: selectedModel.option.modelID
+                            ),
+                            variant: composer.selectedVariant,
+                            mode: composer.selectedMode,
+                            delivery: composer.followUpDelivery
                         ),
-                        variant: composer.selectedVariant,
-                        mode: composer.selectedMode,
-                        delivery: composer.followUpDelivery
-                    ),
-                    directory: worktree
-                )
-            case let .prompt(text):
-                try await messageRepository.sendPromptAsync(
-                    sessionID: sessionID,
-                    options: PromptSendOptions(
-                        text: text,
-                        attachments: submittedAttachments,
-                        model: PromptModelSelection(
-                            providerID: selectedModel.option.providerID,
-                            modelID: selectedModel.option.modelID
+                        directory: worktree
+                    )
+                case let .prompt(text):
+                    try await messageRepository.sendPromptAsync(
+                        sessionID: sessionID,
+                        options: PromptSendOptions(
+                            text: text,
+                            attachments: submittedAttachments,
+                            model: PromptModelSelection(
+                                providerID: selectedModel.option.providerID,
+                                modelID: selectedModel.option.modelID
+                            ),
+                            variant: composer.selectedVariant,
+                            mode: composer.selectedMode,
+                            agentMentions: mentionsForSend,
+                            delivery: composer.followUpDelivery
                         ),
-                        variant: composer.selectedVariant,
-                        mode: composer.selectedMode,
-                        agentMentions: mentionsForSend,
-                        delivery: composer.followUpDelivery
-                    ),
-                    directory: worktree
-                )
-                if !mentionsForSend.isEmpty {
-                    OpenCodeLog.sessionChat.info("prompt send agentParts=\(mentionsForSend.count)")
+                        directory: worktree
+                    )
+                    if !mentionsForSend.isEmpty {
+                        OpenCodeLog.sessionChat.info("prompt send agentParts=\(mentionsForSend.count)")
+                    }
                 }
             }
             persistCurrentSelection(updatePreference: false)
+            state.sendProgressPercent = nil
+            notifyChange()
             await onSendAccepted()
+            discardStoredAttachments(submittedAttachments)
         } catch {
             restoreFailedSubmission(
                 textRevision: submittedDraftRevision,
@@ -737,6 +755,7 @@ final class SessionChatComposer {
 
     func clearSending() {
         state.isSending = false
+        state.sendProgressPercent = nil
         notifyChange()
     }
 
@@ -748,7 +767,20 @@ final class SessionChatComposer {
 
     func setSendError(_ error: String) {
         state.isSending = false
+        state.sendProgressPercent = nil
         state.errorMessage = error
+        notifyChange()
+    }
+
+    private func discardStoredAttachments(_ attachments: [Attachment]) {
+        attachments.forEach { AttachmentLimits.discard($0.fileURL) }
+    }
+
+    private func applySendProgress(sent: Int64, total: Int64, hasAttachments: Bool) {
+        guard PromptSendProgress.shouldShow(bytesTotal: total, hasAttachments: hasAttachments) else { return }
+        let percent = PromptSendProgress.percent(bytesSent: sent, bytesTotal: total)
+        guard state.sendProgressPercent != percent else { return }
+        state.sendProgressPercent = percent
         notifyChange()
     }
 

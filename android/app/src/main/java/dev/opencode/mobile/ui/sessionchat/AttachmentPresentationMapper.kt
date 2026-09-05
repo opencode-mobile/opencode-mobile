@@ -23,13 +23,13 @@ internal object AttachmentPresentationMapper {
             id = attachment.id,
             filename = attachment.filename,
             variant = attachment.kind.presentationVariant,
-            signature = signature(attachment.mime, attachment.dataUrl),
+            signature = signature(attachment.mime, attachment.id),
             imageBytes = attachment.previewBytes,
         )
 
     fun from(file: MessagePart.File): SessionChatAttachmentItem {
         val imageBytes =
-            if (file.kind == AttachmentKind.Image) {
+            if (file.kind == AttachmentKind.Image && file.dataUrl.length <= 512 * 1024) {
                 AttachmentDataUrl.decode(file.dataUrl, file.mime)?.let(AttachmentThumbnailer::create)
             } else {
                 null
@@ -38,7 +38,7 @@ internal object AttachmentPresentationMapper {
             id = file.id,
             filename = file.filename,
             variant = file.kind.presentationVariant,
-            signature = signature(file.mime, file.dataUrl),
+            signature = signature(file.mime, file.id),
             imageBytes = imageBytes,
         )
     }

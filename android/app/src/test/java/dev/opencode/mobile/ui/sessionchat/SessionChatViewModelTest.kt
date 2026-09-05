@@ -21,6 +21,7 @@ import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
+import dev.opencode.mobile.domain.message.AttachmentLimits
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.Message
@@ -30,6 +31,7 @@ import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.PromptSendOptions
+import dev.opencode.mobile.domain.message.PromptSendProgressReporter
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
@@ -1478,6 +1480,42 @@ class SessionChatViewModelTest {
                 viewModel.uiState.value.messages
                     .any { it.isPending },
             )
+        }
+
+    @Test
+    fun sendPrompt_attachmentInFlight_showsSendingPercent() =
+        runTest(testDispatcher) {
+            val sendGate = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository(holdSendUntil = sendGate)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.addAttachments(listOf(testAttachment()))
+            viewModel.sendPrompt()
+            runCurrent()
+            assertEquals("Sending 25%", viewModel.uiState.value.workingIndicatorLabel)
+            sendGate.complete(Unit)
+            advanceUntilIdle()
+            assertFalse(
+                viewModel.uiState.value.workingIndicatorLabel.orEmpty().startsWith("Sending"),
+            )
+        }
+
+    @Test
+    fun removeAttachment_deletesOwnedPendingFile() =
+        runTest(testDispatcher) {
+            val directory =
+                java.io.File(System.getProperty("java.io.tmpdir"), AttachmentLimits.STORE_DIRECTORY_NAME)
+                    .apply { mkdirs() }
+            val file = java.io.File(directory, "pending-remove.bin").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.addAttachments(listOf(testAttachment().copy(localPath = file.absolutePath)))
+            runCurrent()
+            viewModel.removeAttachment(testAttachment().id)
+            runCurrent()
+            assertFalse(file.exists())
         }
 
     @Test
@@ -4194,6 +4232,9 @@ private class FakeMessageRepository(
     ) {
         sendPromptAsyncCalled = true
         sentOptions = options
+        if (options.attachments.isNotEmpty()) {
+            kotlin.coroutines.coroutineContext[PromptSendProgressReporter]?.onProgress?.invoke(1, 4)
+        }
         holdSendUntil?.await()
         if (shouldFailSend) error("send failed")
         if (echoSentPrompt && options.text.isNotEmpty()) {

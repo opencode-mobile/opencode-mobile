@@ -139,6 +139,31 @@ nonisolated struct Attachment: Equatable, Sendable, Identifiable {
     let mime: String
     let kind: AttachmentKind
     let dataURL: String
+    let fileURL: URL?
+    let byteCount: Int64
+    let previewData: Data?
+
+    var usesFileBackedBody: Bool { fileURL != nil }
+
+    init(
+        id: String,
+        filename: String,
+        mime: String,
+        kind: AttachmentKind,
+        dataURL: String,
+        fileURL: URL? = nil,
+        byteCount: Int64 = 0,
+        previewData: Data? = nil
+    ) {
+        self.id = id
+        self.filename = filename
+        self.mime = mime
+        self.kind = kind
+        self.dataURL = dataURL
+        self.fileURL = fileURL
+        self.byteCount = byteCount
+        self.previewData = previewData
+    }
 }
 
 nonisolated struct FilePart: Equatable, Sendable {
@@ -147,6 +172,23 @@ nonisolated struct FilePart: Equatable, Sendable {
     let mime: String
     let kind: AttachmentKind
     let dataURL: String
+    let previewData: Data?
+
+    init(
+        id: String,
+        filename: String,
+        mime: String,
+        kind: AttachmentKind,
+        dataURL: String,
+        previewData: Data? = nil
+    ) {
+        self.id = id
+        self.filename = filename
+        self.mime = mime
+        self.kind = kind
+        self.dataURL = dataURL
+        self.previewData = previewData
+    }
 }
 
 nonisolated struct ToolPart: Equatable, Sendable {
