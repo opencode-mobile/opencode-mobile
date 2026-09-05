@@ -1,7 +1,8 @@
 package dev.opencode.mobile.domain.model
 
-import android.util.Log
 import dev.opencode.mobile.domain.connection.ConnectionProfile
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import javax.inject.Inject
@@ -68,10 +69,6 @@ class NewSessionModelSelectionResolver
             message: String,
             throwable: Throwable,
         ) {
-            runCatching { Log.w(TAG, message, throwable) }
-        }
-
-        private companion object {
-            const val TAG = "NewSessionModel"
+            DiagnosticLog.warning(DiagnosticLogArea.Chat, message, throwable)
         }
     }

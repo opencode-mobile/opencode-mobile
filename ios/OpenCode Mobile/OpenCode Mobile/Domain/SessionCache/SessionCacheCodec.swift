@@ -1,10 +1,7 @@
 import Foundation
-import OSLog
 
 nonisolated enum SessionCacheCodec {
     static let schemaVersion = 1
-
-    private static let logger = Logger(subsystem: "dev.opencode.mobile", category: "SessionCache")
 
     private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -35,16 +32,16 @@ nonisolated enum SessionCacheCodec {
         do {
             let envelope = try decoder.decode(CachedEnvelope.self, from: data)
             guard envelope.schemaVersion == schemaVersion else {
-                logger.warning("session list schema mismatch: \(envelope.schemaVersion, privacy: .public)")
+                DiagnosticLog.warning(.session, "session list schema mismatch: \(envelope.schemaVersion)")
                 return nil
             }
             guard let sessions = envelope.sessions?.sessions else {
-                logger.warning("session list decode failed: missing sessions payload")
+                DiagnosticLog.warning(.session, "session list decode failed: missing sessions payload")
                 return nil
             }
             return sessions.map { $0.toDomain() }
         } catch {
-            logger.warning("session list decode failed: \(error.localizedDescription, privacy: .public)")
+            DiagnosticLog.warning(.session, "session list decode failed: \(error.localizedDescription)")
             return nil
         }
     }
@@ -67,16 +64,16 @@ nonisolated enum SessionCacheCodec {
         do {
             let envelope = try decoder.decode(CachedEnvelope.self, from: data)
             guard envelope.schemaVersion == schemaVersion else {
-                logger.warning("message schema mismatch: \(envelope.schemaVersion, privacy: .public)")
+                DiagnosticLog.warning(.session, "message schema mismatch: \(envelope.schemaVersion)")
                 return nil
             }
             guard let messages = envelope.messages?.messages else {
-                logger.warning("message decode failed: missing messages payload")
+                DiagnosticLog.warning(.session, "message decode failed: missing messages payload")
                 return nil
             }
             return messages.map { $0.toDomain() }
         } catch {
-            logger.warning("message decode failed: \(error.localizedDescription, privacy: .public)")
+            DiagnosticLog.warning(.session, "message decode failed: \(error.localizedDescription)")
             return nil
         }
     }

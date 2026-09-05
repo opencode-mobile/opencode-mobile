@@ -2,6 +2,8 @@ package dev.opencode.mobile.domain.message
 
 import android.os.Looper
 import android.util.Log
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
@@ -1043,7 +1045,7 @@ class MessageSync(
     }
 
     private fun logI(message: String) {
-        runCatching { Log.i(TAG, message) }
+        DiagnosticLog.info(DiagnosticLogArea.Chat, message)
     }
 
     private fun logD(message: String) {
@@ -1051,7 +1053,7 @@ class MessageSync(
     }
 
     private fun logW(message: String) {
-        runCatching { Log.w(TAG, message) }
+        DiagnosticLog.warning(DiagnosticLogArea.Chat, message)
     }
 
     private companion object {

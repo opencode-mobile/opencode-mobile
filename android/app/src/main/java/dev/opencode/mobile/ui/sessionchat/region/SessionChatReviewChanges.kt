@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
-import android.util.Log
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
@@ -100,18 +101,13 @@ class SessionChatReviewChanges(
         result: String,
         startedAt: Long,
     ) {
-        runCatching {
-            Log.i(
-                TAG,
-                "pill-summary source=last-turn session=$sessionId directory=$worktree " +
-                    "files=${summary?.fileCount ?: 0} additions=${summary?.additions ?: 0} " +
-                    "deletions=${summary?.deletions ?: 0} result=$result " +
-                    "durationMs=${System.currentTimeMillis() - startedAt}",
-            )
-        }
+        DiagnosticLog.info(
+            DiagnosticLogArea.Chat,
+            "pill-summary source=last-turn session=$sessionId directory=$worktree " +
+                "files=${summary?.fileCount ?: 0} additions=${summary?.additions ?: 0} " +
+                "deletions=${summary?.deletions ?: 0} result=$result " +
+                "durationMs=${System.currentTimeMillis() - startedAt}",
+        )
     }
 
-    companion object {
-        private const val TAG = "SessionChat"
-    }
 }

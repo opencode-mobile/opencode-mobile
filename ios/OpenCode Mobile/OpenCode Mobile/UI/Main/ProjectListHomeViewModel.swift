@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import OSLog
 
 struct ProjectSectionItem: Identifiable, Equatable {
     let id: String
@@ -568,7 +567,7 @@ final class ProjectListHomeViewModel {
         }
         sessionRenameDialog.isSubmitting = true
         sessionRenameDialog.errorMessage = nil
-        OpenCodeLog.sessionChat.info("home rename submit session=\(target.sessionId, privacy: .public)")
+        OpenCodeLog.sessionChat.info("home rename submit session=\(target.sessionId)")
         do {
             _ = try await sessionRepository.updateSession(
                 id: target.sessionId,
@@ -576,13 +575,13 @@ final class ProjectListHomeViewModel {
                 directory: target.worktree
             )
             guard sessionActionsTarget == target else { return }
-            OpenCodeLog.sessionChat.info("home rename success session=\(target.sessionId, privacy: .public)")
+            OpenCodeLog.sessionChat.info("home rename success session=\(target.sessionId)")
             logHomeRename(outcome: ProductAnalytics.Outcome.success)
             closeSessionRename()
         } catch {
             guard sessionActionsTarget == target else { return }
             OpenCodeLog.sessionChat.warning(
-                "home rename failed session=\(target.sessionId, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                "home rename failed session=\(target.sessionId) error=\(error.localizedDescription)"
             )
             logHomeRename(outcome: ProductAnalytics.Outcome.failure)
             sessionRenameDialog.isSubmitting = false
@@ -658,7 +657,7 @@ final class ProjectListHomeViewModel {
             )
             guard sessionActionsTarget == target else { return }
             OpenCodeLog.sessionChat.info(
-                "home fork success sourceSession=\(target.sessionId, privacy: .public) forkedSession=\(updated.id, privacy: .public)"
+                "home fork success sourceSession=\(target.sessionId) forkedSession=\(updated.id)"
             )
             logHomeFork(outcome: ProductAnalytics.Outcome.success)
             forkedSessionOpenTarget = SessionListItem(
@@ -676,7 +675,7 @@ final class ProjectListHomeViewModel {
         } catch {
             guard sessionActionsTarget == target else { return }
             OpenCodeLog.sessionChat.warning(
-                "home fork failed session=\(target.sessionId, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                "home fork failed session=\(target.sessionId) error=\(error.localizedDescription)"
             )
             logHomeFork(outcome: ProductAnalytics.Outcome.failure)
             sessionForkDialog.isSubmitting = false
@@ -724,15 +723,15 @@ final class ProjectListHomeViewModel {
         )
         sessionActionsSheetVisible = false
         sessionActionInFlight = true
-        OpenCodeLog.sessionChat.info("home archive start session=\(target.sessionId, privacy: .public)")
+        OpenCodeLog.sessionChat.info("home archive start session=\(target.sessionId)")
         do {
             _ = try await sessionRepository.archiveSession(id: target.sessionId, directory: target.worktree)
-            OpenCodeLog.sessionChat.info("home archive success session=\(target.sessionId, privacy: .public)")
+            OpenCodeLog.sessionChat.info("home archive success session=\(target.sessionId)")
             sessionActionInFlight = false
             clearSessionActionsTarget()
         } catch {
             OpenCodeLog.sessionChat.warning(
-                "home archive failed session=\(target.sessionId, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                "home archive failed session=\(target.sessionId) error=\(error.localizedDescription)"
             )
             sessionActionInFlight = false
             clearSessionActionsTarget()
@@ -775,20 +774,20 @@ final class ProjectListHomeViewModel {
         )
         sessionDeleteConfirmVisible = false
         sessionActionInFlight = true
-        OpenCodeLog.sessionChat.info("home delete start session=\(target.sessionId, privacy: .public)")
+        OpenCodeLog.sessionChat.info("home delete start session=\(target.sessionId)")
         do {
             let deleted = try await sessionRepository.deleteSession(id: target.sessionId, directory: target.worktree)
             sessionActionInFlight = false
             clearSessionActionsTarget()
             if deleted {
-                OpenCodeLog.sessionChat.info("home delete success session=\(target.sessionId, privacy: .public)")
+                OpenCodeLog.sessionChat.info("home delete success session=\(target.sessionId)")
             } else {
-                OpenCodeLog.sessionChat.info("home delete rejected session=\(target.sessionId, privacy: .public)")
+                OpenCodeLog.sessionChat.info("home delete rejected session=\(target.sessionId)")
                 removalSnackbar = OpenCodeSnackbarMessage(text: Self.deleteError, variant: .error)
             }
         } catch {
             OpenCodeLog.sessionChat.warning(
-                "home delete failed session=\(target.sessionId, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                "home delete failed session=\(target.sessionId) error=\(error.localizedDescription)"
             )
             sessionActionInFlight = false
             clearSessionActionsTarget()

@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 /// Client slash actions (Commands sheet): new / fork / undo / redo / compact.
 /// These are local session behaviors, never routed through `CommandRepository`.
@@ -179,7 +178,7 @@ final class SessionChatCommands {
                 let forked = try await sessionRepository.forkSession(id: sessionID, atMessageID: nil)
                 let updated = try await sessionRepository.updateSession(id: forked.id, title: title, directory: worktree)
                 guard !Task.isCancelled else { return }
-                OpenCodeLog.sessionChat.info("fork success sourceSession=\(sessionID, privacy: .public) forkedSession=\(updated.id, privacy: .public)")
+                OpenCodeLog.sessionChat.info("fork success sourceSession=\(sessionID) forkedSession=\(updated.id)")
                 forkedTarget = ChildSessionNavigationTarget(
                     sessionID: updated.id,
                     sessionTitle: updated.title,
@@ -194,7 +193,7 @@ final class SessionChatCommands {
             } catch {
                 guard !Task.isCancelled else { return }
                 OpenCodeLog.sessionChat.warning(
-                    "fork failed sourceSession=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    "fork failed sourceSession=\(sessionID) error=\(error.localizedDescription)"
                 )
                 state.forkSubmitting = false
                 state.forkErrorMessage = error.localizedDescription
@@ -300,7 +299,7 @@ final class SessionChatCommands {
                     notifyChange()
                     return
                 }
-                OpenCodeLog.sessionChat.info("compact success session=\(sessionID, privacy: .public)")
+                OpenCodeLog.sessionChat.info("compact success session=\(sessionID)")
                 // Clear chrome before any post-success work so a heavy refresh cannot leave
                 // Compacting… stuck while MainActor rebuilds the transcript.
                 state.isCompacting = false
@@ -318,7 +317,7 @@ final class SessionChatCommands {
                     notifyChange()
                     return
                 }
-                OpenCodeLog.sessionChat.warning("compact failed session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+                OpenCodeLog.sessionChat.warning("compact failed session=\(sessionID) error=\(error.localizedDescription)")
                 state.isCompacting = false
                 state.actionErrorMessage = SessionCompactChrome.failure
                 state.actionSuccessMessage = nil
@@ -361,7 +360,7 @@ final class SessionChatCommands {
                 _ = try await sessionRepository.revertSession(id: sessionID, messageID: target.id, partID: nil)
                 guard !Task.isCancelled else { return }
                 OpenCodeLog.sessionChat.info(
-                    "\(operation, privacy: .public) success session=\(sessionID, privacy: .public) message=\(target.id, privacy: .public)"
+                    "\(operation) success session=\(sessionID) message=\(target.id)"
                 )
                 setRevertBoundary(target.id)
                 await refreshRevertNow()
@@ -369,7 +368,7 @@ final class SessionChatCommands {
             } catch {
                 guard !Task.isCancelled else { return }
                 OpenCodeLog.sessionChat.warning(
-                    "\(operation, privacy: .public) failed session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    "\(operation) failed session=\(sessionID) error=\(error.localizedDescription)"
                 )
                 state.actionErrorMessage = failureMessage
                 notifyChange()
@@ -392,14 +391,14 @@ final class SessionChatCommands {
             do {
                 _ = try await sessionRepository.unrevertSession(id: sessionID)
                 guard !Task.isCancelled else { return }
-                OpenCodeLog.sessionChat.info("\(operation, privacy: .public) success session=\(sessionID, privacy: .public)")
+                OpenCodeLog.sessionChat.info("\(operation) success session=\(sessionID)")
                 setRevertBoundary(nil)
                 await refreshRevertNow()
                 clearComposerRestore()
             } catch {
                 guard !Task.isCancelled else { return }
                 OpenCodeLog.sessionChat.warning(
-                    "\(operation, privacy: .public) failed session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    "\(operation) failed session=\(sessionID) error=\(error.localizedDescription)"
                 )
                 state.actionErrorMessage = failureMessage
                 notifyChange()

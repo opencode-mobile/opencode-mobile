@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 typealias MessageListFetcher = @Sendable (String, String?) async throws -> [Message]
 
@@ -445,7 +444,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             SessionPerformanceProbe.emit("history_request_finished")
             if staging.needsAuthoritativeRecovery {
                 OpenCodeLog.messageContent.info(
-                    "eventStagingRejectStaleAuthority session=\(key.sessionID, privacy: .public) highWater=\(staging.highWater)"
+                    "eventStagingRejectStaleAuthority session=\(key.sessionID) highWater=\(staging.highWater)"
                 )
                 await performClosedLoopRecovery(
                     key: key,
@@ -581,7 +580,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 if becameHealthy {
                     if published {
                         OpenCodeLog.messageContent.info(
-                            "eventStagingRecovery session=\(key.sessionID, privacy: .public) highWater=\(staging.highWater)"
+                            "eventStagingRecovery session=\(key.sessionID) highWater=\(staging.highWater)"
                         )
                     }
                     return
@@ -592,7 +591,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 if isMissingSessionError(error) {
                     markTerminal(key: key)
                     OpenCodeLog.messageContent.error(
-                        "fullReload missing session=\(key.sessionID, privacy: .public) stopping recovery"
+                        "fullReload missing session=\(key.sessionID) stopping recovery"
                     )
                     return
                 }

@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.sessioncache
 
-import android.util.Log
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
 import dev.opencode.mobile.domain.message.Message
@@ -18,7 +19,6 @@ import kotlinx.serialization.json.JsonObject
 
 object SessionCacheCodec {
     const val SCHEMA_VERSION: Int = 1
-    private const val TAG = "SessionCache"
 
     fun encodeSessions(
         sessions: List<Session>,
@@ -39,13 +39,13 @@ object SessionCacheCodec {
         runCatching {
             val envelope = json.decodeFromString<CachedEnvelope>(raw)
             if (envelope.schemaVersion != SCHEMA_VERSION) {
-                Log.w(TAG, "session list schema mismatch: ${envelope.schemaVersion}")
+                DiagnosticLog.warning(DiagnosticLogArea.Session, "session list schema mismatch: ${envelope.schemaVersion}")
                 return null
             }
             envelope.sessions?.sessions?.map { it.toDomain() }
                 ?: error("missing sessions payload")
         }.onFailure { error ->
-            Log.w(TAG, "session list decode failed", error)
+            DiagnosticLog.warning(DiagnosticLogArea.Session, "session list decode failed", error)
         }.getOrNull()
 
     fun encodeMessages(
@@ -67,13 +67,13 @@ object SessionCacheCodec {
         runCatching {
             val envelope = json.decodeFromString<CachedEnvelope>(raw)
             if (envelope.schemaVersion != SCHEMA_VERSION) {
-                Log.w(TAG, "message schema mismatch: ${envelope.schemaVersion}")
+                DiagnosticLog.warning(DiagnosticLogArea.Session, "message schema mismatch: ${envelope.schemaVersion}")
                 return null
             }
             envelope.messages?.messages?.map { it.toDomain() }
                 ?: error("missing messages payload")
         }.onFailure { error ->
-            Log.w(TAG, "message decode failed", error)
+            DiagnosticLog.warning(DiagnosticLogArea.Session, "message decode failed", error)
         }.getOrNull()
 }
 

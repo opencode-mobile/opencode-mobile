@@ -1,6 +1,5 @@
 package dev.opencode.mobile.ui.sessionchat
 
-import android.util.Log
 import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -12,6 +11,8 @@ import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.FixedLiveUpdates
 import dev.opencode.mobile.domain.event.ForegroundEventStream
@@ -1399,7 +1400,7 @@ class SessionChatViewModel
         }
 
         private fun logI(message: String) {
-            runCatching { Log.i(TAG, message) }
+            DiagnosticLog.info(DiagnosticLogArea.Chat, message)
         }
 
         private fun logAction(
@@ -1415,7 +1416,6 @@ class SessionChatViewModel
         }
 
         companion object {
-            private const val TAG = "SessionChat"
             const val ModelFilterThreshold: Int = SessionChatComposer.ModelFilterThreshold
         }
     }
