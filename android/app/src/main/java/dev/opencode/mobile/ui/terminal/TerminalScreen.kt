@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.terminal
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +19,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
 import dev.opencode.mobile.theme.ThemeManager
+import dev.opencode.mobile.theme.ThemeResolver
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.OpenCodeButton
@@ -105,7 +107,10 @@ private fun TerminalLivePane(viewModel: TerminalViewModel) {
                     is TerminalEmulatorEvent.Resize -> viewModel.resize(event.cols, event.rows)
                 }
             },
-            modifier = Modifier.weight(1f),
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .background(ThemeResolver.parseHexColor(tokens["background-base"])),
         )
         TerminalControlStrip(onSend = viewModel::sendInput)
     }

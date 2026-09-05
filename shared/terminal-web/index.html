@@ -16,7 +16,28 @@
       padding: 4px;
       box-sizing: border-box;
     }
+    html.android,
+    html.android body {
+      position: fixed;
+      inset: 0;
+    }
+    html.android .xterm .xterm-helper-textarea {
+      left: 0 !important;
+      top: 0 !important;
+      width: 8px !important;
+      height: 8px !important;
+      opacity: 0 !important;
+    }
+    html.android .xterm-char-measure-element {
+      left: 0 !important;
+    }
+    html.android .xterm .xterm-viewport {
+      background-color: transparent !important;
+    }
   </style>
+  <script>
+    if (window.AndroidTerminal) document.documentElement.classList.add("android");
+  </script>
 </head>
 <body>
   <div id="terminal"></div>
@@ -54,6 +75,8 @@
         if (theme.background) {
           document.body.style.background = theme.background;
           document.documentElement.style.background = theme.background;
+          var terminalEl = document.getElementById("terminal");
+          if (terminalEl) terminalEl.style.background = theme.background;
         }
         if (term) {
           term.options.theme = theme;
@@ -88,7 +111,7 @@
       window.addEventListener("resize", function () {
         fitAddon.fit();
       });
-      if (window.visualViewport) {
+      if (window.visualViewport && !window.AndroidTerminal) {
         window.visualViewport.addEventListener("resize", function () {
           fitAddon.fit();
         });
