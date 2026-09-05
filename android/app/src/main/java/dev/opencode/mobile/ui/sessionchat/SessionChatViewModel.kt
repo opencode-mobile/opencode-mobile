@@ -1244,14 +1244,21 @@ class SessionChatViewModel
                     statusLabel = sessionStatusLabel,
                     isCompacting = isCompacting,
                     isAwaitingUser = awaitingUser,
-                    lastIsThinking = lastIsThinking,
                     sendProgressPercent = composerState.sendProgressPercent,
                 )
-            if (!loggedWorkingLamp || lastWorkingLamp != workingIndicatorLabel) {
+            val workingIndicatorCollapsed =
+                WorkingTurnIndicator.shouldCollapseReservedRow(
+                    lastIsThinking = lastIsThinking,
+                    label = workingIndicatorLabel,
+                )
+            val workingLampKey =
+                "${workingIndicatorLabel ?: "none"}:${if (workingIndicatorCollapsed) 1 else 0}"
+            if (!loggedWorkingLamp || lastWorkingLamp != workingLampKey) {
                 loggedWorkingLamp = true
-                lastWorkingLamp = workingIndicatorLabel
+                lastWorkingLamp = workingLampKey
                 logI(
                     "workingLamp label=${workingIndicatorLabel ?: "none"} " +
+                        "collapsed=${if (workingIndicatorCollapsed) 1 else 0} " +
                         "status=${sessionStatusLabel ?: "none"} " +
                         "awaitingUser=${if (awaitingUser) 1 else 0} " +
                         "lastIsThinking=${if (lastIsThinking) 1 else 0}",
@@ -1279,6 +1286,7 @@ class SessionChatViewModel
                 isAborting = composerState.isAborting,
                 sessionStatusLabel = sessionStatusLabel,
                 workingIndicatorLabel = workingIndicatorLabel,
+                workingIndicatorCollapsed = workingIndicatorCollapsed,
                 syncingIndicatorLabel = syncingIndicatorLabel,
                 sessionTodos = sessionTodos,
                 sessionTodosVisible = SessionTodoList.isVisible(sessionTodos),

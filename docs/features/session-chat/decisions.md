@@ -11,14 +11,17 @@ Still binding:
   composer. Labels from status only: `Working` (busy, including
   optimistic busy after send), `Retrying`, `Compacting…`. Never
   `Thinking` — that word stays on the thought row. Hide when the
-  permission or question dock is up, or when the last painted row is
-  Thinking (that row already occupies the bottom). Do not hide for
-  settled Thought, tools, or streaming text. Child lockout does not
-  hide it if that session is still busy. The old hide-when-tools-run /
+  permission or question dock is up. While the last painted row is
+  Thinking, keep the Working list identity mounted for the busy turn
+  and collapse it in place (height 0, not painted) so Thinking → Working
+  does not insert a new hosted row. Do not hide for settled Thought,
+  tools, or streaming text. Child lockout does not hide it if that
+  session is still busy. The old hide-when-tools-run /
   hide-when-last-turn-has-in-progress-assistant-content rule stays
   revoked except for last-row Thinking.
   `WorkingTurnIndicator` collapses to status + send progress + compacting +
-  awaiting-user + last-is-thinking. SessionInfo owns session status;
+  awaiting-user. Last-is-thinking is a timeline collapse flag, not a
+  dropped label. SessionInfo owns session status;
   the timeline owns last-row layout. Optimistic busy is write-through
   to `SessionStatusLiveStore` so home Running and chat Working share
   one map. Send-fail calls `clearLocalBusy`, which drops only the

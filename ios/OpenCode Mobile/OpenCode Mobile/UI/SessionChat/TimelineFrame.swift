@@ -225,24 +225,31 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
 
     /// Session Chat path: keep declared timeline sets, and fold Working status
     /// chrome into revision. Label *changes* land in `changedRowIDs` so that
-    /// stable row reconfigures without clearing the packet (OPE-136). An
-    /// unchanged label while the timeline publishes must not reconfigure it.
+    /// stable row reconfigures without clearing the packet (OPE-136). Collapse
+    /// toggles land in `layoutChangedRowIDs` so height 0 ↔ painted does not
+    /// insert or remove the reserved identity. An unchanged label+collapse
+    /// while the timeline publishes must not reconfigure it.
     /// Syncing uses a top overlay pill and is not a timeline row.
     static func from(
         _ frame: TimelineFrame,
         workingIndicatorLabel: String?,
-        previousWorkingIndicatorLabel: String?
+        previousWorkingIndicatorLabel: String?,
+        workingIndicatorCollapsed: Bool = false,
+        previousWorkingIndicatorCollapsed: Bool = false
     ) -> MessageListTimelineApplyPacket {
         let base = from(frame)
         let delta = SessionChatStatusChrome.applyDelta(
             current: workingIndicatorLabel,
-            previous: previousWorkingIndicatorLabel
+            previous: previousWorkingIndicatorLabel,
+            currentCollapsed: workingIndicatorCollapsed,
+            previousCollapsed: previousWorkingIndicatorCollapsed
         )
         let chrome = SessionChatStatusChrome.fingerprint(
-            workingIndicatorLabel: workingIndicatorLabel
+            workingIndicatorLabel: workingIndicatorLabel,
+            collapsed: workingIndicatorCollapsed
         )
         var kinds = base.kinds
-        if !delta.inserted.isEmpty || !delta.removed.isEmpty {
+        if !delta.inserted.isEmpty || !delta.removed.isEmpty || !delta.layoutChanged.isEmpty {
             kinds.insert(.structure)
         }
         if !delta.changed.isEmpty {
@@ -253,7 +260,7 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
             insertedRowIDs: base.insertedRowIDs.union(delta.inserted),
             changedRowIDs: base.changedRowIDs.union(delta.changed),
             removedRowIDs: base.removedRowIDs.union(delta.removed),
-            layoutChangedRowIDs: base.layoutChangedRowIDs,
+            layoutChangedRowIDs: base.layoutChangedRowIDs.union(delta.layoutChanged),
             grewBottomRowIDs: base.grewBottomRowIDs,
             decorateRowIDs: base.decorateRowIDs,
             isRequired: base.isRequired,
@@ -291,11 +298,15 @@ enum SessionChatStatusChrome {
     static let workingRowID = "session-chat-working-indicator"
 
     static func fingerprint(
-        workingIndicatorLabel: String?
+        workingIndicatorLabel: String?,
+        collapsed: Bool = false
     ) -> UInt64 {
         var value: UInt64 = 0
         guard let workingIndicatorLabel else { return value }
         value = value &* 1_000_003 &+ 2
+        if collapsed {
+            value = value &* 1_000_003 &+ 3
+        }
         for scalar in workingIndicatorLabel.unicodeScalars {
             value = value &* 31 &+ UInt64(scalar.value)
         }
@@ -304,17 +315,31 @@ enum SessionChatStatusChrome {
 
     static func applyDelta(
         current: String?,
-        previous: String?
-    ) -> (inserted: Set<String>, changed: Set<String>, removed: Set<String>) {
+        previous: String?,
+        currentCollapsed: Bool = false,
+        previousCollapsed: Bool = false
+    ) -> (
+        inserted: Set<String>,
+        changed: Set<String>,
+        removed: Set<String>,
+        layoutChanged: Set<String>
+    ) {
         switch (previous, current) {
         case (nil, .some):
-            ([workingRowID], [], [])
+            return ([workingRowID], [], [], currentCollapsed ? [workingRowID] : [])
         case (.some, nil):
-            ([], [], [workingRowID])
-        case let (previous?, current?) where previous != current:
-            ([], [workingRowID], [])
+            return ([], [], [workingRowID], [])
+        case let (previous?, current?):
+            let labelChanged = previous != current
+            let collapseChanged = previousCollapsed != currentCollapsed
+            return (
+                [],
+                (labelChanged || collapseChanged) ? [workingRowID] : [],
+                [],
+                collapseChanged ? [workingRowID] : []
+            )
         default:
-            ([], [], [])
+            return ([], [], [], [])
         }
     }
 }

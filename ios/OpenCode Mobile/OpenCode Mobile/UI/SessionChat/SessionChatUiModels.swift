@@ -14,6 +14,8 @@ struct SessionChatRow: Identifiable, Equatable {
     let modelProviderID: String?
     let modelID: String?
     let contextInputTokens: Int64?
+    /// Working-row only: reserved list identity collapsed while Thinking is last.
+    let isLayoutCollapsed: Bool
 
     init(
         id: String,
@@ -28,7 +30,8 @@ struct SessionChatRow: Identifiable, Equatable {
         blocks: [SessionChatTimelineBlock] = [],
         modelProviderID: String? = nil,
         modelID: String? = nil,
-        contextInputTokens: Int64? = nil
+        contextInputTokens: Int64? = nil,
+        isLayoutCollapsed: Bool = false
     ) {
         self.id = id
         self.role = role
@@ -43,6 +46,7 @@ struct SessionChatRow: Identifiable, Equatable {
         self.modelProviderID = modelProviderID
         self.modelID = modelID
         self.contextInputTokens = contextInputTokens
+        self.isLayoutCollapsed = isLayoutCollapsed
     }
 
     static func == (lhs: SessionChatRow, rhs: SessionChatRow) -> Bool {
@@ -60,6 +64,7 @@ struct SessionChatRow: Identifiable, Equatable {
               lhs.metadataLabel == rhs.metadataLabel,
               lhs.waitingCaption == rhs.waitingCaption,
               lhs.waitingDelivery == rhs.waitingDelivery,
+              lhs.isLayoutCollapsed == rhs.isLayoutCollapsed,
               lhs.blocks.count == rhs.blocks.count
         else { return false }
         // Huge assistant replies: compare text only after cheap fields match.
@@ -70,6 +75,7 @@ struct SessionChatRow: Identifiable, Equatable {
 extension SessionChatRow: MessageListTimelineHeightEstimating {
     var timelineRowHeightEstimate: CGFloat {
         if id == SessionChatStatusChrome.workingRowID {
+            if isLayoutCollapsed { return 0 }
             return MessageListTimelineRowHeightEstimate.fallback(
                 characterCount: text.count,
                 style: .compact
@@ -208,6 +214,8 @@ struct SessionChatUiState: Equatable {
     var sessionStatusLabel: String?
     /// In-chat Working/Thinking/Retrying label for an active turn.
     var workingIndicatorLabel: String? = nil
+    /// True while Working is reserved but collapsed under last-row Thinking.
+    var workingIndicatorCollapsed: Bool = false
     /// Top Syncing pill label while cached messages wait for network confirmation.
     var syncingIndicatorLabel: String? = nil
     var sessionTodos: [SessionTodo] = []

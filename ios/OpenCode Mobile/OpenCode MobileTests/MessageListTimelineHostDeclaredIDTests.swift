@@ -224,6 +224,40 @@ struct MessageListTimelineHostDeclaredIDTests {
         #expect(controller.lastReconfiguredIDs == ["a"])
     }
 
+    @Test func statusChromeCollapseToggle_reconfiguresStableWorkingRowWithoutInsert() {
+        let workingID = SessionChatStatusChrome.workingRowID
+        let frame = TimelineFrame(
+            frameRevision: 5,
+            rows: [],
+            insertedRowIDs: [],
+            changedRowIDs: [],
+            removedRowIDs: [],
+            layoutChangedRowIDs: [],
+            grewBottomRowIDs: [],
+            decorateRowIDs: [],
+            isRequired: false
+        )
+        let expanded = MessageListTimelineApplyPacket.from(
+            frame,
+            workingIndicatorLabel: "Working",
+            previousWorkingIndicatorLabel: "Working",
+            workingIndicatorCollapsed: false,
+            previousWorkingIndicatorCollapsed: false
+        )
+        let collapsed = MessageListTimelineApplyPacket.from(
+            frame,
+            workingIndicatorLabel: "Working",
+            previousWorkingIndicatorLabel: "Working",
+            workingIndicatorCollapsed: true,
+            previousWorkingIndicatorCollapsed: false
+        )
+        #expect(!collapsed.insertedRowIDs.contains(workingID))
+        #expect(!collapsed.removedRowIDs.contains(workingID))
+        #expect(collapsed.changedRowIDs.contains(workingID))
+        #expect(collapsed.layoutChangedRowIDs.contains(workingID))
+        #expect(collapsed.frameRevision != expanded.frameRevision)
+    }
+
     @Test func nilPacket_identityStable_doesNotReconfigureAllOnRepeatApply() {
         let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
             itemContent: { Text($0.label) },

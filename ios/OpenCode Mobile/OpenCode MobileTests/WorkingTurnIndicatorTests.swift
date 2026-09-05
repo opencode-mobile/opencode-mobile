@@ -94,22 +94,48 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
-    @Test func labelForActiveTurn_hidesWhenLastIsThinking() {
+    @Test func labelForActiveTurn_keepsWorkingWhenLastIsThinking() {
         #expect(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel: "Working",
-                lastIsThinking: true
-            ) == nil
+            WorkingTurnIndicator.labelForActiveTurn(statusLabel: "Working") == "Working"
+        )
+        #expect(
+            WorkingTurnIndicator.shouldCollapseReservedRow(
+                lastIsThinking: true,
+                label: "Working"
+            )
         )
     }
 
-    @Test func labelForActiveTurn_hidesCompactingWhenLastIsThinking() {
+    @Test func labelForActiveTurn_keepsCompactingWhenLastIsThinking() {
         #expect(
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel: "Working",
-                isCompacting: true,
-                lastIsThinking: true
-            ) == nil
+                isCompacting: true
+            ) == SessionCompactChrome.statusLabel
+        )
+        #expect(
+            WorkingTurnIndicator.shouldCollapseReservedRow(
+                lastIsThinking: true,
+                label: SessionCompactChrome.statusLabel
+            )
+        )
+    }
+
+    @Test func shouldCollapseReservedRow_falseWhenNotThinking() {
+        #expect(
+            WorkingTurnIndicator.shouldCollapseReservedRow(
+                lastIsThinking: false,
+                label: "Working"
+            ) == false
+        )
+    }
+
+    @Test func shouldCollapseReservedRow_falseWhenLabelMissing() {
+        #expect(
+            WorkingTurnIndicator.shouldCollapseReservedRow(
+                lastIsThinking: true,
+                label: nil
+            ) == false
         )
     }
 

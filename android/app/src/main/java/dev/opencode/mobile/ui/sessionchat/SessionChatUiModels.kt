@@ -119,6 +119,8 @@ data class SessionChatUiState(
     val sessionStatusLabel: String? = null,
     /** In-chat Working/Thinking/Retrying label for an active turn. */
     val workingIndicatorLabel: String? = null,
+    /** True while Working is reserved but collapsed under last-row Thinking. */
+    val workingIndicatorCollapsed: Boolean = false,
     /** Top Syncing pill label while cached messages wait for network confirmation. */
     val syncingIndicatorLabel: String? = null,
     val sessionTodos: List<SessionTodo> = emptyList(),
