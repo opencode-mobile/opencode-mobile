@@ -10,8 +10,12 @@ import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
+import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.network.PromptJsonBodyWriter
 import dev.opencode.mobile.network.applyDurableSend
 import dev.opencode.mobile.network.setJsonBody
+import dev.opencode.mobile.network.setJsonFileBody
+import java.io.File
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ResponseException
@@ -97,13 +101,19 @@ class MessagesApi private constructor(
         sessionId: String,
         body: SendMessageRequestDto,
         directory: String? = null,
+        attachments: List<Attachment> = emptyList(),
     ) {
         val progress = coroutineContext[PromptSendProgressReporter]
+        val file = promptFile(attachments) { PromptJsonBodyWriter.writeV1Prompt(body, attachments, promptTempDir()) }
         val response =
-            httpClient.get().post("session/$sessionId/prompt_async") {
-                applyDurableSend(progress)
-                applyDirectory(directory)
-                setJsonBody(json, body)
+            try {
+                httpClient.get().post("session/$sessionId/prompt_async") {
+                    applyDurableSend(progress)
+                    applyDirectory(directory)
+                    if (file != null) setJsonFileBody(file) else setJsonBody(json, body)
+                }
+            } finally {
+                file?.delete()
             }
         if (!response.status.isSuccess()) {
             throw ResponseException(response, "prompt_async failed with status ${response.status.value}")
@@ -116,8 +126,11 @@ class MessagesApi private constructor(
         sessionId: String,
         body: V2PromptRequestDto,
         directory: String? = null,
+        attachments: List<Attachment> = emptyList(),
     ) {
-        postSuccess("api/session/$sessionId/prompt", body, directory)
+        postSuccess(path = "api/session/$sessionId/prompt", body = body, attachments = attachments) {
+            PromptJsonBodyWriter.writeV2Prompt(body, attachments, promptTempDir())
+        }
     }
 
     suspend fun switchSessionAgent(
@@ -139,19 +152,33 @@ class MessagesApi private constructor(
     private suspend inline fun <reified T> postSuccess(
         path: String,
         body: T,
-        directory: String?,
+        directory: String? = null,
+        attachments: List<Attachment> = emptyList(),
+        noinline fileBody: () -> File? = { null },
     ) {
         val progress = coroutineContext[PromptSendProgressReporter]
+        val file = promptFile(attachments, fileBody)
         val response =
-            httpClient.get().post(path) {
-                applyDurableSend(progress)
-                setJsonBody(json, body)
+            try {
+                httpClient.get().post(path) {
+                    applyDurableSend(progress)
+                    if (file != null) setJsonFileBody(file) else setJsonBody(json, body)
+                }
+            } finally {
+                file?.delete()
             }
         if (!response.status.isSuccess()) {
             throw ResponseException(response, "$path failed with status ${response.status.value}")
         }
         response.bodyAsText()
     }
+
+    private fun promptFile(
+        attachments: List<Attachment>,
+        fileBody: () -> File?,
+    ): File? = if (attachments.any { it.usesFileBackedBody }) fileBody() else null
+
+    private fun promptTempDir(): File = File(System.getProperty("java.io.tmpdir"), "opencode-prompt-send")
 
     private fun interface ClientProvider {
         fun get(): HttpClient

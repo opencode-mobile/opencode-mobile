@@ -8,10 +8,7 @@ import Testing
         buffer.append(area: .sse, level: .info, message: "opened password=secret status=200")
 
         let attachment = try DiagnosticLogAttachment.make(from: buffer)
-        let decoded = String(
-            data: AttachmentDataURL.decodedData(from: attachment.dataURL, expectedMime: attachment.mime) ?? Data(),
-            encoding: .utf8
-        ) ?? ""
+        let decoded = String(data: try Data(contentsOf: try #require(attachment.fileURL)), encoding: .utf8) ?? ""
 
         #expect(attachment.filename == DiagnosticLogAttachment.filename)
         #expect(attachment.mime == DiagnosticLogAttachment.mime)

@@ -619,7 +619,7 @@ final class SessionChatComposer {
                     filename: attachment.filename,
                     mime: attachment.mime,
                     kind: attachment.kind,
-                    dataURL: attachment.dataURL
+                    dataURL: ""
                 )
             )
         }

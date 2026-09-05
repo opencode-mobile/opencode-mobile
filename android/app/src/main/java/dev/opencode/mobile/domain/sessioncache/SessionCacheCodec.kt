@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.sessioncache
 
 import android.util.Log
 import dev.opencode.mobile.domain.message.AttachmentKind
+import dev.opencode.mobile.domain.message.AttachmentLimits
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageContextEstimate
 import dev.opencode.mobile.domain.message.MessagePart
@@ -326,7 +327,7 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 filename = filename,
                 mime = mime,
                 attachmentKind = kind.name.lowercase(),
-                dataUrl = dataUrl,
+                dataUrl = AttachmentLimits.persistedDataUrl(dataUrl),
             )
         is MessagePart.Compaction -> null
         is MessagePart.Reasoning ->

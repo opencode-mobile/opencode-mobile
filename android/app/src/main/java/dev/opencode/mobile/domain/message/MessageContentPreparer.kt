@@ -102,7 +102,7 @@ class MessageContentPreparer
                                         filename = attachment.filename,
                                         mime = attachment.mime,
                                         kind = attachment.kind,
-                                        dataUrl = attachment.dataUrl,
+                                        dataUrl = "",
                                     ),
                                 )
                             }

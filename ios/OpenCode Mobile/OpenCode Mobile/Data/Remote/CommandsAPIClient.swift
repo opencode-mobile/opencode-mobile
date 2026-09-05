@@ -43,14 +43,20 @@ nonisolated struct CommandsAPIClient: Sendable {
         return envelope.data
     }
 
-    func runCommand(sessionID: String, body: RunCommandRequestDTO, directory: String? = nil) async throws {
-        try await post(path: "session/\(sessionID)/command", body: body, directory: directory)
+    func runCommand(
+        sessionID: String,
+        body: RunCommandRequestDTO,
+        attachments: [Attachment] = [],
+        directory: String? = nil
+    ) async throws {
+        try await post(path: "session/\(sessionID)/command", body: body, attachments: attachments, directory: directory)
     }
 
-    func runCommandV2(sessionID: String, body: V2RunCommandRequestDTO) async throws {
+    func runCommandV2(sessionID: String, body: V2RunCommandRequestDTO, attachments: [Attachment] = []) async throws {
         try await post(
             path: "api/session/\(sessionID)/command",
-            body: body
+            body: body,
+            attachments: attachments
         )
     }
 
@@ -76,9 +82,10 @@ nonisolated struct CommandsAPIClient: Sendable {
         return try decoder.decode(T.self, from: data)
     }
 
-    private func post<B: Encodable>(
+    private func post(
         path: String,
-        body: B,
+        body: RunCommandRequestDTO,
+        attachments: [Attachment],
         directory: String? = nil,
         locationDirectory: String? = nil
     ) async throws {
@@ -89,23 +96,81 @@ nonisolated struct CommandsAPIClient: Sendable {
             locationDirectory: locationDirectory
         )
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let bodyData = try encoder.encode(body)
+        try await uploadJSON(
+            request,
+            fileURL: attachments.contains(where: \.usesFileBackedBody)
+                ? try PromptJSONBodyWriter.writeV1Command(body, attachments: attachments)
+                : nil,
+            fallback: { try encoder.encode(body) }
+        )
+    }
+
+    private func post(
+        path: String,
+        body: V2RunCommandRequestDTO,
+        attachments: [Attachment],
+        directory: String? = nil,
+        locationDirectory: String? = nil
+    ) async throws {
+        var request = try requireConnection().authorizedRequest(
+            path: path,
+            method: "POST",
+            directory: directory,
+            locationDirectory: locationDirectory
+        )
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await uploadJSON(
+            request,
+            fileURL: attachments.contains(where: \.usesFileBackedBody)
+                ? try PromptJSONBodyWriter.writeV2Command(body, attachments: attachments)
+                : nil,
+            fallback: { try encoder.encode(body) }
+        )
+    }
+
+    private func uploadJSON(
+        _ request: URLRequest,
+        fileURL: URL?,
+        fallback: () throws -> Data
+    ) async throws {
+        if let fileURL {
+            defer { try? FileManager.default.removeItem(at: fileURL) }
+            if let bodyUploader {
+                let (data, response) = try await bodyUploader.upload(
+                    request,
+                    fileURL: fileURL,
+                    onProgress: PromptSendProgressReporting.handler
+                )
+                try validateCommandResponse(data, response)
+                return
+            }
+            var request = request
+            request.httpBody = try Data(contentsOf: fileURL)
+            _ = try await data(for: request)
+            return
+        }
+        let bodyData = try fallback()
         if let bodyUploader {
             let (data, response) = try await bodyUploader.upload(
                 request,
                 body: bodyData,
                 onProgress: PromptSendProgressReporting.handler
             )
-            guard let http = response as? HTTPURLResponse else {
-                throw CommandsAPIError.invalidResponse
-            }
-            guard (200 ..< 300).contains(http.statusCode) else {
-                throw CommandsAPIError.httpStatus(http.statusCode, String(data: data, encoding: .utf8))
-            }
+            try validateCommandResponse(data, response)
             return
         }
+        var request = request
         request.httpBody = bodyData
         _ = try await data(for: request)
+    }
+
+    private func validateCommandResponse(_ data: Data, _ response: URLResponse) throws {
+        guard let http = response as? HTTPURLResponse else {
+            throw CommandsAPIError.invalidResponse
+        }
+        guard (200 ..< 300).contains(http.statusCode) else {
+            throw CommandsAPIError.httpStatus(http.statusCode, String(data: data, encoding: .utf8))
+        }
     }
 
     private func data(for request: URLRequest) async throws -> Data {

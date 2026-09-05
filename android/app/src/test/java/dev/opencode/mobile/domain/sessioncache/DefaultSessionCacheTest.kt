@@ -164,7 +164,7 @@ class DefaultSessionCacheTest {
                                 filename = "a.png",
                                 mime = "image/png",
                                 kind = dev.opencode.mobile.domain.message.AttachmentKind.Image,
-                                dataUrl = "data:image/png;base64,abc",
+                                dataUrl = "",
                             ),
                         ),
                 ),
@@ -173,5 +173,6 @@ class DefaultSessionCacheTest {
         val decoded = SessionCacheCodec.decodeMessages(encoded, json)
         assertEquals(messages, decoded)
         assertTrue(encoded.contains("\"schemaVersion\":1"))
+        assertTrue(!encoded.contains("data:image/png"))
     }
 }

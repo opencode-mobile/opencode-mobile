@@ -5,6 +5,7 @@ enum AttachmentLoadError: LocalizedError, Equatable {
     case unsupportedType
     case unreadableFile
     case invalidDataURL
+    case tooLarge
 
     var errorDescription: String? {
         switch self {
@@ -14,6 +15,8 @@ enum AttachmentLoadError: LocalizedError, Equatable {
             "The attachment could not be read."
         case .invalidDataURL:
             "The attachment data is invalid."
+        case .tooLarge:
+            AttachmentLimits.tooLargeMessage
         }
     }
 }
@@ -77,17 +80,22 @@ struct AttachmentLoader: Sendable {
     nonisolated init() {}
 
     nonisolated func load(data: Data, filename: String, declaredMime: String?) throws -> Attachment {
+        guard Int64(data.count) <= AttachmentLimits.maxDecodedBytes else {
+            throw AttachmentLoadError.tooLarge
+        }
         let mime = try resolvedMime(filename: filename, declaredMime: declaredMime)
-        guard let kind = AttachmentDataURL.kind(for: mime),
-              let dataURL = AttachmentDataURL.make(data: data, mime: mime)
-        else { throw AttachmentLoadError.invalidDataURL }
+        guard let kind = AttachmentDataURL.kind(for: mime) else { throw AttachmentLoadError.invalidDataURL }
         let normalizedFilename = filename.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stored = try persist(data: data, filename: normalizedFilename)
         return Attachment(
             id: UUID().uuidString,
             filename: normalizedFilename.isEmpty ? "Attachment" : normalizedFilename,
             mime: mime,
             kind: kind,
-            dataURL: dataURL
+            dataURL: "",
+            fileURL: stored,
+            byteCount: Int64(data.count),
+            previewData: kind == .image ? AttachmentPreview.make(data: data) : nil
         )
     }
 
@@ -95,16 +103,30 @@ struct AttachmentLoader: Sendable {
         let accessed = fileURL.startAccessingSecurityScopedResource()
         defer { if accessed { fileURL.stopAccessingSecurityScopedResource() } }
         do {
+            let values = try fileURL.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
+            if let size = values.fileSize, Int64(size) > AttachmentLimits.maxDecodedBytes {
+                throw AttachmentLoadError.tooLarge
+            }
             return try load(
                 data: Data(contentsOf: fileURL, options: [.mappedIfSafe]),
                 filename: fileURL.lastPathComponent,
-                declaredMime: declaredMime ?? (try? fileURL.resourceValues(forKeys: [.contentTypeKey]).contentType?.preferredMIMEType)
+                declaredMime: declaredMime ?? values.contentType?.preferredMIMEType
             )
         } catch let error as AttachmentLoadError {
             throw error
         } catch {
             throw AttachmentLoadError.unreadableFile
         }
+    }
+
+    nonisolated private func persist(data: Data, filename: String) throws -> URL {
+        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("attachments", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let safeName = filename.replacingOccurrences(of: "/", with: "_")
+        let stored = directory.appendingPathComponent("\(UUID().uuidString)-\(safeName.isEmpty ? "attachment" : safeName)")
+        try data.write(to: stored, options: .atomic)
+        return stored
     }
 
     nonisolated private func resolvedMime(filename: String, declaredMime: String?) throws -> String {

@@ -503,7 +503,7 @@ private extension MessagePart {
                 filename: part.filename,
                 mime: part.mime,
                 attachmentKind: part.kind.rawValue,
-                dataUrl: part.dataURL
+                dataUrl: AttachmentLimits.persistedDataURL(part.dataURL)
             )
         case .compaction:
             // Live marker only; rehydrated from SSE / refresh while session is open.

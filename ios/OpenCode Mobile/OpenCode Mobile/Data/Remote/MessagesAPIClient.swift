@@ -12,7 +12,9 @@ protocol MessagesAPI: Sendable {
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> MessageDTO
     func sendMessage(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws -> MessageDTO
     func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws
+    func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, attachments: [Attachment], directory: String?) async throws
     func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, directory: String?) async throws
+    func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, attachments: [Attachment], directory: String?) async throws
     func switchSessionAgent(sessionID: String, agent: String, directory: String?) async throws
     func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String?) async throws
 }
@@ -22,7 +24,15 @@ extension MessagesAPI {
         []
     }
 
+    func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, attachments: [Attachment], directory: String?) async throws {
+        try await sendPromptAsync(sessionID: sessionID, body: body, directory: directory)
+    }
+
     func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, directory: String?) async throws {}
+
+    func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, attachments: [Attachment], directory: String?) async throws {
+        try await sendPromptV2(sessionID: sessionID, body: body, directory: directory)
+    }
 
     func switchSessionAgent(sessionID: String, agent: String, directory: String?) async throws {}
 
@@ -93,13 +103,37 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
     }
 
     func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, directory: String? = nil) async throws {
+        try await sendPromptAsync(sessionID: sessionID, body: body, attachments: [], directory: directory)
+    }
+
+    func sendPromptAsync(
+        sessionID: String,
+        body: SendMessageRequestDTO,
+        attachments: [Attachment],
+        directory: String? = nil
+    ) async throws {
         var request = try requireConnection().authorizedRequest(path: "session/\(sessionID)/prompt_async", method: "POST", directory: directory)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        _ = try await sendBody(request, body: try encoder.encode(body))
+        _ = try await sendPromptBody(request, encoded: {
+            if attachments.contains(where: \.usesFileBackedBody) {
+                try PromptJSONBodyWriter.writeV1Prompt(body, attachments: attachments)
+            } else {
+                nil
+            }
+        }, fallback: { try encoder.encode(body) })
     }
 
     func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, directory: String? = nil) async throws {
-        try await postPrompt(path: "api/session/\(sessionID)/prompt", body: body, directory: nil)
+        try await sendPromptV2(sessionID: sessionID, body: body, attachments: [], directory: directory)
+    }
+
+    func sendPromptV2(
+        sessionID: String,
+        body: V2PromptRequestDTO,
+        attachments: [Attachment],
+        directory: String? = nil
+    ) async throws {
+        try await postPrompt(path: "api/session/\(sessionID)/prompt", body: body, attachments: attachments, directory: nil)
     }
 
     func switchSessionAgent(sessionID: String, agent: String, directory: String? = nil) async throws {
@@ -114,10 +148,16 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         try await postNoContent(path: "api/session/\(sessionID)/model", body: body, directory: nil)
     }
 
-    private func postPrompt<B: Encodable>(path: String, body: B, directory: String?) async throws {
+    private func postPrompt(path: String, body: V2PromptRequestDTO, attachments: [Attachment], directory: String?) async throws {
         var request = try requireConnection().authorizedRequest(path: path, method: "POST", directory: directory)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        _ = try await sendBody(request, body: try encoder.encode(body))
+        _ = try await sendPromptBody(request, encoded: {
+            if attachments.contains(where: \.usesFileBackedBody) {
+                try PromptJSONBodyWriter.writeV2Prompt(body, attachments: attachments)
+            } else {
+                nil
+            }
+        }, fallback: { try encoder.encode(body) })
     }
 
     private func postNoContent<B: Encodable>(path: String, body: B, directory: String?) async throws {
@@ -125,6 +165,48 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
         _ = try await data(for: request)
+    }
+
+    private func sendPromptBody(
+        _ request: URLRequest,
+        encoded: () throws -> URL?,
+        fallback: () throws -> Data
+    ) async throws -> Data {
+        if let fileURL = try encoded() {
+            defer { try? FileManager.default.removeItem(at: fileURL) }
+            return try await sendBodyFile(request, fileURL: fileURL)
+        }
+        return try await sendBody(request, body: try fallback())
+    }
+
+    private func sendBodyFile(_ request: URLRequest, fileURL: URL) async throws -> Data {
+        if let bodyUploader {
+            let startedAt = OpenCodeAPITrace.start(request)
+            let data: Data
+            let response: URLResponse
+            do {
+                (data, response) = try await bodyUploader.upload(
+                    request,
+                    fileURL: fileURL,
+                    onProgress: PromptSendProgressReporting.handler
+                )
+            } catch {
+                OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
+                throw error
+            }
+            guard let http = response as? HTTPURLResponse else {
+                OpenCodeAPITrace.invalidResponse(request, startedAt: startedAt)
+                throw MessagesAPIError.invalidResponse
+            }
+            OpenCodeAPITrace.finish(request, statusCode: http.statusCode, startedAt: startedAt)
+            guard (200 ..< 300).contains(http.statusCode) else {
+                throw MessagesAPIError.httpStatus(http.statusCode, String(data: data, encoding: .utf8))
+            }
+            return data
+        }
+        var request = request
+        request.httpBody = try Data(contentsOf: fileURL)
+        return try await data(for: request)
     }
 
     private func sendBody(_ request: URLRequest, body: Data) async throws -> Data {

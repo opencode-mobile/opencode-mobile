@@ -878,7 +878,9 @@ struct SessionChatViewModelTests {
             #expect(attachment?.filename == filename)
             #expect(attachment?.mime == expectedMime)
             #expect(attachment?.kind == expectedKind)
-            #expect(attachment?.dataURL == "data:\(expectedMime);base64,Y29udGVudA==")
+            #expect(attachment?.dataURL == "")
+            #expect(attachment?.fileURL != nil)
+            #expect(attachment?.byteCount == Int64(Data("content".utf8).count))
         }
         #expect(viewModel.uiState.composer.attachments.count == cases.count)
     }

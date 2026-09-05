@@ -321,8 +321,9 @@ document.
 
 An Attachment has two lifecycle states: **pending** in the Session Chat
 composer (removable chips before send) and **sent** on a user message as a
-**FilePart**. Bytes travel inside the async prompt as a data URL; there is no
-separate upload API.
+**FilePart**. Pending bytes stay in an app-owned file. The prompt still carries
+them as a data URL on the wire; there is no separate upload API. Files larger
+than 20 MiB decoded are rejected at pick.
 _Avoid_: upload; Attach context (legacy composer label for device files);
 project `@` / `file://` context (different concept); **agent mention** (different
 concept).

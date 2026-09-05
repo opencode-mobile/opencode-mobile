@@ -16,6 +16,6 @@ internal class V1MessageRemote(
         options: PromptSendOptions,
         directory: String?,
     ) {
-        api.sendPromptAsync(sessionId, adapter.toSendRequest(options), directory)
+        api.sendPromptAsync(sessionId, adapter.toSendRequest(options), directory, options.attachments)
     }
 }

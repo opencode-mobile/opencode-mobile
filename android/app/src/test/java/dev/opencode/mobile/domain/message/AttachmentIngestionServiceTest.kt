@@ -58,10 +58,25 @@ class AttachmentIngestionServiceTest {
         val source = ByteArray(AttachmentIngestionService.MAX_PREVIEW_BYTES * 2) { (it % 251).toByte() }
         val attachment = service.ingest("large.png", "image/png", source)
 
-        assertArrayEquals(source, AttachmentDataUrl.decode(attachment.dataUrl, attachment.mime))
+        assertEquals("", attachment.dataUrl)
+        assertArrayEquals(source, java.io.File(requireNotNull(attachment.localPath)).readBytes())
         assertArrayEquals(thumbnail, attachment.previewBytes)
         assertTrue(attachment.previewBytes !== source)
         assertTrue(requireNotNull(attachment.previewBytes).size <= AttachmentIngestionService.MAX_PREVIEW_BYTES)
+    }
+
+    @Test
+    fun ingest_rejectsDecodedBytesOverTwentyMebibytes() {
+        val error =
+            assertThrows(IllegalArgumentException::class.java) {
+                service.ingest(
+                    "huge.pdf",
+                    "application/pdf",
+                    ByteArray((AttachmentLimits.MAX_DECODED_BYTES + 1).toInt()),
+                )
+            }
+
+        assertEquals(AttachmentLimits.TOO_LARGE_ERROR, error.message)
     }
 
     @Test

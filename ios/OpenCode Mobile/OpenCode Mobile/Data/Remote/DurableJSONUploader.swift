@@ -42,8 +42,8 @@ final class DurableJSONUploader: NSObject, URLSessionTaskDelegate, URLSessionDat
         body: Data,
         onProgress: (@Sendable (Int64, Int64) -> Void)?
     ) async throws -> (Data, URLResponse) {
-        onProgress?(0, Int64(body.count))
         if !usesBackgroundSession {
+            onProgress?(0, Int64(body.count))
             var uploadRequest = request
             uploadRequest.httpBody = nil
             return try await session.upload(
@@ -55,6 +55,25 @@ final class DurableJSONUploader: NSObject, URLSessionTaskDelegate, URLSessionDat
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("prompt-send-\(UUID().uuidString).json")
         try body.write(to: fileURL, options: .atomic)
+        return try await upload(request, fileURL: fileURL, onProgress: onProgress)
+    }
+
+    func upload(
+        _ request: URLRequest,
+        fileURL: URL,
+        onProgress: (@Sendable (Int64, Int64) -> Void)?
+    ) async throws -> (Data, URLResponse) {
+        let size = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? NSNumber)?.int64Value ?? 0
+        onProgress?(0, size)
+        if !usesBackgroundSession {
+            var uploadRequest = request
+            uploadRequest.httpBody = nil
+            return try await session.upload(
+                for: uploadRequest,
+                fromFile: fileURL,
+                delegate: ProgressRelay(onProgress: onProgress)
+            )
+        }
         let backgroundTask = await beginBackgroundAssertion()
         do {
             let result = try await performUpload(request, fileURL: fileURL, onProgress: onProgress)
