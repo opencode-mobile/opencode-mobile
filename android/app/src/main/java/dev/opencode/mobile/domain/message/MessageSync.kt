@@ -851,9 +851,11 @@ class MessageSync(
                 worldWatcher.cancel()
                 invalidationWatcher.cancel()
                 staging.close()
-                closeMessageCacheHandle(key)
-                healthByKey.remove(key)
-                setCatchUpSlot(key, false)
+                if (observationStillCurrent()) {
+                    closeMessageCacheHandle(key)
+                    healthByKey.remove(key)
+                    setCatchUpSlot(key, false)
+                }
             }
         }
 

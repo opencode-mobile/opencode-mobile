@@ -26,6 +26,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private var healthByKey: [MessageSessionKey: MessageSyncHealth] = [:]
     private var catchUpSlots: Set<String> = []
     private var catchUpChromeSubscribers: [UUID: (slot: String?, continuation: AsyncStream<Bool>.Continuation)] = [:]
+    private let catchUpChromeQueue = DispatchQueue(label: "dev.opencode.mobile.message-sync.catch-up-chrome")
     private var messageCacheHandles: [MessageSessionKey: any SessionMessageCacheHandle] = [:]
     /// Store slots that painted from cache and still need network confirmation.
     private var awaitingCacheSyncConfirm: Set<String> = []
@@ -151,13 +152,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
         lastPublishedRevision.removeAll()
         healthByKey.removeAll()
         catchUpSlots.removeAll()
-        let subscribers = catchUpChromeSubscribers
         awaitingCacheSyncConfirm.removeAll()
         lock.unlock()
         store.clear()
-        for subscriber in subscribers.values {
-            subscriber.continuation.yield(false)
-        }
+        publishCatchUpChrome()
     }
 
     func peekStoreMessages(sessionID: String, directory: String? = nil) -> [Message] {
@@ -186,19 +184,33 @@ nonisolated final class MessageSync: @unchecked Sendable {
             let id = UUID()
             lock.lock()
             catchUpChromeSubscribers[id] = (slot, continuation)
-            let current =
-                if let slot {
-                    catchUpSlots.contains(slot)
-                } else {
-                    !catchUpSlots.isEmpty
-                }
             lock.unlock()
-            continuation.yield(current)
+            publishCatchUpChrome()
             continuation.onTermination = { [weak self] _ in
                 guard let self else { return }
                 self.lock.lock()
                 self.catchUpChromeSubscribers.removeValue(forKey: id)
                 self.lock.unlock()
+            }
+        }
+    }
+
+    private func publishCatchUpChrome() {
+        catchUpChromeQueue.async { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            let subscribers = Array(self.catchUpChromeSubscribers.values)
+            self.lock.unlock()
+            for subscriber in subscribers {
+                self.lock.lock()
+                let value =
+                    if let slot = subscriber.slot {
+                        self.catchUpSlots.contains(slot)
+                    } else {
+                        !self.catchUpSlots.isEmpty
+                    }
+                self.lock.unlock()
+                subscriber.continuation.yield(value)
             }
         }
     }
@@ -211,36 +223,20 @@ nonisolated final class MessageSync: @unchecked Sendable {
         } else {
             catchUpSlots.remove(key.storeSlot)
         }
-        let subscribers = catchUpChromeSubscribers
-        let slots = catchUpSlots
         lock.unlock()
-        for subscriber in subscribers.values {
-            let value =
-                if let slot = subscriber.slot {
-                    slots.contains(slot)
-                } else {
-                    !slots.isEmpty
-                }
-            subscriber.continuation.yield(value)
-        }
+        publishCatchUpChrome()
     }
 
-    private func clearCatchUp(for key: MessageSessionKey) {
-        setHealth(.healthy, for: key)
+    private func clearCatchUp(for key: MessageSessionKey, startedGeneration: Int) {
         lock.lock()
-        healthByKey.removeValue(forKey: key)
-        catchUpSlots.remove(key.storeSlot)
-        let subscribers = catchUpChromeSubscribers
-        let slots = catchUpSlots
+        let stillOwner = startedGenerationByKey[key] == startedGeneration
+        if stillOwner {
+            healthByKey.removeValue(forKey: key)
+            catchUpSlots.remove(key.storeSlot)
+        }
         lock.unlock()
-        for subscriber in subscribers.values {
-            let value =
-                if let slot = subscriber.slot {
-                    slots.contains(slot)
-                } else {
-                    !slots.isEmpty
-                }
-            subscriber.continuation.yield(value)
+        if stillOwner {
+            publishCatchUpChrome()
         }
     }
 
@@ -306,6 +302,12 @@ nonisolated final class MessageSync: @unchecked Sendable {
         return observationGeneration == startedGeneration && !terminalSessionKeys.contains(key)
     }
 
+    private func observationStillCurrent(key: MessageSessionKey, startedGeneration: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return startedGenerationByKey[key] == startedGeneration
+    }
+
     private func markTerminal(key: MessageSessionKey) {
         lock.lock()
         terminalSessionKeys.insert(key)
@@ -349,7 +351,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         )
         let cacheHandle = openMessageCacheHandle(for: key)
         let resumeState = ObservationResumeState()
-        defer { clearCatchUp(for: key) }
+        defer { clearCatchUp(for: key, startedGeneration: startedGeneration) }
         func confirmCacheSyncIfAwaiting() {
             guard isAwaitingCacheSyncConfirm(for: key.storeSlot) else { return }
             setAwaitingCacheSyncConfirm(false, for: key.storeSlot)
@@ -459,7 +461,9 @@ nonisolated final class MessageSync: @unchecked Sendable {
             worldWatcher.cancel()
             invalidationWatcher.cancel()
             staging.finish()
-            closeMessageCacheHandle(for: key)
+            if observationStillCurrent(key: key, startedGeneration: startedGeneration) {
+                closeMessageCacheHandle(for: key)
+            }
         }
 
         let publishMessages: @Sendable ([Message], Bool) -> Void = { [weak self] messages, isFromCache in
