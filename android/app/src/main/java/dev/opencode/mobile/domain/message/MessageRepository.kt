@@ -13,6 +13,13 @@ interface MessageRepository {
         directory: String? = null,
     ): Flow<DisplayMessageListUpdate>
 
+    fun observeCatchUpChrome(): Flow<Boolean> = kotlinx.coroutines.flow.flowOf(false)
+
+    fun observeCatchUpChrome(
+        sessionId: String,
+        directory: String? = null,
+    ): Flow<Boolean> = observeCatchUpChrome()
+
     suspend fun refreshMessages(
         sessionId: String,
         directory: String? = null,

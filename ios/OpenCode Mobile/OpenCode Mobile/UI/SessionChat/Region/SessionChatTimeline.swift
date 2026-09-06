@@ -12,6 +12,7 @@ final class SessionChatTimeline {
     private let worktree: String
     private let messageRepository: any MessageRepository
     private var observationTask: Task<Void, Never>?
+    private var catchUpChromeTask: Task<Void, Never>?
     private var displayApplyTask: Task<Void, Never>?
     private var observationGeneration = 0
     private var mergePendingWhileSending = false
@@ -22,6 +23,7 @@ final class SessionChatTimeline {
     private var displayFrameRevision: UInt64 = 0
     /// After network confirms the cache, ignore late isFromCache publishes for Syncing.
     private var networkCacheSyncConfirmed = false
+    private var catchUpSyncing = false
     /// Catalog used to collapse expanded slash-command templates in user bubbles.
     private(set) var serverCommands: [ServerCommand] = []
     /// Collapse-consecutive-tool-calls preference (OPE-144); widens grouping.
@@ -80,6 +82,7 @@ final class SessionChatTimeline {
         timelineFrame = .empty
         displayFrameRevision = 0
         networkCacheSyncConfirmed = false
+        catchUpSyncing = false
         state = SessionChatTimelineRegionState()
         notifyChange()
     }
@@ -107,6 +110,9 @@ final class SessionChatTimeline {
     func startObserving() {
         cancelObservationTasks()
         let generation = observationGeneration
+        catchUpChromeTask = Task {
+            await consumeCatchUpChrome(generation: generation)
+        }
         if let warm = messageRepository.peekWarmDisplayMessages(sessionID: sessionID, directory: worktree), !warm.isEmpty {
             // In-memory rows already on screen. Not unconfirmed disk cache — resume
             // skip/same-fingerprint catch-up never confirms Syncing if we raise it here.
@@ -191,8 +197,26 @@ final class SessionChatTimeline {
         observationGeneration &+= 1
         observationTask?.cancel()
         observationTask = nil
+        catchUpChromeTask?.cancel()
+        catchUpChromeTask = nil
         displayApplyTask?.cancel()
         displayApplyTask = nil
+    }
+
+    private func consumeCatchUpChrome(generation: Int) async {
+        for await catchingUp in messageRepository.observeCatchUpChrome(sessionID: sessionID, directory: worktree) {
+            guard observationGeneration == generation, !Task.isCancelled else { return }
+            catchUpSyncing = catchingUp
+            publishSyncingMessages()
+        }
+    }
+
+    private func publishSyncingMessages() {
+        let fromCache = state.messagesFromCache && !networkCacheSyncConfirmed
+        let next = fromCache || catchUpSyncing
+        guard state.isSyncingMessages != next else { return }
+        state.isSyncingMessages = next
+        notifyChange()
     }
 
     func loadMessages() async {
@@ -481,7 +505,7 @@ final class SessionChatTimeline {
         }
         let fromCache = messagesFromCache && !networkCacheSyncConfirmed
         state.messagesFromCache = fromCache
-        state.isSyncingMessages = fromCache
+        state.isSyncingMessages = fromCache || catchUpSyncing
         state.errorMessage = resolvedErrorMessage
         clearOptimisticIfReconciled(rows: stamped.rows)
         notifyChange()
@@ -508,7 +532,7 @@ final class SessionChatTimeline {
     private func confirmCacheSync() {
         networkCacheSyncConfirmed = true
         state.messagesFromCache = false
-        state.isSyncingMessages = false
+        state.isSyncingMessages = catchUpSyncing
         notifyChange()
     }
 

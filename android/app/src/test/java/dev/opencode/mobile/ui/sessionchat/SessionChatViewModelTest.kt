@@ -1108,6 +1108,32 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun bind_sameSessionReuse_resubscribesLiveMessages() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(listOf("Hello"), viewModel.uiState.value.messages.map { it.text })
+
+            repository.messages =
+                listOf(
+                    Message(
+                        id = "msg-2",
+                        role = MessageRole.User,
+                        text = "After reconnect",
+                    ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("After reconnect"),
+                viewModel.uiState.value.messages.map { it.text },
+            )
+        }
+
+    @Test
     fun openRenameSession_prefillsCurrentTitle() =
         runTest(testDispatcher) {
             val viewModel = createViewModel(FakeMessageRepository())
@@ -1290,6 +1316,27 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(SessionChatTimelineState.Error, viewModel.uiState.value.timeline)
+        }
+
+    @Test
+    fun catchUpChrome_showsSyncingPill() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.syncingIndicatorLabel)
+
+            repository.catchUpChrome.value = true
+            advanceUntilIdle()
+
+            assertEquals(SessionMessageSyncChrome.STATUS_LABEL, viewModel.uiState.value.syncingIndicatorLabel)
+
+            repository.catchUpChrome.value = false
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.syncingIndicatorLabel)
         }
 
     @Test
@@ -4160,6 +4207,7 @@ private class FakeMessageRepository(
         },
 ) : MessageRepository {
     val eventStream = FakeForegroundEventStream()
+    val catchUpChrome = MutableStateFlow(false)
     var sendPromptAsyncCalled: Boolean = false
     var sentOptions: PromptSendOptions? = null
     private var listMessagesCallCount = 0
@@ -4187,6 +4235,13 @@ private class FakeMessageRepository(
                     send(loadUpdate())
                 }
         }
+
+    override fun observeCatchUpChrome(): Flow<Boolean> = catchUpChrome
+
+    override fun observeCatchUpChrome(
+        sessionId: String,
+        directory: String?,
+    ): Flow<Boolean> = catchUpChrome
 
     override fun observeDisplayMessages(
         sessionId: String,

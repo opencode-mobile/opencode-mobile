@@ -568,9 +568,63 @@ struct MessageSyncTests {
             }
             return false
         }
+        var chrome = false
+        let chromeTask = Task {
+            for await value in sync.observeCatchUpChrome(sessionID: "ses-1", directory: "/repo") {
+                chrome = value
+            }
+        }
+        let catchingUp = await waitUntil { chrome }
+        chromeTask.cancel()
         task.cancel()
         #expect(stale)
+        #expect(catchingUp)
         #expect(collector.latest()?.first?.text == "Hello")
+    }
+
+    @Test func oldLoopTeardown_doesNotClearNewerCatchUpChrome() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+        var chrome = false
+        let chromeTask = Task {
+            for await value in sync.observeCatchUpChrome(sessionID: "ses-1", directory: "/repo") {
+                chrome = value
+            }
+        }
+        let first = MessageCollector()
+        let firstTask = Task { await first.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        _ = await waitUntil { first.latest()?.first?.text == "Hello" }
+
+        eventStream.start()
+        eventStream.setConnectionState(.disconnected)
+        _ = await waitUntil {
+            if case .stale = sync.syncHealth(sessionID: "ses-1", directory: "/repo") { true } else { false }
+        }
+
+        sync.clearCache()
+        let second = MessageCollector()
+        let secondTask = Task { await second.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        _ = await waitUntil { second.latest()?.first?.text == "Hello" }
+        eventStream.setConnectionState(.connected)
+        eventStream.setConnectionState(.disconnected)
+        let staleAgain = await waitUntil {
+            if case .stale = sync.syncHealth(sessionID: "ses-1", directory: "/repo") { true } else { false }
+        }
+        #expect(staleAgain)
+
+        firstTask.cancel()
+        try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.subscriberStopTimeoutMs + 50))
+
+        var stillStale = false
+        if case .stale = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+            stillStale = true
+        }
+        let catchingUp = await waitUntil { chrome }
+        chromeTask.cancel()
+        secondTask.cancel()
+        #expect(stillStale)
+        #expect(catchingUp)
     }
 
     @Test func backgroundResumeToLiveWithoutReconnect_refreshesAfterStreamingLatch() async {

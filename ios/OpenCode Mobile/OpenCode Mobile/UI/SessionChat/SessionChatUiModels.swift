@@ -216,7 +216,7 @@ struct SessionChatUiState: Equatable {
     var workingIndicatorLabel: String? = nil
     /// True while Working is reserved but collapsed under last-row Thinking.
     var workingIndicatorCollapsed: Bool = false
-    /// Top Syncing pill label while cached messages wait for network confirmation.
+    /// Top Syncing pill label while cached or catching-up messages wait for network confirmation.
     var syncingIndicatorLabel: String? = nil
     var sessionTodos: [SessionTodo] = []
     var sessionTodosVisible: Bool = false

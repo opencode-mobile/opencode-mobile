@@ -85,8 +85,11 @@ class MainScreenViewModel
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
-        private val _isRefreshing = MutableStateFlow(false)
-        val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+        private val _userRefreshing = MutableStateFlow(false)
+        private val _catchUpRefreshing = MutableStateFlow(false)
+        val isRefreshing: StateFlow<Boolean> =
+            combine(_userRefreshing, _catchUpRefreshing) { user, catchUp -> user || catchUp }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, false)
         private val _removalSnackbar = MutableStateFlow<OpenCodeSnackbarMessage?>(null)
         val removalSnackbar: StateFlow<OpenCodeSnackbarMessage?> = _removalSnackbar.asStateFlow()
         private val _sessionActions = MutableStateFlow(HomeSessionActionsUiState())
@@ -141,6 +144,11 @@ class MainScreenViewModel
                     _serversChrome.value = HomeServersChrome()
                 }
             }
+            viewModelScope.launch {
+                messageRepository.observeCatchUpChrome().collect { catchingUp ->
+                    _catchUpRefreshing.value = catchingUp
+                }
+            }
         }
 
         fun refresh() {
@@ -191,13 +199,13 @@ class MainScreenViewModel
                 is MainScreenUiState.Empty,
                 -> {
                     viewModelScope.launch {
-                        if (_isRefreshing.value) return@launch
-                        _isRefreshing.value = true
+                        if (_userRefreshing.value) return@launch
+                        _userRefreshing.value = true
                         try {
                             sessionLiveStore.invalidate(null)
                             sessionStatusLiveStore.invalidate(null)
                         } finally {
-                            _isRefreshing.value = false
+                            _userRefreshing.value = false
                         }
                     }
                 }

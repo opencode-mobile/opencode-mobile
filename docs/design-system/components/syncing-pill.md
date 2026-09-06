@@ -3,9 +3,10 @@
 ## Intent
 
 Provide a compact **non-interactive floating status pill** while Session Chat
-shows cached messages that still wait for network confirmation. The first
-product use is the top-of-timeline **Syncing…** overlay — same floating chrome
-family as Scroll to end, but pinned to the top of the list and not tappable.
+shows messages that still wait for network confirmation — cached history on
+open, or REST catch-up after resume / reconnect. The first product use is the
+top-of-timeline **Syncing…** overlay — same floating chrome family as Scroll to
+end, but pinned to the top of the list and not tappable.
 
 Feature screens own **when** the pill appears (`syncingIndicatorLabel` /
 `isSyncingMessages`). The component only defines **how** it looks when shown.

@@ -17,6 +17,15 @@ sealed interface MessageSyncHealth {
 
     val requiresAuthoritativeRecovery: Boolean
         get() = this is Recovering
+
+    /** Home refresh + Session Chat Syncing pill. Overflow stays quiet (live stream). */
+    val showsCatchUpChrome: Boolean
+        get() =
+            when (this) {
+                Healthy -> false
+                is Stale -> true
+                is Recovering -> reason != MessageSyncRecoveryReason.Overflow
+            }
 }
 
 enum class MessageSyncRecoveryReason {

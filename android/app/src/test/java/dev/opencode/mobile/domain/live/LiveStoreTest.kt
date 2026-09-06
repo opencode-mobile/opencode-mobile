@@ -617,7 +617,61 @@ class MessageSyncTest {
                 (health as MessageSyncHealth.Stale).reason,
             )
             assertEquals("Hello", emissions.last().single().text)
+            val chrome = mutableListOf<Boolean>()
+            val chromeJob =
+                launch {
+                    sync.observeCatchUpChrome("ses-1", "/repo").collect { chrome.add(it) }
+                }
+            advanceTimeBy(1)
+            assertEquals(true, chrome.lastOrNull())
+            chromeJob.cancel()
             collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_oldLoopTeardownDoesNotClearNewerCatchUpChrome() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val chrome = mutableListOf<Boolean>()
+            val chromeJob =
+                launch {
+                    sync.observeCatchUpChrome("ses-1", "/repo").collect { chrome.add(it) }
+                }
+            val firstJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            eventStream.start()
+            advanceTimeBy(1)
+            eventStream.setConnectionState(EventStreamConnectionState.Disconnected)
+            advanceTimeBy(1)
+            assertEquals(true, chrome.lastOrNull())
+
+            sync.clearCache()
+            advanceTimeBy(1)
+            val secondJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(1)
+            eventStream.setConnectionState(EventStreamConnectionState.Disconnected)
+            advanceTimeBy(1)
+            assertTrue(sync.syncHealth("ses-1", "/repo") is MessageSyncHealth.Stale)
+            assertEquals(true, chrome.lastOrNull())
+
+            firstJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            assertTrue(sync.syncHealth("ses-1", "/repo") is MessageSyncHealth.Stale)
+            assertEquals(true, chrome.lastOrNull())
+            chromeJob.cancel()
+            secondJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
         }
 
