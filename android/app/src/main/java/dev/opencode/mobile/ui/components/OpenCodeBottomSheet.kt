@@ -6,6 +6,7 @@ import android.content.ContextWrapper
 import android.os.Build
 import android.provider.Settings
 import android.view.RoundedCorner
+import android.view.View
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -226,7 +227,7 @@ fun OpenCodeBottomSheet(
         }
 
     BackHandler(onBack = ::dismissWithAnimation)
-    BottomSheetWindowOverlay {
+    BottomSheetWindowOverlay(paneTitle = title) {
         Box(
             modifier =
                 Modifier
@@ -608,7 +609,10 @@ private tailrec fun Context.findActivity(): Activity? =
     }
 
 @Composable
-private fun BottomSheetWindowOverlay(content: @Composable () -> Unit) {
+private fun BottomSheetWindowOverlay(
+    paneTitle: String,
+    content: @Composable () -> Unit,
+) {
     val view = LocalView.current
     val activity = remember(view) { view.context.findActivity() }
     val parentComposition = rememberCompositionContext()
@@ -628,8 +632,11 @@ private fun BottomSheetWindowOverlay(content: @Composable () -> Unit) {
                 elevation = 8f
                 isFocusable = true
                 isFocusableInTouchMode = true
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+                accessibilityPaneTitle = paneTitle
             }
         val root = activity.window.decorView as ViewGroup
+        val hiddenSiblings = hideDecorSiblingsFromAccessibility(root, overlay)
         root.addView(
             overlay,
             ViewGroup.LayoutParams(
@@ -638,7 +645,31 @@ private fun BottomSheetWindowOverlay(content: @Composable () -> Unit) {
             ),
         )
         overlay.requestFocus()
-        onDispose { root.removeView(overlay) }
+        onDispose {
+            restoreDecorSiblingAccessibility(hiddenSiblings)
+            root.removeView(overlay)
+        }
+    }
+}
+
+private fun hideDecorSiblingsFromAccessibility(
+    root: ViewGroup,
+    overlay: View,
+): List<Pair<View, Int>> {
+    val hidden = mutableListOf<Pair<View, Int>>()
+    for (index in 0 until root.childCount) {
+        val child = root.getChildAt(index)
+        if (child !== overlay) {
+            hidden += child to child.importantForAccessibility
+            child.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        }
+    }
+    return hidden
+}
+
+private fun restoreDecorSiblingAccessibility(hiddenSiblings: List<Pair<View, Int>>) {
+    hiddenSiblings.forEach { (child, importance) ->
+        child.importantForAccessibility = importance
     }
 }
 

@@ -48,7 +48,8 @@ subtitle content, selected state, or a larger list treatment.
 
 The component owns modal presentation and dismissal. The close button dismisses
 the sheet, and outside-tap, drag, back, and accessibility dismissal behavior
-should remain available.
+should remain available. The overlay is accessibility-modal so VoiceOver and
+TalkBack stay on the sheet and cannot activate the dimmed presenter.
 
 The sheet is a concentric float: **8** logical px from the left, right, and
 bottom of the display. Bottom corners use `bottomSheet.cornerRadius` so they
@@ -102,9 +103,12 @@ accessibility label or description using the platform convention.
 ## Platform Notes
 
 - iOS: presented with a window overlay (same pattern as Dialog) so the card can
-  inset from the display edge without system sheet chrome. Form sheets measure
-  their natural header and body height once, capped at 560pt, then keep that
-  height stable while the keyboard resizes only the internal scroll region.
+  inset from the display edge without system sheet chrome. The hosting view is
+  accessibility-modal and is removed when the host leaves the tree. Form sheets
+  measure their natural header and body height once, capped at 560pt, then keep
+  that height stable. Keyboard overlap shrinks available height and lifts the
+  card so the internal scroll region, not the presenting screen, follows the
+  keyboard.
   Short entry lists start at content height so the first measure is intrinsic
   row height. Compact height is header + rows + tight bottom padding. Measured
   content height is never shrunk after the intrinsic size is known, and updates
@@ -118,7 +122,8 @@ accessibility label or description using the platform convention.
   `bottomSheet.cornerRadiusTop`, bottom corners are the screen display radius
   minus inset (fallback 55 − 8).
 - Android: presented as an activity-window overlay (same idea as the iOS
-  overlay) so the card can sit 8dp from the display edge. Compose `Dialog` and
+  overlay) so the card can sit 8dp from the display edge. The overlay hides
+  sibling decor views from TalkBack while it is attached. Compose `Dialog` and
   `Popup` windows stay above the nav inset and turn the sheet into an island.
   Form mode applies `imePadding()` to the sheet boundary—not its measured
   content—so the sheet follows IME animation while its body scrolls. The app

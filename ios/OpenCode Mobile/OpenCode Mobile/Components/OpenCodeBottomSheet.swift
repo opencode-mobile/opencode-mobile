@@ -178,7 +178,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
                 ? max(bottomSheetContentBottomPadding, safeAreaBottom)
                 : bottomSheetCompactContentBottomPadding
         let usesFixedCardHeight = resolvedMode == .scrollable || contentMode == .form || alwaysFixedHeight
-        let cardHeight = resolvedCardHeight
+        let cardHeight = min(resolvedCardHeight, availableHeight)
         let scrollAreaHeight = max(
             bottomSheetEntryMinHeight,
             cardHeight
@@ -410,9 +410,14 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
         )
     }
 
+    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
+        coordinator.removeOverlayImmediately()
+    }
+
     final class Coordinator {
         private var overlayController: UIHostingController<OpenCodeBottomSheetOverlayContent<PinnedContent, SheetContent>>?
         private var isAnimatingOut = false
+        private var dismissGeneration = 0
 
         func update(
             isPresented: Bool,
@@ -448,18 +453,14 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
             )
 
             if isPresented {
-                isAnimatingOut = false
+                cancelDismissIfNeeded()
                 if let overlayController {
-                    overlayController.safeAreaRegions = []
+                    configureOverlay(overlayController, in: window)
                     overlayController.rootView = content
-                    overlayController.view.frame = window.bounds
+                    overlayController.view.alpha = 1
                 } else {
                     let controller = UIHostingController(rootView: content)
-                    controller.safeAreaRegions = []
-                    controller.view.backgroundColor = .clear
-                    controller.view.isOpaque = false
-                    controller.view.frame = window.bounds
-                    controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                    configureOverlay(controller, in: window)
                     controller.view.alpha = 0
                     window.addSubview(controller.view)
                     overlayController = controller
@@ -472,15 +473,46 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
             }
         }
 
+        func removeOverlayImmediately() {
+            dismissGeneration += 1
+            isAnimatingOut = false
+            overlayController?.view.layer.removeAllAnimations()
+            overlayController?.view.removeFromSuperview()
+            overlayController = nil
+        }
+
+        private func cancelDismissIfNeeded() {
+            guard isAnimatingOut else { return }
+            dismissGeneration += 1
+            overlayController?.view.layer.removeAllAnimations()
+            overlayController?.view.alpha = 1
+            isAnimatingOut = false
+        }
+
+        private func configureOverlay(
+            _ controller: UIHostingController<OpenCodeBottomSheetOverlayContent<PinnedContent, SheetContent>>,
+            in window: UIWindow
+        ) {
+            controller.safeAreaRegions = []
+            controller.view.backgroundColor = .clear
+            controller.view.isOpaque = false
+            controller.view.frame = window.bounds
+            controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            controller.view.accessibilityViewIsModal = true
+        }
+
         private func dismissOverlay() {
             guard let overlayController else { return }
             isAnimatingOut = true
+            dismissGeneration += 1
+            let generation = dismissGeneration
             UIView.animate(withDuration: bottomSheetExitDuration, animations: {
                 overlayController.view.alpha = 0
             }, completion: { [weak self] _ in
+                guard let self, self.isAnimatingOut, self.dismissGeneration == generation else { return }
                 overlayController.view.removeFromSuperview()
-                self?.overlayController = nil
-                self?.isAnimatingOut = false
+                self.overlayController = nil
+                self.isAnimatingOut = false
             })
         }
     }
@@ -501,7 +533,8 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedContent: View, SheetConte
     @State private var keyboardOverlap: CGFloat = 0
 
     var body: some View {
-        let availableHeight = max(0, displayFrame.height - bottomSheetInset)
+        let keyboardInset = contentMode == .form ? keyboardOverlap : 0
+        let availableHeight = max(0, displayFrame.height - bottomSheetInset - keyboardInset)
         ZStack(alignment: .bottom) {
             Color.black.opacity(revealed ? bottomSheetScrimAlpha : 0)
                 .contentShape(Rectangle())
@@ -520,12 +553,11 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedContent: View, SheetConte
                 sheetContent: sheetContent
             )
             .padding(.horizontal, bottomSheetInset)
-            .padding(.bottom, bottomSheetInset)
+            .padding(.bottom, bottomSheetInset + keyboardInset)
             .offset(y: revealed ? 0 : 28)
         }
         .frame(width: displayFrame.width, height: displayFrame.height)
         .ignoresSafeArea()
-        .padding(.bottom, keyboardOverlap)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
             guard contentMode == .form else { return }
             keyboardOverlap = KeyboardOverlap.amount(
@@ -536,6 +568,7 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedContent: View, SheetConte
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             keyboardOverlap = 0
         }
+        .animation(.easeOut(duration: 0.25), value: keyboardOverlap)
         .onAppear {
             withAnimation(.timingCurve(0.2, 0.8, 0.2, 1, duration: bottomSheetEnterDuration)) {
                 revealed = true

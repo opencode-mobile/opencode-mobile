@@ -184,10 +184,10 @@ implementation belong in the feature's `parity-gaps.md`.
 - Shared intent: the presenting screen stays fixed when the keyboard appears;
   only the form sheet's available region changes, with a fixed header and a
   scrollable body that keeps focused controls reachable.
-- iOS behavior: SwiftUI's native sheet locks a natural-content detent capped at
-  560pt in `form` mode on first measure (it may grow, never shrink) and lets the
-  keyboard safe area resize the internal scroll region without recomputing that
-  detent downward.
+- iOS behavior: the window overlay locks a natural-content height capped at
+  560pt in `form` mode on first measure (it may grow, never shrink). Keyboard
+  overlap shrinks available height and lifts the card so only the internal
+  scroll region follows the keyboard.
 - Android behavior: the full-window popup remains over an `adjustNothing`
   activity; `imePadding()` is applied to the form sheet boundary so it follows
   animated IME insets without resizing the activity content.
