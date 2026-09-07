@@ -9,6 +9,7 @@ import android.view.RoundedCorner
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
+import androidx.core.view.ViewCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -34,6 +35,10 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -232,6 +237,7 @@ fun OpenCodeBottomSheet(
             modifier =
                 Modifier
                     .fillMaxSize()
+                    .consumeWindowInsets(WindowInsets.systemBars.union(WindowInsets.displayCutout))
                     .semantics { dialog() }
                     .background(MaterialTheme.colorScheme.scrim.copy(alpha = scrimAlpha))
                     .clickable(
@@ -245,6 +251,7 @@ fun OpenCodeBottomSheet(
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
                         .then(
                             if (contentMode == OpenCodeBottomSheetContentMode.Form) Modifier.imePadding() else Modifier,
                         ),
@@ -261,9 +268,10 @@ fun OpenCodeBottomSheet(
             ) {
                 Surface(
                     modifier =
-                        modifier
+                        Modifier
                             .fillMaxWidth()
                             .padding(start = BottomSheetInset, end = BottomSheetInset, bottom = sheetBottomInset)
+                            .then(modifier)
                             .offset { IntOffset(x = 0, y = dragOffsetPx.roundToInt()) }
                             .clickable(
                                 interactionSource = sheetInteractionSource,
@@ -632,9 +640,14 @@ private fun BottomSheetWindowOverlay(
                 elevation = 8f
                 isFocusable = true
                 isFocusableInTouchMode = true
+                fitsSystemWindows = false
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
                 accessibilityPaneTitle = paneTitle
             }
+        ViewCompat.setOnApplyWindowInsetsListener(overlay) { view, insets ->
+            view.setPadding(0, 0, 0, 0)
+            insets
+        }
         val root = activity.window.decorView as ViewGroup
         val hiddenSiblings = hideDecorSiblingsFromAccessibility(root, overlay)
         root.addView(

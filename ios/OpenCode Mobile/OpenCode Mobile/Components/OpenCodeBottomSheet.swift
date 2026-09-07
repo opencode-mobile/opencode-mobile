@@ -445,7 +445,6 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
                 scrollTargetID: scrollTargetID,
                 contentMode: contentMode,
                 alwaysFixedHeight: alwaysFixedHeight,
-                displayFrame: window.bounds,
                 displaySafeAreaBottom: window.safeAreaInsets.bottom,
                 onDismiss: onDismiss,
                 pinnedContent: pinnedContent,
@@ -455,14 +454,14 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
             if isPresented {
                 cancelDismissIfNeeded()
                 if let overlayController {
-                    configureOverlay(overlayController, in: window)
+                    configureOverlay(overlayController)
                     overlayController.rootView = content
                     overlayController.view.alpha = 1
                 } else {
                     let controller = UIHostingController(rootView: content)
-                    configureOverlay(controller, in: window)
+                    configureOverlay(controller)
                     controller.view.alpha = 0
-                    window.addSubview(controller.view)
+                    attachOverlay(controller.view, to: window)
                     overlayController = controller
                     UIView.animate(withDuration: bottomSheetEnterDuration) {
                         controller.view.alpha = 1
@@ -490,15 +489,25 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
         }
 
         private func configureOverlay(
-            _ controller: UIHostingController<OpenCodeBottomSheetOverlayContent<PinnedContent, SheetContent>>,
-            in window: UIWindow
+            _ controller: UIHostingController<OpenCodeBottomSheetOverlayContent<PinnedContent, SheetContent>>
         ) {
             controller.safeAreaRegions = []
+            controller.additionalSafeAreaInsets = .zero
             controller.view.backgroundColor = .clear
             controller.view.isOpaque = false
-            controller.view.frame = window.bounds
-            controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            controller.view.insetsLayoutMarginsFromSafeArea = false
             controller.view.accessibilityViewIsModal = true
+        }
+
+        private func attachOverlay(_ overlay: UIView, to window: UIWindow) {
+            overlay.translatesAutoresizingMaskIntoConstraints = false
+            window.addSubview(overlay)
+            NSLayoutConstraint.activate([
+                overlay.topAnchor.constraint(equalTo: window.topAnchor),
+                overlay.leadingAnchor.constraint(equalTo: window.leadingAnchor),
+                overlay.trailingAnchor.constraint(equalTo: window.trailingAnchor),
+                overlay.bottomAnchor.constraint(equalTo: window.bottomAnchor),
+            ])
         }
 
         private func dismissOverlay() {
@@ -524,7 +533,6 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedContent: View, SheetConte
     let scrollTargetID: String?
     let contentMode: OpenCodeBottomSheetContentMode
     let alwaysFixedHeight: Bool
-    let displayFrame: CGRect
     let displaySafeAreaBottom: CGFloat
     let onDismiss: () -> Void
     @ViewBuilder let pinnedContent: () -> PinnedContent
@@ -533,41 +541,45 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedContent: View, SheetConte
     @State private var keyboardOverlap: CGFloat = 0
 
     var body: some View {
-        let keyboardInset = contentMode == .form ? keyboardOverlap : 0
-        let availableHeight = max(0, displayFrame.height - bottomSheetInset - keyboardInset)
-        ZStack(alignment: .bottom) {
-            Color.black.opacity(revealed ? bottomSheetScrimAlpha : 0)
-                .contentShape(Rectangle())
-                .onTapGesture(perform: onDismiss)
+        GeometryReader { geometry in
+            let displayFrame = geometry.frame(in: .global)
+            let keyboardInset = contentMode == .form ? keyboardOverlap : 0
+            let availableHeight = max(0, geometry.size.height - bottomSheetInset - keyboardInset)
+            ZStack(alignment: .bottom) {
+                Color.black.opacity(revealed ? bottomSheetScrimAlpha : 0)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onDismiss)
 
-            OpenCodeBottomSheetSheetBody(
-                title: title,
-                leadingAction: leadingAction,
-                scrollTargetID: scrollTargetID,
-                contentMode: contentMode,
-                alwaysFixedHeight: alwaysFixedHeight,
-                availableHeight: availableHeight,
-                safeAreaBottom: max(0, displaySafeAreaBottom - bottomSheetInset),
-                onDismiss: onDismiss,
-                pinnedContent: pinnedContent,
-                sheetContent: sheetContent
-            )
-            .padding(.horizontal, bottomSheetInset)
-            .padding(.bottom, bottomSheetInset + keyboardInset)
-            .offset(y: revealed ? 0 : 28)
+                OpenCodeBottomSheetSheetBody(
+                    title: title,
+                    leadingAction: leadingAction,
+                    scrollTargetID: scrollTargetID,
+                    contentMode: contentMode,
+                    alwaysFixedHeight: alwaysFixedHeight,
+                    availableHeight: availableHeight,
+                    safeAreaBottom: max(0, displaySafeAreaBottom - bottomSheetInset),
+                    onDismiss: onDismiss,
+                    pinnedContent: pinnedContent,
+                    sheetContent: sheetContent
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, bottomSheetInset)
+                .padding(.bottom, bottomSheetInset + keyboardInset)
+                .offset(y: revealed ? 0 : 28)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+                guard contentMode == .form else { return }
+                keyboardOverlap = KeyboardOverlap.amount(
+                    from: notification,
+                    in: displayFrame
+                )
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                keyboardOverlap = 0
+            }
         }
-        .frame(width: displayFrame.width, height: displayFrame.height)
         .ignoresSafeArea()
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
-            guard contentMode == .form else { return }
-            keyboardOverlap = KeyboardOverlap.amount(
-                from: notification,
-                in: displayFrame
-            )
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            keyboardOverlap = 0
-        }
         .animation(.easeOut(duration: 0.25), value: keyboardOverlap)
         .onAppear {
             withAnimation(.timingCurve(0.2, 0.8, 0.2, 1, duration: bottomSheetEnterDuration)) {

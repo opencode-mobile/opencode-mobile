@@ -104,7 +104,8 @@ accessibility label or description using the platform convention.
 
 - iOS: presented with a window overlay (same pattern as Dialog) so the card can
   inset from the display edge without system sheet chrome. The hosting view is
-  accessibility-modal and is removed when the host leaves the tree. Form sheets
+  pinned to the window edges (not the safe-area layout guide), is
+  accessibility-modal, and is removed when the host leaves the tree. Form sheets
   measure their natural header and body height once, capped at 560pt, then keep
   that height stable. Keyboard overlap shrinks available height and lifts the
   card so the internal scroll region, not the presenting screen, follows the
@@ -122,8 +123,10 @@ accessibility label or description using the platform convention.
   `bottomSheet.cornerRadiusTop`, bottom corners are the screen display radius
   minus inset (fallback 55 − 8).
 - Android: presented as an activity-window overlay (same idea as the iOS
-  overlay) so the card can sit 8dp from the display edge. The overlay hides
-  sibling decor views from TalkBack while it is attached. Compose `Dialog` and
+  overlay) so the card can sit 8dp from the display edge. The overlay is
+  attached to the activity decor view with system-bar and display-cutout insets
+  consumed so the 8dp gutter is measured from the display. Sibling decor views
+  are hidden from TalkBack while it is attached. Compose `Dialog` and
   `Popup` windows stay above the nav inset and turn the sheet into an island.
   Form mode applies `imePadding()` to the sheet boundary—not its measured
   content—so the sheet follows IME animation while its body scrolls. The app
