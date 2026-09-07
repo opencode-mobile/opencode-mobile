@@ -1,5 +1,13 @@
 package dev.opencode.mobile.ui.components
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.os.Build
+import android.provider.Settings
+import android.view.RoundedCorner
+import android.view.ViewGroup
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -23,6 +31,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,6 +43,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,12 +54,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCompositionContext
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,8 +73,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.semantics.dialog
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
@@ -68,8 +87,6 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -77,8 +94,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-@Suppress("ktlint:standard:property-naming")
-private val BottomSheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+private val BottomSheetInset = 8.dp
+private val BottomSheetDisplayCornerRadiusFallback = 55.dp
+private val BottomSheetMinCornerRadius = 16.dp
+private val BottomSheetCornerRadiusTop = 24.dp
 
 @Suppress("ktlint:standard:property-naming")
 private const val BottomSheetEnterDurationMillis = 320
@@ -195,20 +214,24 @@ fun OpenCodeBottomSheet(
 
     val scrimInteractionSource = remember { MutableInteractionSource() }
     val sheetInteractionSource = remember { MutableInteractionSource() }
+    val sheetCornerRadius = rememberBottomSheetCornerRadius()
+    val view = LocalView.current
+    val threeButtonNav = remember(view) { view.context.usesThreeButtonNavigation() }
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val sheetBottomInset =
+        if (threeButtonNav) {
+            navBottom + BottomSheetInset
+        } else {
+            BottomSheetInset
+        }
 
-    Popup(
-        onDismissRequest = ::dismissWithAnimation,
-        properties =
-            PopupProperties(
-                focusable = true,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = true,
-            ),
-    ) {
+    BackHandler(onBack = ::dismissWithAnimation)
+    BottomSheetWindowOverlay {
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
+                    .semantics { dialog() }
                     .background(MaterialTheme.colorScheme.scrim.copy(alpha = scrimAlpha))
                     .clickable(
                         interactionSource = scrimInteractionSource,
@@ -239,13 +262,20 @@ fun OpenCodeBottomSheet(
                     modifier =
                         modifier
                             .fillMaxWidth()
+                            .padding(start = BottomSheetInset, end = BottomSheetInset, bottom = sheetBottomInset)
                             .offset { IntOffset(x = 0, y = dragOffsetPx.roundToInt()) }
                             .clickable(
                                 interactionSource = sheetInteractionSource,
                                 indication = null,
                                 onClick = {},
                             ),
-                    shape = BottomSheetShape,
+                    shape =
+                        RoundedCornerShape(
+                            topStart = BottomSheetCornerRadiusTop,
+                            topEnd = BottomSheetCornerRadiusTop,
+                            bottomEnd = sheetCornerRadius,
+                            bottomStart = sheetCornerRadius,
+                        ),
                     color = MaterialTheme.colorScheme.surface,
                     contentColor = MaterialTheme.colorScheme.onSurface,
                 ) {
@@ -289,7 +319,8 @@ private fun BottomSheetContent(
 ) {
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
-    val maxSheetHeight = configuration.screenHeightDp.dp * BottomSheetScrollableHeightFraction
+    val maxSheetHeight =
+        configuration.screenHeightDp.dp * BottomSheetScrollableHeightFraction - BottomSheetInset
     var contentHeight by remember { mutableStateOf(0.dp) }
     var headerHeight by remember { mutableStateOf(0.dp) }
     var pinnedContentHeight by remember { mutableStateOf(0.dp) }
@@ -385,11 +416,12 @@ private fun BottomSheetContent(
         (resolvedSheetHeight - resolvedHeaderHeight - pinnedContentHeight - BottomSheetContentBottomPadding)
             .coerceAtLeast(BottomSheetEntryMinHeight)
 
+    val contentView = LocalView.current
+    val threeButtonNav = remember(contentView) { contentView.context.usesThreeButtonNavigation() }
     val bodyModifier =
         Modifier
             .fillMaxWidth()
             .padding(bottom = BottomSheetContentBottomPadding)
-            .navigationBarsPadding()
 
     Box(modifier = bodyModifier) {
         Column(
@@ -454,6 +486,7 @@ private fun BottomSheetContent(
                             Modifier
                                 .fillMaxWidth()
                                 .heightIn(max = scrollBodyMaxHeight)
+                                .then(if (threeButtonNav) Modifier else Modifier.navigationBarsPadding())
                                 .verticalScroll(scrollState),
                     ) {
                         content()
@@ -537,6 +570,77 @@ private fun Modifier.measureContentHeight(
         onHeight(with(density) { placeable.height.toDp() })
         layout(0, 0) {}
     }
+
+@Composable
+private fun rememberBottomSheetCornerRadius(): Dp {
+    val view = LocalView.current
+    val density = LocalDensity.current
+    val displayRadius =
+        deviceBottomCornerRadiusPx(view.context)?.let { px ->
+            with(density) { px.toDp() }
+        } ?: BottomSheetDisplayCornerRadiusFallback
+    return (displayRadius - BottomSheetInset).coerceAtLeast(BottomSheetMinCornerRadius)
+}
+
+private fun deviceBottomCornerRadiusPx(context: Context): Int? {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
+    val activity = context.findActivity()
+    val insets =
+        activity?.windowManager?.currentWindowMetrics?.windowInsets
+            ?: activity?.window?.decorView?.rootWindowInsets
+            ?: return null
+    val leading = insets.getRoundedCorner(RoundedCorner.POSITION_BOTTOM_LEFT)?.radius
+    val trailing = insets.getRoundedCorner(RoundedCorner.POSITION_BOTTOM_RIGHT)?.radius
+    return listOfNotNull(leading, trailing).maxOrNull()?.takeIf { it > 0 }
+}
+
+private const val NavigationModeGestural = 2
+
+private fun Context.usesThreeButtonNavigation(): Boolean =
+    Settings.Secure.getInt(contentResolver, "navigation_mode", NavigationModeGestural) !=
+        NavigationModeGestural
+
+private tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
+
+@Composable
+private fun BottomSheetWindowOverlay(content: @Composable () -> Unit) {
+    val view = LocalView.current
+    val activity = remember(view) { view.context.findActivity() }
+    val parentComposition = rememberCompositionContext()
+    val currentContent = rememberUpdatedState(content)
+
+    if (activity == null) {
+        Box(modifier = Modifier.fillMaxSize()) { content() }
+        return
+    }
+
+    DisposableEffect(activity, parentComposition) {
+        val overlay =
+            ComposeView(activity).apply {
+                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+                setParentCompositionContext(parentComposition)
+                setContent { currentContent.value() }
+                elevation = 8f
+                isFocusable = true
+                isFocusableInTouchMode = true
+            }
+        val root = activity.window.decorView as ViewGroup
+        root.addView(
+            overlay,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        overlay.requestFocus()
+        onDispose { root.removeView(overlay) }
+    }
+}
 
 @Composable
 fun OpenCodeBottomSheetEntry(

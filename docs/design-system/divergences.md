@@ -263,6 +263,27 @@ implementation belong in the feature's `parity-gaps.md`.
   Store listings use a flattened raster of the same “d”; they cannot carry
   iOS glass or Android parallax.
 
+## Bottom sheet display corner radius
+
+- Status: intentional
+- Area: component
+- Shared intent: The sheet card is inset **8** logical px from the left, right,
+  and bottom of the display. Bottom corners use display corner radius minus
+  that inset so they share a center with the device curve. Top corners use
+  the smaller `bottomSheet.cornerRadiusTop` (**24**).
+- iOS behavior: Reads the screen display corner radius from the window scene
+  (`_displayCornerRadius`; no public numeric API). Bottom corners use that
+  minus inset. Top corners are 24. Missing or zero values use the 55 − 8
+  fallback.
+- Android behavior: API 31+ reads
+  `WindowMetrics.windowInsets.getRoundedCorner()` (bottom leading/trailing;
+  radius is px) for the bottom corners. Top corners are 24. Below API 31, or
+  when the corner is missing, the bottom uses the same 55 − 8 fallback.
+- Reason: Both platforms now resolve a live display radius and apply the
+  same top/bottom split. iOS still has no public numeric API.
+- Review trigger: if iOS adds a public display-corner API, read that and
+  drop the KVC key.
+
 ## Launch screen branding
 
 - Status: intentional

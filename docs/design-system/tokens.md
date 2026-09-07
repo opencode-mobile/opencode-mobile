@@ -553,7 +553,10 @@ entries.
 
 | Token | Value |
 | --- | --- |
-| `bottomSheet.cornerRadiusTop` | 24 (logical px) |
+| `bottomSheet.inset` | 8 (logical px; left, right, and bottom from the display edge) |
+| `bottomSheet.displayCornerRadiusFallback` | 55 (logical px; used only when the platform cannot read the display corner) |
+| `bottomSheet.cornerRadiusTop` | 24 (logical px; top corners only — not the device curve) |
+| `bottomSheet.cornerRadius` | display corner radius − `bottomSheet.inset` (bottom corners only; 47 with the fallback) |
 | `bottomSheet.header.paddingHorizontal` | 20 (logical px) |
 | `bottomSheet.header.paddingTop` | 12 (logical px) |
 | `bottomSheet.header.paddingBottom` | 8 (logical px) |

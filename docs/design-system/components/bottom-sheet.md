@@ -34,7 +34,9 @@ subtitle content, selected state, or a larger list treatment.
 - Semantic tokens: `color.background.elevated`, `color.surface.primary`,
   `color.surface.secondary`, `color.text.primary`, `color.text.disabled`,
   `color.border.subtle`, `color.icon.default`, `color.icon.strong`.
-- Component tokens: `bottomSheet.cornerRadiusTop`, `bottomSheet.header.padding`,
+- Component tokens: `bottomSheet.inset`, `bottomSheet.cornerRadiusTop`,
+  `bottomSheet.cornerRadius`, `bottomSheet.displayCornerRadiusFallback`,
+  `bottomSheet.header.padding`,
   `bottomSheet.entry.minHeight`, `bottomSheet.entry.paddingHorizontal`,
   `bottomSheet.entry.paddingVertical`, `bottomSheet.entry.decorator.size`, and
   `bottomSheet.entry.decorator.iconSize`.
@@ -47,6 +49,13 @@ subtitle content, selected state, or a larger list treatment.
 The component owns modal presentation and dismissal. The close button dismisses
 the sheet, and outside-tap, drag, back, and accessibility dismissal behavior
 should remain available.
+
+The sheet is a concentric float: **8** logical px from the left, right, and
+bottom of the display. Bottom corners use `bottomSheet.cornerRadius` so they
+share a center with the device curve. Top corners use the smaller
+`bottomSheet.cornerRadiusTop` so the header is not eaten by the device radius.
+The home indicator or gesture handle sits on the sheet. Side and bottom
+gutters show the dimmed presenting screen.
 
 When provided, the leading header action appears before the title and performs
 caller-owned in-sheet navigation. It does not dismiss the sheet unless the
@@ -92,30 +101,40 @@ accessibility label or description using the platform convention.
 
 ## Platform Notes
 
-- iOS: presented with SwiftUI `.sheet` and native dismissal. Form sheets measure
+- iOS: presented with a window overlay (same pattern as Dialog) so the card can
+  inset from the display edge without system sheet chrome. Form sheets measure
   their natural header and body height once, capped at 560pt, then keep that
-  detent stable while the keyboard resizes only the internal scroll region.
-  Short entry lists start at a content-height compact detent (not the 50%
-  scrollable detent) so the first measure is intrinsic row height. Compact
-  height is header + rows + tight bottom padding. Detents are applied without a
-  `selection` binding so a changing `.height` value cannot fall out of sync and
-  revert to a medium (~50%) sheet. Measured content height is never shrunk after
-  the intrinsic size is known, and updates stop once a presentation has locked
-  to the scrollable detent. Longer lists switch to a fixed 50% height detent
-  with an internal `ScrollView` and do not fall back to compact when body
-  content shrinks. Overlay tap, close, and accessibility dismiss stay
-  available. Scrollable sheets use `.presentationContentInteraction(.scrolls)`
-  so dragging the list scrolls first; a pull past the top still dismisses.
-  Sheet chrome fills under the home indicator so the presenting screen does
-  not show through below the sheet.
-- Android: presented with a full-window Compose popup so the underlying activity
-  remains fixed with `adjustNothing`. Form mode applies `imePadding()` to the
-  sheet boundary—not its measured content—so the sheet follows IME animation
-  while its body scrolls. The app navigation host handles system bars and display
-  cutouts explicitly rather than using `safeDrawing`, because `safeDrawing`
-  includes the IME and would resize every route behind a focused form. The component can use
-  its own bottom-sheet motion timing while preserving close, scrim tap, back
-  press, and downward drag dismissal. Short entry lists wrap to content height.
+  height stable while the keyboard resizes only the internal scroll region.
+  Short entry lists start at content height so the first measure is intrinsic
+  row height. Compact height is header + rows + tight bottom padding. Measured
+  content height is never shrunk after the intrinsic size is known, and updates
+  stop once a presentation has locked to the scrollable height. Longer lists
+  switch to a fixed 50% of the available height with an internal `ScrollView`
+  and do not fall back to compact when body content shrinks. Overlay tap, close,
+  and accessibility dismiss stay available. The overlay hosting controller
+  reports no safe-area regions so `bottomSheet.inset` is measured from the
+  display edge, not from the home indicator. The home indicator sits on the
+  card. The card shape matches Android: top corners are
+  `bottomSheet.cornerRadiusTop`, bottom corners are the screen display radius
+  minus inset (fallback 55 − 8).
+- Android: presented as an activity-window overlay (same idea as the iOS
+  overlay) so the card can sit 8dp from the display edge. Compose `Dialog` and
+  `Popup` windows stay above the nav inset and turn the sheet into an island.
+  Form mode applies `imePadding()` to the sheet boundary—not its measured
+  content—so the sheet follows IME animation while its body scrolls. The app
+  navigation host handles system bars and display cutouts explicitly rather than
+  using `safeDrawing`, because `safeDrawing` includes the IME and would resize
+  every route behind a focused form. The component can use its own bottom-sheet
+  motion timing while preserving close, scrim tap, back press, and downward drag
+  dismissal. The overlay card is inset by `bottomSheet.inset` on the left, right,
+  and bottom. Bottom corners use
+  `WindowMetrics.windowInsets.getRoundedCorner()` (API 31+) minus inset, or the
+  same fallback as iOS. Top corners use `bottomSheet.cornerRadiusTop`. Gesture
+  navigation keeps the card 8dp from the display edge so the handle sits
+  on the card. Compact lists wrap to content and do not add a nav-bar spacer
+  inside the card. Three-button navigation (`navigation_mode` != gestural) adds
+  the nav-bar height under that 8dp gap so the buttons stay uncovered.
+  Short entry lists wrap to content height.
   Longer action lists and long form sheets use a fixed 50% of screen height and
   scroll inside the sheet body. Short form sheets still wrap to content. Form
   sheets lock their height after the first measure so filter changes do not
@@ -136,6 +155,7 @@ accessibility label or description using the platform convention.
 
 ## Parity And Divergence
 
-Shared semantics for title, close behavior, entry states, and decorator roles are
-aligned across iOS and Android. Platform-specific icon identifier inputs are
-documented in `../divergences.md`.
+Shared semantics for title, close behavior, entry states, decorator roles, 8px
+inset, and concentric corner radius are aligned across iOS and Android.
+Platform-specific icon identifier inputs and how display corner radius is
+resolved are documented in `../divergences.md`.
