@@ -69,9 +69,15 @@ mutually exclusive. Persistent chrome stays on the composite root.
 ### Session Chat
 
 `SessionChatViewModel` is a facade. `SessionChatTimeline`,
-`SessionChatComposer`, and `SessionInfo` own behavior. New logic goes in a
-region, not the facade. See
+`SessionChatComposer`, `SessionInfo`, `SessionChatReviewChanges`,
+`SessionChatCommands`, and `SessionChatInbox` own behavior. New logic goes
+in a region, not the facade. See
 [session-chat/decisions.md](features/session-chat/decisions.md).
+
+Home (`MainScreenViewModel` / `ProjectListHomeViewModel`) is the same
+shape: `HomeSessionActions` owns the long-press sheet, rename / fork
+dialogs, archive, and delete. The facade logs analytics and composes
+home list state.
 
 ## Design system
 

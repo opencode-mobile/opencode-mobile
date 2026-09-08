@@ -2,8 +2,9 @@
 
 Still binding:
 
-- `SessionChatViewModel` is a thin facade. Timeline, composer, and SessionInfo
-  are regions.
+- `SessionChatViewModel` is a thin facade. Timeline, composer, SessionInfo,
+  review changes, commands, and inbox (permission / question / todo) are
+  regions.
 - Timeline is oldest-to-newest. Pin to bottom when auto-follow is armed.
 - Session Running chrome: show iff this session’s status is not idle.
   Optimistic busy on send is the same status. Place it as the last
