@@ -2,8 +2,6 @@ package dev.opencode.mobile.ui.settings
 
 import android.content.Intent
 import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -63,7 +61,6 @@ fun SettingsScreen(
     onClearSessionCache: () -> Unit,
     sessionCacheSizeLabel: String,
     onRefreshSessionCacheSize: () -> Unit,
-    onImportTheme: (android.net.Uri) -> Unit,
     onApplyPreset: (String) -> Unit,
     hideUserDirectoryPrefix: Boolean,
     onHideUserDirectoryPrefixChange: (Boolean) -> Unit,
@@ -92,24 +89,15 @@ fun SettingsScreen(
     var showFollowUpPicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val currentTheme = ThemeManager.currentTheme
-    val themeImportError = ThemeManager.loadError
+    val themeLoadError = ThemeManager.loadError
     val presets =
         ThemeManager.availablePresets().ifEmpty {
-            listOf(ThemePreset(id = "oc-2", name = "OC-2"))
+            listOf(ThemePreset(id = "graphite", name = "Graphite"))
         }
 
     LaunchedEffect(Unit) {
         onRefreshSessionCacheSize()
     }
-
-    val themeImportLauncher =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.OpenDocument(),
-        ) { uri ->
-            if (uri != null) {
-                onImportTheme(uri)
-            }
-        }
 
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.SETTINGS_THEME_PICKER,
@@ -328,19 +316,7 @@ fun SettingsScreen(
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
 
-            OpenCodeListItem(
-                title = "Import Theme",
-                subtitle = "Custom OpenCode OC-2 JSON file",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, "Import Theme"),
-                onClick = {
-                    logSettingsAction(ProductAnalytics.Action.SETTINGS_IMPORT_THEME)
-                    themeImportLauncher.launch(arrayOf("application/json", "text/json", "*/*"))
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            themeImportError?.let { error ->
+            themeLoadError?.let { error ->
                 Text(
                     text = error,
                     style = MaterialTheme.typography.bodySmall,
@@ -427,7 +403,7 @@ fun SettingsScreen(
 
             OpenCodeListItem(
                 title = "Clear All Data",
-                subtitle = "Remove connection, cache, and imported themes",
+                subtitle = "Remove connection and cache",
                 style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Close, "Clear All Data"),
                 onClick = {
@@ -510,8 +486,7 @@ fun SettingsScreen(
                         actionId = ProductAnalytics.Action.THEME_PICKER_SELECT_PRESET,
                         parameters =
                             mapOf(
-                                ProductAnalytics.Param.THEME_PRESET to
-                                    if (ThemeManager.isBundledPreset(preset.id)) preset.id else "imported",
+                                ProductAnalytics.Param.THEME_PRESET to preset.id,
                             ),
                     )
                     onApplyPreset(preset.id)
@@ -699,7 +674,6 @@ private fun SettingsScreenLightPreview() {
             onClearSessionCache = {},
             sessionCacheSizeLabel = "Empty",
             onRefreshSessionCacheSize = {},
-            onImportTheme = {},
             onApplyPreset = {},
             hideUserDirectoryPrefix = HomeDisplayPreferences.hideUserDirectoryPrefix,
             onHideUserDirectoryPrefixChange = {},
@@ -739,7 +713,6 @@ private fun SettingsScreenDarkPreview() {
             onClearSessionCache = {},
             sessionCacheSizeLabel = "Empty",
             onRefreshSessionCacheSize = {},
-            onImportTheme = {},
             onApplyPreset = {},
             hideUserDirectoryPrefix = HomeDisplayPreferences.hideUserDirectoryPrefix,
             onHideUserDirectoryPrefixChange = {},

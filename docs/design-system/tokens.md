@@ -5,39 +5,39 @@ native app implementation exists.
 
 The token system has four levels:
 
-1. Primitive palette (seed colors from the OC-2 theme JSON)
+1. Primitive palette (seed colors from the bundled theme JSON)
 2. Base semantic tokens (resolved from palette seeds via the theme resolver)
 3. Component tokens
 4. Platform mappings
 
 ## Theme JSON Format
 
-The canonical theme source is an OC-2 format JSON file bundled with each app:
+The canonical theme source is a JSON file bundled with each app:
 
 ```json
 {
-  "$schema": "https://opencode.ai/desktop-theme.json",
-  "name": "OC-2",
-  "id": "oc-2",
+  "name": "Graphite",
+  "id": "graphite",
   "light": {
-    "palette": { "neutral": "#f7f7f7", "ink": "#171311", ... },
-    "overrides": { "text-strong": "#171717", ... }
+    "palette": { "neutral": "#F3F4F6", "ink": "#14161A", ... },
+    "overrides": { "text-strong": "#14161A", ... }
   },
   "dark": {
-    "palette": { "neutral": "#1f1f1f", "ink": "#f1ece8", ... },
-    "overrides": { "text-strong": "#EDEDED", ... }
+    "palette": { "neutral": "#141518", "ink": "#ECEEF1", ... },
+    "overrides": { "text-strong": "#ECEEF1", ... }
   }
 }
 ```
 
 Both apps load this at runtime, run the resolver, and produce the resolved token
-dictionary. Bundled presets and imported themes follow the same pipeline.
+dictionary. Only bundled presets follow this pipeline.
 
 ### Bundled theme presets
 
-Thirty-seven desktop themes ship with each app. Canonical JSON lives in
-`shared/theme-presets/`; platform bundles are updated via `npm run themes:sync`
-and verified with `npm run themes:check` (see `scripts/sync-theme-presets.mjs`).
+Five original themes ship with each app: Graphite, Kiln, Beacon, Harbor, and
+Orchid. Canonical JSON lives in `shared/theme-presets/`; platform bundles are
+updated via `npm run themes:sync` and verified with `npm run themes:check`
+(see `scripts/sync-theme-presets.mjs`).
 
 | Platform | Bundle location |
 | --- | --- |
@@ -45,8 +45,8 @@ and verified with `npm run themes:check` (see `scripts/sync-theme-presets.mjs`).
 | Android | `assets/theme-presets/` |
 
 `manifest.json` lists `{ id, name }` pairs for the Settings theme picker. Default
-selection is the `oc-2` preset unless the user chooses another preset or imports
-custom JSON.
+selection is the `graphite` preset unless the user chooses another bundled
+preset.
 
 ## Palette Seeds
 
@@ -69,85 +69,85 @@ these for each mode:
 ## Resolved Semantic Tokens
 
 The resolver expands palette seeds into resolved tokens, then applies overrides.
-The canonical tokens match the OpenCode desktop token schema:
+Tables below show Graphite, the default preset.
 
 ### Background & Surface
 
-| Token | OC-2 Light | OC-2 Dark |
+| Token | Graphite Light | Graphite Dark |
 |---|---|---|
-| `background-base` | `#F8F8F8` | `#1C1C1C` |
-| `surface-base` | `#F8F8F8` | `#1C1C1C` |
+| `background-base` | `#F3F4F6` | `#141518` |
+| `surface-base` | `#F3F4F6` | `#141518` |
 | `surface-base-hover` | `#0000000A` | `#FFFFFF0D` |
-| `surface-raised-base` | `#F3F3F3` | `#232323` |
-| `surface-raised-base-hover` | `#EDEDED` | `#282828` |
-| `surface-interactive-weak` | `#F5FAFF` | `#0D172B` |
-| `surface-success-base` | `#E6FFE5` | `#022B00` |
-| `surface-critical-base` | `#FFF2F0` | `#1F0603` |
+| `surface-raised-base` | `#FFFFFF` | `#1C1D21` |
+| `surface-raised-base-hover` | resolved from `neutral` | resolved from `neutral` |
+| `surface-interactive-weak` | `#E8EBFA` | `#1A1E32` |
+| `surface-success-base` | `#E3F5EA` | `#12261A` |
+| `surface-critical-base` | `#FCECEC` | `#2A1414` |
 
 ### Text
 
-| Token | OC-2 Light | OC-2 Dark |
+| Token | Graphite Light | Graphite Dark |
 |---|---|---|
-| `text-strong` | `#171717` | `#EDEDED` |
-| `text-base` | `#6F6F6F` | `#A0A0A0` |
-| `text-weak` | `#8F8F8F` | `#707070` |
-| `text-weaker` | `#C7C7C7` | `#505050` |
-| `text-interactive-base` | `#034CFF` | `#8CB0FF` |
+| `text-strong` | `#14161A` | `#ECEEF1` |
+| `text-base` | `#5C6370` | `#9AA0AA` |
+| `text-weak` | `#8B919C` | `#6E7480` |
+| `text-weaker` | `#C4C8CE` | `#4A4F58` |
+| `text-interactive-base` | `#3B4FD9` | `#8B97F0` |
 | `text-on-brand-base` | resolved from `primary` seed | resolved from `primary` seed |
-| `icon-invert-base` | `#FFFFFF` | `#1C1C1C` |
+| `icon-invert-base` | `#FFFFFF` | `#141518` |
 
 ### Border
 
-| Token | OC-2 Light | OC-2 Dark |
+| Token | Graphite Light | Graphite Dark |
 |---|---|---|
-| `border-weak-base` | `#DBDBDB` | `#282828` |
-| `border-weaker-base` | `#E8E8E8` | `#232323` |
+| `border-weak-base` | `#D5D8DE` | `#2A2C32` |
+| `border-weaker-base` | `#E6E8EC` | `#22242A` |
 
 ### Icon
 
-| Token | OC-2 Light | OC-2 Dark |
+| Token | Graphite Light | Graphite Dark |
 |---|---|---|
-| `icon-base` | `#8F8F8F` | `#7E7E7E` |
-| `icon-weak-base` | `#C7C7C7` | `#343434` |
-| `icon-strong-base` | `#171717` | `#EDEDED` |
+| `icon-base` | `#8B919C` | `#7A808A` |
+| `icon-weak-base` | resolved from `ink` / `neutral` | resolved from `ink` / `neutral` |
+| `icon-strong-base` | `#14161A` | `#ECEEF1` |
 
 ### Button
 
-| Token | OC-2 Light | OC-2 Dark |
+| Token | Graphite Light | Graphite Dark |
 |---|---|---|
-| `button-primary-base` | resolved from `ink` | resolved from `ink` |
+| `button-primary-base` | `#14161A` | `#ECEEF1` |
 | `button-secondary-base` | resolved from `neutral` | resolved from `neutral` |
 | `button-secondary-hover` | resolved from `neutral` | resolved from `neutral` |
 
 ### Semantic Status
 
-| Token | OC-2 Light | OC-2 Dark |
+| Token | Graphite Light | Graphite Dark |
 |---|---|---|
-| `interactive` | `#034CFF` | `#034CFF` |
-| `success` | `#12C905` | `#12C905` |
-| `warning` | `#FFDC17` | `#FCD53A` |
-| `error` | `#FC533A` | `#FC533A` |
-| `info` | `#A753AE` | `#EDB2F1` |
-| `diff-add` | `#9FF29A` | `#C8FFC4` |
-| `diff-delete` | `#FC533A` | `#FC533A` |
+| `interactive` | `#3B4FD9` | `#8B97F0` |
+| `success` | `#1B8A4A` | `#4EC97A` |
+| `warning` | `#C48412` | `#E0B04A` |
+| `error` | `#D23B3B` | `#E85A5A` |
+| `info` | `#6B5CAD` | `#B4A6E0` |
+| `diff-add` | `#1B8A4A` | `#7AE0A0` |
+| `diff-delete` | `#D23B3B` | `#E85A5A` |
 
 ### Syntax (code highlighting)
 
-| Token | OC-2 Light | OC-2 Dark |
+| Token | Graphite Light | Graphite Dark |
 |---|---|---|
-| `syntax-comment` | `#7A7A7A` | `#8F8F8F` |
-| `syntax-keyword` | `#A753AE` | `#EDB2F1` |
-| `syntax-string` | `#00CEB9` | `#00CEB9` |
-| `syntax-primitive` | `#034CFF` | `#8CB0FF` |
-| `syntax-property` | `#A753AE` | `#FAB283` |
-| `syntax-type` | `#8A6F00` | `#FCD53A` |
-| `syntax-constant` | `#007B80` | `#93E9F6` |
-| `syntax-variable` | `#D1383D` | `#E06C75` |
-| `syntax-operator` | `#318795` | `#56B6C2` |
+| `syntax-comment` | `#8B919C` | `#6E7480` |
+| `syntax-keyword` | `#6B5CAD` | `#B4A6E0` |
+| `syntax-string` | `#087466` | `#4EC9B8` |
+| `syntax-primitive` | `#3B4FD9` | `#8B97F0` |
+| `syntax-property` | `#6B5CAD` | `#C4B08A` |
+| `syntax-type` | `#765A08` | `#E0B04A` |
+| `syntax-constant` | `#1A7A80` | `#7AD4E0` |
+| `syntax-variable` | `#C43A48` | `#E06C75` |
+| `syntax-operator` | `#3A7A82` | `#56B6C2` |
 | `syntax-punctuation` | `text-strong` | `text-strong` |
-| `syntax-critical` | `#FF8C00` | `#FAB283` |
-| `syntax-diff-delete` | `#FF8C00` | `#FAB283` |
-| `syntax-diff-unknown` | `#A753AE` | `#EDB2F1` |
+| `syntax-critical` | resolved from `primary` | resolved from `primary` |
+| `syntax-diff-delete` | resolved from `primary` | resolved from `primary` |
+| `syntax-diff-unknown` | resolved from `info` | resolved from `info` |
 
 ### Syntax role mapping (code blocks)
 

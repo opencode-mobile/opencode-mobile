@@ -53,10 +53,10 @@ implementation belong in the feature's `parity-gaps.md`.
   hardcoded light/dark color pairs in `OpenCodeColors`.
 - Android behavior: `LetterAccent` enum exposes `badgeColors(useDarkTheme)` with
   the same hardcoded light/dark color pairs in `Color.kt`.
-- Reason: the 5 letter-badge accent pairs have no equivalent in the OpenCode
-  desktop theme JSON schema. They are component-level tokens, not derived from
-  palette seeds, and are not expected to change when a custom theme is imported.
-  Hardcoding them avoids unnecessary resolver complexity.
+- Reason: the 5 letter-badge accent pairs have no equivalent in the theme JSON
+  schema. They are component-level tokens, not derived from palette seeds, and
+  are not expected to change when the selected theme changes. Hardcoding them
+  avoids unnecessary resolver complexity.
 - Review trigger: if a future theme JSON schema adds letter-badge accent seeds,
   migrate these to the resolver.
 

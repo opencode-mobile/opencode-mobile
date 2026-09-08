@@ -8,11 +8,11 @@ final class ThemeManager {
     static let shared = ThemeManager()
 
     private enum StorageKeys {
-        static let importedThemes = ThemePersistence.importedThemesKey
         static let selectedThemeID = ThemePersistence.selectedThemeIDKey
     }
 
-    private static let defaultPresetID = "oc-2"
+    private static let defaultPresetID = "graphite"
+    private static let defaultPresetName = "Graphite"
     private static let presetBundleSubdirectories: [String?] = [
         "ThemePresets",
         "Resources/ThemePresets",
@@ -51,16 +51,7 @@ final class ThemeManager {
     // MARK: - Presets
 
     func availablePresets() -> [ThemePreset] {
-        ThemeSupport.mergePresets(
-            bundled: manifestPresets(),
-            imported: ThemePersistence.importedPresets(defaults: defaults)
-        )
-    }
-
-    /// Imported preset ids come from user-supplied theme JSON, so callers that
-    /// report a preset outside the app (Analytics) must check this first.
-    func isBundledPreset(id: String) -> Bool {
-        manifestPresetIDs().contains(id)
+        manifestPresets()
     }
 
     func applyPreset(id: String) {
@@ -87,35 +78,6 @@ final class ThemeManager {
         loadError = nil
     }
 
-    func importTheme(from data: Data) throws {
-        let previousTheme = currentTheme
-        do {
-            try ThemeSupport.assertImportSize(data.count)
-            let decoder = JSONDecoder()
-            let theme = try decoder.decode(OpenCodeTheme.self, from: data)
-            try ThemeSupport.validate(theme)
-            try ThemeSupport.assertNoPresetIdCollision(
-                themeID: theme.id,
-                bundledPresetIDs: manifestPresetIDs()
-            )
-            currentTheme = theme
-            resolve()
-            try ThemePersistence.persistImportedTheme(theme, defaults: defaults)
-            ThemePersistence.saveSelectedThemeID(theme.id, defaults: defaults)
-            loadError = nil
-        } catch {
-            currentTheme = previousTheme
-            resolve()
-            loadError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            throw error
-        }
-    }
-
-    func importTheme(from url: URL) throws {
-        let data = try Data(contentsOf: url)
-        try importTheme(from: data)
-    }
-
     // MARK: - Persistence
 
     private static func loadInitialTheme(defaults: UserDefaults) -> OpenCodeTheme {
@@ -125,13 +87,7 @@ final class ThemeManager {
         else {
             return defaultTheme
         }
-        if let imported = ThemePersistence.loadImportedTheme(id: selectedID, defaults: defaults) {
-            return imported
-        }
-        if let preset = loadPreset(id: selectedID) {
-            return preset
-        }
-        return defaultTheme
+        return loadPreset(id: selectedID) ?? defaultTheme
     }
 
     private func manifestPresets() -> [ThemePreset] {
@@ -141,10 +97,6 @@ final class ThemeManager {
         let presets = Self.loadPresetManifest()
         cachedManifestPresets = presets
         return presets
-    }
-
-    private func manifestPresetIDs() -> Set<String> {
-        Set(manifestPresets().map(\.id))
     }
 
     private static func presetResourceURL(
@@ -178,7 +130,7 @@ final class ThemeManager {
             }
             return presets
         }
-        return [ThemePreset(id: defaultPresetID, name: "OC-2")]
+        return [ThemePreset(id: defaultPresetID, name: defaultPresetName)]
     }
 
     private static func loadPreset(id: String) -> OpenCodeTheme? {
@@ -198,7 +150,7 @@ final class ThemeManager {
             let decoder = JSONDecoder()
             return try decoder.decode(OpenCodeTheme.self, from: asset.data)
         } catch {
-            fatalError("Failed to load bundled oc-2.json: \(error)")
+            fatalError("Failed to load bundled graphite.json: \(error)")
         }
     }
 

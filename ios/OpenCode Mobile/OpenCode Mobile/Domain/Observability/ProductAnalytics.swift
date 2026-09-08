@@ -240,7 +240,6 @@ enum ProductAnalytics {
         static let settingsToggleCollapseConsecutiveToolCalls = "settings_toggle_collapse_consecutive_tool_calls"
         static let settingsToggleSmoothStreaming = "settings_toggle_smooth_streaming"
         static let settingsToggleSessionListProjectPicker = "settings_toggle_session_list_project_picker"
-        static let settingsImportTheme = "settings_import_theme"
         static let settingsClearSessionCache = "settings_clear_session_cache"
         static let settingsOpenPrivacyPolicy = "settings_open_privacy_policy"
         static let settingsToggleProductAnalytics = "settings_toggle_product_analytics"

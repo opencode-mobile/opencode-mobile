@@ -1,12 +1,12 @@
 {
-  "data" : [
+  "data": [
     {
-      "idiom" : "universal",
-      "filename" : "oc-2.json"
+      "idiom": "universal",
+      "filename": "graphite.json"
     }
   ],
-  "info" : {
-    "author" : "xcode",
-    "version" : 1
+  "info": {
+    "author": "xcode",
+    "version": 1
   }
 }

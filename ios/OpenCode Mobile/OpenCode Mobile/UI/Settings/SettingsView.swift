@@ -1,6 +1,5 @@
 import Factory
 import SwiftUI
-import UniformTypeIdentifiers
 
 private struct SectionHeader: View {
     let title: String
@@ -35,8 +34,6 @@ struct SettingsView: View {
     @State private var showThemePicker = false
     @State private var showRecentWindowPicker = false
     @State private var showFollowUpPicker = false
-    @State private var showThemeImporter = false
-    @State private var importError: String?
     @State private var themeManager = ThemeManager.shared
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var markdownHighlightPreferences = MarkdownHighlightPreferences.shared
@@ -232,27 +229,7 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    OpenCodeListItem(
-                        title: "Import Theme",
-                        subtitle: "Custom OpenCode OC-2 JSON file",
-                        style: .card,
-                        startDecorator: .icon(.folder, accessibilityLabel: "Import Theme"),
-                        action: {
-                            logSettingsAction(ProductAnalytics.Action.settingsImportTheme)
-                            importError = nil
-                            showThemeImporter = true
-                        }
-                    )
-                    .padding(.horizontal, 16)
-
-                    if let importError {
-                        Text(importError)
-                            .font(OpenCodeTypography.caption)
-                            .foregroundStyle(OpenCodeColors.error)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 4)
-                    } else if let loadError = themeManager.loadError {
+                    if let loadError = themeManager.loadError {
                         Text(loadError)
                             .font(OpenCodeTypography.caption)
                             .foregroundStyle(OpenCodeColors.error)
@@ -344,7 +321,7 @@ struct SettingsView: View {
 
                     OpenCodeListItem(
                         title: "Clear All Data",
-                        subtitle: "Remove connection, cache, and imported themes",
+                        subtitle: "Remove connection and cache",
                         style: .card,
                         startDecorator: .icon(.close, accessibilityLabel: "Clear All Data"),
                         action: {
@@ -442,14 +419,10 @@ struct SettingsView: View {
                         ? .icon(.check, accessibilityLabel: "Selected")
                         : .none,
                     action: {
-                        // Imported theme ids are user text; report them as a bucket.
-                        let presetValue = themeManager.isBundledPreset(id: preset.id)
-                            ? preset.id
-                            : "imported"
                         ProductAnalytics.logUserAction(
                             screenId: ProductAnalytics.Screen.settingsThemePicker,
                             actionId: ProductAnalytics.Action.themePickerSelectPreset,
-                            parameters: [ProductAnalytics.Param.themePreset: presetValue]
+                            parameters: [ProductAnalytics.Param.themePreset: preset.id]
                         )
                         themeManager.applyPreset(id: preset.id)
                         showThemePicker = false
@@ -503,13 +476,6 @@ struct SettingsView: View {
                     }
                 )
             }
-        }
-        .fileImporter(
-            isPresented: $showThemeImporter,
-            allowedContentTypes: [.json],
-            allowsMultipleSelection: false
-        ) { result in
-            handleThemeImport(result)
         }
         .task {
             ProductAnalytics.logScreenView(
@@ -651,26 +617,6 @@ struct SettingsView: View {
         )
     }
 
-    private func handleThemeImport(_ result: Result<[URL], Error>) {
-        switch result {
-        case .success(let urls):
-            guard let url = urls.first else { return }
-            let accessed = url.startAccessingSecurityScopedResource()
-            defer {
-                if accessed {
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
-            do {
-                try themeManager.importTheme(from: url)
-                importError = nil
-            } catch {
-                importError = error.localizedDescription
-            }
-        case .failure(let error):
-            importError = error.localizedDescription
-        }
-    }
 }
 
 #Preview {

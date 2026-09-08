@@ -1,143 +1,107 @@
 package dev.opencode.mobile.theme
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.junit.Assert.assertThrows
 
 class ThemeSupportTest {
-  @Test
-  fun mergePresets_appendsImportedThemesNotInManifest() {
-    val bundled =
-      listOf(
-        ThemePreset(id = "oc-2", name = "OC-2"),
-        ThemePreset(id = "dracula", name = "Dracula"),
-      )
-    val imported =
-      listOf(
-        ThemePreset(id = "my-theme", name = "My Theme"),
-        ThemePreset(id = "dracula", name = "Duplicate Dracula"),
-      )
+    @Test
+    fun validateTheme_rejectsMissingPaletteSeeds() {
+        val theme =
+            OpenCodeTheme(
+                name = "Broken",
+                id = "broken",
+                light = ThemeVariant(palette = incompletePalette()),
+                dark = ThemeVariant(palette = incompletePalette()),
+            )
 
-    val merged = ThemeSupport.mergePresets(bundled, imported)
+        val error =
+            assertThrows(ThemeValidationException::class.java) {
+                ThemeSupport.validateTheme(theme)
+            }
+        assertTrue(error.message!!.contains("Missing required palette seeds"))
+    }
 
-    assertEquals(listOf("oc-2", "dracula", "my-theme"), merged.map { it.id })
-  }
+    @Test
+    fun validateTheme_acceptsCompletePalette() {
+        ThemeSupport.validateTheme(sampleTheme(id = "valid"))
+    }
 
-  @Test
-  fun assertNoPresetIdCollision_rejectsBundledIds() {
-    val error =
-      assertThrows(ThemeImportException::class.java) {
-        ThemeSupport.assertNoPresetIdCollision("dracula", setOf("oc-2", "dracula"))
-      }
-    assertTrue(error.message!!.contains("conflicts with a bundled preset"))
-  }
+    @Test
+    fun resolverProvidesPathASyntaxFallbackTokens() {
+        val theme = sampleTheme(id = "path-a")
 
-  @Test
-  fun assertImportSize_rejectsOversizedPayload() {
-    val error =
-      assertThrows(ThemeImportException::class.java) {
-        ThemeSupport.assertImportSize(ThemeSupport.MAX_IMPORT_BYTES + 1)
-      }
-    assertTrue(error.message!!.contains("too large"))
-  }
+        val light = ThemeResolver.resolve(theme.light, isDark = false)
+        val dark = ThemeResolver.resolve(theme.dark, isDark = true)
 
-  @Test
-  fun validateTheme_rejectsMissingPaletteSeeds() {
-    val theme =
-      OpenCodeTheme(
-        name = "Broken",
-        id = "broken",
-        light = ThemeVariant(palette = incompletePalette()),
-        dark = ThemeVariant(palette = incompletePalette()),
-      )
+        assertEquals("#D1383D", light["syntax-variable"])
+        assertEquals("#E06C75", dark["syntax-variable"])
+        assertEquals("#318795", light["syntax-operator"])
+        assertEquals("#56B6C2", dark["syntax-operator"])
+        assertEquals(light["text-strong"], light["syntax-punctuation"])
+        assertEquals(dark["text-strong"], dark["syntax-punctuation"])
+    }
 
-    val error =
-      assertThrows(ThemeValidationException::class.java) {
-        ThemeSupport.validateTheme(theme)
-      }
-    assertTrue(error.message!!.contains("Missing required palette seeds"))
-  }
+    @Test
+    fun resolverProvidesDesktopAlignedInlineCodeBackground() {
+        val theme = sampleTheme(id = "inline-code")
 
-  @Test
-  fun validateTheme_acceptsCompletePalette() {
-    ThemeSupport.validateTheme(sampleTheme(id = "valid"))
-  }
+        val light = ThemeResolver.resolve(theme.light, isDark = false)
+        val dark = ThemeResolver.resolve(theme.dark, isDark = true)
 
-  @Test
-  fun resolverProvidesPathASyntaxFallbackTokens() {
-    val theme = sampleTheme(id = "path-a")
+        assertEquals("#00000014", light["markdown-code-bg"])
+        assertEquals("#FFFFFF14", dark["markdown-code-bg"])
+        assertEquals(light["text-strong"], light["markdown-code-text"])
+        assertEquals(dark["text-strong"], dark["markdown-code-text"])
+    }
 
-    val light = ThemeResolver.resolve(theme.light, isDark = false)
-    val dark = ThemeResolver.resolve(theme.dark, isDark = true)
+    @Test
+    fun resolverUsesNeutralChromeForLinksAndQuotes() {
+        val theme = sampleTheme(id = "link-quote")
 
-    assertEquals("#D1383D", light["syntax-variable"])
-    assertEquals("#E06C75", dark["syntax-variable"])
-    assertEquals("#318795", light["syntax-operator"])
-    assertEquals("#56B6C2", dark["syntax-operator"])
-    assertEquals(light["text-strong"], light["syntax-punctuation"])
-    assertEquals(dark["text-strong"], dark["syntax-punctuation"])
-  }
+        val light = ThemeResolver.resolve(theme.light, isDark = false)
+        val dark = ThemeResolver.resolve(theme.dark, isDark = true)
 
-  @Test
-  fun resolverProvidesDesktopAlignedInlineCodeBackground() {
-    val theme = sampleTheme(id = "inline-code")
+        assertEquals(light["text-strong"], light["markdown-link-text"])
+        assertEquals(dark["text-strong"], dark["markdown-link-text"])
+        assertEquals(light["text-strong"], light["markdown-link-underline"])
+        assertEquals(dark["text-strong"], dark["markdown-link-underline"])
+        assertTrue(light["markdown-link-text"] != light["interactive"])
+        assertTrue(dark["markdown-link-text"] != dark["interactive"])
+        assertEquals(light["border-weak-base"], light["markdown-quote-bar"])
+        assertEquals(dark["border-weak-base"], dark["markdown-quote-bar"])
+        assertTrue(light["markdown-quote-bar"] != light["interactive"])
+        assertTrue(dark["markdown-quote-bar"] != dark["interactive"])
+    }
 
-    val light = ThemeResolver.resolve(theme.light, isDark = false)
-    val dark = ThemeResolver.resolve(theme.dark, isDark = true)
+    private fun incompletePalette(): PaletteSeeds =
+        PaletteSeeds(
+            neutral = "#111111",
+            ink = "",
+            primary = "#222222",
+            success = "#333333",
+            warning = "#444444",
+            error = "#555555",
+            info = "#666666",
+        )
 
-    assertEquals("#00000014", light["markdown-code-bg"])
-    assertEquals("#FFFFFF14", dark["markdown-code-bg"])
-    assertEquals(light["text-strong"], light["markdown-code-text"])
-    assertEquals(dark["text-strong"], dark["markdown-code-text"])
-  }
-
-  @Test
-  fun resolverUsesNeutralChromeForLinksAndQuotes() {
-    val theme = sampleTheme(id = "link-quote")
-
-    val light = ThemeResolver.resolve(theme.light, isDark = false)
-    val dark = ThemeResolver.resolve(theme.dark, isDark = true)
-
-    assertEquals(light["text-strong"], light["markdown-link-text"])
-    assertEquals(dark["text-strong"], dark["markdown-link-text"])
-    assertEquals(light["text-strong"], light["markdown-link-underline"])
-    assertEquals(dark["text-strong"], dark["markdown-link-underline"])
-    assertTrue(light["markdown-link-text"] != light["interactive"])
-    assertTrue(dark["markdown-link-text"] != dark["interactive"])
-    assertEquals(light["border-weak-base"], light["markdown-quote-bar"])
-    assertEquals(dark["border-weak-base"], dark["markdown-quote-bar"])
-    assertTrue(light["markdown-quote-bar"] != light["interactive"])
-    assertTrue(dark["markdown-quote-bar"] != dark["interactive"])
-  }
-
-  private fun incompletePalette(): PaletteSeeds =
-    PaletteSeeds(
-      neutral = "#111111",
-      ink = "",
-      primary = "#222222",
-      success = "#333333",
-      warning = "#444444",
-      error = "#555555",
-      info = "#666666",
-    )
-
-  private fun sampleTheme(id: String): OpenCodeTheme {
-    val palette =
-      PaletteSeeds(
-        neutral = "#111111",
-        ink = "#222222",
-        primary = "#333333",
-        success = "#444444",
-        warning = "#555555",
-        error = "#666666",
-        info = "#777777",
-      )
-    return OpenCodeTheme(
-      name = "Sample",
-      id = id,
-      light = ThemeVariant(palette = palette),
-      dark = ThemeVariant(palette = palette),
-    )
-  }
+    private fun sampleTheme(id: String): OpenCodeTheme {
+        val palette =
+            PaletteSeeds(
+                neutral = "#111111",
+                ink = "#222222",
+                primary = "#333333",
+                success = "#444444",
+                warning = "#555555",
+                error = "#666666",
+                info = "#777777",
+            )
+        return OpenCodeTheme(
+            name = "Sample",
+            id = id,
+            light = ThemeVariant(palette = palette),
+            dark = ThemeVariant(palette = palette),
+        )
+    }
 }

@@ -48,9 +48,6 @@ enum ThemeError: LocalizedError {
     case missingPaletteSeeds([String])
     case missingModeVariants
     case invalidJSON(String)
-    case importTooLarge(Int)
-    case presetIdConflict(String)
-    case persistFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -60,12 +57,6 @@ enum ThemeError: LocalizedError {
             "Theme must include both light and dark variants"
         case .invalidJSON(let detail):
             "Invalid theme JSON: \(detail)"
-        case .importTooLarge(let maxBytes):
-            "Theme file is too large (max \(maxBytes / 1024) KB)"
-        case .presetIdConflict(let themeID):
-            "Theme ID \"\(themeID)\" conflicts with a bundled preset"
-        case .persistFailed(let detail):
-            "Could not save imported theme: \(detail)"
         }
     }
 }

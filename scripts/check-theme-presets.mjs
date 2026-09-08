@@ -3,7 +3,7 @@
  * Verify shared, iOS, and Android theme preset bundles match.
  */
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { REPO_ROOT } from "./lib/utils.mjs";
 
@@ -20,6 +20,12 @@ function requireFile(path, label) {
     console.error(`Missing ${label}: ${path}`);
     process.exit(1);
   }
+}
+
+function extraFiles(dir, allowed) {
+  return readdirSync(dir)
+    .filter((name) => name.endsWith(".json") && !allowed.has(name))
+    .sort();
 }
 
 function main() {
@@ -64,6 +70,19 @@ function main() {
     const sharedHash = sha256(sharedFile);
     if (sha256(iosFile) !== sharedHash || sha256(androidFile) !== sharedHash) {
       console.error(`Theme preset "${id}" is out of sync — run: npm run themes:sync`);
+      process.exit(1);
+    }
+  }
+
+  const allowed = new Set(["manifest.json", ...manifest.map((entry) => `${entry.id}.json`)]);
+  for (const [label, dir] of [
+    ["shared", SHARED_DIR],
+    ["iOS", IOS_DIR],
+    ["Android", ANDROID_DIR],
+  ]) {
+    const extra = extraFiles(dir, allowed);
+    if (extra.length > 0) {
+      console.error(`${label} has leftover theme files: ${extra.join(", ")}`);
       process.exit(1);
     }
   }

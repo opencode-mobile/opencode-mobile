@@ -253,7 +253,6 @@ object ProductAnalytics {
         const val SETTINGS_TOGGLE_COLLAPSE_CONSECUTIVE_TOOL_CALLS = "settings_toggle_collapse_consecutive_tool_calls"
         const val SETTINGS_TOGGLE_SMOOTH_STREAMING = "settings_toggle_smooth_streaming"
         const val SETTINGS_TOGGLE_SESSION_LIST_PROJECT_PICKER = "settings_toggle_session_list_project_picker"
-        const val SETTINGS_IMPORT_THEME = "settings_import_theme"
         const val SETTINGS_CLEAR_SESSION_CACHE = "settings_clear_session_cache"
         const val SETTINGS_OPEN_PRIVACY_POLICY = "settings_open_privacy_policy"
         const val SETTINGS_TOGGLE_PRODUCT_ANALYTICS = "settings_toggle_product_analytics"
