@@ -86,10 +86,9 @@ fraction-height scroll sheet only when the content exceeds the compact
 threshold. Once a presentation is scrollable, it stays at that fixed height for
 the rest of the presentation so filtering or other body changes do not resize
 the sheet. Callers may set `alwaysFixedHeight` to force the 50% scrollable
-detent for the whole presentation (used by Add project). `form` always uses a
-scrollable body because keyboard appearance can reduce the available height at
-any time, and it locks to the first measured height (growing only if content
-needs more room, never shrinking).
+detent for the whole presentation (used by Add project). `form` always uses the
+50% scroll detent with a scrollable body so Filter by project, filtered model
+lists, and other form sheets stay the same height on both platforms.
 
 On Android, the component owns vertical scrolling for long content. Feature
 content inside the sheet body should not add its own vertical scroll container.
@@ -105,11 +104,9 @@ accessibility label or description using the platform convention.
 - iOS: presented with a window overlay (same pattern as Dialog) so the card can
   inset from the display edge without system sheet chrome. The hosting view is
   pinned to the window edges (not the safe-area layout guide), is
-  accessibility-modal, and is removed when the host leaves the tree. Form sheets
-  measure their natural header and body height once, capped at 560pt, then keep
-  that height stable. Keyboard overlap shrinks available height and lifts the
-  card so the internal scroll region, not the presenting screen, follows the
-  keyboard.
+  accessibility-modal, and is removed when the host leaves the tree.   Form sheets use the 50% scroll detent. Keyboard overlap shrinks available
+  height and lifts the card so the internal scroll region, not the presenting
+  screen, follows the keyboard.
   Short entry lists start at content height so the first measure is intrinsic
   row height. Compact height is header + rows + tight bottom padding. Measured
   content height is never shrunk after the intrinsic size is known, and updates
@@ -142,12 +139,9 @@ accessibility label or description using the platform convention.
   on the card. Compact lists wrap to content and do not add a nav-bar spacer
   inside the card. Three-button navigation (`navigation_mode` != gestural) adds
   the nav-bar height under that 8dp gap so the buttons stay uncovered.
-  Short entry lists wrap to content height.
-  Longer action lists and long form sheets use a fixed 50% of screen height and
-  scroll inside the sheet body. Short form sheets still wrap to content. Form
-  sheets lock their height after the first measure so filter changes do not
-  resize the sheet. Drag-to-dismiss is limited to the header so list scrolling
-  is not blocked.
+  Short action lists wrap to content height. Longer action lists and every form
+  sheet use a fixed 50% of screen height and scroll inside the sheet body.
+  Drag-to-dismiss is limited to the header so list scrolling is not blocked.
 
 ## Previews
 

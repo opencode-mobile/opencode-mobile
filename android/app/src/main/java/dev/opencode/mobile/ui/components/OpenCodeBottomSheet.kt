@@ -334,7 +334,9 @@ private fun BottomSheetContent(
     var headerHeight by remember { mutableStateOf(0.dp) }
     var pinnedContentHeight by remember { mutableStateOf(0.dp) }
     var lockedSheetHeight by remember { mutableStateOf<Dp?>(null) }
-    var committedToScrollable by remember { mutableStateOf(alwaysFixedHeight) }
+    var committedToScrollable by remember {
+        mutableStateOf(alwaysFixedHeight || contentMode == OpenCodeBottomSheetContentMode.Form)
+    }
     var previousContentMode by remember { mutableStateOf(contentMode) }
     val scrollState = rememberScrollState()
 

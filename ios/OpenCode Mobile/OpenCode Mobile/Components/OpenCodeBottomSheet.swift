@@ -137,7 +137,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
             _compactHeight = State(initialValue: bottomSheetFormInitialHeight)
         } else if contentMode == .form {
             _mode = State(initialValue: .scrollable)
-            _hasLockedScrollable = State(initialValue: false)
+            _hasLockedScrollable = State(initialValue: true)
             _compactHeight = State(initialValue: bottomSheetFormInitialHeight)
         } else {
             _mode = State(initialValue: .compact)
@@ -225,8 +225,9 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
         }
         .onChange(of: contentMode) { oldMode, newMode in
             contentHeight = 0
-            if oldMode == .actionList && newMode == .form {
-                // Match Android: entering the filtered model list locks to 50% immediately.
+            if newMode == .form {
+                // Form sheets (Filter by project, filtered model list) stay on
+                // the 50% detent. Wrapping to content left iOS shorter than Android.
                 hasLockedScrollable = true
                 hasMeasuredFormHeight = false
                 mode = .scrollable
@@ -236,7 +237,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
                 mode = .compact
                 compactHeight = bottomSheetInitialHeight
             } else {
-                hasLockedScrollable = false
+                hasLockedScrollable = true
                 hasMeasuredFormHeight = false
                 mode = .scrollable
             }
@@ -266,8 +267,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
                     + pinnedContentHeight
                     + contentHeight
                     + bottomClearance
-            // Match Android: short forms size to content; long forms lock to the
-            // fixed 50% scrollable height and do not shrink when body content changes.
+            // Forms stay on the 50% detent so Filter by project matches Android.
             if hasLockedScrollable || chromeHeight > bottomSheetCompactMaxHeight {
                 hasLockedScrollable = true
                 compactHeight = max(compactHeight, min(chromeHeight, bottomSheetFormMaxHeight))
