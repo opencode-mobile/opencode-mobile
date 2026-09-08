@@ -67,7 +67,7 @@ let componentGalleryEntries = [
     ComponentGalleryEntry(
         id: .icons,
         title: "Icons",
-        description: "Material Icons catalog synced from icons/manifest.yaml.",
+        description: "Lucide catalog synced from icons/manifest.yaml.",
         category: .foundations
     ),
     ComponentGalleryEntry(

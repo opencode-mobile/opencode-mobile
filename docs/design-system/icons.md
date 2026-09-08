@@ -1,27 +1,28 @@
 # Icons
 
-OpenCode Mobile uses [Google Material Icons](https://github.com/google/material-design-icons)
-(filled, 24dp) on **both** iOS and Android so glyphs match across platforms.
+OpenCode Mobile uses [Lucide](https://lucide.dev/) (24dp outline strokes) on
+**both** iOS and Android so glyphs match across platforms.
 
-Icons are vendored at build time. Most entries come from the
-[`@material-design-icons/svg`](https://www.npmjs.com/package/@material-design-icons/svg)
-npm package (classic Material Icons, filled 24dp). Icons marked `source: material_symbols`
-in the manifest are fetched from Google's
-[Material Symbols](https://github.com/google/material-design-icons/tree/master/symbols)
-repo during `icons:sync`. The mobile apps do not download icons at runtime.
+Icons are vendored at build time from the
+[`lucide-static`](https://www.npmjs.com/package/lucide-static) npm package.
+The mobile apps do not download icons at runtime.
 
 ## Catalog
 
 The canonical list lives in [`icons/manifest.yaml`](../../icons/manifest.yaml).
+Each entry has a stable product `name` and a `lucide` source glyph. Product
+names stay in feature and component APIs; `lucide` is the Lucide icon id from
+https://lucide.dev/icons.
+
 Each entry maps to:
 
 - Android: `OpenCodeIcons.{Name}` in
   [`OpenCodeIcons.kt`](../../android/app/src/main/java/dev/opencode/mobile/ui/icons/OpenCodeIcons.kt)
-  (`ImageVector`)
+  (`ImageVector`, stroke-based)
 - iOS: `OpenCodeIcon.{name}` in
   [`OpenCodeIcon.swift`](../../ios/OpenCode Mobile/OpenCode Mobile/Icons/OpenCodeIcon.swift)
   with assets under
-  [`MaterialIcons.xcassets`](../../ios/OpenCode%20Mobile/OpenCode%20Mobile/MaterialIcons.xcassets)
+  [`LucideIcons.xcassets`](../../ios/OpenCode%20Mobile/OpenCode%20Mobile/LucideIcons.xcassets)
 
 Use `OpenCodeIconImage(icon:)` on iOS for template-rendered icons that follow
 `OpenCodeColors.iconDefault` / `iconStrong` tints.
@@ -50,40 +51,41 @@ pattern when a glyph sits inside circular chrome smaller than a button.
 
 Some catalog icons have a stable product meaning beyond gallery samples:
 
-| Icon | Usage |
-| --- | --- |
-| `widgets` | All-projects mark on the Session List scope control and Filter by project sheet |
-| `add` | Generic add / plus affordances; Commands tile **New** |
-| `create_new_folder` | **Add project** (Session List Dock and home add-project actions) |
-| `keyboard_arrow_down` | Session List Dock scope-control chevron; title switcher chevron after home server name |
-| `search` | Gallery and Top Bar search samples |
-| `terminal` | open Terminal from home; Commands tile **Terminal** |
-| `folder_check` | **Current directory** row in Add project sheet |
-| `subdirectory_arrow_right` | Subdirectory rows in Add project sheet |
-| `arrow_forward` | Terminal control strip Right |
-| `arrow_upward` | **Go up** row in Add project sheet; Queue / default Send |
-| `arrow_warm_up` | Steer follow-up send |
-| `edit` | Edit/rename affordances in gallery and samples; not the gallery entry on home |
-| `archive` | Session Chat overflow **Archive** action |
-| `delete` | Edit server top-bar **Remove** |
-| `arrow_downward` | **Scroll to end** action pill on session chat |
-| `radio_button_checked` | Selected question-request option / custom answer |
-| `radio_button_unchecked` | Unselected question-request option / custom answer |
-| `undo` | Commands tile **Undo** |
-| `redo` | Commands tile **Redo** |
-| `call_split` | Commands tile **Fork** |
-| `vertical_align_center` | Commands tile **Compact** |
+| Icon | Lucide | Usage |
+| --- | --- | --- |
+| `widgets` | `layout-grid` | All-projects mark on the Session List scope control and Filter by project sheet |
+| `add` | `plus` | Generic add / plus affordances; Commands tile **New** |
+| `create_new_folder` | `folder-plus` | **Add project** (Session List Dock and home add-project actions) |
+| `keyboard_arrow_down` | `chevron-down` | Session List Dock scope-control chevron; title switcher chevron after home server name |
+| `search` | `search` | Gallery and Top Bar search samples |
+| `terminal` | `square-terminal` | open Terminal from home; Commands tile **Terminal** |
+| `folder_check` | `folder-check` | **Current directory** row in Add project sheet |
+| `subdirectory_arrow_right` | `corner-down-right` | Subdirectory rows in Add project sheet |
+| `arrow_forward` | `arrow-right` | Terminal control strip Right |
+| `arrow_upward` | `arrow-up` | **Go up** row in Add project sheet; Queue / default Send |
+| `arrow_warm_up` | `arrow-up-right` | Steer follow-up send |
+| `edit` | `pencil` | Edit/rename affordances in gallery and samples; not the gallery entry on home |
+| `archive` | `archive` | Session Chat overflow **Archive** action |
+| `delete` | `trash-2` | Edit server top-bar **Remove** |
+| `arrow_downward` | `arrow-down` | **Scroll to end** action pill on session chat |
+| `radio_button_checked` | `circle-dot` | Selected question-request option / custom answer |
+| `radio_button_unchecked` | `circle` | Unselected question-request option / custom answer |
+| `undo` | `undo-2` | Commands tile **Undo** |
+| `redo` | `redo-2` | Commands tile **Redo** |
+| `call_split` | `git-fork` | Commands tile **Fork** |
+| `vertical_align_center` | `fold-vertical` | Commands tile **Compact** |
 
-Manifest `notes` may mention SF Symbol equivalents; feature decisions live under
-`docs/features/<feature-slug>/decisions.md`.
+Feature decisions live under `docs/features/<feature-slug>/decisions.md`.
 
 ## Adding an icon
 
-1. Add an entry to `icons/manifest.yaml` (`name`, `style`, optional `source`, optional `notes`).
-   Use `source: material_symbols` only when the glyph is not in the classic npm package.
+1. Add an entry to `icons/manifest.yaml` (`name`, `lucide`, optional `notes`).
+   `name` is the product identifier used in app code. `lucide` is the Lucide
+   icon id (kebab-case) from https://lucide.dev/icons. If `lucide` is omitted,
+   the sync script converts `name` from snake_case to kebab-case.
 2. Run `npm install` (first time) and `npm run icons:sync` from the repo root.
 3. Commit generated outputs: `OpenCodeIcons.kt`, `OpenCodeIcon.swift`,
-   `MaterialIcons.xcassets/**`, and `icons/.manifest-hash`.
+   `LucideIcons.xcassets/**`, and `icons/.manifest-hash`.
 4. Use the new symbol in feature or design-system code.
 
 `npm run icons:check` verifies the manifest hash and that generated files exist
@@ -94,13 +96,16 @@ Manifest `notes` may mention SF Symbol equivalents; feature decisions live under
 (errors when code uses an icon not in the manifest; warns on unused manifest
 entries).
 
-Material Symbols SVGs use a `viewBox` origin such as `0 -960 960 960`. The
-Android generator (`scripts/lib/android-generator.mjs`) applies a `group`
-translation so path data stays inside the `ImageVector` viewport; without that
-offset, glyphs can render blank on Android while iOS assets still look correct.
+Lucide SVGs are stroke-based (`fill="none"`, `stroke="currentColor"`). The
+catalog overrides Lucide's default `stroke-width="2"` to **1.5** in the 24×24
+viewBox (`ICON_STROKE_WIDTH` in `scripts/lib/utils.mjs`). The Android generator
+(`scripts/lib/android-generator.mjs`)
+converts `path`, `circle`, `ellipse`, `line`, `polyline`, `polygon`, and `rect`
+elements into stroked `ImageVector` paths. iOS assets keep the SVG strokes and
+replace `currentColor` with black so template tinting works in the asset
+catalog.
 
 ## Licensing
 
-Material Icons are licensed under the
-[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). Attribution
-in an in-app About screen is appreciated but not required.
+Lucide icons are licensed under the
+[ISC License](https://lucide.dev/license).

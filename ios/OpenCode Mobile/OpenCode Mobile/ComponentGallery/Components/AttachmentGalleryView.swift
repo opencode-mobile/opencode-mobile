@@ -2,12 +2,17 @@ import SwiftUI
 import UIKit
 
 struct AttachmentGalleryView: View {
+    private static let sampleImage = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64)).image { context in
+        UIColor(red: 0.35, green: 0.45, blue: 0.55, alpha: 1).setFill()
+        context.fill(CGRect(origin: .zero, size: CGSize(width: 64, height: 64)))
+    }
+
     @State private var attachments = [
         OpenCodeAttachmentPresentation(
             id: "image",
             filename: "session-screenshot.png",
             variant: .image,
-            image: UIImage(systemName: "photo.fill")
+            image: Self.sampleImage
         ),
         OpenCodeAttachmentPresentation(id: "pdf", filename: "product-brief.pdf", variant: .pdf),
         OpenCodeAttachmentPresentation(
@@ -46,7 +51,7 @@ struct AttachmentGalleryView: View {
             id: "sent-image",
             filename: "session-screenshot.png",
             variant: .image,
-            image: UIImage(systemName: "photo.fill")
+            image: Self.sampleImage
         ),
         OpenCodeAttachmentPresentation(id: "sent-pdf", filename: "product-brief.pdf", variant: .pdf),
         OpenCodeAttachmentPresentation(id: "sent-text", filename: "notes.md", variant: .text),

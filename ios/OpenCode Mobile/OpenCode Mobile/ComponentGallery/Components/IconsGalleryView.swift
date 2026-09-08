@@ -5,7 +5,7 @@ struct IconsGalleryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Material Icons catalog from icons/manifest.yaml")
+            Text("Lucide catalog from icons/manifest.yaml")
                 .font(OpenCodeTypography.body)
                 .foregroundStyle(OpenCodeColors.textBase)
 
@@ -15,7 +15,7 @@ struct IconsGalleryView: View {
                         OpenCodeIconImage(icon: icon, size: 24)
                             .foregroundStyle(OpenCodeColors.iconBase)
                             .frame(width: 32, height: 32)
-                        Text(icon.rawValue.replacingOccurrences(of: "md_", with: ""))
+                        Text(icon.rawValue.replacingOccurrences(of: "lucide_", with: ""))
                             .font(OpenCodeTypography.caption)
                             .foregroundStyle(OpenCodeColors.textBase)
                             .lineLimit(2)

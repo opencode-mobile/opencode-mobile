@@ -60,11 +60,11 @@ implementation belong in the feature's `parity-gaps.md`.
 - Review trigger: if a future theme JSON schema adds letter-badge accent seeds,
   migrate these to the resolver.
 
-## Material icon platform types
+## Lucide icon platform types
 
 - Status: intentional
 - Area: component | accessibility
-- Shared intent: both apps render the same Material glyph shapes from
+- Shared intent: both apps render the same Lucide glyph shapes from
   [`icons/manifest.yaml`](../../icons/manifest.yaml); see
   [`icons.md`](icons.md).
 - iOS behavior: icon-bearing APIs use `OpenCodeIcon` (asset catalog name) and

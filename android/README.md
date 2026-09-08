@@ -11,7 +11,7 @@ Formatting and style checks use [ktlint](https://github.com/pinterest/ktlint) vi
 ./gradlew ktlintCheck    # fail on violations — run before opening a PR
 ```
 
-Generated [`OpenCodeIcons.kt`](app/src/main/java/dev/opencode/mobile/ui/icons/OpenCodeIcons.kt) is excluded from ktlint; regenerate with `npm run sync-icons` from the repo root.
+Generated [`OpenCodeIcons.kt`](app/src/main/java/dev/opencode/mobile/ui/icons/OpenCodeIcons.kt) is excluded from ktlint; regenerate with `npm run icons:sync` from the repo root.
 
 When CI is added for Android, include `ktlintCheck` in the job.
 

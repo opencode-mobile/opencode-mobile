@@ -32,18 +32,25 @@ fun IconsGalleryScreen(modifier: Modifier = Modifier) {
             "arrow_forward" to OpenCodeIcons.ArrowForward,
             "arrow_upward" to OpenCodeIcons.ArrowUpward,
             "arrow_warm_up" to OpenCodeIcons.ArrowWarmUp,
+            "arrow_downward" to OpenCodeIcons.ArrowDownward,
             "check" to OpenCodeIcons.Check,
             "chevron_right" to OpenCodeIcons.ChevronRight,
+            "keyboard_arrow_down" to OpenCodeIcons.KeyboardArrowDown,
             "close" to OpenCodeIcons.Close,
             "content_copy" to OpenCodeIcons.ContentCopy,
             "collapse_content" to OpenCodeIcons.CollapseContent,
+            "delete" to OpenCodeIcons.Delete,
             "description" to OpenCodeIcons.Description,
             "edit" to OpenCodeIcons.Edit,
             "expand_content" to OpenCodeIcons.ExpandContent,
             "folder" to OpenCodeIcons.Folder,
+            "create_new_folder" to OpenCodeIcons.CreateNewFolder,
             "folder_check" to OpenCodeIcons.FolderCheck,
+            "list" to OpenCodeIcons.List,
             "more_vert" to OpenCodeIcons.MoreVert,
             "search" to OpenCodeIcons.Search,
+            "settings" to OpenCodeIcons.Settings,
+            "terminal" to OpenCodeIcons.Terminal,
             "architecture" to OpenCodeIcons.Architecture,
             "archive" to OpenCodeIcons.Archive,
             "cloud" to OpenCodeIcons.Cloud,
@@ -54,6 +61,8 @@ fun IconsGalleryScreen(modifier: Modifier = Modifier) {
             "redo" to OpenCodeIcons.Redo,
             "call_split" to OpenCodeIcons.CallSplit,
             "vertical_align_center" to OpenCodeIcons.VerticalAlignCenter,
+            "radio_button_checked" to OpenCodeIcons.RadioButtonChecked,
+            "radio_button_unchecked" to OpenCodeIcons.RadioButtonUnchecked,
             "widgets" to OpenCodeIcons.Widgets,
         )
 
@@ -62,7 +71,7 @@ fun IconsGalleryScreen(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = "Material Icons catalog from icons/manifest.yaml",
+            text = "Lucide catalog from icons/manifest.yaml",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
