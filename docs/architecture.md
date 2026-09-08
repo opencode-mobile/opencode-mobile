@@ -91,17 +91,27 @@ iOS: `UI/<Feature>/` (filesystem-synchronized Xcode groups).
 
 ```text
 UI/SessionChat  UI/Main  UI/Connection  UI/Settings  UI/Root
-Components/  Domain/  Data/  DI/  Theme/  Network/
+Components/{Chrome,List,Chat,Input,Feedback}
+Domain/  Data/  DI/  Theme/  Network/
 ```
 
 `Domain/Message` internals: `Remote/`, `Store/`, `Pipeline/`,
 `Attachment/`. Product types (`Message`, `MessageRepository`,
 `FollowUpDelivery`) stay at the `Message` root.
 
+`Domain/Observability` holds Product Analytics, privacy policy,
+Crashlytics verification, and release observability.
+
 Android: `dev.opencode.mobile.ui.<feature>/` (`sessionchat`, `main`,
-`connection`, `settings`, `root`, `components`). Same Message folders
-under `domain/message/` (`remote`, `store`, `pipeline`, `attachment`);
-package stays `domain.message`.
+`connection`, `settings`, `root`, `components`). Component Collection
+folders: `chrome`, `list`, `chat`, `input`, `feedback`; package stays
+`ui.components`. Same Message folders under `domain/message/`
+(`remote`, `store`, `pipeline`, `attachment`); package stays
+`domain.message`. Analytics and privacy live under
+`domain/observability/`; package stays `dev.opencode.mobile`.
+
+iOS tests mirror `Domain/`, `UI/`, `Components/`, `Data/`, `Network/`,
+and `Theme/`.
 
 ## Persistence
 

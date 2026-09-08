@@ -25,6 +25,21 @@ ktlint_standard_package-name = disabled
 ktlint_standard_package-name = disabled
 [**/ui/sessionchat/region/QuestionRequestSupport.kt]
 ktlint_standard_package-name = disabled
+# Component Collection folders stay on package `ui.components`.
+[**/ui/components/chrome/**.kt]
+ktlint_standard_package-name = disabled
+[**/ui/components/list/**.kt]
+ktlint_standard_package-name = disabled
+[**/ui/components/chat/**.kt]
+ktlint_standard_package-name = disabled
+[**/ui/components/input/**.kt]
+ktlint_standard_package-name = disabled
+[**/ui/components/feedback/**.kt]
+ktlint_standard_package-name = disabled
+# Observability files stay on package `dev.opencode.mobile` so call sites keep
+# the existing ProductAnalytics / PrivacyPolicy imports.
+[**/domain/observability/**.kt]
+ktlint_standard_package-name = disabled
 
 [*.swift]
 indent_size = 4
