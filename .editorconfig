@@ -11,5 +11,16 @@ indent_style = space
 indent_size = 4
 ktlint_function_naming_ignore_when_annotated_with = Composable, Preview
 
+# Message internals stay on package `domain.message` so Screen Models keep
+# product-type imports. Folders are remote / store / pipeline / attachment.
+[**/domain/message/remote/**.kt]
+ktlint_standard_package-name = disabled
+[**/domain/message/store/**.kt]
+ktlint_standard_package-name = disabled
+[**/domain/message/pipeline/**.kt]
+ktlint_standard_package-name = disabled
+[**/domain/message/attachment/**.kt]
+ktlint_standard_package-name = disabled
+
 [*.swift]
 indent_size = 4

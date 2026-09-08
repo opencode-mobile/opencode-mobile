@@ -88,8 +88,14 @@ UI/SessionChat  UI/Main  UI/Connection  UI/Settings  UI/Root
 Components/  Domain/  Data/  DI/  Theme/  Network/
 ```
 
+`Domain/Message` internals: `Remote/`, `Store/`, `Pipeline/`,
+`Attachment/`. Product types (`Message`, `MessageRepository`,
+`FollowUpDelivery`) stay at the `Message` root.
+
 Android: `dev.opencode.mobile.ui.<feature>/` (`sessionchat`, `main`,
-`connection`, `settings`, `root`, `components`).
+`connection`, `settings`, `root`, `components`). Same Message folders
+under `domain/message/` (`remote`, `store`, `pipeline`, `attachment`);
+package stays `domain.message`.
 
 ## Persistence
 
