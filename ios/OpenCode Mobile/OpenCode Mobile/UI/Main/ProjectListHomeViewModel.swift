@@ -102,16 +102,16 @@ final class ProjectListHomeViewModel {
     private(set) var pendingProjectRemoval: ProjectRemovalItem?
     /// Shared home snackbar: project removal plus archive / delete failures.
     private(set) var removalSnackbar: OpenCodeSnackbarMessage?
-    private(set) var sessionActionsTarget: HomeSessionActionTarget?
-    private(set) var sessionActionsSheetVisible = false
+    var sessionActionsTarget: HomeSessionActionTarget? { sessionActionsRegion.target }
+    var sessionActionsSheetVisible: Bool { sessionActionsRegion.sheetVisible }
     /// Stays false until a message fetch confirms the session is forkable.
-    private(set) var sessionActionsCanFork = false
-    private(set) var sessionActionsCanArchive = true
-    private(set) var sessionRenameDialog = HomeSessionTitleDialogState()
-    private(set) var sessionForkDialog = HomeSessionTitleDialogState()
-    private(set) var sessionForkResult = HomeSessionForkResultState()
-    private(set) var sessionDeleteConfirmVisible = false
-    private(set) var sessionActionInFlight = false
+    var sessionActionsCanFork: Bool { sessionActionsRegion.canFork }
+    var sessionActionsCanArchive: Bool { sessionActionsRegion.canArchive }
+    var sessionRenameDialog: HomeSessionTitleDialogState { sessionActionsRegion.renameDialog }
+    var sessionForkDialog: HomeSessionTitleDialogState { sessionActionsRegion.forkDialog }
+    var sessionForkResult: HomeSessionForkResultState { sessionActionsRegion.forkResult }
+    var sessionDeleteConfirmVisible: Bool { sessionActionsRegion.deleteConfirmVisible }
+    var sessionActionInFlight: Bool { sessionActionsRegion.actionInFlight }
     private let projectRepository: any ProjectRepository
     private let filesystemRepository: any FilesystemRepository
     private let sessionRepository: any SessionRepository
@@ -138,8 +138,7 @@ final class ProjectListHomeViewModel {
     private var liveSessionsByWorktree: [String: SessionListSnapshot] = [:]
     private var liveStatusesByWorktree: [String: [String: SessionStatus]] = [:]
     private var liveReadyIdsByWorktree: [String: Set<String>] = [:]
-    private var forkGateTask: Task<Void, Never>?
-    private var forkedSessionOpenTarget: SessionListItem?
+    private let sessionActionsRegion: HomeSessionActions
     /// Title-edit Analytics fires once per dialog so keystrokes are not events.
     private var loggedRenameTitleEdit = false
     private var loggedForkTitleEdit = false
@@ -174,7 +173,14 @@ final class ProjectListHomeViewModel {
         self.connectionSessionCoordinator = connectionSessionCoordinator
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.sessionCache = sessionCache
+        self.sessionActionsRegion = HomeSessionActions(
+            sessionRepository: sessionRepository,
+            messageRepository: messageRepository
+        )
         lastHomeHiddenAtEpochMs = HomeDisplayPreferences.shared.lastHomeHiddenAtEpochMs()
+        sessionActionsRegion.onLifecycleError = { [weak self] message in
+            self?.removalSnackbar = OpenCodeSnackbarMessage(text: message, variant: .error)
+        }
         sessionReadyStore.bindProfile(profileID: activeConnectionManager.currentProfile()?.id)
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
@@ -508,13 +514,12 @@ final class ProjectListHomeViewModel {
             presentation: ProductAnalytics.Presentation.sheet,
             trigger: ProductAnalytics.Trigger.present
         )
-        let target = HomeSessionActionTarget(sessionId: sessionId, title: title, worktree: worktree)
-        sessionActionsTarget = target
-        sessionActionsSheetVisible = true
-        sessionActionsCanFork = false
-        sessionActionsCanArchive = activeConnectionManager.capabilities.supportsSessionArchive
-        forkGateTask?.cancel()
-        forkGateTask = Task { await resolveForkVisibility(target) }
+        sessionActionsRegion.begin(
+            sessionId: sessionId,
+            title: title,
+            worktree: worktree,
+            canArchive: activeConnectionManager.capabilities.supportsSessionArchive
+        )
     }
 
     /// Dismissal from the sheet chrome. Action handlers hide the sheet themselves and
@@ -526,13 +531,11 @@ final class ProjectListHomeViewModel {
                 actionId: ProductAnalytics.Action.sessionActionsDismiss
             )
         }
-        sessionActionsSheetVisible = false
-        guard !hasOpenSessionActionDialog else { return }
-        clearSessionActionsTarget()
+        sessionActionsRegion.dismissSheet()
     }
 
     func openSessionRename() {
-        guard let target = sessionActionsTarget else { return }
+        guard sessionActionsTarget != nil else { return }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.homeSessionActions,
             actionId: ProductAnalytics.Action.sessionActionsRename
@@ -543,8 +546,7 @@ final class ProjectListHomeViewModel {
             trigger: ProductAnalytics.Trigger.present
         )
         loggedRenameTitleEdit = false
-        sessionActionsSheetVisible = false
-        sessionRenameDialog = HomeSessionTitleDialogState(isVisible: true, draftTitle: target.title)
+        sessionActionsRegion.chooseRename()
     }
 
     func updateSessionRenameDraft(_ text: String) {
@@ -556,8 +558,7 @@ final class ProjectListHomeViewModel {
                 actionId: ProductAnalytics.Action.homeRenameEditTitle
             )
         }
-        sessionRenameDialog.draftTitle = text
-        sessionRenameDialog.errorMessage = nil
+        sessionActionsRegion.updateRenameDraft(text)
     }
 
     func cancelSessionRename() {
@@ -566,48 +567,12 @@ final class ProjectListHomeViewModel {
             screenId: ProductAnalytics.Screen.homeRenameSession,
             actionId: ProductAnalytics.Action.homeRenameCancel
         )
-        closeSessionRename()
-    }
-
-    private func closeSessionRename() {
-        sessionRenameDialog = HomeSessionTitleDialogState()
-        clearSessionActionsTarget()
+        sessionActionsRegion.cancelRename()
     }
 
     func confirmSessionRename() async {
-        guard let target = sessionActionsTarget, !sessionRenameDialog.isSubmitting else { return }
-        let trimmed = sessionRenameDialog.draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            logHomeRename(outcome: ProductAnalytics.Outcome.blocked)
-            sessionRenameDialog.errorMessage = Self.emptyTitleError
-            return
-        }
-        if trimmed == target.title {
-            logHomeRename(outcome: ProductAnalytics.Outcome.blocked)
-            closeSessionRename()
-            return
-        }
-        sessionRenameDialog.isSubmitting = true
-        sessionRenameDialog.errorMessage = nil
-        OpenCodeLog.sessionChat.info("home rename submit session=\(target.sessionId)")
-        do {
-            _ = try await sessionRepository.updateSession(
-                id: target.sessionId,
-                title: trimmed,
-                directory: target.worktree
-            )
-            guard sessionActionsTarget == target else { return }
-            OpenCodeLog.sessionChat.info("home rename success session=\(target.sessionId)")
-            logHomeRename(outcome: ProductAnalytics.Outcome.success)
-            closeSessionRename()
-        } catch {
-            guard sessionActionsTarget == target else { return }
-            OpenCodeLog.sessionChat.warning(
-                "home rename failed session=\(target.sessionId) error=\(error.localizedDescription)"
-            )
-            logHomeRename(outcome: ProductAnalytics.Outcome.failure)
-            sessionRenameDialog.isSubmitting = false
-            sessionRenameDialog.errorMessage = sessionMutationErrorMessage(error)
+        if let outcome = await sessionActionsRegion.confirmRename() {
+            logHomeRename(outcome: outcome)
         }
     }
 
@@ -620,7 +585,7 @@ final class ProjectListHomeViewModel {
     }
 
     func openSessionFork() {
-        guard let target = sessionActionsTarget else { return }
+        guard sessionActionsTarget != nil else { return }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.homeSessionActions,
             actionId: ProductAnalytics.Action.sessionActionsFork
@@ -631,11 +596,7 @@ final class ProjectListHomeViewModel {
             trigger: ProductAnalytics.Trigger.present
         )
         loggedForkTitleEdit = false
-        sessionActionsSheetVisible = false
-        sessionForkDialog = HomeSessionTitleDialogState(
-            isVisible: true,
-            draftTitle: Self.suggestedForkTitle(for: target.title)
-        )
+        sessionActionsRegion.chooseFork()
     }
 
     func updateSessionForkDraft(_ text: String) {
@@ -646,8 +607,7 @@ final class ProjectListHomeViewModel {
                 actionId: ProductAnalytics.Action.homeForkEditTitle
             )
         }
-        sessionForkDialog.draftTitle = text
-        sessionForkDialog.errorMessage = nil
+        sessionActionsRegion.updateForkDraft(text)
     }
 
     func cancelSessionFork() {
@@ -656,52 +616,19 @@ final class ProjectListHomeViewModel {
             screenId: ProductAnalytics.Screen.homeForkSession,
             actionId: ProductAnalytics.Action.homeForkCancel
         )
-        sessionForkDialog = HomeSessionTitleDialogState()
-        clearSessionActionsTarget()
+        sessionActionsRegion.cancelFork()
     }
 
     func confirmSessionFork() async {
-        guard let target = sessionActionsTarget, !sessionForkDialog.isSubmitting else { return }
-        let trimmed = sessionForkDialog.draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            logHomeFork(outcome: ProductAnalytics.Outcome.blocked)
-            sessionForkDialog.errorMessage = Self.emptyTitleError
-            return
-        }
-        sessionForkDialog.isSubmitting = true
-        sessionForkDialog.errorMessage = nil
-        do {
-            let forked = try await sessionRepository.forkSession(id: target.sessionId, atMessageID: nil)
-            let updated = try await sessionRepository.updateSession(
-                id: forked.id,
-                title: trimmed,
-                directory: target.worktree
-            )
-            guard sessionActionsTarget == target else { return }
-            OpenCodeLog.sessionChat.info(
-                "home fork success sourceSession=\(target.sessionId) forkedSession=\(updated.id)"
-            )
-            logHomeFork(outcome: ProductAnalytics.Outcome.success)
-            forkedSessionOpenTarget = SessionListItem(
-                id: updated.id,
-                title: updated.title,
-                worktree: target.worktree
-            )
-            sessionForkDialog = HomeSessionTitleDialogState()
-            sessionForkResult = HomeSessionForkResultState(isVisible: true, forkedTitle: updated.title)
-            ProductAnalytics.logScreenView(
-                screenId: ProductAnalytics.Screen.homeForkResult,
-                presentation: ProductAnalytics.Presentation.dialog,
-                trigger: ProductAnalytics.Trigger.present
-            )
-        } catch {
-            guard sessionActionsTarget == target else { return }
-            OpenCodeLog.sessionChat.warning(
-                "home fork failed session=\(target.sessionId) error=\(error.localizedDescription)"
-            )
-            logHomeFork(outcome: ProductAnalytics.Outcome.failure)
-            sessionForkDialog.isSubmitting = false
-            sessionForkDialog.errorMessage = sessionMutationErrorMessage(error)
+        if let outcome = await sessionActionsRegion.confirmFork() {
+            logHomeFork(outcome: outcome)
+            if outcome == ProductAnalytics.Outcome.success {
+                ProductAnalytics.logScreenView(
+                    screenId: ProductAnalytics.Screen.homeForkResult,
+                    presentation: ProductAnalytics.Presentation.dialog,
+                    trigger: ProductAnalytics.Trigger.present
+                )
+            }
         }
     }
 
@@ -718,11 +645,7 @@ final class ProjectListHomeViewModel {
             screenId: ProductAnalytics.Screen.homeForkResult,
             actionId: ProductAnalytics.Action.homeForkOpen
         )
-        let target = forkedSessionOpenTarget
-        forkedSessionOpenTarget = nil
-        sessionForkResult = HomeSessionForkResultState()
-        clearSessionActionsTarget()
-        pendingSessionOpen = target
+        pendingSessionOpen = sessionActionsRegion.takeForkedOpenTarget()
     }
 
     func chooseSessionForkStay() {
@@ -732,33 +655,16 @@ final class ProjectListHomeViewModel {
                 actionId: ProductAnalytics.Action.homeForkStay
             )
         }
-        forkedSessionOpenTarget = nil
-        sessionForkResult = HomeSessionForkResultState()
-        clearSessionActionsTarget()
+        sessionActionsRegion.clearForkedOpenTarget()
     }
 
     func archiveSessionAction() async {
-        guard let target = sessionActionsTarget, sessionActionsCanArchive, !sessionActionInFlight else { return }
+        guard sessionActionsTarget != nil, sessionActionsCanArchive, !sessionActionInFlight else { return }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.homeSessionActions,
             actionId: ProductAnalytics.Action.sessionActionsArchive
         )
-        sessionActionsSheetVisible = false
-        sessionActionInFlight = true
-        OpenCodeLog.sessionChat.info("home archive start session=\(target.sessionId)")
-        do {
-            _ = try await sessionRepository.archiveSession(id: target.sessionId, directory: target.worktree)
-            OpenCodeLog.sessionChat.info("home archive success session=\(target.sessionId)")
-            sessionActionInFlight = false
-            clearSessionActionsTarget()
-        } catch {
-            OpenCodeLog.sessionChat.warning(
-                "home archive failed session=\(target.sessionId) error=\(error.localizedDescription)"
-            )
-            sessionActionInFlight = false
-            clearSessionActionsTarget()
-            removalSnackbar = OpenCodeSnackbarMessage(text: Self.archiveError, variant: .error)
-        }
+        await sessionActionsRegion.chooseArchive()
     }
 
     func requestDeleteSessionAction() {
@@ -772,8 +678,7 @@ final class ProjectListHomeViewModel {
             presentation: ProductAnalytics.Presentation.dialog,
             trigger: ProductAnalytics.Trigger.present
         )
-        sessionActionsSheetVisible = false
-        sessionDeleteConfirmVisible = true
+        sessionActionsRegion.chooseDelete()
     }
 
     func cancelDeleteSessionAction() {
@@ -784,101 +689,22 @@ final class ProjectListHomeViewModel {
                 actionId: ProductAnalytics.Action.homeDeleteCancel
             )
         }
-        sessionDeleteConfirmVisible = false
-        clearSessionActionsTarget()
+        sessionActionsRegion.dismissDeleteConfirm()
     }
 
     func confirmDeleteSessionAction() async {
-        guard let target = sessionActionsTarget, !sessionActionInFlight else { return }
+        guard sessionActionsTarget != nil, !sessionActionInFlight else { return }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.homeDeleteSessionConfirm,
             actionId: ProductAnalytics.Action.homeDeleteConfirm
         )
-        sessionDeleteConfirmVisible = false
-        sessionActionInFlight = true
-        OpenCodeLog.sessionChat.info("home delete start session=\(target.sessionId)")
-        do {
-            let deleted = try await sessionRepository.deleteSession(id: target.sessionId, directory: target.worktree)
-            sessionActionInFlight = false
-            clearSessionActionsTarget()
-            if deleted {
-                OpenCodeLog.sessionChat.info("home delete success session=\(target.sessionId)")
-            } else {
-                OpenCodeLog.sessionChat.info("home delete rejected session=\(target.sessionId)")
-                removalSnackbar = OpenCodeSnackbarMessage(text: Self.deleteError, variant: .error)
-            }
-        } catch {
-            OpenCodeLog.sessionChat.warning(
-                "home delete failed session=\(target.sessionId) error=\(error.localizedDescription)"
-            )
-            sessionActionInFlight = false
-            clearSessionActionsTarget()
-            removalSnackbar = OpenCodeSnackbarMessage(text: Self.deleteError, variant: .error)
-        }
-    }
-
-    /// Fork parity with Commands: at least one visible user message. A failed fetch
-    /// leaves Fork hidden rather than offering an action the server may reject.
-    private func resolveForkVisibility(_ target: HomeSessionActionTarget) async {
-        guard let messages = try? await messageRepository.listMessages(
-            sessionID: target.sessionId,
-            directory: target.worktree
-        ) else { return }
-        guard !Task.isCancelled, sessionActionsTarget == target else { return }
-        let refs = messages.map { message in
-            ClientSlashMessageRef(
-                id: message.id,
-                isUser: message.role == .user,
-                isPending: false,
-                isStreaming: false,
-                hasNonEmptyText: !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            )
-        }
-        let input = ClientSlashActionCatalog.visibilityInput(
-            messages: refs,
-            revertMessageID: nil,
-            hasSelectedComposerModel: false
-        )
-        sessionActionsCanFork = ClientSlashActionCatalog.visibleActions(input).contains(.fork)
-    }
-
-    private var hasOpenSessionActionDialog: Bool {
-        sessionRenameDialog.isVisible
-            || sessionForkDialog.isVisible
-            || sessionForkResult.isVisible
-            || sessionDeleteConfirmVisible
-            || sessionActionInFlight
-    }
-
-    private func clearSessionActionsTarget() {
-        forkGateTask?.cancel()
-        forkGateTask = nil
-        sessionActionsTarget = nil
-        sessionActionsSheetVisible = false
-        sessionActionsCanFork = false
-        sessionActionsCanArchive = true
-    }
-
-    private func sessionMutationErrorMessage(_ error: Error) -> String {
-        guard let sessionError = error as? SessionError else { return error.localizedDescription }
-        switch sessionError {
-        case let .http(_, message):
-            return message ?? "Request failed"
-        case .transport:
-            return "Unable to reach the server"
-        case .decoding:
-            return "Unable to read server response"
-        }
+        await sessionActionsRegion.confirmDelete()
     }
 
     static func suggestedForkTitle(for title: String) -> String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "Forked session" : "Fork of \(trimmed)"
     }
-
-    private static let emptyTitleError = "Enter a session title"
-    private static let archiveError = "Couldn't archive session."
-    private static let deleteError = "Couldn't delete session."
 
     private func runHomeLoad(skipProbe: Bool = false, preserveContent: Bool = false) async {
         guard activeConnectionManager.connection != nil else {

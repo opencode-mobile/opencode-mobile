@@ -536,6 +536,28 @@ struct SessionInfoRegionState: Equatable {
     }
 }
 
+struct SessionChatInboxRegionState: Equatable {
+    var permissionRequests: [PermissionRequest] = []
+    var permissionSubmittingID: String?
+    var permissionError: String?
+    var permissionTopologyError: String?
+    var questionRequests: [QuestionRequest] = []
+    var questionSubmittingID: String?
+    var questionError: String?
+    var questionTopologyError: String?
+    var questionWizardIndex = 0
+    var questionDrafts: [Int: QuestionAnswerDraft] = [:]
+    var sessionTodos: [SessionTodo] = []
+
+    var visibleQuestionRequest: QuestionRequest? {
+        permissionRequests.isEmpty ? questionRequests.first : nil
+    }
+
+    var questionDraft: QuestionAnswerDraft {
+        questionDrafts[questionWizardIndex] ?? QuestionAnswerDraft()
+    }
+}
+
 struct SessionChatReviewChangesRegionState: Equatable {
     var messageID: String?
     var summary: ReviewChangesSummary?

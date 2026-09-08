@@ -61,8 +61,10 @@ Session rename from Session Chat overflow is a separate Feature Slice:
 ## Screen Model structure
 
 Session Chat uses a **regional Screen Model**: `SessionChatTimeline`,
-`SessionChatComposer`, and `SessionInfo` own behavior; `SessionChatViewModel`
-is a thin facade. Any change to the facade is an architectural decision — see
+`SessionChatComposer`, `SessionInfo`, `SessionChatReviewChanges`,
+`SessionChatCommands`, and `SessionChatInbox` own behavior;
+`SessionChatViewModel` is a thin facade. Any change to the facade is an
+architectural decision — see
 [Session Chat decisions](decisions.md#keep-sessionchatviewmodel-as-a-thin-facade).
 
 ## UI States

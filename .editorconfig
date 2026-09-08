@@ -21,6 +21,10 @@ ktlint_standard_package-name = disabled
 ktlint_standard_package-name = disabled
 [**/domain/message/attachment/**.kt]
 ktlint_standard_package-name = disabled
+[**/ui/sessionchat/timeline/**.kt]
+ktlint_standard_package-name = disabled
+[**/ui/sessionchat/region/QuestionRequestSupport.kt]
+ktlint_standard_package-name = disabled
 
 [*.swift]
 indent_size = 4

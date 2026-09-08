@@ -4,8 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
-import dev.opencode.mobile.domain.command.ClientSlashActionCatalog
-import dev.opencode.mobile.domain.command.ClientSlashMessageRef
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
@@ -22,7 +20,6 @@ import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.MessageRepository
-import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
@@ -31,7 +28,6 @@ import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
-import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
@@ -45,6 +41,7 @@ import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
 import dev.opencode.mobile.ui.components.SessionListScrollPin
+import dev.opencode.mobile.ui.main.region.HomeSessionActions
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
 import kotlinx.coroutines.Job
@@ -92,8 +89,20 @@ class MainScreenViewModel
                 .stateIn(viewModelScope, SharingStarted.Eagerly, false)
         private val _removalSnackbar = MutableStateFlow<OpenCodeSnackbarMessage?>(null)
         val removalSnackbar: StateFlow<OpenCodeSnackbarMessage?> = _removalSnackbar.asStateFlow()
-        private val _sessionActions = MutableStateFlow(HomeSessionActionsUiState())
-        val sessionActions: StateFlow<HomeSessionActionsUiState> = _sessionActions.asStateFlow()
+        private val sessionActionsRegion =
+            HomeSessionActions(
+                sessionRepository = sessionRepository,
+                messageRepository = messageRepository,
+                scope = viewModelScope,
+                onLifecycleError = { message ->
+                    _removalSnackbar.value =
+                        OpenCodeSnackbarMessage(
+                            text = message,
+                            variant = OpenCodeSnackbarVariant.Error,
+                        )
+                },
+            )
+        val sessionActions: StateFlow<HomeSessionActionsUiState> = sessionActionsRegion.state
         private val _revealNewestToken = MutableStateFlow(0)
         val revealNewestToken: StateFlow<Int> = _revealNewestToken.asStateFlow()
         private val _pendingSelectedFilterId = MutableStateFlow<String?>(null)
@@ -113,8 +122,6 @@ class MainScreenViewModel
         private val serverBaseUrl: String
             get() = activeConnectionManager.current()?.baseUrl.orEmpty()
         private var liveObservationJobs: List<Job> = emptyList()
-        private var forkGateJob: Job? = null
-        private var forkedOpenTarget: SessionOpenTarget? = null
 
         // Title fields report one edit per dialog appearance instead of per keystroke.
         private var renameDraftEditReported = false
@@ -454,20 +461,12 @@ class MainScreenViewModel
                 ProductAnalytics.Screen.HOME,
                 ProductAnalytics.Action.HOME_LONG_PRESS_SESSION,
             )
-            forkGateJob?.cancel()
-            forkedOpenTarget = null
-            _sessionActions.value =
-                HomeSessionActionsUiState(
-                    target =
-                        HomeSessionActionTarget(
-                            sessionId = sessionId,
-                            title = title,
-                            worktree = worktree,
-                        ),
-                    sheetVisible = true,
-                    canArchive = activeConnectionManager.currentCapabilities().supportsSessionArchive,
-                )
-            forkGateJob = viewModelScope.launch { resolveForkAvailability(sessionId, worktree) }
+            sessionActionsRegion.begin(
+                sessionId = sessionId,
+                title = title,
+                worktree = worktree,
+                canArchive = activeConnectionManager.currentCapabilities().supportsSessionArchive,
+            )
         }
 
         /**
@@ -479,28 +478,17 @@ class MainScreenViewModel
                 ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
                 ProductAnalytics.Action.SESSION_ACTIONS_DISMISS,
             )
-            _sessionActions.update { it.copy(sheetVisible = false) }
-            if (!_sessionActions.value.hasOpenDialog) {
-                clearSessionActions()
-            }
+            sessionActionsRegion.dismissSheet()
         }
 
         fun chooseRename() {
-            val target = _sessionActions.value.target ?: return
+            if (sessionActions.value.target == null) return
             logAction(
                 ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
                 ProductAnalytics.Action.SESSION_ACTIONS_RENAME,
             )
             renameDraftEditReported = false
-            _sessionActions.update {
-                it.copy(
-                    sheetVisible = false,
-                    renameVisible = true,
-                    renameDraft = target.title,
-                    renameSubmitting = false,
-                    renameError = null,
-                )
-            }
+            sessionActionsRegion.chooseRename()
         }
 
         fun updateRenameDraft(text: String) {
@@ -511,94 +499,37 @@ class MainScreenViewModel
                     ProductAnalytics.Action.HOME_RENAME_EDIT_TITLE,
                 )
             }
-            _sessionActions.update { it.copy(renameDraft = text, renameError = null) }
+            sessionActionsRegion.updateRenameDraft(text)
         }
 
         fun cancelRename() {
-            if (_sessionActions.value.renameSubmitting) return
+            if (sessionActions.value.renameSubmitting) return
             logAction(
                 ProductAnalytics.Screen.HOME_RENAME_SESSION,
                 ProductAnalytics.Action.HOME_RENAME_CANCEL,
             )
-            clearSessionActions()
+            sessionActionsRegion.cancelRename()
         }
 
         fun confirmRename() {
-            val state = _sessionActions.value
-            val target = state.target ?: return
-            if (state.renameSubmitting) return
-            val trimmed = state.renameDraft.trim()
-            if (trimmed.isEmpty()) {
+            sessionActionsRegion.confirmRename { outcome ->
                 logAction(
                     ProductAnalytics.Screen.HOME_RENAME_SESSION,
                     ProductAnalytics.Action.HOME_RENAME_SAVE,
-                    mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.BLOCKED),
+                    mapOf(ProductAnalytics.Param.OUTCOME to outcome),
                 )
-                _sessionActions.update { it.copy(renameError = EMPTY_TITLE_ERROR) }
-                return
-            }
-            if (trimmed == target.title) {
-                logAction(
-                    ProductAnalytics.Screen.HOME_RENAME_SESSION,
-                    ProductAnalytics.Action.HOME_RENAME_SAVE,
-                    mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.BLOCKED),
-                )
-                clearSessionActions()
-                return
-            }
-            _sessionActions.update { it.copy(renameSubmitting = true, renameError = null) }
-            logI("rename submit session=${target.sessionId}")
-            viewModelScope.launch {
-                runCatching {
-                    sessionRepository.updateSession(
-                        id = target.sessionId,
-                        title = trimmed,
-                        directory = target.worktree,
-                    )
-                }.onSuccess {
-                    logI("rename success session=${target.sessionId}")
-                    logAction(
-                        ProductAnalytics.Screen.HOME_RENAME_SESSION,
-                        ProductAnalytics.Action.HOME_RENAME_SAVE,
-                        mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.SUCCESS),
-                    )
-                    clearSessionActions(target.sessionId)
-                }.onFailure { error ->
-                    logW("rename failed session=${target.sessionId} message=${error.message}")
-                    logAction(
-                        ProductAnalytics.Screen.HOME_RENAME_SESSION,
-                        ProductAnalytics.Action.HOME_RENAME_SAVE,
-                        mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.FAILURE),
-                    )
-                    _sessionActions.update { current ->
-                        if (current.target?.sessionId != target.sessionId) {
-                            current
-                        } else {
-                            current.copy(renameSubmitting = false, renameError = mutationErrorMessage(error))
-                        }
-                    }
-                }
             }
         }
 
         fun chooseFork() {
-            val state = _sessionActions.value
-            val target = state.target ?: return
-            if (!state.canFork) return
+            val state = sessionActions.value
+            if (state.target == null || !state.canFork) return
             logAction(
                 ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
                 ProductAnalytics.Action.SESSION_ACTIONS_FORK,
             )
             forkDraftEditReported = false
-            _sessionActions.update {
-                it.copy(
-                    sheetVisible = false,
-                    forkVisible = true,
-                    forkDraft = suggestedHomeForkTitle(target.title),
-                    forkSubmitting = false,
-                    forkError = null,
-                )
-            }
+            sessionActionsRegion.chooseFork()
         }
 
         fun updateForkDraft(text: String) {
@@ -609,87 +540,25 @@ class MainScreenViewModel
                     ProductAnalytics.Action.HOME_FORK_EDIT_TITLE,
                 )
             }
-            _sessionActions.update { it.copy(forkDraft = text, forkError = null) }
+            sessionActionsRegion.updateForkDraft(text)
         }
 
         fun cancelFork() {
-            if (_sessionActions.value.forkSubmitting) return
+            if (sessionActions.value.forkSubmitting) return
             logAction(
                 ProductAnalytics.Screen.HOME_FORK_SESSION,
                 ProductAnalytics.Action.HOME_FORK_CANCEL,
             )
-            clearSessionActions()
+            sessionActionsRegion.cancelFork()
         }
 
         fun confirmFork() {
-            val state = _sessionActions.value
-            val target = state.target ?: return
-            if (state.forkSubmitting) return
-            val title = state.forkDraft.trim()
-            if (title.isEmpty()) {
+            sessionActionsRegion.confirmFork { outcome ->
                 logAction(
                     ProductAnalytics.Screen.HOME_FORK_SESSION,
                     ProductAnalytics.Action.HOME_FORK_CONFIRM,
-                    mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.BLOCKED),
+                    mapOf(ProductAnalytics.Param.OUTCOME to outcome),
                 )
-                _sessionActions.update { it.copy(forkError = EMPTY_TITLE_ERROR) }
-                return
-            }
-            _sessionActions.update { it.copy(forkSubmitting = true, forkError = null) }
-            logI("fork submit session=${target.sessionId}")
-            viewModelScope.launch {
-                runCatching {
-                    val forked =
-                        sessionRepository.forkSession(
-                            id = target.sessionId,
-                            atMessageId = null,
-                            directory = target.worktree,
-                        )
-                    sessionRepository.updateSession(
-                        id = forked.id,
-                        title = title,
-                        directory = target.worktree,
-                    )
-                }.onSuccess { forked ->
-                    logI("fork success session=${target.sessionId} forkedSession=${forked.id}")
-                    logAction(
-                        ProductAnalytics.Screen.HOME_FORK_SESSION,
-                        ProductAnalytics.Action.HOME_FORK_CONFIRM,
-                        mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.SUCCESS),
-                    )
-                    forkedOpenTarget =
-                        SessionOpenTarget(
-                            sessionId = forked.id,
-                            title = forked.title,
-                            worktree = target.worktree,
-                        )
-                    _sessionActions.update { current ->
-                        if (current.target?.sessionId != target.sessionId) {
-                            current
-                        } else {
-                            current.copy(
-                                forkVisible = false,
-                                forkSubmitting = false,
-                                forkResultVisible = true,
-                                forkedTitle = forked.title,
-                            )
-                        }
-                    }
-                }.onFailure { error ->
-                    logW("fork failed session=${target.sessionId} message=${error.message}")
-                    logAction(
-                        ProductAnalytics.Screen.HOME_FORK_SESSION,
-                        ProductAnalytics.Action.HOME_FORK_CONFIRM,
-                        mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.FAILURE),
-                    )
-                    _sessionActions.update { current ->
-                        if (current.target?.sessionId != target.sessionId) {
-                            current
-                        } else {
-                            current.copy(forkSubmitting = false, forkError = mutationErrorMessage(error))
-                        }
-                    }
-                }
             }
         }
 
@@ -698,10 +567,7 @@ class MainScreenViewModel
                 ProductAnalytics.Screen.HOME_FORK_RESULT,
                 ProductAnalytics.Action.HOME_FORK_OPEN,
             )
-            val target = forkedOpenTarget
-            forkedOpenTarget = null
-            clearSessionActions()
-            if (target == null) return
+            val target = sessionActionsRegion.takeForkedOpenTarget() ?: return
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) state.copy(pendingOpenSession = target) else state
             }
@@ -712,149 +578,46 @@ class MainScreenViewModel
                 ProductAnalytics.Screen.HOME_FORK_RESULT,
                 ProductAnalytics.Action.HOME_FORK_STAY,
             )
-            forkedOpenTarget = null
-            clearSessionActions()
+            sessionActionsRegion.clearForkedOpenTarget()
         }
 
         fun chooseArchive() {
-            val state = _sessionActions.value
-            val target = state.target ?: return
-            if (!state.canArchive) return
-            if (state.lifecycleInFlight) return
+            val state = sessionActions.value
+            if (state.target == null || !state.canArchive || state.lifecycleInFlight) return
             logAction(
                 ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
                 ProductAnalytics.Action.SESSION_ACTIONS_ARCHIVE,
             )
-            _sessionActions.update { it.copy(sheetVisible = false, lifecycleInFlight = true) }
-            logI("archive start session=${target.sessionId}")
-            viewModelScope.launch {
-                runCatching { sessionRepository.archiveSession(id = target.sessionId, directory = target.worktree) }
-                    .onSuccess {
-                        logI("archive success session=${target.sessionId}")
-                        clearSessionActions(target.sessionId)
-                    }.onFailure { error ->
-                        logW("archive failed session=${target.sessionId} message=${error.message}")
-                        clearSessionActions(target.sessionId)
-                        _removalSnackbar.value =
-                            OpenCodeSnackbarMessage(
-                                text = ARCHIVE_ERROR,
-                                variant = OpenCodeSnackbarVariant.Error,
-                            )
-                    }
-            }
+            sessionActionsRegion.chooseArchive()
         }
 
         fun chooseDelete() {
-            if (_sessionActions.value.target == null) return
+            if (sessionActions.value.target == null) return
             logAction(
                 ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
                 ProductAnalytics.Action.SESSION_ACTIONS_DELETE,
             )
-            _sessionActions.update { it.copy(sheetVisible = false, deleteConfirmVisible = true) }
+            sessionActionsRegion.chooseDelete()
         }
 
         fun dismissDeleteConfirm() {
-            if (_sessionActions.value.lifecycleInFlight) return
+            if (sessionActions.value.lifecycleInFlight) return
             logAction(
                 ProductAnalytics.Screen.HOME_DELETE_SESSION_CONFIRM,
                 ProductAnalytics.Action.HOME_DELETE_CANCEL,
             )
-            clearSessionActions()
+            sessionActionsRegion.dismissDeleteConfirm()
         }
 
         fun confirmDelete() {
-            val state = _sessionActions.value
-            val target = state.target ?: return
-            if (state.lifecycleInFlight) return
+            val state = sessionActions.value
+            if (state.target == null || state.lifecycleInFlight) return
             logAction(
                 ProductAnalytics.Screen.HOME_DELETE_SESSION_CONFIRM,
                 ProductAnalytics.Action.HOME_DELETE_CONFIRM,
             )
-            _sessionActions.update { it.copy(deleteConfirmVisible = false, lifecycleInFlight = true) }
-            logI("delete start session=${target.sessionId}")
-            viewModelScope.launch {
-                runCatching { sessionRepository.deleteSession(id = target.sessionId, directory = target.worktree) }
-                    .onSuccess { deleted ->
-                        clearSessionActions(target.sessionId)
-                        if (deleted) {
-                            logI("delete success session=${target.sessionId}")
-                        } else {
-                            logW("delete rejected session=${target.sessionId}")
-                            _removalSnackbar.value =
-                                OpenCodeSnackbarMessage(
-                                    text = DELETE_ERROR,
-                                    variant = OpenCodeSnackbarVariant.Error,
-                                )
-                        }
-                    }.onFailure { error ->
-                        logW("delete failed session=${target.sessionId} message=${error.message}")
-                        clearSessionActions(target.sessionId)
-                        _removalSnackbar.value =
-                            OpenCodeSnackbarMessage(
-                                text = DELETE_ERROR,
-                                variant = OpenCodeSnackbarVariant.Error,
-                            )
-                    }
-            }
+            sessionActionsRegion.confirmDelete()
         }
-
-        /**
-         * Fork is hidden until a message fetch proves the session has at least one visible user
-         * message, matching the Commands sheet rule. A failed fetch leaves Fork hidden. Home keeps
-         * this to one request per long-press and so passes no revert boundary (see parity gaps).
-         */
-        private suspend fun resolveForkAvailability(
-            sessionId: String,
-            worktree: String,
-        ) {
-            val messages =
-                runCatching { messageRepository.listMessages(sessionId = sessionId, directory = worktree) }
-                    .getOrNull() ?: return
-            val refs =
-                messages.map { message ->
-                    ClientSlashMessageRef(
-                        id = message.id,
-                        isUser = message.role == MessageRole.User,
-                        isPending = false,
-                        isStreaming = false,
-                        hasNonEmptyText = message.text.isNotBlank(),
-                    )
-                }
-            val visibility =
-                ClientSlashActionCatalog.visibilityInput(
-                    messages = refs,
-                    revertMessageId = null,
-                    hasSelectedComposerModel = false,
-                )
-            _sessionActions.update { current ->
-                if (current.target?.sessionId != sessionId) {
-                    current
-                } else {
-                    current.copy(canFork = visibility.visibleUserMessageCount > 0)
-                }
-            }
-        }
-
-        /** Resets the whole action surface; [sessionId] guards against a stale in-flight action. */
-        private fun clearSessionActions(sessionId: String? = null) {
-            forkGateJob?.cancel()
-            forkGateJob = null
-            _sessionActions.update { current ->
-                if (sessionId != null && current.target?.sessionId != sessionId) {
-                    current
-                } else {
-                    HomeSessionActionsUiState()
-                }
-            }
-        }
-
-        private fun mutationErrorMessage(throwable: Throwable): String =
-            when (throwable) {
-                is SessionError.Http -> throwable.message ?: "Request failed"
-                is SessionError.Transport -> "Unable to reach the server"
-                is SessionError.Decoding -> "Unable to read server response"
-                else -> throwable.message ?: "Something went wrong"
-            }
 
         private fun logAction(
             screenId: String,
@@ -1243,11 +1006,6 @@ class MainScreenViewModel
             }
         }
 
-        private companion object {
-            const val EMPTY_TITLE_ERROR = "Enter a session title"
-            const val ARCHIVE_ERROR = "Couldn't archive session."
-            const val DELETE_ERROR = "Couldn't delete session."
-        }
     }
 
 fun suggestedHomeForkTitle(currentTitle: String): String {
