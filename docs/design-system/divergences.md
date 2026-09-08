@@ -184,10 +184,9 @@ implementation belong in the feature's `parity-gaps.md`.
 - Shared intent: the presenting screen stays fixed when the keyboard appears;
   only the form sheet's available region changes, with a fixed header and a
   scrollable body that keeps focused controls reachable.
-- iOS behavior: SwiftUI's native sheet locks a natural-content detent capped at
-  560pt in `form` mode on first measure (it may grow, never shrink) and lets the
-  keyboard safe area resize the internal scroll region without recomputing that
-  detent downward.
+- iOS behavior: the window overlay locks `form` mode to the 50% detent.
+  Keyboard overlap shrinks available height and lifts the card so only the
+  internal scroll region follows the keyboard.
 - Android behavior: the full-window popup remains over an `adjustNothing`
   activity; `imePadding()` is applied to the form sheet boundary so it follows
   animated IME insets without resizing the activity content.
@@ -262,6 +261,27 @@ implementation belong in the feature's `parity-gaps.md`.
 - Review trigger: revisit if Android adds a system glass icon material.
   Store listings use a flattened raster of the same “d”; they cannot carry
   iOS glass or Android parallax.
+
+## Bottom sheet display corner radius
+
+- Status: intentional
+- Area: component
+- Shared intent: The sheet card is inset **8** logical px from the left, right,
+  and bottom of the display. Bottom corners use display corner radius minus
+  that inset so they share a center with the device curve. Top corners use
+  the smaller `bottomSheet.cornerRadiusTop` (**24**).
+- iOS behavior: Reads the screen display corner radius from the window scene
+  (`_displayCornerRadius`; no public numeric API). Bottom corners use that
+  minus inset. Top corners are 24. Missing or zero values use the 55 − 8
+  fallback.
+- Android behavior: API 31+ reads
+  `WindowMetrics.windowInsets.getRoundedCorner()` (bottom leading/trailing;
+  radius is px) for the bottom corners. Top corners are 24. Below API 31, or
+  when the corner is missing, the bottom uses the same 55 − 8 fallback.
+- Reason: Both platforms now resolve a live display radius and apply the
+  same top/bottom split. iOS still has no public numeric API.
+- Review trigger: if iOS adds a public display-corner API, read that and
+  drop the KVC key.
 
 ## Launch screen branding
 
