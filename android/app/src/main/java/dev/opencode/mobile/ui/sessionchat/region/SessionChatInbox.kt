@@ -108,7 +108,15 @@ class SessionChatInbox(
         val filtered = dropOrphanQuestionRequests(before, loadedMessages())
         if (filtered == before) return
         _state.update { current ->
-            val next = current.copy(questionRequests = filtered)
+            val submittingCleared =
+                current.questionSubmittingId != null &&
+                    filtered.none { request -> request.id == current.questionSubmittingId }
+            val next =
+                current.copy(
+                    questionRequests = filtered,
+                    questionSubmittingId = if (submittingCleared) null else current.questionSubmittingId,
+                    questionError = if (submittingCleared) null else current.questionError,
+                )
             syncQuestionDrafts(next)
         }
     }
