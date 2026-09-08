@@ -421,6 +421,26 @@ data class SessionChatReviewChangesRegionState(
     val summary: ReviewChangesSummary? = null,
 )
 
+data class SessionChatInboxRegionState(
+    val permissionRequests: List<PermissionRequest> = emptyList(),
+    val permissionSubmittingId: String? = null,
+    val permissionError: String? = null,
+    val permissionTopologyError: String? = null,
+    val questionRequests: List<QuestionRequest> = emptyList(),
+    val questionSubmittingId: String? = null,
+    val questionError: String? = null,
+    val questionTopologyError: String? = null,
+    val questionWizardIndex: Int = 0,
+    val questionDrafts: Map<Int, QuestionAnswerDraft> = emptyMap(),
+    val sessionTodos: List<SessionTodo> = emptyList(),
+) {
+    val visibleQuestionRequest: QuestionRequest?
+        get() = if (permissionRequests.isNotEmpty()) null else questionRequests.firstOrNull()
+
+    val questionDraft: QuestionAnswerDraft
+        get() = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()
+}
+
 data class SessionChatCommandsRegionState(
     val commandsSheetVisible: Boolean = false,
     val visibleActions: List<ClientSlashAction> = listOf(ClientSlashAction.New, ClientSlashAction.Terminal),

@@ -48,7 +48,7 @@ internal fun dropOrphanQuestionRequests(
     }
 }
 
-internal data class QuestionAnswerDraft(
+data class QuestionAnswerDraft(
     val selectedLabels: List<String> = emptyList(),
     val customText: String = "",
     val customSelected: Boolean = false,
