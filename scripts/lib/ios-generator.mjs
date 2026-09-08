@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { ICON_STROKE_WIDTH } from "./utils.mjs";
 
 const IMAGESET_CONTENTS = `{
   "images" : [
@@ -22,7 +23,8 @@ const IMAGESET_CONTENTS = `{
 function normalizeLucideSvgForIos(svgText) {
   return svgText
     .replaceAll('stroke="currentColor"', 'stroke="#000000"')
-    .replaceAll('fill="currentColor"', 'fill="#000000"');
+    .replaceAll('fill="currentColor"', 'fill="#000000"')
+    .replace(/stroke-width="[^"]*"/g, `stroke-width="${ICON_STROKE_WIDTH}"`);
 }
 
 export function generateIosAssets(icons, svgByName, xcassetsDir) {

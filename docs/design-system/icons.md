@@ -96,8 +96,10 @@ Feature decisions live under `docs/features/<feature-slug>/decisions.md`.
 (errors when code uses an icon not in the manifest; warns on unused manifest
 entries).
 
-Lucide SVGs are stroke-based (`fill="none"`, `stroke="currentColor"`,
-`stroke-width="2"`). The Android generator (`scripts/lib/android-generator.mjs`)
+Lucide SVGs are stroke-based (`fill="none"`, `stroke="currentColor"`). The
+catalog overrides Lucide's default `stroke-width="2"` to **1.5** in the 24×24
+viewBox (`ICON_STROKE_WIDTH` in `scripts/lib/utils.mjs`). The Android generator
+(`scripts/lib/android-generator.mjs`)
 converts `path`, `circle`, `ellipse`, `line`, `polyline`, `polygon`, and `rect`
 elements into stroked `ImageVector` paths. iOS assets keep the SVG strokes and
 replace `currentColor` with black so template tinting works in the asset

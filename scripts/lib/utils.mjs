@@ -5,6 +5,9 @@ import { parse as parseYaml } from "yaml";
 
 export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
+/** Catalog stroke width in the 24×24 Lucide viewBox. */
+export const ICON_STROKE_WIDTH = 1.5;
+
 function snakeToKebab(name) {
   return name.replaceAll("_", "-");
 }

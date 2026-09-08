@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { toPascalCase } from "./utils.mjs";
+import { ICON_STROKE_WIDTH, toPascalCase } from "./utils.mjs";
 
 function attr(tag, name, fallback = null) {
   const match = tag.match(new RegExp(`(?:^|\\s)${name}="([^"]*)"`, "i"));
@@ -102,8 +102,7 @@ function parseSvg(svgText) {
     }
   }
 
-  const rootTag = svgText.match(/<svg\b[^>]*>/i)?.[0] ?? "";
-  const strokeWidth = Number(attr(rootTag, "stroke-width", "2"));
+  const strokeWidth = ICON_STROKE_WIDTH;
 
   const paths = [];
   const tagRegex = /<(path|circle|ellipse|line|polyline|polygon|rect)\b([^>]*)\/?>/gi;
