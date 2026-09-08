@@ -11,7 +11,7 @@ const ANDROID_OUTPUT = join(
 const IOS_ENUM_OUTPUT = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Icons/OpenCodeIcon.swift");
 
 function expectedHash(icons) {
-  return icons.map((i) => `${i.source}/${i.style}/${i.name}:${i.iosAssetName}`).join("\n") + "\n";
+  return icons.map((i) => `${i.source}/${i.lucide}/${i.name}:${i.iosAssetName}`).join("\n") + "\n";
 }
 
 function main() {
@@ -39,7 +39,7 @@ function main() {
   for (const icon of icons) {
     const imageset = join(
       REPO_ROOT,
-      "ios/OpenCode Mobile/OpenCode Mobile/MaterialIcons.xcassets",
+      "ios/OpenCode Mobile/OpenCode Mobile/LucideIcons.xcassets",
       `${icon.iosAssetName}.imageset/icon.svg`,
     );
     if (!existsSync(imageset)) {

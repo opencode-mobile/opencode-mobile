@@ -1,41 +1,37 @@
 #!/usr/bin/env node
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { generateAndroidIcons } from "./lib/android-generator.mjs";
 import { generateIosAssets, generateIosSwiftEnum } from "./lib/ios-generator.mjs";
-import { fetchMaterialSymbolSvg } from "./lib/material-symbols.mjs";
-import { loadManifest, REPO_ROOT, svgSourcePath } from "./lib/utils.mjs";
+import { loadManifest, lucideSvgSourcePath, REPO_ROOT } from "./lib/utils.mjs";
 
 const require = createRequire(import.meta.url);
-const svgPackageRoot = dirname(require.resolve("@material-design-icons/svg/package.json"));
+const svgPackageRoot = dirname(require.resolve("lucide-static/package.json"));
 
-const CACHE_DIR = join(REPO_ROOT, "icons/cache/svg");
+const CACHE_DIR = join(REPO_ROOT, "icons/cache/lucide");
 const ANDROID_OUTPUT = join(
   REPO_ROOT,
   "android/app/src/main/java/dev/opencode/mobile/ui/icons/OpenCodeIcons.kt",
 );
-const IOS_XCASSETS = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/MaterialIcons.xcassets");
+const IOS_XCASSETS = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/LucideIcons.xcassets");
+const LEGACY_IOS_XCASSETS = join(
+  REPO_ROOT,
+  "ios/OpenCode Mobile/OpenCode Mobile/MaterialIcons.xcassets",
+);
 const IOS_ENUM_OUTPUT = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Icons/OpenCodeIcon.swift");
 const MANIFEST_HASH_FILE = join(REPO_ROOT, "icons/.manifest-hash");
 
-async function copyIconsToCache(icons) {
+function copyIconsToCache(icons) {
+  rmSync(CACHE_DIR, { recursive: true, force: true });
+  mkdirSync(CACHE_DIR, { recursive: true });
   for (const icon of icons) {
-    const destDir = join(CACHE_DIR, icon.style);
-    mkdirSync(destDir, { recursive: true });
-    const dest = join(destDir, `${icon.name}.svg`);
-
-    if (icon.source === "material_symbols") {
-      const svg = await fetchMaterialSymbolSvg(icon.name);
-      writeFileSync(dest, svg, "utf8");
-      continue;
-    }
-
-    const source = svgSourcePath(svgPackageRoot, icon.style, icon.name);
+    const dest = join(CACHE_DIR, `${icon.name}.svg`);
+    const source = lucideSvgSourcePath(svgPackageRoot, icon.lucide);
     try {
       copyFileSync(source, dest);
     } catch {
-      throw new Error(`Missing Material icon SVG: ${icon.style}/${icon.name}.svg`);
+      throw new Error(`Missing Lucide icon SVG: ${icon.lucide}.svg (catalog name ${icon.name})`);
     }
   }
 }
@@ -43,30 +39,29 @@ async function copyIconsToCache(icons) {
 function readCachedSvgs(icons) {
   const svgByName = new Map();
   for (const icon of icons) {
-    const path = join(CACHE_DIR, icon.style, `${icon.name}.svg`);
+    const path = join(CACHE_DIR, `${icon.name}.svg`);
     svgByName.set(icon.name, readFileSync(path, "utf8"));
   }
   return svgByName;
 }
 
 function writeManifestHash(icons) {
-  const payload = icons
-    .map((i) => `${i.source}/${i.style}/${i.name}:${i.iosAssetName}`)
-    .join("\n");
+  const payload = icons.map((i) => `${i.source}/${i.lucide}/${i.name}:${i.iosAssetName}`).join("\n");
   writeFileSync(MANIFEST_HASH_FILE, `${payload}\n`, "utf8");
 }
 
-async function main() {
+function main() {
   const icons = loadManifest();
-  console.log(`Syncing ${icons.length} Material icons...`);
+  console.log(`Syncing ${icons.length} Lucide icons...`);
 
-  await copyIconsToCache(icons);
+  copyIconsToCache(icons);
   const svgByName = readCachedSvgs(icons);
 
   generateAndroidIcons(icons, svgByName, ANDROID_OUTPUT);
   console.log(`Wrote ${ANDROID_OUTPUT}`);
 
-  generateIosAssets(icons, CACHE_DIR, IOS_XCASSETS);
+  generateIosAssets(icons, svgByName, IOS_XCASSETS);
+  rmSync(LEGACY_IOS_XCASSETS, { recursive: true, force: true });
   console.log(`Wrote ${IOS_XCASSETS}`);
 
   generateIosSwiftEnum(icons, IOS_ENUM_OUTPUT);
@@ -76,7 +71,4 @@ async function main() {
   console.log("Icon sync complete.");
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+main();

@@ -62,7 +62,7 @@ build/openapi/
 android/app/build/generated/openapi/
 ios/OpenCode Mobile/Generated/
 
-# Material icon sync cache (generated assets are committed)
+# Lucide icon sync cache (generated assets are committed)
 icons/cache/
 
 # Theme research

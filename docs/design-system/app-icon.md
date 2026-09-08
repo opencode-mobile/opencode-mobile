@@ -15,7 +15,7 @@ pre-round corners or add drop shadows — Play (~30% mask + shadow) and Apple
 [`app-icon/interlock.svg`](../../app-icon/interlock.svg) is the previous listing
 mark. Leave it in the tree; do not point either generator at it.
 
-This is separate from the in-app Material Icons catalog (see
+This is separate from the in-app Lucide icon catalog (see
 [`icons.md`](./icons.md)); the launcher/store mark is not part of
 `icons/manifest.yaml`.
 

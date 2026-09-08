@@ -1,116 +1,106 @@
-# Material Icons catalog — see docs/design-system/icons.md
+# Lucide catalog — see docs/design-system/icons.md
 icons:
   - name: add
-    style: filled
-    notes: SF Symbol plus
+    lucide: plus
+    notes: Generic add / plus affordances; Commands tile New
   - name: arrow_back
-    style: filled
-    notes: SF Symbol chevron.left
+    lucide: arrow-left
+    notes: Back navigation; Terminal control strip Left
   - name: arrow_forward
-    style: filled
-    notes: SF Symbol chevron.right; pair of arrow_back
+    lucide: arrow-right
+    notes: Pair of arrow_back; Terminal control strip Right
   - name: arrow_upward
-    style: filled
-    notes: SF Symbol arrow.up; Queue / default Send
+    lucide: arrow-up
+    notes: Queue / default Send; Go up row in Add project sheet
   - name: arrow_warm_up
-    source: material_symbols
-    style: filled
+    lucide: arrow-up-right
     notes: Steer follow-up send
   - name: arrow_downward
-    style: filled
-    notes: SF Symbol arrow.down; scroll-to-end action pill
+    lucide: arrow-down
+    notes: Scroll-to-end action pill; Terminal control strip Down
   - name: check
-    style: filled
-    notes: SF Symbol checkmark
+    lucide: check
+    notes: Selected / complete mark
   - name: chevron_right
-    style: filled
+    lucide: chevron-right
   - name: keyboard_arrow_down
-    style: filled
+    lucide: chevron-down
     notes: Title switcher chevron after home server name
   - name: close
-    style: filled
-    notes: SF Symbol xmark
+    lucide: x
+    notes: Dismiss / close
   - name: content_copy
-    style: filled
-    notes: SF Symbol doc.on.doc
+    lucide: copy
+    notes: Copy action
   - name: collapse_content
-    source: material_symbols
-    style: filled
+    lucide: minimize-2
     notes: Outgoing message expanded state
   - name: delete
-    style: filled
-    notes: SF Symbol trash; Edit server top-bar remove
+    lucide: trash-2
+    notes: Edit server top-bar remove
   - name: description
-    style: filled
-    notes: SF Symbol doc.text
+    lucide: file-text
+    notes: Document / file affordance
   - name: edit
-    style: filled
-    notes: SF Symbol pencil
+    lucide: pencil
   - name: expand_content
-    source: material_symbols
-    style: filled
+    lucide: maximize-2
     notes: Outgoing message collapsed state
   - name: folder
-    style: filled
-    notes: SF Symbol folder.fill
+    lucide: folder
   - name: create_new_folder
-    style: filled
+    lucide: folder-plus
     notes: Add project — folder with plus (Session List Dock)
   - name: folder_check
-    source: material_symbols
-    style: filled
+    lucide: folder-check
     notes: Current directory row in Add project sheet
   - name: list
-    style: filled
-    notes: SF Symbol list.bullet
+    lucide: list
   - name: more_vert
-    style: filled
-    notes: SF Symbol ellipsis
+    lucide: ellipsis-vertical
   - name: search
-    style: filled
-    notes: SF Symbol magnifyingglass
+    lucide: search
   - name: settings
-    style: filled
+    lucide: settings
     notes: Gear — home top bar Settings action
   - name: terminal
-    style: filled
+    lucide: square-terminal
     notes: open Terminal from home
   - name: architecture
-    style: filled
-    notes: Column/blueprint — Component Gallery entry in Settings
+    lucide: component
+    notes: Component Gallery entry in Settings
   - name: archive
-    style: filled
-    notes: SF Symbol archivebox; Session Chat overflow Archive action
+    lucide: archive
+    notes: Session Chat overflow Archive action
   - name: cloud
-    style: filled
-    notes: Cloud — Server Connection entry in Settings
+    lucide: cloud
+    notes: Server Connection entry in Settings
   - name: stop
-    style: filled
-    notes: SF Symbol stop.fill; Session Composer abort action
+    lucide: square
+    notes: Session Composer abort action
   - name: stop_circle
-    style: filled
-    notes: SF Symbol stop.circle
+    lucide: circle-stop
   - name: subdirectory_arrow_right
-    style: filled
+    lucide: corner-down-right
     notes: Subdirectory rows in Add project sheet
   - name: undo
-    style: filled
-    notes: SF Symbol arrow.uturn.backward; Commands tile Undo
+    lucide: undo-2
+    notes: Commands tile Undo
   - name: redo
-    style: filled
+    lucide: redo-2
     notes: Commands tile Redo; pair of undo
   - name: call_split
-    style: filled
+    lucide: git-fork
     notes: Commands tile Fork
   - name: vertical_align_center
-    style: filled
+    lucide: fold-vertical
     notes: Commands tile Compact
   - name: radio_button_checked
-    style: filled
-    notes: SF Symbol circle.inset.filled; question option selected
+    lucide: circle-dot
+    notes: Question option selected
   - name: radio_button_unchecked
-    style: filled
-    notes: SF Symbol circle; question option unselected
+    lucide: circle
+    notes: Question option unselected
   - name: widgets
-    style: filled
-    notes: SF Symbol square.grid.2x2 (component gallery)
+    lucide: layout-grid
+    notes: All-projects mark; component gallery

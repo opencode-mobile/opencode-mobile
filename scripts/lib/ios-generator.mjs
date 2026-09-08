@@ -1,6 +1,5 @@
-import { mkdirSync, writeFileSync, copyFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { toPascalCase } from "./utils.mjs";
 
 const IMAGESET_CONTENTS = `{
   "images" : [
@@ -20,7 +19,14 @@ const IMAGESET_CONTENTS = `{
 }
 `;
 
-export function generateIosAssets(icons, cacheDir, xcassetsDir) {
+function normalizeLucideSvgForIos(svgText) {
+  return svgText
+    .replaceAll('stroke="currentColor"', 'stroke="#000000"')
+    .replaceAll('fill="currentColor"', 'fill="#000000"');
+}
+
+export function generateIosAssets(icons, svgByName, xcassetsDir) {
+  rmSync(xcassetsDir, { recursive: true, force: true });
   mkdirSync(xcassetsDir, { recursive: true });
   writeFileSync(
     join(xcassetsDir, "Contents.json"),
@@ -35,12 +41,11 @@ export function generateIosAssets(icons, cacheDir, xcassetsDir) {
   );
 
   for (const icon of icons) {
+    const svgText = svgByName.get(icon.name);
+    if (!svgText) throw new Error(`Missing SVG for ${icon.name}`);
     const imagesetDir = join(xcassetsDir, `${icon.iosAssetName}.imageset`);
     mkdirSync(imagesetDir, { recursive: true });
-    copyFileSync(
-      join(cacheDir, icon.style, `${icon.name}.svg`),
-      join(imagesetDir, "icon.svg"),
-    );
+    writeFileSync(join(imagesetDir, "icon.svg"), normalizeLucideSvgForIos(svgText), "utf8");
     writeFileSync(join(imagesetDir, "Contents.json"), IMAGESET_CONTENTS, "utf8");
   }
 }
@@ -62,7 +67,7 @@ ${cases}
     var accessibilityIdentifier: String { rawValue }
 }
 
-/// Material catalog icon rendered as a template asset.
+/// Lucide catalog icon rendered as a template asset.
 ///
 /// Size with size: or an outer .frame. Do not use .font — asset-catalog
 /// templates ignore font the way SF Symbols do not, which previously left

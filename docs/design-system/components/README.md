@@ -96,7 +96,7 @@ applicable item is complete.
 
 ## Current Component Docs
 
-- `../icons.md` (shared Material icon catalog and sync workflow)
+- `../icons.md` (shared Lucide icon catalog and sync workflow)
 - `attachment.md`
 - `connection-status-label.md`
 - `message-list.md`

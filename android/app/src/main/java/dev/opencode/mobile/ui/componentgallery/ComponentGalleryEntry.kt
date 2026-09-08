@@ -73,7 +73,7 @@ val ComponentGalleryEntries =
         ComponentGalleryEntry(
             id = ComponentGalleryEntryId.Icons,
             title = "Icons",
-            description = "Material Icons catalog synced from icons/manifest.yaml.",
+            description = "Lucide catalog synced from icons/manifest.yaml.",
             category = ComponentGalleryCategory.Foundations,
         ),
         ComponentGalleryEntry(
