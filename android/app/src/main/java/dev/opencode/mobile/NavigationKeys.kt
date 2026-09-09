@@ -13,6 +13,12 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object ServersHome : NavKey
 
+@Serializable data object AppearanceHome : NavKey
+
+@Serializable data object ThemePickerHome : NavKey
+
+@Serializable data object SyntaxPickerHome : NavKey
+
 @Serializable data object TextMateLogbookHome : NavKey
 
 @Serializable data object DiagnosticLogsHome : NavKey

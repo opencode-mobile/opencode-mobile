@@ -1,0 +1,29 @@
+{
+  "id": "neon",
+  "name": "Neon",
+  "blurb": "Dracula family",
+  "light": {
+    "syntax-comment": "#6272A4",
+    "syntax-keyword": "#9B4DCA",
+    "syntax-string": "#8A7A00",
+    "syntax-primitive": "#007A9B",
+    "syntax-property": "#007A9B",
+    "syntax-type": "#6B4DB0",
+    "syntax-constant": "#007A9B",
+    "syntax-variable": "#C43A48",
+    "syntax-operator": "#282A36",
+    "syntax-punctuation": "#282A36"
+  },
+  "dark": {
+    "syntax-comment": "#6272A4",
+    "syntax-keyword": "#FF79C6",
+    "syntax-string": "#F1FA8C",
+    "syntax-primitive": "#8BE9FD",
+    "syntax-property": "#8BE9FD",
+    "syntax-type": "#BD93F9",
+    "syntax-constant": "#8BE9FD",
+    "syntax-variable": "#FF5555",
+    "syntax-operator": "#F8F8F2",
+    "syntax-punctuation": "#F8F8F2"
+  }
+}

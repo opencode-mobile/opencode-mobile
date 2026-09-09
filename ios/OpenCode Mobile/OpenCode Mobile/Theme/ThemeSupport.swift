@@ -21,6 +21,7 @@ enum ThemeSupport {
 enum ThemePersistence {
     static let importedThemesKey = "importedThemes"
     static let selectedThemeIDKey = "selectedThemeID"
+    static let selectedSyntaxIDKey = "selectedSyntaxID"
 
     static func saveSelectedThemeID(
         _ id: String,
@@ -29,8 +30,16 @@ enum ThemePersistence {
         defaults.set(id, forKey: selectedThemeIDKey)
     }
 
+    static func saveSelectedSyntaxID(
+        _ id: String,
+        defaults: UserDefaults
+    ) {
+        defaults.set(id, forKey: selectedSyntaxIDKey)
+    }
+
     static func clear(defaults: UserDefaults) {
         defaults.removeObject(forKey: importedThemesKey)
         defaults.removeObject(forKey: selectedThemeIDKey)
+        defaults.removeObject(forKey: selectedSyntaxIDKey)
     }
 }

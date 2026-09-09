@@ -3,6 +3,62 @@ import Foundation
 struct ThemePreset: Identifiable, Equatable, Codable {
     let id: String
     let name: String
+    var blurb: String
+
+    init(id: String, name: String, blurb: String = "") {
+        self.id = id
+        self.name = name
+        self.blurb = blurb
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        blurb = try container.decodeIfPresent(String.self, forKey: .blurb) ?? ""
+    }
+}
+
+struct SyntaxHighlightPreset: Identifiable, Equatable, Codable {
+    let id: String
+    let name: String
+    var blurb: String
+    var light: [String: String]
+    var dark: [String: String]
+
+    var isMatch: Bool { id == Self.matchID }
+
+    static let matchID = "match"
+    static let match = SyntaxHighlightPreset(
+        id: matchID,
+        name: "Match theme",
+        blurb: "Use the UI theme’s own tokens",
+        light: [:],
+        dark: [:]
+    )
+
+    init(
+        id: String,
+        name: String,
+        blurb: String = "",
+        light: [String: String] = [:],
+        dark: [String: String] = [:]
+    ) {
+        self.id = id
+        self.name = name
+        self.blurb = blurb
+        self.light = light
+        self.dark = dark
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        blurb = try container.decodeIfPresent(String.self, forKey: .blurb) ?? ""
+        light = try container.decodeIfPresent([String: String].self, forKey: .light) ?? [:]
+        dark = try container.decodeIfPresent([String: String].self, forKey: .dark) ?? [:]
+    }
 }
 
 struct OpenCodeTheme: Codable, Equatable {

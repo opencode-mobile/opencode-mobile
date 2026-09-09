@@ -31,7 +31,7 @@ struct SettingsView: View {
     @State private var showClearConfirmation = false
     @State private var showClearSessionCacheConfirmation = false
     @State private var sessionCacheSizeLabel = "Empty"
-    @State private var showThemePicker = false
+    @State private var showAppearance = false
     @State private var showRecentWindowPicker = false
     @State private var showFollowUpPicker = false
     @State private var themeManager = ThemeManager.shared
@@ -85,18 +85,17 @@ struct SettingsView: View {
                     SectionHeader(title: "Appearance")
 
                     OpenCodeListItem(
-                        title: "Theme",
-                        subtitle: themeManager.currentTheme.name,
+                        title: "Appearance",
+                        subtitle: "\(themeManager.currentTheme.name) · \(themeManager.currentSyntaxPreset.name)",
                         style: .card,
-                        startDecorator: .icon(.widgets, accessibilityLabel: "Theme"),
+                        startDecorator: .icon(.widgets, accessibilityLabel: "Appearance"),
                         action: {
-                            logSettingsAction(ProductAnalytics.Action.settingsOpenThemePicker)
-                            ProductAnalytics.logScreenView(
-                                screenId: ProductAnalytics.Screen.settingsThemePicker,
-                                presentation: ProductAnalytics.Presentation.sheet,
-                                trigger: ProductAnalytics.Trigger.present
-                            )
-                            showThemePicker = true
+                            logSettingsAction(ProductAnalytics.Action.settingsOpenAppearance)
+                            showAppearance = true
+                        },
+                        trailing: {
+                            OpenCodeIconImage(icon: .chevronRight, size: 18)
+                                .foregroundStyle(OpenCodeColors.textBase)
                         }
                     )
                     .padding(.horizontal, 16)
@@ -407,29 +406,8 @@ struct SettingsView: View {
         .navigationDestination(isPresented: $showDiagnosticLogs) {
             DiagnosticLogsView()
         }
-        .openCodeBottomSheet(
-            isPresented: themePickerBinding,
-            title: "Theme",
-            scrollTargetID: themeManager.currentTheme.id
-        ) {
-            ForEach(themeManager.availablePresets()) { preset in
-                OpenCodeBottomSheetEntry(
-                    title: preset.name,
-                    endDecorator: preset.id == themeManager.currentTheme.id
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
-                    action: {
-                        ProductAnalytics.logUserAction(
-                            screenId: ProductAnalytics.Screen.settingsThemePicker,
-                            actionId: ProductAnalytics.Action.themePickerSelectPreset,
-                            parameters: [ProductAnalytics.Param.themePreset: preset.id]
-                        )
-                        themeManager.applyPreset(id: preset.id)
-                        showThemePicker = false
-                    }
-                )
-                .id(preset.id)
-            }
+        .navigationDestination(isPresented: $showAppearance) {
+            AppearanceSettingsView()
         }
         .openCodeBottomSheet(
             isPresented: recentWindowPickerBinding,
@@ -583,22 +561,6 @@ struct SettingsView: View {
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.settings,
             actionId: actionId
-        )
-    }
-
-    // Sheet-chrome dismissal only: entry taps clear the flag directly.
-    private var themePickerBinding: Binding<Bool> {
-        Binding(
-            get: { showThemePicker },
-            set: { presented in
-                if !presented {
-                    ProductAnalytics.logUserAction(
-                        screenId: ProductAnalytics.Screen.settingsThemePicker,
-                        actionId: ProductAnalytics.Action.themePickerDismiss
-                    )
-                }
-                showThemePicker = presented
-            }
         )
     }
 

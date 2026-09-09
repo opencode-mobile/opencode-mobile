@@ -20,6 +20,7 @@ final class ThemeManager {
     ]
 
     private(set) var currentTheme: OpenCodeTheme
+    private(set) var currentSyntaxPreset: SyntaxHighlightPreset
     private(set) var resolvedLight: ResolvedTokens
     private(set) var resolvedDark: ResolvedTokens
     private(set) var revision: UInt64 = 0
@@ -27,20 +28,24 @@ final class ThemeManager {
 
     private let defaults: UserDefaults
     private var cachedManifestPresets: [ThemePreset]?
+    private var cachedSyntaxPresets: [SyntaxHighlightPreset]?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.resolvedLight = ResolvedTokens()
         self.resolvedDark = ResolvedTokens()
         self.currentTheme = Self.loadInitialTheme(defaults: defaults)
+        self.currentSyntaxPreset = Self.loadInitialSyntaxPreset(defaults: defaults)
         resolve()
     }
 
     // MARK: - Resolution
 
     func resolve() {
-        resolvedLight = ThemeResolver.resolve(variant: currentTheme.light, isDark: false)
-        resolvedDark = ThemeResolver.resolve(variant: currentTheme.dark, isDark: true)
+        let light = ThemeResolver.resolve(variant: currentTheme.light, isDark: false)
+        let dark = ThemeResolver.resolve(variant: currentTheme.dark, isDark: true)
+        resolvedLight = ThemeResolver.overlaySyntax(light, syntax: currentSyntaxPreset.light)
+        resolvedDark = ThemeResolver.overlaySyntax(dark, syntax: currentSyntaxPreset.dark)
         revision &+= 1
     }
 
@@ -52,6 +57,38 @@ final class ThemeManager {
 
     func availablePresets() -> [ThemePreset] {
         manifestPresets()
+    }
+
+    func availableSyntaxPresets() -> [SyntaxHighlightPreset] {
+        syntaxPresets()
+    }
+
+    func resolvedPreview(themeId: String) -> (ResolvedTokens, ResolvedTokens)? {
+        guard let theme = Self.loadPreset(id: themeId) else { return nil }
+        return (
+            ThemeResolver.resolve(variant: theme.light, isDark: false),
+            ThemeResolver.resolve(variant: theme.dark, isDark: true)
+        )
+    }
+
+    func syntaxTokensForPreview(preset: SyntaxHighlightPreset, isDark: Bool) -> [String: String] {
+        if preset.isMatch {
+            let variant = isDark ? currentTheme.dark : currentTheme.light
+            let tokens = ThemeResolver.resolve(variant: variant, isDark: isDark).tokens
+            return tokens.filter { $0.key.hasPrefix("syntax-") }
+        }
+        return isDark ? preset.dark : preset.light
+    }
+
+    func applySyntaxPreset(id: String) {
+        guard let preset = syntaxPresets().first(where: { $0.id == id }) else {
+            loadError = "Syntax highlight preset not found"
+            return
+        }
+        currentSyntaxPreset = preset
+        resolve()
+        ThemePersistence.saveSelectedSyntaxID(id, defaults: defaults)
+        loadError = nil
     }
 
     func applyPreset(id: String) {
@@ -74,11 +111,72 @@ final class ThemeManager {
 
     func loadBundledTheme() {
         currentTheme = Self.loadPreset(id: Self.defaultPresetID) ?? Self.bundledTheme()
+        currentSyntaxPreset = .match
         resolve()
         loadError = nil
     }
 
     // MARK: - Persistence
+
+    private static func loadInitialSyntaxPreset(defaults: UserDefaults) -> SyntaxHighlightPreset {
+        guard let selectedID = defaults.string(forKey: ThemePersistence.selectedSyntaxIDKey),
+              !selectedID.isEmpty
+        else {
+            return .match
+        }
+        return loadSyntaxPreset(id: selectedID) ?? .match
+    }
+
+    private func syntaxPresets() -> [SyntaxHighlightPreset] {
+        if let cachedSyntaxPresets {
+            return cachedSyntaxPresets
+        }
+        let presets = Self.loadSyntaxManifest()
+        cachedSyntaxPresets = presets
+        return presets
+    }
+
+    private static func loadSyntaxManifest() -> [SyntaxHighlightPreset] {
+        for subdirectory in ["SyntaxPresets", "Resources/SyntaxPresets", nil] {
+            guard let url = Bundle.main.url(
+                forResource: "syntax-manifest",
+                withExtension: "json",
+                subdirectory: subdirectory
+            ),
+            let data = try? Data(contentsOf: url),
+            let entries = try? JSONDecoder().decode([SyntaxHighlightPreset].self, from: data),
+            !entries.isEmpty
+            else {
+                continue
+            }
+            return entries.map { entry in
+                if entry.id == SyntaxHighlightPreset.matchID {
+                    return SyntaxHighlightPreset(
+                        id: entry.id,
+                        name: entry.name,
+                        blurb: entry.blurb,
+                        light: [:],
+                        dark: [:]
+                    )
+                }
+                return loadSyntaxPreset(id: entry.id) ?? entry
+            }
+        }
+        return [.match]
+    }
+
+    private static func loadSyntaxPreset(id: String) -> SyntaxHighlightPreset? {
+        if id == SyntaxHighlightPreset.matchID { return .match }
+        for subdirectory in ["SyntaxPresets", "Resources/SyntaxPresets", nil] {
+            if let url = Bundle.main.url(forResource: id, withExtension: "json", subdirectory: subdirectory),
+               let data = try? Data(contentsOf: url),
+               let preset = try? JSONDecoder().decode(SyntaxHighlightPreset.self, from: data)
+            {
+                return preset
+            }
+        }
+        return nil
+    }
 
     private static func loadInitialTheme(defaults: UserDefaults) -> OpenCodeTheme {
         let defaultTheme = loadPreset(id: defaultPresetID) ?? bundledTheme()

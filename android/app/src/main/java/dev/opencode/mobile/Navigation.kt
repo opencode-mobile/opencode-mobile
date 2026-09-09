@@ -91,12 +91,15 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolGroupScreen
 import dev.opencode.mobile.ui.sessionchat.view.toTarget
 import dev.opencode.mobile.ui.sessioncontext.SessionContextScreen
+import dev.opencode.mobile.ui.settings.AppearanceSettingsScreen
 import dev.opencode.mobile.ui.settings.DiagnosticLogsScreen
 import dev.opencode.mobile.ui.settings.DiagnosticLogsViewModel
 import dev.opencode.mobile.ui.settings.ServersScreen
 import dev.opencode.mobile.ui.settings.ServersViewModel
 import dev.opencode.mobile.ui.settings.SettingsScreen
 import dev.opencode.mobile.ui.settings.SettingsViewModel
+import dev.opencode.mobile.ui.settings.SyntaxHighlightPickerScreen
+import dev.opencode.mobile.ui.settings.ThemePickerScreen
 import dev.opencode.mobile.ui.settings.TextMateLanguagesRoute
 import dev.opencode.mobile.ui.settings.TextMateLogbookScreen
 import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
@@ -250,12 +253,16 @@ fun MainNavigation() {
                                                         backStack.add(ServersHome)
                                                     }
                                                 },
+                                                onAppearanceClick = {
+                                                    if (backStack.lastOrNull() != AppearanceHome) {
+                                                        backStack.add(AppearanceHome)
+                                                    }
+                                                },
                                                 serversSummary = serversSummary,
                                                 onClearData = settingsViewModel::clearAllData,
                                                 onClearSessionCache = settingsViewModel::clearSessionCache,
                                                 sessionCacheSizeLabel = sessionCacheSizeLabel,
                                                 onRefreshSessionCacheSize = settingsViewModel::refreshSessionCacheSize,
-                                                onApplyPreset = settingsViewModel::applyPreset,
                                                 hideUserDirectoryPrefix =
                                                     HomeDisplayPreferences.hideUserDirectoryPrefix,
                                                 onHideUserDirectoryPrefixChange =
@@ -287,6 +294,48 @@ fun MainNavigation() {
                                                     AnalyticsConsentPreferences.productAnalyticsConsented,
                                                 onProductAnalyticsConsentedChange =
                                                     settingsViewModel::setProductAnalyticsConsented,
+                                            )
+                                        }
+                                    }
+                                    entry<AppearanceHome> {
+                                        RouteSurface {
+                                            ProductRouteScreenViewEffect(
+                                                screenId = ProductAnalytics.Screen.SETTINGS_APPEARANCE,
+                                            )
+                                            AppearanceSettingsScreen(
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onThemeClick = {
+                                                    if (backStack.lastOrNull() != ThemePickerHome) {
+                                                        backStack.add(ThemePickerHome)
+                                                    }
+                                                },
+                                                onSyntaxClick = {
+                                                    if (backStack.lastOrNull() != SyntaxPickerHome) {
+                                                        backStack.add(SyntaxPickerHome)
+                                                    }
+                                                },
+                                            )
+                                        }
+                                    }
+                                    entry<ThemePickerHome> {
+                                        RouteSurface {
+                                            ProductRouteScreenViewEffect(
+                                                screenId = ProductAnalytics.Screen.SETTINGS_THEME_PICKER,
+                                            )
+                                            ThemePickerScreen(
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onSelect = settingsViewModel::applyPreset,
+                                            )
+                                        }
+                                    }
+                                    entry<SyntaxPickerHome> {
+                                        RouteSurface {
+                                            ProductRouteScreenViewEffect(
+                                                screenId = ProductAnalytics.Screen.SETTINGS_SYNTAX_PICKER,
+                                            )
+                                            SyntaxHighlightPickerScreen(
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onSelect = settingsViewModel::applySyntaxPreset,
                                             )
                                         }
                                     }

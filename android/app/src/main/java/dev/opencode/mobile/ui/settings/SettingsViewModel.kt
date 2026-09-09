@@ -118,6 +118,10 @@ class SettingsViewModel
             ThemeManager.applyPreset(id)
         }
 
+        fun applySyntaxPreset(id: String) {
+            ThemeManager.applySyntaxPreset(id)
+        }
+
         fun setHideUserDirectoryPrefix(enabled: Boolean) {
             HomeDisplayPreferences.updateHideUserDirectoryPrefix(enabled)
         }

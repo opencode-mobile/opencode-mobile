@@ -44,9 +44,29 @@ updated via `npm run themes:sync` and verified with `npm run themes:check`
 | iOS | `Resources/ThemePresets/` (may flatten into bundle root at build time) |
 | Android | `assets/theme-presets/` |
 
-`manifest.json` lists `{ id, name }` pairs for the Settings theme picker. Default
-selection is the `graphite` preset unless the user chooses another bundled
-preset.
+`manifest.json` lists `{ id, name, blurb }` pairs for the Settings theme picker.
+Default selection is the `graphite` preset unless the user chooses another
+bundled preset.
+
+### Syntax highlight presets
+
+Code-fence colors are a separate setting from the UI theme. Canonical JSON
+lives in `shared/syntax-presets/`; platform bundles are updated by the same
+`npm run themes:sync` command.
+
+| Preset | Role |
+| --- | --- |
+| `match` | Virtual. Use the active UI theme’s own `syntax-*` tokens. Default. |
+| `nocturne` | One Dark family |
+| `citrus` | Solarized family |
+| `paper` | GitHub family |
+| `neon` | Dracula family |
+
+`match` has no JSON file. The other presets overlay only `syntax-*` keys onto
+the resolved UI theme. The syntax catalog is `syntax-manifest.json` so it does
+not collide with the theme `manifest.json` when iOS flattens resource folders.
+Settings → Appearance opens dedicated preview pages for both pickers (card
+gallery), not a name-only sheet.
 
 ## Palette Seeds
 

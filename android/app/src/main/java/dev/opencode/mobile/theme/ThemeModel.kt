@@ -62,3 +62,24 @@ data class ResolvedTokens(
 ) {
     operator fun get(key: String): String = tokens[key] ?: "#000000"
 }
+
+@Serializable
+data class SyntaxHighlightPreset(
+    val id: String,
+    val name: String,
+    val blurb: String = "",
+    val light: Map<String, String> = emptyMap(),
+    val dark: Map<String, String> = emptyMap(),
+) {
+    val isMatch: Boolean get() = id == MATCH_SYNTAX_PRESET_ID
+
+    companion object {
+        const val MATCH_SYNTAX_PRESET_ID = "match"
+        val Match =
+            SyntaxHighlightPreset(
+                id = MATCH_SYNTAX_PRESET_ID,
+                name = "Match theme",
+                blurb = "Use the UI theme’s own tokens",
+            )
+    }
+}

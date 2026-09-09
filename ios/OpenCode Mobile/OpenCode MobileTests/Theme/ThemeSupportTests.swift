@@ -16,13 +16,15 @@ struct ThemeSupportTests {
 }
 
 struct ThemePersistenceTests {
-    @Test func clear_removesSelectedThemeID() {
+    @Test func clear_removesSelectedThemeAndSyntaxIDs() {
         let defaults = isolatedDefaults()
         ThemePersistence.saveSelectedThemeID("kiln", defaults: defaults)
+        ThemePersistence.saveSelectedSyntaxID("nocturne", defaults: defaults)
 
         ThemePersistence.clear(defaults: defaults)
 
         #expect(defaults.string(forKey: ThemePersistence.selectedThemeIDKey) == nil)
+        #expect(defaults.string(forKey: ThemePersistence.selectedSyntaxIDKey) == nil)
         #expect(defaults.data(forKey: ThemePersistence.importedThemesKey) == nil)
     }
 

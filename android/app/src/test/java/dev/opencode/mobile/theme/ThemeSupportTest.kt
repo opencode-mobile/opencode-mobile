@@ -75,6 +75,25 @@ class ThemeSupportTest {
         assertTrue(dark["markdown-quote-bar"] != dark["interactive"])
     }
 
+    @Test
+    fun overlaySyntax_replacesSyntaxKeysAndIgnoresOthers() {
+        val base = ThemeResolver.resolve(sampleTheme(id = "overlay").light, isDark = false)
+        val overlaid =
+            ThemeResolver.overlaySyntax(
+                base,
+                mapOf(
+                    "syntax-keyword" to "#AABBCC",
+                    "background-base" to "#000000",
+                    "syntax-comment" to "112233",
+                ),
+            )
+
+        assertEquals("#AABBCC", overlaid["syntax-keyword"])
+        assertEquals("#112233", overlaid["syntax-comment"])
+        assertEquals(base["background-base"], overlaid["background-base"])
+        assertEquals(base["text-strong"], overlaid["text-strong"])
+    }
+
     private fun incompletePalette(): PaletteSeeds =
         PaletteSeeds(
             neutral = "#111111",

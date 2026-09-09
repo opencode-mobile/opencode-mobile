@@ -1,22 +1,27 @@
 [
   {
     "id": "graphite",
-    "name": "Graphite"
+    "name": "Graphite",
+    "blurb": "Cool gray product default"
   },
   {
     "id": "kiln",
-    "name": "Kiln"
+    "name": "Kiln",
+    "blurb": "Warm paper and copper"
   },
   {
     "id": "beacon",
-    "name": "Beacon"
+    "name": "Beacon",
+    "blurb": "Newspaper white and lime"
   },
   {
     "id": "harbor",
-    "name": "Harbor"
+    "name": "Harbor",
+    "blurb": "Ice paper and sea teal"
   },
   {
     "id": "orchid",
-    "name": "Orchid"
+    "name": "Orchid",
+    "blurb": "Lilac paper and violet"
   }
 ]
