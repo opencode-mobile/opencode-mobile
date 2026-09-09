@@ -101,6 +101,7 @@ struct DiagnosticLogsView: View {
                 showDivider: true
             )
 
+            VStack(spacing: 0) {
             ScrollView {
                 LazyVStack(spacing: 8) {
                     if model.isLoading {
@@ -191,6 +192,9 @@ struct DiagnosticLogsView: View {
             .padding(.horizontal, 16)
             .padding(.top, 8)
             .padding(.bottom, 16)
+            }
+            .openCodeReadableColumn()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationBarBackButtonHidden(true)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

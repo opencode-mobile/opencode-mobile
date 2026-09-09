@@ -23,6 +23,7 @@ struct TerminalsCatalogView: View {
                 leading: .back(action: { dismiss() }),
                 showDivider: true
             )
+            Group {
             if viewModel.isLoading {
                 OpenCodeStatusStack(
                     title: "Loading terminals",
@@ -62,6 +63,9 @@ struct TerminalsCatalogView: View {
                     }
                 }
             }
+            }
+            .openCodeReadableColumn()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(OpenCodeColors.backgroundBase)
         .toolbar(.hidden, for: .navigationBar)

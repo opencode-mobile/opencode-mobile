@@ -294,7 +294,8 @@ implementation belong in the feature's `parity-gaps.md`.
 - Status: intentional
 - Area: token
 - Shared intent: compact is a phone-width window; regular is wider. Reading
-  surfaces center at `layout.contentMaxWidth`. Bottom sheets stay edge-inset
+  surfaces center at `layout.contentMaxWidth`. Camera viewfinders stay
+  full-bleed. Bottom sheets stay edge-inset
   on compact and become a `layout.sheetMaxWidth` card on regular.
 - iOS behavior: screens use `horizontalSizeClass`. Window-level bottom-sheet
   overlays resolve regular when the overlay width is at least

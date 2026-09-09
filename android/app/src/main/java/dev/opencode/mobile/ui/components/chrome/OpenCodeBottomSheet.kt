@@ -9,7 +9,6 @@ import android.view.RoundedCorner
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
-import androidx.core.view.ViewCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -30,27 +29,28 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -96,6 +96,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.core.view.ViewCompat
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -232,15 +233,7 @@ fun OpenCodeBottomSheet(
 
     val scrimInteractionSource = remember { MutableInteractionSource() }
     val sheetInteractionSource = remember { MutableInteractionSource() }
-    val layoutWidth = currentOpenCodeLayoutWidth()
-    val usesFloatingCard = layoutWidth == OpenCodeLayoutWidth.Regular
     val displayCornerRadius = rememberBottomSheetCornerRadius()
-    val sheetCornerRadius =
-        if (usesFloatingCard) {
-            BottomSheetCornerRadiusTop
-        } else {
-            displayCornerRadius
-        }
     val view = LocalView.current
     val threeButtonNav = remember(view) { view.context.usesThreeButtonNavigation() }
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -253,7 +246,7 @@ fun OpenCodeBottomSheet(
 
     BackHandler(onBack = ::dismissWithAnimation)
     BottomSheetWindowOverlay(paneTitle = title) {
-        Box(
+        BoxWithConstraints(
             modifier =
                 Modifier
                     .fillMaxSize()
@@ -266,12 +259,18 @@ fun OpenCodeBottomSheet(
                         onClick = ::dismissWithAnimation,
                     ),
         ) {
+            val usesFloatingCard = maxWidth >= OpenCodeLayout.CompactMaxWidth
+            val sheetCornerRadius =
+                if (usesFloatingCard) {
+                    BottomSheetCornerRadiusTop
+                } else {
+                    displayCornerRadius
+                }
             AnimatedVisibility(
                 visible = sheetVisible,
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
                         .then(
                             if (contentMode == OpenCodeBottomSheetContentMode.Form) Modifier.imePadding() else Modifier,
                         ),
@@ -752,15 +751,13 @@ fun OpenCodeBottomSheetEntry(
                     } else {
                         Color.Transparent
                     },
-                )
-                .defaultMinSize(minHeight = BottomSheetEntryMinHeight)
+                ).defaultMinSize(minHeight = BottomSheetEntryMinHeight)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = ripple(bounded = true),
                     enabled = enabled,
                     onClick = onClick,
-                )
-                .padding(
+                ).padding(
                     horizontal = BottomSheetEntryHorizontalPadding,
                     vertical = BottomSheetEntryVerticalPadding,
                 ).then(if (enabled) Modifier else Modifier.alpha(0.7f)),

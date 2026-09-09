@@ -36,6 +36,8 @@ struct TerminalView: View {
                 showDivider: true
             )
             content
+                .openCodeReadableColumn()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(OpenCodeColors.backgroundBase)
         .toolbar(.hidden, for: .navigationBar)

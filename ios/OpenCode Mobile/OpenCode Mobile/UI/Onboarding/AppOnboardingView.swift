@@ -119,6 +119,7 @@ struct AppOnboardingView: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 28)
         }
+        .openCodeReadableColumn()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -218,6 +219,7 @@ private struct AppOnboardingSetupGuideView: View {
                 leading: .back(action: onBack)
             )
 
+            VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Set up opencode serve")
@@ -268,6 +270,9 @@ private struct AppOnboardingSetupGuideView: View {
             )
             .padding(.horizontal, 24)
             .padding(.vertical, 28)
+            }
+            .openCodeReadableColumn()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)

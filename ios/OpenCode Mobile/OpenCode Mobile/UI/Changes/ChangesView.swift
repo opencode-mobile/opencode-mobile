@@ -46,7 +46,9 @@ struct ChangesView: View {
                     showDivider: true
                 )
             }
-            content.frame(maxWidth: .infinity, maxHeight: .infinity)
+            content
+                .openCodeReadableColumn()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(OpenCodeColors.backgroundBase)
         .toolbar(.hidden, for: .navigationBar)
@@ -279,6 +281,7 @@ private struct FileViewerView: View {
                 showDivider: true
             )
 
+            Group {
             if state.hasPreview {
                 viewerContent
             } else {
@@ -292,6 +295,9 @@ private struct FileViewerView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(24)
             }
+            }
+            .openCodeReadableColumn()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(OpenCodeColors.backgroundBase)
         .toolbar(.hidden, for: .navigationBar)

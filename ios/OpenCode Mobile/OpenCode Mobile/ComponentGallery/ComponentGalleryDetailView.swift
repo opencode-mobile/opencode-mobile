@@ -19,6 +19,7 @@ struct ComponentGalleryDetailView: View {
                 )
             }
 
+            Group {
             if entry.id == .messageList {
                 MessageListGalleryView(model: messageListGalleryModel)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -64,6 +65,9 @@ struct ComponentGalleryDetailView: View {
                     .padding(.vertical, 16)
                 }
             }
+            }
+            .openCodeReadableColumn()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(OpenCodeColors.backgroundBase)
         .navigationBarHidden(true)

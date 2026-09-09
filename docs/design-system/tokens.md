@@ -248,9 +248,9 @@ states, variants, or platforms.
 ### Layout
 
 Shared page and overlay width. **Compact** is a phone-width window. **Regular**
-is everything wider. Top bars stay edge-to-edge. Session Chat, home list + dock,
-and other reading surfaces center a column at `layout.contentMaxWidth`. Bottom
-sheets stay edge-inset on compact and become a max-width card on regular.
+is everything wider. Top bars stay edge-to-edge. Screens center a column at
+`layout.contentMaxWidth`. Camera viewfinders stay full-bleed. Bottom sheets stay
+edge-inset on compact and become a max-width card on regular.
 
 | Token | Value |
 | --- | --- |

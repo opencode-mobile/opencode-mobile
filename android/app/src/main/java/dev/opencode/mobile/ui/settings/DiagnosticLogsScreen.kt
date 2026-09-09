@@ -47,6 +47,7 @@ import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
+import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -240,6 +241,8 @@ fun DiagnosticLogsScreen(
             showDivider = true,
         )
 
+        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.fillMaxSize()) {
         when {
             state.loading ->
                 CircularProgressIndicator(
@@ -352,6 +355,8 @@ fun DiagnosticLogsScreen(
                 size = OpenCodeButtonSize.Large,
                 onClick = { showExportSheet = true },
             )
+        }
+            }
         }
     }
 

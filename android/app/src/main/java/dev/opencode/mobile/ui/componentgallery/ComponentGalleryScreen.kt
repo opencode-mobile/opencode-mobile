@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
@@ -45,6 +46,8 @@ fun ComponentGalleryScreen(
             showDivider = true,
         )
 
+        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.fillMaxSize()) {
         OpenCodeTextInput(
             value = searchQuery,
             onValueChange = { searchQuery = it },
@@ -101,6 +104,8 @@ fun ComponentGalleryScreen(
                         )
                     }
                 }
+            }
+        }
             }
         }
     }

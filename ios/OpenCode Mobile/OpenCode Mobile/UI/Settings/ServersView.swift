@@ -55,6 +55,7 @@ struct ServersView: View {
                 leading: .back(action: { dismiss() }),
                 showDivider: true
             )
+            VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 8) {
                     Text("SAVED")
@@ -109,6 +110,9 @@ struct ServersView: View {
             )
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
+            }
+            .openCodeReadableColumn()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)

@@ -54,6 +54,7 @@ import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeListGroup
 import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.StartDecorator
@@ -136,103 +137,107 @@ private fun AppOnboardingPagerScreen(
         )
     }
 
-    Column(
+    Box(
         modifier =
             modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
     ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.End,
-        ) {
-            TextButton(
-                onClick = {
-                    ProductAnalytics.logUserAction(
-                        screenId = ProductAnalytics.Screen.APP_ONBOARDING,
-                        actionId = ProductAnalytics.Action.ONBOARDING_SKIP,
-                    )
-                    onSkip()
-                },
-            ) {
-                Text(
-                    text = "Skip",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        OpenCodeReadableColumn(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(
+                        onClick = {
+                            ProductAnalytics.logUserAction(
+                                screenId = ProductAnalytics.Screen.APP_ONBOARDING,
+                                actionId = ProductAnalytics.Action.ONBOARDING_SKIP,
+                            )
+                            onSkip()
+                        },
+                    ) {
+                        Text(
+                            text = "Skip",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
 
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.weight(1f),
-        ) { pageIndex ->
-            AppOnboardingPageContent(
-                page = pages[pageIndex],
-                onNeedServerFirst = onNeedServerFirst,
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 28.dp),
-            )
-        }
-
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                pages.indices.forEach { index ->
-                    val selected = index == pagerState.currentPage
-                    Box(
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.weight(1f),
+                ) { pageIndex ->
+                    AppOnboardingPageContent(
+                        page = pages[pageIndex],
+                        onNeedServerFirst = onNeedServerFirst,
                         modifier =
                             Modifier
-                                .height(7.dp)
-                                .width(if (selected) 18.dp else 7.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(
-                                    if (selected) {
-                                        MaterialTheme.colorScheme.onSurface
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f)
-                                    },
-                                ),
+                                .fillMaxSize()
+                                .padding(horizontal = 28.dp),
+                    )
+                }
+
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 28.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        pages.indices.forEach { index ->
+                            val selected = index == pagerState.currentPage
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .height(7.dp)
+                                        .width(if (selected) 18.dp else 7.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(
+                                            if (selected) {
+                                                MaterialTheme.colorScheme.onSurface
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f)
+                                            },
+                                        ),
+                            )
+                        }
+                    }
+                    OpenCodeButton(
+                        variant =
+                            OpenCodeButtonVariant.FullWidthText(
+                                if (lastPage) "Connect to server" else "Next",
+                            ),
+                        onClick = {
+                            if (lastPage) {
+                                ProductAnalytics.logUserAction(
+                                    screenId = ProductAnalytics.Screen.APP_ONBOARDING,
+                                    actionId = ProductAnalytics.Action.ONBOARDING_CONNECT,
+                                )
+                                onConnect()
+                            } else {
+                                ProductAnalytics.logUserAction(
+                                    screenId = ProductAnalytics.Screen.APP_ONBOARDING,
+                                    actionId = ProductAnalytics.Action.ONBOARDING_NEXT,
+                                )
+                                advancedByNextButton = true
+                                scope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                }
+                            }
+                        },
                     )
                 }
             }
-            OpenCodeButton(
-                variant =
-                    OpenCodeButtonVariant.FullWidthText(
-                        if (lastPage) "Connect to server" else "Next",
-                    ),
-                onClick = {
-                    if (lastPage) {
-                        ProductAnalytics.logUserAction(
-                            screenId = ProductAnalytics.Screen.APP_ONBOARDING,
-                            actionId = ProductAnalytics.Action.ONBOARDING_CONNECT,
-                        )
-                        onConnect()
-                    } else {
-                        ProductAnalytics.logUserAction(
-                            screenId = ProductAnalytics.Screen.APP_ONBOARDING,
-                            actionId = ProductAnalytics.Action.ONBOARDING_NEXT,
-                        )
-                        advancedByNextButton = true
-                        scope.launch {
-                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                        }
-                    }
-                },
-            )
         }
     }
 }
@@ -341,8 +346,7 @@ private fun AppOnboardingIllustrationPlaceholder(modifier: Modifier = Modifier) 
                             ),
                         cornerRadius = CornerRadius(20.dp.toPx(), 20.dp.toPx()),
                     )
-                }
-                .padding(horizontal = 20.dp),
+                }.padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -384,74 +388,78 @@ private fun AppOnboardingSetupGuideScreen(
         OpenCodeTopBar(
             leading = OpenCodeTopBarLeading.Back(onClick = onBack),
         )
-        Column(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp),
-        ) {
-            Text(
-                text = "Set up opencode serve",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text =
-                    "The app talks to an opencode server you run. Short path below — full detail in the official docs.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(18.dp))
-            SetupStep(
-                number = "Step 1",
-                title = "Start the server on your machine",
-                body =
-                    "In your project, run the opencode server (headless). Keep it running while you use the phone.",
-                code = "opencode serve",
-            )
-            SetupStep(
-                number = "Step 2",
-                title = "Require a password",
-                body =
-                    "Set OPENCODE_SERVER_PASSWORD. Username defaults to opencode unless you set OPENCODE_SERVER_USERNAME.",
-            )
-            SetupStep(
-                number = "Step 3",
-                title = "Reach it from your phone",
-                body =
-                    "Recommended: Tailscale — install Tailscale on the machine and phone, then use the machine’s " +
-                        "Tailscale IP or MagicDNS name as the server URL.\n\nAlso fine: same LAN, VPN, HTTPS, or " +
-                        "another tunnel you manage. The app does not create a relay for you.",
-            )
-            SetupStep(
-                number = "Step 4",
-                title = "Connect in the app",
-                body =
-                    "Enter base URL + password. The app checks GET /global/health, then saves a Connection Profile " +
-                        "on this device.",
-                showDivider = false,
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-        }
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 28.dp),
-        ) {
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.FullWidthText("Open server docs"),
-                onClick = {
-                    ProductAnalytics.logUserAction(
-                        screenId = ProductAnalytics.Screen.APP_ONBOARDING_SETUP_GUIDE,
-                        actionId = ProductAnalytics.Action.SETUP_GUIDE_OPEN_DOCS,
+        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 24.dp),
+                ) {
+                    Text(
+                        text = "Set up opencode serve",
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                     )
-                    val intent =
-                        Intent(Intent.ACTION_VIEW, Uri.parse(AppOnboardingCopy.SERVER_DOCS_URL))
-                    context.startActivity(intent)
-                },
-            )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text =
+                            "The app talks to an opencode server you run. Short path below — full detail in the official docs.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(18.dp))
+                    SetupStep(
+                        number = "Step 1",
+                        title = "Start the server on your machine",
+                        body =
+                            "In your project, run the opencode server (headless). Keep it running while you use the phone.",
+                        code = "opencode serve",
+                    )
+                    SetupStep(
+                        number = "Step 2",
+                        title = "Require a password",
+                        body =
+                            "Set OPENCODE_SERVER_PASSWORD. Username defaults to opencode unless you set OPENCODE_SERVER_USERNAME.",
+                    )
+                    SetupStep(
+                        number = "Step 3",
+                        title = "Reach it from your phone",
+                        body =
+                            "Recommended: Tailscale — install Tailscale on the machine and phone, then use the machine’s " +
+                                "Tailscale IP or MagicDNS name as the server URL.\n\nAlso fine: same LAN, VPN, HTTPS, or " +
+                                "another tunnel you manage. The app does not create a relay for you.",
+                    )
+                    SetupStep(
+                        number = "Step 4",
+                        title = "Connect in the app",
+                        body =
+                            "Enter base URL + password. The app checks GET /global/health, then saves a Connection Profile " +
+                                "on this device.",
+                        showDivider = false,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 28.dp),
+                ) {
+                    OpenCodeButton(
+                        variant = OpenCodeButtonVariant.FullWidthText("Open server docs"),
+                        onClick = {
+                            ProductAnalytics.logUserAction(
+                                screenId = ProductAnalytics.Screen.APP_ONBOARDING_SETUP_GUIDE,
+                                actionId = ProductAnalytics.Action.SETUP_GUIDE_OPEN_DOCS,
+                            )
+                            val intent =
+                                Intent(Intent.ACTION_VIEW, Uri.parse(AppOnboardingCopy.SERVER_DOCS_URL))
+                            context.startActivity(intent)
+                        },
+                    )
+                }
+            }
         }
     }
 }

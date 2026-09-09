@@ -55,6 +55,7 @@ struct AppearanceSettingsView: View {
                 }
                 .padding(.vertical, 16)
             }
+            .openCodeReadableColumn()
         }
         .navigationBarBackButtonHidden(true)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -111,6 +112,7 @@ struct ThemePickerView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
             }
+            .openCodeReadableColumn()
         }
         .navigationBarBackButtonHidden(true)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -160,6 +162,7 @@ struct SyntaxHighlightPickerView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
             }
+            .openCodeReadableColumn()
         }
         .navigationBarBackButtonHidden(true)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

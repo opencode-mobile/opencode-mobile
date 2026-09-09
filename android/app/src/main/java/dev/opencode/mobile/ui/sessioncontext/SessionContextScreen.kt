@@ -39,6 +39,7 @@ import dev.opencode.mobile.domain.sessioncontext.SessionContextBreakdownKind
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 
@@ -68,6 +69,8 @@ fun SessionContextScreen(
                 ),
             showDivider = true,
         )
+        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.fillMaxSize()) {
         when (uiState.timeline) {
             SessionContextTimelineState.Loading ->
                 Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -107,6 +110,8 @@ fun SessionContextScreen(
                         SessionContextContent(display = display, errorMessage = uiState.errorMessage)
                     }
                 }
+        }
+            }
         }
     }
 }

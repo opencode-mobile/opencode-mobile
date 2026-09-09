@@ -63,6 +63,7 @@ struct SessionChatToolGroupView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
             }
+            .openCodeReadableColumn()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)

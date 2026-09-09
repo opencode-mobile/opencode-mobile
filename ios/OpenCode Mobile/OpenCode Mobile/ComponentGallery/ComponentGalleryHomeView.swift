@@ -28,6 +28,7 @@ struct ComponentGalleryHomeView: View {
                 showDivider: true
             )
 
+            Group {
             if entriesByCategory.isEmpty {
                 searchField
                 OpenCodeEmptyState(
@@ -77,6 +78,9 @@ struct ComponentGalleryHomeView: View {
                 }
                 .scrollDismissesKeyboard(.immediately)
             }
+            }
+            .openCodeReadableColumn()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(OpenCodeColors.backgroundBase)
         .navigationBarHidden(true)
