@@ -1,0 +1,29 @@
+{
+  "id": "citrus",
+  "name": "Citrus",
+  "blurb": "Solarized family",
+  "light": {
+    "syntax-comment": "#93A1A1",
+    "syntax-keyword": "#859900",
+    "syntax-string": "#2AA198",
+    "syntax-primitive": "#268BD2",
+    "syntax-property": "#268BD2",
+    "syntax-type": "#B58900",
+    "syntax-constant": "#2AA198",
+    "syntax-variable": "#DC322F",
+    "syntax-operator": "#657B83",
+    "syntax-punctuation": "#657B83"
+  },
+  "dark": {
+    "syntax-comment": "#586E75",
+    "syntax-keyword": "#859900",
+    "syntax-string": "#2AA198",
+    "syntax-primitive": "#268BD2",
+    "syntax-property": "#268BD2",
+    "syntax-type": "#B58900",
+    "syntax-constant": "#2AA198",
+    "syntax-variable": "#DC322F",
+    "syntax-operator": "#93A1A1",
+    "syntax-punctuation": "#93A1A1"
+  }
+}

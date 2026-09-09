@@ -32,14 +32,22 @@ whether that tab is present; the dock does not insert it.
 - Surface: Floating Dock chrome (`surface.raised` underlay / glass materials).
 - Chip scroller (default): Filter Chip tokens; selected project may show
   remove.
-- Scope control (picker on): `text.strong` fill at **0.08**, 14pt corner,
-  letter badge or All mark (32 circle + `widgets` grid), body-secondary
+- Scope control (picker on): same inner-control recipe as Add project / New
+  session — iOS 26+ regular glass; otherwise a transparent `text-strong`
+  wash at **0.05**, no stroke, so the dock chrome shows through. **20pt**
+  continuous corner (dock shell is 26).
+  Letter badge or All mark (32 circle + `widgets` grid), body-secondary
   semibold title, caption subtitle (`text.weak`), count pill,
-  `keyboard_arrow_down` chevron.
+  `keyboard_arrow_down` chevron. The All mark and count pill keep a
+  `text-strong` **0.10** fill. Do not outline these controls to match the
+  Session Composer shell — that hairline sits on the same raised white and
+  reads cheap. Do not use `surface-base` or a **0.08+** ink wash for the
+  control — those read as a grey slab. Do not flatten the wash into an
+  opaque mix with `surface-raised-base`.
 - Actions: circle Add project + capsule New session, shared height **52**,
-  horizontal gap **8**, fill-only `text.strong` at **0.14** on **both**
-  platforms (including iOS 26 — dock CTAs intentionally do not use per-button
-  Liquid Glass so they match Android weight and alignment).
+  horizontal gap **8**, same glass / **0.05** wash recipe and no stroke on
+  both platforms. Do not use high-contrast `OpenCodeButton`
+  `fullWidthText`.
 - Error: `color.error` + body-secondary text.
 
 ## Behavior
@@ -100,13 +108,15 @@ is hold-to-remove on project rows in the sheet, not on the dock.
 
 ## Platform Notes
 
-- iOS: `OpenCodeFloatingDock` + fill-only CTA row. Add project / New session
-  stay fill-only (circle + capsule, 52pt) to match Android. Play selection and
-  context-action haptics through UIKit generators at the gesture.
-  `.sensoryFeedback` is silent when a sheet presents in the same update.
-- Android: same structure with Material raised dock and fill-only CTAs at 52dp /
-  8dp gap. Project switch uses `HapticFeedbackType.TextHandleMove`; New session
-  hold uses `LongPress`.
+- iOS: `OpenCodeFloatingDock` plus regular glass on the scope control and
+  CTA row (iOS 26+). Pre–26 uses the **0.05** wash. Add project / New
+  session stay circle + capsule at 52pt. Play selection and context-action
+  haptics through UIKit generators at the gesture. `.sensoryFeedback` is
+  silent when a sheet presents in the same update.
+- Android: same structure with Material raised dock and a transparent
+  **0.05** wash on the scope control and CTAs at 52dp / 8dp gap. Project
+  switch uses `HapticFeedbackType.TextHandleMove`; New session hold uses
+  `LongPress`.
 
 ## Review Surfaces
 

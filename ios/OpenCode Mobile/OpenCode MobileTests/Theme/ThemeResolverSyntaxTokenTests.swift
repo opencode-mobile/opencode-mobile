@@ -56,6 +56,23 @@ struct ThemeResolverSyntaxTokenTests {
         #expect(resolved["syntax-operator"] == "#222222")
         #expect(resolved["syntax-punctuation"] == "#333333")
     }
+
+    @Test func overlaySyntax_replacesSyntaxKeysAndIgnoresOthers() {
+        let base = ThemeResolver.resolve(variant: testVariant(), isDark: false)
+        let overlaid = ThemeResolver.overlaySyntax(
+            base,
+            syntax: [
+                "syntax-keyword": "#AABBCC",
+                "background-base": "#000000",
+                "syntax-comment": "112233",
+            ]
+        )
+
+        #expect(overlaid["syntax-keyword"] == "#AABBCC")
+        #expect(overlaid["syntax-comment"] == "#112233")
+        #expect(overlaid["background-base"] == base["background-base"])
+        #expect(overlaid["text-strong"] == base["text-strong"])
+    }
 }
 
 private func testVariant(overrides: [String: String]? = nil) -> ThemeVariant {

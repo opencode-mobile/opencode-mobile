@@ -109,17 +109,13 @@ struct OpenCodeSessionListDock: View {
 
     private static let ctaHeight: CGFloat = 52
     private static let ctaIconSize: CGFloat = 22
-    private static let ctaFillOpacity: Double = 0.14
 
     private var addProjectButton: some View {
         Button(action: onAddProject) {
             OpenCodeIconImage(icon: .createNewFolder, size: Self.ctaIconSize)
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .frame(width: Self.ctaHeight, height: Self.ctaHeight)
-                .background(
-                    OpenCodeColors.textStrong.opacity(Self.ctaFillOpacity),
-                    in: Circle()
-                )
+                .openCodeSubtleControlChrome(shape: Circle())
                 .contentShape(Circle())
         }
         .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
@@ -163,8 +159,7 @@ struct SessionListScopeControl: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(minHeight: 44)
-        .background(OpenCodeColors.textStrong.opacity(0.08), in: controlShape)
-        .clipShape(controlShape)
+        .openCodeSubtleControlChrome(shape: controlShape)
         .contentShape(controlShape)
         .gesture(drag)
         .onTapGesture(perform: onOpen)
@@ -275,7 +270,7 @@ struct SessionListScopeControl: View {
     }
 
     private var controlShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
     }
 
     private var selectedIndex: Int {
@@ -508,10 +503,7 @@ private struct NewSessionDockButton: View {
             .foregroundStyle(OpenCodeColors.textStrong)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(
-                OpenCodeColors.textStrong.opacity(0.14),
-                in: Capsule()
-            )
+            .openCodeSubtleControlChrome(shape: Capsule())
             .contentShape(Capsule())
 
         if let onLongPress {

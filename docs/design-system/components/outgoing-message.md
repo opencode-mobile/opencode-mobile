@@ -34,7 +34,7 @@ outgoing message.
 
 ## Token Usage
 
-- Semantic tokens: `surface-raised-base`, `text-strong`, `text-weaker`.
+- Semantic tokens: `surface-interactive-weak`, `text-strong`, `text-weaker`.
 - Component tokens: `outgoingMessage.cornerRadius`,
   `outgoingMessage.maxWidthFraction`, `outgoingMessage.paddingHorizontal`,
   `outgoingMessage.paddingVertical`, `outgoingMessage.footerSpacing`.
@@ -52,9 +52,10 @@ present, the rounded bubble may grow with message content up to the shared
 `outgoingMessage.maxWidthFraction` cap so long prompts wrap naturally. Short
 prompts shrink to their content width; there is no minimum bubble width. The
 message text is shown without a role prefix; alignment communicates that the
-message is outgoing. The bubble uses `surface-raised-base` so it remains
-distinct from the page background in light mode without introducing a
-component-only raw color. Bubble corners match `listItem.cornerRadius`.
+message is outgoing. The bubble uses `surface-interactive-weak` with no
+stroke so the user voice is a theme-tinted wash, not a second white card.
+Assistant Message keeps `surface-raised-base`. Bubble corners match
+`listItem.cornerRadius`.
 
 Plain-text parts may highlight a leading slash command token with
 `syntax-type` when the prompt matches the shared command-token heuristic.
@@ -84,10 +85,11 @@ footer and unused conversation-row width do not activate the message.
 
 ## Platform Notes
 
-- iOS: implemented with SwiftUI text inside the rounded message surface. The
-  bubble caps at `outgoingMessage.maxWidthFraction` and otherwise shrink-wraps
-  to content width. Feature-owned tap or long-press gestures attach to the pill.
-- Android: implemented with Compose text inside a Material 3 surface. Ripple
+- iOS: implemented with SwiftUI text inside the interactive-weak message
+  surface, no stroke. The bubble caps at `outgoingMessage.maxWidthFraction`
+  and otherwise shrink-wraps to content width. Feature-owned tap or
+  long-press gestures attach to the pill.
+- Android: implemented with Compose text inside the same wash. Ripple
   feedback is clipped to the pill shape.
 
 ## Previews

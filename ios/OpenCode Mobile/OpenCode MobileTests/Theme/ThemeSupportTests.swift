@@ -3,36 +3,6 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct ThemeSupportTests {
-    @Test func mergePresets_appendsImportedThemesNotInManifest() {
-        let bundled = [
-            ThemePreset(id: "oc-2", name: "OC-2"),
-            ThemePreset(id: "dracula", name: "Dracula"),
-        ]
-        let imported = [
-            ThemePreset(id: "my-theme", name: "My Theme"),
-            ThemePreset(id: "dracula", name: "Duplicate Dracula"),
-        ]
-
-        let merged = ThemeSupport.mergePresets(bundled: bundled, imported: imported)
-
-        #expect(merged.map(\.id) == ["oc-2", "dracula", "my-theme"])
-    }
-
-    @Test func assertNoPresetIdCollision_rejectsBundledIDs() {
-        #expect(throws: ThemeError.self) {
-            try ThemeSupport.assertNoPresetIdCollision(
-                themeID: "dracula",
-                bundledPresetIDs: ["oc-2", "dracula"]
-            )
-        }
-    }
-
-    @Test func assertImportSize_rejectsOversizedPayload() {
-        #expect(throws: ThemeError.self) {
-            try ThemeSupport.assertImportSize(ThemeSupport.maxImportBytes + 1)
-        }
-    }
-
     @Test func validate_rejectsMissingPaletteSeeds() {
         let theme = sampleTheme(id: "broken", ink: "")
         #expect(throws: ThemeError.self) {
@@ -46,37 +16,16 @@ struct ThemeSupportTests {
 }
 
 struct ThemePersistenceTests {
-    @Test func persistAndRestoreImportedTheme() throws {
+    @Test func clear_removesSelectedThemeAndSyntaxIDs() {
         let defaults = isolatedDefaults()
-        let theme = sampleTheme(id: "custom-import", name: "Custom Import")
-
-        try ThemePersistence.persistImportedTheme(theme, defaults: defaults)
-        ThemePersistence.saveSelectedThemeID(theme.id, defaults: defaults)
-
-        let restored = ThemePersistence.loadImportedTheme(id: theme.id, defaults: defaults)
-        #expect(restored?.id == theme.id)
-        #expect(restored?.name == theme.name)
-    }
-
-    @Test func importedPresets_listsPersistedThemes() throws {
-        let defaults = isolatedDefaults()
-        let theme = sampleTheme(id: "listed-import", name: "Listed Import")
-        try ThemePersistence.persistImportedTheme(theme, defaults: defaults)
-
-        let presets = ThemePersistence.importedPresets(defaults: defaults)
-        #expect(presets.map(\.id) == ["listed-import"])
-    }
-
-    @Test func clear_removesPersistedThemes() throws {
-        let defaults = isolatedDefaults()
-        let theme = sampleTheme(id: "clear-me", name: "Clear Me")
-        try ThemePersistence.persistImportedTheme(theme, defaults: defaults)
-        ThemePersistence.saveSelectedThemeID(theme.id, defaults: defaults)
+        ThemePersistence.saveSelectedThemeID("kiln", defaults: defaults)
+        ThemePersistence.saveSelectedSyntaxID("nocturne", defaults: defaults)
 
         ThemePersistence.clear(defaults: defaults)
 
-        #expect(ThemePersistence.loadImportedTheme(id: theme.id, defaults: defaults) == nil)
         #expect(defaults.string(forKey: ThemePersistence.selectedThemeIDKey) == nil)
+        #expect(defaults.string(forKey: ThemePersistence.selectedSyntaxIDKey) == nil)
+        #expect(defaults.data(forKey: ThemePersistence.importedThemesKey) == nil)
     }
 
     private func isolatedDefaults() -> UserDefaults {

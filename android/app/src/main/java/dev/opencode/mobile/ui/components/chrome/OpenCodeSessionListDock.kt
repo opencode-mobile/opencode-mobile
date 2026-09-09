@@ -81,7 +81,11 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 private val NewSessionButtonShape = RoundedCornerShape(percent = 50)
-private val ScopeControlShape = RoundedCornerShape(14.dp)
+private val ScopeControlShape = RoundedCornerShape(20.dp)
+private const val DockControlFillAlpha = 0.05f
+
+@Composable
+private fun dockControlFill(): Color = openCodeColor("text-strong").copy(alpha = DockControlFillAlpha)
 
 @Composable
 fun OpenCodeSessionListDock(
@@ -100,7 +104,7 @@ fun OpenCodeSessionListDock(
     val textStrong = openCodeColor("text-strong")
     val error = openCodeColor("error")
     val iconStrong = openCodeColor("icon-strong-base")
-    val ctaFill = textStrong.copy(alpha = 0.14f)
+    val controlFill = dockControlFill()
     OpenCodeFloatingDock(modifier = modifier) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -139,7 +143,7 @@ fun OpenCodeSessionListDock(
             ) {
                 DockCta(
                     onClick = onAddProject,
-                    fill = ctaFill,
+                    fill = controlFill,
                     shape = CircleShape,
                     modifier = Modifier.size(52.dp),
                 ) {
@@ -154,7 +158,7 @@ fun OpenCodeSessionListDock(
                     onClick = onNewSession,
                     onLongClick = onNewSessionLongPress,
                     onLongClickLabel = if (onNewSessionLongPress != null) "Choose project" else null,
-                    fill = ctaFill,
+                    fill = controlFill,
                     shape = NewSessionButtonShape,
                     modifier =
                         Modifier
@@ -223,7 +227,6 @@ fun SessionListScopeControl(
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val textStrong = openCodeColor("text-strong")
     val textWeak = openCodeColor("text-weak")
     var shownTabId by remember { mutableStateOf(selectedId) }
     val selectedIndex = tabs.indexOfFirst { it.id == shownTabId }.let { if (it >= 0) it else 0 }
@@ -367,7 +370,7 @@ fun SessionListScopeControl(
             modifier
                 .fillMaxWidth()
                 .clip(ScopeControlShape)
-                .background(textStrong.copy(alpha = 0.08f))
+                .background(dockControlFill())
                 .pointerInput(shownTabId, isSwitching) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)

@@ -52,7 +52,7 @@ xcodebuild build \
 ```bash
 npm install
 npm run icons:sync      # regenerate shared Lucide icons
-npm run themes:sync     # sync OC-2 desktop theme presets into app bundles
+npm run themes:sync     # copy bundled theme presets into app bundles
 npm run themes:check    # verify shared/iOS/Android preset copies match
 npm run api:sync        # fetch OpenAPI spec and generate clients
 ```

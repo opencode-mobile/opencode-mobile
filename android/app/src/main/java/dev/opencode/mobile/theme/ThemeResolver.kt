@@ -110,6 +110,20 @@ object ThemeResolver {
         return ResolvedTokens(tokens)
     }
 
+    fun overlaySyntax(
+        base: ResolvedTokens,
+        syntax: Map<String, String>,
+    ): ResolvedTokens {
+        if (syntax.isEmpty()) return base
+        val tokens = base.tokens.toMutableMap()
+        for ((key, value) in syntax) {
+            if (!key.startsWith("syntax-")) continue
+            val trimmed = value.trim()
+            tokens[key] = if (trimmed.startsWith("#")) trimmed else "#$trimmed"
+        }
+        return ResolvedTokens(tokens)
+    }
+
     // --- Hex utilities ---
 
     private fun String.normalizedHex(): String {

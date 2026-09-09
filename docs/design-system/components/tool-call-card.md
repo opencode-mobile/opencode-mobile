@@ -39,9 +39,8 @@ supplies optional +/− counts and error text, and optionally wires a tap.
 
 ## Token Usage
 
-- Semantic tokens: `color.surface.base`, `color.border.weaker`,
-  `color.text.strong`, `color.text.base`, `color.text.weaker`, `success`,
-  `warning`, `error`, `diffAdd`, `diffDelete`.
+- Semantic tokens: `surface-raised-base`, `text-strong`, `text-base`,
+  `text-weaker`, `success`, `warning`, `error`, `diffAdd`, `diffDelete`.
 - Component tokens: `toolCallCard.*` in [`../tokens.md`](../tokens.md).
 - Typography roles:
   - `type.heading` for the title
@@ -49,8 +48,9 @@ supplies optional +/− counts and error text, and optionally wires a tap.
 
 ## Behavior
 
-The card is a leading-aligned bordered surface with a status dot, title, and
-optional supporting lines. Status maps to semantic colors:
+The card is a leading-aligned `surface-raised-base` surface with no stroke,
+a status dot, title, and optional supporting lines. Same fill recipe as
+Assistant Message. Status maps to semantic colors:
 
 | Status | Dot token |
 | --- | --- |
@@ -99,8 +99,9 @@ across iOS and Android. No intentional divergences for this component.
 
 - Public API and applicable states: complete (`pending` / `running` /
   `completed` / `error`; display-only or feature-owned tap).
-- Token and typography mapping: complete; uses `toolCallCard.*` geometry plus
-  shared status and diff semantic colors with `type.heading` / `type.caption`.
+- Token and typography mapping: complete; uses `toolCallCard.*` geometry,
+  `surface-raised-base`, plus shared status and diff colors with
+  `type.heading` / `type.caption`.
 - iOS and Android implementations: complete.
 - Gallery and previews: complete with interactive status, content, and
   tappable controls plus light/dark gallery theme support.

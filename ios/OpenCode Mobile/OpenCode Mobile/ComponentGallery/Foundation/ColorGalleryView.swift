@@ -46,7 +46,7 @@ private let tokenNames = [
 struct ColorGalleryView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("OpenCode Desktop Tokens (\(ThemeManager.shared.currentTheme.name))")
+            Text("Theme tokens (\(ThemeManager.shared.currentTheme.name))")
                 .font(OpenCodeTypography.heading)
                 .foregroundStyle(OpenCodeColors.textStrong)
 

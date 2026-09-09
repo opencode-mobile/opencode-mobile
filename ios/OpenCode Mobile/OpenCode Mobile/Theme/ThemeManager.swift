@@ -8,11 +8,11 @@ final class ThemeManager {
     static let shared = ThemeManager()
 
     private enum StorageKeys {
-        static let importedThemes = ThemePersistence.importedThemesKey
         static let selectedThemeID = ThemePersistence.selectedThemeIDKey
     }
 
-    private static let defaultPresetID = "oc-2"
+    private static let defaultPresetID = "porcelain"
+    private static let defaultPresetName = "Porcelain"
     private static let presetBundleSubdirectories: [String?] = [
         "ThemePresets",
         "Resources/ThemePresets",
@@ -20,6 +20,7 @@ final class ThemeManager {
     ]
 
     private(set) var currentTheme: OpenCodeTheme
+    private(set) var currentSyntaxPreset: SyntaxHighlightPreset
     private(set) var resolvedLight: ResolvedTokens
     private(set) var resolvedDark: ResolvedTokens
     private(set) var revision: UInt64 = 0
@@ -27,20 +28,24 @@ final class ThemeManager {
 
     private let defaults: UserDefaults
     private var cachedManifestPresets: [ThemePreset]?
+    private var cachedSyntaxPresets: [SyntaxHighlightPreset]?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.resolvedLight = ResolvedTokens()
         self.resolvedDark = ResolvedTokens()
         self.currentTheme = Self.loadInitialTheme(defaults: defaults)
+        self.currentSyntaxPreset = Self.loadInitialSyntaxPreset(defaults: defaults)
         resolve()
     }
 
     // MARK: - Resolution
 
     func resolve() {
-        resolvedLight = ThemeResolver.resolve(variant: currentTheme.light, isDark: false)
-        resolvedDark = ThemeResolver.resolve(variant: currentTheme.dark, isDark: true)
+        let light = ThemeResolver.resolve(variant: currentTheme.light, isDark: false)
+        let dark = ThemeResolver.resolve(variant: currentTheme.dark, isDark: true)
+        resolvedLight = ThemeResolver.overlaySyntax(light, syntax: currentSyntaxPreset.light)
+        resolvedDark = ThemeResolver.overlaySyntax(dark, syntax: currentSyntaxPreset.dark)
         revision &+= 1
     }
 
@@ -51,16 +56,39 @@ final class ThemeManager {
     // MARK: - Presets
 
     func availablePresets() -> [ThemePreset] {
-        ThemeSupport.mergePresets(
-            bundled: manifestPresets(),
-            imported: ThemePersistence.importedPresets(defaults: defaults)
+        manifestPresets()
+    }
+
+    func availableSyntaxPresets() -> [SyntaxHighlightPreset] {
+        syntaxPresets()
+    }
+
+    func resolvedPreview(themeId: String) -> (ResolvedTokens, ResolvedTokens)? {
+        guard let theme = Self.loadPreset(id: themeId) else { return nil }
+        return (
+            ThemeResolver.resolve(variant: theme.light, isDark: false),
+            ThemeResolver.resolve(variant: theme.dark, isDark: true)
         )
     }
 
-    /// Imported preset ids come from user-supplied theme JSON, so callers that
-    /// report a preset outside the app (Analytics) must check this first.
-    func isBundledPreset(id: String) -> Bool {
-        manifestPresetIDs().contains(id)
+    func syntaxTokensForPreview(preset: SyntaxHighlightPreset, isDark: Bool) -> [String: String] {
+        if preset.isMatch {
+            let variant = isDark ? currentTheme.dark : currentTheme.light
+            let tokens = ThemeResolver.resolve(variant: variant, isDark: isDark).tokens
+            return tokens.filter { $0.key.hasPrefix("syntax-") }
+        }
+        return isDark ? preset.dark : preset.light
+    }
+
+    func applySyntaxPreset(id: String) {
+        guard let preset = syntaxPresets().first(where: { $0.id == id }) else {
+            loadError = "Syntax highlight preset not found"
+            return
+        }
+        currentSyntaxPreset = preset
+        resolve()
+        ThemePersistence.saveSelectedSyntaxID(id, defaults: defaults)
+        loadError = nil
     }
 
     func applyPreset(id: String) {
@@ -83,40 +111,72 @@ final class ThemeManager {
 
     func loadBundledTheme() {
         currentTheme = Self.loadPreset(id: Self.defaultPresetID) ?? Self.bundledTheme()
+        currentSyntaxPreset = .match
         resolve()
         loadError = nil
     }
 
-    func importTheme(from data: Data) throws {
-        let previousTheme = currentTheme
-        do {
-            try ThemeSupport.assertImportSize(data.count)
-            let decoder = JSONDecoder()
-            let theme = try decoder.decode(OpenCodeTheme.self, from: data)
-            try ThemeSupport.validate(theme)
-            try ThemeSupport.assertNoPresetIdCollision(
-                themeID: theme.id,
-                bundledPresetIDs: manifestPresetIDs()
-            )
-            currentTheme = theme
-            resolve()
-            try ThemePersistence.persistImportedTheme(theme, defaults: defaults)
-            ThemePersistence.saveSelectedThemeID(theme.id, defaults: defaults)
-            loadError = nil
-        } catch {
-            currentTheme = previousTheme
-            resolve()
-            loadError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            throw error
-        }
-    }
-
-    func importTheme(from url: URL) throws {
-        let data = try Data(contentsOf: url)
-        try importTheme(from: data)
-    }
-
     // MARK: - Persistence
+
+    private static func loadInitialSyntaxPreset(defaults: UserDefaults) -> SyntaxHighlightPreset {
+        guard let selectedID = defaults.string(forKey: ThemePersistence.selectedSyntaxIDKey),
+              !selectedID.isEmpty
+        else {
+            return .match
+        }
+        return loadSyntaxPreset(id: selectedID) ?? .match
+    }
+
+    private func syntaxPresets() -> [SyntaxHighlightPreset] {
+        if let cachedSyntaxPresets {
+            return cachedSyntaxPresets
+        }
+        let presets = Self.loadSyntaxManifest()
+        cachedSyntaxPresets = presets
+        return presets
+    }
+
+    private static func loadSyntaxManifest() -> [SyntaxHighlightPreset] {
+        for subdirectory in ["SyntaxPresets", "Resources/SyntaxPresets", nil] {
+            guard let url = Bundle.main.url(
+                forResource: "syntax-manifest",
+                withExtension: "json",
+                subdirectory: subdirectory
+            ),
+            let data = try? Data(contentsOf: url),
+            let entries = try? JSONDecoder().decode([SyntaxHighlightPreset].self, from: data),
+            !entries.isEmpty
+            else {
+                continue
+            }
+            return entries.map { entry in
+                if entry.id == SyntaxHighlightPreset.matchID {
+                    return SyntaxHighlightPreset(
+                        id: entry.id,
+                        name: entry.name,
+                        blurb: entry.blurb,
+                        light: [:],
+                        dark: [:]
+                    )
+                }
+                return loadSyntaxPreset(id: entry.id) ?? entry
+            }
+        }
+        return [.match]
+    }
+
+    private static func loadSyntaxPreset(id: String) -> SyntaxHighlightPreset? {
+        if id == SyntaxHighlightPreset.matchID { return .match }
+        for subdirectory in ["SyntaxPresets", "Resources/SyntaxPresets", nil] {
+            if let url = Bundle.main.url(forResource: id, withExtension: "json", subdirectory: subdirectory),
+               let data = try? Data(contentsOf: url),
+               let preset = try? JSONDecoder().decode(SyntaxHighlightPreset.self, from: data)
+            {
+                return preset
+            }
+        }
+        return nil
+    }
 
     private static func loadInitialTheme(defaults: UserDefaults) -> OpenCodeTheme {
         let defaultTheme = loadPreset(id: defaultPresetID) ?? bundledTheme()
@@ -125,13 +185,7 @@ final class ThemeManager {
         else {
             return defaultTheme
         }
-        if let imported = ThemePersistence.loadImportedTheme(id: selectedID, defaults: defaults) {
-            return imported
-        }
-        if let preset = loadPreset(id: selectedID) {
-            return preset
-        }
-        return defaultTheme
+        return loadPreset(id: selectedID) ?? defaultTheme
     }
 
     private func manifestPresets() -> [ThemePreset] {
@@ -141,10 +195,6 @@ final class ThemeManager {
         let presets = Self.loadPresetManifest()
         cachedManifestPresets = presets
         return presets
-    }
-
-    private func manifestPresetIDs() -> Set<String> {
-        Set(manifestPresets().map(\.id))
     }
 
     private static func presetResourceURL(
@@ -178,7 +228,7 @@ final class ThemeManager {
             }
             return presets
         }
-        return [ThemePreset(id: defaultPresetID, name: "OC-2")]
+        return [ThemePreset(id: defaultPresetID, name: defaultPresetName)]
     }
 
     private static func loadPreset(id: String) -> OpenCodeTheme? {
@@ -198,7 +248,7 @@ final class ThemeManager {
             let decoder = JSONDecoder()
             return try decoder.decode(OpenCodeTheme.self, from: asset.data)
         } catch {
-            fatalError("Failed to load bundled oc-2.json: \(error)")
+            fatalError("Failed to load bundled porcelain.json: \(error)")
         }
     }
 

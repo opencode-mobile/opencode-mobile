@@ -33,7 +33,8 @@ subtitle content, selected state, or a larger list treatment.
 
 - Semantic tokens: `color.background.elevated`, `color.surface.primary`,
   `color.surface.secondary`, `color.text.primary`, `color.text.disabled`,
-  `color.border.subtle`, `color.icon.default`, `color.icon.strong`.
+  `color.border.subtle`, `icon-strong-base` for enabled entry icons,
+  `icon-base` for disabled.
 - Component tokens: `bottomSheet.inset`, `bottomSheet.cornerRadiusTop`,
   `bottomSheet.cornerRadius`, `bottomSheet.displayCornerRadiusFallback`,
   `bottomSheet.header.padding`,

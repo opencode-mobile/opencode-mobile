@@ -1,6 +1,5 @@
 import Factory
 import SwiftUI
-import UniformTypeIdentifiers
 
 private struct SectionHeader: View {
     let title: String
@@ -32,11 +31,9 @@ struct SettingsView: View {
     @State private var showClearConfirmation = false
     @State private var showClearSessionCacheConfirmation = false
     @State private var sessionCacheSizeLabel = "Empty"
-    @State private var showThemePicker = false
+    @State private var showAppearance = false
     @State private var showRecentWindowPicker = false
     @State private var showFollowUpPicker = false
-    @State private var showThemeImporter = false
-    @State private var importError: String?
     @State private var themeManager = ThemeManager.shared
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var markdownHighlightPreferences = MarkdownHighlightPreferences.shared
@@ -88,18 +85,17 @@ struct SettingsView: View {
                     SectionHeader(title: "Appearance")
 
                     OpenCodeListItem(
-                        title: "Theme",
-                        subtitle: themeManager.currentTheme.name,
+                        title: "Appearance",
+                        subtitle: "\(themeManager.currentTheme.name) · \(themeManager.currentSyntaxPreset.name)",
                         style: .card,
-                        startDecorator: .icon(.widgets, accessibilityLabel: "Theme"),
+                        startDecorator: .icon(.widgets, accessibilityLabel: "Appearance"),
                         action: {
-                            logSettingsAction(ProductAnalytics.Action.settingsOpenThemePicker)
-                            ProductAnalytics.logScreenView(
-                                screenId: ProductAnalytics.Screen.settingsThemePicker,
-                                presentation: ProductAnalytics.Presentation.sheet,
-                                trigger: ProductAnalytics.Trigger.present
-                            )
-                            showThemePicker = true
+                            logSettingsAction(ProductAnalytics.Action.settingsOpenAppearance)
+                            showAppearance = true
+                        },
+                        trailing: {
+                            OpenCodeIconImage(icon: .chevronRight, size: 18)
+                                .foregroundStyle(OpenCodeColors.textBase)
                         }
                     )
                     .padding(.horizontal, 16)
@@ -232,27 +228,7 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    OpenCodeListItem(
-                        title: "Import Theme",
-                        subtitle: "Custom OpenCode OC-2 JSON file",
-                        style: .card,
-                        startDecorator: .icon(.folder, accessibilityLabel: "Import Theme"),
-                        action: {
-                            logSettingsAction(ProductAnalytics.Action.settingsImportTheme)
-                            importError = nil
-                            showThemeImporter = true
-                        }
-                    )
-                    .padding(.horizontal, 16)
-
-                    if let importError {
-                        Text(importError)
-                            .font(OpenCodeTypography.caption)
-                            .foregroundStyle(OpenCodeColors.error)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 4)
-                    } else if let loadError = themeManager.loadError {
+                    if let loadError = themeManager.loadError {
                         Text(loadError)
                             .font(OpenCodeTypography.caption)
                             .foregroundStyle(OpenCodeColors.error)
@@ -344,7 +320,7 @@ struct SettingsView: View {
 
                     OpenCodeListItem(
                         title: "Clear All Data",
-                        subtitle: "Remove connection, cache, and imported themes",
+                        subtitle: "Remove connection and cache",
                         style: .card,
                         startDecorator: .icon(.close, accessibilityLabel: "Clear All Data"),
                         action: {
@@ -430,33 +406,8 @@ struct SettingsView: View {
         .navigationDestination(isPresented: $showDiagnosticLogs) {
             DiagnosticLogsView()
         }
-        .openCodeBottomSheet(
-            isPresented: themePickerBinding,
-            title: "Theme",
-            scrollTargetID: themeManager.currentTheme.id
-        ) {
-            ForEach(themeManager.availablePresets()) { preset in
-                OpenCodeBottomSheetEntry(
-                    title: preset.name,
-                    endDecorator: preset.id == themeManager.currentTheme.id
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
-                    action: {
-                        // Imported theme ids are user text; report them as a bucket.
-                        let presetValue = themeManager.isBundledPreset(id: preset.id)
-                            ? preset.id
-                            : "imported"
-                        ProductAnalytics.logUserAction(
-                            screenId: ProductAnalytics.Screen.settingsThemePicker,
-                            actionId: ProductAnalytics.Action.themePickerSelectPreset,
-                            parameters: [ProductAnalytics.Param.themePreset: presetValue]
-                        )
-                        themeManager.applyPreset(id: preset.id)
-                        showThemePicker = false
-                    }
-                )
-                .id(preset.id)
-            }
+        .navigationDestination(isPresented: $showAppearance) {
+            AppearanceSettingsView()
         }
         .openCodeBottomSheet(
             isPresented: recentWindowPickerBinding,
@@ -503,13 +454,6 @@ struct SettingsView: View {
                     }
                 )
             }
-        }
-        .fileImporter(
-            isPresented: $showThemeImporter,
-            allowedContentTypes: [.json],
-            allowsMultipleSelection: false
-        ) { result in
-            handleThemeImport(result)
         }
         .task {
             ProductAnalytics.logScreenView(
@@ -620,22 +564,6 @@ struct SettingsView: View {
         )
     }
 
-    // Sheet-chrome dismissal only: entry taps clear the flag directly.
-    private var themePickerBinding: Binding<Bool> {
-        Binding(
-            get: { showThemePicker },
-            set: { presented in
-                if !presented {
-                    ProductAnalytics.logUserAction(
-                        screenId: ProductAnalytics.Screen.settingsThemePicker,
-                        actionId: ProductAnalytics.Action.themePickerDismiss
-                    )
-                }
-                showThemePicker = presented
-            }
-        )
-    }
-
     private var recentWindowPickerBinding: Binding<Bool> {
         Binding(
             get: { showRecentWindowPicker },
@@ -651,26 +579,6 @@ struct SettingsView: View {
         )
     }
 
-    private func handleThemeImport(_ result: Result<[URL], Error>) {
-        switch result {
-        case .success(let urls):
-            guard let url = urls.first else { return }
-            let accessed = url.startAccessingSecurityScopedResource()
-            defer {
-                if accessed {
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
-            do {
-                try themeManager.importTheme(from: url)
-                importError = nil
-            } catch {
-                importError = error.localizedDescription
-            }
-        case .failure(let error):
-            importError = error.localizedDescription
-        }
-    }
 }
 
 #Preview {

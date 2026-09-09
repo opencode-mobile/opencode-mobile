@@ -6,4 +6,5 @@ import kotlinx.serialization.Serializable
 data class ThemePreset(
     val id: String,
     val name: String,
+    val blurb: String = "",
 )

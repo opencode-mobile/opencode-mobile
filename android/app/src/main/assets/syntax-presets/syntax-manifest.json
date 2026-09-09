@@ -1,0 +1,7 @@
+[
+  { "id": "match", "name": "Match theme", "blurb": "Use the UI theme’s own tokens" },
+  { "id": "nocturne", "name": "Nocturne", "blurb": "One Dark family" },
+  { "id": "citrus", "name": "Citrus", "blurb": "Solarized family" },
+  { "id": "paper", "name": "Paper", "blurb": "GitHub family" },
+  { "id": "neon", "name": "Neon", "blurb": "Dracula family" }
+]

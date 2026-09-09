@@ -1,102 +1,108 @@
 #!/usr/bin/env node
 /**
- * Sync OC-2 desktop theme presets from anomalyco/opencode into mobile app bundles.
- *
- * Source: packages/ui/src/theme/themes/*.json
- * Pin OPENCODE_THEME_REF to a commit where those files exist.
+ * Copy bundled OpenCode Mobile theme presets from shared/ into both app bundles.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { REPO_ROOT } from "./lib/utils.mjs";
 
-const OPENCODE_THEME_REF = "ec3ae17e";
-const THEME_IDS = [
-  "oc-2",
-  "amoled",
-  "aura",
-  "ayu",
-  "carbonfox",
-  "catppuccin",
-  "catppuccin-frappe",
-  "catppuccin-macchiato",
-  "cobalt2",
-  "cursor",
-  "dracula",
-  "everforest",
-  "flexoki",
-  "github",
-  "gruvbox",
-  "kanagawa",
-  "lucent-orng",
-  "material",
-  "matrix",
-  "mercury",
-  "monokai",
-  "nightowl",
-  "nord",
-  "one-dark",
-  "onedarkpro",
-  "opencode",
-  "orng",
-  "osaka-jade",
-  "palenight",
-  "rosepine",
-  "shadesofpurple",
-  "solarized",
-  "synthwave84",
-  "tokyonight",
-  "vercel",
-  "vesper",
-  "zenburn",
-];
-
 const SHARED_DIR = join(REPO_ROOT, "shared/theme-presets");
+const SHARED_SYNTAX_DIR = join(REPO_ROOT, "shared/syntax-presets");
 const IOS_DIR = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Resources/ThemePresets");
+const IOS_SYNTAX_DIR = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Resources/SyntaxPresets");
 const ANDROID_DIR = join(REPO_ROOT, "android/app/src/main/assets/theme-presets");
+const ANDROID_SYNTAX_DIR = join(REPO_ROOT, "android/app/src/main/assets/syntax-presets");
+const IOS_FALLBACK = join(
+  REPO_ROOT,
+  "ios/OpenCode Mobile/OpenCode Mobile/Assets.xcassets/ThemeJson.dataset",
+);
+const DEFAULT_PRESET_ID = "porcelain";
 
-async function fetchTheme(id) {
-  const url = `https://raw.githubusercontent.com/anomalyco/opencode/${OPENCODE_THEME_REF}/packages/ui/src/theme/themes/${id}.json`;
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${id}: ${response.status} ${url}`);
+function jsonFiles(dir) {
+  return readdirSync(dir).filter((name) => name.endsWith(".json"));
+}
+
+function clearJson(dir) {
+  mkdirSync(dir, { recursive: true });
+  for (const name of jsonFiles(dir)) {
+    unlinkSync(join(dir, name));
   }
-  return response.text();
 }
 
-function writeTo(destDir, id, jsonText) {
-  writeFileSync(join(destDir, `${id}.json`), jsonText, "utf8");
+function copyBundle(destDir) {
+  clearJson(destDir);
+  for (const name of jsonFiles(SHARED_DIR)) {
+    copyFileSync(join(SHARED_DIR, name), join(destDir, name));
+  }
 }
 
-async function main() {
-  mkdirSync(SHARED_DIR, { recursive: true });
-  mkdirSync(IOS_DIR, { recursive: true });
-  mkdirSync(ANDROID_DIR, { recursive: true });
-
-  const manifest = [];
-
-  for (const id of THEME_IDS) {
-    const jsonText = await fetchTheme(id);
-    const theme = JSON.parse(jsonText);
-    if (!theme.id || !theme.name) {
-      throw new Error(`Theme ${id} is missing id or name`);
+function main() {
+  const manifest = JSON.parse(readFileSync(join(SHARED_DIR, "manifest.json"), "utf8"));
+  if (!Array.isArray(manifest) || manifest.length === 0) {
+    throw new Error("shared/theme-presets/manifest.json is empty or invalid");
+  }
+  for (const entry of manifest) {
+    if (!entry.id || !entry.name) {
+      throw new Error("Manifest entry is missing id or name");
     }
-    manifest.push({ id: theme.id, name: theme.name });
-    writeTo(SHARED_DIR, id, jsonText);
-    writeTo(IOS_DIR, id, jsonText);
-    writeTo(ANDROID_DIR, id, jsonText);
-    console.log(`synced ${id}`);
+    const file = join(SHARED_DIR, `${entry.id}.json`);
+    const theme = JSON.parse(readFileSync(file, "utf8"));
+    if (theme.id !== entry.id || theme.name !== entry.name) {
+      throw new Error(`Theme ${entry.id} does not match its manifest entry`);
+    }
   }
 
-  manifest.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-  const manifestJson = JSON.stringify(manifest, null, 2) + "\n";
-  writeFileSync(join(SHARED_DIR, "manifest.json"), manifestJson, "utf8");
-  writeFileSync(join(IOS_DIR, "manifest.json"), manifestJson, "utf8");
-  writeFileSync(join(ANDROID_DIR, "manifest.json"), manifestJson, "utf8");
+  copyBundle(IOS_DIR);
+  copyBundle(ANDROID_DIR);
+  syncSyntaxPresets();
 
-  console.log(`Synced ${manifest.length} theme presets (ref ${OPENCODE_THEME_REF})`);
+  mkdirSync(IOS_FALLBACK, { recursive: true });
+  for (const name of readdirSync(IOS_FALLBACK)) {
+    if (name.endsWith(".json") && name !== "Contents.json") {
+      unlinkSync(join(IOS_FALLBACK, name));
+    }
+  }
+  copyFileSync(join(SHARED_DIR, `${DEFAULT_PRESET_ID}.json`), join(IOS_FALLBACK, `${DEFAULT_PRESET_ID}.json`));
+  writeFileSync(
+    join(IOS_FALLBACK, "Contents.json"),
+    `${JSON.stringify(
+      {
+        data: [{ idiom: "universal", filename: `${DEFAULT_PRESET_ID}.json` }],
+        info: { author: "xcode", version: 1 },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  console.log(`Synced ${manifest.length} theme presets and syntax highlight presets`);
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+function syncSyntaxPresets() {
+  const manifest = JSON.parse(readFileSync(join(SHARED_SYNTAX_DIR, "syntax-manifest.json"), "utf8"));
+  if (!Array.isArray(manifest) || manifest.length === 0) {
+    throw new Error("shared/syntax-presets/syntax-manifest.json is empty or invalid");
+  }
+  for (const entry of manifest) {
+    if (!entry.id || !entry.name) {
+      throw new Error("Syntax manifest entry is missing id or name");
+    }
+    if (entry.id === "match") continue;
+    const file = join(SHARED_SYNTAX_DIR, `${entry.id}.json`);
+    const preset = JSON.parse(readFileSync(file, "utf8"));
+    if (preset.id !== entry.id || preset.name !== entry.name) {
+      throw new Error(`Syntax preset ${entry.id} does not match its manifest entry`);
+    }
+  }
+  copyBundleFrom(SHARED_SYNTAX_DIR, IOS_SYNTAX_DIR);
+  copyBundleFrom(SHARED_SYNTAX_DIR, ANDROID_SYNTAX_DIR);
+}
+
+function copyBundleFrom(srcDir, destDir) {
+  clearJson(destDir);
+  for (const name of jsonFiles(srcDir)) {
+    copyFileSync(join(srcDir, name), join(destDir, name));
+  }
+}
+
+main();

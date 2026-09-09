@@ -248,10 +248,10 @@ private struct OpenCodeOverflowMenuPanel: View {
         }
         .padding(.vertical, overflowMenuPaddingVertical)
         .fixedSize(horizontal: true, vertical: true)
-        .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: overflowMenuCornerRadius))
+        .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: overflowMenuCornerRadius))
         .overlay {
             RoundedRectangle(cornerRadius: overflowMenuCornerRadius)
-                .strokeBorder(OpenCodeColors.borderWeakerBase, lineWidth: 1)
+                .strokeBorder(OpenCodeColors.borderWeakBase, lineWidth: 1)
         }
     }
 }
@@ -302,11 +302,11 @@ private func overflowEntryTextColor(_ entry: OpenCodeOverflowMenuEntry) -> Color
 private func overflowEntryIconColor(_ entry: OpenCodeOverflowMenuEntry) -> Color {
     switch (entry.enabled, entry.destructive) {
     case (false, _):
-        OpenCodeColors.iconWeakBase.opacity(0.6)
+        OpenCodeColors.iconBase
     case (true, true):
         OpenCodeColors.error
     case (true, false):
-        OpenCodeColors.iconWeakBase
+        OpenCodeColors.iconStrongBase
     }
 }
 

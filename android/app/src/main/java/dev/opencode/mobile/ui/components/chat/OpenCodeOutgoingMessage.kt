@@ -93,8 +93,8 @@ fun OpenCodeOutgoingMessage(
                                     .clip(OutgoingMessageShape)
                                     .then(outgoingMessageInteractionModifier(onClick, onLongClick)),
                             shape = OutgoingMessageShape,
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            color = openCodeColor("surface-interactive-weak"),
+                            contentColor = openCodeColor("text-strong"),
                         ) {
                             Column(
                                 modifier =

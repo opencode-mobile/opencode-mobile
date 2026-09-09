@@ -42,6 +42,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlin.math.roundToInt
 
@@ -147,9 +148,9 @@ private fun OpenCodeOverflowMenuPanel(
                 .wrapContentWidth(Alignment.End)
                 .widthIn(min = OverflowMenuMinWidth),
         shape = RoundedCornerShape(OverflowMenuCornerRadius),
-        color = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = openCodeColor("surface-raised-base"),
+        contentColor = openCodeColor("text-strong"),
+        border = BorderStroke(1.dp, openCodeColor("border-weak-base")),
         shadowElevation = 0.dp,
     ) {
         Column(
@@ -178,15 +179,15 @@ private fun OverflowMenuEntryRow(
 ) {
     val contentColor =
         when {
-            !entry.enabled -> MaterialTheme.colorScheme.onSurfaceVariant
-            entry.destructive -> MaterialTheme.colorScheme.error
-            else -> MaterialTheme.colorScheme.onSurface
+            !entry.enabled -> openCodeColor("text-weak")
+            entry.destructive -> openCodeColor("error")
+            else -> openCodeColor("text-strong")
         }
     val iconColor =
         when {
-            !entry.enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-            entry.destructive -> MaterialTheme.colorScheme.error
-            else -> MaterialTheme.colorScheme.onSurfaceVariant
+            !entry.enabled -> openCodeColor("icon-base")
+            entry.destructive -> openCodeColor("error")
+            else -> openCodeColor("icon-strong-base")
         }
     val interactionSource = remember { MutableInteractionSource() }
 

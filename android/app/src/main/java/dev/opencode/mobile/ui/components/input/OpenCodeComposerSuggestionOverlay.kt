@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeColor
 
 data class OpenCodeComposerSuggestionItem(
     val id: String,
@@ -61,7 +62,7 @@ fun OpenCodeComposerSuggestionOverlay(
             Text(
                 text = emptyMessage ?: "No commands",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = openCodeColor("text-base"),
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             )
         } else {
@@ -112,14 +113,14 @@ private fun ComposerSuggestionRow(
                 Text(
                     text = "[$label]",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = openCodeColor("text-base"),
                     maxLines = 1,
                 )
             }
             Text(
                 text = item.title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = openCodeColor("text-strong"),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
@@ -129,7 +130,7 @@ private fun ComposerSuggestionRow(
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = openCodeColor("text-base"),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

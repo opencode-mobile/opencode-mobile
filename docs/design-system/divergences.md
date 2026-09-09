@@ -53,10 +53,10 @@ implementation belong in the feature's `parity-gaps.md`.
   hardcoded light/dark color pairs in `OpenCodeColors`.
 - Android behavior: `LetterAccent` enum exposes `badgeColors(useDarkTheme)` with
   the same hardcoded light/dark color pairs in `Color.kt`.
-- Reason: the 5 letter-badge accent pairs have no equivalent in the OpenCode
-  desktop theme JSON schema. They are component-level tokens, not derived from
-  palette seeds, and are not expected to change when a custom theme is imported.
-  Hardcoding them avoids unnecessary resolver complexity.
+- Reason: the 5 letter-badge accent pairs have no equivalent in the theme JSON
+  schema. They are component-level tokens, not derived from palette seeds, and
+  are not expected to change when the selected theme changes. Hardcoding them
+  avoids unnecessary resolver complexity.
 - Review trigger: if a future theme JSON schema adds letter-badge accent seeds,
   migrate these to the resolver.
 
@@ -224,20 +224,22 @@ implementation belong in the feature's `parity-gaps.md`.
   (`background.base` `0 → 0.7 → 0.7`, top = dock top + 16, solid to screen
   edge). Composer mode / model Choice Badges (including **Plan**) use the
   related capsule glass Choice Badge variant.
-- iOS behavior: iOS 26+ `glassEffect` with `surface-raised-base` underlay at
-  0.92 opacity on floating chrome and floating pills; glass on filter chips and
-  key home controls. Session List dock **Add project / New session** stay
-  fill-only (`text.strong` 0.14, 52pt) on all iOS versions to match Android —
-  not per-button Liquid Glass. Below iOS 26, floating chrome uses raised fill
-  (0.95) plus light shadow; capsule glass Choice Badges / Filter Chips use
-  fill-only `text.strong` stands-ins (0.14 selected / 0.08 unselected). Capsule
-  chips, Choice Badge glass, and floating pills use **non-interactive**
-  `glassEffect` plus subtle scale/opacity press — not `.interactive()` lens
-  feedback. Multi-pill float stacks use `GlassEffectContainer`. Composer
-  IconCircles stay non-glass in the OPE-99 shell-only slice.
+- iOS behavior: iOS 26+ `glassEffect` with no opaque underlay on floating
+  chrome; glass on filter chips, the project scope control, dock CTAs, and
+  key home controls. Pre–26 dock / composer inner controls use a transparent
+  `text-strong` **0.05** wash with no stroke — not the composer-shell outline
+  (that hairline is for a card on the page). Below iOS 26, floating chrome
+  uses raised fill (0.95) plus light shadow; capsule
+  glass Choice Badges / Filter Chips use fill-only `text.strong` stands-ins
+  (0.14 selected / 0.08 unselected). Capsule chips, Choice Badge glass, and
+  floating pills use **non-interactive** `glassEffect` plus subtle
+  scale/opacity press — not `.interactive()` lens feedback. Multi-pill float
+  stacks use `GlassEffectContainer`. Composer IconCircles stay non-glass in
+  the OPE-99 shell-only slice.
 - Android behavior: Material 3 raised `Surface` (fill alpha 0.95, light
-  elevation) for floating chrome; dock CTAs and glass Choice Badge / Filter
-  Chip stand-ins share the fill-only recipe; no system Liquid Glass API.
+  elevation) for floating chrome; dock CTAs and the project scope control use
+  a transparent **0.05** wash as the glass stand-in; glass Choice Badge /
+  Filter Chip stand-ins stay fill-only; no system Liquid Glass API.
 - Reason: Android has no Liquid Glass equivalent; layout and product actions stay
   aligned while materials remain platform-native.
 - Review trigger: if Android gains a system glass material API or product asks

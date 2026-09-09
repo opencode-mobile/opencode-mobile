@@ -226,7 +226,7 @@ fun OpenCodeSessionComposer(
             is OpenCodeSessionComposerState.Question,
             is OpenCodeSessionComposerState.ChildLockout,
             is OpenCodeSessionComposerState.Prompt,
-            -> MaterialTheme.colorScheme.outlineVariant
+            -> openCodeColor("border-weak-base")
         }
     val announceBlocking =
         state is OpenCodeSessionComposerState.Permission || state is OpenCodeSessionComposerState.Question
@@ -333,7 +333,7 @@ private fun PromptEntryContent(
     }
 
     val mentionColor = openCodeColor("syntax-type")
-    val bodyColor = MaterialTheme.colorScheme.onSurface
+    val bodyColor = openCodeColor("text-strong")
     val mentionTransformation =
         remember(state.mentionRanges, mentionColor) {
             MentionVisualTransformation(mentionRanges = state.mentionRanges, mentionColor = mentionColor)
@@ -394,7 +394,7 @@ private fun PromptEntryContent(
                     Text(
                         text = "Ask anything...",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = openCodeColor("text-weak"),
                     )
                 }
                 innerTextField()
@@ -419,7 +419,7 @@ private fun PromptEntryContent(
                 onClick = { onAction(OpenCodeSessionComposerAction.Attach) },
             )
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconCircleText("/", "Open commands"),
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Slash, "Open commands"),
                 contrast = OpenCodeButtonContrast.Low,
                 onClick = { onAction(OpenCodeSessionComposerAction.OpenCommands) },
             )
@@ -454,7 +454,7 @@ private fun PromptEntryContent(
                             },
                     ),
                 enabled = state.sendEnabled,
-                contrast = OpenCodeButtonContrast.Low,
+                contrast = OpenCodeButtonContrast.Accent,
                 onLongClick =
                     state.followUpDelivery?.let {
                         { onAction(OpenCodeSessionComposerAction.ToggleFollowUp) }
@@ -617,6 +617,7 @@ private fun ChildLockoutContent(
         }
     val textStrong = openCodeColor("text-strong")
     val ctaFill = textStrong.copy(alpha = 0.14f)
+    val ctaShape = RoundedCornerShape(percent = 50)
     val chipShape = RoundedCornerShape(percent = 50)
     Row(
         modifier =
@@ -644,8 +645,8 @@ private fun ChildLockoutContent(
             Modifier
                 .fillMaxWidth()
                 .height(52.dp)
-                .clip(chipShape)
-                .background(ctaFill)
+                .clip(ctaShape)
+                .background(textStrong.copy(alpha = 0.05f))
                 .clickable { onAction(OpenCodeSessionComposerAction.BackToMainSession) },
         contentAlignment = Alignment.Center,
     ) {

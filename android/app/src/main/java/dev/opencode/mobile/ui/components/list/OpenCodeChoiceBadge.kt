@@ -17,7 +17,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -75,20 +74,20 @@ private fun StandardChoiceBadge(
 ) {
     val containerColor =
         when {
-            !enabled -> MaterialTheme.colorScheme.surfaceVariant
-            selected -> MaterialTheme.colorScheme.surfaceVariant
-            else -> MaterialTheme.colorScheme.surface
+            !enabled -> openCodeColor("surface-raised-base")
+            selected -> openCodeColor("surface-raised-base")
+            else -> openCodeColor("surface-base")
         }
     val borderColor =
         when {
-            !enabled -> MaterialTheme.colorScheme.outlineVariant
-            selected -> MaterialTheme.colorScheme.outline
-            else -> MaterialTheme.colorScheme.outlineVariant
+            !enabled -> openCodeColor("border-weaker-base")
+            selected -> openCodeColor("border-weak-base")
+            else -> openCodeColor("border-weaker-base")
         }
     val contentColor =
         when {
-            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
-            else -> MaterialTheme.colorScheme.onSurface
+            !enabled -> openCodeColor("text-base")
+            else -> openCodeColor("text-strong")
         }
 
     Surface(
@@ -104,7 +103,7 @@ private fun StandardChoiceBadge(
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelLarge,
             modifier =
                 Modifier.padding(
                     horizontal = BadgePaddingHorizontal,
@@ -127,7 +126,7 @@ private fun GlassChoiceBadge(
         if (enabled) {
             textStrong
         } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
+            openCodeColor("text-base")
         }
     // Fill-only stand-in (same recipe as iOS pre–26 glass fallback).
     val fill = textStrong.copy(alpha = if (selected) 0.14f else 0.08f)
@@ -146,7 +145,7 @@ private fun GlassChoiceBadge(
         Text(
             text = label,
             color = labelColor,
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Normal),
+            style = MaterialTheme.typography.labelLarge,
             maxLines = 1,
         )
     }

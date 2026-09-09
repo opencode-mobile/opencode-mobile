@@ -107,6 +107,15 @@ struct ThemeResolver {
         return ResolvedTokens(tokens: tokens)
     }
 
+    static func overlaySyntax(_ base: ResolvedTokens, syntax: [String: String]) -> ResolvedTokens {
+        guard !syntax.isEmpty else { return base }
+        var tokens = base.tokens
+        for (key, value) in syntax where key.hasPrefix("syntax-") {
+            tokens[key] = value.normalizedHex
+        }
+        return ResolvedTokens(tokens: tokens)
+    }
+
     // MARK: - Hex Utilities
 
     static func normalizeColor(_ value: String) -> String {

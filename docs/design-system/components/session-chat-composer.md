@@ -57,8 +57,10 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
 ## Token Usage
 
 - Shell tokens: Floating Chrome materials (`surface.raised` / glass; see
-  `floating-chrome.md`), `border-weaker-base`, `text-strong`, and `text-base`.
-- Status/action tokens: `warning`, `error`, and `button-primary-base`.
+  `floating-chrome.md`), `border-weak-base` for the prompt / question /
+  child-lockout outline, `text-strong`, and `text-base`.
+- Status/action tokens: `warning`, `error`, `button-primary-base`,
+  `interactive`, and `text-on-brand-base` (send `IconCircle` accent contrast).
 - Shared shell geometry: 26 logical-pixel continuous corner radius, 12
   logical-pixel content padding, 12 logical-pixel screen gutters, 4
   logical-pixel bottom inset (Floating Dock parity), and 10 logical-pixel row
@@ -67,14 +69,16 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   logical-pixel horizontal and vertical inset. Permission and question actions
   occupy the same leading and trailing positions as the attach and send actions.
 - Child-lockout caption uses caption typography and `text-base`. Display-only
-  model and thinking-effort chips use the same fill-only capsule recipe as
-  Session List Dock CTAs / glass stand-in (`text-strong` at **0.14**, capsule,
-  button typography) — not interactive Choice Badges. The back action uses
-  the Session List Dock **New session** CTA: full-width capsule, height **52**,
-  `text-strong` fill at **0.14**, `text-strong` label. Do not use high-contrast
-  `OpenCodeButton` `fullWidthText`.
-- Typography: body for prompt entry; heading, body-secondary, code, caption, and
+  model and thinking-effort chips stay fill-only capsules (`text-strong` at
+  **0.14**, button typography) — not interactive Choice Badges. The back
+  action uses the Session List Dock **New session** CTA: full-width capsule,
+  height **52**, `text-strong` label, and the same glass / **0.05** wash
+  recipe with no stroke. Do not use high-contrast `OpenCodeButton`
+  `fullWidthText`.
+- Typography: body for prompt entry; placeholder uses `text-weak` (not
+  `text-base` / on-surface-variant). Heading, body-secondary, code, caption, and
   button roles for permission approval, question request, and child lockout.
+  Glass picker chips use `type.button` and `text-strong` on both platforms.
   Question selection hints use `text-base`. Question options reuse
   `OpenCodeListItem` card style.
 
@@ -105,18 +109,23 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   **glass** variant in the **unselected** (clear / clickable) chrome — they open
   pickers rather than toggling a selected peer in-row.
 - The prompt action row is `[+] [/] … [send]`: Attach `IconCircle`, then a
-  Commands `IconCircleText("/")` action at 8 logical-pixel spacing, a flexible
-  gap, then stop (when active) and send. Commands opens a feature-owned
-  Commands sheet; the composer only reports the tap as `openCommands`.
+  Commands `IconCircle` using the `slash` catalog icon at 8 logical-pixel spacing, a flexible
+  gap, then stop (when active) and send. Attach, Commands, and Stop stay
+  low-contrast. Send uses Button **accent** contrast (`interactive` fill,
+  `text-on-brand-base` icon) so it follows the theme brand. An empty draft
+  keeps send on muted accent; the first sendable character springs it to
+  full accent. Commands opens a
+  feature-owned Commands sheet; the composer only reports the tap as
+  `openCommands`.
 - With a pending permission or question request, the shell replaces its inner
   content with that decision UI. Draft prompt text and selection state remain in
   the Screen Model and return after the request resolves. After those requests
   resolve on a child session, the shell returns to child lockout, not prompt
   entry.
-- The shell keeps its normal neutral outline for prompt entry and question
+- The shell keeps its `border-weak-base` outline for prompt entry and question
   request. It uses the warning outline for a pending permission and the error
   outline after a failed permission response. Question response failures keep
-  the neutral outline and surface the error in content copy.
+  the same `border-weak-base` outline and surface the error in content copy.
 - The shell coordinates content replacement with its size change when switching
   between prompt entry, permission approval, question request, and child
   lockout. Android fades
@@ -180,7 +189,7 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
 
 Both platform component files include permission-state, question-state,
 child-lockout, and mention-styled prompt previews for light and dark theme
-review, plus an `iconCircleText` button preview. Both Component Galleries
+review. Both Component Galleries
 expose one live, edge-to-edge composer with interactive controls for empty
 prompt, populated prompt, mention-styled prompt, active work, pending
 attachments, pending revert, child lockout, pending permission, queued
@@ -203,8 +212,8 @@ resize motion can be reviewed in a realistic Session Chat placement.
   (OPE-58) and `backToMainSession` (OPE-170).
 - Token and typography mapping: complete. Shell materials use Floating Chrome
   (`floating-chrome.md`); question selection hints use `text-base`; question
-  shell outline stays neutral. The Commands action reuses `iconCircle` geometry
-  via `iconCircleText`; no new tokens for OPE-99 shell materials.
+  shell outline stays `border-weak-base`. The Commands action uses `iconCircle`
+  with the `slash` catalog icon; no new tokens for OPE-99 shell materials.
 - iOS and Android implementations: complete for shared question-request composer
   state and for Floating Chrome shell materials (OPE-99). Control-level glass on
   IconCircles remains out of scope for this slice.

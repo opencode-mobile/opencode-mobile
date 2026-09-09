@@ -22,11 +22,7 @@ struct OpenCodeAssistantMessage: View {
         }
         .padding(.horizontal, Self.paddingHorizontal)
         .padding(.vertical, Self.paddingVertical)
-        .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: Self.cornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: Self.cornerRadius)
-                .stroke(OpenCodeColors.borderWeakerBase, lineWidth: Self.borderWidth)
-        )
+        .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: Self.cornerRadius))
     }
 
     static let emptyPlaceholder = "…"
@@ -38,7 +34,6 @@ struct OpenCodeAssistantMessage: View {
     private static let cornerRadius: CGFloat = 8
     private static let paddingHorizontal: CGFloat = 12
     private static let paddingVertical: CGFloat = 8
-    private static let borderWidth: CGFloat = 1
 }
 
 #if DEBUG

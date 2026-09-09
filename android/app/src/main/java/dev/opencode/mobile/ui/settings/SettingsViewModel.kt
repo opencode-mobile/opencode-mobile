@@ -1,11 +1,8 @@
 package dev.opencode.mobile.ui.settings
 
-import android.content.Context
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
@@ -42,7 +39,6 @@ import javax.inject.Inject
 class SettingsViewModel
     @Inject
     constructor(
-        @ApplicationContext private val context: Context,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
         private val activeConnectionManager: ActiveConnectionManager,
         private val foregroundEventStream: ForegroundEventStream,
@@ -118,12 +114,12 @@ class SettingsViewModel
             }
         }
 
-        fun importThemeFromUri(uri: Uri) {
-            ThemeManager.importThemeFromUri(context, uri)
-        }
-
         fun applyPreset(id: String) {
             ThemeManager.applyPreset(id)
+        }
+
+        fun applySyntaxPreset(id: String) {
+            ThemeManager.applySyntaxPreset(id)
         }
 
         fun setHideUserDirectoryPrefix(enabled: Boolean) {

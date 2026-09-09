@@ -88,7 +88,7 @@ fun ColorGalleryScreen(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = "OpenCode Desktop Tokens (${ThemeManager.currentTheme.name})",
+            text = "Theme tokens (${ThemeManager.currentTheme.name})",
             style = MaterialTheme.typography.titleMedium,
         )
         tokens.forEach { token -> ColorTokenRow(token) }

@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlin.math.max
 
@@ -64,6 +65,7 @@ fun IconsGalleryScreen(modifier: Modifier = Modifier) {
             "radio_button_checked" to OpenCodeIcons.RadioButtonChecked,
             "radio_button_unchecked" to OpenCodeIcons.RadioButtonUnchecked,
             "widgets" to OpenCodeIcons.Widgets,
+            "slash" to OpenCodeIcons.Slash,
         )
 
     Column(
@@ -103,7 +105,7 @@ fun IconsGalleryScreen(modifier: Modifier = Modifier) {
                                     imageVector = vector,
                                     contentDescription = name,
                                     modifier = Modifier.size(24.dp),
-                                    tint = MaterialTheme.colorScheme.onSurface,
+                                    tint = openCodeColor("icon-strong-base"),
                                 )
                                 Text(
                                     text = name,

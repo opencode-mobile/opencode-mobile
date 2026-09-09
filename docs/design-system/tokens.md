@@ -5,48 +5,80 @@ native app implementation exists.
 
 The token system has four levels:
 
-1. Primitive palette (seed colors from the OC-2 theme JSON)
+1. Primitive palette (seed colors from the bundled theme JSON)
 2. Base semantic tokens (resolved from palette seeds via the theme resolver)
 3. Component tokens
 4. Platform mappings
 
 ## Theme JSON Format
 
-The canonical theme source is an OC-2 format JSON file bundled with each app:
+The canonical theme source is a JSON file bundled with each app:
 
 ```json
 {
-  "$schema": "https://opencode.ai/desktop-theme.json",
-  "name": "OC-2",
-  "id": "oc-2",
+  "name": "Porcelain",
+  "id": "porcelain",
   "light": {
-    "palette": { "neutral": "#f7f7f7", "ink": "#171311", ... },
+    "palette": { "neutral": "#F8F8F8", "ink": "#171717", ... },
     "overrides": { "text-strong": "#171717", ... }
   },
   "dark": {
-    "palette": { "neutral": "#1f1f1f", "ink": "#f1ece8", ... },
+    "palette": { "neutral": "#121212", "ink": "#EDEDED", ... },
     "overrides": { "text-strong": "#EDEDED", ... }
   }
 }
 ```
 
 Both apps load this at runtime, run the resolver, and produce the resolved token
-dictionary. Bundled presets and imported themes follow the same pipeline.
+dictionary. Only bundled presets follow this pipeline.
 
 ### Bundled theme presets
 
-Thirty-seven desktop themes ship with each app. Canonical JSON lives in
-`shared/theme-presets/`; platform bundles are updated via `npm run themes:sync`
-and verified with `npm run themes:check` (see `scripts/sync-theme-presets.mjs`).
+Five original themes ship with each app: Porcelain, Linen, Signal, Hotline,
+and Phosphor. Canonical JSON lives in `shared/theme-presets/`; platform
+bundles are updated via `npm run themes:sync` and verified with
+`npm run themes:check` (see `scripts/sync-theme-presets.mjs`).
+
+| Preset | Role |
+| --- | --- |
+| `porcelain` | Near-white / near-black default. Quiet blue taps. |
+| `linen` | Quiet warm paper / espresso. Dusty olive taps. |
+| `signal` | True white / true black. Electric blue is the shout. |
+| `hotline` | Neutral chrome, loud pink on taps and user bubbles. |
+| `phosphor` | Neutral chrome, CRT green on taps and user bubbles. |
+
+Assistant Message and Tool Call Card have no hairline. Every preset must
+keep `surface-raised-base` a different luminance from `background-base` in
+both modes so those cards stay visible on Session Chat.
 
 | Platform | Bundle location |
 | --- | --- |
 | iOS | `Resources/ThemePresets/` (may flatten into bundle root at build time) |
 | Android | `assets/theme-presets/` |
 
-`manifest.json` lists `{ id, name }` pairs for the Settings theme picker. Default
-selection is the `oc-2` preset unless the user chooses another preset or imports
-custom JSON.
+`manifest.json` lists `{ id, name, blurb }` pairs for the Settings theme picker.
+Default selection is the `porcelain` preset unless the user chooses another
+bundled preset. Users still on a retired preset ID fall back to Porcelain.
+
+### Syntax highlight presets
+
+Code-fence colors are a separate setting from the UI theme. Canonical JSON
+lives in `shared/syntax-presets/`; platform bundles are updated by the same
+`npm run themes:sync` command.
+
+| Preset | Role |
+| --- | --- |
+| `match` | Virtual. Use the active UI theme’s own `syntax-*` tokens. Default. |
+| `nocturne` | One Dark family |
+| `citrus` | Solarized family |
+| `paper` | GitHub family |
+| `neon` | Dracula family |
+
+`match` has no JSON file. The other presets overlay only `syntax-*` keys onto
+the resolved UI theme. The syntax catalog is `syntax-manifest.json` so it does
+not collide with the theme `manifest.json` when iOS flattens resource folders.
+Settings → Appearance opens dedicated preview pages for both pickers (card
+gallery), not a name-only sheet.
 
 ## Palette Seeds
 
@@ -69,85 +101,85 @@ these for each mode:
 ## Resolved Semantic Tokens
 
 The resolver expands palette seeds into resolved tokens, then applies overrides.
-The canonical tokens match the OpenCode desktop token schema:
+Tables below show Porcelain, the default preset.
 
 ### Background & Surface
 
-| Token | OC-2 Light | OC-2 Dark |
+| Token | Porcelain Light | Porcelain Dark |
 |---|---|---|
-| `background-base` | `#F8F8F8` | `#1C1C1C` |
-| `surface-base` | `#F8F8F8` | `#1C1C1C` |
+| `background-base` | `#F8F8F8` | `#121212` |
+| `surface-base` | `#F8F8F8` | `#121212` |
 | `surface-base-hover` | `#0000000A` | `#FFFFFF0D` |
-| `surface-raised-base` | `#F3F3F3` | `#232323` |
-| `surface-raised-base-hover` | `#EDEDED` | `#282828` |
-| `surface-interactive-weak` | `#F5FAFF` | `#0D172B` |
-| `surface-success-base` | `#E6FFE5` | `#022B00` |
-| `surface-critical-base` | `#FFF2F0` | `#1F0603` |
+| `surface-raised-base` | `#FFFFFF` | `#1C1C1C` |
+| `surface-raised-base-hover` | resolved from `neutral` | resolved from `neutral` |
+| `surface-interactive-weak` | `#E8EEFF` | `#161C2E` |
+| `surface-success-base` | `#E3F5EA` | `#12261A` |
+| `surface-critical-base` | `#FCECEC` | `#2A1414` |
 
 ### Text
 
-| Token | OC-2 Light | OC-2 Dark |
+| Token | Porcelain Light | Porcelain Dark |
 |---|---|---|
 | `text-strong` | `#171717` | `#EDEDED` |
 | `text-base` | `#6F6F6F` | `#A0A0A0` |
 | `text-weak` | `#8F8F8F` | `#707070` |
 | `text-weaker` | `#C7C7C7` | `#505050` |
-| `text-interactive-base` | `#034CFF` | `#8CB0FF` |
+| `text-interactive-base` | `#1456F7` | `#C0D4FB` |
 | `text-on-brand-base` | resolved from `primary` seed | resolved from `primary` seed |
-| `icon-invert-base` | `#FFFFFF` | `#1C1C1C` |
+| `icon-invert-base` | `#FFFFFF` | `#121212` |
 
 ### Border
 
-| Token | OC-2 Light | OC-2 Dark |
+| Token | Porcelain Light | Porcelain Dark |
 |---|---|---|
-| `border-weak-base` | `#DBDBDB` | `#282828` |
-| `border-weaker-base` | `#E8E8E8` | `#232323` |
+| `border-weak-base` | `#E5E5E5` | `#282828` |
+| `border-weaker-base` | `#F0F0F0` | `#232323` |
 
 ### Icon
 
-| Token | OC-2 Light | OC-2 Dark |
+| Token | Porcelain Light | Porcelain Dark |
 |---|---|---|
 | `icon-base` | `#8F8F8F` | `#7E7E7E` |
-| `icon-weak-base` | `#C7C7C7` | `#343434` |
+| `icon-weak-base` | resolved from `ink` / `neutral` | resolved from `ink` / `neutral` |
 | `icon-strong-base` | `#171717` | `#EDEDED` |
 
 ### Button
 
-| Token | OC-2 Light | OC-2 Dark |
+| Token | Porcelain Light | Porcelain Dark |
 |---|---|---|
-| `button-primary-base` | resolved from `ink` | resolved from `ink` |
+| `button-primary-base` | `#171717` | `#EDEDED` |
 | `button-secondary-base` | resolved from `neutral` | resolved from `neutral` |
 | `button-secondary-hover` | resolved from `neutral` | resolved from `neutral` |
 
 ### Semantic Status
 
-| Token | OC-2 Light | OC-2 Dark |
+| Token | Porcelain Light | Porcelain Dark |
 |---|---|---|
-| `interactive` | `#034CFF` | `#034CFF` |
-| `success` | `#12C905` | `#12C905` |
-| `warning` | `#FFDC17` | `#FCD53A` |
-| `error` | `#FC533A` | `#FC533A` |
-| `info` | `#A753AE` | `#EDB2F1` |
-| `diff-add` | `#9FF29A` | `#C8FFC4` |
-| `diff-delete` | `#FC533A` | `#FC533A` |
+| `interactive` | `#1456F7` | `#8BA8FF` |
+| `success` | `#089B00` | `#4EC97A` |
+| `warning` | `#C78B05` | `#E0B04A` |
+| `error` | `#CB321C` | `#E85A5A` |
+| `info` | `#5A5A8A` | `#B4A6E0` |
+| `diff-add` | `#089B00` | `#7AE0A0` |
+| `diff-delete` | `#CB321C` | `#E85A5A` |
 
 ### Syntax (code highlighting)
 
-| Token | OC-2 Light | OC-2 Dark |
+| Token | Porcelain Light | Porcelain Dark |
 |---|---|---|
-| `syntax-comment` | `#7A7A7A` | `#8F8F8F` |
-| `syntax-keyword` | `#A753AE` | `#EDB2F1` |
-| `syntax-string` | `#00CEB9` | `#00CEB9` |
-| `syntax-primitive` | `#034CFF` | `#8CB0FF` |
-| `syntax-property` | `#A753AE` | `#FAB283` |
-| `syntax-type` | `#8A6F00` | `#FCD53A` |
-| `syntax-constant` | `#007B80` | `#93E9F6` |
-| `syntax-variable` | `#D1383D` | `#E06C75` |
-| `syntax-operator` | `#318795` | `#56B6C2` |
+| `syntax-comment` | `#8F8F8F` | `#707070` |
+| `syntax-keyword` | `#1456F7` | `#8BA8FF` |
+| `syntax-string` | `#087466` | `#4EC9B8` |
+| `syntax-primitive` | `#1456F7` | `#8BA8FF` |
+| `syntax-property` | `#5A5A8A` | `#C4B08A` |
+| `syntax-type` | `#8A6508` | `#E0B04A` |
+| `syntax-constant` | `#1A7A80` | `#7AD4E0` |
+| `syntax-variable` | `#CB321C` | `#E06C75` |
+| `syntax-operator` | `#3A7A82` | `#56B6C2` |
 | `syntax-punctuation` | `text-strong` | `text-strong` |
-| `syntax-critical` | `#FF8C00` | `#FAB283` |
-| `syntax-diff-delete` | `#FF8C00` | `#FAB283` |
-| `syntax-diff-unknown` | `#A753AE` | `#EDB2F1` |
+| `syntax-critical` | resolved from `primary` | resolved from `primary` |
+| `syntax-diff-delete` | resolved from `primary` | resolved from `primary` |
+| `syntax-diff-unknown` | resolved from `info` | resolved from `info` |
 
 ### Syntax role mapping (code blocks)
 
@@ -425,7 +457,11 @@ Reusable action component with text and icon-only variants.
 High contrast buttons invert against the surrounding page using semantic
 foreground/background tokens. Low contrast buttons use secondary surface fill,
 primary or strong content, and subtle border so secondary actions remain visible
-without competing with primary actions.
+without competing with primary actions. Accent contrast uses the `interactive`
+fill with `text-on-brand-base` content so a single CTA follows the theme brand.
+Disabled accent uses an opaque **0.10** mix of `interactive` over
+`surface-raised-base`, with `text-weak` content — not `surface-interactive-weak`
+(that token is the outgoing-message wash and stays loud on Hotline / Phosphor).
 
 | Token | Value |
 | --- | --- |
@@ -605,7 +641,9 @@ Short auto-dismissing feedback overlay for transient success or error copy.
 
 ### Outgoing message
 
-Reusable outgoing prompt card for session conversations.
+Reusable outgoing prompt card for session conversations. Fill is
+`surface-interactive-weak` so the user voice reads apart from assistant
+cards. No hairline — the wash is the edge.
 
 | Token | Value |
 | --- | --- |
@@ -618,18 +656,20 @@ Reusable outgoing prompt card for session conversations.
 ### Assistant message
 
 Reusable leading-aligned assistant reply card for session conversations.
+Fill is `surface-raised-base`. No hairline — luminance against
+`background-base` is the edge. Do not share the outgoing wash.
 
 | Token | Value |
 | --- | --- |
 | `assistantMessage.cornerRadius` | 8 (logical px; matches `listItem.cornerRadius`) |
 | `assistantMessage.paddingHorizontal` | 12 (logical px) |
 | `assistantMessage.paddingVertical` | 8 (logical px) |
-| `assistantMessage.borderWidth` | 1 (logical px) |
 
 ### Tool call card
 
-Collapsed, tool-agnostic assistant tool-call row. Status chrome reuses the
-shared `success` / `warning` / `error` semantic tokens; +/− counts reuse
+Collapsed, tool-agnostic assistant tool-call row. Same raised fill as
+Assistant Message, no hairline. Status chrome reuses the shared
+`success` / `warning` / `error` semantic tokens; +/− counts reuse
 `diffAdd` / `diffDelete`.
 
 | Token | Value |

@@ -1,0 +1,29 @@
+{
+  "id": "paper",
+  "name": "Paper",
+  "blurb": "GitHub family",
+  "light": {
+    "syntax-comment": "#6A737D",
+    "syntax-keyword": "#D73A49",
+    "syntax-string": "#032F62",
+    "syntax-primitive": "#005CC5",
+    "syntax-property": "#005CC5",
+    "syntax-type": "#6F42C1",
+    "syntax-constant": "#005CC5",
+    "syntax-variable": "#E36209",
+    "syntax-operator": "#24292E",
+    "syntax-punctuation": "#24292E"
+  },
+  "dark": {
+    "syntax-comment": "#8B949E",
+    "syntax-keyword": "#FF7B72",
+    "syntax-string": "#A5D6FF",
+    "syntax-primitive": "#79C0FF",
+    "syntax-property": "#79C0FF",
+    "syntax-type": "#D2A8FF",
+    "syntax-constant": "#79C0FF",
+    "syntax-variable": "#FFA657",
+    "syntax-operator": "#E6EDF3",
+    "syntax-punctuation": "#E6EDF3"
+  }
+}

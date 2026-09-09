@@ -262,7 +262,7 @@ struct OpenCodeSessionComposer: View {
                     )
 
                     OpenCodeButton(
-                        variant: .iconCircleText("/", accessibilityLabel: "Open commands"),
+                        variant: .iconCircle(.slash, accessibilityLabel: "Open commands"),
                         contrast: .low,
                         action: { onAction(.openCommands) }
                     )
@@ -292,7 +292,7 @@ struct OpenCodeSessionComposer: View {
                             }()
                         ),
                         enabled: prompt.sendEnabled,
-                        contrast: .low,
+                        contrast: .accent,
                         longPress: prompt.followUpDelivery == nil ? nil : { onAction(.toggleFollowUp) },
                         action: {
                             // OPE-138: send leaves editing intent. Mention UITextView is
@@ -406,10 +406,7 @@ struct OpenCodeSessionComposer: View {
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
-                .background(
-                    OpenCodeColors.textStrong.opacity(0.14),
-                    in: Capsule()
-                )
+                .openCodeSubtleControlChrome(shape: Capsule())
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -624,7 +621,7 @@ struct OpenCodeSessionComposer: View {
     private var outlineColor: Color {
         switch state {
         case .prompt, .question, .childLockout:
-            OpenCodeColors.borderWeakerBase
+            OpenCodeColors.borderWeakBase
         case let .permission(permission):
             permission.errorMessage == nil ? OpenCodeColors.warning : OpenCodeColors.error
         }

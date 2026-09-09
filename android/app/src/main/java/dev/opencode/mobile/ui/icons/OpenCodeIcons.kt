@@ -48,6 +48,7 @@ private var _vertical_align_center: ImageVector? = null
 private var _radio_button_checked: ImageVector? = null
 private var _radio_button_unchecked: ImageVector? = null
 private var _widgets: ImageVector? = null
+private var _slash: ImageVector? = null
 
   val Add: ImageVector
     get() {
@@ -1447,5 +1448,37 @@ private var _widgets: ImageVector? = null
     )
       }.build()
       return _widgets!!
+    }
+
+  val Slash: ImageVector
+    get() {
+      if (_slash != null) return _slash!!
+      _slash = ImageVector.Builder(
+        name = "Slash",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M 5 3 h 14 a 2 2 0 0 1 2 2 v 14 a 2 2 0 0 1 -2 2 h -14 a 2 2 0 0 1 -2 -2 v -14 a 2 2 0 0 1 2 -2 z").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M 9 15 L 15 9").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _slash!!
     }
 }

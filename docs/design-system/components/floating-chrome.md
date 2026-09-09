@@ -25,8 +25,9 @@ customization beyond the documented recipe.
 
 ## Token Usage
 
-- Semantic tokens: `surface.raised` underlay (iOS glass underlay opacity `0.92`;
-  iOS pre–26 and Android fill alpha `0.95`).
+- Semantic tokens: `surface.raised` underlay (iOS pre–26 and Android fill
+  alpha `0.95`). iOS 26+ uses `glassEffect` with no opaque underlay so the
+  dock and composer stay subtly transparent.
 - Component tokens: continuous corner radius supplied by the caller; common
   values are **26** for dock/composer shells and **12** for suggestion overlays.
   Pre–iOS 26 uses a light drop shadow (radius **8**, y **4**, black opacity
@@ -41,10 +42,12 @@ material as appropriate on each platform.
 
 ## Platform Notes
 
-- iOS: `View.openCodeFloatingChrome(cornerRadius:)` — iOS 26+ `glassEffect` with
-  `surface-raised-base` underlay at 0.92; below iOS 26 opaque
-  `surface-raised-base` at 0.95 plus a light drop shadow (not `.regularMaterial`
-  alone, which reads too low-contrast on older OS versions).
+- iOS: `View.openCodeFloatingChrome(cornerRadius:)` — iOS 26+ `glassEffect`
+  only (no raised underlay). Below iOS 26, `surface-raised-base` at 0.95 plus
+  a light drop shadow (not `.regularMaterial` alone, which reads too
+  low-contrast on older OS versions). Inner dock and composer controls use
+  `openCodeSubtleControlChrome`: regular glass on iOS 26+, `text-strong` at
+  **0.05** below.
 - Android: `OpenCodeFloatingChrome` composable — Material 3 `Surface` with raised
   fill at 0.95 alpha, tonal elevation `2`, shadow elevation `4` (no system
   Liquid Glass). Optional `border` for composer / overlay outlines.

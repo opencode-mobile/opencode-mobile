@@ -1,7 +1,6 @@
 package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
@@ -14,11 +13,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeColor
 
 private val AssistantMessageCornerRadius = 8.dp
 private val AssistantMessagePaddingHorizontal = 12.dp
 private val AssistantMessagePaddingVertical = 8.dp
-private val AssistantMessageBorderWidth = 1.dp
 
 internal const val ASSISTANT_MESSAGE_EMPTY_PLACEHOLDER = "…"
 
@@ -34,8 +33,7 @@ fun OpenCodeAssistantMessage(
     val shape = RoundedCornerShape(AssistantMessageCornerRadius)
     val bubbleModifier =
         modifier
-            .background(MaterialTheme.colorScheme.surface, shape)
-            .border(AssistantMessageBorderWidth, MaterialTheme.colorScheme.outlineVariant, shape)
+            .background(openCodeColor("surface-raised-base"), shape)
             .padding(
                 horizontal = AssistantMessagePaddingHorizontal,
                 vertical = AssistantMessagePaddingVertical,
@@ -53,7 +51,7 @@ fun OpenCodeAssistantMessage(
             text = assistantMessageDisplayText(text),
             modifier = bubbleModifier,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = openCodeColor("text-strong"),
         )
     }
 }

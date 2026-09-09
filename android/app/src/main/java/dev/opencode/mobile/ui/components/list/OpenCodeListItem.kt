@@ -285,6 +285,7 @@ fun OpenCodeListItem(
                         status = status,
                         caption = caption,
                         enabled = enabled,
+                        textBase = textBase,
                         textWeaker = textWeaker,
                         surfaceRaised = surfaceRaised,
                     )
@@ -303,6 +304,7 @@ private fun ListItemMetaColumn(
     status: OpenCodeListItemStatus?,
     caption: String?,
     enabled: Boolean,
+    textBase: Color,
     textWeaker: Color,
     surfaceRaised: Color,
 ) {
@@ -314,7 +316,7 @@ private fun ListItemMetaColumn(
         if (!caption.isNullOrEmpty()) {
             Text(
                 text = caption,
-                color = textWeaker,
+                color = if (enabled) textBase else textWeaker,
                 style = MaterialTheme.typography.labelMedium,
                 textAlign = TextAlign.End,
                 maxLines = 1,
@@ -420,9 +422,9 @@ private fun ListItemStartDecoration(
         is StartDecorator.Icon -> {
             val tint =
                 if (enabled) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                    openCodeColor("icon-strong-base")
                 } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    openCodeColor("icon-base")
                 }
             Icon(
                 imageVector = decorator.imageVector,
