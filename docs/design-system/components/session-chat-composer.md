@@ -57,8 +57,9 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
 ## Token Usage
 
 - Shell tokens: Floating Chrome materials (`surface.raised` / glass; see
-  `floating-chrome.md`), `border-weak-base` for the prompt / question /
-  child-lockout outline, `text-strong`, and `text-base`.
+  `floating-chrome.md`) — same shadow-only raised card as Floating Dock, with
+  no default hairline. Permission uses `warning` or `error` for a status
+  outline only. Also `text-strong` and `text-base`.
 - Status/action tokens: `warning`, `error`, `button-primary-base`,
   `interactive`, and `text-on-brand-base` (send `IconCircle` accent contrast).
 - Shared shell geometry: 26 logical-pixel continuous corner radius, 12
@@ -95,7 +96,7 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   exists. Pending revert, when shown, is a full-width removable chip above
   attachments and the prompt, stacked at 6–8 logical-pixel spacing, using the
   same surface, border, and remove control as `OpenCodeAttachmentChip`. The
-  shell stays on the neutral outline. X reports `cancelRevert`. Pending
+  shell stays shadow-only. X reports `cancelRevert`. Pending
   attachments render as a vertical stack of full-width removable chips above
   the prompt input at 6–8 logical-pixel spacing. Attach is disabled
   when the selected model cannot accept image or PDF input; the feature owns
@@ -122,10 +123,11 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   the Screen Model and return after the request resolves. After those requests
   resolve on a child session, the shell returns to child lockout, not prompt
   entry.
-- The shell keeps its `border-weak-base` outline for prompt entry and question
-  request. It uses the warning outline for a pending permission and the error
-  outline after a failed permission response. Question response failures keep
-  the same `border-weak-base` outline and surface the error in content copy.
+- Prompt, question, and child-lockout shells match Floating Dock: raised
+  chrome and shadow, no hairline. A pending permission uses the warning
+  outline; a failed permission response uses the error outline. Question
+  response failures keep the shadow-only shell and surface the error in
+  content copy.
 - The shell coordinates content replacement with its size change when switching
   between prompt entry, permission approval, question request, and child
   lockout. Android fades
@@ -178,11 +180,16 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   and selection sync from Screen Model values only when `selectionRevision`
   changes. Prompt `BasicTextField` uses `maxLines = 5` so growth stops and
   scrolls after about five body lines. Question custom text uses
-  `OpenCodeTextInput`. Its fixed screen gutter and bottom inset sit outside the
-  animated content boundary. `AnimatedContent` coordinates the crossfade and
-  `SizeTransform`; shared `OpenCodeFloatingChrome` (raised Surface) and the
-  outline wrap that boundary so the shell redraws at each intermediate height
-  instead of revealing already-switched content inside a lagging container.
+  `OpenCodeTextInput`. Its fixed screen gutter and **4** logical-pixel bottom
+  inset sit outside the animated content boundary. Session Chat applies one
+  bottom inset on the composer overlay — `ime.union(navigationBars)` — so the
+  shell lines up with Session List Dock (`nav` + **4**) and cannot stack a
+  leftover IME inset on top of the nav bar. The timeline fade uses that
+  measured overlay height and reaches the display edge. `AnimatedContent` coordinates the crossfade and
+  `SizeTransform`; shared `OpenCodeFloatingChrome` (raised Surface) wraps that
+  boundary so the shell redraws at each intermediate height instead of
+  revealing already-switched content inside a lagging container. Permission
+  status outlines, when present, travel with that chrome.
 - Native progress indicators may differ while preserving shared state behavior.
 
 ## Review Surfaces
@@ -211,9 +218,10 @@ resize motion can be reviewed in a realistic Session Chat placement.
   `question`, `childLockout`), including the `openCommands` prompt action
   (OPE-58) and `backToMainSession` (OPE-170).
 - Token and typography mapping: complete. Shell materials use Floating Chrome
-  (`floating-chrome.md`); question selection hints use `text-base`; question
-  shell outline stays `border-weak-base`. The Commands action uses `iconCircle`
-  with the `slash` catalog icon; no new tokens for OPE-99 shell materials.
+  (`floating-chrome.md`) with no default outline so the card matches Session
+  List Dock; question selection hints use `text-base`. Permission still uses
+  warning / error outlines. The Commands action uses `iconCircle` with the
+  `slash` catalog icon; no new tokens for OPE-99 shell materials.
 - iOS and Android implementations: complete for shared question-request composer
   state and for Floating Chrome shell materials (OPE-99). Control-level glass on
   IconCircles remains out of scope for this slice.

@@ -219,14 +219,17 @@ fun OpenCodeSessionComposer(
     onAction: (OpenCodeSessionComposerAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val outlineColor =
+    val outline =
         when (state) {
             is OpenCodeSessionComposerState.Permission ->
-                if (state.errorMessage == null) openCodeColor("warning") else openCodeColor("error")
+                BorderStroke(
+                    1.dp,
+                    if (state.errorMessage == null) openCodeColor("warning") else openCodeColor("error"),
+                )
             is OpenCodeSessionComposerState.Question,
             is OpenCodeSessionComposerState.ChildLockout,
             is OpenCodeSessionComposerState.Prompt,
-            -> openCodeColor("border-weak-base")
+            -> null
         }
     val announceBlocking =
         state is OpenCodeSessionComposerState.Permission || state is OpenCodeSessionComposerState.Question
@@ -241,7 +244,7 @@ fun OpenCodeSessionComposer(
         OpenCodeFloatingChrome(
             modifier = Modifier.fillMaxWidth(),
             shape = shellShape,
-            border = BorderStroke(1.dp, outlineColor),
+            border = outline,
         ) {
             Column(
                 modifier =

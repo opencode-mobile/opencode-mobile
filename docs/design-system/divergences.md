@@ -227,8 +227,8 @@ implementation belong in the feature's `parity-gaps.md`.
 - iOS behavior: iOS 26+ `glassEffect` with no opaque underlay on floating
   chrome; glass on filter chips, the project scope control, dock CTAs, and
   key home controls. Pre–26 dock / composer inner controls use a transparent
-  `text-strong` **0.05** wash with no stroke — not the composer-shell outline
-  (that hairline is for a card on the page). Below iOS 26, floating chrome
+  `text-strong` **0.05** wash with no stroke, matching the shadow-only
+  floating chrome shells. Below iOS 26, floating chrome
   uses raised fill (0.95) plus light shadow; capsule
   glass Choice Badges / Filter Chips use fill-only `text.strong` stands-ins
   (0.14 selected / 0.08 unselected). Capsule chips, Choice Badge glass, and

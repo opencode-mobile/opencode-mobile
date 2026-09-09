@@ -8,10 +8,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -308,7 +312,7 @@ fun SessionChatScreen(
         },
     )
 
-    Box(modifier = modifier.fillMaxSize().imePadding()) {
+    Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBarOverflowHost(
                 expanded = menuExpanded,
@@ -546,7 +550,10 @@ fun SessionChatScreen(
                                 if (height != composerOverlayHeightPx) {
                                     composerOverlayHeightPx = height
                                 }
-                            },
+                            }
+                            .windowInsetsPadding(
+                                WindowInsets.ime.union(WindowInsets.navigationBars),
+                            ),
                 ) {
                     if (SessionChatComposerKind.resolve(
                             isChildSession = parentId != null,

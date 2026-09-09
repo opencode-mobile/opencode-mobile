@@ -28,8 +28,11 @@ safe-area padding.
 
 - iOS: `LinearGradient` with bottom safe-area extension via ignore-safe-area on
   the fade only.
-- Android: `Brush.verticalGradient` full-width box aligned to bottom; height
-  includes navigation bar inset when the dock block is measured with it.
+- Android: `Brush.verticalGradient` full-width box aligned to the physical
+  bottom. Height includes the navigation-bar inset when the dock or composer
+  block is measured with `navigationBarsPadding`. The navigation host must not
+  consume that bottom inset on Home or Session Chat, or the fade stops above
+  the bar and the screen reads as a slab on the system navigation.
 
 ## Review Surfaces
 

@@ -103,7 +103,9 @@ top.
   provided. Picker-chrome filter changes use the shared opacity crossfade.
 - Android: same hierarchy with Material raised glass-like dock; no system Liquid
   Glass. Android `SessionList` does not expose pull-to-refresh in this version.
-  Picker-chrome filter changes use the shared opacity crossfade.
+  Picker-chrome filter changes use the shared opacity crossfade. The dock
+  applies `navigationBarsPadding`; the fade extends to the physical screen
+  edge under the system navigation bar.
 
 ## Review Surfaces
 

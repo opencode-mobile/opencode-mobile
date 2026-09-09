@@ -128,9 +128,11 @@ accessibility label or description using the platform convention.
   `Popup` windows stay above the nav inset and turn the sheet into an island.
   Form mode applies `imePadding()` to the sheet boundary—not its measured
   content—so the sheet follows IME animation while its body scrolls. The app
-  navigation host handles system bars and display cutouts explicitly rather than
-  using `safeDrawing`, because `safeDrawing` includes the IME and would resize
-  every route behind a focused form. The component can use its own bottom-sheet
+  navigation host pads status bars, horizontal system bars, and display cutouts
+  explicitly rather than using `safeDrawing`, because `safeDrawing` includes the
+  IME and would resize every route behind a focused form. Bottom navigation-bar
+  inset is left to floating chrome on Home and Session Chat, or to the route
+  surface on other screens. The component can use its own bottom-sheet
   motion timing while preserving close, scrim tap, back press, and downward drag
   dismissal. The overlay card is inset by `bottomSheet.inset` on the left, right,
   and bottom. Bottom corners use

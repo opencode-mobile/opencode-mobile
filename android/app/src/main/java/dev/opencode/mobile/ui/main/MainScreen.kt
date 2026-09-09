@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -326,7 +327,10 @@ internal fun MainScreen(
 
             when (uiState) {
                 is MainScreenUiState.Disconnected -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         ConnectionOnboardingScreen(
                             onConnectClick = {
                                 ProductAnalytics.logUserAction(
@@ -345,7 +349,7 @@ internal fun MainScreen(
                         title = "Loading sessions",
                         subtitle = "Checking server…",
                         testTag = "homeLoading",
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().navigationBarsPadding(),
                     )
                 }
                 is MainScreenUiState.ProbeFailed -> {
@@ -353,7 +357,7 @@ internal fun MainScreen(
                         message = uiState.message,
                         onRetry = onRetryProbe,
                         onEditConnection = onEditConnection,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().navigationBarsPadding(),
                     )
                 }
                 is MainScreenUiState.Empty,
@@ -410,7 +414,10 @@ internal fun MainScreen(
             onDismissed = {
                 onConsumeProjectRemovalSnackbar()
             },
-            modifier = Modifier.align(Alignment.BottomCenter),
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding(),
         )
     }
 

@@ -39,11 +39,11 @@ whether that tab is present; the dock does not insert it.
   Letter badge or All mark (32 circle + `widgets` grid), body-secondary
   semibold title, caption subtitle (`text.weak`), count pill,
   `keyboard_arrow_down` chevron. The All mark and count pill keep a
-  `text-strong` **0.10** fill. Do not outline these controls to match the
-  Session Composer shell — that hairline sits on the same raised white and
-  reads cheap. Do not use `surface-base` or a **0.08+** ink wash for the
-  control — those read as a grey slab. Do not flatten the wash into an
-  opaque mix with `surface-raised-base`.
+  `text-strong` **0.10** fill. Do not stroke the dock shell or these inner
+  controls — Floating Chrome is shadow-only on the raised card, and a
+  hairline on that white reads cheap. Do not use `surface-base` or a
+  **0.08+** ink wash for the control — those read as a grey slab. Do not
+  flatten the wash into an opaque mix with `surface-raised-base`.
 - Actions: circle Add project + capsule New session, shared height **52**,
   horizontal gap **8**, same glass / **0.05** wash recipe and no stroke on
   both platforms. Do not use high-contrast `OpenCodeButton`
@@ -116,7 +116,8 @@ is hold-to-remove on project rows in the sheet, not on the dock.
 - Android: same structure with Material raised dock and a transparent
   **0.05** wash on the scope control and CTAs at 52dp / 8dp gap. Project
   switch uses `HapticFeedbackType.TextHandleMove`; New session hold uses
-  `LongPress`.
+  `LongPress`. Callers apply `navigationBarsPadding` around the dock so the
+  card sits above the system navigation bar.
 
 ## Review Surfaces
 
