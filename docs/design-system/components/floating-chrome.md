@@ -50,7 +50,9 @@ material as appropriate on each platform.
   **0.05** below.
 - Android: `OpenCodeFloatingChrome` composable — Material 3 `Surface` with raised
   fill at 0.95 alpha, tonal elevation `2`, shadow elevation `4` (no system
-  Liquid Glass). Optional `border` for composer / overlay outlines.
+  Liquid Glass). Optional `border` for permission-status composer outlines
+  and suggestion-overlay outlines. The default dock / composer shell has
+  no hairline.
 
 ## Review Surfaces
 

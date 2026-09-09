@@ -8,9 +8,17 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -192,9 +200,11 @@ fun MainNavigation() {
                     AppRootState.Home ->
                         NavDisplay(
                             modifier =
-                                Modifier
-                                    .systemBarsPadding()
-                                    .displayCutoutPadding(),
+                                Modifier.windowInsetsPadding(
+                                    WindowInsets.systemBars
+                                        .union(WindowInsets.displayCutout)
+                                        .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
+                                ),
                             backStack = backStack,
                             onBack = { backStack.removeLastOrNull() },
                             transitionSpec = { forwardRouteTransition() },
@@ -203,7 +213,7 @@ fun MainNavigation() {
                             entryProvider =
                                 entryProvider {
                                     entry<ProjectListHome> {
-                                        RouteSurface {
+                                        RouteSurface(edgeToEdgeBottom = true) {
                                             ProductRouteScreenViewEffect(
                                                 screenId = ProductAnalytics.Screen.HOME,
                                             )
@@ -452,7 +462,7 @@ fun MainNavigation() {
                                         }
                                     }
                                     entry<ComponentGalleryDetail> { key ->
-                                        RouteSurface {
+                                        RouteSurface(edgeToEdgeBottom = key.entryId.usesEdgeToEdgeBottomChrome()) {
                                             val entry = ComponentGalleryEntries.first { it.id == key.entryId }
                                             if (key.entryId == ComponentGalleryEntryId.MessageList) {
                                                 MessageListGalleryDetailScreen(
@@ -550,7 +560,7 @@ fun MainNavigation() {
                                         }
                                     }
                                     entry<SessionChat> { key ->
-                                        RouteSurface {
+                                        RouteSurface(edgeToEdgeBottom = true) {
                                             ProductRouteScreenViewEffect(
                                                 screenId = ProductAnalytics.Screen.SESSION_CHAT,
                                             )
@@ -729,10 +739,21 @@ internal fun backwardRouteTransition() =
     )
 
 @Composable
-private fun RouteSurface(content: @Composable () -> Unit) {
+private fun RouteSurface(
+    edgeToEdgeBottom: Boolean = false,
+    content: @Composable () -> Unit,
+) {
     Surface(
-        modifier = Modifier.fillMaxSize(),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .then(if (edgeToEdgeBottom) Modifier else Modifier.navigationBarsPadding()),
         color = MaterialTheme.colorScheme.background,
         content = content,
     )
 }
+
+private fun ComponentGalleryEntryId.usesEdgeToEdgeBottomChrome(): Boolean =
+    this == ComponentGalleryEntryId.SessionList ||
+        this == ComponentGalleryEntryId.SessionListDock ||
+        this == ComponentGalleryEntryId.SessionComposer

@@ -33,14 +33,20 @@ rounded rect. Materials come from `OpenCodeFloatingChrome` /
 Outer float insets are platform-specific: iOS `OpenCodeFloatingDock` applies
 horizontal **16** and bottom **4** padding around the chrome; Android callers
 (for example `SessionList`) apply outer float insets around `OpenCodeFloatingDock`.
-Both platforms apply inner content padding **12**.
+Both platforms apply inner content padding **12**. The card sits above the home
+indicator / navigation bar; the list fade, not the card, reaches the physical
+screen edge.
 
 ## Platform Notes
 
 - iOS: uses shared floating chrome (iOS 26+ glass + underlay; material fallback).
-  Dock owns outer float insets `16` / `4` and inner content padding `12`.
+  Dock owns outer float insets `16` / `4` and inner content padding `12`. Safe
+  area lifts the card; the fade ignores the bottom safe area.
 - Android: uses shared floating chrome (raised Surface stand-in). Outer float
-  insets remain caller-owned; dock owns inner content padding `12`.
+  insets remain caller-owned; dock owns inner content padding `12`. Home and
+  Session Chat do not consume the bottom navigation-bar inset at the navigation
+  host. Callers apply `navigationBarsPadding` on the card so it sits above the
+  bar while the fade measures that inset and paints to the display edge.
 
 ## Review Surfaces
 

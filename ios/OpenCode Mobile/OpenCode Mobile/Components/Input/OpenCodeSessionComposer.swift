@@ -212,10 +212,12 @@ struct OpenCodeSessionComposer: View {
         .padding(.vertical, 12)
         .clipShape(RoundedRectangle(cornerRadius: Self.shellCornerRadius, style: .continuous))
         .openCodeFloatingChrome(cornerRadius: Self.shellCornerRadius)
-        .overlay(
-            RoundedRectangle(cornerRadius: Self.shellCornerRadius, style: .continuous)
-                .stroke(outlineColor, lineWidth: 1)
-        )
+        .overlay {
+            if let outlineColor {
+                RoundedRectangle(cornerRadius: Self.shellCornerRadius, style: .continuous)
+                    .stroke(outlineColor, lineWidth: 1)
+            }
+        }
         .padding(.horizontal, 12)
         .padding(.bottom, 4)
         .animation(.easeInOut(duration: 0.24), value: contentKind)
@@ -618,10 +620,10 @@ struct OpenCodeSessionComposer: View {
         .accessibilityElement(children: .contain)
     }
 
-    private var outlineColor: Color {
+    private var outlineColor: Color? {
         switch state {
         case .prompt, .question, .childLockout:
-            OpenCodeColors.borderWeakBase
+            nil
         case let .permission(permission):
             permission.errorMessage == nil ? OpenCodeColors.warning : OpenCodeColors.error
         }
