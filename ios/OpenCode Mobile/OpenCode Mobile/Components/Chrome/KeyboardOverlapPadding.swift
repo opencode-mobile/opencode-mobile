@@ -37,8 +37,13 @@ enum KeyboardOverlap {
 /// growth extends upward into the timeline. Wrapping the top bar in the same
 /// GeometryReader left a keyboard-sized gap above the chrome (title/back under
 /// the status bar / Dynamic Island).
+///
+/// The host also ignores the home-indicator safe area so the timeline can paint
+/// to the physical bottom behind the floating composer (home Session List
+/// already does this via ScrollView). Callers lift the composer by the home
+/// indicator when the keyboard is hidden; `overlap` is that keyboard inset.
 struct KeyboardOverlapPaddingModifier: ViewModifier {
-    @State private var overlap: CGFloat = 0
+    @Binding var overlap: CGFloat
 
     func body(content: Content) -> some View {
         GeometryReader { geometry in
@@ -65,11 +70,12 @@ struct KeyboardOverlapPaddingModifier: ViewModifier {
                 }
         }
         .ignoresSafeArea(.keyboard)
+        .ignoresSafeArea(edges: .bottom)
     }
 }
 
 extension View {
-    func keyboardOverlapPadding() -> some View {
-        modifier(KeyboardOverlapPaddingModifier())
+    func keyboardOverlapPadding(overlap: Binding<CGFloat>) -> some View {
+        modifier(KeyboardOverlapPaddingModifier(overlap: overlap))
     }
 }

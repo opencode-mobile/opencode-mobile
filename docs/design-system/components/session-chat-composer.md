@@ -173,6 +173,10 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   would turn scroll back off (OPE-213). Overflow scrolls inside the field.
   Question custom text uses `OpenCodeTextInput`. Shell fill uses shared
   `openCodeFloatingChrome` (iOS 26+ Liquid Glass + underlay; material fallback).
+  The keyboard-avoidance host ignores the home-indicator safe area so the
+  timeline paints behind the composer to the physical screen edge (parity with
+  Session List). The composer overlay adds that inset only while the keyboard
+  is hidden so the shell stays on the same float as Session List Dock.
 - Android uses Compose selection, live-region semantics, and progress
   primitives. Prompt mention spans render through a `VisualTransformation` on
   `BasicTextField` (not `AnnotatedString` on `TextFieldValue`) so
