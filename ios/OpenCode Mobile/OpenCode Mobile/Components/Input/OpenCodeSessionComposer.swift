@@ -406,10 +406,7 @@ struct OpenCodeSessionComposer: View {
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
-                .background(
-                    OpenCodeColors.textStrong.opacity(0.14),
-                    in: Capsule()
-                )
+                .background(OpenCodeColors.textStrong.opacity(0.05), in: Capsule())
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)

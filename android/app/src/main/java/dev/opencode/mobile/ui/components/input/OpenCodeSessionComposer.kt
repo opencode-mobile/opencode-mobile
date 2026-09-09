@@ -617,6 +617,7 @@ private fun ChildLockoutContent(
         }
     val textStrong = openCodeColor("text-strong")
     val ctaFill = textStrong.copy(alpha = 0.14f)
+    val ctaShape = RoundedCornerShape(percent = 50)
     val chipShape = RoundedCornerShape(percent = 50)
     Row(
         modifier =
@@ -644,8 +645,8 @@ private fun ChildLockoutContent(
             Modifier
                 .fillMaxWidth()
                 .height(52.dp)
-                .clip(chipShape)
-                .background(ctaFill)
+                .clip(ctaShape)
+                .background(textStrong.copy(alpha = 0.05f))
                 .clickable { onAction(OpenCodeSessionComposerAction.BackToMainSession) },
         contentAlignment = Alignment.Center,
     ) {

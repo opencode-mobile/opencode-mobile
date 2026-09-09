@@ -226,18 +226,21 @@ implementation belong in the feature's `parity-gaps.md`.
   related capsule glass Choice Badge variant.
 - iOS behavior: iOS 26+ `glassEffect` with `surface-raised-base` underlay at
   0.92 opacity on floating chrome and floating pills; glass on filter chips and
-  key home controls. Session List dock **Add project / New session** stay
-  fill-only (`text.strong` 0.14, 52pt) on all iOS versions to match Android —
-  not per-button Liquid Glass. Below iOS 26, floating chrome uses raised fill
-  (0.95) plus light shadow; capsule glass Choice Badges / Filter Chips use
-  fill-only `text.strong` stands-ins (0.14 selected / 0.08 unselected). Capsule
-  chips, Choice Badge glass, and floating pills use **non-interactive**
-  `glassEffect` plus subtle scale/opacity press — not `.interactive()` lens
-  feedback. Multi-pill float stacks use `GlassEffectContainer`. Composer
-  IconCircles stay non-glass in the OPE-99 shell-only slice.
+  key home controls. Session List dock **Add project / New session** and the
+  project scope control use a `text-strong` **0.05** wash with no stroke on
+  all iOS versions to match Android — not per-button Liquid Glass, and not
+  the composer-shell outline (that hairline is for a card on the page). Below
+  iOS 26, floating chrome uses raised fill (0.95) plus light shadow; capsule
+  glass Choice Badges / Filter Chips use fill-only `text.strong` stands-ins
+  (0.14 selected / 0.08 unselected). Capsule chips, Choice Badge glass, and
+  floating pills use **non-interactive** `glassEffect` plus subtle
+  scale/opacity press — not `.interactive()` lens feedback. Multi-pill float
+  stacks use `GlassEffectContainer`. Composer IconCircles stay non-glass in
+  the OPE-99 shell-only slice.
 - Android behavior: Material 3 raised `Surface` (fill alpha 0.95, light
-  elevation) for floating chrome; dock CTAs and glass Choice Badge / Filter
-  Chip stand-ins share the fill-only recipe; no system Liquid Glass API.
+  elevation) for floating chrome; dock CTAs and the project scope control use
+  the same **0.05** wash; glass Choice Badge / Filter Chip stand-ins stay
+  fill-only; no system Liquid Glass API.
 - Reason: Android has no Liquid Glass equivalent; layout and product actions stay
   aligned while materials remain platform-native.
 - Review trigger: if Android gains a system glass material API or product asks

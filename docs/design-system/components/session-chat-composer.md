@@ -68,12 +68,12 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   logical-pixel horizontal and vertical inset. Permission and question actions
   occupy the same leading and trailing positions as the attach and send actions.
 - Child-lockout caption uses caption typography and `text-base`. Display-only
-  model and thinking-effort chips use the same fill-only capsule recipe as
-  Session List Dock CTAs / glass stand-in (`text-strong` at **0.14**, capsule,
-  button typography) — not interactive Choice Badges. The back action uses
-  the Session List Dock **New session** CTA: full-width capsule, height **52**,
-  `text-strong` fill at **0.14**, `text-strong` label. Do not use high-contrast
-  `OpenCodeButton` `fullWidthText`.
+  model and thinking-effort chips stay fill-only capsules (`text-strong` at
+  **0.14**, button typography) — not interactive Choice Badges. The back
+  action uses the Session List Dock **New session** CTA: full-width capsule,
+  height **52**, `text-strong` label, and the same `text-strong` **0.05**
+  wash with no stroke. Do not use high-contrast `OpenCodeButton`
+  `fullWidthText`.
 - Typography: body for prompt entry; placeholder uses `text-weak` (not
   `text-base` / on-surface-variant). Heading, body-secondary, code, caption, and
   button roles for permission approval, question request, and child lockout.

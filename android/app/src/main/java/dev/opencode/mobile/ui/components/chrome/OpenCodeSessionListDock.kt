@@ -81,7 +81,8 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 private val NewSessionButtonShape = RoundedCornerShape(percent = 50)
-private val ScopeControlShape = RoundedCornerShape(14.dp)
+private val ScopeControlShape = RoundedCornerShape(20.dp)
+private const val DockControlFillAlpha = 0.05f
 
 @Composable
 fun OpenCodeSessionListDock(
@@ -100,7 +101,7 @@ fun OpenCodeSessionListDock(
     val textStrong = openCodeColor("text-strong")
     val error = openCodeColor("error")
     val iconStrong = openCodeColor("icon-strong-base")
-    val surfaceBase = openCodeColor("surface-base")
+    val controlFill = textStrong.copy(alpha = DockControlFillAlpha)
     OpenCodeFloatingDock(modifier = modifier) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -139,7 +140,7 @@ fun OpenCodeSessionListDock(
             ) {
                 DockCta(
                     onClick = onAddProject,
-                    fill = surfaceBase,
+                    fill = controlFill,
                     shape = CircleShape,
                     modifier = Modifier.size(52.dp),
                 ) {
@@ -154,7 +155,7 @@ fun OpenCodeSessionListDock(
                     onClick = onNewSession,
                     onLongClick = onNewSessionLongPress,
                     onLongClickLabel = if (onNewSessionLongPress != null) "Choose project" else null,
-                    fill = surfaceBase,
+                    fill = controlFill,
                     shape = NewSessionButtonShape,
                     modifier =
                         Modifier
@@ -366,7 +367,7 @@ fun SessionListScopeControl(
             modifier
                 .fillMaxWidth()
                 .clip(ScopeControlShape)
-                .background(openCodeColor("surface-base"))
+                .background(openCodeColor("text-strong").copy(alpha = DockControlFillAlpha))
                 .pointerInput(shownTabId, isSwitching) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
