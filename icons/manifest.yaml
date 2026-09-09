@@ -104,3 +104,6 @@ icons:
   - name: widgets
     lucide: layout-grid
     notes: All-projects mark; component gallery
+  - name: slash
+    lucide: square-slash
+    notes: Session Composer Commands action

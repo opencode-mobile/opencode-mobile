@@ -34,7 +34,7 @@ struct OpenCodeComposerSuggestionOverlay: View {
             if items.isEmpty {
                 Text(emptyMessage ?? "No commands")
                     .font(OpenCodeTypography.bodySecondary)
-                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .foregroundStyle(OpenCodeColors.textBase)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
@@ -94,7 +94,7 @@ private struct ComposerSuggestionRow: View {
                     if let badge = item.badge, !badge.isEmpty {
                         Text("[\(badge)]")
                             .font(OpenCodeTypography.body)
-                            .foregroundStyle(OpenCodeColors.textWeak)
+                            .foregroundStyle(OpenCodeColors.textBase)
                             .lineLimit(1)
                     }
                     Text(item.title)
@@ -105,7 +105,7 @@ private struct ComposerSuggestionRow: View {
                 if let subtitle = item.subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(OpenCodeTypography.bodySecondary)
-                        .foregroundStyle(OpenCodeColors.textWeak)
+                        .foregroundStyle(OpenCodeColors.textBase)
                         .lineLimit(1)
                 }
             }

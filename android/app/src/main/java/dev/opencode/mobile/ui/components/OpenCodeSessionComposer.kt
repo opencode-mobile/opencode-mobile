@@ -226,7 +226,7 @@ fun OpenCodeSessionComposer(
             is OpenCodeSessionComposerState.Question,
             is OpenCodeSessionComposerState.ChildLockout,
             is OpenCodeSessionComposerState.Prompt,
-            -> MaterialTheme.colorScheme.outlineVariant
+            -> openCodeColor("border-weak-base")
         }
     val announceBlocking =
         state is OpenCodeSessionComposerState.Permission || state is OpenCodeSessionComposerState.Question
@@ -333,7 +333,7 @@ private fun PromptEntryContent(
     }
 
     val mentionColor = openCodeColor("syntax-type")
-    val bodyColor = MaterialTheme.colorScheme.onSurface
+    val bodyColor = openCodeColor("text-strong")
     val mentionTransformation =
         remember(state.mentionRanges, mentionColor) {
             MentionVisualTransformation(mentionRanges = state.mentionRanges, mentionColor = mentionColor)
@@ -394,7 +394,7 @@ private fun PromptEntryContent(
                     Text(
                         text = "Ask anything...",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = openCodeColor("text-weak"),
                     )
                 }
                 innerTextField()
@@ -419,7 +419,7 @@ private fun PromptEntryContent(
                 onClick = { onAction(OpenCodeSessionComposerAction.Attach) },
             )
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconCircleText("/", "Open commands"),
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Slash, "Open commands"),
                 contrast = OpenCodeButtonContrast.Low,
                 onClick = { onAction(OpenCodeSessionComposerAction.OpenCommands) },
             )

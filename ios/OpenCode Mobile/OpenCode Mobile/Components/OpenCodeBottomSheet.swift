@@ -834,7 +834,7 @@ private struct BottomSheetEntryDecoration: View {
         case (true, true):
             OpenCodeColors.error
         case (true, false):
-            OpenCodeColors.iconBase
+            OpenCodeColors.iconStrongBase
         }
     }
 

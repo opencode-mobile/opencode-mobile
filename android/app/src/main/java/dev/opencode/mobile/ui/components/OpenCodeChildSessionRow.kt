@@ -160,7 +160,7 @@ fun OpenCodeChildSessionRow(
                     imageVector = OpenCodeIcons.ChevronRight,
                     contentDescription = null,
                     modifier = Modifier.size(ChildSessionRowChevronSize),
-                    tint = openCodeColor("icon-base"),
+                    tint = openCodeColor("icon-strong-base"),
                 )
             }
         }

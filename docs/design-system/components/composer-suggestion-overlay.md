@@ -28,15 +28,17 @@ Each suggestion uses an **internal row**, not `OpenCodeListItem`:
 
 1. **Primary line:** optional source label as literal bracketed text
    (`[skill]`, `[mcp]`), then the command title (`/skill-name`). Same typography
-   as the title; source label uses a weaker text color.
+   as the title; source label uses `text-base` so it stays secondary without
+   disappearing on a raised card.
 2. **Secondary line:** `subtitle` when present (single line, ellipsis).
 
 ## Token Usage
 
 - Semantic tokens: Floating Chrome materials (`surface.raised` / glass; see
   `floating-chrome.md`) and `border-weaker-base` for the panel (same shell
-  family as Session Composer); `text-strong` for the title; `text-weak` for the
-  bracketed source label and subtitle.
+  family as Session Composer); `text-strong` for the title; `text-base` for the
+  bracketed source label, subtitle, and empty message. Do not use `text-weak`
+  here — Graphite’s weak grey is too faint on `surface-raised`.
 - Typography roles: `type.body` for both the bracketed source label and title;
   `type.bodySecondary` for the subtitle.
 - Geometry: panel matching composer chrome family at corner radius 12;

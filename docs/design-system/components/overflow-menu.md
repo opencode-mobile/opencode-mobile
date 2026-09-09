@@ -41,9 +41,11 @@ are out of scope.
 
 ## Token Usage
 
-- Semantic tokens: `color.background.elevated`, `color.text.primary`,
-  `color.text.disabled`, `color.icon.default`, and `color.status.error` (or the
-  platform error mapping) for destructive entry text and icons.
+- Semantic tokens: `surface-raised-base`, `border-weak-base`, `text-strong`,
+  `text-weak`, `icon-strong-base`, `icon-base`, and `error` for destructive
+  entry text and icons. Enabled icons use `icon-strong-base` so they read with
+  the label; `icon-weak-base` is too faint next to `text-strong`. Disabled
+  icons use `icon-base`.
 - Component tokens: `overflowMenu.cornerRadius`, `overflowMenu.minWidth`,
   `overflowMenu.paddingVertical`, `overflowMenu.entry.minHeight`,
   `overflowMenu.entry.paddingHorizontal`, `overflowMenu.entry.iconSize`,
@@ -73,11 +75,11 @@ do not reserve that column.
 ## Platform Notes
 
 - iOS: presented with a window-level overlay anchored below the measured top
-  bar (`OpenCodeOverflowMenuWindowOverlay`). Panel chrome uses `surfaceBase`,
-  `borderWeakerBase`, and `overflowMenu.cornerRadius`.
+  bar (`OpenCodeOverflowMenuWindowOverlay`). Panel chrome uses
+  `surface-raised-base`, `border-weak-base`, and `overflowMenu.cornerRadius`.
 - Android: presented with a styled window popup aligned to the top-trailing
-  overflow-button anchor. Panel chrome uses `surface`, `outlineVariant`, and
-  `overflowMenu.cornerRadius`.
+  overflow-button anchor. Panel chrome uses the same raised surface and
+  `border-weak-base` stroke.
 
 ## Previews
 

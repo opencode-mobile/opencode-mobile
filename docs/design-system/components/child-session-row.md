@@ -37,7 +37,7 @@ copy, and optionally wires a tap.
 
 - Semantic tokens: `color.surface.base`, `color.surface.raised`,
   `color.border.weaker`, `color.text.strong`, `color.text.base`,
-  `color.text.weaker`, `color.icon.base`.
+  `color.text.weaker`, `icon-strong-base`.
 - Component tokens: `childSessionRow.*` in [`../tokens.md`](../tokens.md).
 - Typography roles:
   - `type.heading` for the title

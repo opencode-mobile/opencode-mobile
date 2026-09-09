@@ -43,9 +43,10 @@ trailing meta (caption above a status pill).
 ## Token Usage
 
 - Semantic tokens: `surface-base`, `surface-raised-base`, `text-strong`,
-  `text-base`, `text-weaker`, `border-weaker-base`, `icon-base`,
+  `text-base`, `text-weaker`, `border-weaker-base`, `icon-strong-base`,
   `diff-add` / `diff-delete`, status tones (`interactive`, `success`, `warning`,
-  `error`, `info`).
+  `error`, `info`). Start icons and trailing chevrons use `icon-strong-base`.
+  Caption meta uses `text-base` (same as subtitle), not `text-weaker`.
 - Component tokens: row corner radius; letter badge size/shape (circle 32);
   status pill padding and capsule shape.
 - Typography: body semibold title; caption/label for subtitle, caption meta, and

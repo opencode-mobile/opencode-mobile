@@ -713,9 +713,9 @@ fun OpenCodeBottomSheetEntry(
         }
     val iconColor =
         when {
-            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-            destructive -> MaterialTheme.colorScheme.error
-            else -> MaterialTheme.colorScheme.onSurfaceVariant
+            !enabled -> openCodeColor("icon-base")
+            destructive -> openCodeColor("error")
+            else -> openCodeColor("icon-strong-base")
         }
     val entryShape = RoundedCornerShape(10.dp)
 

@@ -13,7 +13,7 @@ struct IconsGalleryView: View {
                 ForEach(OpenCodeIcon.allCases, id: \.self) { icon in
                     VStack(spacing: 6) {
                         OpenCodeIconImage(icon: icon, size: 24)
-                            .foregroundStyle(OpenCodeColors.iconBase)
+                            .foregroundStyle(OpenCodeColors.iconStrongBase)
                             .frame(width: 32, height: 32)
                         Text(icon.rawValue.replacingOccurrences(of: "lucide_", with: ""))
                             .font(OpenCodeTypography.caption)

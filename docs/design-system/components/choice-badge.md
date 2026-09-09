@@ -31,8 +31,9 @@ is a dock filter with an optional count badge.
 - Component tokens: geometry for the standard pill — see `choiceBadge.*` in
   `docs/design-system/tokens.md`. Glass variant uses capsule geometry aligned
   with Filter Chip (min height 36, horizontal 12 / vertical 8 padding).
-- Typography roles: `type.button` on iOS; Android maps to `labelMedium` /
-  `labelLarge` density matching Filter Chip for glass.
+- Typography roles: `type.button` on both platforms (14 medium). Do not
+  flatten Android glass to regular weight — that is why composer chips
+  read lighter than iOS.
 
 ## Behavior
 

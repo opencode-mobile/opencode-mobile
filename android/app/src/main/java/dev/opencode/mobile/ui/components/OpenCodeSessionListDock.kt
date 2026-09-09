@@ -100,7 +100,7 @@ fun OpenCodeSessionListDock(
     val textStrong = openCodeColor("text-strong")
     val error = openCodeColor("error")
     val iconStrong = openCodeColor("icon-strong-base")
-    val ctaFill = textStrong.copy(alpha = 0.14f)
+    val surfaceBase = openCodeColor("surface-base")
     OpenCodeFloatingDock(modifier = modifier) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -139,7 +139,7 @@ fun OpenCodeSessionListDock(
             ) {
                 DockCta(
                     onClick = onAddProject,
-                    fill = ctaFill,
+                    fill = surfaceBase,
                     shape = CircleShape,
                     modifier = Modifier.size(52.dp),
                 ) {
@@ -154,7 +154,7 @@ fun OpenCodeSessionListDock(
                     onClick = onNewSession,
                     onLongClick = onNewSessionLongPress,
                     onLongClickLabel = if (onNewSessionLongPress != null) "Choose project" else null,
-                    fill = ctaFill,
+                    fill = surfaceBase,
                     shape = NewSessionButtonShape,
                     modifier =
                         Modifier
@@ -223,7 +223,6 @@ fun SessionListScopeControl(
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val textStrong = openCodeColor("text-strong")
     val textWeak = openCodeColor("text-weak")
     var shownTabId by remember { mutableStateOf(selectedId) }
     val selectedIndex = tabs.indexOfFirst { it.id == shownTabId }.let { if (it >= 0) it else 0 }
@@ -367,7 +366,7 @@ fun SessionListScopeControl(
             modifier
                 .fillMaxWidth()
                 .clip(ScopeControlShape)
-                .background(textStrong.copy(alpha = 0.08f))
+                .background(openCodeColor("surface-base"))
                 .pointerInput(shownTabId, isSwitching) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)

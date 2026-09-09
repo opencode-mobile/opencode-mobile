@@ -262,7 +262,7 @@ struct OpenCodeSessionComposer: View {
                     )
 
                     OpenCodeButton(
-                        variant: .iconCircleText("/", accessibilityLabel: "Open commands"),
+                        variant: .iconCircle(.slash, accessibilityLabel: "Open commands"),
                         contrast: .low,
                         action: { onAction(.openCommands) }
                     )
@@ -624,7 +624,7 @@ struct OpenCodeSessionComposer: View {
     private var outlineColor: Color {
         switch state {
         case .prompt, .question, .childLockout:
-            OpenCodeColors.borderWeakerBase
+            OpenCodeColors.borderWeakBase
         case let .permission(permission):
             permission.errorMessage == nil ? OpenCodeColors.warning : OpenCodeColors.error
         }

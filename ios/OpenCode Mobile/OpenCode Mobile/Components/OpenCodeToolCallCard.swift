@@ -84,11 +84,7 @@ struct OpenCodeToolCallCard: View {
         .contentShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
         .background {
             RoundedRectangle(cornerRadius: Self.cornerRadius)
-                .fill(OpenCodeColors.surfaceBase)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: Self.cornerRadius)
-                .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
+                .fill(OpenCodeColors.surfaceRaisedBase)
         }
     }
 

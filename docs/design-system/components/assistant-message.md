@@ -36,11 +36,9 @@ Chat; pass `renderedMarkdown` only when the owning feature is ready to paint.
 
 ## Token Usage
 
-- Semantic tokens: `color.surface.base`, `color.border.weaker`,
-  `color.text.strong`.
+- Semantic tokens: `surface-raised-base`, `text-strong`.
 - Component tokens: `assistantMessage.cornerRadius`,
-  `assistantMessage.paddingHorizontal`, `assistantMessage.paddingVertical`,
-  `assistantMessage.borderWidth`.
+  `assistantMessage.paddingHorizontal`, `assistantMessage.paddingVertical`.
 - Typography roles:
   - `type.body` for message text.
 
@@ -48,9 +46,10 @@ Chat; pass `renderedMarkdown` only when the owning feature is ready to paint.
 
 Messages render leading aligned in their parent conversation row. The rounded
 bubble grows with content and has no maximum-width cap. Alignment communicates
-that the message is incoming. The bubble uses `surface-base` with a weaker
-border so it stays distinct from the page background without a component-only
-raw color. Bubble corners match `listItem.cornerRadius`.
+that the message is incoming. The bubble uses `surface-raised-base` with no
+stroke: the raised fill against `background-base` is the edge. Outgoing
+Message uses `surface-interactive-weak` so the two voices do not share a
+recipe. Bubble corners match `listItem.cornerRadius`.
 
 When `renderedMarkdown` is present, the card hosts `OpenCodeRenderedMarkdown`
 and forwards `isStreaming`. Otherwise it paints plain `type.body` text, or
@@ -61,11 +60,11 @@ to the card.
 
 ## Platform Notes
 
-- iOS: SwiftUI text or `OpenCodeRenderedMarkdown` inside a rounded surface
-  with a 1pt weaker border. Plain text uses `OpenCodeTypography.body` with
+- iOS: SwiftUI text or `OpenCodeRenderedMarkdown` inside a raised rounded
+  surface with no stroke. Plain text uses `OpenCodeTypography.body` with
   4pt line spacing.
-- Android: Compose text or `OpenCodeRenderedMarkdown` inside a Material 3
-  surface with an `outlineVariant` border.
+- Android: Compose text or `OpenCodeRenderedMarkdown` inside a raised
+  surface with no stroke.
 
 ## Review Surfaces
 
@@ -86,7 +85,7 @@ across iOS and Android. No intentional divergences for this component.
 
 - Public API and applicable states: complete (one layout; empty placeholder).
 - Token and typography mapping: complete; uses `assistantMessage.*` geometry
-  plus shared surface, border, and text tokens with `type.body`.
+  plus `surface-raised-base` and `text-strong` with `type.body`.
 - iOS and Android implementations: complete.
 - Gallery and previews: complete with interactive short/long/empty controls
   plus light/dark gallery theme support.

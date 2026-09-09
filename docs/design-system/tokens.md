@@ -605,7 +605,9 @@ Short auto-dismissing feedback overlay for transient success or error copy.
 
 ### Outgoing message
 
-Reusable outgoing prompt card for session conversations.
+Reusable outgoing prompt card for session conversations. Fill is
+`surface-interactive-weak` so the user voice reads apart from assistant
+cards. No hairline — the wash is the edge.
 
 | Token | Value |
 | --- | --- |
@@ -618,18 +620,20 @@ Reusable outgoing prompt card for session conversations.
 ### Assistant message
 
 Reusable leading-aligned assistant reply card for session conversations.
+Fill is `surface-raised-base`. No hairline — luminance against
+`background-base` is the edge. Do not share the outgoing wash.
 
 | Token | Value |
 | --- | --- |
 | `assistantMessage.cornerRadius` | 8 (logical px; matches `listItem.cornerRadius`) |
 | `assistantMessage.paddingHorizontal` | 12 (logical px) |
 | `assistantMessage.paddingVertical` | 8 (logical px) |
-| `assistantMessage.borderWidth` | 1 (logical px) |
 
 ### Tool call card
 
-Collapsed, tool-agnostic assistant tool-call row. Status chrome reuses the
-shared `success` / `warning` / `error` semantic tokens; +/− counts reuse
+Collapsed, tool-agnostic assistant tool-call row. Same raised fill as
+Assistant Message, no hairline. Status chrome reuses the shared
+`success` / `warning` / `error` semantic tokens; +/− counts reuse
 `diffAdd` / `diffDelete`.
 
 | Token | Value |

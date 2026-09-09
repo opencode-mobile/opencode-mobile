@@ -32,14 +32,16 @@ whether that tab is present; the dock does not insert it.
 - Surface: Floating Dock chrome (`surface.raised` underlay / glass materials).
 - Chip scroller (default): Filter Chip tokens; selected project may show
   remove.
-- Scope control (picker on): `text.strong` fill at **0.08**, 14pt corner,
-  letter badge or All mark (32 circle + `widgets` grid), body-secondary
-  semibold title, caption subtitle (`text.weak`), count pill,
-  `keyboard_arrow_down` chevron.
+- Scope control (picker on): `surface-base` fill on the raised dock, no
+  stroke. 14pt corner, letter badge or All mark (32 circle + `widgets` grid),
+  body-secondary semibold title, caption subtitle (`text.weak`), count pill,
+  `keyboard_arrow_down` chevron. The All mark and count pill keep a
+  `text-strong` **0.10** fill. Do not use an ink wash or a hairline outline —
+  wash reads as a grey slab, outline reads cheap on white.
 - Actions: circle Add project + capsule New session, shared height **52**,
-  horizontal gap **8**, fill-only `text.strong` at **0.14** on **both**
-  platforms (including iOS 26 — dock CTAs intentionally do not use per-button
-  Liquid Glass so they match Android weight and alignment).
+  horizontal gap **8**, same `surface-base` fill and no stroke on both
+  platforms (including iOS 26). Do not use high-contrast `OpenCodeButton`
+  `fullWidthText`.
 - Error: `color.error` + body-secondary text.
 
 ## Behavior

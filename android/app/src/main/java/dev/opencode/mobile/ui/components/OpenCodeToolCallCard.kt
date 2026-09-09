@@ -1,6 +1,5 @@
 package dev.opencode.mobile.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -95,8 +94,7 @@ fun OpenCodeToolCallCard(
                     },
                 ),
         shape = shape,
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = openCodeColor("surface-raised-base"),
     ) {
         Row(
             modifier =

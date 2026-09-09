@@ -70,7 +70,7 @@ struct OpenCodeChildSessionRow: View {
                 }
                 if action != nil {
                     OpenCodeIconImage(icon: .chevronRight, size: Self.chevronSize)
-                        .foregroundStyle(OpenCodeColors.iconBase)
+                        .foregroundStyle(OpenCodeColors.iconStrongBase)
                         .accessibilityHidden(true)
                 }
             }

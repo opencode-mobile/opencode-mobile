@@ -133,7 +133,7 @@ struct OpenCodeOutgoingMessage: View {
         pillContent(text: text)
             .padding(.horizontal, outgoingMessagePaddingHorizontal)
             .padding(.vertical, outgoingMessagePaddingVertical)
-            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
+            .background(OpenCodeColors.surfaceInteractiveWeak, in: RoundedRectangle(cornerRadius: 8))
             .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 

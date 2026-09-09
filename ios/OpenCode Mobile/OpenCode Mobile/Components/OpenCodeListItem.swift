@@ -199,7 +199,7 @@ struct OpenCodeListItem<Trailing: View>: View {
             }
 
             trailing()
-                .foregroundStyle(OpenCodeColors.iconBase)
+                .foregroundStyle(OpenCodeColors.iconStrongBase)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
@@ -222,7 +222,7 @@ struct OpenCodeListItem<Trailing: View>: View {
             if let caption, !caption.isEmpty {
                 Text(caption)
                     .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textWeaker)
+                    .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(.trailing, 2)
@@ -334,7 +334,7 @@ struct OpenCodeListItem<Trailing: View>: View {
             .accessibilityHidden(true)
         case let .icon(icon, accessibilityLabel):
             OpenCodeIconImage(icon: icon, size: listItemIconDecoratorSize)
-                .foregroundStyle(OpenCodeColors.iconBase)
+                .foregroundStyle(OpenCodeColors.iconStrongBase)
                 .accessibilityHidden(accessibilityLabel == nil)
                 .accessibilityLabel(accessibilityLabel ?? "")
         case let .iconCircle(icon, accessibilityLabel):

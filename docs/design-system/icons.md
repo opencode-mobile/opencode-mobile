@@ -24,8 +24,10 @@ Each entry maps to:
   with assets under
   [`LucideIcons.xcassets`](../../ios/OpenCode%20Mobile/OpenCode%20Mobile/LucideIcons.xcassets)
 
-Use `OpenCodeIconImage(icon:)` on iOS for template-rendered icons that follow
-`OpenCodeColors.iconDefault` / `iconStrong` tints.
+Use `OpenCodeIconImage(icon:)` on iOS for template-rendered icons. Product
+chrome (list rows, overflow, sheets, the catalog gallery) tints with
+`icon-strong-base` so glyphs read with `text-strong` labels. Keep `icon-base`
+for muted tracks and secondary marks, not for default action icons.
 
 ### iOS sizing (required)
 
@@ -55,6 +57,7 @@ Some catalog icons have a stable product meaning beyond gallery samples:
 | --- | --- | --- |
 | `widgets` | `layout-grid` | All-projects mark on the Session List scope control and Filter by project sheet |
 | `add` | `plus` | Generic add / plus affordances; Commands tile **New** |
+| `slash` | `square-slash` | Session Composer **Commands** action |
 | `create_new_folder` | `folder-plus` | **Add project** (Session List Dock and home add-project actions) |
 | `keyboard_arrow_down` | `chevron-down` | Session List Dock scope-control chevron; title switcher chevron after home server name |
 | `search` | `search` | Gallery and Top Bar search samples |
