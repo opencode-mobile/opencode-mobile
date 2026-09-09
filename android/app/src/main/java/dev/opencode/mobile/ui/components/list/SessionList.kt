@@ -206,7 +206,8 @@ fun SessionList(
                         }
                     }
                     .navigationBarsPadding()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = 4.dp),
         )
     }
 }

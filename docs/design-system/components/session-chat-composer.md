@@ -181,12 +181,11 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   changes. Prompt `BasicTextField` uses `maxLines = 5` so growth stops and
   scrolls after about five body lines. Question custom text uses
   `OpenCodeTextInput`. Its fixed screen gutter and **4** logical-pixel bottom
-  inset sit outside the animated content boundary. Session Chat keeps the
-  composer above the system navigation bar with
-  `navigationBars.exclude(ime)` so focus / IME-visible cannot drop the nav
-  inset before the keyboard height arrives. `imePadding` on the screen lifts
-  the overlay with the keyboard. The timeline fade uses the measured overlay
-  height and reaches the display edge. `AnimatedContent` coordinates the crossfade and
+  inset sit outside the animated content boundary. Session Chat applies one
+  bottom inset on the composer overlay — `ime.union(navigationBars)` — so the
+  shell lines up with Session List Dock (`nav` + **4**) and cannot stack a
+  leftover IME inset on top of the nav bar. The timeline fade uses that
+  measured overlay height and reaches the display edge. `AnimatedContent` coordinates the crossfade and
   `SizeTransform`; shared `OpenCodeFloatingChrome` (raised Surface) wraps that
   boundary so the shell redraws at each intermediate height instead of
   revealing already-switched content inside a lagging container. Permission

@@ -45,8 +45,9 @@ screen edge.
 - Android: uses shared floating chrome (raised Surface stand-in). Outer float
   insets remain caller-owned; dock owns inner content padding `12`. Home and
   Session Chat do not consume the bottom navigation-bar inset at the navigation
-  host. Callers apply `navigationBarsPadding` on the card so it sits above the
-  bar while the fade measures that inset and paints to the display edge.
+  host. Callers apply `navigationBarsPadding` plus the shared **4** logical-pixel
+  bottom float so the card matches Session Chat Composer. The fade measures
+  that inset and paints to the display edge.
 
 ## Review Surfaces
 
