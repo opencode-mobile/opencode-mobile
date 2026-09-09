@@ -62,12 +62,14 @@ the fill, primary or strong content color for text/icons, and
 
 Accent contrast is for a single colorful call-to-action that should pick up
 the theme brand (Session Composer send). Enabled uses `interactive` fill and
-`text-on-brand-base` for the label or icon. Disabled keeps a muted brand —
-`surface-interactive-weak` fill and `text-interactive-base` icon — not the
-generic grey disabled treatment. When accent becomes enabled, fill, icon,
-and scale spring together from the muted **0.96** rest to full accent at
-**1.0** (`response` 0.32 / damping 0.68 on iOS; matching Compose spring on
-Android).
+`text-on-brand-base` for the label or icon. Disabled is a whisper of brand,
+not the user-bubble wash: opaque `interactive` at **0.10** over
+`surface-raised-base`, with a `text-weak` icon. Do not use
+`surface-interactive-weak` here — Hotline and Phosphor set that token loud
+on purpose for outgoing messages, so a filled circle of it reads as enabled.
+When accent becomes enabled, fill, icon, and scale spring together from the
+muted **0.96** rest to full accent at **1.0** (`response` 0.32 / damping
+0.68 on iOS; matching Compose spring on Android).
 Do not use `button-primary-base` here — that token stays ink on Porcelain,
 Linen, and Signal.
 

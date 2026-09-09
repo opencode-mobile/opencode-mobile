@@ -129,7 +129,7 @@ private struct OpenCodeButtonStyle: ButtonStyle {
                     fixedWidth: fixedWidth,
                     fixedHeight: fixedHeight
                 )
-                .background(backgroundColor(isPressed: isPressed), in: Circle())
+                .background { chromeFill(isPressed: isPressed, in: Circle()) }
                 .overlay(
                     Circle()
                         .strokeBorder(borderColor(isPressed: isPressed), lineWidth: 1)
@@ -146,7 +146,7 @@ private struct OpenCodeButtonStyle: ButtonStyle {
                     fixedWidth: fixedWidth,
                     fixedHeight: fixedHeight
                 )
-                .background(backgroundColor(isPressed: isPressed), in: RoundedRectangle(cornerRadius: 8))
+                .background { chromeFill(isPressed: isPressed, in: RoundedRectangle(cornerRadius: 8)) }
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(borderColor(isPressed: isPressed), lineWidth: 1)
@@ -212,6 +212,18 @@ private struct OpenCodeButtonStyle: ButtonStyle {
         }
     }
 
+    @ViewBuilder
+    private func chromeFill<S: Shape>(isPressed: Bool, in shape: S) -> some View {
+        if contrast == .accent, !enabled {
+            ZStack {
+                shape.fill(OpenCodeColors.surfaceRaisedBase)
+                shape.fill(OpenCodeColors.interactive.opacity(0.10))
+            }
+        } else {
+            shape.fill(backgroundColor(isPressed: isPressed))
+        }
+    }
+
     private var accentEnableAnimation: Animation? {
         guard contrast == .accent else { return nil }
         return .spring(response: 0.32, dampingFraction: 0.68)
@@ -225,7 +237,7 @@ private struct OpenCodeButtonStyle: ButtonStyle {
 
     private var foregroundColor: Color {
         if !enabled {
-            return contrast == .accent ? OpenCodeColors.textInteractiveBase : OpenCodeColors.textBase
+            return contrast == .accent ? OpenCodeColors.textWeak : OpenCodeColors.textBase
         }
         switch contrast {
         case .low: return OpenCodeColors.textStrong
@@ -237,9 +249,7 @@ private struct OpenCodeButtonStyle: ButtonStyle {
 
     private func backgroundColor(isPressed: Bool) -> Color {
         if !enabled {
-            return contrast == .accent
-                ? OpenCodeColors.surfaceInteractiveWeak
-                : OpenCodeColors.surfaceRaisedBase
+            return OpenCodeColors.surfaceRaisedBase
         }
         switch contrast {
         case .low:
@@ -257,7 +267,7 @@ private struct OpenCodeButtonStyle: ButtonStyle {
     private func borderColor(isPressed: Bool) -> Color {
         if !enabled {
             return contrast == .accent
-                ? OpenCodeColors.surfaceInteractiveWeak
+                ? OpenCodeColors.interactive.opacity(0.10)
                 : OpenCodeColors.borderWeakerBase
         }
         switch contrast {

@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -98,7 +99,8 @@ fun OpenCodeButton(
 ) {
     val targetContainer =
         when {
-            !enabled && contrast == OpenCodeButtonContrast.Accent -> openCodeColor("surface-interactive-weak")
+            !enabled && contrast == OpenCodeButtonContrast.Accent ->
+                lerp(openCodeColor("surface-raised-base"), openCodeColor("interactive"), 0.10f)
             !enabled -> MaterialTheme.colorScheme.surfaceVariant
             contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.surfaceVariant
             contrast == OpenCodeButtonContrast.Accent -> openCodeColor("interactive")
@@ -107,7 +109,8 @@ fun OpenCodeButton(
         }
     val targetBorder =
         when {
-            !enabled && contrast == OpenCodeButtonContrast.Accent -> openCodeColor("surface-interactive-weak")
+            !enabled && contrast == OpenCodeButtonContrast.Accent ->
+                lerp(openCodeColor("surface-raised-base"), openCodeColor("interactive"), 0.10f)
             !enabled -> MaterialTheme.colorScheme.outlineVariant
             contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.outlineVariant
             contrast == OpenCodeButtonContrast.Accent -> openCodeColor("interactive")
@@ -116,7 +119,7 @@ fun OpenCodeButton(
         }
     val targetContent =
         when {
-            !enabled && contrast == OpenCodeButtonContrast.Accent -> openCodeColor("text-interactive-base")
+            !enabled && contrast == OpenCodeButtonContrast.Accent -> openCodeColor("text-weak")
             !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
             contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.onSurface
             contrast == OpenCodeButtonContrast.Accent -> openCodeColor("text-on-brand-base")

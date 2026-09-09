@@ -455,7 +455,9 @@ foreground/background tokens. Low contrast buttons use secondary surface fill,
 primary or strong content, and subtle border so secondary actions remain visible
 without competing with primary actions. Accent contrast uses the `interactive`
 fill with `text-on-brand-base` content so a single CTA follows the theme brand.
-Disabled accent uses `surface-interactive-weak` and `text-interactive-base`.
+Disabled accent uses an opaque **0.10** mix of `interactive` over
+`surface-raised-base`, with `text-weak` content — not `surface-interactive-weak`
+(that token is the outgoing-message wash and stays loud on Hotline / Phosphor).
 
 | Token | Value |
 | --- | --- |
