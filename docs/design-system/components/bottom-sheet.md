@@ -77,10 +77,12 @@ context actions feel clickable.
 
 Use `form` mode when the sheet hosts text fields. While the sheet is presented,
 the presenting screen ignores keyboard-driven safe-area resizing so background
-layout stays stable even if the sheet switches content modes. Only the sheet
-responds: its header remains fixed, its body scrolls, and its available bottom
-edge follows the keyboard. This avoids remeasuring compact content against a
-changing keyboard safe area.
+layout stays stable even if the sheet switches content modes. Action lists
+dismiss the software keyboard on present so Add attachment, Commands, and other
+choice sheets get the full bottom of the display. Form sheets keep the keyboard:
+the card lifts, the header stays fixed, and the body scrolls so focused fields
+stay reachable. This avoids remeasuring compact content against a changing
+keyboard safe area.
 
 `actionList` keeps content-measured compact sizing and switches to a fixed
 fraction-height scroll sheet only when the content exceeds the compact
@@ -105,9 +107,9 @@ accessibility label or description using the platform convention.
 - iOS: presented with a window overlay (same pattern as Dialog) so the card can
   inset from the display edge without system sheet chrome. The hosting view is
   pinned to the window edges (not the safe-area layout guide), is
-  accessibility-modal, and is removed when the host leaves the tree.   Form sheets use the 50% scroll detent. Keyboard overlap shrinks available
-  height and lifts the card so the internal scroll region, not the presenting
-  screen, follows the keyboard.
+  accessibility-modal, and is removed when the host leaves the tree.   Form sheets use the 50% scroll detent. Action lists resign first responder
+  on present. Form sheets read the keyboard frame and lift so the internal
+  scroll region, not the presenting screen, follows the keyboard.
   Short entry lists start at content height so the first measure is intrinsic
   row height. Compact height is header + rows + tight bottom padding. Measured
   content height is never shrunk after the intrinsic size is known, and updates
@@ -126,8 +128,9 @@ accessibility label or description using the platform convention.
   consumed so the 8dp gutter is measured from the display. Sibling decor views
   are hidden from TalkBack while it is attached. Compose `Dialog` and
   `Popup` windows stay above the nav inset and turn the sheet into an island.
-  Form mode applies `imePadding()` to the sheet boundary—not its measured
-  content—so the sheet follows IME animation while its body scrolls. The app
+  Action lists clear focus and hide the IME on present. Form mode applies
+  `imePadding()` to the sheet boundary—not its measured content—so the sheet
+  follows IME animation while its body scrolls. The app
   navigation host pads status bars, horizontal system bars, and display cutouts
   explicitly rather than using `safeDrawing`, because `safeDrawing` includes the
   IME and would resize every route behind a focused form. Bottom navigation-bar

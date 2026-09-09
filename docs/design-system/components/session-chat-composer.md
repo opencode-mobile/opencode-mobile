@@ -102,8 +102,9 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   when the selected model cannot accept image or PDF input; the feature owns
   that gate and passes `attachEnabled` into the composer.
 - Send clears composer focus and dismisses the software keyboard (OPE-138;
-  restores the OPE-62 chat send policy). Focus stays view-local in the
-  composer; Screen Models do not track keyboard visibility. Long-press send,
+  restores the OPE-62 chat send policy). Attach, Commands, and composer
+  pickers do the same through the action-list bottom sheet. Focus stays
+  view-local in the composer; Screen Models do not track keyboard visibility. Long-press send,
   when follow-up delivery is active, plays the Button context-action haptic
   and reports `toggleFollowUp`. Tap send stays silent.
 - Model, mode, and thinking-effort (variant) pickers use `OpenCodeChoiceBadge`

@@ -22,6 +22,17 @@ enum KeyboardOverlap {
         (notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?
             .doubleValue ?? 0.25
     }
+
+    /// Action-list sheets resign the current first responder so they are not
+    /// stacked over an already-visible software keyboard.
+    static func dismissSoftwareKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
+    }
 }
 
 /// Pads the bottom of `content` by the software-keyboard overlap and opts out of

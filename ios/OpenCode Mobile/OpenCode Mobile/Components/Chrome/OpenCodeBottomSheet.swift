@@ -418,6 +418,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
         private var overlayController: UIHostingController<OpenCodeBottomSheetOverlayContent<PinnedContent, SheetContent>>?
         private var isAnimatingOut = false
         private var dismissGeneration = 0
+        private var wasPresented = false
 
         func update(
             isPresented: Bool,
@@ -452,6 +453,10 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
             )
 
             if isPresented {
+                if !wasPresented, contentMode == .actionList {
+                    KeyboardOverlap.dismissSoftwareKeyboard()
+                }
+                wasPresented = true
                 cancelDismissIfNeeded()
                 if let overlayController {
                     configureOverlay(overlayController)
@@ -467,14 +472,18 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
                         controller.view.alpha = 1
                     }
                 }
-            } else if overlayController != nil, !isAnimatingOut {
-                dismissOverlay()
+            } else {
+                wasPresented = false
+                if overlayController != nil, !isAnimatingOut {
+                    dismissOverlay()
+                }
             }
         }
 
         func removeOverlayImmediately() {
             dismissGeneration += 1
             isAnimatingOut = false
+            wasPresented = false
             overlayController?.view.layer.removeAllAnimations()
             overlayController?.view.removeFromSuperview()
             overlayController = nil
