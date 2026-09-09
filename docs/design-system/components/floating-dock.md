@@ -30,24 +30,21 @@ The dock is a presentational surface. Content is clipped to the continuous
 rounded rect. Materials come from `OpenCodeFloatingChrome` /
 `openCodeFloatingChrome`.
 
-Outer float insets are platform-specific: iOS `OpenCodeFloatingDock` applies
-horizontal **16** and bottom **4** padding around the chrome; Android callers
-(for example `SessionList`) apply outer float insets around `OpenCodeFloatingDock`.
-Both platforms apply inner content padding **12**. The card sits above the home
-indicator / navigation bar; the list fade, not the card, reaches the physical
-screen edge.
+Outer float insets are shared with Session Chat Composer: horizontal **12** and
+bottom **4** around the chrome. Both platforms apply inner content padding
+**12**. The card sits above the home indicator / navigation bar; the list fade,
+not the card, reaches the physical screen edge.
 
 ## Platform Notes
 
 - iOS: uses shared floating chrome (iOS 26+ glass + underlay; material fallback).
-  Dock owns outer float insets `16` / `4` and inner content padding `12`. Safe
+  Dock owns outer float insets `12` / `4` and inner content padding `12`. Safe
   area lifts the card; the fade ignores the bottom safe area.
-- Android: uses shared floating chrome (raised Surface stand-in). Outer float
-  insets remain caller-owned; dock owns inner content padding `12`. Home and
-  Session Chat do not consume the bottom navigation-bar inset at the navigation
-  host. Callers apply `navigationBarsPadding` plus the shared **4** logical-pixel
-  bottom float so the card matches Session Chat Composer. The fade measures
-  that inset and paints to the display edge.
+- Android: uses shared floating chrome (raised Surface stand-in). Dock owns the
+  same outer `12` / `4` and inner `12`. Home and Session Chat do not consume the
+  bottom navigation-bar inset at the navigation host. Callers apply
+  `navigationBarsPadding` only; the fade measures that inset and paints to the
+  display edge.
 
 ## Review Surfaces
 

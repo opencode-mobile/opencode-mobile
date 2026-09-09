@@ -92,9 +92,7 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 12.dp)
-                    .padding(bottom = 4.dp),
+                    .navigationBarsPadding(),
         )
     }
 

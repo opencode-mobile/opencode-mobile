@@ -82,6 +82,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.semantics.dialog
@@ -179,6 +181,15 @@ fun OpenCodeBottomSheet(
     var dragOffsetPx by remember { mutableFloatStateOf(0f) }
     val coroutineScope = rememberCoroutineScope()
     val dragDismissThresholdPx = with(LocalDensity.current) { BottomSheetDragDismissThreshold.toPx() }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(visible, contentMode) {
+        if (visible && contentMode == OpenCodeBottomSheetContentMode.ActionList) {
+            focusManager.clearFocus()
+            keyboardController?.hide()
+        }
+    }
 
     LaunchedEffect(visible) {
         if (visible) {

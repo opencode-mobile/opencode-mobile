@@ -16,9 +16,10 @@ where Item.ID == String {
     var horizontalContentPadding: CGFloat = MessageListTimelineDefaults.horizontalContentPadding
     var topContentPadding: CGFloat = MessageListTimelineDefaults.topContentPadding
     var bottomContentPadding: CGFloat = MessageListTimelineDefaults.bottomContentPadding
-    /// Extra scroll clearance under floating chrome (composer). Applied via the
-    /// host VC's `additionalSafeAreaInsets.bottom` so `adjustedContentInset`
-    /// grows and end-pin can clear the overlay.
+    /// Extra scroll clearance under floating chrome (composer), measured from
+    /// the host view's bottom edge. Applied via `additionalSafeAreaInsets.bottom`
+    /// minus any inherited system bottom inset so home-indicator underlap does
+    /// not double-count.
     var bottomOverlayInset: CGFloat = 0
     /// Extra scroll clearance under the top float stack (todos / review / sync).
     /// Applied via `additionalSafeAreaInsets.top` so the first message rests
@@ -167,6 +168,8 @@ where Item.ID == String {
     /// so `adjustedContentInset.bottom` grows and end-pin / manual scroll can
     /// park the newest message above the chrome. Section footers and
     /// `contentInset.bottom` alone did not expand scroll range here (LLDB).
+    /// Subtract inherited system bottom inset so an edge-to-edge host does not
+    /// stack the home indicator on top of the measured composer clearance.
     func updateBottomOverlayInset(_ value: CGFloat) {
         let inset = max(0, value)
         guard abs(bottomOverlayInset - inset) > 0.5 else {
@@ -177,9 +180,15 @@ where Item.ID == String {
         applyBottomOverlaySafeArea(repinIfNeeded: true)
     }
 
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        applyBottomOverlaySafeArea(repinIfNeeded: false)
+    }
+
     private func applyBottomOverlaySafeArea(repinIfNeeded: Bool) {
         guard isViewLoaded else { return }
-        let inset = bottomOverlayInset
+        let inheritedBottom = max(0, view.safeAreaInsets.bottom - additionalSafeAreaInsets.bottom)
+        let inset = max(0, bottomOverlayInset - inheritedBottom)
         if abs(additionalSafeAreaInsets.bottom - inset) > 0.5 {
             var safe = additionalSafeAreaInsets
             safe.bottom = inset

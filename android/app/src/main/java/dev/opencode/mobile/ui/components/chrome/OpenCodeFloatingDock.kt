@@ -17,7 +17,10 @@ fun OpenCodeFloatingDock(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     OpenCodeFloatingChrome(
-        modifier = modifier,
+        modifier =
+            modifier
+                .padding(horizontal = 12.dp)
+                .padding(bottom = 4.dp),
         shape = RoundedCornerShape(OpenCodeFloatingDockCornerRadius),
     ) {
         Column(

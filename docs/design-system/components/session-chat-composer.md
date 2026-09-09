@@ -102,8 +102,9 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   when the selected model cannot accept image or PDF input; the feature owns
   that gate and passes `attachEnabled` into the composer.
 - Send clears composer focus and dismisses the software keyboard (OPE-138;
-  restores the OPE-62 chat send policy). Focus stays view-local in the
-  composer; Screen Models do not track keyboard visibility. Long-press send,
+  restores the OPE-62 chat send policy). Attach, Commands, and composer
+  pickers do the same through the action-list bottom sheet. Focus stays
+  view-local in the composer; Screen Models do not track keyboard visibility. Long-press send,
   when follow-up delivery is active, plays the Button context-action haptic
   and reports `toggleFollowUp`. Tap send stays silent.
 - Model, mode, and thinking-effort (variant) pickers use `OpenCodeChoiceBadge`
@@ -173,6 +174,10 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   would turn scroll back off (OPE-213). Overflow scrolls inside the field.
   Question custom text uses `OpenCodeTextInput`. Shell fill uses shared
   `openCodeFloatingChrome` (iOS 26+ Liquid Glass + underlay; material fallback).
+  The keyboard-avoidance host ignores the home-indicator safe area so the
+  timeline paints behind the composer to the physical screen edge (parity with
+  Session List). The composer overlay adds that inset only while the keyboard
+  is hidden so the shell stays on the same float as Session List Dock.
 - Android uses Compose selection, live-region semantics, and progress
   primitives. Prompt mention spans render through a `VisualTransformation` on
   `BasicTextField` (not `AnnotatedString` on `TextFieldValue`) so

@@ -31,6 +31,8 @@ struct SessionChatView: View {
     /// Measured floating composer stack height (composer + optional suggestions).
     @State private var composerOverlayHeight: CGFloat = 0
     @State private var bottomSafeAreaInset: CGFloat = 0
+    /// Keyboard overlap reported by `keyboardOverlapPadding`. Zero when hidden.
+    @State private var keyboardOverlap: CGFloat = 0
 
     private let session: SessionListItem
     private let injectedViewModel: SessionChatViewModel?
@@ -171,7 +173,8 @@ struct SessionChatView: View {
                         hideFloatStack: showSessionTodosSheet,
                         // Composer + 16 end-pin gap; Scroll to end uses this as-is
                         // (no extra scrollToEndPillBottomPadding).
-                        bottomOverlayInset: sessionChatTimelineBottomInset(composerOverlayHeight),
+                        bottomOverlayInset: sessionChatTimelineBottomInset(composerOverlayHeight)
+                            + composerHomeIndicatorLift,
                         onRefresh: { await viewModel.refreshMessages() },
                         onReviewChangesTap: {
                             logChatAction(ProductAnalytics.Action.chatOpenChanges)
@@ -240,19 +243,19 @@ struct SessionChatView: View {
                     )
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea(edges: .bottom)
 
                 OpenCodeBottomFade(
-                    height: sessionChatTimelineBottomInset(composerOverlayHeight) + bottomSafeAreaInset
+                    height: sessionChatTimelineBottomInset(composerOverlayHeight)
+                        + composerHomeIndicatorLift
                 )
-                .offset(y: bottomSafeAreaInset)
-                .ignoresSafeArea(edges: .bottom)
                 .allowsHitTesting(false)
 
                 OpenCodeSnackbarHost(
                     message: viewModel.uiState.snackbar.mapToOpenCodeSnackbarMessage(),
                     onDismissed: { viewModel.consumeSnackbar() }
                 )
-                .padding(.bottom, max(composerOverlayHeight, 168))
+                .padding(.bottom, max(composerOverlayHeight, 168) + composerHomeIndicatorLift)
 
                 VStack(spacing: 0) {
                     if SessionChatComposerKind.resolve(
@@ -310,9 +313,10 @@ struct SessionChatView: View {
                             }
                     }
                 }
+                .padding(.bottom, composerHomeIndicatorLift)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .keyboardOverlapPadding()
+            .keyboardOverlapPadding(overlap: $keyboardOverlap)
         }
         .background(OpenCodeColors.backgroundBase)
         .background {
@@ -593,6 +597,13 @@ struct SessionChatView: View {
         .navigationDestination(item: $terminalRoute) { route in
             TerminalView(worktree: route.worktree, projectTitle: route.projectTitle, ptyId: route.ptyId)
         }
+    }
+
+    /// Home-indicator lift for the floating composer. The timeline host ignores
+    /// the bottom safe area so messages can fade to the physical edge; the
+    /// composer stays above the indicator unless the keyboard already replaced it.
+    private var composerHomeIndicatorLift: CGFloat {
+        keyboardOverlap > 0 ? 0 : bottomSafeAreaInset
     }
 
     private var blocksSessionTodosSheet: Bool {

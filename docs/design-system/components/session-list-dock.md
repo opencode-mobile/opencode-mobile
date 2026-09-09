@@ -117,7 +117,8 @@ is hold-to-remove on project rows in the sheet, not on the dock.
   **0.05** wash on the scope control and CTAs at 52dp / 8dp gap. Project
   switch uses `HapticFeedbackType.TextHandleMove`; New session hold uses
   `LongPress`. Callers apply `navigationBarsPadding` around the dock so the
-  card sits above the system navigation bar.
+  card sits above the system navigation bar. Side and bottom float insets are
+  owned by Floating Dock (`12` / `4`), matching Session Chat Composer.
 
 ## Review Surfaces
 

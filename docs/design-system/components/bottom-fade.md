@@ -26,8 +26,11 @@ safe-area padding.
 
 ## Platform Notes
 
-- iOS: `LinearGradient` with bottom safe-area extension via ignore-safe-area on
-  the fade only.
+- iOS: `LinearGradient` sized to the measured dock or composer block plus the
+  home-indicator inset. Home Session List extends the fade with
+  ignore-safe-area. Session Chat's keyboard host already ignores the bottom
+  safe area so the timeline and fade reach the physical edge; the composer
+  keeps the home-indicator lift.
 - Android: `Brush.verticalGradient` full-width box aligned to the physical
   bottom. Height includes the navigation-bar inset when the dock or composer
   block is measured with `navigationBarsPadding`. The navigation host must not
