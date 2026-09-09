@@ -8,7 +8,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -115,6 +118,46 @@ fun OpenCodeActionTile(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+@Composable
+fun OpenCodeActionTileGrid(
+    itemCount: Int,
+    modifier: Modifier = Modifier,
+    item: @Composable (index: Int) -> Unit,
+) {
+    val columns =
+        if (currentOpenCodeLayoutWidth() == OpenCodeLayoutWidth.Regular) {
+            OpenCodeLayout.actionTileColumnCount(OpenCodeLayout.SheetMaxWidth)
+        } else {
+            OpenCodeLayout.ACTION_TILE_GRID_MIN_COLUMNS
+        }
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = OpenCodeLayout.ActionTileGridPaddingHorizontal),
+        verticalArrangement = Arrangement.spacedBy(OpenCodeLayout.ActionTileGridGap),
+    ) {
+        val rows = if (itemCount == 0) 0 else (itemCount + columns - 1) / columns
+        repeat(rows) { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(OpenCodeLayout.ActionTileGridGap),
+            ) {
+                repeat(columns) { column ->
+                    val index = row * columns + column
+                    if (index < itemCount) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            item(index)
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
     }
 }
 

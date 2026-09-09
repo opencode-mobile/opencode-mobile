@@ -44,6 +44,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
@@ -231,7 +232,15 @@ fun OpenCodeBottomSheet(
 
     val scrimInteractionSource = remember { MutableInteractionSource() }
     val sheetInteractionSource = remember { MutableInteractionSource() }
-    val sheetCornerRadius = rememberBottomSheetCornerRadius()
+    val layoutWidth = currentOpenCodeLayoutWidth()
+    val usesFloatingCard = layoutWidth == OpenCodeLayoutWidth.Regular
+    val displayCornerRadius = rememberBottomSheetCornerRadius()
+    val sheetCornerRadius =
+        if (usesFloatingCard) {
+            BottomSheetCornerRadiusTop
+        } else {
+            displayCornerRadius
+        }
     val view = LocalView.current
     val threeButtonNav = remember(view) { view.context.usesThreeButtonNavigation() }
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -280,6 +289,7 @@ fun OpenCodeBottomSheet(
                 Surface(
                     modifier =
                         Modifier
+                            .widthIn(max = if (usesFloatingCard) OpenCodeLayout.SheetMaxWidth else Dp.Unspecified)
                             .fillMaxWidth()
                             .padding(start = BottomSheetInset, end = BottomSheetInset, bottom = sheetBottomInset)
                             .then(modifier)

@@ -23,6 +23,7 @@ struct OpenCodeAssistantMessage: View {
         .padding(.horizontal, Self.paddingHorizontal)
         .padding(.vertical, Self.paddingVertical)
         .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: Self.cornerRadius))
+        .frame(maxWidth: OpenCodeLayout.assistantMessageMaxWidth, alignment: .leading)
     }
 
     static let emptyPlaceholder = "…"

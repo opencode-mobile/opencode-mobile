@@ -315,6 +315,7 @@ struct SessionChatView: View {
                 }
                 .padding(.bottom, composerHomeIndicatorLift)
             }
+            .openCodeReadableColumn()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .keyboardOverlapPadding(overlap: $keyboardOverlap)
         }
@@ -1065,22 +1066,12 @@ private struct CommandsActionTileGrid: View {
     let run: (ClientSlashAction) -> Void
 
     var body: some View {
-        VStack(spacing: 10) {
-            ForEach(Array(stride(from: 0, to: actions.count, by: 2)), id: \.self) { index in
-                HStack(spacing: 10) {
-                    tile(actions[index])
-                    if index + 1 < actions.count {
-                        tile(actions[index + 1])
-                    } else {
-                        Color.clear.frame(maxWidth: .infinity)
-                    }
-                }
-            }
+        OpenCodeActionTileGrid(items: actions) { action in
+            tile(action)
         }
-        .padding(.horizontal, 16)
     }
 
-    private func tile(_ action: ClientSlashAction) -> some View {
+    private func tile(_ action: ClientSlashAction) -> OpenCodeActionTile {
         let requiresLive = action == .new || action == .fork || action == .terminal
         return OpenCodeActionTile(
             icon: action.tileIcon,

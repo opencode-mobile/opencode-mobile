@@ -2,9 +2,9 @@
 
 ## Intent
 
-Provide a compact labeled action for two-column palettes inside a bottom
-sheet. Use it when a short catalog icon plus a one-word label is enough to
-choose an action. Do not use it for title-only rows; those stay
+Provide a compact labeled action for action palettes inside a bottom sheet.
+Use it when a short catalog icon plus a one-word label is enough to choose an
+action. Do not use it for title-only rows; those stay
 `OpenCodeBottomSheetEntry`.
 
 ## Public API
@@ -24,8 +24,9 @@ choose an action. Do not use it for title-only rows; those stay
 - Component tokens: `actionTile.cornerRadius`, `actionTile.minHeight`,
   `actionTile.paddingTop`, `actionTile.paddingHorizontal`,
   `actionTile.paddingBottom`, `actionTile.iconSize`,
-  `actionTile.contentGap`, `actionTile.grid.gap`, and
-  `actionTile.grid.paddingHorizontal`.
+  `actionTile.contentGap`, `actionTile.grid.gap`,
+  `actionTile.grid.paddingHorizontal`, `actionTile.grid.minColumnWidth`,
+  `actionTile.grid.minColumns`, and `actionTile.grid.maxColumns`.
 - Typography roles: `type.body` for the label.
 
 ## Behavior
@@ -37,9 +38,11 @@ accessibility label. Long labels truncate to one line.
 Enabled tiles use a spring press scale (~0.97). Icons are decorative when
 an accessibility label is provided.
 
-Callers arrange tiles in a two-column grid with `actionTile.grid.gap` and
-`actionTile.grid.paddingHorizontal`. An odd last tile stays leading; the
-empty cell is not tappable.
+Callers arrange tiles with `OpenCodeActionTileGrid`. Column count is
+`minColumns`…`maxColumns` from the available width and
+`actionTile.grid.minColumnWidth`. A phone-width sheet stays at two columns; a
+regular `layout.sheetMaxWidth` sheet can open a third or fourth. An odd last
+tile stays leading; empty cells are not tappable.
 
 ## Platform Notes
 

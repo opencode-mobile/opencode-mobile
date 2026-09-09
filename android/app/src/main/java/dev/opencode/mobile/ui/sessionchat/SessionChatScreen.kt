@@ -3,11 +3,8 @@ package dev.opencode.mobile.ui.sessionchat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,6 +50,7 @@ import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomFade
 import dev.opencode.mobile.ui.components.OpenCodeBottomFadeOverhang
 import dev.opencode.mobile.ui.components.OpenCodeActionTile
+import dev.opencode.mobile.ui.components.OpenCodeActionTileGrid
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionItem
@@ -61,6 +59,7 @@ import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
+import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
@@ -448,7 +447,7 @@ fun SessionChatScreen(
                 )
             }
 
-            Box(modifier = Modifier.weight(1f)) {
+            OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
                 SessionChatTimelineView(
                     props =
                         SessionChatTimelineViewProps(
@@ -1020,34 +1019,23 @@ private fun CommandsActionTileGrid(
     canMutate: Boolean,
     onAction: (ClientSlashAction) -> Unit,
 ) {
-    Column(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        actions.chunked(2).forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                row.forEach { action ->
-                    val requiresLive =
-                        action == ClientSlashAction.New ||
-                            action == ClientSlashAction.Fork ||
-                            action == ClientSlashAction.Terminal
-                    OpenCodeActionTile(
-                        icon = action.tileIcon(),
-                        label = action.tileLabel,
-                        onClick = { onAction(action) },
-                        enabled = !requiresLive || canMutate,
-                        accessibilityLabel = action.description,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                if (row.size == 1) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-            }
-        }
+    OpenCodeActionTileGrid(
+        itemCount = actions.size,
+        modifier = Modifier.padding(vertical = 4.dp),
+    ) { index ->
+        val action = actions[index]
+        val requiresLive =
+            action == ClientSlashAction.New ||
+                action == ClientSlashAction.Fork ||
+                action == ClientSlashAction.Terminal
+        OpenCodeActionTile(
+            icon = action.tileIcon(),
+            label = action.tileLabel,
+            onClick = { onAction(action) },
+            enabled = !requiresLive || canMutate,
+            accessibilityLabel = action.description,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
