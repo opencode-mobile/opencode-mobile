@@ -453,7 +453,9 @@ Reusable action component with text and icon-only variants.
 High contrast buttons invert against the surrounding page using semantic
 foreground/background tokens. Low contrast buttons use secondary surface fill,
 primary or strong content, and subtle border so secondary actions remain visible
-without competing with primary actions.
+without competing with primary actions. Accent contrast uses the `interactive`
+fill with `text-on-brand-base` content so a single CTA follows the theme brand.
+Disabled accent uses `surface-interactive-weak` and `text-interactive-base`.
 
 | Token | Value |
 | --- | --- |

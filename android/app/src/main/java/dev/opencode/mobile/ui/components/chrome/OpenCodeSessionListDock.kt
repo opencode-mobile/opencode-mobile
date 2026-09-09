@@ -48,6 +48,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
@@ -85,6 +86,14 @@ private val ScopeControlShape = RoundedCornerShape(20.dp)
 private const val DockControlFillAlpha = 0.05f
 
 @Composable
+private fun dockControlFill(): Color =
+    lerp(
+        openCodeColor("surface-raised-base"),
+        openCodeColor("text-strong"),
+        DockControlFillAlpha,
+    )
+
+@Composable
 fun OpenCodeSessionListDock(
     filterTabs: List<SessionListFilterTab>,
     selectedFilterId: String,
@@ -101,7 +110,7 @@ fun OpenCodeSessionListDock(
     val textStrong = openCodeColor("text-strong")
     val error = openCodeColor("error")
     val iconStrong = openCodeColor("icon-strong-base")
-    val controlFill = textStrong.copy(alpha = DockControlFillAlpha)
+    val controlFill = dockControlFill()
     OpenCodeFloatingDock(modifier = modifier) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -367,7 +376,7 @@ fun SessionListScopeControl(
             modifier
                 .fillMaxWidth()
                 .clip(ScopeControlShape)
-                .background(openCodeColor("text-strong").copy(alpha = DockControlFillAlpha))
+                .background(dockControlFill())
                 .pointerInput(shownTabId, isSwitching) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)

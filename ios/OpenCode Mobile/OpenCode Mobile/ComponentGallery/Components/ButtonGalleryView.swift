@@ -73,6 +73,11 @@ struct ButtonGalleryView: View {
                     selected: contrast == .low,
                     action: { contrast = .low }
                 )
+                OpenCodeChoiceBadge(
+                    label: "Accent",
+                    selected: contrast == .accent,
+                    action: { contrast = .accent }
+                )
             }
 
             HStack(spacing: 8) {

@@ -93,6 +93,7 @@ fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
                         when (option) {
                             OpenCodeButtonContrast.High -> "High contrast"
                             OpenCodeButtonContrast.Low -> "Low contrast"
+                            OpenCodeButtonContrast.Accent -> "Accent"
                             OpenCodeButtonContrast.Destructive -> "Destructive"
                         },
                     selected = option == contrastSelection,

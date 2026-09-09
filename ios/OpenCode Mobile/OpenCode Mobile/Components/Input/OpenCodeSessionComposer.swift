@@ -292,7 +292,7 @@ struct OpenCodeSessionComposer: View {
                             }()
                         ),
                         enabled: prompt.sendEnabled,
-                        contrast: .low,
+                        contrast: .accent,
                         longPress: prompt.followUpDelivery == nil ? nil : { onAction(.toggleFollowUp) },
                         action: {
                             // OPE-138: send leaves editing intent. Mention UITextView is
@@ -406,7 +406,11 @@ struct OpenCodeSessionComposer: View {
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
-                .background(OpenCodeColors.textStrong.opacity(0.05), in: Capsule())
+                .background {
+                    Capsule()
+                        .fill(OpenCodeColors.surfaceRaisedBase)
+                        .overlay(Capsule().fill(OpenCodeColors.textStrong.opacity(0.05)))
+                }
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)

@@ -59,7 +59,8 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
 - Shell tokens: Floating Chrome materials (`surface.raised` / glass; see
   `floating-chrome.md`), `border-weak-base` for the prompt / question /
   child-lockout outline, `text-strong`, and `text-base`.
-- Status/action tokens: `warning`, `error`, and `button-primary-base`.
+- Status/action tokens: `warning`, `error`, `button-primary-base`,
+  `interactive`, and `text-on-brand-base` (send `IconCircle` accent contrast).
 - Shared shell geometry: 26 logical-pixel continuous corner radius, 12
   logical-pixel content padding, 12 logical-pixel screen gutters, 4
   logical-pixel bottom inset (Floating Dock parity), and 10 logical-pixel row
@@ -71,9 +72,9 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   model and thinking-effort chips stay fill-only capsules (`text-strong` at
   **0.14**, button typography) — not interactive Choice Badges. The back
   action uses the Session List Dock **New session** CTA: full-width capsule,
-  height **52**, `text-strong` label, and the same `text-strong` **0.05**
-  wash with no stroke. Do not use high-contrast `OpenCodeButton`
-  `fullWidthText`.
+  height **52**, `text-strong` label, and the same opaque `text-strong`
+  **0.05** mix over `surface-raised-base` with no stroke. Do not use
+  high-contrast `OpenCodeButton` `fullWidthText`.
 - Typography: body for prompt entry; placeholder uses `text-weak` (not
   `text-base` / on-surface-variant). Heading, body-secondary, code, caption, and
   button roles for permission approval, question request, and child lockout.
@@ -109,8 +110,13 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   pickers rather than toggling a selected peer in-row.
 - The prompt action row is `[+] [/] … [send]`: Attach `IconCircle`, then a
   Commands `IconCircle` using the `slash` catalog icon at 8 logical-pixel spacing, a flexible
-  gap, then stop (when active) and send. Commands opens a feature-owned
-  Commands sheet; the composer only reports the tap as `openCommands`.
+  gap, then stop (when active) and send. Attach, Commands, and Stop stay
+  low-contrast. Send uses Button **accent** contrast (`interactive` fill,
+  `text-on-brand-base` icon) so it follows the theme brand. An empty draft
+  keeps send on muted accent; the first sendable character springs it to
+  full accent. Commands opens a
+  feature-owned Commands sheet; the composer only reports the tap as
+  `openCommands`.
 - With a pending permission or question request, the shell replaces its inner
   content with that decision UI. Draft prompt text and selection state remain in
   the Screen Model and return after the request resolves. After those requests

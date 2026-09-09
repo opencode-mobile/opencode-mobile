@@ -33,7 +33,10 @@ whether that tab is present; the dock does not insert it.
 - Chip scroller (default): Filter Chip tokens; selected project may show
   remove.
 - Scope control (picker on): same inner-control recipe as Add project / New
-  session — `text-strong` fill at **0.05**, no stroke. **20pt** continuous
+  session — an **opaque** mix of `text-strong` at **0.05** over
+  `surface-raised-base`, no stroke. Do not paint a transparent
+  `text-strong` overlay: Android’s 0.95 dock then reads as a hole, while
+  iOS glass flattens the same alpha and looks solid. **20pt** continuous
   corner (dock shell is 26). Letter badge or All mark (32 circle + `widgets`
   grid), body-secondary semibold title, caption subtitle (`text.weak`), count
   pill, `keyboard_arrow_down` chevron. The All mark and count pill keep a
@@ -42,8 +45,8 @@ whether that tab is present; the dock does not insert it.
   reads cheap. Do not use `surface-base` or a **0.08+** ink wash for the
   control — those read as a grey slab.
 - Actions: circle Add project + capsule New session, shared height **52**,
-  horizontal gap **8**, same **0.05** wash and no stroke on both platforms
-  (including iOS 26). Do not use high-contrast `OpenCodeButton`
+  horizontal gap **8**, same opaque **0.05** mix and no stroke on both
+  platforms (including iOS 26). Do not use high-contrast `OpenCodeButton`
   `fullWidthText`.
 - Error: `color.error` + body-secondary text.
 
@@ -105,13 +108,15 @@ is hold-to-remove on project rows in the sheet, not on the dock.
 
 ## Platform Notes
 
-- iOS: `OpenCodeFloatingDock` plus the **0.05** wash on the scope control and
-  CTA row. Add project / New session stay circle + capsule at 52pt to match
+- iOS: `OpenCodeFloatingDock` plus the opaque **0.05** mix on the scope
+  control and CTA row (raised underlay, then ink wash — `Color.mix` is iOS
+  18+). Add project / New session stay circle + capsule at 52pt to match
   Android. Play selection and context-action haptics through UIKit generators
   at the gesture. `.sensoryFeedback` is silent when a sheet presents in the
   same update.
-- Android: same structure with Material raised dock and the same **0.05**
-  wash on the scope control and CTAs at 52dp / 8dp gap. Project switch uses
+- Android: same structure with Material raised dock and the same opaque
+  **0.05** mix (`lerp` of raised and `text-strong`) on the scope control and
+  CTAs at 52dp / 8dp gap. Project switch uses
   `HapticFeedbackType.TextHandleMove`; New session hold uses `LongPress`.
 
 ## Review Surfaces

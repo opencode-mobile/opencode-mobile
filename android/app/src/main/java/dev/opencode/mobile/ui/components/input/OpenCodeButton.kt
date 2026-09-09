@@ -1,5 +1,9 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -16,9 +20,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -28,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private val OpenCodeButtonCornerRadius = RoundedCornerShape(8.dp)
@@ -68,6 +76,7 @@ sealed interface OpenCodeButtonVariant {
 enum class OpenCodeButtonContrast {
     High,
     Low,
+    Accent,
     Destructive,
 }
 
@@ -87,27 +96,66 @@ fun OpenCodeButton(
     size: OpenCodeButtonSize = OpenCodeButtonSize.Medium,
     onLongClick: (() -> Unit)? = null,
 ) {
-    val containerColor =
+    val targetContainer =
         when {
+            !enabled && contrast == OpenCodeButtonContrast.Accent -> openCodeColor("surface-interactive-weak")
             !enabled -> MaterialTheme.colorScheme.surfaceVariant
             contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.surfaceVariant
+            contrast == OpenCodeButtonContrast.Accent -> openCodeColor("interactive")
             contrast == OpenCodeButtonContrast.Destructive -> MaterialTheme.colorScheme.error
             else -> MaterialTheme.colorScheme.onSurface
         }
-    val borderColor =
+    val targetBorder =
         when {
+            !enabled && contrast == OpenCodeButtonContrast.Accent -> openCodeColor("surface-interactive-weak")
             !enabled -> MaterialTheme.colorScheme.outlineVariant
             contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.outlineVariant
+            contrast == OpenCodeButtonContrast.Accent -> openCodeColor("interactive")
             contrast == OpenCodeButtonContrast.Destructive -> MaterialTheme.colorScheme.error
             else -> MaterialTheme.colorScheme.onSurface
         }
-    val contentColor =
+    val targetContent =
         when {
+            !enabled && contrast == OpenCodeButtonContrast.Accent -> openCodeColor("text-interactive-base")
             !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
             contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.onSurface
+            contrast == OpenCodeButtonContrast.Accent -> openCodeColor("text-on-brand-base")
             contrast == OpenCodeButtonContrast.Destructive -> MaterialTheme.colorScheme.onError
             else -> MaterialTheme.colorScheme.surface
         }
+    val isAccent = contrast == OpenCodeButtonContrast.Accent
+    val accentColorSpring =
+        spring<Color>(
+            dampingRatio = 0.68f,
+            stiffness = Spring.StiffnessMediumLow,
+        )
+    val animatedContainer by animateColorAsState(
+        targetValue = targetContainer,
+        animationSpec = accentColorSpring,
+        label = "OpenCodeButton container",
+    )
+    val animatedBorder by animateColorAsState(
+        targetValue = targetBorder,
+        animationSpec = accentColorSpring,
+        label = "OpenCodeButton border",
+    )
+    val animatedContent by animateColorAsState(
+        targetValue = targetContent,
+        animationSpec = accentColorSpring,
+        label = "OpenCodeButton content",
+    )
+    val containerColor = if (isAccent) animatedContainer else targetContainer
+    val borderColor = if (isAccent) animatedBorder else targetBorder
+    val contentColor = if (isAccent) animatedContent else targetContent
+    val accentScale by animateFloatAsState(
+        targetValue = if (isAccent && !enabled) 0.96f else 1f,
+        animationSpec =
+            spring(
+                dampingRatio = 0.68f,
+                stiffness = Spring.StiffnessMediumLow,
+            ),
+        label = "OpenCodeButton accent scale",
+    )
 
     val variantMinHeight =
         when (size) {
@@ -149,7 +197,15 @@ fun OpenCodeButton(
             Modifier.clickable(enabled = enabled, onClick = onClick)
         }
     Surface(
-        modifier = modifier.then(variantModifier).clip(shape).then(interaction),
+        modifier =
+            modifier
+                .then(variantModifier)
+                .graphicsLayer {
+                    scaleX = accentScale
+                    scaleY = accentScale
+                }
+                .clip(shape)
+                .then(interaction),
         shape = shape,
         color = containerColor,
         contentColor = contentColor,

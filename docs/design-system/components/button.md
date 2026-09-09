@@ -18,7 +18,7 @@ icon-only button needs.
 - Size: `medium` (default) or `large`.
   - Text variants: `medium` min-height **40**; `large` min-height **48**.
   - Icon variants: `medium` frame **40×40**; `large` frame **48×48**.
-- Contrast: `high` (default), `low`, or `destructive`.
+- Contrast: `high` (default), `low`, `accent`, or `destructive`.
 - States: `enabled`, `disabled`.
 - Required content:
   - text title for text variants;
@@ -37,7 +37,8 @@ icon-only button needs.
 
 - Semantic tokens: `color.surface.primary`, `color.surface.secondary`,
   `color.text.primary`, `color.text.secondary`, `color.text.disabled`,
-  `color.border.subtle`, `color.border.default`, `color.icon.strong`.
+  `color.border.subtle`, `color.border.default`, `color.icon.strong`,
+  `interactive`, `text-on-brand-base`.
 - Component tokens: `button.cornerRadius`, `button.minHeight.*`,
   `button.padding.*`, `button.iconSquare.size`, and
   `button.iconCircle.size`.
@@ -59,13 +60,25 @@ without competing with a primary action. They use `color.surface.secondary` for
 the fill, primary or strong content color for text/icons, and
 `color.border.subtle` for the border.
 
+Accent contrast is for a single colorful call-to-action that should pick up
+the theme brand (Session Composer send). Enabled uses `interactive` fill and
+`text-on-brand-base` for the label or icon. Disabled keeps a muted brand —
+`surface-interactive-weak` fill and `text-interactive-base` icon — not the
+generic grey disabled treatment. When accent becomes enabled, fill, icon,
+and scale spring together from the muted **0.96** rest to full accent at
+**1.0** (`response` 0.32 / damping 0.68 on iOS; matching Compose spring on
+Android).
+Do not use `button-primary-base` here — that token stays ink on Porcelain,
+Linen, and Signal.
+
 Destructive contrast is for irreversible or hard-to-undo confirms (often as a
 dialog primary). It uses semantic error fill with contrasting label text so
 Remove / Delete / Clear read as destructive without inventing a separate button
 variant. Map: Android `MaterialTheme.colorScheme.error` /
 `onError`; iOS `OpenCodeColors.error` fill with `surfaceBase` label.
 
-Disabled state stays muted, blocks interaction, and overrides contrast.
+Disabled state blocks interaction. High, low, and destructive stay on the
+generic muted treatment. Accent keeps the muted-brand treatment above.
 
 `fullWidthText` always fills its container width and keeps a minimum touch
 height. `compactText` keeps the same visual language but sizes to content
@@ -78,9 +91,10 @@ behavior, swapping the centered catalog icon for a short text glyph
 (button-role typography) for actions the icon catalog does not cover.
 
 Pressed feedback stays subtle: iOS low-contrast uses `surface-raised-base-hover`
-plus a light opacity/scale nudge (`0.92` / `0.98`); high and destructive keep
-their fill tokens and use the same opacity/scale nudge. Do not flash pressed
-fills to `text-base` — that reads as an invert and is too high-contrast.
+plus a light opacity/scale nudge (`0.92` / `0.98`); high, accent, and
+destructive keep their fill tokens and use the same opacity/scale nudge. Do
+not flash pressed fills to `text-base` — that reads as an invert and is too
+high-contrast.
 Android relies on Material ripple on the shaped `Surface`.
 
 ## Platform Notes

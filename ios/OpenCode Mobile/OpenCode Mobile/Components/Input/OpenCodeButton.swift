@@ -11,6 +11,7 @@ enum OpenCodeButtonVariant {
 enum OpenCodeButtonContrast {
     case high
     case low
+    case accent
     case destructive
 }
 
@@ -134,8 +135,9 @@ private struct OpenCodeButtonStyle: ButtonStyle {
                         .strokeBorder(borderColor(isPressed: isPressed), lineWidth: 1)
                 )
                 .opacity(isPressed ? 0.92 : 1)
-                .scaleEffect(isPressed ? 0.98 : 1)
+                .scaleEffect(pressScale(isPressed: isPressed))
                 .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+                .animation(accentEnableAnimation, value: enabled)
             } else {
                 baseLabel(
                     configuration: configuration,
@@ -150,8 +152,9 @@ private struct OpenCodeButtonStyle: ButtonStyle {
                         .strokeBorder(borderColor(isPressed: isPressed), lineWidth: 1)
                 )
                 .opacity(isPressed ? 0.92 : 1)
-                .scaleEffect(isPressed ? 0.98 : 1)
+                .scaleEffect(pressScale(isPressed: isPressed))
                 .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+                .animation(accentEnableAnimation, value: enabled)
             }
         }
         .onChange(of: configuration.isPressed) { _, pressed in
@@ -209,21 +212,41 @@ private struct OpenCodeButtonStyle: ButtonStyle {
         }
     }
 
+    private var accentEnableAnimation: Animation? {
+        guard contrast == .accent else { return nil }
+        return .spring(response: 0.32, dampingFraction: 0.68)
+    }
+
+    private func pressScale(isPressed: Bool) -> CGFloat {
+        if isPressed { return 0.98 }
+        if contrast == .accent, !enabled { return 0.96 }
+        return 1
+    }
+
     private var foregroundColor: Color {
-        if !enabled { return OpenCodeColors.textBase }
+        if !enabled {
+            return contrast == .accent ? OpenCodeColors.textInteractiveBase : OpenCodeColors.textBase
+        }
         switch contrast {
         case .low: return OpenCodeColors.textStrong
+        case .accent: return OpenCodeColors.textOnBrandBase
         case .destructive: return OpenCodeColors.surfaceBase
         case .high: return OpenCodeColors.surfaceBase
         }
     }
 
     private func backgroundColor(isPressed: Bool) -> Color {
-        if !enabled { return OpenCodeColors.surfaceRaisedBase }
+        if !enabled {
+            return contrast == .accent
+                ? OpenCodeColors.surfaceInteractiveWeak
+                : OpenCodeColors.surfaceRaisedBase
+        }
         switch contrast {
         case .low:
             // Hover emphasis only — a solid textBase flash is too high-contrast.
             return isPressed ? OpenCodeColors.surfaceRaisedBaseHover : OpenCodeColors.surfaceRaisedBase
+        case .accent:
+            return OpenCodeColors.interactive
         case .destructive:
             return OpenCodeColors.error
         case .high:
@@ -232,10 +255,16 @@ private struct OpenCodeButtonStyle: ButtonStyle {
     }
 
     private func borderColor(isPressed: Bool) -> Color {
-        if !enabled { return OpenCodeColors.borderWeakerBase }
+        if !enabled {
+            return contrast == .accent
+                ? OpenCodeColors.surfaceInteractiveWeak
+                : OpenCodeColors.borderWeakerBase
+        }
         switch contrast {
         case .low:
             return isPressed ? OpenCodeColors.borderWeakBase : OpenCodeColors.borderWeakerBase
+        case .accent:
+            return OpenCodeColors.interactive
         case .destructive:
             return OpenCodeColors.error
         case .high:

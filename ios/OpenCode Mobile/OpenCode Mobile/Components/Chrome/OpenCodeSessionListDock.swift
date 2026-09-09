@@ -116,7 +116,7 @@ struct OpenCodeSessionListDock: View {
             OpenCodeIconImage(icon: .createNewFolder, size: Self.ctaIconSize)
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .frame(width: Self.ctaHeight, height: Self.ctaHeight)
-                .background(OpenCodeColors.textStrong.opacity(Self.controlFillOpacity), in: Circle())
+                .background(OpenCodeDockControlFill(shape: Circle()))
                 .contentShape(Circle())
         }
         .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
@@ -160,7 +160,7 @@ struct SessionListScopeControl: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(minHeight: 44)
-        .background(OpenCodeColors.textStrong.opacity(OpenCodeSessionListDock.controlFillOpacity), in: controlShape)
+        .background(OpenCodeDockControlFill(shape: controlShape))
         .clipShape(controlShape)
         .contentShape(controlShape)
         .gesture(drag)
@@ -505,7 +505,7 @@ private struct NewSessionDockButton: View {
             .foregroundStyle(OpenCodeColors.textStrong)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(OpenCodeColors.textStrong.opacity(OpenCodeSessionListDock.controlFillOpacity), in: Capsule())
+            .background(OpenCodeDockControlFill(shape: Capsule()))
             .contentShape(Capsule())
 
         if let onLongPress {
@@ -545,6 +545,20 @@ private struct NewSessionDockButton: View {
             }
             .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
         }
+    }
+}
+
+private struct OpenCodeDockControlFill<S: Shape>: View {
+    var shape: S
+
+    var body: some View {
+        shape
+            .fill(OpenCodeColors.surfaceRaisedBase)
+            .overlay(
+                shape.fill(
+                    OpenCodeColors.textStrong.opacity(OpenCodeSessionListDock.controlFillOpacity)
+                )
+            )
     }
 }
 
