@@ -16,7 +16,7 @@ struct OpenCodeFloatingDock<Content: View>: View {
             .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: openCodeFloatingDockCornerRadius, style: .continuous))
             .openCodeFloatingChrome(cornerRadius: openCodeFloatingDockCornerRadius)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 12)
             .padding(.bottom, 4)
     }
 }
