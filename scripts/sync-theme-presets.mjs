@@ -16,7 +16,7 @@ const IOS_FALLBACK = join(
   REPO_ROOT,
   "ios/OpenCode Mobile/OpenCode Mobile/Assets.xcassets/ThemeJson.dataset",
 );
-const DEFAULT_PRESET_ID = "graphite";
+const DEFAULT_PRESET_ID = "porcelain";
 
 function jsonFiles(dir) {
   return readdirSync(dir).filter((name) => name.endsWith(".json"));

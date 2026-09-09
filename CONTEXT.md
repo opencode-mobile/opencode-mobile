@@ -487,8 +487,8 @@ A JSON theme file used by OpenCode Mobile.
 
 Each theme defines `light` and `dark` variants with palette seeds and optional
 token overrides. The apps resolve seeds into semantic color tokens at runtime.
-Settings offers five bundled themes: Graphite, Kiln, Beacon, Harbor, and
-Orchid. Graphite is the default.
+Settings offers five bundled themes: Porcelain, Linen, Signal, Hotline, and
+Phosphor. Porcelain is the default.
 
 ### Design System
 

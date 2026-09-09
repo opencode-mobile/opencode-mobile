@@ -15,7 +15,7 @@ object ThemeManager {
     private const val KEY_SELECTED_SYNTAX_ID = "selectedSyntaxID"
     private const val PRESET_ASSET_DIR = "theme-presets"
     private const val SYNTAX_ASSET_DIR = "syntax-presets"
-    private const val DEFAULT_PRESET_ID = "graphite"
+    private const val DEFAULT_PRESET_ID = "porcelain"
     const val MATCH_SYNTAX_PRESET_ID = SyntaxHighlightPreset.MATCH_SYNTAX_PRESET_ID
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -216,33 +216,33 @@ object ThemeManager {
     private fun createFallbackTheme(): OpenCodeTheme {
         val lightPalette =
             PaletteSeeds(
-                neutral = "#F3F4F6",
-                ink = "#14161A",
-                primary = "#3B4FD9",
-                success = "#1B8A4A",
-                warning = "#C48412",
-                error = "#D23B3B",
-                info = "#6B5CAD",
-                interactive = "#3B4FD9",
-                diffAdd = "#1B8A4A",
-                diffDelete = "#D23B3B",
+                neutral = "#F8F8F8",
+                ink = "#171717",
+                primary = "#1456F7",
+                success = "#089B00",
+                warning = "#C78B05",
+                error = "#CB321C",
+                info = "#5A5A8A",
+                interactive = "#1456F7",
+                diffAdd = "#089B00",
+                diffDelete = "#CB321C",
             )
         val darkPalette =
             PaletteSeeds(
-                neutral = "#141518",
-                ink = "#ECEEF1",
-                primary = "#8B97F0",
+                neutral = "#121212",
+                ink = "#EDEDED",
+                primary = "#8BA8FF",
                 success = "#4EC97A",
                 warning = "#E0B04A",
                 error = "#E85A5A",
                 info = "#B4A6E0",
-                interactive = "#8B97F0",
+                interactive = "#8BA8FF",
                 diffAdd = "#7AE0A0",
                 diffDelete = "#E85A5A",
             )
         return OpenCodeTheme(
-            name = "Graphite",
-            id = "graphite-fallback",
+            name = "Porcelain",
+            id = "porcelain-fallback",
             light = ThemeVariant(palette = lightPalette),
             dark = ThemeVariant(palette = darkPalette),
         )

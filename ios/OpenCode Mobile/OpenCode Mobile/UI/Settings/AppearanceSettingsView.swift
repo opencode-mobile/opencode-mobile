@@ -336,11 +336,11 @@ private extension ThemePreset {
 
 private func themeBlurb(_ id: String) -> String {
     switch id {
-    case "graphite": "Cool gray product default"
-    case "kiln": "Warm paper and copper"
-    case "beacon": "Newspaper white and lime"
-    case "harbor": "Ice paper and sea teal"
-    case "orchid": "Lilac paper and violet"
+    case "porcelain": "Near-white / near-black"
+    case "linen": "Warm paper / espresso"
+    case "signal": "True white / true black"
+    case "hotline": "Neutral chrome, loud pink"
+    case "phosphor": "Neutral chrome, CRT green"
     default: id
     }
 }

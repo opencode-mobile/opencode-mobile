@@ -120,7 +120,7 @@ fun ThemePickerScreen(
     val selectedId = ThemeManager.currentTheme.id
     val presets =
         ThemeManager.availablePresets().ifEmpty {
-            listOf(ThemePreset(id = "graphite", name = "Graphite"))
+            listOf(ThemePreset(id = "porcelain", name = "Porcelain"))
         }
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
@@ -384,10 +384,10 @@ private fun ThemePreset.displayBlurb(): String = blurb.ifBlank { themeBlurb(id) 
 
 private fun themeBlurb(id: String): String =
     when (id) {
-        "graphite" -> "Cool gray product default"
-        "kiln" -> "Warm paper and copper"
-        "beacon" -> "Newspaper white and lime"
-        "harbor" -> "Ice paper and sea teal"
-        "orchid" -> "Lilac paper and violet"
+        "porcelain" -> "Near-white / near-black"
+        "linen" -> "Warm paper / espresso"
+        "signal" -> "True white / true black"
+        "hotline" -> "Neutral chrome, loud pink"
+        "phosphor" -> "Neutral chrome, CRT green"
         else -> id
     }

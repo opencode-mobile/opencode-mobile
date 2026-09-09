@@ -1,27 +1,27 @@
 [
   {
-    "id": "graphite",
-    "name": "Graphite",
-    "blurb": "Cool gray product default"
+    "id": "porcelain",
+    "name": "Porcelain",
+    "blurb": "Near-white / near-black"
   },
   {
-    "id": "kiln",
-    "name": "Kiln",
-    "blurb": "Warm paper and copper"
+    "id": "linen",
+    "name": "Linen",
+    "blurb": "Warm paper / espresso"
   },
   {
-    "id": "beacon",
-    "name": "Beacon",
-    "blurb": "Newspaper white and lime"
+    "id": "signal",
+    "name": "Signal",
+    "blurb": "True white / true black"
   },
   {
-    "id": "harbor",
-    "name": "Harbor",
-    "blurb": "Ice paper and sea teal"
+    "id": "hotline",
+    "name": "Hotline",
+    "blurb": "Neutral chrome, loud pink"
   },
   {
-    "id": "orchid",
-    "name": "Orchid",
-    "blurb": "Lilac paper and violet"
+    "id": "phosphor",
+    "name": "Phosphor",
+    "blurb": "Neutral chrome, CRT green"
   }
 ]

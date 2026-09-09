@@ -38,7 +38,7 @@ Each suggestion uses an **internal row**, not `OpenCodeListItem`:
   `floating-chrome.md`) and `border-weaker-base` for the panel (same shell
   family as Session Composer); `text-strong` for the title; `text-base` for the
   bracketed source label, subtitle, and empty message. Do not use `text-weak`
-  here — Graphite’s weak grey is too faint on `surface-raised`.
+  here — Porcelain’s weak grey is too faint on `surface-raised`.
 - Typography roles: `type.body` for both the bracketed source label and title;
   `type.bodySecondary` for the subtitle.
 - Geometry: panel matching composer chrome family at corner radius 12;

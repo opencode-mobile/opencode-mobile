@@ -16,15 +16,15 @@ The canonical theme source is a JSON file bundled with each app:
 
 ```json
 {
-  "name": "Graphite",
-  "id": "graphite",
+  "name": "Porcelain",
+  "id": "porcelain",
   "light": {
-    "palette": { "neutral": "#F3F4F6", "ink": "#14161A", ... },
-    "overrides": { "text-strong": "#14161A", ... }
+    "palette": { "neutral": "#F8F8F8", "ink": "#171717", ... },
+    "overrides": { "text-strong": "#171717", ... }
   },
   "dark": {
-    "palette": { "neutral": "#141518", "ink": "#ECEEF1", ... },
-    "overrides": { "text-strong": "#ECEEF1", ... }
+    "palette": { "neutral": "#121212", "ink": "#EDEDED", ... },
+    "overrides": { "text-strong": "#EDEDED", ... }
   }
 }
 ```
@@ -34,10 +34,18 @@ dictionary. Only bundled presets follow this pipeline.
 
 ### Bundled theme presets
 
-Five original themes ship with each app: Graphite, Kiln, Beacon, Harbor, and
-Orchid. Canonical JSON lives in `shared/theme-presets/`; platform bundles are
-updated via `npm run themes:sync` and verified with `npm run themes:check`
-(see `scripts/sync-theme-presets.mjs`).
+Five original themes ship with each app: Porcelain, Linen, Signal, Hotline,
+and Phosphor. Canonical JSON lives in `shared/theme-presets/`; platform
+bundles are updated via `npm run themes:sync` and verified with
+`npm run themes:check` (see `scripts/sync-theme-presets.mjs`).
+
+| Preset | Role |
+| --- | --- |
+| `porcelain` | Near-white / near-black default. Quiet blue taps. |
+| `linen` | Quiet warm paper / espresso. Dusty olive taps. |
+| `signal` | True white / true black. Electric blue is the shout. |
+| `hotline` | Neutral chrome, loud pink on taps and user bubbles. |
+| `phosphor` | Neutral chrome, CRT green on taps and user bubbles. |
 
 | Platform | Bundle location |
 | --- | --- |
@@ -45,8 +53,8 @@ updated via `npm run themes:sync` and verified with `npm run themes:check`
 | Android | `assets/theme-presets/` |
 
 `manifest.json` lists `{ id, name, blurb }` pairs for the Settings theme picker.
-Default selection is the `graphite` preset unless the user chooses another
-bundled preset.
+Default selection is the `porcelain` preset unless the user chooses another
+bundled preset. Users still on a retired preset ID fall back to Porcelain.
 
 ### Syntax highlight presets
 
@@ -89,80 +97,80 @@ these for each mode:
 ## Resolved Semantic Tokens
 
 The resolver expands palette seeds into resolved tokens, then applies overrides.
-Tables below show Graphite, the default preset.
+Tables below show Porcelain, the default preset.
 
 ### Background & Surface
 
-| Token | Graphite Light | Graphite Dark |
+| Token | Porcelain Light | Porcelain Dark |
 |---|---|---|
-| `background-base` | `#F3F4F6` | `#141518` |
-| `surface-base` | `#F3F4F6` | `#141518` |
+| `background-base` | `#F8F8F8` | `#121212` |
+| `surface-base` | `#F8F8F8` | `#121212` |
 | `surface-base-hover` | `#0000000A` | `#FFFFFF0D` |
-| `surface-raised-base` | `#FFFFFF` | `#1C1D21` |
+| `surface-raised-base` | `#FFFFFF` | `#1C1C1C` |
 | `surface-raised-base-hover` | resolved from `neutral` | resolved from `neutral` |
-| `surface-interactive-weak` | `#E8EBFA` | `#1A1E32` |
+| `surface-interactive-weak` | `#E8EEFF` | `#161C2E` |
 | `surface-success-base` | `#E3F5EA` | `#12261A` |
 | `surface-critical-base` | `#FCECEC` | `#2A1414` |
 
 ### Text
 
-| Token | Graphite Light | Graphite Dark |
+| Token | Porcelain Light | Porcelain Dark |
 |---|---|---|
-| `text-strong` | `#14161A` | `#ECEEF1` |
-| `text-base` | `#5C6370` | `#9AA0AA` |
-| `text-weak` | `#8B919C` | `#6E7480` |
-| `text-weaker` | `#C4C8CE` | `#4A4F58` |
-| `text-interactive-base` | `#3B4FD9` | `#8B97F0` |
+| `text-strong` | `#171717` | `#EDEDED` |
+| `text-base` | `#6F6F6F` | `#A0A0A0` |
+| `text-weak` | `#8F8F8F` | `#707070` |
+| `text-weaker` | `#C7C7C7` | `#505050` |
+| `text-interactive-base` | `#1456F7` | `#C0D4FB` |
 | `text-on-brand-base` | resolved from `primary` seed | resolved from `primary` seed |
-| `icon-invert-base` | `#FFFFFF` | `#141518` |
+| `icon-invert-base` | `#FFFFFF` | `#121212` |
 
 ### Border
 
-| Token | Graphite Light | Graphite Dark |
+| Token | Porcelain Light | Porcelain Dark |
 |---|---|---|
-| `border-weak-base` | `#D5D8DE` | `#2A2C32` |
-| `border-weaker-base` | `#E6E8EC` | `#22242A` |
+| `border-weak-base` | `#E5E5E5` | `#282828` |
+| `border-weaker-base` | `#F0F0F0` | `#232323` |
 
 ### Icon
 
-| Token | Graphite Light | Graphite Dark |
+| Token | Porcelain Light | Porcelain Dark |
 |---|---|---|
-| `icon-base` | `#8B919C` | `#7A808A` |
+| `icon-base` | `#8F8F8F` | `#7E7E7E` |
 | `icon-weak-base` | resolved from `ink` / `neutral` | resolved from `ink` / `neutral` |
-| `icon-strong-base` | `#14161A` | `#ECEEF1` |
+| `icon-strong-base` | `#171717` | `#EDEDED` |
 
 ### Button
 
-| Token | Graphite Light | Graphite Dark |
+| Token | Porcelain Light | Porcelain Dark |
 |---|---|---|
-| `button-primary-base` | `#14161A` | `#ECEEF1` |
+| `button-primary-base` | `#171717` | `#EDEDED` |
 | `button-secondary-base` | resolved from `neutral` | resolved from `neutral` |
 | `button-secondary-hover` | resolved from `neutral` | resolved from `neutral` |
 
 ### Semantic Status
 
-| Token | Graphite Light | Graphite Dark |
+| Token | Porcelain Light | Porcelain Dark |
 |---|---|---|
-| `interactive` | `#3B4FD9` | `#8B97F0` |
-| `success` | `#1B8A4A` | `#4EC97A` |
-| `warning` | `#C48412` | `#E0B04A` |
-| `error` | `#D23B3B` | `#E85A5A` |
-| `info` | `#6B5CAD` | `#B4A6E0` |
-| `diff-add` | `#1B8A4A` | `#7AE0A0` |
-| `diff-delete` | `#D23B3B` | `#E85A5A` |
+| `interactive` | `#1456F7` | `#8BA8FF` |
+| `success` | `#089B00` | `#4EC97A` |
+| `warning` | `#C78B05` | `#E0B04A` |
+| `error` | `#CB321C` | `#E85A5A` |
+| `info` | `#5A5A8A` | `#B4A6E0` |
+| `diff-add` | `#089B00` | `#7AE0A0` |
+| `diff-delete` | `#CB321C` | `#E85A5A` |
 
 ### Syntax (code highlighting)
 
-| Token | Graphite Light | Graphite Dark |
+| Token | Porcelain Light | Porcelain Dark |
 |---|---|---|
-| `syntax-comment` | `#8B919C` | `#6E7480` |
-| `syntax-keyword` | `#6B5CAD` | `#B4A6E0` |
+| `syntax-comment` | `#8F8F8F` | `#707070` |
+| `syntax-keyword` | `#1456F7` | `#8BA8FF` |
 | `syntax-string` | `#087466` | `#4EC9B8` |
-| `syntax-primitive` | `#3B4FD9` | `#8B97F0` |
-| `syntax-property` | `#6B5CAD` | `#C4B08A` |
-| `syntax-type` | `#765A08` | `#E0B04A` |
+| `syntax-primitive` | `#1456F7` | `#8BA8FF` |
+| `syntax-property` | `#5A5A8A` | `#C4B08A` |
+| `syntax-type` | `#8A6508` | `#E0B04A` |
 | `syntax-constant` | `#1A7A80` | `#7AD4E0` |
-| `syntax-variable` | `#C43A48` | `#E06C75` |
+| `syntax-variable` | `#CB321C` | `#E06C75` |
 | `syntax-operator` | `#3A7A82` | `#56B6C2` |
 | `syntax-punctuation` | `text-strong` | `text-strong` |
 | `syntax-critical` | resolved from `primary` | resolved from `primary` |

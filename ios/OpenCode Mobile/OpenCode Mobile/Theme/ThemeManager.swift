@@ -11,8 +11,8 @@ final class ThemeManager {
         static let selectedThemeID = ThemePersistence.selectedThemeIDKey
     }
 
-    private static let defaultPresetID = "graphite"
-    private static let defaultPresetName = "Graphite"
+    private static let defaultPresetID = "porcelain"
+    private static let defaultPresetName = "Porcelain"
     private static let presetBundleSubdirectories: [String?] = [
         "ThemePresets",
         "Resources/ThemePresets",
@@ -248,7 +248,7 @@ final class ThemeManager {
             let decoder = JSONDecoder()
             return try decoder.decode(OpenCodeTheme.self, from: asset.data)
         } catch {
-            fatalError("Failed to load bundled graphite.json: \(error)")
+            fatalError("Failed to load bundled porcelain.json: \(error)")
         }
     }
 
