@@ -545,15 +545,15 @@ fun SessionChatScreen(
                         Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .windowInsetsPadding(
-                                WindowInsets.ime.union(WindowInsets.navigationBars),
-                            )
                             .onGloballyPositioned { coordinates ->
                                 val height = coordinates.size.height
                                 if (height != composerOverlayHeightPx) {
                                     composerOverlayHeightPx = height
                                 }
-                            },
+                            }
+                            .windowInsetsPadding(
+                                WindowInsets.ime.union(WindowInsets.navigationBars),
+                            ),
                 ) {
                     if (SessionChatComposerKind.resolve(
                             isChildSession = parentId != null,
