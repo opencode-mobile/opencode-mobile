@@ -406,11 +406,7 @@ struct OpenCodeSessionComposer: View {
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
-                .background {
-                    Capsule()
-                        .fill(OpenCodeColors.surfaceRaisedBase)
-                        .overlay(Capsule().fill(OpenCodeColors.textStrong.opacity(0.05)))
-                }
+                .openCodeSubtleControlChrome(shape: Capsule())
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)

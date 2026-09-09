@@ -10,7 +10,6 @@ struct OpenCodeFloatingChrome: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         if #available(iOS 26, *) {
             content
-                .background(OpenCodeColors.surfaceRaisedBase.opacity(0.92), in: shape)
                 .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius, style: .continuous))
         } else {
             // Raised fill + shadow stand-in: `.regularMaterial` alone reads too
@@ -22,8 +21,27 @@ struct OpenCodeFloatingChrome: ViewModifier {
     }
 }
 
+/// Inner dock / composer controls: Liquid Glass on iOS 26+, a 0.05 ink wash
+/// below. Do not paint an opaque raised underlay — that is what made the
+/// project selector look solid on glass.
+struct OpenCodeSubtleControlChrome<S: Shape>: ViewModifier {
+    var shape: S
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content.glassEffect(.regular, in: shape)
+        } else {
+            content.background(OpenCodeColors.textStrong.opacity(0.05), in: shape)
+        }
+    }
+}
+
 extension View {
     func openCodeFloatingChrome(cornerRadius: CGFloat) -> some View {
         modifier(OpenCodeFloatingChrome(cornerRadius: cornerRadius))
+    }
+
+    func openCodeSubtleControlChrome<S: Shape>(shape: S) -> some View {
+        modifier(OpenCodeSubtleControlChrome(shape: shape))
     }
 }

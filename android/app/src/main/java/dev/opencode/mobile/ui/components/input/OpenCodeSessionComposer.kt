@@ -44,7 +44,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -647,13 +646,7 @@ private fun ChildLockoutContent(
                 .fillMaxWidth()
                 .height(52.dp)
                 .clip(ctaShape)
-                .background(
-                    lerp(
-                        openCodeColor("surface-raised-base"),
-                        textStrong,
-                        0.05f,
-                    ),
-                )
+                .background(textStrong.copy(alpha = 0.05f))
                 .clickable { onAction(OpenCodeSessionComposerAction.BackToMainSession) },
         contentAlignment = Alignment.Center,
     ) {

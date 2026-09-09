@@ -48,7 +48,6 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
@@ -86,12 +85,7 @@ private val ScopeControlShape = RoundedCornerShape(20.dp)
 private const val DockControlFillAlpha = 0.05f
 
 @Composable
-private fun dockControlFill(): Color =
-    lerp(
-        openCodeColor("surface-raised-base"),
-        openCodeColor("text-strong"),
-        DockControlFillAlpha,
-    )
+private fun dockControlFill(): Color = openCodeColor("text-strong").copy(alpha = DockControlFillAlpha)
 
 @Composable
 fun OpenCodeSessionListDock(

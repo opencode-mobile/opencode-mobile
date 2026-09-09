@@ -224,14 +224,12 @@ implementation belong in the feature's `parity-gaps.md`.
   (`background.base` `0 → 0.7 → 0.7`, top = dock top + 16, solid to screen
   edge). Composer mode / model Choice Badges (including **Plan**) use the
   related capsule glass Choice Badge variant.
-- iOS behavior: iOS 26+ `glassEffect` with `surface-raised-base` underlay at
-  0.92 opacity on floating chrome and floating pills; glass on filter chips and
-  key home controls. Session List dock **Add project / New session** and the
-  project scope control use an opaque `text-strong` **0.05** mix over
-  `surface-raised-base` with no stroke on all iOS versions to match Android —
-  not per-button Liquid Glass, and not the composer-shell outline (that
-  hairline is for a card on the page). Below
-  iOS 26, floating chrome uses raised fill (0.95) plus light shadow; capsule
+- iOS behavior: iOS 26+ `glassEffect` with no opaque underlay on floating
+  chrome; glass on filter chips, the project scope control, dock CTAs, and
+  key home controls. Pre–26 dock / composer inner controls use a transparent
+  `text-strong` **0.05** wash with no stroke — not the composer-shell outline
+  (that hairline is for a card on the page). Below iOS 26, floating chrome
+  uses raised fill (0.95) plus light shadow; capsule
   glass Choice Badges / Filter Chips use fill-only `text.strong` stands-ins
   (0.14 selected / 0.08 unselected). Capsule chips, Choice Badge glass, and
   floating pills use **non-interactive** `glassEffect` plus subtle
@@ -240,8 +238,8 @@ implementation belong in the feature's `parity-gaps.md`.
   the OPE-99 shell-only slice.
 - Android behavior: Material 3 raised `Surface` (fill alpha 0.95, light
   elevation) for floating chrome; dock CTAs and the project scope control use
-  the same opaque **0.05** mix; glass Choice Badge / Filter Chip stand-ins stay
-  fill-only; no system Liquid Glass API.
+  a transparent **0.05** wash as the glass stand-in; glass Choice Badge /
+  Filter Chip stand-ins stay fill-only; no system Liquid Glass API.
 - Reason: Android has no Liquid Glass equivalent; layout and product actions stay
   aligned while materials remain platform-native.
 - Review trigger: if Android gains a system glass material API or product asks

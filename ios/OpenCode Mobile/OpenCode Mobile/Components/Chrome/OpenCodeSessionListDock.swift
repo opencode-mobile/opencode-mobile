@@ -109,14 +109,13 @@ struct OpenCodeSessionListDock: View {
 
     private static let ctaHeight: CGFloat = 52
     private static let ctaIconSize: CGFloat = 22
-    static let controlFillOpacity: CGFloat = 0.05
 
     private var addProjectButton: some View {
         Button(action: onAddProject) {
             OpenCodeIconImage(icon: .createNewFolder, size: Self.ctaIconSize)
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .frame(width: Self.ctaHeight, height: Self.ctaHeight)
-                .background(OpenCodeDockControlFill(shape: Circle()))
+                .openCodeSubtleControlChrome(shape: Circle())
                 .contentShape(Circle())
         }
         .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
@@ -160,8 +159,7 @@ struct SessionListScopeControl: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(minHeight: 44)
-        .background(OpenCodeDockControlFill(shape: controlShape))
-        .clipShape(controlShape)
+        .openCodeSubtleControlChrome(shape: controlShape)
         .contentShape(controlShape)
         .gesture(drag)
         .onTapGesture(perform: onOpen)
@@ -505,7 +503,7 @@ private struct NewSessionDockButton: View {
             .foregroundStyle(OpenCodeColors.textStrong)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(OpenCodeDockControlFill(shape: Capsule()))
+            .openCodeSubtleControlChrome(shape: Capsule())
             .contentShape(Capsule())
 
         if let onLongPress {
@@ -545,20 +543,6 @@ private struct NewSessionDockButton: View {
             }
             .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
         }
-    }
-}
-
-private struct OpenCodeDockControlFill<S: Shape>: View {
-    var shape: S
-
-    var body: some View {
-        shape
-            .fill(OpenCodeColors.surfaceRaisedBase)
-            .overlay(
-                shape.fill(
-                    OpenCodeColors.textStrong.opacity(OpenCodeSessionListDock.controlFillOpacity)
-                )
-            )
     }
 }
 

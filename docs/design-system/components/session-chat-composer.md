@@ -72,9 +72,9 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   model and thinking-effort chips stay fill-only capsules (`text-strong` at
   **0.14**, button typography) — not interactive Choice Badges. The back
   action uses the Session List Dock **New session** CTA: full-width capsule,
-  height **52**, `text-strong` label, and the same opaque `text-strong`
-  **0.05** mix over `surface-raised-base` with no stroke. Do not use
-  high-contrast `OpenCodeButton` `fullWidthText`.
+  height **52**, `text-strong` label, and the same glass / **0.05** wash
+  recipe with no stroke. Do not use high-contrast `OpenCodeButton`
+  `fullWidthText`.
 - Typography: body for prompt entry; placeholder uses `text-weak` (not
   `text-base` / on-surface-variant). Heading, body-secondary, code, caption, and
   button roles for permission approval, question request, and child lockout.
