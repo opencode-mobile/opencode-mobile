@@ -47,6 +47,10 @@ bundles are updated via `npm run themes:sync` and verified with
 | `hotline` | Neutral chrome, loud pink on taps and user bubbles. |
 | `phosphor` | Neutral chrome, CRT green on taps and user bubbles. |
 
+Assistant Message and Tool Call Card have no hairline. Every preset must
+keep `surface-raised-base` a different luminance from `background-base` in
+both modes so those cards stay visible on Session Chat.
+
 | Platform | Bundle location |
 | --- | --- |
 | iOS | `Resources/ThemePresets/` (may flatten into bundle root at build time) |

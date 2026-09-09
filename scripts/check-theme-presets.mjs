@@ -22,6 +22,25 @@ function requireFile(path, label) {
   }
 }
 
+function normalizeHex(value) {
+  return String(value).trim().toLowerCase();
+}
+
+function checkRaisedContrast(id, theme) {
+  for (const mode of ["light", "dark"]) {
+    const overrides = theme[mode]?.overrides;
+    if (!overrides) continue;
+    const background = overrides["background-base"];
+    const raised = overrides["surface-raised-base"];
+    if (background && raised && normalizeHex(background) === normalizeHex(raised)) {
+      console.error(
+        `Theme preset "${id}" ${mode} sets background-base and surface-raised-base to ${background}. Assistant cards have no hairline and need a luminance edge.`,
+      );
+      process.exit(1);
+    }
+  }
+}
+
 function extraFiles(dir, allowed) {
   return readdirSync(dir)
     .filter((name) => name.endsWith(".json") && !allowed.has(name))
@@ -72,6 +91,7 @@ function main() {
       console.error(`Theme preset "${id}" is out of sync — run: npm run themes:sync`);
       process.exit(1);
     }
+    checkRaisedContrast(id, JSON.parse(readFileSync(sharedFile, "utf8")));
   }
 
   const allowed = new Set(["manifest.json", ...manifest.map((entry) => `${entry.id}.json`)]);
