@@ -10,6 +10,9 @@ class SessionChatComposerStateTest {
     fun selectedVariantLabel_titleCasesEffort() {
         val state = SessionChatComposerState(selectedVariant = "high")
         assertEquals("High", state.selectedVariantLabel)
+        val hyphenated = SessionChatComposerState(selectedVariant = "very-high")
+        assertEquals("very-high", hyphenated.selectedVariant)
+        assertEquals("Very High", hyphenated.selectedVariantLabel)
         assertEquals("Default", SessionChatComposerState().selectedVariantLabel)
     }
 

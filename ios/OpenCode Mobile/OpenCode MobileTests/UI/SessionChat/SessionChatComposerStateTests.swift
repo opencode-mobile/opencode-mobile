@@ -12,6 +12,9 @@ struct SessionChatComposerStateTests {
             selectedVariant: "high"
         )
         #expect(state.selectedVariantLabel == "High")
+        state.selectedVariant = "very-high"
+        #expect(state.selectedVariant == "very-high")
+        #expect(state.selectedVariantLabel == "Very High")
         state.selectedVariant = nil
         #expect(state.selectedVariantLabel == "Default")
     }

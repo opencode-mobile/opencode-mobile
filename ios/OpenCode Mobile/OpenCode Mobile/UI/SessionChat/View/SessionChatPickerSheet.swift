@@ -211,7 +211,10 @@ struct SessionChatPickerSheetModifier: ViewModifier {
             ForEach(composer.variantOptions, id: \.self) { level in
                 OpenCodeBottomSheetEntry(
                     title: TitleCaseIdentifier.displayName(for: level),
-                    endDecorator: level.compare(composer.selectedVariantLabel, options: .caseInsensitive) == .orderedSame
+                    endDecorator: level.compare(
+                        composer.selectedVariant ?? ModelSelection.defaultVariantLabel,
+                        options: .caseInsensitive
+                    ) == .orderedSame
                         ? .icon(.check, accessibilityLabel: "Selected")
                         : .none,
                     action: {
