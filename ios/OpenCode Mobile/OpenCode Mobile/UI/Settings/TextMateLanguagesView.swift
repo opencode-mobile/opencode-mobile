@@ -51,6 +51,7 @@ struct TextMateLanguagesView: View {
                 }
                 .padding(.bottom, 24)
             }
+            .openCodeReadableColumn()
         }
         .navigationBarBackButtonHidden(true)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

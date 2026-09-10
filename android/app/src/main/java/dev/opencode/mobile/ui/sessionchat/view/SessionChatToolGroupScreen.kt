@@ -17,6 +17,7 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.SessionToolGroup
 import dev.opencode.mobile.SessionToolGroupMember
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
@@ -127,11 +128,11 @@ internal fun SessionChatToolGroupScreen(
                 ),
             showDivider = true,
         )
+        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
         Column(
             modifier =
                 Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
+                    .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -153,8 +154,9 @@ internal fun SessionChatToolGroupScreen(
                             onChildSessionTap = onChildSessionTap,
                             onChangesReviewTap = onChangesReviewTap,
                         ),
-                )
+                    )
             }
+        }
         }
     }
 }

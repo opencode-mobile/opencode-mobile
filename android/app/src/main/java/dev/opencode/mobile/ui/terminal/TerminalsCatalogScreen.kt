@@ -22,6 +22,7 @@ import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
@@ -45,6 +46,7 @@ fun TerminalsCatalogScreen(
             leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
             showDivider = true,
         )
+        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
         if (uiState.isLoading) {
             OpenCodeStatusStack(
                 title = "Loading terminals",
@@ -83,6 +85,7 @@ fun TerminalsCatalogScreen(
                     )
                 }
             }
+        }
         }
     }
     val pending = uiState.pendingClose

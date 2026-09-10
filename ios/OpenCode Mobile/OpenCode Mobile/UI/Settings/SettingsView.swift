@@ -390,6 +390,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .openCodeReadableColumn()
         }
         .navigationBarBackButtonHidden(true)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -65,7 +65,9 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
 - Shared shell geometry: 26 logical-pixel continuous corner radius, 12
   logical-pixel content padding, 12 logical-pixel screen gutters, 4
   logical-pixel bottom inset (Floating Dock parity), and 10 logical-pixel row
-  spacing.
+  spacing. Session Chat places the composer, its suggestion overlay, and the
+  model-unavailable caption in the same `layout.contentMaxWidth` column as the
+  timeline so that chrome does not span a tablet.
 - Prompt text, permission copy, and question copy use the same additional 4
   logical-pixel horizontal and vertical inset. Permission and question actions
   occupy the same leading and trailing positions as the attach and send actions.

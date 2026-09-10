@@ -45,8 +45,9 @@ Chat; pass `renderedMarkdown` only when the owning feature is ready to paint.
 ## Behavior
 
 Messages render leading aligned in their parent conversation row. The rounded
-bubble grows with content and has no maximum-width cap. Alignment communicates
-that the message is incoming. The bubble uses `surface-raised-base` with no
+bubble grows with content up to `assistantMessage.maxWidth` so markdown does
+not span a tablet or Split View pane. Alignment communicates that the message
+is incoming. The bubble uses `surface-raised-base` with no
 stroke: the raised fill against `background-base` is the edge. Outgoing
 Message uses `surface-interactive-weak` so the two voices do not share a
 recipe. Bubble corners match `listItem.cornerRadius`.
@@ -85,7 +86,8 @@ across iOS and Android. No intentional divergences for this component.
 
 - Public API and applicable states: complete (one layout; empty placeholder).
 - Token and typography mapping: complete; uses `assistantMessage.*` geometry
-  plus `surface-raised-base` and `text-strong` with `type.body`.
+  including `assistantMessage.maxWidth`, plus `surface-raised-base` and
+  `text-strong` with `type.body`.
 - iOS and Android implementations: complete.
 - Gallery and previews: complete with interactive short/long/empty controls
   plus light/dark gallery theme support.

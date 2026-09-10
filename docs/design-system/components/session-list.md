@@ -78,6 +78,10 @@ Session List applies the selected project filter, then groups via
 
 Layout:
 
+The list, bottom fade, and dock share one `layout.contentMaxWidth` column
+centered in the page. The page fill stays edge-to-edge. Top bar stays with
+the home shell.
+
 1. Scrolling `OpenCodeListItem` rows (letter badge, title, compact path, trailing
    caption + status pill) with leading-inset dividers. Home ladders group as
    Recent → day → week; **Recent** uses a plain section header (same language as

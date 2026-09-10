@@ -36,6 +36,7 @@ struct ConnectionSetupView: View {
                     showDivider: true
                 )
 
+                VStack(spacing: 0) {
                 GeometryReader { geo in
                     ScrollView {
                         ZStack(alignment: .topLeading) {
@@ -155,6 +156,9 @@ struct ConnectionSetupView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
+                }
+                .openCodeReadableColumn()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
             OpenCodeSnackbarHost(

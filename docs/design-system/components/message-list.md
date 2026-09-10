@@ -35,6 +35,10 @@ presentation; the host owns scroll geometry, pin state, and overlay placement.
   - horizontal and vertical content padding overrides.
   - keyboard dismiss on user scroll callback (iOS host only).
 
+Session Chat hosts the Message List inside the `layout.contentMaxWidth`
+column so rows do not span a tablet. Horizontal padding below is inside that
+column.
+
 Shared defaults live in `MessageListTimelineDefaults` on both platforms:
 
 | Token / default | Value |

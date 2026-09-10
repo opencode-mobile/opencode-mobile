@@ -222,6 +222,7 @@ struct SessionList<EmptyContent: View>: View {
                 }
             }
         }
+        .openCodeReadableColumn()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
         .background {

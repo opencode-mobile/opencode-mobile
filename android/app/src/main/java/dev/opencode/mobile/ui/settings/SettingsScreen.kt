@@ -43,6 +43,7 @@ import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
+import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.StartDecorator
@@ -123,336 +124,337 @@ fun SettingsScreen(
             showDivider = true,
         )
 
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(top = 16.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            SectionHeader(title = "Server")
-
-            OpenCodeListItem(
-                title = "Servers",
-                subtitle = serversSummary.subtitle,
-                style = OpenCodeListItemStyle.Card,
-                startDecorator =
-                    StartDecorator.Letter(
-                        serversSummary.letter,
-                        serversSummary.letterAccent,
-                    ),
-                onClick = {
-                    logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_CONNECTION)
-                    onServersClick()
-                },
-                trailing = {
-                    Icon(
-                        imageVector = OpenCodeIcons.ChevronRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            SectionHeader(title = "Appearance")
-
-            OpenCodeListItem(
-                title = "Appearance",
-                subtitle = "${currentTheme.name} · ${currentSyntax.name}",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Appearance"),
-                onClick = {
-                    logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_APPEARANCE)
-                    onAppearanceClick()
-                },
-                trailing = {
-                    Icon(
-                        imageVector = OpenCodeIcons.ChevronRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            OpenCodeListItem(
-                title = "Hide User Directory",
-                subtitle = "Show ~/Projects/… instead of /Users/you/Projects/…",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, "Hide User Directory"),
-                trailing = {
-                    Switch(
-                        checked = hideUserDirectoryPrefix,
-                        onCheckedChange = { enabled ->
-                            logSettingsToggle(
-                                ProductAnalytics.Action.SETTINGS_TOGGLE_HIDE_USER_DIRECTORY,
-                                enabled,
-                            )
-                            onHideUserDirectoryPrefixChange(enabled)
-                        },
-                    )
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            OpenCodeListItem(
-                title = "Recent Window",
-                subtitle = HomeSessionLadder.formatWindowHoursLabel(recentWindowHours),
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.List, "Recent Window"),
-                onClick = {
-                    logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_RECENT_WINDOW_PICKER)
-                    showRecentWindowPicker = true
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            OpenCodeListItem(
-                title = "Project Picker",
-                subtitle = "Replace home filter chips with a project picker",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Project Picker"),
-                trailing = {
-                    Switch(
-                        checked = sessionListProjectPickerEnabled,
-                        onCheckedChange = { enabled ->
-                            logSettingsToggle(
-                                ProductAnalytics.Action.SETTINGS_TOGGLE_SESSION_LIST_PROJECT_PICKER,
-                                enabled,
-                            )
-                            onSessionListProjectPickerEnabledChange(enabled)
-                        },
-                    )
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            OpenCodeListItem(
-                title = "Collapse Consecutive Tool Calls",
-                subtitle = "Group back-to-back tools into one summary card",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator =
-                    StartDecorator.Icon(OpenCodeIcons.CollapseContent, "Collapse Consecutive Tool Calls"),
-                trailing = {
-                    Switch(
-                        checked = collapseConsecutiveToolCalls,
-                        onCheckedChange = { enabled ->
-                            logSettingsToggle(
-                                ProductAnalytics.Action.SETTINGS_TOGGLE_COLLAPSE_CONSECUTIVE_TOOL_CALLS,
-                                enabled,
-                            )
-                            onCollapseConsecutiveToolCallsChange(enabled)
-                        },
-                    )
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            OpenCodeListItem(
-                title = "Smooth Streaming",
-                subtitle = "Paint assistant text in short chunks instead of every token",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator =
-                    StartDecorator.Icon(OpenCodeIcons.ExpandContent, "Smooth Streaming"),
-                trailing = {
-                    Switch(
-                        checked = smoothStreamingUpdates,
-                        onCheckedChange = { enabled ->
-                            logSettingsToggle(
-                                ProductAnalytics.Action.SETTINGS_TOGGLE_SMOOTH_STREAMING,
-                                enabled,
-                            )
-                            onSmoothStreamingUpdatesChange(enabled)
-                        },
-                    )
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            OpenCodeListItem(
-                title = "Follow-up send",
-                subtitle =
-                    if (supportsFollowUpDelivery) {
-                        val label = if (followUpDelivery == FollowUpDelivery.Steer) "Steer" else "Queue"
-                        "$label · V2 servers only. V1 does not support this."
-                    } else {
-                        "Not supported on V1. This server always sends immediately."
-                    },
-                style = OpenCodeListItemStyle.Card,
-                enabled = supportsFollowUpDelivery,
-                startDecorator =
-                    StartDecorator.Icon(
-                        if (followUpDelivery == FollowUpDelivery.Steer && supportsFollowUpDelivery) {
-                            OpenCodeIcons.ArrowWarmUp
-                        } else {
-                            OpenCodeIcons.ArrowUpward
-                        },
-                        "Follow-up send",
-                    ),
-                onClick =
-                    if (supportsFollowUpDelivery) {
-                        { showFollowUpPicker = true }
-                    } else {
-                        null
-                    },
-                trailing =
-                    if (supportsFollowUpDelivery) {
-                        {
-                            Icon(
-                                imageVector = OpenCodeIcons.ChevronRight,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            themeLoadError?.let { error ->
-                Text(
-                    text = error,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = openCodeColor("error"),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-            }
-
-            SectionHeader(title = "Session Cache")
-
-            OpenCodeListItem(
-                title = "Size",
-                subtitle = sessionCacheSizeLabel,
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Archive, "Session Cache Size"),
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            OpenCodeListItem(
-                title = "Clear Session Cache",
-                subtitle = "Remove cached sessions and messages",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Close, "Clear Session Cache"),
-                onClick = {
-                    logSettingsAction(ProductAnalytics.Action.SETTINGS_CLEAR_SESSION_CACHE)
-                    showClearSessionCacheConfirmation = true
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            SectionHeader(title = "Privacy")
-
-            OpenCodeListItem(
-                title = "Privacy Policy",
-                subtitle = "How the apps handle data",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Privacy Policy"),
-                onClick = {
-                    logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_PRIVACY_POLICY)
-                    context.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse(PrivacyPolicy.URL)),
-                    )
-                },
-                trailing = {
-                    Icon(
-                        imageVector = OpenCodeIcons.ChevronRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            OpenCodeListItem(
-                title = "Product Analytics",
-                subtitle = "Allow optional product usage events. Crash reporting is unchanged.",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Product Analytics"),
-                trailing = {
-                    Switch(
-                        checked = productAnalyticsConsented,
-                        onCheckedChange = { enabled ->
-                            // Log after the consent change so a revoke is dropped by the
-                            // consent gate instead of being recorded on the way out.
-                            onProductAnalyticsConsentedChange(enabled)
-                            logSettingsToggle(
-                                ProductAnalytics.Action.SETTINGS_TOGGLE_PRODUCT_ANALYTICS,
-                                enabled,
-                            )
-                        },
-                    )
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            OpenCodeListItem(
-                title = "Diagnostic Logs",
-                subtitle = "Share a redacted rolling runtime log window",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Diagnostic Logs"),
-                onClick = onDiagnosticLogsClick,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            OpenCodeListItem(
-                title = "Clear All Data",
-                subtitle = "Remove connection and cache",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Close, "Clear All Data"),
-                onClick = {
-                    logSettingsAction(ProductAnalytics.Action.SETTINGS_CLEAR_ALL_DATA)
-                    showClearConfirmation = true
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-
-            if (DeveloperToolsPreferences.unlocked) {
-                SectionHeader(title = "Developer Tools")
+        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(top = 16.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SectionHeader(title = "Server")
 
                 OpenCodeListItem(
-                    title = "TextMate Highlighting",
-                    subtitle = "On by default for all packaged languages; semantic fallback otherwise (can disable)",
+                    title = "Servers",
+                    subtitle = serversSummary.subtitle,
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Highlighting"),
+                    startDecorator =
+                        StartDecorator.Letter(
+                            serversSummary.letter,
+                            serversSummary.letterAccent,
+                        ),
+                    onClick = {
+                        logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_CONNECTION)
+                        onServersClick()
+                    },
                     trailing = {
-                        Switch(
-                            checked = textMateEnabled,
-                            onCheckedChange = onTextMateEnabledChange,
+                        Icon(
+                            imageVector = OpenCodeIcons.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                SectionHeader(title = "Appearance")
+
+                OpenCodeListItem(
+                    title = "Appearance",
+                    subtitle = "${currentTheme.name} · ${currentSyntax.name}",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Appearance"),
+                    onClick = {
+                        logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_APPEARANCE)
+                        onAppearanceClick()
+                    },
+                    trailing = {
+                        Icon(
+                            imageVector = OpenCodeIcons.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
                 OpenCodeListItem(
-                    title = "TextMate Languages",
-                    subtitle = "Opt out of any packaged language (all default on)",
+                    title = "Hide User Directory",
+                    subtitle = "Show ~/Projects/… instead of /Users/you/Projects/…",
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Languages"),
-                    onClick = onTextMateLanguagesClick,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, "Hide User Directory"),
+                    trailing = {
+                        Switch(
+                            checked = hideUserDirectoryPrefix,
+                            onCheckedChange = { enabled ->
+                                logSettingsToggle(
+                                    ProductAnalytics.Action.SETTINGS_TOGGLE_HIDE_USER_DIRECTORY,
+                                    enabled,
+                                )
+                                onHideUserDirectoryPrefixChange(enabled)
+                            },
+                        )
+                    },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
                 OpenCodeListItem(
-                    title = "Component Gallery",
-                    subtitle = "Design-system foundations and reusable components",
+                    title = "Recent Window",
+                    subtitle = HomeSessionLadder.formatWindowHoursLabel(recentWindowHours),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "Component Gallery"),
-                    onClick = onComponentGalleryClick,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.List, "Recent Window"),
+                    onClick = {
+                        logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_RECENT_WINDOW_PICKER)
+                        showRecentWindowPicker = true
+                    },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
                 OpenCodeListItem(
-                    title = "TextMate Logbook",
-                    subtitle = "Persisted code-fence parsing measurements",
+                    title = "Project Picker",
+                    subtitle = "Replace home filter chips with a project picker",
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "TextMate Logbook"),
-                    onClick = onTextMateLogbookClick,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Project Picker"),
+                    trailing = {
+                        Switch(
+                            checked = sessionListProjectPickerEnabled,
+                            onCheckedChange = { enabled ->
+                                logSettingsToggle(
+                                    ProductAnalytics.Action.SETTINGS_TOGGLE_SESSION_LIST_PROJECT_PICKER,
+                                    enabled,
+                                )
+                                onSessionListProjectPickerEnabledChange(enabled)
+                            },
+                        )
+                    },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
+
+                OpenCodeListItem(
+                    title = "Collapse Consecutive Tool Calls",
+                    subtitle = "Group back-to-back tools into one summary card",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator =
+                        StartDecorator.Icon(OpenCodeIcons.CollapseContent, "Collapse Consecutive Tool Calls"),
+                    trailing = {
+                        Switch(
+                            checked = collapseConsecutiveToolCalls,
+                            onCheckedChange = { enabled ->
+                                logSettingsToggle(
+                                    ProductAnalytics.Action.SETTINGS_TOGGLE_COLLAPSE_CONSECUTIVE_TOOL_CALLS,
+                                    enabled,
+                                )
+                                onCollapseConsecutiveToolCallsChange(enabled)
+                            },
+                        )
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                OpenCodeListItem(
+                    title = "Smooth Streaming",
+                    subtitle = "Paint assistant text in short chunks instead of every token",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator =
+                        StartDecorator.Icon(OpenCodeIcons.ExpandContent, "Smooth Streaming"),
+                    trailing = {
+                        Switch(
+                            checked = smoothStreamingUpdates,
+                            onCheckedChange = { enabled ->
+                                logSettingsToggle(
+                                    ProductAnalytics.Action.SETTINGS_TOGGLE_SMOOTH_STREAMING,
+                                    enabled,
+                                )
+                                onSmoothStreamingUpdatesChange(enabled)
+                            },
+                        )
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                OpenCodeListItem(
+                    title = "Follow-up send",
+                    subtitle =
+                        if (supportsFollowUpDelivery) {
+                            val label = if (followUpDelivery == FollowUpDelivery.Steer) "Steer" else "Queue"
+                            "$label · V2 servers only. V1 does not support this."
+                        } else {
+                            "Not supported on V1. This server always sends immediately."
+                        },
+                    style = OpenCodeListItemStyle.Card,
+                    enabled = supportsFollowUpDelivery,
+                    startDecorator =
+                        StartDecorator.Icon(
+                            if (followUpDelivery == FollowUpDelivery.Steer && supportsFollowUpDelivery) {
+                                OpenCodeIcons.ArrowWarmUp
+                            } else {
+                                OpenCodeIcons.ArrowUpward
+                            },
+                            "Follow-up send",
+                        ),
+                    onClick =
+                        if (supportsFollowUpDelivery) {
+                            { showFollowUpPicker = true }
+                        } else {
+                            null
+                        },
+                    trailing =
+                        if (supportsFollowUpDelivery) {
+                            {
+                                Icon(
+                                    imageVector = OpenCodeIcons.ChevronRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        } else {
+                            null
+                        },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                themeLoadError?.let { error ->
+                    Text(
+                        text = error,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = openCodeColor("error"),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+
+                SectionHeader(title = "Session Cache")
+
+                OpenCodeListItem(
+                    title = "Size",
+                    subtitle = sessionCacheSizeLabel,
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Archive, "Session Cache Size"),
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                OpenCodeListItem(
+                    title = "Clear Session Cache",
+                    subtitle = "Remove cached sessions and messages",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Close, "Clear Session Cache"),
+                    onClick = {
+                        logSettingsAction(ProductAnalytics.Action.SETTINGS_CLEAR_SESSION_CACHE)
+                        showClearSessionCacheConfirmation = true
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                SectionHeader(title = "Privacy")
+
+                OpenCodeListItem(
+                    title = "Privacy Policy",
+                    subtitle = "How the apps handle data",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Privacy Policy"),
+                    onClick = {
+                        logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_PRIVACY_POLICY)
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(PrivacyPolicy.URL)),
+                        )
+                    },
+                    trailing = {
+                        Icon(
+                            imageVector = OpenCodeIcons.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                OpenCodeListItem(
+                    title = "Product Analytics",
+                    subtitle = "Allow optional product usage events. Crash reporting is unchanged.",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Product Analytics"),
+                    trailing = {
+                        Switch(
+                            checked = productAnalyticsConsented,
+                            onCheckedChange = { enabled ->
+                                // Log after the consent change so a revoke is dropped by the
+                                // consent gate instead of being recorded on the way out.
+                                onProductAnalyticsConsentedChange(enabled)
+                                logSettingsToggle(
+                                    ProductAnalytics.Action.SETTINGS_TOGGLE_PRODUCT_ANALYTICS,
+                                    enabled,
+                                )
+                            },
+                        )
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                OpenCodeListItem(
+                    title = "Diagnostic Logs",
+                    subtitle = "Share a redacted rolling runtime log window",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Diagnostic Logs"),
+                    onClick = onDiagnosticLogsClick,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                OpenCodeListItem(
+                    title = "Clear All Data",
+                    subtitle = "Remove connection and cache",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Close, "Clear All Data"),
+                    onClick = {
+                        logSettingsAction(ProductAnalytics.Action.SETTINGS_CLEAR_ALL_DATA)
+                        showClearConfirmation = true
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                if (DeveloperToolsPreferences.unlocked) {
+                    SectionHeader(title = "Developer Tools")
+
+                    OpenCodeListItem(
+                        title = "TextMate Highlighting",
+                        subtitle = "On by default for all packaged languages; semantic fallback otherwise (can disable)",
+                        style = OpenCodeListItemStyle.Card,
+                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Highlighting"),
+                        trailing = {
+                            Switch(
+                                checked = textMateEnabled,
+                                onCheckedChange = onTextMateEnabledChange,
+                            )
+                        },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+
+                    OpenCodeListItem(
+                        title = "TextMate Languages",
+                        subtitle = "Opt out of any packaged language (all default on)",
+                        style = OpenCodeListItemStyle.Card,
+                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Languages"),
+                        onClick = onTextMateLanguagesClick,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+
+                    OpenCodeListItem(
+                        title = "Component Gallery",
+                        subtitle = "Design-system foundations and reusable components",
+                        style = OpenCodeListItemStyle.Card,
+                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "Component Gallery"),
+                        onClick = onComponentGalleryClick,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+
+                    OpenCodeListItem(
+                        title = "TextMate Logbook",
+                        subtitle = "Persisted code-fence parsing measurements",
+                        style = OpenCodeListItemStyle.Card,
+                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "TextMate Logbook"),
+                        onClick = onTextMateLogbookClick,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
             }
         }
     }

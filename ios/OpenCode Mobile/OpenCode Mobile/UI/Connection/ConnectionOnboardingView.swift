@@ -19,6 +19,7 @@ struct ConnectionOnboardingView: View {
             Spacer()
         }
         .padding(24)
+        .openCodeReadableColumn()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
     }

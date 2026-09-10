@@ -45,6 +45,7 @@ struct TextMateLogbookView: View {
                 showDivider: true
             )
 
+            VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Spacer()
                 OpenCodeButton(
@@ -97,6 +98,9 @@ struct TextMateLogbookView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
             }
+            }
+            .openCodeReadableColumn()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationBarBackButtonHidden(true)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

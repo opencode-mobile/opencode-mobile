@@ -40,6 +40,7 @@ import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
+import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
@@ -134,6 +135,8 @@ fun ConnectionSetupScreen(
                     },
                 showDivider = true,
             )
+            OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier =
                     Modifier
@@ -172,6 +175,8 @@ fun ConnectionSetupScreen(
                     onClick = onSubmit,
                     modifier = Modifier.fillMaxWidth(),
                 )
+            }
+                }
             }
         }
         OpenCodeSnackbarHost(

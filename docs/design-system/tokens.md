@@ -245,6 +245,22 @@ Examples:
 Use component tokens when a component needs stable internal styling across
 states, variants, or platforms.
 
+### Layout
+
+Shared page and overlay width. **Compact** is a phone-width window. **Regular**
+is everything wider. Top bars stay edge-to-edge. Screens center a column at
+`layout.contentMaxWidth`. Camera viewfinders stay full-bleed. Bottom sheets stay
+edge-inset on compact and become a max-width card on regular.
+
+| Token | Value |
+| --- | --- |
+| `layout.contentMaxWidth` | 720 (logical px) |
+| `layout.sheetMaxWidth` | 560 (logical px) |
+| `layout.compactMaxWidth` | 600 (logical px; Android container-width breakpoint. iOS screens use `horizontalSizeClass`; window overlays use this same 600 px check) |
+
+`OpenCodeLayoutWidth.compact` | `regular` is the only public width class. Do
+not expose Material medium/expanded or raw breakpoints on feature APIs.
+
 ### List item container
 
 The outer list-row surface (`OpenCodeListItem`) uses one shared corner radius on
@@ -590,6 +606,7 @@ entries.
 | Token | Value |
 | --- | --- |
 | `bottomSheet.inset` | 8 (logical px; left, right, and bottom from the display edge) |
+| `bottomSheet.maxWidth` | `layout.sheetMaxWidth` (regular only; compact stays edge-inset) |
 | `bottomSheet.displayCornerRadiusFallback` | 55 (logical px; used only when the platform cannot read the display corner) |
 | `bottomSheet.cornerRadiusTop` | 24 (logical px; top corners only — not the device curve) |
 | `bottomSheet.cornerRadius` | display corner radius − `bottomSheet.inset` (bottom corners only; 47 with the fallback) |
@@ -623,6 +640,9 @@ Labeled icon tile for compact action palettes such as the Commands sheet.
 | `actionTile.contentGap` | 12 (logical px) |
 | `actionTile.grid.gap` | 10 (logical px) |
 | `actionTile.grid.paddingHorizontal` | 16 (logical px) |
+| `actionTile.grid.minColumnWidth` | 160 (logical px) |
+| `actionTile.grid.minColumns` | 2 |
+| `actionTile.grid.maxColumns` | 4 |
 
 ### Snackbar
 
@@ -662,6 +682,7 @@ Fill is `surface-raised-base`. No hairline — luminance against
 | Token | Value |
 | --- | --- |
 | `assistantMessage.cornerRadius` | 8 (logical px; matches `listItem.cornerRadius`) |
+| `assistantMessage.maxWidth` | 720 (logical px; same cap as `layout.contentMaxWidth`) |
 | `assistantMessage.paddingHorizontal` | 12 (logical px) |
 | `assistantMessage.paddingVertical` | 8 (logical px) |
 
@@ -707,6 +728,11 @@ Platform mappings translate semantic and component tokens into native APIs:
 
 - iOS: SwiftUI colors through `OpenCodeColors` + `ThemeManager`.
 - Android: Material 3 color roles + custom tokens through `ThemeResolver`.
+- Width class: iOS screens use `horizontalSizeClass` (`compact` / `regular`).
+  Android uses container width against `layout.compactMaxWidth` (same split as
+  `WindowWidthSizeClass.Compact` vs Medium/Expanded). Bottom-sheet window
+  overlays on both platforms use the 600 px container-width check so Split
+  View and multi-window match the visible pane.
 
 Mappings may differ when platform conventions require it. Record intentional
 differences in `docs/design-system/divergences.md`.

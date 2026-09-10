@@ -25,6 +25,7 @@ import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
+import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
@@ -59,6 +60,7 @@ fun TerminalScreen(
             leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
             showDivider = true,
         )
+        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
         when (uiState) {
             TerminalUiState.Connecting ->
                 OpenCodeStatusStack(
@@ -82,6 +84,7 @@ fun TerminalScreen(
                     message = "Shell ended",
                     onRetry = viewModel::retry,
                 )
+        }
         }
     }
 }

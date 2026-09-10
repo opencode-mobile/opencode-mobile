@@ -94,6 +94,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
     let contentMode: OpenCodeBottomSheetContentMode
     let alwaysFixedHeight: Bool
     let availableHeight: CGFloat
+    let usesFloatingCard: Bool
     let onDismiss: () -> Void
     @ViewBuilder let pinnedContent: () -> PinnedContent
     @ViewBuilder let sheetContent: () -> SheetContent
@@ -114,6 +115,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
         alwaysFixedHeight: Bool,
         availableHeight: CGFloat,
         safeAreaBottom: CGFloat,
+        usesFloatingCard: Bool,
         onDismiss: @escaping () -> Void,
         @ViewBuilder pinnedContent: @escaping () -> PinnedContent,
         @ViewBuilder sheetContent: @escaping () -> SheetContent
@@ -125,6 +127,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
         self.alwaysFixedHeight = alwaysFixedHeight
         self.availableHeight = availableHeight
         self.safeAreaBottom = safeAreaBottom
+        self.usesFloatingCard = usesFloatingCard
         self.onDismiss = onDismiss
         self.pinnedContent = pinnedContent
         self.sheetContent = sheetContent
@@ -210,7 +213,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
         )
         .frame(maxWidth: .infinity, alignment: .top)
         .frame(height: usesFixedCardHeight ? cardHeight : nil, alignment: .top)
-        .modifier(BottomSheetCardChrome())
+        .modifier(BottomSheetCardChrome(usesFloatingCard: usesFloatingCard))
         .onChange(of: contentHeight) { _, _ in
             updatePresentationMode()
         }
@@ -322,13 +325,17 @@ private func bottomSheetBottomCornerRadius(window: UIWindow?) -> CGFloat {
 }
 
 private struct BottomSheetCardChrome: ViewModifier {
+    let usesFloatingCard: Bool
+
     func body(content: Content) -> some View {
-        let bottomRadius = bottomSheetBottomCornerRadius(
-            window: UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .flatMap(\.windows)
-                .first(where: \.isKeyWindow)
-        )
+        let bottomRadius = usesFloatingCard
+            ? bottomSheetCornerRadiusTop
+            : bottomSheetBottomCornerRadius(
+                window: UIApplication.shared.connectedScenes
+                    .compactMap { $0 as? UIWindowScene }
+                    .flatMap(\.windows)
+                    .first(where: \.isKeyWindow)
+            )
         let shape = UnevenRoundedRectangle(
             topLeadingRadius: bottomSheetCornerRadiusTop,
             bottomLeadingRadius: bottomRadius,
@@ -567,11 +574,16 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedContent: View, SheetConte
                     alwaysFixedHeight: alwaysFixedHeight,
                     availableHeight: availableHeight,
                     safeAreaBottom: max(0, displaySafeAreaBottom - bottomSheetInset),
+                    usesFloatingCard: OpenCodeLayoutWidth.resolve(containerWidth: geometry.size.width) == .regular,
                     onDismiss: onDismiss,
                     pinnedContent: pinnedContent,
                     sheetContent: sheetContent
                 )
-                .frame(maxWidth: .infinity)
+                .frame(
+                    maxWidth: OpenCodeLayoutWidth.resolve(containerWidth: geometry.size.width) == .regular
+                        ? OpenCodeLayout.sheetMaxWidth
+                        : .infinity
+                )
                 .padding(.horizontal, bottomSheetInset)
                 .padding(.bottom, bottomSheetInset + keyboardInset)
                 .offset(y: revealed ? 0 : 28)

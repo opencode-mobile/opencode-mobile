@@ -55,6 +55,7 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeHunkNavigationPill
 import dev.opencode.mobile.ui.components.OpenCodeListGroup
+import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
@@ -201,6 +202,7 @@ private fun ChangedFilesScreen(
                 showDivider = true,
             )
         }
+        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
         when (val phase = state.phase) {
             ChangesPhase.Loading -> Centered { CircularProgressIndicator() }
             ChangesPhase.NoTurn ->
@@ -238,6 +240,7 @@ private fun ChangedFilesScreen(
                         )
                     }
                 }
+        }
         }
     }
 }
@@ -392,6 +395,7 @@ private fun FileViewerScreen(
                 ),
             showDivider = true,
         )
+        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
         if (!viewer.hasPreview) {
             Centered { EmptyMessage("Preview unavailable", "A text preview is unavailable for this file.") }
         } else {
@@ -436,6 +440,7 @@ private fun FileViewerScreen(
                             .padding(bottom = 12.dp),
                 )
             }
+        }
         }
     }
 }

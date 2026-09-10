@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -33,6 +34,7 @@ fun OpenCodeAssistantMessage(
     val shape = RoundedCornerShape(AssistantMessageCornerRadius)
     val bubbleModifier =
         modifier
+            .widthIn(max = OpenCodeLayout.AssistantMessageMaxWidth)
             .background(openCodeColor("surface-raised-base"), shape)
             .padding(
                 horizontal = AssistantMessagePaddingHorizontal,

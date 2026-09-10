@@ -34,6 +34,7 @@ import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
+import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.StartDecorator
@@ -69,15 +70,16 @@ fun ServersScreen(
                 leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
                 showDivider = true,
             )
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(top = 8.dp, bottom = 88.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(top = 8.dp, bottom = 88.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                 Text(
                     text = "SAVED",
                     style = MaterialTheme.typography.titleSmall,
@@ -127,16 +129,18 @@ fun ServersScreen(
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
+                    }
+                    OpenCodeButton(
+                        variant = OpenCodeButtonVariant.FullWidthText("Add server"),
+                        onClick = onAddServer,
+                        modifier =
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(horizontal = 20.dp, vertical = 24.dp),
+                    )
+                }
             }
         }
-        OpenCodeButton(
-            variant = OpenCodeButtonVariant.FullWidthText("Add server"),
-            onClick = onAddServer,
-            modifier =
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 20.dp, vertical = 24.dp),
-        )
     }
 
     val pending = uiState.pendingRemoval

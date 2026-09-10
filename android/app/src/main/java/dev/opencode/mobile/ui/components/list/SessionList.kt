@@ -142,20 +142,34 @@ fun SessionList(
                 .fillMaxSize()
                 .background(background),
     ) {
-        if (useProjectPicker) {
-            Crossfade(
-                targetState = selectedFilterId,
-                animationSpec =
-                    tween(
-                        durationMillis = SessionListScopePaging.LIST_CROSSFADE_DURATION_MS,
-                        easing = EaseInOut,
-                    ),
-                modifier = Modifier.fillMaxSize(),
-                label = "sessionListFilter",
-            ) { filterId ->
+        OpenCodeReadableColumn {
+            if (useProjectPicker) {
+                Crossfade(
+                    targetState = selectedFilterId,
+                    animationSpec =
+                        tween(
+                            durationMillis = SessionListScopePaging.LIST_CROSSFADE_DURATION_MS,
+                            easing = EaseInOut,
+                        ),
+                    modifier = Modifier.fillMaxSize(),
+                    label = "sessionListFilter",
+                ) { filterId ->
+                    SessionListFeedPage(
+                        sessions = sessions,
+                        filterId = filterId,
+                        listBottomFadeHeight = listBottomFadeHeight,
+                        borderWeaker = borderWeaker,
+                        background = background,
+                        emptyContent = emptyContent,
+                        revealNewestToken = revealNewestToken,
+                        onSessionSelected = onSessionSelected,
+                        onSessionLongPress = onSessionLongPress,
+                    )
+                }
+            } else {
                 SessionListFeedPage(
                     sessions = sessions,
-                    filterId = filterId,
+                    filterId = selectedFilterId,
                     listBottomFadeHeight = listBottomFadeHeight,
                     borderWeaker = borderWeaker,
                     background = background,
@@ -165,48 +179,36 @@ fun SessionList(
                     onSessionLongPress = onSessionLongPress,
                 )
             }
-        } else {
-            SessionListFeedPage(
-                sessions = sessions,
-                filterId = selectedFilterId,
-                listBottomFadeHeight = listBottomFadeHeight,
-                borderWeaker = borderWeaker,
-                background = background,
-                emptyContent = emptyContent,
-                revealNewestToken = revealNewestToken,
-                onSessionSelected = onSessionSelected,
-                onSessionLongPress = onSessionLongPress,
+
+            OpenCodeBottomFade(
+                height = listBottomFadeHeight,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+
+            OpenCodeSessionListDock(
+                filterTabs = filterTabs,
+                selectedFilterId = selectedFilterId,
+                createError = createError,
+                useProjectPicker = useProjectPicker,
+                onOpenProjectPicker = onOpenProjectPicker,
+                onFilterSelected = onFilterSelected,
+                onRemoveProject = onRemoveProject,
+                onAddProject = onAddProject,
+                onNewSession = onNewSession,
+                onNewSessionLongPress = onNewSessionLongPress,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .onGloballyPositioned { coordinates ->
+                            val height: Dp = with(density) { coordinates.size.height.toDp() }
+                            if (height != dockBlockHeight) {
+                                dockBlockHeight = height
+                            }
+                        }
+                        .navigationBarsPadding(),
             )
         }
-
-        OpenCodeBottomFade(
-            height = listBottomFadeHeight,
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
-
-        OpenCodeSessionListDock(
-            filterTabs = filterTabs,
-            selectedFilterId = selectedFilterId,
-            createError = createError,
-            useProjectPicker = useProjectPicker,
-            onOpenProjectPicker = onOpenProjectPicker,
-            onFilterSelected = onFilterSelected,
-            onRemoveProject = onRemoveProject,
-            onAddProject = onAddProject,
-            onNewSession = onNewSession,
-            onNewSessionLongPress = onNewSessionLongPress,
-            modifier =
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .onGloballyPositioned { coordinates ->
-                        val height: Dp = with(density) { coordinates.size.height.toDp() }
-                        if (height != dockBlockHeight) {
-                            dockBlockHeight = height
-                        }
-                    }
-                    .navigationBarsPadding(),
-        )
     }
 }
 

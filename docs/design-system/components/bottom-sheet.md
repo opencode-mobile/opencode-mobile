@@ -53,11 +53,16 @@ should remain available. The overlay is accessibility-modal so VoiceOver and
 TalkBack stay on the sheet and cannot activate the dimmed presenter.
 
 The sheet is a concentric float: **8** logical px from the left, right, and
-bottom of the display. Bottom corners use `bottomSheet.cornerRadius` so they
-share a center with the device curve. Top corners use the smaller
-`bottomSheet.cornerRadiusTop` so the header is not eaten by the device radius.
-The home indicator or gesture handle sits on the sheet. Side and bottom
-gutters show the dimmed presenting screen.
+bottom of the display on **compact** width. Bottom corners use
+`bottomSheet.cornerRadius` so they share a center with the device curve. Top
+corners use the smaller `bottomSheet.cornerRadiusTop` so the header is not
+eaten by the device radius. The home indicator or gesture handle sits on the
+sheet. Side and bottom gutters show the dimmed presenting screen.
+
+On **regular** width the card is centered, still 8 px from the bottom, and
+capped at `layout.sheetMaxWidth`. All four corners use
+`bottomSheet.cornerRadiusTop` because the card no longer shares a center with
+the display curve. Compact presentation is unchanged.
 
 When provided, the leading header action appears before the title and performs
 caller-owned in-sheet navigation. It does not dismiss the sheet unless the
@@ -164,6 +169,7 @@ accessibility label or description using the platform convention.
 ## Parity And Divergence
 
 Shared semantics for title, close behavior, entry states, decorator roles, 8px
-inset, and concentric corner radius are aligned across iOS and Android.
+inset, compact concentric corners, and regular max-width floating cards are
+aligned across iOS and Android.
 Platform-specific icon identifier inputs and how display corner radius is
 resolved are documented in `../divergences.md`.

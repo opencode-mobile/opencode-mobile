@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 
@@ -33,6 +34,7 @@ fun ComponentGalleryDetailScreen(
             showDivider = true,
         )
 
+        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
         if (
             entry.id == ComponentGalleryEntryId.SessionComposer ||
             entry.id == ComponentGalleryEntryId.SessionList ||
@@ -91,6 +93,7 @@ fun ComponentGalleryDetailScreen(
                     }
                 }
             }
+        }
         }
     }
 }

@@ -289,6 +289,25 @@ implementation belong in the feature's `parity-gaps.md`.
 - Review trigger: if iOS adds a public display-corner API, read that and
   drop the KVC key.
 
+## Compact vs regular width resolution
+
+- Status: intentional
+- Area: token
+- Shared intent: compact is a phone-width window; regular is wider. Reading
+  surfaces center at `layout.contentMaxWidth`. Camera viewfinders stay
+  full-bleed. Bottom sheets stay edge-inset
+  on compact and become a `layout.sheetMaxWidth` card on regular.
+- iOS behavior: screens use `horizontalSizeClass`. Window-level bottom-sheet
+  overlays resolve regular when the overlay width is at least
+  `layout.compactMaxWidth` (600), because the overlay may not inherit the
+  presenter's size class.
+- Android behavior: container width against `layout.compactMaxWidth` (same
+  split as `WindowWidthSizeClass.Compact` vs Medium/Expanded).
+- Reason: each platform's standard width class, with a shared 600 px fallback
+  for window overlays and Android measurement.
+- Review trigger: if iOS size class and the 600 px overlay check disagree in a
+  visible Split View case, pick one rule for both.
+
 ## Launch screen branding
 
 - Status: intentional

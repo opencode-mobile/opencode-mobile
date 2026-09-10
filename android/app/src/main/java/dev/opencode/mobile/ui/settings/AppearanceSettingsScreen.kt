@@ -36,6 +36,7 @@ import dev.opencode.mobile.theme.ThemeResolver
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
+import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.StartDecorator
@@ -56,57 +57,58 @@ fun AppearanceSettingsScreen(
             leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
             showDivider = true,
         )
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(top = 16.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            OpenCodeListItem(
-                title = "Theme",
-                subtitle = "${theme.name} · ${themeBlurb(theme.id)}",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Theme"),
-                onClick = {
-                    ProductAnalytics.logUserAction(
-                        screenId = ProductAnalytics.Screen.SETTINGS_APPEARANCE,
-                        actionId = ProductAnalytics.Action.SETTINGS_OPEN_THEME_PICKER,
-                    )
-                    onThemeClick()
-                },
-                trailing = {
-                    Icon(
-                        imageVector = OpenCodeIcons.ChevronRight,
-                        contentDescription = null,
-                        tint = openCodeColor("text-base"),
-                    )
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            OpenCodeListItem(
-                title = "Code highlight",
-                subtitle = "${syntax.name} · ${syntax.blurb}",
-                style = OpenCodeListItemStyle.Card,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Code highlight"),
-                onClick = {
-                    ProductAnalytics.logUserAction(
-                        screenId = ProductAnalytics.Screen.SETTINGS_APPEARANCE,
-                        actionId = ProductAnalytics.Action.SETTINGS_OPEN_SYNTAX_PICKER,
-                    )
-                    onSyntaxClick()
-                },
-                trailing = {
-                    Icon(
-                        imageVector = OpenCodeIcons.ChevronRight,
-                        contentDescription = null,
-                        tint = openCodeColor("text-base"),
-                    )
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
+        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(top = 16.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OpenCodeListItem(
+                    title = "Theme",
+                    subtitle = "${theme.name} · ${themeBlurb(theme.id)}",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Theme"),
+                    onClick = {
+                        ProductAnalytics.logUserAction(
+                            screenId = ProductAnalytics.Screen.SETTINGS_APPEARANCE,
+                            actionId = ProductAnalytics.Action.SETTINGS_OPEN_THEME_PICKER,
+                        )
+                        onThemeClick()
+                    },
+                    trailing = {
+                        Icon(
+                            imageVector = OpenCodeIcons.ChevronRight,
+                            contentDescription = null,
+                            tint = openCodeColor("text-base"),
+                        )
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+                OpenCodeListItem(
+                    title = "Code highlight",
+                    subtitle = "${syntax.name} · ${syntax.blurb}",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Code highlight"),
+                    onClick = {
+                        ProductAnalytics.logUserAction(
+                            screenId = ProductAnalytics.Screen.SETTINGS_APPEARANCE,
+                            actionId = ProductAnalytics.Action.SETTINGS_OPEN_SYNTAX_PICKER,
+                        )
+                        onSyntaxClick()
+                    },
+                    trailing = {
+                        Icon(
+                            imageVector = OpenCodeIcons.ChevronRight,
+                            contentDescription = null,
+                            tint = openCodeColor("text-base"),
+                        )
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
         }
     }
 }
@@ -128,34 +130,35 @@ fun ThemePickerScreen(
             leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
             showDivider = true,
         )
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            presets.forEach { preset ->
-                val preview = ThemeManager.resolvedPreview(preset.id)
-                ThemePreviewCard(
-                    name = preset.name,
-                    blurb = preset.displayBlurb(),
-                    selected = preset.id == selectedId,
-                    light = preview?.first,
-                    dark = preview?.second,
-                    onClick = {
-                        ProductAnalytics.logUserAction(
-                            screenId = ProductAnalytics.Screen.SETTINGS_THEME_PICKER,
-                            actionId = ProductAnalytics.Action.THEME_PICKER_SELECT_PRESET,
-                            parameters =
-                                mapOf(ProductAnalytics.Param.THEME_PRESET to preset.id),
-                        )
-                        onSelect(preset.id)
-                    },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
+        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                presets.forEach { preset ->
+                    val preview = ThemeManager.resolvedPreview(preset.id)
+                    ThemePreviewCard(
+                        name = preset.name,
+                        blurb = preset.displayBlurb(),
+                        selected = preset.id == selectedId,
+                        light = preview?.first,
+                        dark = preview?.second,
+                        onClick = {
+                            ProductAnalytics.logUserAction(
+                                screenId = ProductAnalytics.Screen.SETTINGS_THEME_PICKER,
+                                actionId = ProductAnalytics.Action.THEME_PICKER_SELECT_PRESET,
+                                parameters =
+                                    mapOf(ProductAnalytics.Param.THEME_PRESET to preset.id),
+                            )
+                            onSelect(preset.id)
+                        },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
             }
         }
     }
@@ -176,31 +179,32 @@ fun SyntaxHighlightPickerScreen(
             leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
             showDivider = true,
         )
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            presets.forEach { preset ->
-                SyntaxPreviewCard(
-                    preset = preset,
-                    selected = preset.id == selectedId,
-                    tokens = ThemeManager.syntaxTokensForPreview(preset, isDark = isDark),
-                    onClick = {
-                        ProductAnalytics.logUserAction(
-                            screenId = ProductAnalytics.Screen.SETTINGS_SYNTAX_PICKER,
-                            actionId = ProductAnalytics.Action.SYNTAX_PICKER_SELECT_PRESET,
-                            parameters =
-                                mapOf(ProductAnalytics.Param.SYNTAX_PRESET to preset.id),
-                        )
-                        onSelect(preset.id)
-                    },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
+        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                presets.forEach { preset ->
+                    SyntaxPreviewCard(
+                        preset = preset,
+                        selected = preset.id == selectedId,
+                        tokens = ThemeManager.syntaxTokensForPreview(preset, isDark = isDark),
+                        onClick = {
+                            ProductAnalytics.logUserAction(
+                                screenId = ProductAnalytics.Screen.SETTINGS_SYNTAX_PICKER,
+                                actionId = ProductAnalytics.Action.SYNTAX_PICKER_SELECT_PRESET,
+                                parameters =
+                                    mapOf(ProductAnalytics.Param.SYNTAX_PRESET to preset.id),
+                            )
+                            onSelect(preset.id)
+                        },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
             }
         }
     }
