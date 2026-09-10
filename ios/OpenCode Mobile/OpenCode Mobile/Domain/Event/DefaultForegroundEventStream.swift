@@ -32,6 +32,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private var occupancyTask: Task<Void, Never>?
     private var revisionTask: Task<Void, Never>?
     private var protocolProbeTask: Task<Void, Never>?
+    /// Invalidates overlapping `start()` applies after `stop()` or a new occupancy.
+    private var occupancySerial: UInt64 = 0
     /// Invalidates in-flight cancel/error handlers after `stop()` or a newer `start()`.
     private var streamGeneration: UInt64 = 0
     private var appliedConfig: LiveConnectionConfig?
@@ -135,19 +137,22 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         lock.lock()
         if occupancyTask != nil {
             inFlightStartApplies += 1
+            let serial = occupancySerial
             lock.unlock()
             Task { [weak self] in
-                defer { self?.endInFlightStartApply() }
+                defer { self?.endInFlightStartApply(serial) }
                 await self?.applyStartWhileOccupying()
             }
             return
         }
         DiagnosticLog.info(.sse, "foreground SSE stream starting")
+        occupancySerial += 1
+        let serial = occupancySerial
         streamGeneration += 1
         let generation = streamGeneration
         openGapLocked(.occupancyStart)
         occupancyTask = Task(priority: .userInitiated) { [weak self] in
-            await self?.beginOccupancy(generation: generation)
+            await self?.beginOccupancy(generation: generation, serial: serial)
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(3_600))
             }
@@ -163,6 +168,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         if wasFullyConnected || occupyingConnected {
             pendingResumeBarrier = true
         }
+        occupancySerial += 1
+        inFlightStartApplies = 0
         streamGeneration += 1
         let generation = streamGeneration
         occupancyTask?.cancel()
@@ -231,26 +238,30 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         retargetIdentity(config, reason: .configChanged)
     }
 
-    private func endInFlightStartApply() {
+    private func endInFlightStartApply(_ serial: UInt64) {
         lock.lock()
-        inFlightStartApplies = max(0, inFlightStartApplies - 1)
+        if occupancySerial == serial {
+            inFlightStartApplies = max(0, inFlightStartApplies - 1)
+        }
         lock.unlock()
     }
 
-    private func waitForInFlightStartApplies() async {
+    private func waitForInFlightStartApplies(_ serial: UInt64) async {
         while true {
             lock.lock()
             let inFlight = inFlightStartApplies
+            let currentSerial = occupancySerial
+            let occupying = occupancyTask != nil
             lock.unlock()
-            if inFlight == 0 { return }
+            if inFlight == 0 || currentSerial != serial || !occupying { return }
             await Task.yield()
         }
     }
 
-    private func beginOccupancy(generation: UInt64) async {
+    private func beginOccupancy(generation: UInt64, serial: UInt64) async {
         let config = await resolveConfig()
         guard stillCurrent(generation), isOccupying() else { return }
-        await waitForInFlightStartApplies()
+        await waitForInFlightStartApplies(serial)
         guard stillCurrent(generation), isOccupying() else { return }
         lock.lock()
         let pendingAtCommit = pendingStartConfig

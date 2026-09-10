@@ -13,6 +13,7 @@ import dev.opencode.mobile.domain.message.ConnectionEpoch
 import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
@@ -76,6 +77,9 @@ class DefaultForegroundEventStream
 
         /** Invalidates in-flight cancel/error handlers after stop() or a newer start(). */
         private val streamGeneration = AtomicLong(0)
+
+        /** Invalidates overlapping start() applies after stop() or a new occupancy. */
+        private val occupancySerial = AtomicLong(0)
         private var appliedConfig: LiveConnectionConfig? = null
         private val pendingStartConfig = AtomicReference<LiveConnectionConfig?>(null)
         private val inFlightStartApplies = AtomicInteger(0)
@@ -103,23 +107,27 @@ class DefaultForegroundEventStream
         override fun start() {
             val existing = occupancyJob
             if (existing?.isActive == true) {
+                val serial = occupancySerial.get()
                 inFlightStartApplies.incrementAndGet()
-                scope.launch {
+                CoroutineScope(existing).launch {
                     try {
                         applyStartWhileOccupying()
                     } finally {
-                        inFlightStartApplies.decrementAndGet()
+                        endInFlightStartApply(serial)
                     }
                 }
                 return
             }
-            occupancyJob =
-                scope.launch {
+            val serial = occupancySerial.incrementAndGet()
+            val job =
+                scope.launch(start = CoroutineStart.LAZY) {
                     val config = resolveConfig()
                     if (!isActive) return@launch
-                    beginOccupancy(this, pendingStartConfig.getAndSet(null) ?: config)
+                    beginOccupancy(this, pendingStartConfig.getAndSet(null) ?: config, serial)
                     awaitCancellation()
                 }
+            occupancyJob = job
+            job.start()
         }
 
         private suspend fun applyStartWhileOccupying() {
@@ -165,6 +173,8 @@ class DefaultForegroundEventStream
                 if (wasFullyConnected || occupyingConnected) {
                     pendingResumeBarrier = true
                 }
+                occupancySerial.incrementAndGet()
+                inFlightStartApplies.set(0)
                 generation = streamGeneration.incrementAndGet()
                 occupancyJob?.cancel()
                 occupancyJob = null
@@ -187,9 +197,23 @@ class DefaultForegroundEventStream
             _snapshot.value = snapshot
         }
 
-        private suspend fun waitForInFlightStartApplies(occupancyScope: CoroutineScope) {
+        private fun endInFlightStartApply(serial: Long) {
+            if (occupancySerial.get() == serial) {
+                inFlightStartApplies.updateAndGet { current -> maxOf(0, current - 1) }
+            }
+        }
+
+        private suspend fun waitForInFlightStartApplies(
+            occupancyScope: CoroutineScope,
+            serial: Long,
+        ) {
             while (inFlightStartApplies.get() > 0) {
-                if (!occupancyScope.isActive || !isOccupying()) return
+                if (!occupancyScope.isActive ||
+                    !isOccupying() ||
+                    occupancySerial.get() != serial
+                ) {
+                    return
+                }
                 yield()
             }
         }
@@ -197,9 +221,10 @@ class DefaultForegroundEventStream
         private suspend fun beginOccupancy(
             occupancyScope: CoroutineScope,
             config: LiveConnectionConfig,
+            serial: Long,
         ) {
             if (!isOccupying()) return
-            waitForInFlightStartApplies(occupancyScope)
+            waitForInFlightStartApplies(occupancyScope, serial)
             if (!isOccupying() || !occupancyScope.isActive) return
             val merged = pendingStartConfig.getAndSet(null) ?: config
             diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream starting")

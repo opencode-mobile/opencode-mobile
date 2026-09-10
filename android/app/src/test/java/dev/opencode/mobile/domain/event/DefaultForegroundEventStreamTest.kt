@@ -479,6 +479,66 @@ class DefaultForegroundEventStreamTest {
         }
 
     @Test
+    fun stopThenStart_doesNotWaitForStaleOverlappingStartApply() =
+        runBlocking<Unit> {
+            val channels = CopyOnWriteArrayList<ByteChannel>()
+            val client =
+                HttpClient(
+                    MockEngine {
+                        val channel = ByteChannel(autoFlush = true)
+                        channels += channel
+                        channel.writeStringUtf8(
+                            "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                        )
+                        respond(
+                            content = channel,
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = StallNextProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(2_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.Connected }
+                }
+                store.arm()
+                stream.start()
+                withTimeout(2_000) { store.stalled.await() }
+                stream.stop()
+                withTimeout(2_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.Idle }
+                }
+                val opensAfterStop = channels.size
+                stream.start()
+                withTimeout(2_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.Connected }
+                }
+                assertTrue(channels.size > opensAfterStop)
+            } finally {
+                stream.stop()
+                store.release()
+                channels.forEach { it.close() }
+                client.close()
+            }
+        }
+
+    @Test
     fun startDuringHeldConfigResolve_usesPendingConfigNotStale() =
         runBlocking {
             val requests = CopyOnWriteArrayList<HttpRequestData>()
@@ -685,6 +745,55 @@ class DefaultForegroundEventStreamTest {
 
     private val sampleProfile =
         ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", password = "x")
+
+    private class StallNextProfileStore : ConnectionProfileStore {
+        private var profile: ConnectionProfile? = null
+        private val armed = java.util.concurrent.atomic.AtomicBoolean(false)
+        private val hold = CompletableDeferred<Unit>()
+        val stalled = CompletableDeferred<Unit>()
+
+        fun arm() {
+            armed.set(true)
+        }
+
+        fun release() {
+            hold.complete(Unit)
+        }
+
+        override suspend fun activeProfile(): ConnectionProfile? = profile
+
+        override suspend fun saveProfile(profile: ConnectionProfile) {
+            this.profile = profile
+        }
+
+        override suspend fun addedWorktrees(serverBaseUrl: String): List<String> {
+            if (armed.compareAndSet(true, false)) {
+                stalled.complete(Unit)
+                hold.await()
+            }
+            return emptyList()
+        }
+
+        override suspend fun addWorktree(
+            serverBaseUrl: String,
+            worktree: String,
+        ) = Unit
+
+        override suspend fun removeWorktree(
+            serverBaseUrl: String,
+            worktree: String,
+        ) = Unit
+
+        override suspend fun setAddedWorktrees(
+            serverBaseUrl: String,
+            worktrees: List<String>,
+        ) = Unit
+
+        override suspend fun clearAll() = Unit
+
+        override fun configurationRevisions(): kotlinx.coroutines.flow.Flow<Unit> =
+            kotlinx.coroutines.flow.emptyFlow()
+    }
 
     private class HoldingProfileStore(
         private val hold: CompletableDeferred<Unit>,

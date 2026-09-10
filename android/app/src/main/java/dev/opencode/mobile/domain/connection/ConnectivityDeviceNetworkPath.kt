@@ -7,6 +7,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -50,5 +51,14 @@ class ConnectivityDeviceNetworkPath
 
         init {
             connectivityManager.registerDefaultNetworkCallback(callback)
+        }
+
+        override suspend fun waitUntilReady() {
+            if (connectivityManager.activeNetwork != null) {
+                _status.value = DeviceNetworkPathStatus.Ready
+                return
+            }
+            _status.value = DeviceNetworkPathStatus.Unavailable
+            status.first { it == DeviceNetworkPathStatus.Ready }
         }
     }

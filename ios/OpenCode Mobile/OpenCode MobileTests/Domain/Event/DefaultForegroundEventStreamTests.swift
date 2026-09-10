@@ -268,6 +268,41 @@ struct DefaultForegroundEventStreamTests {
         #expect(!stream.snapshot.requiredTargets.contains("event:/old"))
     }
 
+    @Test func stopThenStart_doesNotWaitForStaleOverlappingStartApply() async {
+        let stall = StallNextDirectories()
+        let heartbeat = #"data: {"payload":{"type":"server.heartbeat","properties":{}}}"# + "\n\n"
+        let stream = makeStream(
+            responses: [heartbeat, heartbeat, heartbeat],
+            instanceDirectories: { await stall.next() }
+        )
+        var states: [EventStreamConnectionState] = []
+        let stateTask = Task { @MainActor in
+            for await state in stream.connectionStateUpdates() {
+                states.append(state)
+            }
+        }
+        await Task.yield()
+        stream.start()
+        let firstLive = await waitUntil(timeoutMs: 2_000) { states.contains(.connected) }
+        #expect(firstLive)
+        stall.arm()
+        stream.start()
+        let overlappingHeld = await waitUntil(timeoutMs: 2_000) { stall.isHolding }
+        #expect(overlappingHeld)
+        stream.stop()
+        let stopped = await waitUntil(timeoutMs: 1_000) { stream.connectionState == .idle }
+        #expect(stopped)
+        let indexAfterStop = states.count
+        stream.start()
+        let resumedLive = await waitUntil(timeoutMs: 2_000) {
+            states[indexAfterStop...].contains(.connected)
+        }
+        stream.stop()
+        stall.release()
+        stateTask.cancel()
+        #expect(resumedLive)
+    }
+
     @Test func unavailablePath_doesNotOpenSseUntilReady() async {
         let path = FakeDeviceNetworkPath(status: .unavailable)
         var states: [EventStreamConnectionState] = []
@@ -376,6 +411,47 @@ private final class HoldingDirectories: @unchecked Sendable {
     }
 
     func release() async {
+        lock.lock()
+        let continuation = holdContinuation
+        holdContinuation = nil
+        lock.unlock()
+        continuation?.resume()
+    }
+}
+
+private final class StallNextDirectories: @unchecked Sendable {
+    private let lock = NSLock()
+    private var armed = false
+    private var holdContinuation: CheckedContinuation<Void, Never>?
+
+    var isHolding: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return holdContinuation != nil
+    }
+
+    func arm() {
+        lock.lock()
+        armed = true
+        lock.unlock()
+    }
+
+    func next() async -> [String] {
+        lock.lock()
+        let shouldStall = armed
+        if shouldStall { armed = false }
+        lock.unlock()
+        if shouldStall {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                lock.lock()
+                holdContinuation = continuation
+                lock.unlock()
+            }
+        }
+        return []
+    }
+
+    func release() {
         lock.lock()
         let continuation = holdContinuation
         holdContinuation = nil
