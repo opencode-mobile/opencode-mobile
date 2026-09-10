@@ -3,7 +3,6 @@ package dev.opencode.mobile.ui.sessioncontext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.sessioncontext.SessionContextBreakdownItem
 import dev.opencode.mobile.domain.sessioncontext.SessionContextRepository
 import dev.opencode.mobile.domain.sessioncontext.SessionContextSnapshot
@@ -116,14 +115,6 @@ class SessionContextViewModel
                         SessionContextStatItem("activity", "Last Activity", time(snapshot.lastActivityEpochMs)),
                     ),
                 breakdown = snapshot.breakdown,
-                rawMessages =
-                    snapshot.rawMessages.map {
-                        SessionContextRawMessageItem(
-                            id = it.id,
-                            role = roleLabel(it.role),
-                            createdAt = time(it.createdAtEpochMs),
-                        )
-                    },
             )
         }
 
@@ -143,15 +134,6 @@ class SessionContextViewModel
                         .atZone(ZoneId.systemDefault())
                         .format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withLocale(Locale.US))
                 } ?: "—"
-
-        private fun roleLabel(role: MessageRole): String =
-            when (role) {
-                MessageRole.User -> "user"
-                MessageRole.Assistant -> "assistant"
-                MessageRole.Command -> "command"
-                MessageRole.Tool -> "tool"
-                MessageRole.Unknown -> "message"
-            }
     }
 
 data class SessionContextUiState(
@@ -170,17 +152,10 @@ enum class SessionContextTimelineState {
 data class SessionContextDisplayState(
     val stats: List<SessionContextStatItem>,
     val breakdown: List<SessionContextBreakdownItem>,
-    val rawMessages: List<SessionContextRawMessageItem>,
 )
 
 data class SessionContextStatItem(
     val id: String,
     val label: String,
     val value: String,
-)
-
-data class SessionContextRawMessageItem(
-    val id: String,
-    val role: String,
-    val createdAt: String,
 )

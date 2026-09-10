@@ -74,7 +74,6 @@ struct SessionContextView: View {
                     if !displayState.breakdown.isEmpty {
                         breakdown(displayState.breakdown)
                     }
-                    rawMessages(displayState.rawMessages)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 18)
@@ -140,52 +139,6 @@ struct SessionContextView: View {
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textBase)
         }
-    }
-
-    private func rawMessages(_ messages: [SessionContextRawMessageRow]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Raw messages")
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textBase)
-            VStack(spacing: 0) {
-                ForEach(messages) { message in
-                    HStack(spacing: 8) {
-                        Text(message.role.rawValue)
-                            .font(OpenCodeTypography.body)
-                            .foregroundStyle(OpenCodeColors.textStrong)
-                        Text("• \(message.id)")
-                            .font(OpenCodeTypography.body)
-                            .foregroundStyle(OpenCodeColors.textBase)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Spacer(minLength: 8)
-                        Text(rawTime(message.createdAtEpochMs))
-                            .font(OpenCodeTypography.caption)
-                            .foregroundStyle(OpenCodeColors.textBase)
-                            .lineLimit(1)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    if message.id != messages.last?.id {
-                        Divider().background(OpenCodeColors.borderWeakerBase)
-                    }
-                }
-            }
-            .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
-            )
-        }
-    }
-
-    private func rawTime(_ epochMs: Int64?) -> String {
-        guard let epochMs else { return "—" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: Date(timeIntervalSince1970: TimeInterval(epochMs) / 1000))
     }
 
     private func label(for kind: SessionContextBreakdownItem.Kind) -> String {

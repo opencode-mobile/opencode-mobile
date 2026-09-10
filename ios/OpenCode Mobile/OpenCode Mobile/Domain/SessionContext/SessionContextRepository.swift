@@ -71,8 +71,7 @@ struct SessionContextCalculator: Sendable {
             totalCost: messages.filter { $0.role == .assistant }.reduce(0) { $0 + ($1.cost ?? 0) },
             createdAtEpochMs: session.createdAtEpochMs,
             lastActivityEpochMs: latestAssistant?.sentAtEpochMs ?? session.updatedAtEpochMs,
-            breakdown: inputTokens > 0 ? breakdown(messages: messages, inputTokens: inputTokens) : [],
-            rawMessages: messages.map { SessionContextRawMessageRow(id: $0.id, role: $0.role, createdAtEpochMs: $0.sentAtEpochMs) }
+            breakdown: inputTokens > 0 ? breakdown(messages: messages, inputTokens: inputTokens) : []
         )
     }
 
