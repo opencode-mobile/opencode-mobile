@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.model
 
 import dev.opencode.mobile.domain.message.AttachmentKind
+import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 
 data class ModelSelectionCatalog(
     val options: List<ModelSelectionOption>,
@@ -47,7 +48,7 @@ data class ModelSelectionOption(
     val supportsPdfInput: Boolean = true,
 ) {
     val id: String = "$providerId:$modelId"
-    val modelLabel: String = modelName.ifBlank { modelId }
+    val modelLabel: String = TitleCaseIdentifier.displayName(modelName.ifBlank { modelId })
     val providerLabel: String = providerName.ifBlank { providerId }
     val displayLabel: String = "$modelLabel · $providerLabel"
     val supportsVariants: Boolean = variants.isNotEmpty()
@@ -76,7 +77,7 @@ data class ModelSelection(
 ) {
     val modelLabel: String = option.modelLabel
     val modelDisplayLabel: String = option.displayLabel
-    val variantLabel: String = selectedVariant ?: DefaultVariantLabel
+    val variantLabel: String = TitleCaseIdentifier.displayName(selectedVariant ?: DefaultVariantLabel)
 
     @Suppress("ktlint:standard:property-naming")
     companion object {

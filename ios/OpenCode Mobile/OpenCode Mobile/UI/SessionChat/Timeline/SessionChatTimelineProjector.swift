@@ -37,7 +37,12 @@ nonisolated enum SessionChatTimelineProjector {
             defer { sentTimeLock.unlock() }
             return sentTimeFormatter.string(from: date)
         }
-        return [mode, model, variant, timeLabel].compactMap { $0 }.joined(separator: " · ")
+        return [
+            mode.map { TitleCaseIdentifier.displayName(for: $0) },
+            model.map { TitleCaseIdentifier.displayName(for: $0) },
+            variant.map { TitleCaseIdentifier.displayName(for: $0) },
+            timeLabel,
+        ].compactMap { $0 }.joined(separator: " · ")
     }
 
     static func project(

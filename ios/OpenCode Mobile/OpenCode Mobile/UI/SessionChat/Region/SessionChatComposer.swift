@@ -979,7 +979,12 @@ final class SessionChatComposer {
     }
 
     private func metadataLabel(mode: String, model: String?, variant: String?) -> String {
-        [mode, model, variant, formatSentTime(Date())].compactMap { $0 }.joined(separator: " · ")
+        [
+            TitleCaseIdentifier.displayName(for: mode),
+            model.map { TitleCaseIdentifier.displayName(for: $0) },
+            variant.map { TitleCaseIdentifier.displayName(for: $0) },
+            formatSentTime(Date()),
+        ].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func applySelectableAgents(_ agents: [SelectableAgent]) {

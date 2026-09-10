@@ -23,6 +23,7 @@ import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.ModelSelectionProvider
+import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
@@ -190,9 +191,9 @@ internal fun SessionChatPickerSheet(
             ComposerPickerKind.Variant ->
                 variantOptions.forEach { variant ->
                     OpenCodeBottomSheetEntry(
-                        title = variant,
+                        title = TitleCaseIdentifier.displayName(variant),
                         endDecorator =
-                            if (variant == selectedVariantLabel) {
+                            if (variant.equals(selectedVariantLabel, ignoreCase = true)) {
                                 BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
                             } else {
                                 BottomSheetEntryDecorator.None

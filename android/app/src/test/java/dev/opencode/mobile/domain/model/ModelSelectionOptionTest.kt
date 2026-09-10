@@ -15,6 +15,19 @@ class ModelSelectionOptionTest {
         )
 
     @Test
+    fun modelLabel_titleCasesIdWhenNameIsBlank() {
+        val unnamed =
+            ModelSelectionOption(
+                providerId = "xai",
+                providerName = "xAI",
+                modelId = "grok-4.6",
+                modelName = "",
+            )
+        assertEquals("Grok 4.6", unnamed.modelLabel)
+        assertEquals("Claude Sonnet", option.modelLabel)
+    }
+
+    @Test
     fun matchesFilter_emptyQueryMatchesAll() {
         assertTrue(option.matchesFilter(""))
         assertTrue(option.matchesFilter("   "))

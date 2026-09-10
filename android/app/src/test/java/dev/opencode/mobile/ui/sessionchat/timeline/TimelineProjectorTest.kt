@@ -16,6 +16,22 @@ import org.junit.Test
 
 class TimelineProjectorTest {
     @Test
+    fun metadataLabel_titleCasesModeModelAndVariant() {
+        val label =
+            TimelineProjector.metadataLabel(
+                Message(
+                    id = "msg-user",
+                    role = MessageRole.User,
+                    text = "Hello",
+                    model = "grok-4.6",
+                    variant = "high",
+                    mode = "build",
+                ),
+            )
+        assertEquals("Build · Grok 4.6 · High", label)
+    }
+
+    @Test
     fun project_textToolText_blockIdsStableAcrossReproject() {
         val parts =
             listOf(

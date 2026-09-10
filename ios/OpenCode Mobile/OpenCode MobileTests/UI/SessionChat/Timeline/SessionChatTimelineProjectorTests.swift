@@ -3,6 +3,15 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct SessionChatTimelineProjectorTests {
+    @Test func metadataLabel_titleCasesModeModelAndVariant() {
+        let label = SessionChatTimelineProjector.metadataLabel(
+            mode: "build",
+            model: "grok-4.6",
+            variant: "high"
+        )
+        #expect(label == "Build · Grok 4.6 · High")
+    }
+
     @Test func interleavedTextToolText_blockIDsStableAcrossReproject() {
         let parts: [MessagePart] = [
             text("t1", "Before"),
