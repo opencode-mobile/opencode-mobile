@@ -3275,6 +3275,32 @@ class SessionStatusLiveStoreTest {
         }
 
     @Test
+    fun markBusy_thenBackgroundReturnRestIdle_dropsPendingBusy() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(statuses = emptyList())
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val world = FakeWorldSignals()
+            val store = createStatusStore(repository, eventStream, world)
+            val emissions = mutableListOf<Map<String, SessionStatus>>()
+            val collectJob =
+                launch {
+                    store.observeStatuses("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+
+            store.markBusy("/repo", "ses-1")
+            advanceUntilIdle()
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+
+            world.emit(WorldSignal.Foreground)
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertTrue(emissions.last()["ses-1"] == null)
+        }
+
+    @Test
     fun markBusy_thenEmptyActiveSnapshot_keepsPendingBusy() =
         runTest(testDispatcher) {
             val repository = FakeSessionRepository(statuses = emptyList())
@@ -3480,12 +3506,14 @@ class SessionStatusLiveStoreTest {
     private fun createStatusStore(
         repository: FakeSessionRepository,
         eventStream: FakeForegroundEventStream,
+        worldSignals: WorldSignals = SilentWorldSignals,
     ): DefaultSessionStatusLiveStore =
         DefaultSessionStatusLiveStore(
             repository,
             eventStream,
             LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
             EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+            worldSignals,
         )
 }
 

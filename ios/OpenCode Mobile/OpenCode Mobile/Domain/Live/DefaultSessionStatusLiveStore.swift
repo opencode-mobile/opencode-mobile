@@ -130,13 +130,16 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
 
         @Sendable func overlayPending(
             _ base: [String: SessionStatus],
-            confirmFrom: [String: SessionStatus]? = nil
+            confirmFrom: [String: SessionStatus]? = nil,
+            dropUnconfirmedPending: Bool = false
         ) -> [String: SessionStatus] {
             let confirm = confirmFrom ?? base
             var result = base
             for sessionID in pendingBusy.snapshot(directory: directory) {
                 let restType = confirm[sessionID]?.raw["type"]
                 if restType == "busy" || restType == "retry" {
+                    pendingBusy.remove(directory: directory, sessionID: sessionID)
+                } else if dropUnconfirmedPending {
                     pendingBusy.remove(directory: directory, sessionID: sessionID)
                 } else {
                     result[sessionID] = SessionStatus(sessionID: sessionID, raw: ["type": "busy"])
@@ -152,7 +155,11 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             yield(next)
         }
 
-        @Sendable func commitLoaded(_ loaded: [String: SessionStatus], emptyActiveGuard: Bool = false) {
+        @Sendable func commitLoaded(
+            _ loaded: [String: SessionStatus],
+            emptyActiveGuard: Bool = false,
+            dropUnconfirmedPending: Bool = false
+        ) {
             // Empty active maps are a between-step gap on v2, not idle.
             // True idle is session.idle / execution.*. Overlay pending
             // onto the kept server map; do not skip overlay because
@@ -165,7 +172,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                 }
             }
             serverBox.replace(loaded)
-            let next = overlayPending(loaded)
+            let next = overlayPending(loaded, dropUnconfirmedPending: dropUnconfirmedPending)
             currentBox.replace(next)
             yield(next)
         }
@@ -211,7 +218,11 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         .session,
                         "statusLiveStore refresh directory=\(directory) reason=\(reason)"
                     )
-                    commitLoaded(loaded, emptyActiveGuard: emptyActiveGuard)
+                    commitLoaded(
+                        loaded,
+                        emptyActiveGuard: emptyActiveGuard,
+                        dropUnconfirmedPending: reason == StoreRefreshReason.backgroundReturn
+                    )
                 }
             )
             switch outcome {
@@ -265,7 +276,10 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         continue
                     }
                     guard let reason = signal.catchUpReason else { continue }
-                    await reloadFromServer(reason: reason, force: false)
+                    await reloadFromServer(
+                        reason: reason,
+                        force: reason == StoreRefreshReason.backgroundReturn
+                    )
                 }
             }
             group.addTask {

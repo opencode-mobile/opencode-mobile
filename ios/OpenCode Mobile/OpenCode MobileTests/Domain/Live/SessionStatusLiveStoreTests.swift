@@ -148,6 +148,28 @@ struct SessionStatusLiveStoreTests {
         #expect(collector.emissions.last?["ses-1"]?.raw["type"] == "busy")
     }
 
+    @Test func markBusy_thenBackgroundReturnRestIdle_dropsPendingBusy() async throws {
+        let repository = StatusLiveStoreFakeSessionRepository(statuses: [])
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let world = FakeWorldSignals()
+        let store = DefaultSessionStatusLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream,
+            worldSignals: world
+        )
+
+        let collector = StatusCollector(store: store, directory: "/repo")
+        _ = try await collector.awaitEmission(matching: { _ in true })
+
+        store.markBusy(directory: "/repo", sessionID: "ses-1")
+        _ = try await collector.awaitEmission { $0["ses-1"]?.raw["type"] == "busy" }
+
+        world.emit(.foreground)
+        _ = try await collector.awaitEmission { $0["ses-1"] == nil }
+        collector.cancel()
+    }
+
     @Test func markBusy_thenEmptyActiveSnapshot_keepsPendingBusy() async throws {
         let repository = StatusLiveStoreFakeSessionRepository(statuses: [])
         let eventStream = FakeForegroundEventStream()

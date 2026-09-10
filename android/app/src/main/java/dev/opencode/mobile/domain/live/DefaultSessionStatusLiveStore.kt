@@ -132,6 +132,7 @@ class DefaultSessionStatusLiveStore
                     suspend fun commitLoaded(
                         loaded: Map<String, SessionStatus>,
                         emptyActiveGuard: Boolean = false,
+                        dropUnconfirmedPending: Boolean = false,
                     ) {
                         // Empty active maps are a between-step gap on v2, not idle.
                         // True idle is session.idle / execution.*. Overlay pending
@@ -142,7 +143,12 @@ class DefaultSessionStatusLiveStore
                             return
                         }
                         server = loaded
-                        current = overlayPending(directory, loaded)
+                        current =
+                            overlayPending(
+                                directory,
+                                loaded,
+                                dropUnconfirmedPending = dropUnconfirmedPending,
+                            )
                         send(current)
                     }
 
@@ -185,7 +191,11 @@ class DefaultSessionStatusLiveStore
                                         DiagnosticLogArea.Session,
                                         "statusLiveStore refresh directory=$directory reason=$reason",
                                     )
-                                    commitLoaded(loaded, emptyActiveGuard)
+                                    commitLoaded(
+                                        loaded,
+                                        emptyActiveGuard,
+                                        dropUnconfirmedPending = reason == StoreRefreshReason.BACKGROUND_RETURN,
+                                    )
                                 },
                             )
                         when (outcome) {
@@ -256,7 +266,10 @@ class DefaultSessionStatusLiveStore
                                 return@collect
                             }
                             val reason = signal.catchUpReason() ?: return@collect
-                            reloadFromServer(reason, force = false)
+                            reloadFromServer(
+                                reason,
+                                force = reason == StoreRefreshReason.BACKGROUND_RETURN,
+                            )
                         }
                     }
                     launch {
@@ -338,6 +351,7 @@ class DefaultSessionStatusLiveStore
             directory: String,
             base: Map<String, SessionStatus>,
             confirmFrom: Map<String, SessionStatus> = base,
+            dropUnconfirmedPending: Boolean = false,
         ): Map<String, SessionStatus> {
             val pending = pendingBusy[directory]?.toSet().orEmpty()
             if (pending.isEmpty()) return base
@@ -345,6 +359,8 @@ class DefaultSessionStatusLiveStore
             for (sessionId in pending) {
                 val restType = confirmFrom[sessionId]?.raw?.get("type")
                 if (restType == "busy" || restType == "retry") {
+                    pendingBusy[directory]?.remove(sessionId)
+                } else if (dropUnconfirmedPending) {
                     pendingBusy[directory]?.remove(sessionId)
                 } else {
                     result = result + (sessionId to localBusy(sessionId))
