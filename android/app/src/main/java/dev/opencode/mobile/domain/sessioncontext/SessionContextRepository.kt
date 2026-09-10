@@ -79,7 +79,6 @@ class SessionContextCalculator
                 createdAtEpochMs = session.createdAtEpochMs,
                 lastActivityEpochMs = latestAssistant?.sentAtEpochMs ?: session.updatedAtEpochMs,
                 breakdown = if (inputTokens > 0) breakdown(messages, inputTokens) else emptyList(),
-                rawMessages = messages.map { SessionContextRawMessageRow(it.id, it.role, it.sentAtEpochMs) },
             )
         }
 

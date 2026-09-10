@@ -468,7 +468,7 @@ A session-scoped inspection view for the model context and message accounting
 behind a **session**.
 
 Session Context shows provider and model labels, context limit, token usage,
-message counts, cost, approximate input-token breakdown, and raw message rows.
+message counts, cost, and approximate input-token breakdown.
 It is opened from the context usage control in Session Chat. It is a snapshot
 that can be manually refreshed, not a live-updating timeline.
 

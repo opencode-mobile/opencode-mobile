@@ -11,7 +11,6 @@ struct SessionContextSnapshot: Equatable, Sendable {
     let createdAtEpochMs: Int64?
     let lastActivityEpochMs: Int64?
     let breakdown: [SessionContextBreakdownItem]
-    let rawMessages: [SessionContextRawMessageRow]
 }
 
 struct SessionContextTokenStats: Equatable, Sendable {
@@ -46,12 +45,6 @@ struct SessionContextBreakdownItem: Equatable, Sendable, Identifiable {
     let tokens: Int64
     let widthPercent: Double
     let displayPercent: Double
-}
-
-struct SessionContextRawMessageRow: Equatable, Sendable, Identifiable {
-    let id: String
-    let role: MessageRole
-    let createdAtEpochMs: Int64?
 }
 
 enum SessionContextError: Error, Equatable {

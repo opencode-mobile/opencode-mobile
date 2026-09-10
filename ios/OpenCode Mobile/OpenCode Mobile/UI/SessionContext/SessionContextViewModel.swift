@@ -10,7 +10,6 @@ enum SessionContextViewState: Equatable {
 struct SessionContextDisplayState: Equatable {
     let stats: [SessionContextStatItem]
     let breakdown: [SessionContextBreakdownItem]
-    let rawMessages: [SessionContextRawMessageRow]
 }
 
 struct SessionContextStatItem: Equatable, Identifiable {
@@ -115,7 +114,7 @@ final class SessionContextViewModel {
             SessionContextStatItem(id: "created", label: "Session Created", value: time(snapshot.createdAtEpochMs)),
             SessionContextStatItem(id: "activity", label: "Last Activity", value: time(snapshot.lastActivityEpochMs)),
         ]
-        return SessionContextDisplayState(stats: stats, breakdown: snapshot.breakdown, rawMessages: snapshot.rawMessages)
+        return SessionContextDisplayState(stats: stats, breakdown: snapshot.breakdown)
     }
 
     private func number(_ value: Int?) -> String {

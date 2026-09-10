@@ -69,7 +69,6 @@ class SessionContextViewModelTest {
             createdAtEpochMs = null,
             lastActivityEpochMs = null,
             breakdown = emptyList(),
-            rawMessages = emptyList(),
         )
 }
 

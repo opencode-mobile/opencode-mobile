@@ -1,14 +1,12 @@
 package dev.opencode.mobile.ui.sessioncontext
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -148,7 +146,6 @@ private fun SessionContextContent(
         if (display.breakdown.isNotEmpty()) {
             ContextBreakdown(display.breakdown)
         }
-        RawMessages(display.rawMessages)
     }
 }
 
@@ -234,62 +231,6 @@ private fun ContextBreakdown(items: List<SessionContextBreakdownItem>) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-    }
-}
-
-@Composable
-private fun RawMessages(messages: List<SessionContextRawMessageItem>) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            text = "Raw messages",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surface)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)),
-        ) {
-            messages.forEachIndexed { index, message ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = message.role,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = "• ${message.id}",
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.MiddleEllipsis,
-                    )
-                    Text(
-                        text = message.createdAt,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                    )
-                }
-                if (index != messages.lastIndex) {
-                    Spacer(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .background(MaterialTheme.colorScheme.outlineVariant),
-                    )
-                }
-            }
-        }
     }
 }
 
