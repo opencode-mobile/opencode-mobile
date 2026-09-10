@@ -31,11 +31,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -338,13 +340,47 @@ private fun ChangedFilesContent(
                     }
                 }
             } else {
-                item {
-                    OpenCodeListGroup(itemCount = changeSet.filteredFiles.size) { index ->
-                        FileRow(changeSet.filteredFiles[index], changeSet, onOpenFile)
+                changeSet.fileGroups.forEach { group ->
+                    item(key = group.directory) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FolderHeader(group)
+                            OpenCodeListGroup(itemCount = group.files.size) { index ->
+                                FileRow(group.files[index], changeSet, onOpenFile)
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun FolderHeader(group: ChangedFileGroup) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clearAndSetSemantics {
+                    contentDescription =
+                        "${group.directory}, ${group.files.size} ${if (group.files.size == 1) "file" else "files"}"
+                },
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = group.directory,
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelLarge,
+        )
+        Text(
+            text = "${group.files.size}",
+            color = openCodeColor("text-weak"),
+            style = MaterialTheme.typography.labelLarge,
+        )
     }
 }
 
@@ -355,7 +391,7 @@ private fun FileRow(
     onOpenFile: (String) -> Unit,
 ) {
     OpenCodeListItem(
-        title = file.path,
+        title = changedFileName(file.path),
         onClick = {
             logChangesAction(ProductAnalytics.Action.CHANGES_OPEN_FILE)
             onOpenFile(file.path)

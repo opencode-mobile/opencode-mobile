@@ -70,6 +70,9 @@ data class ChangesContentState(
             return if (query.isEmpty()) files else files.filter { it.path.contains(query, ignoreCase = true) }
         }
 
+    val fileGroups: List<ChangedFileGroup>
+        get() = groupChangedFiles(filteredFiles, files)
+
     val additions: Int get() = filteredFiles.sumOf(FileDiff::additions)
     val deletions: Int get() = filteredFiles.sumOf(FileDiff::deletions)
     val summary: String get() = countLabel(filteredFiles.size, "changed file", "changed files")
