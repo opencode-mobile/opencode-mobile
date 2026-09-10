@@ -86,6 +86,8 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
         emit(.foreground)
         if hasActiveConnection() {
             stream.start()
+        } else {
+            DiagnosticLog.info(.sse, "foreground SSE start skipped; no active connection")
         }
     }
 

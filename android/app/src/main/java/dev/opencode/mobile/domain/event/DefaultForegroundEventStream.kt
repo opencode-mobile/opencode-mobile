@@ -94,6 +94,8 @@ class DefaultForegroundEventStream
         private var lastAllLive = false
         private var lastRequiredTargets: List<String> = emptyList()
         private var lastLiveTargets: Set<String> = emptySet()
+        private var lastDirectories: List<String> = emptyList()
+        private val configEpoch = AtomicLong(0)
 
         private val _connectionState = MutableStateFlow(EventStreamConnectionState.Idle)
         override val connectionState: StateFlow<EventStreamConnectionState> = _connectionState.asStateFlow()
@@ -107,23 +109,30 @@ class DefaultForegroundEventStream
         override fun start() {
             val existing = occupancyJob
             if (existing?.isActive == true) {
-                val serial = occupancySerial.get()
-                inFlightStartApplies.incrementAndGet()
-                CoroutineScope(existing).launch {
-                    try {
-                        applyStartWhileOccupying()
-                    } finally {
-                        endInFlightStartApply(serial)
+                val stuckIdle =
+                    _connectionState.value == EventStreamConnectionState.Idle && appliedConfig == null
+                if (!stuckIdle) {
+                    val serial = occupancySerial.get()
+                    inFlightStartApplies.incrementAndGet()
+                    CoroutineScope(existing).launch {
+                        try {
+                            applyStartWhileOccupying()
+                        } finally {
+                            endInFlightStartApply(serial)
+                        }
                     }
+                    return
                 }
-                return
+                existing.cancel()
+                occupancyJob = null
             }
+            diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream starting")
             val serial = occupancySerial.incrementAndGet()
             val job =
                 scope.launch(start = CoroutineStart.LAZY) {
-                    val config = resolveConfig()
+                    val bootstrap = pendingStartConfig.getAndSet(null) ?: bootstrapConfig()
                     if (!isActive) return@launch
-                    beginOccupancy(this, pendingStartConfig.getAndSet(null) ?: config, serial)
+                    beginOccupancy(this, bootstrap, serial)
                     awaitCancellation()
                 }
             occupancyJob = job
@@ -227,17 +236,10 @@ class DefaultForegroundEventStream
             waitForInFlightStartApplies(occupancyScope, serial)
             if (!isOccupying() || !occupancyScope.isActive) return
             val merged = pendingStartConfig.getAndSet(null) ?: config
-            diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream starting")
             val generation = beginGeneration(LiveGapReason.OccupancyStart)
             if (!stillCurrent(generation)) return
             appliedConfig = merged
             publishSnapshot()
-            occupancyScope.launch {
-                collectConfigurationRevisions(generation)
-            }
-            occupancyScope.launch {
-                probeProtocolWhileOccupying(generation)
-            }
             deviceNetworkPath.waitUntilReady()
             if (!stillCurrent(generation)) return
             val pending = pendingStartConfig.getAndSet(null)
@@ -256,10 +258,16 @@ class DefaultForegroundEventStream
             ) {
                 if (!stillCurrent(generation)) return
                 retargetIdentity(pending, LiveGapReason.ConfigChanged)
-                return
+            } else if (stillCurrent(generation)) {
+                reconcileLeases(effective)
             }
             if (!stillCurrent(generation)) return
-            reconcileLeases(effective)
+            occupancyScope.launch {
+                collectConfigurationRevisions(generation)
+            }
+            occupancyScope.launch {
+                probeProtocolWhileOccupying(generation)
+            }
         }
 
         private suspend fun collectConfigurationRevisions(generation: Long) {
@@ -286,9 +294,19 @@ class DefaultForegroundEventStream
         }
 
         private suspend fun onConfigurationRevision(generation: Long) {
+            val epoch = configEpoch.get()
             val config = resolveConfig()
             if (!stillCurrent(generation)) return
-            val applied = appliedConfig ?: return
+            if (configEpoch.get() != epoch) return
+            applyResolvedConfig(config)
+        }
+
+        private fun applyResolvedConfig(config: LiveConnectionConfig) {
+            val applied = appliedConfig
+            if (applied == null) {
+                reconcileLeases(config)
+                return
+            }
             if (applied.identity != config.identity || applied.protocol != config.protocol) {
                 retargetIdentity(config, LiveGapReason.ConfigChanged)
                 return
@@ -343,6 +361,8 @@ class DefaultForegroundEventStream
             val generation = streamGeneration.get()
             if (!stillCurrent(generation)) return
             appliedConfig = config
+            lastDirectories = config.directories
+            configEpoch.incrementAndGet()
             val targets = SseSubscribeTargets.forProtocol(config.protocol, config.directories)
             val required = targets.associateBy { it.key }
             synchronized(stateLock) {
@@ -684,6 +704,23 @@ class DefaultForegroundEventStream
                 leases.values.forEach { it.cancel() }
                 leases.clear()
             }
+        }
+
+        private fun bootstrapConfig(): LiveConnectionConfig {
+            val profile = activeConnectionManager.currentProfile()
+            val protocol = activeConnectionManager.protocolHint()
+            val identity =
+                if (profile == null) {
+                    ""
+                } else {
+                    "${ConnectionProfileIdentity.normalizeBaseUrl(profile.baseUrl)}|${ConnectionProfileIdentity.normalizeUsername(profile.username)}"
+                }
+            return LiveConnectionConfig(
+                profileId = profile?.id?.ifBlank { identity } ?: identity,
+                connectionIdentity = identity,
+                protocol = protocol,
+                directories = lastDirectories,
+            )
         }
 
         private suspend fun resolveConfig(): LiveConnectionConfig {

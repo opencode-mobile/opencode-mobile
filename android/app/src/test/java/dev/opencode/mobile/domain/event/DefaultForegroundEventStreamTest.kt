@@ -85,6 +85,97 @@ class DefaultForegroundEventStreamTest {
         }
 
     @Test
+    fun start_opensLeasesWithoutWaitingForWorktrees() =
+        runBlocking {
+            val opened = CompletableDeferred<Unit>()
+            val hold = CompletableDeferred<Unit>()
+            val client =
+                HttpClient(
+                    MockEngine { request ->
+                        opened.complete(Unit)
+                        respond(
+                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = HoldingProfileStore(hold, initial = listOf("/repo"), next = listOf("/repo"))
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V1 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V1)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(2_000) { opened.await() }
+            } finally {
+                hold.complete(Unit)
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun stopThenStart_reopensCachedDirectoriesWithoutWaitingForWorktrees() =
+        runBlocking {
+            val openedResume = CompletableDeferred<Unit>()
+            val hold = CompletableDeferred<Unit>()
+            val stallNext = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine { request ->
+                        if (stallNext.get() > 0 && request.url.parameters["directory"] == "/repo") {
+                            openedResume.complete(Unit)
+                        }
+                        respond(
+                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = CacheThenHoldProfileStore(worktrees = listOf("/repo"), hold = hold, stallNext = stallNext)
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V1 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V1)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(2_000) {
+                    stream.snapshot.first { snap -> snap.requiredTargets.contains("event:/repo") }
+                }
+                stallNext.incrementAndGet()
+                stream.stop()
+                stream.start()
+                withTimeout(2_000) { openedResume.await() }
+            } finally {
+                hold.complete(Unit)
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
     fun cachedProtocol_opensMatchingSsePath() =
         runBlocking {
             val requests = mutableListOf<HttpRequestData>()
@@ -822,6 +913,47 @@ class DefaultForegroundEventStreamTest {
                 secondResolveEntered.complete(Unit)
             }
             return next
+        }
+
+        override suspend fun addWorktree(
+            serverBaseUrl: String,
+            worktree: String,
+        ) = Unit
+
+        override suspend fun removeWorktree(
+            serverBaseUrl: String,
+            worktree: String,
+        ) = Unit
+
+        override suspend fun setAddedWorktrees(
+            serverBaseUrl: String,
+            worktrees: List<String>,
+        ) = Unit
+
+        override suspend fun clearAll() = Unit
+
+        override fun configurationRevisions(): kotlinx.coroutines.flow.Flow<Unit> =
+            kotlinx.coroutines.flow.emptyFlow()
+    }
+
+    private class CacheThenHoldProfileStore(
+        private val worktrees: List<String>,
+        private val hold: CompletableDeferred<Unit>,
+        private val stallNext: AtomicInteger,
+    ) : ConnectionProfileStore {
+        private var profile: ConnectionProfile? = null
+
+        override suspend fun activeProfile(): ConnectionProfile? = profile
+
+        override suspend fun saveProfile(profile: ConnectionProfile) {
+            this.profile = profile
+        }
+
+        override suspend fun addedWorktrees(serverBaseUrl: String): List<String> {
+            if (stallNext.get() > 0) {
+                hold.await()
+            }
+            return worktrees
         }
 
         override suspend fun addWorktree(

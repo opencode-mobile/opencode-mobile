@@ -136,6 +136,37 @@ class ProcessWorldSignalsTest {
             signals.onForeground()
             runCurrent()
             assertEquals(StreamOccupancy.Active, signals.occupancy.value)
+            assertEquals(EventStreamConnectionState.Connected, stream.connectionState.value)
+        }
+
+    @Test
+    fun sustainedBackgroundThenForegroundRestartsStream() =
+        runTest(testDispatcher) {
+            val stream = RecordingForegroundEventStream()
+            val signals =
+                ProcessWorldSignals(
+                    stream = stream,
+                    deviceNetworkPath = ReadyPath,
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    hasActiveConnection = { true },
+                    profileSaved = MutableSharedFlow(),
+                    profileCleared = MutableSharedFlow(),
+                    scope = this,
+                    stopGraceMs = 5_000L,
+                )
+            signals.onForeground()
+            runCurrent()
+            signals.onBackground()
+            runCurrent()
+            advanceTimeBy(5_000L)
+            runCurrent()
+            assertEquals(EventStreamConnectionState.Idle, stream.connectionState.value)
+            assertEquals(listOf("start", "stop"), stream.ops.toList())
+
+            signals.onForeground()
+            runCurrent()
+            assertEquals(EventStreamConnectionState.Connected, stream.connectionState.value)
+            assertEquals(listOf("start", "stop", "start"), stream.ops.toList())
         }
 
     private fun processWorldSignals(

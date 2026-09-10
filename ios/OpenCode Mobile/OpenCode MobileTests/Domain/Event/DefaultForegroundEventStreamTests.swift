@@ -243,6 +243,29 @@ struct DefaultForegroundEventStreamTests {
         stateTask.cancel()
     }
 
+    @Test func start_opensLeasesWithoutWaitingForDirectories() async {
+        let hold = HoldingDirectories(initial: ["/repo"], next: ["/repo"])
+        let stream = makeStream(
+            responses: [
+                #"data: {"payload":{"type":"server.heartbeat","properties":{}}}"# + "\n\n",
+            ],
+            instanceDirectories: { await hold.next() }
+        )
+        var states: [EventStreamConnectionState] = []
+        let stateTask = Task { @MainActor in
+            for await state in stream.connectionStateUpdates() {
+                states.append(state)
+            }
+        }
+        await Task.yield()
+        stream.start()
+        let becameConnected = await waitUntil(timeoutMs: 2_000) { states.contains(.connected) }
+        stream.stop()
+        stateTask.cancel()
+        await hold.release()
+        #expect(becameConnected)
+    }
+
     @Test func startDuringHeldConfigResolve_usesPendingConfigNotStale() async {
         let hold = HoldingDirectories(initial: ["/old"], next: ["/new"])
         let stream = makeStream(

@@ -50,6 +50,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private var lastAllLive = false
     private var lastRequiredTargets: [String] = []
     private var lastLiveTargets: Set<String> = []
+    private var lastDirectories: [String] = []
+    private var configEpoch: UInt64 = 0
     private let eventDeduper = SseEventDeduper()
     private var leases: [String: Lease] = [:]
     private var subscriberContinuations: [UUID: AsyncStream<OpencodeEvent>.Continuation] = [:]
@@ -136,14 +138,19 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     func start() {
         lock.lock()
         if occupancyTask != nil {
-            inFlightStartApplies += 1
-            let serial = occupancySerial
-            lock.unlock()
-            Task { [weak self] in
-                defer { self?.endInFlightStartApply(serial) }
-                await self?.applyStartWhileOccupying()
+            let stuckIdle = _connectionState == .idle && appliedConfig == nil
+            if !stuckIdle {
+                inFlightStartApplies += 1
+                let serial = occupancySerial
+                lock.unlock()
+                Task { [weak self] in
+                    defer { self?.endInFlightStartApply(serial) }
+                    await self?.applyStartWhileOccupying()
+                }
+                return
             }
-            return
+            occupancyTask?.cancel()
+            occupancyTask = nil
         }
         DiagnosticLog.info(.sse, "foreground SSE stream starting")
         occupancySerial += 1
@@ -259,7 +266,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     }
 
     private func beginOccupancy(generation: UInt64, serial: UInt64) async {
-        let config = await resolveConfig()
+        let config = bootstrapConfig()
         guard stillCurrent(generation), isOccupying() else { return }
         await waitForInFlightStartApplies(serial)
         guard stillCurrent(generation), isOccupying() else { return }
@@ -270,16 +277,6 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         appliedConfig = merged
         lock.unlock()
         publishSnapshot()
-        lock.lock()
-        revisionTask?.cancel()
-        revisionTask = Task { [weak self] in
-            await self?.collectConfigurationRevisions(generation: generation)
-        }
-        protocolProbeTask?.cancel()
-        protocolProbeTask = Task { [weak self] in
-            await self?.probeProtocolWhileOccupying(generation: generation)
-        }
-        lock.unlock()
         await deviceNetworkPath.waitUntilReady()
         guard stillCurrent(generation), isOccupying() else { return }
         lock.lock()
@@ -296,10 +293,20 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
            pending.identity != merged.identity || pending.serverProtocol != merged.serverProtocol {
             guard stillCurrent(generation) else { return }
             retargetIdentity(pending, reason: .configChanged)
-            return
+        } else if stillCurrent(generation) {
+            reconcileLeases(effective, generation: generation)
         }
         guard stillCurrent(generation) else { return }
-        reconcileLeases(effective, generation: generation)
+        lock.lock()
+        revisionTask?.cancel()
+        revisionTask = Task { [weak self] in
+            await self?.collectConfigurationRevisions(generation: generation)
+        }
+        protocolProbeTask?.cancel()
+        protocolProbeTask = Task { [weak self] in
+            await self?.probeProtocolWhileOccupying(generation: generation)
+        }
+        lock.unlock()
     }
 
     private func collectConfigurationRevisions(generation: UInt64) async {
@@ -335,12 +342,21 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     }
 
     private func onConfigurationRevision(generation: UInt64) async {
+        let epoch = currentConfigEpoch()
         let config = await resolveConfig()
         guard stillCurrent(generation), isOccupying() else { return }
+        guard currentConfigEpoch() == epoch else { return }
+        applyResolvedConfig(config, generation: generation)
+    }
+
+    private func applyResolvedConfig(_ config: LiveConnectionConfig, generation: UInt64) {
         lock.lock()
         let applied = appliedConfig
         lock.unlock()
-        guard let applied else { return }
+        guard let applied else {
+            reconcileLeases(config, generation: generation)
+            return
+        }
         if applied.identity != config.identity || applied.serverProtocol != config.serverProtocol {
             retargetIdentity(config, reason: .configChanged)
             return
@@ -373,6 +389,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         guard stillCurrent(generation), isOccupying() else { return }
         lock.lock()
         appliedConfig = config
+        lastDirectories = config.directories
+        configEpoch += 1
         let targets = SseSubscribeTargets.targets(protocol: config.serverProtocol, directories: config.directories)
         let required = Set(targets.map(\.key))
         let stale = leases.keys.filter { !required.contains($0) }
@@ -643,6 +661,25 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         for continuation in conts {
             continuation.yield(snapshot)
         }
+    }
+
+    private func bootstrapConfig() -> LiveConnectionConfig {
+        lock.lock()
+        let directories = lastDirectories
+        let previous = appliedConfig
+        lock.unlock()
+        return LiveConnectionConfig(
+            profileID: previous?.profileID ?? "",
+            connectionIdentity: previous?.connectionIdentity ?? "",
+            serverProtocol: protocolHint(),
+            directories: directories
+        )
+    }
+
+    private func currentConfigEpoch() -> UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return configEpoch
     }
 
     private func resolveConfig() async -> LiveConnectionConfig {

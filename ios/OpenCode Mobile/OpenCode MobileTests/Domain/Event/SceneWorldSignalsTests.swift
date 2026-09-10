@@ -89,6 +89,7 @@ struct SceneWorldSignalsTests {
 
         signals.onForeground()
         #expect(signals.occupancy == .active)
+        #expect(stream.connectionState == .connected)
     }
 
     private func sceneWorldSignals(

@@ -84,6 +84,11 @@ class ProcessWorldSignals(
         emit(WorldSignal.Foreground)
         if (hasActiveConnection()) {
             stream.start()
+        } else {
+            diagnosticLogger.info(
+                DiagnosticLogArea.Sse,
+                "foreground SSE start skipped; no active connection",
+            )
         }
     }
 
