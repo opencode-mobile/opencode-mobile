@@ -295,6 +295,47 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_serverConnectedDuringReconnectRecovery_clearsCatchUpChrome() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val chrome = mutableListOf<Boolean>()
+            val chromeJob =
+                launch {
+                    sync.observeCatchUpChrome("ses-1", "/repo").collect { chrome.add(it) }
+                }
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(1)
+            assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
+            assertEquals(false, chrome.lastOrNull() ?: false)
+
+            val recoveryGate = CompletableDeferred<Unit>()
+            repository.nextLoadGate = recoveryGate
+            eventStream.openGap()
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
+            advanceTimeBy(1)
+            assertTrue(sync.syncHealth("ses-1", "/repo") is MessageSyncHealth.Recovering)
+            assertEquals(true, chrome.lastOrNull())
+
+            repeat(4) { eventStream.emit(OpencodeEvent(type = "server.connected")) }
+            advanceTimeBy(1)
+            recoveryGate.complete(Unit)
+            advanceTimeBy(50)
+
+            assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
+            assertEquals(false, chrome.lastOrNull())
+            collectJob.cancel()
+            chromeJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
     fun observeMessages_repeatedOverflowCycles_recoverToHealthyOnlyAfterValidatedReplace() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()

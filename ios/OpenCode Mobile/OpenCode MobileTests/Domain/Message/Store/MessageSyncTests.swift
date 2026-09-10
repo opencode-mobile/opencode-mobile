@@ -1071,6 +1071,60 @@ struct MessageSyncTests {
         #expect(bounded)
     }
 
+    @Test func serverConnectedDuringReconnectRecovery_clearsCatchUpChrome() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        repo.holdNextListMessages()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+        var sessionChrome: [Bool] = []
+        var globalChrome: [Bool] = []
+        let task = Task { for await _ in sync.observeMessages(sessionID: "ses-1", directory: "/repo") {} }
+        let sessionChromeTask = Task {
+            for await flag in sync.observeCatchUpChrome(sessionID: "ses-1", directory: "/repo") {
+                sessionChrome.append(flag)
+            }
+        }
+        let globalChromeTask = Task {
+            for await flag in sync.observeCatchUpChrome() {
+                globalChrome.append(flag)
+            }
+        }
+        let held = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 1 }
+        #expect(held)
+        repo.resumeListMessages()
+        let loaded = await waitUntil {
+            repo.listMessagesCallCount >= 1
+                && sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy
+        }
+        #expect(loaded)
+        #expect(sessionChrome.last == false)
+        #expect(globalChrome.last == false)
+
+        repo.holdNextListMessages()
+        eventStream.openGap()
+        let recovering = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 2 }
+        #expect(recovering)
+        #expect(sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .recovering(.reconnect))
+        #expect(sessionChrome.last == true)
+        #expect(globalChrome.last == true)
+
+        for _ in 0..<4 {
+            eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil, rawProperties: nil))
+        }
+        repo.resumeListMessages()
+        let healthy = await waitUntil {
+            sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy
+                && sessionChrome.last == false
+                && globalChrome.last == false
+        }
+        task.cancel()
+        sessionChromeTask.cancel()
+        globalChromeTask.cancel()
+        #expect(healthy)
+        #expect(repo.listMessagesCallCount == 2)
+    }
+
     @Test func discardedRacedRecovery_isQuietUntilQuietAcceptedRest() async {
         for _ in 1...10 {
             let repo = FakeLiveMessageRepository()

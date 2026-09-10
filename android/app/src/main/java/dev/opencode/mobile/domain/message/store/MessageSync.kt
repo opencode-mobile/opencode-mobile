@@ -332,9 +332,9 @@ class MessageSync(
 
             fun requiresRecovery(): Boolean = health.get().requiresAuthoritativeRecovery
 
-            fun isRelevant(event: OpencodeEvent): Boolean =
+            fun isAuthorityRace(event: OpencodeEvent): Boolean =
                 when (event.type) {
-                    "stream.reconnected", "server.connected", "sse.parse.failed" -> true
+                    "stream.reconnected", "server.connected", "sse.parse.failed" -> false
                     else -> event.sessionId == key.sessionId
                 }
 
@@ -427,7 +427,7 @@ class MessageSync(
                         if (!isActive || !observationStillCurrent()) return@collect
                         if (!MessageEventRouter.shouldStageForMessageSync(event)) return@collect
                         if (requiresRecovery()) {
-                            if (isRelevant(event)) {
+                            if (isAuthorityRace(event)) {
                                 noteRelevantWhileRecovering()
                                 if (MessageEventRouter.isIncrementalTranscriptEvent(event)) {
                                     handleEventFn?.invoke(event)
@@ -554,6 +554,7 @@ class MessageSync(
                             completeAuthorityWindow(AuthorityWindowOutcome.Failed)
                             if (isMissingSessionError(result.error)) {
                                 terminalSessionKeys.add(key)
+                                publishHealth(MessageSyncHealth.Healthy)
                                 logW(
                                     "fullReload missing session=${key.sessionId} reason=overflow-recovery " +
                                         "stopping recovery",
@@ -576,7 +577,16 @@ class MessageSync(
                 if (!observationStillCurrent()) return
                 val snapshot = currentSnapshot()
                 if (!authority.needsReconcile(snapshot)) {
-                    if (requiresRecovery() || authority.isInFlight()) return
+                    if (authority.isInFlight()) return
+                    val current = health.get()
+                    if (current is MessageSyncHealth.Recovering &&
+                        current.reason == MessageSyncRecoveryReason.Reconnect
+                    ) {
+                        publishHealth(MessageSyncHealth.Healthy)
+                        confirmCacheSyncIfAwaiting()
+                        return
+                    }
+                    if (requiresRecovery()) return
                     logI("fullReload skip session=${key.sessionId} reason=$fetchReason")
                     confirmCacheSyncIfAwaiting()
                     return

@@ -63,7 +63,7 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
             lock.unlock()
             return
         }
-        let relevant = isRelevant(event, sessionID: sessionID)
+        let relevant = isAuthorityRace(event, sessionID: sessionID)
         if health.requiresAuthoritativeRecovery {
             if relevant {
                 _ = noteRelevantEventWhileRecoveringLocked()
@@ -281,12 +281,12 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
         return (waiter, .recoveryRequired)
     }
 
-    private func isRelevant(_ event: OpencodeEvent, sessionID: String) -> Bool {
+    private func isAuthorityRace(_ event: OpencodeEvent, sessionID: String) -> Bool {
         switch event.type {
         case "stream.reconnected", "server.connected", "sse.parse.failed":
-            return true
+            false
         default:
-            return event.sessionID == sessionID
+            event.sessionID == sessionID
         }
     }
 

@@ -721,6 +721,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 setHealth(staging.currentHealth, for: key)
                 if isMissingSessionError(error) {
                     markTerminal(key: key)
+                    staging.clearRecoveringLatch()
+                    setHealth(.healthy, for: key)
                     OpenCodeLog.messageContent.error(
                         "fullReload missing session=\(key.sessionID) stopping recovery"
                     )
@@ -934,7 +936,16 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 store.messages(sessionID: key.storeSlot)
             )
         ) else {
-            if staging.needsAuthoritativeRecovery || gapState.authority.isInFlight() {
+            if gapState.authority.isInFlight() {
+                return
+            }
+            if case .recovering(.reconnect) = staging.currentHealth {
+                staging.clearRecoveringLatch()
+                setHealth(.healthy, for: key)
+                confirmCacheSync()
+                return
+            }
+            if staging.needsAuthoritativeRecovery {
                 return
             }
             DiagnosticLog.info(.chat, "fullReload skip session=\(key.sessionID) reason=\(reason)")

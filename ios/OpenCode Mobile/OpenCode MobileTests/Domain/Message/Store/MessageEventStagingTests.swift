@@ -16,6 +16,30 @@ import Testing
         #expect(staging.highWaterBytes > 0)
     }
 
+    @Test func enqueue_serverConnectedWhileRecovering_doesNotRaceAuthority() {
+        let staging = MessageEventStaging(capacity: 8, byteCapacity: 10_000)
+        staging.enterRecovering(.reconnect, wakeConsumer: false)
+        staging.beginAuthorityWindow()
+        staging.enqueue(
+            OpencodeEvent(type: "server.connected", sessionID: nil, rawProperties: nil),
+            sessionID: "ses-1"
+        )
+        #expect(staging.completeAuthorityWindow(.accepted))
+        #expect(staging.currentHealth == .healthy)
+    }
+
+    @Test func enqueue_sessionEventWhileRecovering_racesAuthority() {
+        let staging = MessageEventStaging(capacity: 8, byteCapacity: 10_000)
+        staging.enterRecovering(.reconnect, wakeConsumer: false)
+        staging.beginAuthorityWindow()
+        staging.enqueue(
+            eventWithPartDelta(partID: "prt-1", messageID: "msg-1", delta: "x", sessionID: "ses-1"),
+            sessionID: "ses-1"
+        )
+        #expect(!staging.completeAuthorityWindow(.accepted))
+        #expect(staging.currentHealth == .recovering(.racedAuthority))
+    }
+
     @Test func enqueue_ignoresNonMessageIntakeTypes() {
         let staging = MessageEventStaging(capacity: 64, byteCapacity: 200)
         staging.enqueue(
