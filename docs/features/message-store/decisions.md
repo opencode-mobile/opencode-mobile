@@ -11,11 +11,14 @@ Still binding:
   REST-reload the transcript on `session.idle` when the last assistant
   already has visible content. If that last assistant has no visible
   content (empty/hidden reasoning, dropped `text.ended`), REST-reload.
-  Treat `sse.parse.failed` as an SSE gap and REST-reload. Poll REST when
-  SSE is not live, streaming is stalled, or cache sync is still awaiting
-  confirm. Skip a UI emit when reconnect merge leaves the fingerprint
-  unchanged unless cache confirm is still pending. Revision-gate in-flight
-  REST so it cannot overwrite a newer SSE revision.
+  Treat `sse.parse.failed` as an SSE gap and REST-reload. Failed idle
+  authority stays recovering until accepted REST acknowledges. Poll REST
+  when SSE is not live, streaming is stalled, or cache sync is still
+  awaiting confirm. Skip a UI emit when reconnect merge leaves the
+  fingerprint unchanged unless cache confirm is still pending.
+  Revision-gate in-flight REST so it cannot overwrite a newer SSE
+  revision. Failed or discarded REST does not acknowledge the current
+  gap; accepted replace or equality confirmation does.
 - v2 `session.tool.*` events after `input.started` are sparse. TUI keeps
   name on its tools map (`current.part.name ?? "tool"` is display only).
   Do not invent `"tool"` as part identity. Parse nameless tool updates.
@@ -36,10 +39,11 @@ Still binding:
   (GrowBottom).
 - Views own native paint and scroll. Screen Model does not own viewport
   geometry.
-- SSE transport (foreground-only, 45s silence watchdog) is
+- SSE transport (foreground-only, per-target 45s silence watchdog) is
   [foreground-event-stream](../foreground-event-stream/decisions.md).
   Return from background, path restore, and pull-to-refresh catch-up are
   [reactive-data-layer](../reactive-data-layer/decisions.md): MessageSync
-  stale bit plus interest, not a `ForegroundRestore` UI registry.
-  `stream.reconnected` still runs MessageSync catch-up for warm drops and
-  cold resume after stop, coalesced with world-signal REST.
+  `GapAuthority` plus interest. MessageSync owns bounded staging,
+  reduction, and revision-gated authority. It does not own transport or
+  lifecycle reconnect clocks. `stream.reconnected` / `server.connected`
+  only wake current-gap evaluation.

@@ -2,9 +2,9 @@
 
 ## Endpoint
 
-One app-wide stream, protocol-selected: v1 `GET /global/event` **and**
-instance `GET /event`; v2 `GET /api/event`. Keep all three paths. Do not
-collapse to v2-only.
+One app-wide occupancy, protocol-selected: v1 `GET /global/event` **and**
+every current instance `GET /event?directory=`; v2 `GET /api/event`. Keep
+all three paths. Do not collapse to v2-only.
 
 Both protocols must deliver relevant live events over SSE (session
 lifecycle, message/part, status, permissions, questions — not just
@@ -16,6 +16,36 @@ Screen Models by protocol. Live Session Chat shape is TUI v2 — see
 [server-api-v2](../server-api-v2/decisions.md). Message merge policy is
 [message-store](../message-store/decisions.md).
 
+## LiveConnection is the transport authority
+
+- Date: 2026-09-10
+- Decision: `ForegroundEventStream` stays the caller seam.
+  `DefaultForegroundEventStream` implements `LiveConnection`: one atomic
+  profile / protocol / directory config identity, one generation per
+  occupancy attempt, required vs live targets, and a monotonic gap
+  revision. Stores read that snapshot. They do not invent a second
+  reconnect clock.
+- Reason: treating any open target as Connected, or treating
+  `stream.reconnected` as a new REST obligation, double-fetched and hid
+  silent v1 instance leases.
+- Revisit when: the server publishes a single multiplexed event path that
+  replaces the v1 global-plus-instance lease set.
+
+## Required leases, not any-target live
+
+- Date: 2026-09-10
+- Decision: Connected / live requires every required lease. v1 requires
+  global plus every current added-project instance. v2 requires
+  `/api/event`. Each target has its own line watchdog and retry.
+  Adding or removing directories starts or cancels only the affected
+  leases. Incumbents that stay live do not force a full reconnect or a
+  new gap. Profile, protocol, or connection-identity change retargets
+  the whole set and opens `ConfigChanged`.
+- Reason: a heartbeat on `/global/event` must not keep chrome live while
+  an instance `/event` is dead. Adding a project must not drop the
+  existing bus.
+- Revisit when: v1 instance leases are no longer required.
+
 ## Event envelope
 
 Server sends JSON SSE data as `{ "payload": { "type", "properties" } }`. Parser also accepts unwrapped `{ "type", "properties" }` for resilience.
@@ -26,20 +56,20 @@ Feature-specific subscribers own refresh policy while the **foreground event
 stream** is active:
 
 - **MessageSync:** [message-store](../message-store/decisions.md).
-- **SessionLiveStore:** debounced `listSessions` reload (500 ms) on `session.created`, `session.updated`, `session.deleted`, and reconnect.
-- **SessionStatusLiveStore:** debounced bulk `getAllSessionStatuses` (300 ms) on `session.status`, `session.idle`, and reconnect.
+- **SessionLiveStore:** debounced `listSessions` reload (500 ms) on
+  `session.created`, `session.updated`, `session.deleted`. Reconnect and
+  `server.connected` only wake [GapAuthority](../reactive-data-layer/decisions.md)
+  evaluation; they are not a new REST obligation.
+- **SessionStatusLiveStore:** debounced bulk `getAllSessionStatuses`
+  (300 ms) on `session.status` and `session.idle`. Same wake-only rule
+  for reconnect / `server.connected`.
 - **Connect/reconnect:** Both platforms forward the server's
-  `server.connected` event. `MessageSync` schedules a short-debounced
-  synchronization for it; synthetic `stream.reconnected` reloads immediately
-  and cancels a pending connected-event reload when one exists. After a
-  transport drop (`Idle` / `Disconnected` / `Reconnecting`), returning to
-  `Connecting` (cold resume after `stop()` clears `wasConnected`) or
-  `Connected` triggers the same reconnect fullReload when `server.connected`
-  is missed (OPE-119 / OPE-165). TransportResumed, `server.connected`,
-  `stream.reconnected`, and reactive-data-layer world-signal REST share one
-  catch-up per ConnectionEpoch so overlapping signals do not double-fetch.
-  Home does not run a broad section reload per SSE event. Process-gap
-  catch-up is [reactive-data-layer](../reactive-data-layer/decisions.md).
+  `server.connected` event once per generation. Synthetic
+  `stream.reconnected` fires when every required lease is live after a
+  gap or cold resume. Stores evaluate the current gap revision; they do
+  not share a `ConnectionEpoch` catch-up claim. Home does not run a
+  broad section reload per SSE event. Process-gap catch-up is
+  [reactive-data-layer](../reactive-data-layer/decisions.md).
   Explicit project additions can reload with `skipProbe = true`; saved
   profile changes run the normal probe-backed refresh path.
 - **Quiet refresh:** MessageSync/display-pipeline updates in Session Chat
@@ -57,11 +87,13 @@ stream** is active:
   does not stop them. Ready watches and pills are parked per Connection
   Profile (`bindProfile`) instead of wiped, so a session that finishes while
   another server is active still becomes Ready after switching back.
+  Permission, question, and todo live stores clear on the same path.
 - Reason: after a v2→v1 switch the new HTTP client kept fetching the previous
   server's session IDs (`/home/ivan…` on a Mac v1 host), 404ing every 5s.
   Home Remove from home looked stuck when those leftover rows and chats
   stayed on screen. Wiping Ready on the same path dropped watches, so idle
   catch-up could not fire on return.
+- Revisit when: a later store is added that observes across profiles.
 
 ## Status display
 
@@ -69,19 +101,25 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
 
 ## Lifecycle
 
-- **App foreground:** Android `ProcessLifecycleOwner` and iOS `scenePhase`
-  publish world signals and start/stop this stream. See
-  [reactive-data-layer](../reactive-data-layer/decisions.md). **5s stop grace**
-  so pickers do not tear down SSE; `.inactive` keeps the stream. `start()`
-  stays idempotent while a stream job is active. Cancelled SSE tasks must
-  not publish Idle/Disconnected over a newer generation's Connecting state.
-  While a foreground retry is in flight, chrome stays **connecting**. Cold
-  resume after `stop()` still arms `pendingResumeBarrier` so the next
-  successful open emits `stream.reconnected` even though `wasConnected` was
-  cleared for chrome.
-- **REST after a gap:** not this module. Store stale-bit catch-up is
-  reactive-data-layer. Do not register open sessions or home visibility on
-  the stream.
+- **App foreground:** Android `ProcessLifecycleOwner` and iOS
+  `scenePhase` publish world signals. `ProcessWorldSignals` /
+  `SceneWorldSignals` own desired occupancy and start or stop this
+  stream. See [reactive-data-layer](../reactive-data-layer/decisions.md).
+  **5s stop grace** so pickers do not tear down SSE; `.inactive` keeps
+  the stream. Grace itself is not a data gap. `start()` stays
+  idempotent while a stream job is active and reconciles directory
+  leases in place when identity is unchanged. Cancelled SSE tasks must
+  not publish Idle/Disconnected over a newer generation's Connecting
+  state. While a foreground retry is in flight, chrome stays
+  **connecting**. Cold resume after `stop()` still arms
+  `pendingResumeBarrier` so the next fully live set emits
+  `stream.reconnected` even though `wasFullyConnected` was cleared for
+  chrome. iOS `AppRootViewModel.enterHome()` calls
+  `SceneWorldSignals.onForeground()` so the first active scene is not
+  missed; AppRoot is not a second stream owner.
+- **REST after a gap:** not this module. Stores reconcile by
+  `GapAuthority` revision. Do not register open sessions or home
+  visibility on the stream.
 - **Session Chat (iOS):** `startObserving()` on appear; `stopObserving()` on
   explicit back or after a short delayed disappear (avoids dropping the
   observe subscription when the home Screen Model refresh re-renders the
@@ -113,29 +151,42 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
   socket stays **live**. Mutations (`canMutate`) require a Connection Profile,
   a ready path, and occupancy that is not Stopped. They do not wait for SSE
   `live`. Screen Models collect `LiveUpdates`; they do not fold the matrix.
-  Store stale bits stay out of the label. Quiet catch-up is still quiet.
+  Store gap revisions stay out of the label. Quiet catch-up is still quiet.
 - Reason: after the reactive data layer, Idle while reconnecting was a false
   **offline**, and REST already worked while the label blocked send/create.
 - Revisit when: cause copy (no network vs unreachable) is a product need.
 
 ## Heartbeats
 
-`server.heartbeat` updates connection state only. `server.connected` schedules
-a synchronization reload; synthetic `stream.reconnected` reloads immediately.
+`server.heartbeat` updates connection state only. `server.connected` and
+synthetic `stream.reconnected` wake current-gap evaluation. They do not
+create a new catch-up obligation.
 
 ## Idle reconnect
 
 - Date: 2026-08-19
-- Decision: cancel and retry the foreground SSE read after **45s** with no
-  received lines. Every SSE line counts as activity: JSON `data:` payloads,
-  `server.heartbeat`, keep-alive comments (`: …`), and `id` / `event` fields.
-  Comments are still not published as events. Both platforms log
-  `foreground SSE idle timeout; reconnecting`.
+- Decision: cancel and retry **that target's** SSE read after **45s** with
+  no received lines. Watchdogs are independent per lease. Every SSE line
+  counts as activity: JSON `data:` payloads, `server.heartbeat`, keep-alive
+  comments (`: …`), and `id` / `event` fields. Comments are still not
+  published as events. Both platforms log
+  `foreground SSE idle timeout` with the target key.
 - Reason: a hung `/api/event` subscriber can stay open without EOF. Counting
   only complete JSON `data:` lines treated comment keep-alives as silence and
-  cancelled a live socket every 45s. A socket read timeout is too aggressive
-  (heartbeats can be sparse); an activity watchdog on any received line is not.
+  cancelled a live socket every 45s. A global watchdog would cancel healthy
+  leases because another target was silent.
 - Revisit when: heartbeat interval is published and a tighter bound is safe.
+
+## Gap revisions
+
+- Date: 2026-09-10
+- Decision: `BackgroundStop`, `PathLost`, incumbent lease loss or idle,
+  parser loss, and configuration / profile generation change open a
+  monotonic gap revision. Background grace does not. Directory growth
+  that only adds leases does not.
+- Reason: treating grace or any-target flap as a gap forced REST while
+  the bus was still live.
+- Revisit when: a new loss cause must become a data gap.
 
 ## Logging
 
