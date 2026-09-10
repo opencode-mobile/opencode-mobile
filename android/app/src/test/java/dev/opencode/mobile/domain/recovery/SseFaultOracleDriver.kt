@@ -94,7 +94,6 @@ class SseFaultOracleDriver(
                 connectionProfileIdProvider = { profileId.get() },
                 recoveryDelay = { delay(1) },
                 nowMs = { scope.testScheduler.currentTime },
-                connectionEpoch = epoch,
             )
 
         applyConnectionState(stream, trace.seed.connectionState)

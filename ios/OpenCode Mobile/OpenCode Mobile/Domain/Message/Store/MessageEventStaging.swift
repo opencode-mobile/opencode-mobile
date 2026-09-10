@@ -11,11 +11,10 @@ nonisolated let messageEventStagingCapacity = 4_096
 /// resume cannot re-enter locked methods and deadlock.
 nonisolated final class MessageEventStaging: @unchecked Sendable {
     enum Item: Sendable {
-        case event(OpencodeEvent, epoch: UInt64, byteCost: Int)
+        case event(OpencodeEvent, byteCost: Int)
         case overflow
         case recoveryRequired
-        /// SSE returned to Connected after Idle/Disconnect without a reconnect event.
-        case transportResumed(String)
+        case evaluate(String)
     }
 
     private let lock = NSLock()
@@ -55,7 +54,7 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
         buffer = Array(repeating: nil, count: self.capacity)
     }
 
-    func enqueue(_ event: OpencodeEvent, sessionID: String, epoch: UInt64) {
+    func enqueue(_ event: OpencodeEvent, sessionID: String) {
         guard MessageEventRouter.shouldStageForMessageSync(event) else { return }
         let resume: (CheckedContinuation<Item?, Never>, Item)?
         lock.lock()
@@ -77,7 +76,7 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
             resumeWaiter(resume)
             return
         }
-        resume = deliverLocked(.event(event, epoch: epoch, byteCost: cost))
+        resume = deliverLocked(.event(event, byteCost: cost))
         lock.unlock()
         resumeWaiter(resume)
     }
@@ -128,13 +127,13 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
         }
     }
 
-    func requestTransportResume(reason: String = StoreRefreshReason.streamReconnected) {
+    func requestEvaluate(reason: String) {
         lock.lock()
         guard !isFinished else {
             lock.unlock()
             return
         }
-        let resume = deliverLocked(.transportResumed(reason))
+        let resume = deliverLocked(.evaluate(reason))
         lock.unlock()
         resumeWaiter(resume)
     }
@@ -245,7 +244,7 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
 
     /// Delivers under lock. Returns a waiter to resume **after** unlock.
     private func deliverLocked(_ item: Item) -> (CheckedContinuation<Item?, Never>, Item)? {
-        if case .event(_, _, let cost) = item {
+        if case .event(_, let cost) = item {
             let depth = count + (waiters.isEmpty ? 1 : 0)
             highWater = max(highWater, depth)
             highWaterBytes = max(highWaterBytes, queuedBytes + cost)
@@ -255,7 +254,7 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
             return (waiter, item)
         }
         pushBackLocked(item)
-        if case .event(_, _, let cost) = item {
+        if case .event(_, let cost) = item {
             highWater = max(highWater, count)
             highWaterBytes = max(highWaterBytes, queuedBytes)
             _ = cost
@@ -272,7 +271,7 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
         let index = (head + count) % buffer.count
         buffer[index] = item
         count += 1
-        if case .event(_, _, let cost) = item {
+        if case .event(_, let cost) = item {
             queuedBytes += cost
         }
     }
@@ -282,7 +281,7 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
         buffer[head] = nil
         head = (head + 1) % buffer.count
         count -= 1
-        if case .event(_, _, let cost) = item {
+        if case .event(_, let cost) = item {
             queuedBytes = max(0, queuedBytes - cost)
         }
         return item

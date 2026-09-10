@@ -65,7 +65,6 @@ class MessageSync(
     private val connectionProfileIdProvider: () -> String = { "local" },
     private val recoveryDelay: suspend (Long) -> Unit = { ms -> delay(ms) },
     private val nowMs: () -> Long = { System.currentTimeMillis() },
-    private val connectionEpoch: ConnectionEpoch = ConnectionEpoch.shared,
     private val sessionCache: SessionCache = NoOpSessionCache,
 ) {
     private val liveConnection = eventStream.asLiveConnection()
@@ -117,7 +116,6 @@ class MessageSync(
 
     fun clearCache() {
         observationGeneration.incrementAndGet()
-        observationCache.keys.forEach { terminalSessionKeys.add(it) }
         observationCache.clear()
         lastFingerprints.clear()
         lastPublishedFrames.clear()
@@ -186,10 +184,6 @@ class MessageSync(
             noteMessageActivity(key.storeSlot)
             fun observationStillCurrent(): Boolean =
                 observationGeneration.get() == startedGeneration && key !in terminalSessionKeys
-            // Adopted forward on stream.reconnected / server.connected so a
-            // ConnectionEpoch bump from SSE start/reconnect does not latch
-            // Recovering on a stale observation generation.
-            val observationEpoch = AtomicLong(connectionEpoch.current())
             val staging = Channel<StagedItem>(capacity = eventStagingCapacity)
             val health = AtomicReference<MessageSyncHealth>(MessageSyncHealth.Healthy)
             val authorityWindowOpen = AtomicBoolean(false)
@@ -199,14 +193,12 @@ class MessageSync(
             val queuedBytes = AtomicInteger(0)
             val highWater = AtomicInteger(0)
             val highWaterBytes = AtomicInteger(0)
-            var serverConnectedReloadJob: Job? = null
             var snapshotWatcher: Job? = null
             val storeSlot = key.storeSlot
             val directory = key.directory.ifEmpty { null }
             val cacheHandle = messageCacheHandle(key)
             val authority = GapAuthority()
             val recoveryGeneration = AtomicLong(0)
-            val seenConnected = AtomicBoolean(false)
 
             fun currentSnapshot(): LiveConnectionSnapshot = liveConnection.snapshot.value
 
@@ -218,16 +210,8 @@ class MessageSync(
                 }
             }
 
-            fun shouldEvaluateGap(): Boolean {
-                noteLastAssistantGap()
-                return authority.needsReconcile(currentSnapshot())
-            }
-
-            fun beginGapReconcile(): Long? {
-                val snapshot = currentSnapshot()
-                if (!snapshot.isReachable()) return null
-                noteLastAssistantGap()
-                return authority.tryBegin(currentSnapshot())
+            fun wakeGapEvaluation(reason: String) {
+                staging.trySend(StagedItem.Evaluate(reason))
             }
 
             suspend fun emitMessages(
@@ -349,28 +333,9 @@ class MessageSync(
                 }
             }
 
-            fun isCurrentEpoch(): Boolean = connectionEpoch.current() == observationEpoch.get()
-
-            fun adoptCurrentEpoch() {
-                observationEpoch.set(connectionEpoch.current())
-            }
-
             suspend fun confirmCacheSyncIfAwaiting() {
                 if (!awaitingCacheSyncConfirm.remove(storeSlot)) return
                 send(MessageListUpdate.CacheSyncConfirmed)
-            }
-
-            suspend fun requestResumeCatchUp(fetchReason: String = StoreRefreshReason.STREAM_RECONNECTED): Boolean {
-                if (!seenConnected.get()) return false
-                if (!shouldEvaluateGap()) {
-                    logI(
-                        "fullReload skip session=${key.sessionId} reason=$fetchReason",
-                    )
-                    confirmCacheSyncIfAwaiting()
-                    return false
-                }
-                staging.trySend(StagedItem.TransportResumed(fetchReason))
-                return true
             }
 
             val producer =
@@ -392,7 +357,7 @@ class MessageSync(
                         }
                         val result =
                             staging.trySend(
-                                StagedItem.Event(event, observationEpoch.get(), cost),
+                                StagedItem.Event(event, cost),
                             )
                         if (result.isSuccess) {
                             noteQueued(cost)
@@ -402,45 +367,13 @@ class MessageSync(
                     }
                 }
 
-            val connectionWatcher =
-                launch {
-                    eventStream.connectionState.collect { state ->
-                        when (state) {
-                            EventStreamConnectionState.Connected -> {
-                                val shouldRecover = seenConnected.get() && shouldEvaluateGap()
-                                seenConnected.set(true)
-                                if (shouldRecover) {
-                                    requestResumeCatchUp()
-                                }
-                            }
-                            EventStreamConnectionState.Disconnected,
-                            EventStreamConnectionState.Reconnecting,
-                            EventStreamConnectionState.Idle,
-                            -> {
-                                if (!seenConnected.get()) return@collect
-                                if (lastPublishedFrames[storeSlot] == null) return@collect
-                                engine.finishStreamingText(storeSlot)
-                                if (!authority.needsReconcile(currentSnapshot())) return@collect
-                                if (!health.get().isHealthy) return@collect
-                                publishHealth(
-                                    MessageSyncHealth.Stale(MessageSyncRecoveryReason.TransportUnavailable),
-                                )
-                            }
-                            EventStreamConnectionState.Connecting -> {
-                                requestResumeCatchUp(StoreRefreshReason.STREAM_RECONNECTED)
-                            }
-                        }
-                    }
-                }
-
             val worldWatcher =
                 launch {
                     worldSignals.signals.collect { signal ->
                         when {
                             signal.marksStale() -> {
-                                if (!seenConnected.get()) return@collect
-                                if (lastPublishedFrames[storeSlot] == null) return@collect
                                 authority.invalidate(currentSnapshot())
+                                if (lastPublishedFrames[storeSlot] == null) return@collect
                                 if (!health.get().isHealthy) return@collect
                                 publishHealth(
                                     MessageSyncHealth.Stale(MessageSyncRecoveryReason.TransportUnavailable),
@@ -448,7 +381,7 @@ class MessageSync(
                             }
                             else -> {
                                 val reason = signal.catchUpReason() ?: return@collect
-                                requestResumeCatchUp(reason)
+                                wakeGapEvaluation(reason)
                             }
                         }
                     }
@@ -459,10 +392,7 @@ class MessageSync(
                     invalidationBus.events.collect { invalidation ->
                         if (invalidation.key != null && invalidation.key != storeSlot) return@collect
                         authority.invalidate(currentSnapshot())
-                        publishHealth(
-                            MessageSyncHealth.Stale(MessageSyncRecoveryReason.TransportUnavailable),
-                        )
-                        requestResumeCatchUp(invalidation.reason)
+                        wakeGapEvaluation(invalidation.reason)
                     }
                 }
 
@@ -470,14 +400,8 @@ class MessageSync(
                 reason: MessageSyncRecoveryReason,
                 fetchReason: String = "overflow-recovery",
             ) {
-                if (!observationStillCurrent() || !isCurrentEpoch()) {
-                    // SSE start/reconnect bumps ConnectionEpoch under an in-flight
-                    // observation. Never leave Recovering latched when we cannot
-                    // complete authority for this generation.
+                if (!observationStillCurrent()) {
                     authority.fail(recoveryGeneration.get())
-                    if (requiresRecovery()) {
-                        publishHealth(MessageSyncHealth.Healthy)
-                    }
                     return
                 }
                 if (!requiresRecovery()) {
@@ -485,17 +409,13 @@ class MessageSync(
                 }
                 var acknowledged = false
                 var backoffMs = MessageSyncRecoveryPolicy.INITIAL_BACKOFF_MS
-                while (isActive && isCurrentEpoch() && observationStillCurrent()) {
+                while (isActive && observationStillCurrent()) {
                     drainStaging()
                     beginAuthorityWindow()
                     val fingerprintBefore = lastFingerprints[storeSlot]
                     when (val result = fullReloadResult(key, reason = fetchReason, mergeExisting = true)) {
                         is ReloadResult.Success -> {
                             val becameHealthy = completeAuthorityWindow(reloadSucceeded = true)
-                            // Publish even if SSE start / dual v1 reconnect bumped
-                            // ConnectionEpoch mid-GET. Gating on isCurrentEpoch() left
-                            // the REST snapshot in the store and never pushed a frame
-                            // (Pixel 9: fullReload reason=background-return, no emit).
                             if (observationStillCurrent()) {
                                 rememberPublishedFrame(storeSlot, result.messages)
                                 if (fingerprintBefore != messageFingerprint(result.messages)) {
@@ -512,7 +432,6 @@ class MessageSync(
                                     )
                                     confirmCacheSyncIfAwaiting()
                                 }
-                                adoptCurrentEpoch()
                             }
                             if (becameHealthy) {
                                 authority.acknowledge(recoveryGeneration.get())
@@ -542,75 +461,54 @@ class MessageSync(
                 }
             }
 
+            suspend fun reconcileGap(fetchReason: String) {
+                if (!observationStillCurrent()) return
+                noteLastAssistantGap()
+                val snapshot = currentSnapshot()
+                if (!authority.needsReconcile(snapshot)) {
+                    logI("fullReload skip session=${key.sessionId} reason=$fetchReason")
+                    confirmCacheSyncIfAwaiting()
+                    return
+                }
+                if (!snapshot.isReachable()) {
+                    if (lastPublishedFrames[storeSlot] == null) return
+                    engine.finishStreamingText(storeSlot)
+                    if (health.get().isHealthy) {
+                        publishHealth(MessageSyncHealth.Stale(MessageSyncRecoveryReason.TransportUnavailable))
+                    }
+                    return
+                }
+                val generation = authority.tryBegin(snapshot) ?: return
+                recoveryGeneration.set(generation)
+                enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
+                performClosedLoopRecovery(
+                    MessageSyncRecoveryReason.Reconnect,
+                    fetchReason = fetchReason,
+                )
+            }
+
             suspend fun handleEvent(event: OpencodeEvent) {
                 assertOffMainThread()
                 if (!observationStillCurrent()) return
                 if (event.type == "sse.parse.failed") {
-                    serverConnectedReloadJob?.cancel()
-                    serverConnectedReloadJob = null
                     if (lastPublishedFrames[storeSlot] == null) return
                     if (requiresRecovery()) {
                         noteRelevantWhileRecovering()
                         return
                     }
                     authority.invalidate(currentSnapshot())
-                    val generation = beginGapReconcile() ?: return
-                    recoveryGeneration.set(generation)
-                    adoptCurrentEpoch()
-                    enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
-                    performClosedLoopRecovery(
-                        MessageSyncRecoveryReason.Reconnect,
-                        fetchReason = StoreRefreshReason.STREAM_RECONNECTED,
-                    )
+                    reconcileGap(StoreRefreshReason.STREAM_RECONNECTED)
                     return
                 }
                 if (event.type == "stream.reconnected") {
-                    serverConnectedReloadJob?.cancel()
-                    serverConnectedReloadJob = null
-                    val generation = beginGapReconcile()
-                    if (generation == null) {
-                        logI("fullReload skip session=${key.sessionId} reason=${StoreRefreshReason.STREAM_RECONNECTED}")
-                        adoptCurrentEpoch()
-                        confirmCacheSyncIfAwaiting()
-                        return
-                    }
-                    recoveryGeneration.set(generation)
-                    adoptCurrentEpoch()
-                    enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
-                    performClosedLoopRecovery(
-                        MessageSyncRecoveryReason.Reconnect,
-                        fetchReason = StoreRefreshReason.STREAM_RECONNECTED,
-                    )
+                    reconcileGap(StoreRefreshReason.STREAM_RECONNECTED)
                     return
                 }
                 if (event.type == "server.connected") {
-                    serverConnectedReloadJob?.cancel()
-                    serverConnectedReloadJob =
-                        launch {
-                            delay(LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS)
-                            if (!observationStillCurrent()) return@launch
-                            val generation = beginGapReconcile()
-                            if (generation == null) {
-                                logI(
-                                    "fullReload skip session=${key.sessionId} " +
-                                        "reason=${StoreRefreshReason.SERVER_CONNECTED}",
-                                )
-                                adoptCurrentEpoch()
-                                confirmCacheSyncIfAwaiting()
-                                return@launch
-                            }
-                            recoveryGeneration.set(generation)
-                            adoptCurrentEpoch()
-                            enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
-                            performClosedLoopRecovery(
-                                MessageSyncRecoveryReason.Reconnect,
-                                fetchReason = StoreRefreshReason.SERVER_CONNECTED,
-                            )
-                        }
+                    reconcileGap(StoreRefreshReason.SERVER_CONNECTED)
                     return
                 }
 
-                if (!isCurrentEpoch()) return
                 if (event.sessionId != key.sessionId) return
                 when (event.type) {
                     "message.updated",
@@ -850,8 +748,7 @@ class MessageSync(
                     launch {
                         liveConnection.snapshot.collect {
                             if (!observationStillCurrent()) return@collect
-                            if (!seenConnected.get()) return@collect
-                            requestResumeCatchUp()
+                            wakeGapEvaluation(StoreRefreshReason.STREAM_RECONNECTED)
                         }
                     }
 
@@ -864,31 +761,12 @@ class MessageSync(
                                     ?: MessageSyncRecoveryReason.Overflow
                             performClosedLoopRecovery(reason)
                         }
-                        is StagedItem.TransportResumed -> {
-                            serverConnectedReloadJob?.cancel()
-                            serverConnectedReloadJob = null
-                            val generation = beginGapReconcile()
-                            if (generation == null) {
-                                logI(
-                                    "fullReload skip session=${key.sessionId} reason=${item.reason}",
-                                )
-                                adoptCurrentEpoch()
-                                confirmCacheSyncIfAwaiting()
-                                continue
-                            }
-                            recoveryGeneration.set(generation)
-                            adoptCurrentEpoch()
-                            enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
-                            performClosedLoopRecovery(
-                                MessageSyncRecoveryReason.Reconnect,
-                                fetchReason = item.reason,
-                            )
+                        is StagedItem.Evaluate -> {
+                            reconcileGap(item.reason)
                         }
                         is StagedItem.Event -> {
                             noteDequeued(item.byteCost)
-                            if (item.epoch != observationEpoch.get()) {
-                                // Drop stale-epoch work.
-                            } else if (requiresRecovery() || pendingRecoveryWhileIdle.getAndSet(false)) {
+                            if (requiresRecovery() || pendingRecoveryWhileIdle.getAndSet(false)) {
                                 val reason =
                                     (health.get() as? MessageSyncHealth.Recovering)?.reason
                                         ?: MessageSyncRecoveryReason.Overflow
@@ -900,10 +778,8 @@ class MessageSync(
                     }
                 }
             } finally {
-                serverConnectedReloadJob?.cancel()
                 snapshotWatcher?.cancel()
                 producer.cancel()
-                connectionWatcher.cancel()
                 worldWatcher.cancel()
                 invalidationWatcher.cancel()
                 staging.close()
@@ -918,7 +794,6 @@ class MessageSync(
     private sealed interface StagedItem {
         data class Event(
             val event: OpencodeEvent,
-            val epoch: Long,
             val byteCost: Int,
         ) : StagedItem
 
@@ -926,8 +801,7 @@ class MessageSync(
 
         data object RecoveryRequired : StagedItem
 
-        /** SSE returned to Connected after Idle/Disconnect without a reconnect event. */
-        data class TransportResumed(
+        data class Evaluate(
             val reason: String,
         ) : StagedItem
     }
@@ -949,8 +823,7 @@ class MessageSync(
                 // TUI does not poll GET …/message while the event iterator is live.
                 // Keep the watchdog for transport drop and stalled streaming only.
                 val connected = eventStream.connectionState.value == EventStreamConnectionState.Connected
-                val awaitingCache = awaitingCacheSyncConfirm.contains(storeSlot)
-                if (connected && !stalled && !awaitingCache) continue
+                if (connected && !stalled) continue
                 val expectedRevision = engine.revision(storeSlot)
                 val load = runCatching { listMessages(key.sessionId, directory) }
                 if (load.isFailure) {

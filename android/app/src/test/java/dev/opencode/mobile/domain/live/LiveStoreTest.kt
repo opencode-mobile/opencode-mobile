@@ -11,7 +11,6 @@ import dev.opencode.mobile.domain.event.SilentWorldSignals
 import dev.opencode.mobile.domain.event.StoreRefreshReason
 import dev.opencode.mobile.domain.event.WorldSignal
 import dev.opencode.mobile.domain.event.WorldSignals
-import dev.opencode.mobile.domain.message.ConnectionEpoch
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.DisplayMessagePipeline
 import dev.opencode.mobile.domain.message.InMemoryMessageStore
@@ -734,28 +733,15 @@ class MessageSyncTest {
         }
 
     @Test
-    fun observeMessages_backgroundReturn_emitsWhenEpochBumpsDuringCatchUp() =
+    fun observeMessages_backgroundReturn_publishesWhenGapReconcilesDuringCatchUp() =
         runTest(testDispatcher) {
-            // Pixel 9 OPE-198: background while streaming, turn finishes off-device,
-            // foreground catch-up GET collides with v1 dual SSE reconnect epoch bumps.
-            // REST merges into the store (fullReload count=N) but UI stays on the
-            // partial frame if emit is gated on isCurrentEpoch().
+            // Background while streaming, turn finishes off-device, then foreground
+            // catch-up must still publish even if compatibility reconnect events arrive
+            // while the authoritative GET is in flight.
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
             val world = FakeWorldSignals()
-            val epoch = ConnectionEpoch()
-            val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
-            val sync =
-                MessageSync(
-                    listMessages = { sessionId, directory -> repository.listMessages(sessionId, directory) },
-                    engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
-                    eventStream = eventStream,
-                    liveStoreScope = scope,
-                    worldSignals = world,
-                    pollIntervalMs = LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS,
-                    connectionEpoch = epoch,
-                    recoveryDelay = { delay(1) },
-                )
+            val sync = createMessageSync(repository, eventStream, worldSignals = world)
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
                 launch {
@@ -789,11 +775,10 @@ class MessageSyncTest {
 
             val gate = CompletableDeferred<Unit>()
             repository.nextLoadGate = gate
+            eventStream.setConnectionState(EventStreamConnectionState.Connecting)
             world.emit(WorldSignal.Foreground)
             advanceTimeBy(1)
 
-            epoch.bump()
-            epoch.bump()
             eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
             gate.complete(Unit)
             advanceTimeBy(1)
@@ -840,17 +825,11 @@ class MessageSyncTest {
             // stays Live on a stale timeline until pull-to-refresh.
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
-            val epoch = ConnectionEpoch()
-            val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
             val sync =
-                MessageSync(
-                    listMessages = { sessionId, directory -> repository.listMessages(sessionId, directory) },
-                    engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
-                    eventStream = eventStream,
-                    liveStoreScope = scope,
+                createMessageSync(
+                    repository,
+                    eventStream,
                     pollIntervalMs = LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS,
-                    connectionEpoch = epoch,
-                    recoveryDelay = { delay(1) },
                 )
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
@@ -886,9 +865,7 @@ class MessageSyncTest {
                     ),
                 )
 
-            // Foreground resume: start() bumps epoch and HTTP open marks Connected
-            // (Live) without emitting stream.reconnected after stop() cleared wasConnected.
-            epoch.bump()
+            // Foreground resume reaches Connected/Live without stream.reconnected.
             eventStream.setConnectionState(EventStreamConnectionState.Connected)
             advanceTimeBy(LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS + 50)
 
@@ -907,18 +884,7 @@ class MessageSyncTest {
             // TransportResumed + server.connected share one catch-up.
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
-            val epoch = ConnectionEpoch()
-            val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
-            val sync =
-                MessageSync(
-                    listMessages = { sessionId, directory -> repository.listMessages(sessionId, directory) },
-                    engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
-                    eventStream = eventStream,
-                    liveStoreScope = scope,
-                    pollIntervalMs = 60_000L,
-                    connectionEpoch = epoch,
-                    recoveryDelay = { delay(1) },
-                )
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
                 launch {
@@ -946,7 +912,6 @@ class MessageSyncTest {
                         parts = listOf(MessagePart.Text(text = "Caught up while connecting")),
                     ),
                 )
-            epoch.bump()
             eventStream.setConnectionState(EventStreamConnectionState.Connecting)
             advanceTimeBy(50)
             assertEquals("Caught up while connecting", emissions.last().single().text)
@@ -967,17 +932,11 @@ class MessageSyncTest {
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
-            val epoch = ConnectionEpoch()
-            val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
             val sync =
-                MessageSync(
-                    listMessages = { sessionId, directory -> repository.listMessages(sessionId, directory) },
-                    engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
-                    eventStream = eventStream,
-                    liveStoreScope = scope,
+                createMessageSync(
+                    repository,
+                    eventStream,
                     pollIntervalMs = LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS,
-                    connectionEpoch = epoch,
-                    recoveryDelay = { delay(1) },
                 )
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
@@ -995,7 +954,6 @@ class MessageSyncTest {
             repository.messages =
                 listOf(Message(id = "msg-2", role = MessageRole.Assistant, text = "Updated while away"))
 
-            epoch.bump()
             eventStream.setConnectionState(EventStreamConnectionState.Connected)
             advanceTimeBy(LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS + 50)
 
@@ -1005,22 +963,11 @@ class MessageSyncTest {
         }
 
     @Test
-    fun observeMessages_staleEpochEventDoesNotMutateStore() =
+    fun observeMessages_clearedObservationDoesNotPublishLaterDeltas() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
-            val epoch = ConnectionEpoch()
-            val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
-            val sync =
-                MessageSync(
-                    listMessages = { sessionId, directory -> repository.listMessages(sessionId, directory) },
-                    engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
-                    eventStream = eventStream,
-                    liveStoreScope = scope,
-                    pollIntervalMs = 60_000L,
-                    connectionEpoch = epoch,
-                    recoveryDelay = { delay(1) },
-                )
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
                 launch {
@@ -1031,34 +978,25 @@ class MessageSyncTest {
             advanceTimeBy(1)
             assertEquals("Hello", emissions.last().single().text)
             val before = emissions.size
+            val callsAfterInitial = repository.listMessagesCallCount
 
-            epoch.bump()
+            sync.clearCache()
             eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-1", delta = " should-not-apply"))
             advanceTimeBy(50)
 
             assertEquals(before, emissions.size)
             assertEquals("Hello", emissions.last().single().text)
+            assertEquals(callsAfterInitial, repository.listMessagesCallCount)
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
         }
 
     @Test
-    fun observeMessages_serverConnectedAfterEpochBumpRecoversAndAppliesLiveDeltas() =
+    fun observeMessages_reconnectCompatibilityEventsWithoutGap_doNotRest() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
-            val epoch = ConnectionEpoch()
-            val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
-            val sync =
-                MessageSync(
-                    listMessages = { sessionId, directory -> repository.listMessages(sessionId, directory) },
-                    engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
-                    eventStream = eventStream,
-                    liveStoreScope = scope,
-                    pollIntervalMs = 60_000L,
-                    connectionEpoch = epoch,
-                    recoveryDelay = { delay(1) },
-                )
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
                 launch {
@@ -1068,14 +1006,17 @@ class MessageSyncTest {
                 }
             advanceTimeBy(1)
             assertEquals("Hello", emissions.last().single().text)
+            val callsAfterInitial = repository.listMessagesCallCount
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(1)
 
-            // Foreground SSE start bumps the shared epoch, then emits server.connected.
-            // Recovery must adopt the new generation or it latches Recovering forever.
-            epoch.bump()
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
             eventStream.emit(OpencodeEvent(type = "server.connected"))
             advanceTimeBy(LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS + 50)
 
+            assertEquals(callsAfterInitial, repository.listMessagesCallCount)
             assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
+            assertFalse(sync.observeCatchUpChrome("ses-1", "/repo").first())
 
             eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
             eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
@@ -1086,7 +1027,48 @@ class MessageSyncTest {
                 "Live after reconnect",
                 emissions.last().first { it.id == "msg-2" }.text,
             )
+            assertEquals(callsAfterInitial, repository.listMessagesCallCount)
             collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_oneGap_causesExactlyOneReloadAndClearsCatchUp() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val emissions = mutableListOf<List<Message>>()
+            val chrome = mutableListOf<Boolean>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            val chromeJob =
+                launch {
+                    sync.observeCatchUpChrome("ses-1", "/repo").collect { chrome.add(it) }
+                }
+            advanceTimeBy(1)
+            assertEquals("Hello", emissions.last().single().text)
+            val callsAfterInitial = repository.listMessagesCallCount
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(1)
+
+            repository.messages =
+                listOf(Message(id = "msg-2", role = MessageRole.Assistant, text = "After gap"))
+            eventStream.openGap()
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
+            eventStream.emit(OpencodeEvent(type = "server.connected"))
+            advanceTimeBy(LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS + 50)
+
+            assertEquals(callsAfterInitial + 1, repository.listMessagesCallCount)
+            assertEquals("After gap", emissions.last().single().text)
+            assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
+            assertEquals(false, chrome.lastOrNull())
+            collectJob.cancel()
+            chromeJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
         }
 

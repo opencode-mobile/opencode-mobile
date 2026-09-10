@@ -129,22 +129,14 @@ struct MessageSyncTests {
         #expect(repo.listMessagesCallCount == afterInitial)
     }
 
-    @Test func observeMessages_backgroundReturn_emitsWhenEpochBumpsDuringCatchUp() async {
+    @Test func observeMessages_backgroundReturn_publishesWhenGapReconcilesDuringCatchUp() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
         let world = FakeWorldSignals()
-        let epoch = ConnectionEpoch()
-        let sync = MessageSync(
-            listMessages: { sessionID, directory in
-                try await repo.listMessages(sessionID: sessionID, directory: directory)
-            },
-            store: SessionMessageEngine(store: InMemoryMessageStore()),
+        let sync = makeMessageSync(
+            repo: repo,
             eventStream: eventStream,
-            worldSignals: world,
-            pollIntervalMs: LiveStoreRefreshPolicy.workingPollIntervalMs,
-            connectionProfileIDProvider: { "local" },
-            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
-            connectionEpoch: epoch
+            worldSignals: world
         )
         let collector = MessageCollector()
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
@@ -183,8 +175,6 @@ struct MessageSyncTests {
         let blocked = await waitUntil { repo.isListBlocked }
         #expect(blocked)
 
-        _ = epoch.bump()
-        _ = epoch.bump()
         eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: nil, rawProperties: nil))
         repo.resumeListMessages()
 
@@ -373,7 +363,6 @@ struct MessageSyncTests {
     @Test func repeatedOverflowCycles_recoverToHealthyOnlyAfterValidatedReplace() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let epoch = ConnectionEpoch()
         let sync = MessageSync(
             listMessages: { sessionID, directory in
                 try await repo.listMessages(sessionID: sessionID, directory: directory)
@@ -384,8 +373,7 @@ struct MessageSyncTests {
             eventStagingCapacity: 64,
             eventStagingByteCapacity: 200,
             connectionProfileIDProvider: { "local" },
-            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
-            connectionEpoch: epoch
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) }
         )
         let collector = MessageCollector()
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
@@ -638,18 +626,7 @@ struct MessageSyncTests {
         // must still fullReload when server.connected is missed.
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let epoch = ConnectionEpoch()
-        let sync = MessageSync(
-            listMessages: { sessionID, directory in
-                try await repo.listMessages(sessionID: sessionID, directory: directory)
-            },
-            store: SessionMessageEngine(store: InMemoryMessageStore()),
-            eventStream: eventStream,
-            pollIntervalMs: LiveStoreRefreshPolicy.workingPollIntervalMs,
-            connectionProfileIDProvider: { "local" },
-            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
-            connectionEpoch: epoch
-        )
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
         let collector = MessageCollector()
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
@@ -686,7 +663,6 @@ struct MessageSyncTests {
             ),
         ]
 
-        _ = epoch.bump()
         eventStream.setConnectionState(.connected)
         let refreshed = await waitUntil {
             collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Finished while away"
@@ -698,18 +674,7 @@ struct MessageSyncTests {
     @Test func backgroundResumeToLiveWithoutReconnect_refreshesWhenNotStreaming() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let epoch = ConnectionEpoch()
-        let sync = MessageSync(
-            listMessages: { sessionID, directory in
-                try await repo.listMessages(sessionID: sessionID, directory: directory)
-            },
-            store: SessionMessageEngine(store: InMemoryMessageStore()),
-            eventStream: eventStream,
-            pollIntervalMs: LiveStoreRefreshPolicy.workingPollIntervalMs,
-            connectionProfileIDProvider: { "local" },
-            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
-            connectionEpoch: epoch
-        )
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
         let collector = MessageCollector()
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
@@ -736,7 +701,6 @@ struct MessageSyncTests {
                 sentAtEpochMs: nil
             ),
         ]
-        _ = epoch.bump()
         eventStream.setConnectionState(.connected)
         let refreshed = await waitUntil {
             collector.latest()?.first?.text == "Updated while away"
@@ -750,7 +714,6 @@ struct MessageSyncTests {
         // TransportResumed + server.connected share one catch-up.
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let epoch = ConnectionEpoch()
         var listCallTimestamps: [Date] = []
         let sync = MessageSync(
             listMessages: { sessionID, directory in
@@ -761,8 +724,7 @@ struct MessageSyncTests {
             eventStream: eventStream,
             pollIntervalMs: 60_000,
             connectionProfileIDProvider: { "local" },
-            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
-            connectionEpoch: epoch
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) }
         )
         let collector = MessageCollector()
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
@@ -792,7 +754,6 @@ struct MessageSyncTests {
                 sentAtEpochMs: nil
             ),
         ]
-        _ = epoch.bump()
         eventStream.setConnectionState(.connecting)
         let refreshedBeforeLive = await waitUntil {
             collector.latest()?.first?.text == "Caught up while connecting"
@@ -810,28 +771,18 @@ struct MessageSyncTests {
         #expect(!listCallTimestamps.isEmpty)
     }
 
-    @Test func staleEpoch_eventDoesNotMutateStore() async {
+    @Test func clearedObservation_doesNotPublishLaterDeltas() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let epoch = ConnectionEpoch()
-        let sync = MessageSync(
-            listMessages: { sessionID, directory in
-                try await repo.listMessages(sessionID: sessionID, directory: directory)
-            },
-            store: SessionMessageEngine(store: InMemoryMessageStore()),
-            eventStream: eventStream,
-            pollIntervalMs: 60_000,
-            connectionProfileIDProvider: { "local" },
-            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
-            connectionEpoch: epoch
-        )
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
         let collector = MessageCollector()
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
         #expect(loaded)
         let before = collector.emissions.count
+        let callsAfterInitial = repo.listMessagesCallCount
 
-        _ = epoch.bump()
+        sync.clearCache()
         eventStream.emit(
             eventWithPartDelta(
                 partID: "prt-1",
@@ -844,32 +795,24 @@ struct MessageSyncTests {
         task.cancel()
         #expect(collector.emissions.count == before)
         #expect(collector.latest()?.first?.text == "Hello")
+        #expect(repo.listMessagesCallCount == callsAfterInitial)
     }
 
-    @Test func serverConnected_afterEpochBump_recoversAndAppliesLiveDeltas() async {
+    @Test func reconnectCompatibilityEventsWithoutGap_doNotRest() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let epoch = ConnectionEpoch()
-        let sync = MessageSync(
-            listMessages: { sessionID, directory in
-                try await repo.listMessages(sessionID: sessionID, directory: directory)
-            },
-            store: SessionMessageEngine(store: InMemoryMessageStore()),
-            eventStream: eventStream,
-            pollIntervalMs: 60_000,
-            connectionProfileIDProvider: { "local" },
-            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
-            connectionEpoch: epoch
-        )
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
         let collector = MessageCollector()
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
         #expect(loaded)
+        let callsAfterInitial = repo.listMessagesCallCount
+        eventStream.setConnectionState(.connected)
 
-        _ = epoch.bump()
+        eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: nil, rawProperties: nil))
         eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil, rawProperties: nil))
-        // Wait for debounced adopt + recovery; isHealthy alone is true before reconnect.
         try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.messageDebounceMs + 250))
+        #expect(repo.listMessagesCallCount == callsAfterInitial)
         #expect(sync.syncHealth(sessionID: "ses-1", directory: "/repo").isHealthy)
 
         eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
@@ -887,6 +830,48 @@ struct MessageSyncTests {
         }
         task.cancel()
         #expect(streamed)
+        #expect(repo.listMessagesCallCount == callsAfterInitial)
+    }
+
+    @Test func oneGap_causesExactlyOneReloadAndClearsCatchUp() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        var chrome = false
+        let chromeTask = Task {
+            for await flag in sync.observeCatchUpChrome(sessionID: "ses-1", directory: "/repo") {
+                chrome = flag
+            }
+        }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+        let callsAfterInitial = repo.listMessagesCallCount
+        eventStream.setConnectionState(.connected)
+
+        repo.messages = [
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "After gap",
+                parts: [.text(TextPart(text: "After gap", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        eventStream.openGap()
+        eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: nil, rawProperties: nil))
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil, rawProperties: nil))
+        let reloaded = await waitUntil { collector.latest()?.first?.text == "After gap" }
+        try? await Task.sleep(for: .milliseconds(50))
+        task.cancel()
+        chromeTask.cancel()
+        #expect(reloaded)
+        #expect(repo.listMessagesCallCount == callsAfterInitial + 1)
+        #expect(sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy)
+        #expect(chrome == false)
     }
 
     @Test func messageUpdated_suppressesEmptyNewSlot() async {
@@ -952,31 +937,18 @@ struct MessageSyncTests {
         #expect(published)
     }
 
-    @Test func pollSurvivesEpochBumpUntilAdopt() async {
+    @Test func pollSurvivesDisconnectWithoutGapEvent() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let epoch = ConnectionEpoch()
-        let sync = MessageSync(
-            listMessages: { sessionID, directory in
-                try await repo.listMessages(sessionID: sessionID, directory: directory)
-            },
-            store: SessionMessageEngine(store: InMemoryMessageStore()),
-            eventStream: eventStream,
-            pollIntervalMs: 40,
-            connectionProfileIDProvider: { "local" },
-            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
-            connectionEpoch: epoch
-        )
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 40)
         let collector = MessageCollector()
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
         #expect(loaded)
 
-        _ = epoch.bump()
+        eventStream.setConnectionState(.connected)
+        eventStream.setConnectionState(.disconnected)
         try? await Task.sleep(for: .milliseconds(90))
-
-        eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: nil, rawProperties: nil))
-        try? await Task.sleep(for: .milliseconds(80))
 
         repo.messages = [
             Message(

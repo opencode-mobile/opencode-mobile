@@ -48,8 +48,7 @@ enum SseFaultOracleDriver {
             pollIntervalMs: 60_000,
             connectionProfileIDProvider: { profileID.value },
             recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
-            nowMs: { Int64(Date().timeIntervalSince1970 * 1000) },
-            connectionEpoch: epoch
+            nowMs: { Int64(Date().timeIntervalSince1970 * 1000) }
         )
 
         applyConnectionState(stream, trace.seed.connectionState)

@@ -50,7 +50,7 @@ nonisolated protocol LiveConnection: ForegroundEventStream {
 }
 
 extension LiveConnectionSnapshot {
-    var isReachable: Bool {
+    nonisolated var isReachable: Bool {
         connectionState == .connecting
             || connectionState == .connected
             || connectionState == .reconnecting
