@@ -365,6 +365,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             )
             let needsCatchUp: Bool = {
                 if case .stale = health { return true }
+                if self.isAwaitingCacheSyncConfirm(for: key.storeSlot) { return true }
                 return self.connectionEpoch.current() != observationEpoch.current
             }()
             if !needsCatchUp {
@@ -401,6 +402,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                             directory: key.directory.isEmpty ? nil : key.directory
                         )
                         if case .stale = health { return true }
+                        if self.isAwaitingCacheSyncConfirm(for: key.storeSlot) { return true }
                         return self.connectionEpoch.current() != observationEpoch.current
                     }()
                     resumeState.markSeenConnected()
@@ -831,7 +833,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             case .transportResumed(let reason):
                 debounceTask?.cancel()
                 debounceTask = nil
-                guard catchUpGate.claim(connectionEpoch.current()) else {
+                guard shouldReloadAfterReconnect(catchUpGate: catchUpGate, key: key) else {
                     DiagnosticLog.info(.chat, "fullReload skip session=\(key.sessionID) reason=\(reason)")
                     confirmCacheSync()
                     continue
@@ -880,6 +882,17 @@ nonisolated final class MessageSync: @unchecked Sendable {
         }
     }
 
+    private func shouldReloadAfterReconnect(
+        catchUpGate: ReconnectCatchUpGate,
+        key: MessageSessionKey
+    ) -> Bool {
+        if catchUpGate.claim(connectionEpoch.current()) { return true }
+        if isAwaitingCacheSyncConfirm(for: key.storeSlot) { return true }
+        return SessionTranscriptAuthority.lastAssistantNeedsAuthority(
+            store.messages(sessionID: key.storeSlot)
+        )
+    }
+
     private func handleStagedEvent(
         event: OpencodeEvent,
         key: MessageSessionKey,
@@ -890,10 +903,28 @@ nonisolated final class MessageSync: @unchecked Sendable {
         publishMessages: @escaping @Sendable ([Message]) -> Void,
         confirmCacheSync: @escaping @Sendable () -> Void
     ) async {
+        if event.type == "sse.parse.failed" {
+            guard publishedFrame(for: key.storeSlot) != nil else { return }
+            if staging.needsAuthoritativeRecovery { return }
+            observationEpoch.adopt(connectionEpoch.current())
+            staging.enterRecovering(.reconnect, wakeConsumer: false)
+            setHealth(staging.currentHealth, for: key)
+            await performClosedLoopRecovery(
+                key: key,
+                staging: staging,
+                observationEpoch: observationEpoch,
+                reason: .reconnect,
+                fetchReason: StoreRefreshReason.streamReconnected,
+                publishMessages: publishMessages,
+                confirmCacheSync: confirmCacheSync
+            )
+            return
+        }
+
         if event.type == "stream.reconnected" {
             debounceTask?.cancel()
             debounceTask = nil
-            guard catchUpGate.claim(connectionEpoch.current()) else {
+            guard shouldReloadAfterReconnect(catchUpGate: catchUpGate, key: key) else {
                 DiagnosticLog.info(
                     .chat,
                     "fullReload skip session=\(key.sessionID) reason=\(StoreRefreshReason.streamReconnected)"
@@ -921,7 +952,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             debounceTask = Task { [weak self] in
                 try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.messageDebounceMs))
                 guard !Task.isCancelled, let self else { return }
-                guard catchUpGate.claim(self.connectionEpoch.current()) else {
+                guard self.shouldReloadAfterReconnect(catchUpGate: catchUpGate, key: key) else {
                     DiagnosticLog.info(
                         .chat,
                         "fullReload skip session=\(key.sessionID) reason=\(StoreRefreshReason.serverConnected)"
@@ -993,9 +1024,20 @@ nonisolated final class MessageSync: @unchecked Sendable {
             // REST-reload the transcript. Finalize local streaming parts.
             store.finishStreamingText(sessionID: key.storeSlot)
             let recovered = store.messages(sessionID: key.storeSlot)
-            setHealth(.healthy, for: key)
-            guard markChanged(key: key, messages: recovered) else { return }
-            publishMessages(recovered)
+            if markChanged(key: key, messages: recovered) {
+                publishMessages(recovered)
+            }
+            guard SessionTranscriptAuthority.lastAssistantNeedsAuthority(recovered) else {
+                setHealth(.healthy, for: key)
+                return
+            }
+            switch await fullReloadResult(key: key, reason: "session.idle") {
+            case .success(let messages):
+                setHealth(.healthy, for: key)
+                publishMessages(messages)
+            case .failure:
+                setHealth(.healthy, for: key)
+            }
         default:
             return
         }
@@ -1131,7 +1173,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
             if streaming && !stalled { continue }
             // TUI does not poll GET …/message while the event iterator is live.
             // Keep the watchdog for transport drop and stalled streaming only.
-            if eventStream.connectionState == .connected && !stalled { continue }
+            let awaitingCache = isAwaitingCacheSyncConfirm(for: key.storeSlot)
+            if eventStream.connectionState == .connected && !stalled && !awaitingCache { continue }
             let expectedRevision = store.revision(sessionID: key.storeSlot)
             let directory = key.directory.isEmpty ? nil : key.directory
             do {

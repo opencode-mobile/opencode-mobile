@@ -13,6 +13,7 @@ nonisolated enum MessageEventRouter {
         "session.idle",
         "stream.reconnected",
         "server.connected",
+        "sse.parse.failed",
     ]
 
     static func shouldStageForMessageSync(_ event: OpencodeEvent) -> Bool {

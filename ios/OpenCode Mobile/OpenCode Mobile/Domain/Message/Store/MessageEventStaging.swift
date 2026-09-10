@@ -236,7 +236,7 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
 
     private func isRelevant(_ event: OpencodeEvent, sessionID: String) -> Bool {
         switch event.type {
-        case "stream.reconnected", "server.connected":
+        case "stream.reconnected", "server.connected", "sse.parse.failed":
             return true
         default:
             return event.sessionID == sessionID

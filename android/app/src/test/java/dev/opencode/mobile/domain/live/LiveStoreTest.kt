@@ -1603,6 +1603,78 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_sessionIdleReloadsWhenLastAssistantHasNoVisibleContent() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            repository.messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "Hello"),
+                    Message(
+                        id = "msg-2",
+                        role = MessageRole.Assistant,
+                        text = "",
+                        parts = listOf(MessagePart.Reasoning(text = "")),
+                    ),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            val afterInitial = repository.listMessagesCallCount
+            repository.messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "Hello"),
+                    Message(
+                        id = "msg-2",
+                        role = MessageRole.Assistant,
+                        text = "Done",
+                        parts = listOf(MessagePart.Text(text = "Done")),
+                    ),
+                )
+            eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            advanceTimeBy(50)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            assertTrue(repository.listMessagesCallCount > afterInitial)
+            assertEquals("Done", emissions.last().first { it.id == "msg-2" }.text)
+        }
+
+    @Test
+    fun observeMessages_parseFailedEventReloadsTranscript() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(1)
+            val afterInitial = repository.listMessagesCallCount
+            repository.messages =
+                listOf(Message(id = "msg-1", role = MessageRole.User, text = "After gap"))
+            eventStream.emit(OpencodeEvent(type = "sse.parse.failed"))
+            advanceTimeBy(50)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            assertTrue(repository.listMessagesCallCount > afterInitial)
+            assertEquals("After gap", emissions.last().single().text)
+        }
+
+    @Test
     fun observeMessages_failedIdleReloadEndsStreamingAndPollingRecovers() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()

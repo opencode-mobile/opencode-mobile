@@ -2,6 +2,17 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct SseDiagnosticLoggingTests {
+    @Test func parseFailedMessage_recordsTypeAndLengthWithoutBody() {
+        #expect(
+            SseDiagnosticLogging.parseFailedMessage(#"{"type":"session.text.ended","payload":{}}"#)
+                == "SSE event parse failed type=session.text.ended chars=42"
+        )
+        #expect(
+            SseDiagnosticLogging.parseFailedMessage("not")
+                == "SSE event parse failed type=- chars=3"
+        )
+    }
+
     @Test func bufferMessage_skipsMessageParts() {
         #expect(
             SseDiagnosticLogging.bufferMessage(

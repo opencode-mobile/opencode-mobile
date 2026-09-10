@@ -255,7 +255,10 @@ nonisolated final class DefaultForegroundEventStream: ForegroundEventStream, @un
                         activity.touch()
                         let parsed = adapter.parseEvents(dataLine: dataLine)
                         if parsed.isEmpty {
-                            DiagnosticLog.warning(.sse, "SSE event parse failed")
+                            DiagnosticLog.warning(.sse, SseDiagnosticLogging.parseFailedMessage(dataLine))
+                            if !dataLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                _ = owner.handleStreamEvent(OpencodeEvent(type: "sse.parse.failed", sessionID: nil))
+                            }
                             return
                         }
                         for event in parsed {

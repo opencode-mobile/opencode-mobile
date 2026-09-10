@@ -8,6 +8,18 @@ import org.junit.Test
 
 class SseDiagnosticLoggingTest {
     @Test
+    fun parseFailedMessage_recordsTypeAndLengthWithoutBody() {
+        assertEquals(
+            "SSE event parse failed type=session.text.ended chars=42",
+            SseDiagnosticLogging.parseFailedMessage("""{"type":"session.text.ended","payload":{}}"""),
+        )
+        assertEquals(
+            "SSE event parse failed type=- chars=3",
+            SseDiagnosticLogging.parseFailedMessage("not"),
+        )
+    }
+
+    @Test
     fun bufferMessage_skipsMessageParts() {
         assertNull(
             SseDiagnosticLogging.bufferMessage(
