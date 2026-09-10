@@ -1,7 +1,5 @@
 package dev.opencode.mobile.domain.sessioncontext
 
-import dev.opencode.mobile.domain.message.MessageRole
-
 data class SessionContextSnapshot(
     val sessionId: String,
     val sessionTitle: String,
@@ -13,7 +11,6 @@ data class SessionContextSnapshot(
     val createdAtEpochMs: Long?,
     val lastActivityEpochMs: Long?,
     val breakdown: List<SessionContextBreakdownItem>,
-    val rawMessages: List<SessionContextRawMessageRow>,
 )
 
 data class SessionContextTokenStats(
@@ -47,12 +44,6 @@ enum class SessionContextBreakdownKind {
     Tool,
     Other,
 }
-
-data class SessionContextRawMessageRow(
-    val id: String,
-    val role: MessageRole,
-    val createdAtEpochMs: Long?,
-)
 
 sealed class SessionContextError : Exception() {
     data class Underlying(

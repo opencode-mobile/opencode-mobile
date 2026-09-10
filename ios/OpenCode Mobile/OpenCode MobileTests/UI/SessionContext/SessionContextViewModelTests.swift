@@ -51,8 +51,7 @@ struct SessionContextViewModelTests {
             totalCost: 0,
             createdAtEpochMs: nil,
             lastActivityEpochMs: nil,
-            breakdown: [],
-            rawMessages: []
+            breakdown: []
         )
     }
 }
