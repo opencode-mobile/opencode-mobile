@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -58,6 +59,7 @@ import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionOverlay
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
+import dev.opencode.mobile.ui.components.OpenCodeLayout
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
@@ -441,7 +443,13 @@ fun SessionChatScreen(
             uiState.composer.modelNotice?.let { notice ->
                 Text(
                     text = notice,
-                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .widthIn(max = OpenCodeLayout.ContentMaxWidth)
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 8.dp),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

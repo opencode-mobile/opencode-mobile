@@ -148,6 +148,7 @@ struct SessionChatView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
+                    .openCodeReadableColumn()
             }
 
             // Keyboard avoidance wraps only the timeline + composer so the top bar
