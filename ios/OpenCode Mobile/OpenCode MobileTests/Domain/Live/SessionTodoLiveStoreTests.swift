@@ -104,7 +104,7 @@ struct SessionTodoLiveStoreTests {
         let collector = TodoCollector(store: store)
         _ = try await collector.awaitEmission { !$0.isEmpty }
 
-        world.emit(.background)
+        world.emit(.backgroundStop)
         try await Task.sleep(for: .milliseconds(40))
         repository.listTodosError = URLError(.cannotConnectToHost)
         world.emit(.foreground)

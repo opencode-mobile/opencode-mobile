@@ -194,6 +194,8 @@ class MessageSyncTest {
             assertEquals("Hello", emissions.last().single().text)
 
             repository.shouldFailLoad = true
+            eventStream.openGap()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = "ses-1"))
             advanceTimeBy(50)
 
@@ -217,6 +219,8 @@ class MessageSyncTest {
             val callsAfterInitial = repository.listMessagesCallCount
 
             repository.shouldFailMissingSession = true
+            eventStream.openGap()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = "ses-1"))
             advanceTimeBy(20_000)
 
@@ -266,6 +270,8 @@ class MessageSyncTest {
 
             val recoveryGate = CompletableDeferred<Unit>()
             repository.nextLoadGate = recoveryGate
+            eventStream.openGap()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = "ses-1"))
             // Start recovery only — do not advanceUntilIdle while the REST gate is held.
             advanceTimeBy(1)
@@ -696,7 +702,7 @@ class MessageSyncTest {
             world.emit(WorldSignal.Foreground)
             advanceTimeBy(1)
 
-            assertTrue(repository.listMessagesCallCount > afterInitial)
+            assertEquals(afterInitial, repository.listMessagesCallCount)
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
         }
@@ -1100,6 +1106,8 @@ class MessageSyncTest {
             advanceTimeBy(1)
 
             repository.messages = listOf(Message(id = "msg-2", role = MessageRole.Assistant, text = "Updated"))
+            eventStream.openGap()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = "ses-1"))
             advanceTimeBy(350)
             collectJob.cancel()
@@ -1249,6 +1257,8 @@ class MessageSyncTest {
             advanceTimeBy(1)
 
             repository.shouldFailLoad = true
+            eventStream.openGap()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = "ses-1"))
             advanceTimeBy(350)
             collectJob.cancel()
@@ -2465,6 +2475,8 @@ class SessionStatusLiveStoreTest {
             assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
 
             repository.statuses = emptyList()
+            eventStream.openGap()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             eventStream.emit(OpencodeEvent(type = "server.connected"))
             advanceTimeBy(350)
             advanceUntilIdle()
@@ -2513,6 +2525,8 @@ class SessionStatusLiveStoreTest {
             assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
 
             repository.statuses = emptyList()
+            eventStream.openGap()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             eventStream.emit(OpencodeEvent(type = "server.connected"))
             advanceTimeBy(350)
             advanceUntilIdle()
@@ -2544,6 +2558,8 @@ class SessionStatusLiveStoreTest {
             assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
 
             repository.statuses = emptyList()
+            eventStream.openGap()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             eventStream.emit(OpencodeEvent(type = "server.connected"))
             advanceTimeBy(350)
             advanceUntilIdle()
@@ -2607,6 +2623,8 @@ class SessionStatusLiveStoreTest {
             assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
 
             repository.statuses = emptyList()
+            eventStream.openGap()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             eventStream.emit(OpencodeEvent(type = "server.connected"))
             advanceTimeBy(350)
             advanceUntilIdle()
@@ -2833,6 +2851,8 @@ class LiveObservationTeardownTest {
             advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
             advanceUntilIdle()
             repository.statuses = emptyList()
+            eventStream.openGap()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             eventStream.emit(OpencodeEvent(type = "server.connected"))
             advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
             advanceUntilIdle()
@@ -3060,7 +3080,7 @@ class LiveStoreRevisionGateTest {
             advanceUntilIdle()
             assertEquals(1, repository.statusFetchCount)
 
-            world.emit(WorldSignal.Background)
+            world.emit(WorldSignal.BackgroundStop)
             runCurrent()
             repository.statusDelayMs = 10_000
             world.emit(WorldSignal.Foreground)
@@ -3220,6 +3240,8 @@ class DefaultPermissionLiveStoreTest {
             advanceUntilIdle()
             assertEquals(1, repository.permissionFetchCount)
 
+            eventStream.openGap()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
             eventStream.emit(OpencodeEvent(type = "server.connected"))
             runCurrent()
@@ -3350,6 +3372,8 @@ class DefaultQuestionLiveStoreTest {
             advanceUntilIdle()
             assertEquals(1, repository.questionFetchCount)
 
+            eventStream.openGap()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
             eventStream.emit(OpencodeEvent(type = "server.connected"))
             runCurrent()

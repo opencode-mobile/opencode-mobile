@@ -222,6 +222,7 @@ struct SessionStatusLiveStoreTests {
         _ = try await collector.awaitEmission { $0["ses-1"]?.raw["type"] == "busy" }
 
         repository.statuses = []
+        eventStream.openGap()
         eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
         try await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs + 80))
         collector.cancel()

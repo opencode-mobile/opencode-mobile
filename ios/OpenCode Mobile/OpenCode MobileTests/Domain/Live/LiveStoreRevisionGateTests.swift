@@ -20,6 +20,7 @@ struct LiveStoreRevisionGateTests {
 
         let gate = RestGate()
         repository.nextGetGate = gate
+        eventStream.openGap()
         eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
         try await poll { repository.statusFetchCount == 2 }
 

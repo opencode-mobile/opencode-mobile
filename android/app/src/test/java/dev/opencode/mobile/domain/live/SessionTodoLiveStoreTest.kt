@@ -1,6 +1,8 @@
 package dev.opencode.mobile.domain.live
 
+import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
+import dev.opencode.mobile.domain.event.LiveGapReason
 import dev.opencode.mobile.domain.event.FakeWorldSignals
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.SilentWorldSignals
@@ -288,7 +290,6 @@ class SessionTodoLiveStoreTest {
             job.cancel()
 
             assertEquals("From event", emissions.last().single().content)
-            assertTrue(repository.listTodosCallCount >= 2)
         }
 
     @Test
@@ -331,7 +332,7 @@ class SessionTodoLiveStoreTest {
                 }
             advanceUntilIdle()
 
-            world.emit(WorldSignal.Background)
+            world.emit(WorldSignal.BackgroundStop)
             advanceUntilIdle()
             repository.listTodosError = SessionError.Http(500, "down")
             world.emit(WorldSignal.Foreground)
@@ -366,6 +367,8 @@ class SessionTodoLiveStoreTest {
             advanceUntilIdle()
             val afterIdle = repository.listTodosCallCount
 
+            eventStream.openGap(LiveGapReason.Reconnect)
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = null, rawProperties = null))
             advanceUntilIdle()
             job.cancel()

@@ -3,9 +3,11 @@ package dev.opencode.mobile.domain.live
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.GapAuthority
 import dev.opencode.mobile.domain.event.SilentWorldSignals
 import dev.opencode.mobile.domain.event.StoreRefreshReason
 import dev.opencode.mobile.domain.event.WorldSignals
+import dev.opencode.mobile.domain.event.asLiveConnection
 import dev.opencode.mobile.domain.event.catchUpReason
 import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.SessionRepository
@@ -80,20 +82,27 @@ class DefaultSessionLiveStore
 
         private fun buildSessionFlow(directory: String): Flow<SessionListSnapshot> =
             channelFlow {
-                var stale = false
+                val liveConnection = eventStream.asLiveConnection()
+                val authority = GapAuthority()
                 val gate = LiveStoreRefreshGate()
                 try {
                     suspend fun refreshFromNetwork(
                         reason: String,
                         force: Boolean,
                     ): Boolean {
-                        if (!force && !stale) {
-                            DiagnosticLog.info(
-                                DiagnosticLogArea.Session,
-                                "sessionLiveStore skip directory=$directory reason=$reason",
-                            )
-                            return false
-                        }
+                        val snapshot = liveConnection.snapshot.value
+                        val generation =
+                            if (force) {
+                                null
+                            } else {
+                                authority.tryBegin(snapshot) ?: run {
+                                    DiagnosticLog.info(
+                                        DiagnosticLogArea.Session,
+                                        "sessionLiveStore skip directory=$directory reason=$reason",
+                                    )
+                                    return false
+                                }
+                            }
                         val outcome =
                             gate.refresh(
                                 load = {
@@ -102,7 +111,6 @@ class DefaultSessionLiveStore
                                 commit = { sessions ->
                                     sessionCache.rememberSessions(directory, sessions)
                                     send(SessionListSnapshot(sessions = sessions, isFromCache = false))
-                                    stale = false
                                     DiagnosticLog.info(
                                         DiagnosticLogArea.Session,
                                         "sessionLiveStore refresh directory=$directory reason=$reason " +
@@ -110,6 +118,14 @@ class DefaultSessionLiveStore
                                     )
                                 },
                             )
+                        if (generation != null) {
+                            when (outcome) {
+                                LiveStoreRefreshOutcome.COMMITTED -> authority.acknowledge(generation)
+                                LiveStoreRefreshOutcome.FAILED,
+                                LiveStoreRefreshOutcome.DISCARDED,
+                                -> authority.fail(generation)
+                            }
+                        }
                         return outcome == LiveStoreRefreshOutcome.COMMITTED
                     }
 
@@ -118,8 +134,8 @@ class DefaultSessionLiveStore
                             .filter { it.key == null || it.key == directory }
                             .collect { invalidation ->
                                 try {
-                                    stale = true
-                                    refreshFromNetwork(invalidation.reason, force = true)
+                                    authority.invalidate(liveConnection.snapshot.value)
+                                    refreshFromNetwork(invalidation.reason, force = false)
                                 } finally {
                                     invalidation.ack?.complete(Unit)
                                 }
@@ -132,16 +148,22 @@ class DefaultSessionLiveStore
                     }
 
                     refreshFromNetwork(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)
+                    authority.acknowledgeCurrent(liveConnection.snapshot.value)
 
                     launch {
                         worldSignals.signals.collect { signal ->
                             if (signal.marksStale()) {
-                                stale = true
+                                authority.invalidate(liveConnection.snapshot.value)
                                 return@collect
                             }
                             signal.catchUpReason()?.let { reason ->
                                 refreshFromNetwork(reason, force = false)
                             }
+                        }
+                    }
+                    launch {
+                        liveConnection.snapshot.collect {
+                            refreshFromNetwork(StoreRefreshReason.STREAM_RECONNECTED, force = false)
                         }
                     }
 
@@ -153,7 +175,8 @@ class DefaultSessionLiveStore
                         eventStream.events.filter { it.triggersHomeRefresh }.map { it.type },
                     ).debounce(LiveStoreRefreshPolicy.SESSION_DEBOUNCE_MS)
                         .collect { reason ->
-                            refreshFromNetwork(reason, force = true)
+                            val mutation = reason != "stream.reconnected" && reason != "server.connected"
+                            refreshFromNetwork(reason, force = mutation)
                         }
                 } finally {
                     activeDirectories.remove(directory)

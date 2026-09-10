@@ -1,7 +1,7 @@
 import Foundation
 @testable import OpenCode_Mobile
 
-final class RecordingForegroundEventStream: ForegroundEventStream, @unchecked Sendable {
+final class RecordingForegroundEventStream: LiveConnection, @unchecked Sendable {
     let fake = FakeForegroundEventStream()
     private let lock = NSLock()
     private var _ops: [String] = []
@@ -13,9 +13,14 @@ final class RecordingForegroundEventStream: ForegroundEventStream, @unchecked Se
     }
 
     var connectionState: EventStreamConnectionState { fake.connectionState }
+    var snapshot: LiveConnectionSnapshot { fake.snapshot }
 
     func connectionStateUpdates() -> AsyncStream<EventStreamConnectionState> {
         fake.connectionStateUpdates()
+    }
+
+    func snapshotUpdates() -> AsyncStream<LiveConnectionSnapshot> {
+        fake.snapshotUpdates()
     }
 
     func events() -> AsyncStream<OpencodeEvent> {

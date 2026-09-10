@@ -593,16 +593,26 @@ struct EventDomainAdapterTests {
     }
 }
 
-final class FakeForegroundEventStream: ForegroundEventStream, @unchecked Sendable {
+final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
     private let lock = NSLock()
     private var _connectionState: EventStreamConnectionState = .idle
+    private var _snapshot = LiveConnectionSnapshot()
+    private var gapClock: UInt64 = 0
+    private var wasConnected = false
+    private var occupying = false
     var connectionState: EventStreamConnectionState {
         lock.lock()
         defer { lock.unlock() }
         return _connectionState
     }
+    var snapshot: LiveConnectionSnapshot {
+        lock.lock()
+        defer { lock.unlock() }
+        return _snapshot
+    }
     private var continuations: [UUID: AsyncStream<OpencodeEvent>.Continuation] = [:]
     private var connectionStateContinuations: [UUID: AsyncStream<EventStreamConnectionState>.Continuation] = [:]
+    private var snapshotContinuations: [UUID: AsyncStream<LiveConnectionSnapshot>.Continuation] = [:]
 
     func connectionStateUpdates() -> AsyncStream<EventStreamConnectionState> {
         let id = UUID()
@@ -616,6 +626,23 @@ final class FakeForegroundEventStream: ForegroundEventStream, @unchecked Sendabl
                 guard let self else { return }
                 self.lock.lock()
                 self.connectionStateContinuations.removeValue(forKey: id)
+                self.lock.unlock()
+            }
+        }
+    }
+
+    func snapshotUpdates() -> AsyncStream<LiveConnectionSnapshot> {
+        let id = UUID()
+        return AsyncStream { continuation in
+            self.lock.lock()
+            let current = self._snapshot
+            self.snapshotContinuations[id] = continuation
+            self.lock.unlock()
+            continuation.yield(current)
+            continuation.onTermination = { [weak self] _ in
+                guard let self else { return }
+                self.lock.lock()
+                self.snapshotContinuations.removeValue(forKey: id)
                 self.lock.unlock()
             }
         }
@@ -637,20 +664,74 @@ final class FakeForegroundEventStream: ForegroundEventStream, @unchecked Sendabl
     }
 
     func start() {
+        lock.lock()
+        if occupying || _connectionState == .connected {
+            occupying = true
+            lock.unlock()
+            return
+        }
+        occupying = true
+        openGapLocked(.occupancyStart)
+        wasConnected = false
+        lock.unlock()
         setConnectionState(.connected)
     }
 
     func stop() {
-        setConnectionState(.idle)
+        lock.lock()
+        occupying = false
+        _connectionState = .idle
+        wasConnected = false
+        openGapLocked(.stopped)
+        _snapshot.connectionState = .idle
+        let stateConts = Array(connectionStateContinuations.values)
+        let snapshotConts = Array(snapshotContinuations.values)
+        let snapshot = _snapshot
+        lock.unlock()
+        for continuation in stateConts {
+            continuation.yield(.idle)
+        }
+        for continuation in snapshotConts {
+            continuation.yield(snapshot)
+        }
+    }
+
+    func openGap(_ reason: LiveGapReason = .reconnect) {
+        lock.lock()
+        openGapLocked(reason)
+        _snapshot.connectionState = _connectionState
+        let snapshotConts = Array(snapshotContinuations.values)
+        let snapshot = _snapshot
+        lock.unlock()
+        for continuation in snapshotConts {
+            continuation.yield(snapshot)
+        }
     }
 
     func setConnectionState(_ state: EventStreamConnectionState) {
         lock.lock()
+        let dropFromConnected = wasConnected && (state == .idle || state == .disconnected || state == .reconnecting)
         _connectionState = state
-        let conts = Array(connectionStateContinuations.values)
+        if dropFromConnected {
+            openGapLocked(.reconnect)
+        }
+        _snapshot.connectionState = state
+        if state == .connected {
+            wasConnected = true
+            occupying = true
+        }
+        if state == .idle {
+            wasConnected = false
+        }
+        let stateConts = Array(connectionStateContinuations.values)
+        let snapshotConts = Array(snapshotContinuations.values)
+        let snapshot = _snapshot
         lock.unlock()
-        for continuation in conts {
+        for continuation in stateConts {
             continuation.yield(state)
+        }
+        for continuation in snapshotConts {
+            continuation.yield(snapshot)
         }
     }
 
@@ -661,5 +742,11 @@ final class FakeForegroundEventStream: ForegroundEventStream, @unchecked Sendabl
         for continuation in conts {
             continuation.yield(event)
         }
+    }
+
+    private func openGapLocked(_ reason: LiveGapReason) {
+        gapClock += 1
+        _snapshot.generation = gapClock
+        _snapshot.gap = LiveGapRevision(generation: gapClock, reason: reason)
     }
 }

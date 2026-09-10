@@ -36,6 +36,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private var emittedConnectedForCurrentGeneration = false
     private var pendingResumeBarrier = false
     private var currentGap: LiveGapRevision?
+    private var gapClock: UInt64 = 0
+    private var lastAllLive = false
     private let eventDeduper = SseEventDeduper()
     private var leases: [String: Lease] = [:]
     private var subscriberContinuations: [UUID: AsyncStream<OpencodeEvent>.Continuation] = [:]
@@ -125,7 +127,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         DiagnosticLog.info(.sse, "foreground SSE stream starting")
         streamGeneration += 1
         let generation = streamGeneration
-        currentGap = LiveGapRevision(generation: generation, reason: .occupancyStart)
+        openGapLocked(.occupancyStart)
         occupancyTask = Task(priority: .userInitiated) { [weak self] in
             await self?.beginOccupancy(generation: generation)
             while !Task.isCancelled {
@@ -154,7 +156,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         occupyingConnected = false
         emittedReconnectForCurrentGap = false
         emittedConnectedForCurrentGeneration = false
-        currentGap = LiveGapRevision(generation: generation, reason: .stopped)
+        lastAllLive = false
+        openGapLocked(.stopped)
         lock.unlock()
         if hadTask || state != .idle {
             DiagnosticLog.info(.sse, "foreground SSE stream stopping")
@@ -217,7 +220,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         lock.lock()
         streamGeneration += 1
         let generation = streamGeneration
-        currentGap = LiveGapRevision(generation: generation, reason: reason)
+        openGapLocked(reason)
         appliedConfig = config
         eventDeduper.clear()
         occupyingConnected = false
@@ -332,6 +335,10 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         if parsed.isEmpty {
             DiagnosticLog.warning(.sse, SseDiagnosticLogging.parseFailedMessage(dataLine))
             if !dataLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                lock.lock()
+                openGapLocked(.parseFailed)
+                lock.unlock()
+                publishSnapshot()
                 _ = handleStreamEvent(OpencodeEvent(type: "sse.parse.failed", sessionID: nil), generation: generation)
             }
             return
@@ -390,6 +397,11 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             SseSubscribeTargets.targets(protocol: $0.serverProtocol, directories: $0.directories).map(\.key)
         } ?? []
         let allLive = !required.isEmpty && required.allSatisfy { leases[$0]?.live == true }
+        if lastAllLive && !allLive {
+            let pathLost = deviceNetworkPath.status == .unavailable
+            openGapLocked(pathLost ? .pathLost : .leaseLost)
+        }
+        lastAllLive = allLive
         let shouldPublishReconnect = (wasFullyConnected || pendingResumeBarrier) && !emittedReconnectForCurrentGap
         if allLive {
             occupyingConnected = true
@@ -476,6 +488,12 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             serverProtocol: serverProtocol,
             directories: directories
         )
+    }
+
+    private func openGapLocked(_ reason: LiveGapReason) {
+        gapClock += 1
+        currentGap = LiveGapRevision(generation: gapClock, reason: reason)
+        emittedReconnectForCurrentGap = false
     }
 
     private func currentGeneration() -> UInt64 {

@@ -1,8 +1,11 @@
 package dev.opencode.mobile.domain.live
 
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.GapAuthority
 import dev.opencode.mobile.domain.event.SilentWorldSignals
+import dev.opencode.mobile.domain.event.StoreRefreshReason
 import dev.opencode.mobile.domain.event.WorldSignals
+import dev.opencode.mobile.domain.event.asLiveConnection
 import dev.opencode.mobile.domain.event.catchUpReason
 import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
@@ -48,6 +51,7 @@ class DefaultSessionTodoLiveStore
                     onBufferOverflow = BufferOverflow.DROP_OLDEST,
                 ),
             var eventJob: Job? = null,
+            val authority: GapAuthority = GapAuthority(),
         )
 
         private val sessions = ConcurrentHashMap<SessionKey, SessionState>()
@@ -65,7 +69,7 @@ class DefaultSessionTodoLiveStore
                     emit(state.todos)
                     if (!state.hasCache) {
                         liveStoreScope.coroutineScope.launch {
-                            fetch(key, state, force = false)
+                            fetch(key, state, force = true, reason = StoreRefreshReason.INITIAL_SUBSCRIBE)
                         }
                     }
                 }
@@ -90,7 +94,7 @@ class DefaultSessionTodoLiveStore
             state.isLive = isLive
             if (wasLive == isLive || !isLive) return
             liveStoreScope.coroutineScope.launch {
-                fetch(key, state, force = state.hasCache)
+                fetch(key, state, force = true)
             }
         }
 
@@ -106,7 +110,8 @@ class DefaultSessionTodoLiveStore
             val key = SessionKey(sessionId, directory.orEmpty())
             val state = sessions[key] ?: return
             liveStoreScope.coroutineScope.launch {
-                fetch(key, state, force = true)
+                state.authority.invalidate(eventStream.asLiveConnection().snapshot.value)
+                fetch(key, state, force = false, reason = StoreRefreshReason.PULL_TO_REFRESH)
             }
         }
 
@@ -117,19 +122,25 @@ class DefaultSessionTodoLiveStore
             if (state.eventJob?.isActive == true) return
             state.eventJob =
                 liveStoreScope.coroutineScope.launch {
-                    var stale = false
+                    val liveConnection = eventStream.asLiveConnection()
+                    if (state.hasCache) {
+                        state.authority.acknowledgeCurrent(liveConnection.snapshot.value)
+                    }
                     launch {
                         worldSignals.signals.collect { signal ->
                             if (state.observerCount <= 0) return@collect
                             if (signal.marksStale()) {
-                                stale = true
+                                state.authority.invalidate(liveConnection.snapshot.value)
                                 return@collect
                             }
                             val reason = signal.catchUpReason() ?: return@collect
-                            if (!stale) return@collect
-                            if (fetch(key, state, force = true)) {
-                                stale = false
-                            }
+                            fetch(key, state, force = false, reason = reason)
+                        }
+                    }
+                    launch {
+                        liveConnection.snapshot.collect {
+                            if (state.observerCount <= 0) return@collect
+                            fetch(key, state, force = false, reason = StoreRefreshReason.STREAM_RECONNECTED)
                         }
                     }
                     var reconnectRefresh: Job? = null
@@ -148,9 +159,7 @@ class DefaultSessionTodoLiveStore
                                         launch {
                                             delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
                                             if (state.observerCount <= 0) return@launch
-                                            if (fetch(key, state, force = true)) {
-                                                stale = false
-                                            }
+                                            fetch(key, state, force = false, reason = event.type)
                                         }
                                 }
                             }
@@ -165,14 +174,30 @@ class DefaultSessionTodoLiveStore
             key: SessionKey,
             state: SessionState,
             force: Boolean,
+            reason: String? = null,
         ): Boolean {
-            if (state.hasCache && !force) return true
+            val liveConnection = eventStream.asLiveConnection()
+            val snapshot = liveConnection.snapshot.value
+            val generation =
+                if (force) {
+                    null
+                } else {
+                    state.authority.tryBegin(snapshot) ?: return state.hasCache
+                }
             val directory = key.directory.ifEmpty { null }
             val todos =
                 runCatching {
                     sessionRepository.listSessionTodos(key.sessionId, directory)
-                }.getOrNull() ?: return false
+                }.getOrNull()
+            if (todos == null) {
+                generation?.let { state.authority.fail(it) }
+                return false
+            }
             replace(state, todos, markCache = true)
+            generation?.let { state.authority.acknowledge(it) }
+            if (force) {
+                state.authority.acknowledgeCurrent(liveConnection.snapshot.value)
+            }
             return true
         }
 

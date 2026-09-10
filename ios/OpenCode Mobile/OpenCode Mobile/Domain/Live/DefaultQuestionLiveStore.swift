@@ -67,24 +67,27 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
         invalidationBus: StoreInvalidationBus,
         yield: @escaping @Sendable ([QuestionRequest]) -> Void
     ) async {
-        let stale = StaleBit()
+        let liveConnection = eventStream.asLiveConnection()
+        let authority = GapAuthority()
         let gate = LiveStoreRefreshGate()
         let lastEmitted = QuestionEmitCache()
         await refresh(
             directory: directory,
             reason: StoreRefreshReason.initialSubscribe,
             force: true,
-            stale: stale,
+            liveConnection: liveConnection,
+            authority: authority,
             gate: gate,
             lastEmitted: lastEmitted,
             sessionRepository: sessionRepository,
             yield: yield
         )
+        authority.acknowledgeCurrent(liveConnection.snapshot)
         await withTaskGroup(of: Void.self) { group in
             group.addTask {
                 for await signal in worldSignals.signals() {
                     if signal.marksStale {
-                        stale.mark()
+                        authority.invalidate(liveConnection.snapshot)
                         continue
                     }
                     guard let reason = signal.catchUpReason else { continue }
@@ -92,7 +95,23 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
                         directory: directory,
                         reason: reason,
                         force: false,
-                        stale: stale,
+                        liveConnection: liveConnection,
+                        authority: authority,
+                        gate: gate,
+                        lastEmitted: lastEmitted,
+                        sessionRepository: sessionRepository,
+                        yield: yield
+                    )
+                }
+            }
+            group.addTask {
+                for await _ in liveConnection.snapshotUpdates() {
+                    await refresh(
+                        directory: directory,
+                        reason: StoreRefreshReason.streamReconnected,
+                        force: false,
+                        liveConnection: liveConnection,
+                        authority: authority,
                         gate: gate,
                         lastEmitted: lastEmitted,
                         sessionRepository: sessionRepository,
@@ -103,12 +122,13 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
             group.addTask {
                 for await invalidation in invalidationBus.events() {
                     if let key = invalidation.key, key != directory { continue }
-                    stale.mark()
+                    authority.invalidate(liveConnection.snapshot)
                     await refresh(
                         directory: directory,
                         reason: invalidation.reason,
-                        force: true,
-                        stale: stale,
+                        force: false,
+                        liveConnection: liveConnection,
+                        authority: authority,
                         gate: gate,
                         lastEmitted: lastEmitted,
                         sessionRepository: sessionRepository,
@@ -131,8 +151,9 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
                             await refresh(
                                 directory: directory,
                                 reason: reason,
-                                force: true,
-                                stale: stale,
+                                force: false,
+                                liveConnection: liveConnection,
+                                authority: authority,
                                 gate: gate,
                                 lastEmitted: lastEmitted,
                                 sessionRepository: sessionRepository,
@@ -149,7 +170,8 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
                         directory: directory,
                         reason: event.type,
                         force: true,
-                        stale: stale,
+                        liveConnection: liveConnection,
+                        authority: authority,
                         gate: gate,
                         lastEmitted: lastEmitted,
                         sessionRepository: sessionRepository,
@@ -166,22 +188,29 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
         directory: String,
         reason: String,
         force: Bool,
-        stale: StaleBit,
+        liveConnection: any LiveConnection,
+        authority: GapAuthority,
         gate: LiveStoreRefreshGate,
         lastEmitted: QuestionEmitCache,
         sessionRepository: any SessionRepository,
         yield: @escaping @Sendable ([QuestionRequest]) -> Void
     ) async {
-        if !force, !stale.isSet {
-            DiagnosticLog.info(.question, "question skip reason=\(reason)")
-            return
+        let snapshot = liveConnection.snapshot
+        let generation: UInt64?
+        if force {
+            generation = nil
+        } else {
+            guard let started = authority.tryBegin(snapshot) else {
+                DiagnosticLog.info(.question, "question skip reason=\(reason)")
+                return
+            }
+            generation = started
         }
         let outcome = await gate.refresh(
             load: { () async -> [QuestionRequest]? in
                 try? await sessionRepository.listPendingQuestions(directory: directory)
             },
             commit: { requests in
-                stale.clear()
                 DiagnosticLog.info(.question, "question refresh reason=\(reason) count=\(requests.count)")
                 guard lastEmitted.shouldEmit(requests) else {
                     DiagnosticLog.info(
@@ -193,6 +222,14 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
                 yield(requests)
             }
         )
+        if let generation {
+            switch outcome {
+            case .committed:
+                authority.acknowledge(generation)
+            case .failed, .discarded:
+                authority.fail(generation)
+            }
+        }
         if outcome == .failed {
             DiagnosticLog.warning(.question, "question refresh failed reason=\(reason)")
         }

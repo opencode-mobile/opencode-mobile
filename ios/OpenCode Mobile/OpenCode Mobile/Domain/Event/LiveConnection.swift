@@ -22,6 +22,9 @@ nonisolated enum LiveGapReason: Equatable, Sendable {
     case reconnect
     case configChanged
     case stopped
+    case pathLost
+    case leaseLost
+    case parseFailed
 }
 
 nonisolated struct LiveGapRevision: Equatable, Sendable {
@@ -44,6 +47,56 @@ nonisolated struct LiveConnectionSnapshot: Equatable, Sendable {
 nonisolated protocol LiveConnection: ForegroundEventStream {
     var snapshot: LiveConnectionSnapshot { get }
     func snapshotUpdates() -> AsyncStream<LiveConnectionSnapshot>
+}
+
+extension LiveConnectionSnapshot {
+    var isReachable: Bool {
+        connectionState == .connecting
+            || connectionState == .connected
+            || connectionState == .reconnecting
+    }
+}
+
+extension ForegroundEventStream {
+    func asLiveConnection() -> any LiveConnection {
+        if let live = self as? any LiveConnection {
+            return live
+        }
+        return AdaptedLiveConnection(stream: self)
+    }
+}
+
+nonisolated final class AdaptedLiveConnection: LiveConnection, @unchecked Sendable {
+    private let stream: any ForegroundEventStream
+
+    init(stream: any ForegroundEventStream) {
+        self.stream = stream
+    }
+
+    var connectionState: EventStreamConnectionState { stream.connectionState }
+
+    func connectionStateUpdates() -> AsyncStream<EventStreamConnectionState> {
+        stream.connectionStateUpdates()
+    }
+
+    func events() -> AsyncStream<OpencodeEvent> {
+        stream.events()
+    }
+
+    func start() { stream.start() }
+
+    func stop() { stream.stop() }
+
+    var snapshot: LiveConnectionSnapshot {
+        LiveConnectionSnapshot(connectionState: stream.connectionState)
+    }
+
+    func snapshotUpdates() -> AsyncStream<LiveConnectionSnapshot> {
+        AsyncStream { continuation in
+            continuation.yield(snapshot)
+            continuation.finish()
+        }
+    }
 }
 
 nonisolated final class LiveConnectionRevisionSignal: @unchecked Sendable {

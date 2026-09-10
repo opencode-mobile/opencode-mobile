@@ -151,7 +151,7 @@ nonisolated final class FakeWorldSignals: WorldSignals, @unchecked Sendable {
 
 extension WorldSignal {
     nonisolated var marksStale: Bool {
-        self == .background || self == .backgroundStop || self == .pathLost
+        self == .backgroundStop || self == .pathLost
     }
 
     nonisolated var catchUpReason: String? {

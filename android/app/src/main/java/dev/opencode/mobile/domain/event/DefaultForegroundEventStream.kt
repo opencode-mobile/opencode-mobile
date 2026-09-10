@@ -78,6 +78,8 @@ class DefaultForegroundEventStream
         private var emittedConnectedForCurrentGeneration = false
         private var pendingResumeBarrier = false
         private var currentGap: LiveGapRevision? = null
+        private val gapClock = AtomicLong(0)
+        private var lastAllLive = false
 
         private val _connectionState = MutableStateFlow(EventStreamConnectionState.Idle)
         override val connectionState: StateFlow<EventStreamConnectionState> = _connectionState.asStateFlow()
@@ -134,7 +136,8 @@ class DefaultForegroundEventStream
             occupyingConnected = false
             emittedReconnectForCurrentGap = false
             emittedConnectedForCurrentGeneration = false
-            currentGap = LiveGapRevision(generation, LiveGapReason.Stopped)
+            lastAllLive = false
+            openGap(LiveGapReason.Stopped)
             setConnectionState(EventStreamConnectionState.Idle, generation)
             publishSnapshot()
         }
@@ -204,8 +207,14 @@ class DefaultForegroundEventStream
         private fun beginGeneration(reason: LiveGapReason): Long {
             val generation = streamGeneration.incrementAndGet()
             connectionEpoch.bump()
-            currentGap = LiveGapRevision(generation, reason)
+            openGap(reason)
             return generation
+        }
+
+        private fun openGap(reason: LiveGapReason) {
+            val revision = gapClock.incrementAndGet()
+            currentGap = LiveGapRevision(revision, reason)
+            emittedReconnectForCurrentGap = false
         }
 
         private fun reconcileLeases(config: LiveConnectionConfig) {
@@ -338,6 +347,8 @@ class DefaultForegroundEventStream
                     SseDiagnosticLogging.parseFailedMessage(dataLine),
                 )
                 if (dataLine.isNotBlank()) {
+                    openGap(LiveGapReason.ParseFailed)
+                    publishSnapshot()
                     emitIfCurrent(OpencodeEvent(type = "sse.parse.failed"), generation)
                 }
                 return
@@ -411,6 +422,11 @@ class DefaultForegroundEventStream
                     required.all { key ->
                         synchronized(leaseLock) { leases[key]?.live?.get() == true }
                     }
+            if (lastAllLive && !allLive) {
+                val pathLost = deviceNetworkPath.status.value == DeviceNetworkPathStatus.Unavailable
+                openGap(if (pathLost) LiveGapReason.PathLost else LiveGapReason.LeaseLost)
+            }
+            lastAllLive = allLive
             if (allLive) {
                 val shouldPublishReconnect =
                     (wasFullyConnected || pendingResumeBarrier) && !emittedReconnectForCurrentGap

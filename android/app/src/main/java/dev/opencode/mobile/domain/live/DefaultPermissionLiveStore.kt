@@ -3,9 +3,11 @@ package dev.opencode.mobile.domain.live
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.GapAuthority
 import dev.opencode.mobile.domain.event.SilentWorldSignals
 import dev.opencode.mobile.domain.event.StoreRefreshReason
 import dev.opencode.mobile.domain.event.WorldSignals
+import dev.opencode.mobile.domain.event.asLiveConnection
 import dev.opencode.mobile.domain.event.catchUpReason
 import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.PermissionRequest
@@ -37,7 +39,8 @@ class DefaultPermissionLiveStore
         override fun observePermissions(directory: String): Flow<List<PermissionRequest>> =
             cache.observe(directory) { sharingScope ->
                 channelFlow {
-                    var stale = false
+                    val liveConnection = eventStream.asLiveConnection()
+                    val authority = GapAuthority()
                     var reconnectRefresh: Job? = null
                     var lastEmitted: List<PermissionRequest>? = null
                     val gate = LiveStoreRefreshGate()
@@ -46,37 +49,51 @@ class DefaultPermissionLiveStore
                         reason: String,
                         force: Boolean,
                     ) {
-                        if (!force && !stale) {
-                            diagnosticLogger.info(
-                                DiagnosticLogArea.Permission,
-                                "permission skip reason=$reason",
-                            )
-                            return
-                        }
-                        var failure: Throwable? = null
-                        gate.refresh(
-                            load = {
-                                runCatching { sessionRepository.listPendingPermissions(directory) }
-                                    .onFailure { failure = it }
-                                    .getOrNull()
-                            },
-                            commit = { requests ->
-                                stale = false
-                                diagnosticLogger.info(
-                                    DiagnosticLogArea.Permission,
-                                    "permission refresh reason=$reason count=${requests.size}",
-                                )
-                                if (requests == lastEmitted) {
+                        val snapshot = liveConnection.snapshot.value
+                        val generation =
+                            if (force) {
+                                null
+                            } else {
+                                authority.tryBegin(snapshot) ?: run {
                                     diagnosticLogger.info(
                                         DiagnosticLogArea.Permission,
-                                        "permission emit skipped reason=$reason cause=unchanged",
+                                        "permission skip reason=$reason",
                                     )
-                                } else {
-                                    lastEmitted = requests
-                                    send(requests)
+                                    return
                                 }
-                            },
-                        )
+                            }
+                        var failure: Throwable? = null
+                        val outcome =
+                            gate.refresh(
+                                load = {
+                                    runCatching { sessionRepository.listPendingPermissions(directory) }
+                                        .onFailure { failure = it }
+                                        .getOrNull()
+                                },
+                                commit = { requests ->
+                                    diagnosticLogger.info(
+                                        DiagnosticLogArea.Permission,
+                                        "permission refresh reason=$reason count=${requests.size}",
+                                    )
+                                    if (requests == lastEmitted) {
+                                        diagnosticLogger.info(
+                                            DiagnosticLogArea.Permission,
+                                            "permission emit skipped reason=$reason cause=unchanged",
+                                        )
+                                    } else {
+                                        lastEmitted = requests
+                                        send(requests)
+                                    }
+                                },
+                            )
+                        if (generation != null) {
+                            when (outcome) {
+                                LiveStoreRefreshOutcome.COMMITTED -> authority.acknowledge(generation)
+                                LiveStoreRefreshOutcome.FAILED,
+                                LiveStoreRefreshOutcome.DISCARDED,
+                                -> authority.fail(generation)
+                            }
+                        }
                         failure?.let {
                             diagnosticLogger.warning(
                                 DiagnosticLogArea.Permission,
@@ -86,21 +103,27 @@ class DefaultPermissionLiveStore
                         }
                     }
                     refresh(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)
+                    authority.acknowledgeCurrent(liveConnection.snapshot.value)
                     launch {
                         worldSignals.signals.collect { signal ->
                             if (signal.marksStale()) {
-                                stale = true
+                                authority.invalidate(liveConnection.snapshot.value)
                                 return@collect
                             }
                             signal.catchUpReason()?.let { refresh(it, force = false) }
                         }
                     }
                     launch {
+                        liveConnection.snapshot.collect {
+                            refresh(StoreRefreshReason.STREAM_RECONNECTED, force = false)
+                        }
+                    }
+                    launch {
                         invalidationBus.events
                             .filter { it.key == null || it.key == directory }
                             .collect {
-                                stale = true
-                                refresh(it.reason, force = true)
+                                authority.invalidate(liveConnection.snapshot.value)
+                                refresh(it.reason, force = false)
                             }
                     }
                     try {
@@ -116,7 +139,7 @@ class DefaultPermissionLiveStore
                                     reconnectRefresh =
                                         launch {
                                             delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
-                                            refresh(event.type, force = true)
+                                            refresh(event.type, force = false)
                                         }
                                 } else {
                                     refresh(event.type, force = true)

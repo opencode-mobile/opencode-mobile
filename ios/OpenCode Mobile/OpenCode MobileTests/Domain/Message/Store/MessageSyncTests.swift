@@ -84,9 +84,9 @@ struct MessageSyncTests {
         world.emit(.background)
         try? await Task.sleep(for: .milliseconds(20))
         world.emit(.foreground)
-        let refreshed = await waitUntil { repo.listMessagesCallCount > afterInitial }
+        try? await Task.sleep(for: .milliseconds(80))
         task.cancel()
-        #expect(refreshed)
+        #expect(repo.listMessagesCallCount == afterInitial)
     }
 
     @Test func observeMessages_worldBackgroundStopThenForeground_refreshes() async {
@@ -160,7 +160,7 @@ struct MessageSyncTests {
         }
         #expect(streaming)
 
-        world.emit(.background)
+        world.emit(.backgroundStop)
         eventStream.setConnectionState(.idle)
         try? await Task.sleep(for: .milliseconds(20))
 
@@ -178,6 +178,7 @@ struct MessageSyncTests {
         ]
 
         repo.holdNextListMessages()
+        eventStream.setConnectionState(.connecting)
         world.emit(.foreground)
         let blocked = await waitUntil { repo.isListBlocked }
         #expect(blocked)
@@ -300,6 +301,8 @@ struct MessageSyncTests {
         #expect(loaded)
 
         repo.shouldFailList = true
+        eventStream.setConnectionState(.connected)
+        eventStream.openGap()
         eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: "ses-1", rawProperties: nil))
         let kept = await waitUntil {
             if case .recovering = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
@@ -330,6 +333,8 @@ struct MessageSyncTests {
 
         // Enter recovering via failed reconnect (no REST hold / MainActor deadlock).
         repo.shouldFailList = true
+        eventStream.setConnectionState(.connected)
+        eventStream.openGap()
         eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: "ses-1", rawProperties: nil))
         let recovering = await waitUntil {
             if case .recovering = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
@@ -1385,6 +1390,8 @@ struct MessageSyncTests {
         #expect(loaded)
         #expect(collector.emissions.count == 1)
 
+        eventStream.setConnectionState(.connected)
+        eventStream.openGap()
         eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: "ses-1", rawProperties: nil))
         let reloaded = await waitUntil { repo.listMessagesCallCount >= 2 }
         try? await Task.sleep(for: .milliseconds(50))
@@ -1997,6 +2004,8 @@ struct MessageSyncTests {
             Message(id: "msg-1", role: .user, text: "After reconnect", parts: [], model: nil, mode: nil, sentAtEpochMs: nil),
         ]
 
+        eventStream.setConnectionState(.connected)
+        eventStream.openGap()
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(dataLine: #"{"payload":{"type":"stream.reconnected","properties":{}}}"#)!
         eventStream.emit(event)

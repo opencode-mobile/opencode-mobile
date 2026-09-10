@@ -52,6 +52,8 @@ struct QuestionLiveStoreTests {
         _ = try await collector.awaitEmission { $0.isEmpty }
         #expect(repository.questionFetchCount == 1)
 
+        eventStream.openGap()
+        eventStream.setConnectionState(.connected)
         eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: nil))
         eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
         await settleBeyondDebounce()

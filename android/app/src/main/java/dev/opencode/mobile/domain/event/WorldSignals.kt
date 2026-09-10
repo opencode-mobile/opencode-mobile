@@ -56,8 +56,7 @@ class FakeWorldSignals : WorldSignals {
 }
 
 fun WorldSignal.marksStale(): Boolean =
-    this == WorldSignal.Background ||
-        this == WorldSignal.BackgroundStop ||
+    this == WorldSignal.BackgroundStop ||
         this == WorldSignal.PathLost
 
 fun WorldSignal.catchUpReason(): String? =

@@ -4,10 +4,12 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.GapAuthority
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.SilentWorldSignals
 import dev.opencode.mobile.domain.event.StoreRefreshReason
 import dev.opencode.mobile.domain.event.WorldSignals
+import dev.opencode.mobile.domain.event.asLiveConnection
 import dev.opencode.mobile.domain.event.catchUpReason
 import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.SessionRepository
@@ -114,7 +116,8 @@ class DefaultSessionStatusLiveStore
                 var server = emptyMap<String, SessionStatus>()
                 var current = emptyMap<String, SessionStatus>()
                 var reconnectRefresh: Job? = null
-                var stale = false
+                val liveConnection = eventStream.asLiveConnection()
+                val authority = GapAuthority()
                 val gate = LiveStoreRefreshGate()
                 try {
                     suspend fun emitOverlay(base: Map<String, SessionStatus>) {
@@ -147,13 +150,19 @@ class DefaultSessionStatusLiveStore
                         force: Boolean,
                         emptyActiveGuard: Boolean = false,
                     ): LiveStoreRefreshOutcome {
-                        if (!force && !stale) {
-                            DiagnosticLog.info(
-                                DiagnosticLogArea.Session,
-                                "statusLiveStore skip directory=$directory reason=$reason",
-                            )
-                            return LiveStoreRefreshOutcome.FAILED
-                        }
+                        val snapshot = liveConnection.snapshot.value
+                        val generation =
+                            if (force) {
+                                null
+                            } else {
+                                authority.tryBegin(snapshot) ?: run {
+                                    DiagnosticLog.info(
+                                        DiagnosticLogArea.Session,
+                                        "statusLiveStore skip directory=$directory reason=$reason",
+                                    )
+                                    return LiveStoreRefreshOutcome.FAILED
+                                }
+                            }
                         val outcome =
                             gate.refresh(
                                 load = {
@@ -164,7 +173,6 @@ class DefaultSessionStatusLiveStore
                                     }.getOrNull()
                                 },
                                 commit = { loaded ->
-                                    stale = false
                                     DiagnosticLog.info(
                                         DiagnosticLogArea.Session,
                                         "statusLiveStore refresh directory=$directory reason=$reason",
@@ -172,6 +180,14 @@ class DefaultSessionStatusLiveStore
                                     commitLoaded(loaded, emptyActiveGuard)
                                 },
                             )
+                        if (generation != null) {
+                            when (outcome) {
+                                LiveStoreRefreshOutcome.COMMITTED -> authority.acknowledge(generation)
+                                LiveStoreRefreshOutcome.FAILED,
+                                LiveStoreRefreshOutcome.DISCARDED,
+                                -> authority.fail(generation)
+                            }
+                        }
                         if (outcome == LiveStoreRefreshOutcome.DISCARDED) {
                             DiagnosticLog.info(
                                 DiagnosticLogArea.Session,
@@ -211,8 +227,8 @@ class DefaultSessionStatusLiveStore
                             .filter { it.key == null || it.key == directory }
                             .collect { invalidation ->
                                 try {
-                                    stale = true
-                                    reloadFromServer(invalidation.reason, force = true)
+                                    authority.invalidate(liveConnection.snapshot.value)
+                                    reloadFromServer(invalidation.reason, force = false)
                                 } finally {
                                     invalidation.ack?.complete(Unit)
                                 }
@@ -221,15 +237,21 @@ class DefaultSessionStatusLiveStore
                     activeDirectories.add(directory)
 
                     reloadFromServer(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)
+                    authority.acknowledgeCurrent(liveConnection.snapshot.value)
 
                     launch {
                         worldSignals.signals.collect { signal ->
                             if (signal.marksStale()) {
-                                stale = true
+                                authority.invalidate(liveConnection.snapshot.value)
                                 return@collect
                             }
                             val reason = signal.catchUpReason() ?: return@collect
                             reloadFromServer(reason, force = false)
+                        }
+                    }
+                    launch {
+                        liveConnection.snapshot.collect {
+                            reloadFromServer(StoreRefreshReason.STREAM_RECONNECTED, force = false)
                         }
                     }
 
@@ -241,7 +263,7 @@ class DefaultSessionStatusLiveStore
                                     reconnectRefresh =
                                         launch {
                                             delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
-                                            reloadFromServer(event.type, force = true)
+                                            reloadFromServer(event.type, force = false)
                                         }
                                 }
                                 event.type == "session.active.snapshot" -> {

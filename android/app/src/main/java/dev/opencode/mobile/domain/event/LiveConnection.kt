@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 data class LiveConnectionConfig(
@@ -24,6 +25,9 @@ enum class LiveGapReason {
     Reconnect,
     ConfigChanged,
     Stopped,
+    PathLost,
+    LeaseLost,
+    ParseFailed,
 }
 
 data class LiveGapRevision(
@@ -47,4 +51,20 @@ data class LiveConnectionSnapshot(
  */
 interface LiveConnection : ForegroundEventStream {
     val snapshot: StateFlow<LiveConnectionSnapshot>
+}
+
+fun LiveConnectionSnapshot.isReachable(): Boolean =
+    connectionState == EventStreamConnectionState.Connecting ||
+        connectionState == EventStreamConnectionState.Connected ||
+        connectionState == EventStreamConnectionState.Reconnecting
+
+fun ForegroundEventStream.asLiveConnection(): LiveConnection =
+    this as? LiveConnection ?: AdaptedLiveConnection(this)
+
+private class AdaptedLiveConnection(
+    private val stream: ForegroundEventStream,
+) : LiveConnection,
+    ForegroundEventStream by stream {
+    override val snapshot: StateFlow<LiveConnectionSnapshot> =
+        MutableStateFlow(LiveConnectionSnapshot(connectionState = stream.connectionState.value))
 }
