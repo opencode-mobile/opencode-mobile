@@ -779,6 +779,17 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
         }
     }
 
+    /// Same generation and gap; yields even when the snapshot is equal.
+    func republishSameGeneration() {
+        lock.lock()
+        let snapshotConts = Array(snapshotContinuations.values)
+        let snapshot = _snapshot
+        lock.unlock()
+        for continuation in snapshotConts {
+            continuation.yield(snapshot)
+        }
+    }
+
     private func openGapLocked(_ reason: LiveGapReason) {
         gapClock += 1
         _snapshot.generation = gapClock

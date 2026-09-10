@@ -479,7 +479,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
 
         snapshotWatcher = Task { [liveConnection] in
             for await _ in liveConnection.snapshotUpdates() {
-                wakeGapEvaluation(reason: StoreRefreshReason.streamReconnected)
+                wakeGapEvaluation(reason: StoreRefreshReason.connectionSnapshot)
             }
         }
 
@@ -682,7 +682,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             )
             switch result {
             case .accepted(let messages):
-                let becameHealthy = staging.completeAuthorityWindow(reloadSucceeded: true)
+                let becameHealthy = staging.completeAuthorityWindow(.accepted)
                 setHealth(staging.currentHealth, for: key)
                 let published = observationStillCurrent(key: key)
                 if published {
@@ -714,10 +714,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     continue
                 }
             case .discarded:
-                _ = staging.completeAuthorityWindow(reloadSucceeded: false)
+                _ = staging.completeAuthorityWindow(.discarded)
                 setHealth(staging.currentHealth, for: key)
             case .failure(let error):
-                _ = staging.completeAuthorityWindow(reloadSucceeded: false)
+                _ = staging.completeAuthorityWindow(.failed)
                 setHealth(staging.currentHealth, for: key)
                 if isMissingSessionError(error) {
                     markTerminal(key: key)
@@ -875,7 +875,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         switch await fullReloadResult(key: key, reason: reason) {
         case .accepted(let messages):
             if let staging {
-                let healthy = staging.completeAuthorityWindow(reloadSucceeded: true)
+                let healthy = staging.completeAuthorityWindow(.accepted)
                 setHealth(staging.currentHealth, for: key)
                 publishMessages(messages)
                 if !healthy {
@@ -893,7 +893,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             }
         case .discarded(let messages):
             if let staging {
-                _ = staging.completeAuthorityWindow(reloadSucceeded: false)
+                _ = staging.completeAuthorityWindow(.discarded)
                 setHealth(staging.currentHealth, for: key)
                 publishMessages(messages)
                 await performClosedLoopRecovery(
@@ -906,7 +906,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             }
         case .failure:
             if let staging {
-                _ = staging.completeAuthorityWindow(reloadSucceeded: false)
+                _ = staging.completeAuthorityWindow(.failed)
                 setHealth(staging.currentHealth, for: key)
                 await performClosedLoopRecovery(
                     key: key,
@@ -1136,6 +1136,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 setHealth(.healthy, for: key)
                 return
             }
+            gapState.invalidateIfCurrentObligationPaid()
             await reconcileGap(
                 key: key,
                 reason: "session.idle",
@@ -1406,22 +1407,21 @@ private nonisolated final class ObservationGapState: @unchecked Sendable {
         }
     }
 
-    func shouldEvaluate(lastAssistantNeedsAuthority: Bool) -> Bool {
-        let snapshot = liveConnection.snapshot
-        if lastAssistantNeedsAuthority, !authority.needsReconcile(snapshot) {
-            authority.invalidate(snapshot)
-        }
-        return authority.needsReconcile(liveConnection.snapshot)
+    func shouldEvaluate(lastAssistantNeedsAuthority _: Bool) -> Bool {
+        authority.needsReconcile(liveConnection.snapshot)
     }
 
-    func begin(lastAssistantNeedsAuthority: Bool) -> UInt64? {
-        let snapshot = liveConnection.snapshot
-        guard snapshot.isReachable else { return nil }
-        if lastAssistantNeedsAuthority, !authority.needsReconcile(snapshot) {
-            authority.invalidate(snapshot)
-        }
+    func begin(lastAssistantNeedsAuthority _: Bool) -> UInt64? {
+        guard liveConnection.snapshot.isReachable else { return nil }
         guard let generation = authority.tryBegin(liveConnection.snapshot) else { return nil }
         recoveryGeneration = generation
         return generation
+    }
+
+    func invalidateIfCurrentObligationPaid() {
+        let snapshot = liveConnection.snapshot
+        if authority.obligation(snapshot) <= authority.acknowledgedGeneration() {
+            authority.invalidate(snapshot)
+        }
     }
 }

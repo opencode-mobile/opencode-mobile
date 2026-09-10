@@ -127,11 +127,20 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         var events: [OpencodeEvent] = []
+        var kept: [Item] = []
         while count > 0 {
-            if case .event(let event, _) = popFrontLocked(),
-               MessageEventRouter.isIncrementalTranscriptEvent(event) {
+            let item = popFrontLocked()
+            switch item {
+            case .event(let event, _) where MessageEventRouter.isIncrementalTranscriptEvent(event):
                 events.append(event)
+            case .event, .evaluate:
+                kept.append(item)
+            case .overflow, .recoveryRequired:
+                break
             }
+        }
+        for item in kept {
+            pushBackLocked(item)
         }
         return events
     }
@@ -190,27 +199,33 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
     }
 
     @discardableResult
-    func completeAuthorityWindow(reloadSucceeded: Bool) -> Bool {
+    func completeAuthorityWindow(_ outcome: AuthorityWindowOutcome) -> Bool {
         lock.lock()
         defer { lock.unlock() }
         authorityWindowOpen = false
         let raced = racedDuringAuthorityWindow
         racedDuringAuthorityWindow = false
         MessagePipelineProbe.emit(.authorityWindowClosed)
-        guard reloadSucceeded else {
+        switch outcome {
+        case .failed:
             health = .recovering(.reloadFailed)
             MessagePipelineProbe.emit(.recoveryRetry)
             return false
-        }
-        if raced {
+        case .discarded:
             health = .recovering(.racedAuthority)
             MessagePipelineProbe.emit(.recoveryRetry)
             return false
+        case .accepted:
+            if raced {
+                health = .recovering(.racedAuthority)
+                MessagePipelineProbe.emit(.recoveryRetry)
+                return false
+            }
+            health = .healthy
+            pendingRecoveryWhileIdle = false
+            MessagePipelineProbe.emit(.recoveryHealthy)
+            return true
         }
-        health = .healthy
-        pendingRecoveryWhileIdle = false
-        MessagePipelineProbe.emit(.recoveryHealthy)
-        return true
     }
 
     func noteRelevantEventWhileRecovering() {

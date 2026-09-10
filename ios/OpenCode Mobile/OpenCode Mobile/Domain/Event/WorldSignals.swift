@@ -183,4 +183,5 @@ nonisolated enum StoreRefreshReason {
     static let initialSubscribe = "initial-subscribe"
     static let streamReconnected = "stream.reconnected"
     static let serverConnected = "server.connected"
+    static let connectionSnapshot = "connection-snapshot"
 }

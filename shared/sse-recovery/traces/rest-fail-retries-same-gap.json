@@ -35,7 +35,7 @@
         "gapReason": "reconnect",
         "restFetches": [
           { "reason": "initial-subscribe", "count": 1 },
-          { "reason": "stream.reconnected", "count": 1 }
+          { "reason": "connection-snapshot", "count": 1 }
         ]
       },
       "after-retry-success": {
@@ -43,7 +43,7 @@
         "catchUpChrome": false,
         "restFetches": [
           { "reason": "initial-subscribe", "count": 1 },
-          { "reason": "stream.reconnected", "count": 2 }
+          { "reason": "connection-snapshot", "count": 2 }
         ],
         "transcript": [{ "id": "msg-1", "text": "Recovered" }]
       }

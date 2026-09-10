@@ -73,4 +73,5 @@ object StoreRefreshReason {
     const val INITIAL_SUBSCRIBE = "initial-subscribe"
     const val STREAM_RECONNECTED = "stream.reconnected"
     const val SERVER_CONNECTED = "server.connected"
+    const val CONNECTION_SNAPSHOT = "connection-snapshot"
 }

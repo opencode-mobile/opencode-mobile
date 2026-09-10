@@ -16,7 +16,7 @@ nonisolated enum MessageSyncHealth: Equatable, Sendable {
         return false
     }
 
-    /// Home refresh + Session Chat Syncing pill. Overflow stays quiet (live stream).
+    /// Home refresh + Session Chat Syncing pill. Overflow and raced authority stay quiet.
     var showsCatchUpChrome: Bool {
         switch self {
         case .healthy:
@@ -24,9 +24,16 @@ nonisolated enum MessageSyncHealth: Equatable, Sendable {
         case .stale:
             true
         case .recovering(let reason):
-            reason != .overflow
+            reason != .overflow && reason != .racedAuthority
         }
     }
+}
+
+/// REST authority-window result. Discarded means live local state won the race.
+nonisolated enum AuthorityWindowOutcome: Sendable {
+    case accepted
+    case discarded
+    case failed
 }
 
 nonisolated enum MessageSyncRecoveryReason: String, Equatable, Sendable {

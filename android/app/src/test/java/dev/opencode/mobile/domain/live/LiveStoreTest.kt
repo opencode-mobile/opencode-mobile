@@ -995,6 +995,478 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_hiddenReasoningSnapshotUpdates_doNotRestOrShowCatchUp() =
+        runTest(testDispatcher) {
+            for (iteration in 1..10) {
+                val seed = hiddenReasoningTranscript()
+                val repository = FakeMessageRepository(messages = seed)
+                val eventStream = FakeForegroundEventStream()
+                eventStream.setConnectionState(EventStreamConnectionState.Connected)
+                val initialHold = CompletableDeferred<Unit>()
+                repository.nextLoadGate = initialHold
+                val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+                val emissions = mutableListOf<List<Message>>()
+                val chrome = mutableListOf<Boolean>()
+                val collectJob =
+                    launch {
+                        sync.observeMessages("ses-1", "/repo").collect { update ->
+                            if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                        }
+                    }
+                val chromeJob =
+                    launch {
+                        sync.observeCatchUpChrome("ses-1", "/repo").collect { chrome.add(it) }
+                    }
+                advanceTimeBy(1)
+                runCurrent()
+                assertEquals(1, repository.listHoldsEntered.get())
+                initialHold.complete(Unit)
+                advanceTimeBy(1)
+                runCurrent()
+                assertEquals(seed, emissions.last())
+                val afterInitial = repository.listMessagesCallCount
+                assertEquals(1, afterInitial)
+                assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
+                assertFalse(chrome.last())
+
+                for (snapshotWake in 1..3) {
+                    eventStream.republishSameGeneration()
+                    runCurrent()
+                }
+                eventStream.emit(reasoningPartEvent(partId = "prt-r", messageId = "msg-2", text = ""))
+                eventStream.emit(
+                    partDeltaEvent(
+                        partId = "prt-r",
+                        messageId = "msg-2",
+                        delta = "Thinking",
+                        field = "reasoning",
+                    ),
+                )
+                eventStream.emit(textPartEvent(partId = "prt-t", messageId = "msg-2", text = ""))
+                eventStream.emit(
+                    partDeltaEvent(partId = "prt-t", messageId = "msg-2", delta = "Answer"),
+                )
+                advanceTimeBy(1)
+                runCurrent()
+
+                assertEquals(afterInitial, repository.listMessagesCallCount)
+                assertFalse(chrome.contains(true))
+                assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
+                val assistant = emissions.last().first { it.id == "msg-2" }
+                assertEquals("Thinking", (assistant.parts[0] as MessagePart.Reasoning).text)
+                assertEquals("Answer", (assistant.parts[1] as MessagePart.Text).text)
+                collectJob.cancel()
+                chromeJob.cancel()
+                advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+            }
+        }
+
+    @Test
+    fun observeMessages_hiddenReasoningTransportGap_reconcilesOnce() =
+        runTest(testDispatcher) {
+            for (iteration in 1..10) {
+                val seed = hiddenReasoningTranscript()
+                val repository = FakeMessageRepository(messages = seed)
+                val eventStream = FakeForegroundEventStream()
+                eventStream.setConnectionState(EventStreamConnectionState.Connected)
+                val initialHold = CompletableDeferred<Unit>()
+                repository.nextLoadGate = initialHold
+                val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+                val chrome = mutableListOf<Boolean>()
+                val collectJob =
+                    launch {
+                        sync.observeMessages("ses-1", "/repo").collect { }
+                    }
+                val chromeJob =
+                    launch {
+                        sync.observeCatchUpChrome("ses-1", "/repo").collect { chrome.add(it) }
+                    }
+                advanceTimeBy(1)
+                runCurrent()
+                initialHold.complete(Unit)
+                advanceTimeBy(1)
+                runCurrent()
+                val afterInitial = repository.listMessagesCallCount
+                assertEquals(1, afterInitial)
+
+                val recoveryHold = CompletableDeferred<Unit>()
+                repository.nextLoadGate = recoveryHold
+                repository.messages =
+                    listOf(
+                        Message(id = "msg-1", role = MessageRole.User, text = "Hello"),
+                        Message(
+                            id = "msg-2",
+                            role = MessageRole.Assistant,
+                            text = "Done",
+                            parts = listOf(MessagePart.Text(text = "Done")),
+                        ),
+                    )
+                eventStream.openGap()
+                advanceTimeBy(1)
+                runCurrent()
+                assertEquals(2, repository.listHoldsEntered.get())
+                assertEquals(afterInitial, repository.listMessagesCallCount)
+                recoveryHold.complete(Unit)
+                advanceTimeBy(1)
+                runCurrent()
+
+                assertEquals(afterInitial + 1, repository.listMessagesCallCount)
+                assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
+                assertFalse(chrome.last())
+                collectJob.cancel()
+                chromeJob.cancel()
+                advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+            }
+        }
+
+    @Test
+    fun observeMessages_idleDuringInitialSubscribe_paysThenOneIdleRest() =
+        runTest(testDispatcher) {
+            for (iteration in 1..10) {
+                val seed = hiddenReasoningTranscript()
+                val completed = completedAssistantTranscript()
+                val repository = FakeMessageRepository(messages = seed)
+                val eventStream = FakeForegroundEventStream()
+                eventStream.setConnectionState(EventStreamConnectionState.Connected)
+                val initialHold = CompletableDeferred<Unit>()
+                repository.nextLoadGate = initialHold
+                val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+                val chrome = mutableListOf<Boolean>()
+                val collectJob =
+                    launch {
+                        sync.observeMessages("ses-1", "/repo").collect { }
+                    }
+                val chromeJob =
+                    launch {
+                        sync.observeCatchUpChrome("ses-1", "/repo").collect { chrome.add(it) }
+                    }
+                advanceTimeBy(1)
+                runCurrent()
+                assertTrue(eventStream.hasEventSubscriber)
+                assertEquals(1, repository.listHoldsEntered.get())
+                val authority = sync.gapAuthority("ses-1", "/repo")
+                val initialBegun = authority.inFlightGeneration()
+                assertNotNull(initialBegun)
+
+                repeat(5) {
+                    eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+                }
+                val idleHold = CompletableDeferred<Unit>()
+                repository.nextLoadGate = idleHold
+                initialHold.complete(Unit)
+                advanceTimeBy(1)
+                runCurrent()
+
+                assertEquals(2, repository.listHoldsEntered.get())
+                assertEquals(1, repository.listMessagesCallCount)
+                assertEquals(
+                    listOf(StoreRefreshReason.INITIAL_SUBSCRIBE, "session.idle"),
+                    sync.recordedRestAttempts(),
+                )
+                assertEquals(initialBegun, authority.acknowledgedGeneration())
+                val snapshot = eventStream.snapshot.value
+                assertEquals(initialBegun!! + 1, authority.obligation(snapshot))
+                assertEquals(initialBegun + 1, authority.inFlightGeneration())
+
+                repository.messages = completed
+                idleHold.complete(Unit)
+                advanceTimeBy(1)
+                runCurrent()
+
+                assertEquals(2, repository.listMessagesCallCount)
+                assertEquals(
+                    listOf(StoreRefreshReason.INITIAL_SUBSCRIBE, "session.idle"),
+                    sync.recordedRestAttempts(),
+                )
+                assertEquals(initialBegun + 1, authority.acknowledgedGeneration())
+                assertNull(authority.inFlightGeneration())
+                assertFalse(authority.needsReconcile(eventStream.snapshot.value))
+                assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
+                assertFalse(chrome.last())
+                collectJob.cancel()
+                chromeJob.cancel()
+                advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+            }
+        }
+
+    @Test
+    fun observeMessages_repeatedIncompleteIdle_reconcilesOnce() =
+        runTest(testDispatcher) {
+            val seed = hiddenReasoningTranscript()
+            val repository = FakeMessageRepository(messages = seed)
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val initialHold = CompletableDeferred<Unit>()
+            repository.nextLoadGate = initialHold
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            runCurrent()
+            initialHold.complete(Unit)
+            advanceTimeBy(1)
+            runCurrent()
+            val afterInitial = repository.listMessagesCallCount
+            assertEquals(1, afterInitial)
+
+            val idleHold = CompletableDeferred<Unit>()
+            repository.nextLoadGate = idleHold
+            repository.messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "Hello"),
+                    Message(
+                        id = "msg-2",
+                        role = MessageRole.Assistant,
+                        text = "Done",
+                        parts = listOf(MessagePart.Text(text = "Done")),
+                    ),
+                )
+            repeat(5) {
+                eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            }
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(2, repository.listHoldsEntered.get())
+            assertEquals(afterInitial, repository.listMessagesCallCount)
+            idleHold.complete(Unit)
+            advanceTimeBy(1)
+            runCurrent()
+
+            assertEquals(afterInitial + 1, repository.listMessagesCallCount)
+            assertEquals(1, sync.recordedRestAttempts().count { it == "session.idle" })
+            assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_discardedRacedRecovery_isQuietUntilQuietAcceptedRest() =
+        runTest(testDispatcher) {
+            for (iteration in 1..10) {
+                val seed = racedAuthoritySeed()
+                val repository = FakeMessageRepository(messages = seed)
+                val eventStream = FakeForegroundEventStream()
+                eventStream.setConnectionState(EventStreamConnectionState.Connected)
+                val initialHold = CompletableDeferred<Unit>()
+                repository.nextLoadGate = initialHold
+                val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+                val emissions = mutableListOf<List<Message>>()
+                val sessionChrome = mutableListOf<Boolean>()
+                val globalChrome = mutableListOf<Boolean>()
+                val collectJob =
+                    launch {
+                        sync.observeMessages("ses-1", "/repo").collect { update ->
+                            if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                        }
+                    }
+                val sessionChromeJob =
+                    launch {
+                        sync.observeCatchUpChrome("ses-1", "/repo").collect { sessionChrome.add(it) }
+                    }
+                val globalChromeJob =
+                    launch {
+                        sync.observeCatchUpChrome().collect { globalChrome.add(it) }
+                    }
+                advanceTimeBy(1)
+                runCurrent()
+                initialHold.complete(Unit)
+                advanceTimeBy(1)
+                runCurrent()
+                assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
+                assertFalse(sessionChrome.last())
+                assertFalse(globalChrome.last())
+
+                val recoveryHold = CompletableDeferred<Unit>()
+                repository.nextLoadGate = recoveryHold
+                eventStream.openGap()
+                advanceTimeBy(1)
+                runCurrent()
+                assertEquals(2, repository.listHoldsEntered.get())
+                assertEquals(
+                    MessageSyncHealth.Recovering(MessageSyncRecoveryReason.Reconnect),
+                    sync.syncHealth("ses-1", "/repo"),
+                )
+                assertTrue(sessionChrome.last())
+                assertTrue(globalChrome.last())
+                val authority = sync.gapAuthority("ses-1", "/repo")
+                val snapshot = eventStream.snapshot.value
+                val obligation = authority.obligation(snapshot)
+                assertTrue(authority.acknowledgedGeneration() < obligation)
+                assertEquals(obligation, authority.inFlightGeneration())
+
+                val deltas = listOf(" one", " two", " three")
+                var expectedText = "Hello"
+                var currentHold = recoveryHold
+                var expectedHolds = 2
+                for (delta in deltas) {
+                    eventStream.emit(partDeltaEvent(partId = "part-1", messageId = "msg-1", delta = delta))
+                    runCurrent()
+                    expectedText += delta
+                    assertEquals(expectedText, emissions.last().single().text)
+
+                    repository.messages = racedAuthoritySeed("S")
+                    val nextHold = CompletableDeferred<Unit>()
+                    repository.nextLoadGate = nextHold
+                    currentHold.complete(Unit)
+                    advanceTimeBy(1)
+                    runCurrent()
+                    expectedHolds += 1
+                    assertEquals(expectedHolds, repository.listHoldsEntered.get())
+                    assertTrue(authority.acknowledgedGeneration() < obligation)
+                    assertEquals(obligation, authority.inFlightGeneration())
+                    assertEquals(
+                        MessageSyncHealth.Recovering(MessageSyncRecoveryReason.RacedAuthority),
+                        sync.syncHealth("ses-1", "/repo"),
+                    )
+                    assertFalse(sessionChrome.last())
+                    assertFalse(globalChrome.last())
+                    assertEquals(expectedText, emissions.last().single().text)
+                    currentHold = nextHold
+                }
+
+                repository.messages = racedAuthoritySeed(expectedText)
+                currentHold.complete(Unit)
+                advanceTimeBy(1)
+                runCurrent()
+
+                assertEquals(obligation, authority.acknowledgedGeneration())
+                assertNull(authority.inFlightGeneration())
+                assertFalse(authority.needsReconcile(eventStream.snapshot.value))
+                assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
+                assertFalse(sessionChrome.last())
+                assertFalse(globalChrome.last())
+                assertEquals(expectedText, emissions.last().single().text)
+
+                collectJob.cancel()
+                sessionChromeJob.cancel()
+                globalChromeJob.cancel()
+                advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+            }
+        }
+
+    @Test
+    fun observeMessages_failedRecoveryRest_staysVisibleReloadFailed() =
+        runTest(testDispatcher) {
+            for (iteration in 1..10) {
+                val seed = racedAuthoritySeed()
+                val repository = FakeMessageRepository(messages = seed)
+                val eventStream = FakeForegroundEventStream()
+                eventStream.setConnectionState(EventStreamConnectionState.Connected)
+                val initialHold = CompletableDeferred<Unit>()
+                repository.nextLoadGate = initialHold
+                val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+                val sessionChrome = mutableListOf<Boolean>()
+                val globalChrome = mutableListOf<Boolean>()
+                val collectJob =
+                    launch {
+                        sync.observeMessages("ses-1", "/repo").collect { }
+                    }
+                val sessionChromeJob =
+                    launch {
+                        sync.observeCatchUpChrome("ses-1", "/repo").collect { sessionChrome.add(it) }
+                    }
+                val globalChromeJob =
+                    launch {
+                        sync.observeCatchUpChrome().collect { globalChrome.add(it) }
+                    }
+                advanceTimeBy(1)
+                runCurrent()
+                initialHold.complete(Unit)
+                advanceTimeBy(1)
+                runCurrent()
+
+                val recoveryHold = CompletableDeferred<Unit>()
+                repository.nextLoadGate = recoveryHold
+                eventStream.openGap()
+                advanceTimeBy(1)
+                runCurrent()
+                assertEquals(2, repository.listHoldsEntered.get())
+                assertEquals(
+                    MessageSyncHealth.Recovering(MessageSyncRecoveryReason.Reconnect),
+                    sync.syncHealth("ses-1", "/repo"),
+                )
+                assertTrue(sessionChrome.last())
+                assertTrue(globalChrome.last())
+                val authority = sync.gapAuthority("ses-1", "/repo")
+                val obligation = authority.obligation(eventStream.snapshot.value)
+
+                repository.shouldFailLoad = true
+                val retryHold = CompletableDeferred<Unit>()
+                repository.nextLoadGate = retryHold
+                recoveryHold.complete(Unit)
+                advanceTimeBy(1)
+                runCurrent()
+
+                assertEquals(3, repository.listHoldsEntered.get())
+                assertTrue(authority.acknowledgedGeneration() < obligation)
+                assertEquals(obligation, authority.inFlightGeneration())
+                assertEquals(
+                    MessageSyncHealth.Recovering(MessageSyncRecoveryReason.ReloadFailed),
+                    sync.syncHealth("ses-1", "/repo"),
+                )
+                assertTrue(sessionChrome.last())
+                assertTrue(globalChrome.last())
+
+                collectJob.cancel()
+                sessionChromeJob.cancel()
+                globalChromeJob.cancel()
+                advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+            }
+        }
+
+    @Test
+    fun observeCatchUpChrome_unscoped_clearsRecoveredSessionAndStaysBounded() =
+        runTest(testDispatcher) {
+            val seed = hiddenReasoningTranscript()
+            val repository = FakeMessageRepository(messages = seed)
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val initialHold = CompletableDeferred<Unit>()
+            repository.nextLoadGate = initialHold
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val globalChrome = mutableListOf<Boolean>()
+            val chromeJob =
+                launch {
+                    sync.observeCatchUpChrome().collect { globalChrome.add(it) }
+                }
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            runCurrent()
+            initialHold.complete(Unit)
+            advanceTimeBy(1)
+            runCurrent()
+            assertFalse(globalChrome.last())
+
+            val recoveryHold = CompletableDeferred<Unit>()
+            repository.nextLoadGate = recoveryHold
+            eventStream.openGap()
+            advanceTimeBy(1)
+            runCurrent()
+            assertTrue(globalChrome.contains(true))
+            recoveryHold.complete(Unit)
+            advanceTimeBy(1)
+            runCurrent()
+            assertFalse(globalChrome.last())
+
+            for (snapshotWake in 1..3) {
+                eventStream.republishSameGeneration()
+                runCurrent()
+            }
+            assertFalse(globalChrome.last())
+            assertEquals(2, repository.listMessagesCallCount)
+
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+            assertFalse(globalChrome.last())
+            chromeJob.cancel()
+        }
+
+    @Test
     fun observeMessages_reconnectCompatibilityEventsWithoutGap_doNotRest() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
@@ -1066,7 +1538,7 @@ class MessageSyncTest {
             eventStream.emit(OpencodeEvent(type = "server.connected"))
             advanceTimeBy(LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS + 50)
 
-            assertEquals(callsAfterInitial + 2, repository.listMessagesCallCount)
+            assertEquals(callsAfterInitial + 1, repository.listMessagesCallCount)
             assertEquals("After gap", emissions.last().single().text)
             assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
             assertEquals(false, chrome.lastOrNull())
@@ -2370,6 +2842,38 @@ class MessageSyncTest {
             is MessageListUpdate.CacheSyncConfirmed -> emptyList()
         }
     }
+
+    private fun racedAuthoritySeed(text: String = "Hello"): List<Message> =
+        listOf(
+            Message(
+                id = "msg-1",
+                role = MessageRole.User,
+                text = text,
+                parts = listOf(MessagePart.Text(id = "part-1", text = text)),
+            ),
+        )
+
+    private fun hiddenReasoningTranscript(): List<Message> =
+        listOf(
+            Message(id = "msg-1", role = MessageRole.User, text = "Hello"),
+            Message(
+                id = "msg-2",
+                role = MessageRole.Assistant,
+                text = "",
+                parts = listOf(MessagePart.Reasoning(id = "prt-r", text = "", isStreaming = false)),
+            ),
+        )
+
+    private fun completedAssistantTranscript(): List<Message> =
+        listOf(
+            Message(id = "msg-1", role = MessageRole.User, text = "Hello"),
+            Message(
+                id = "msg-2",
+                role = MessageRole.Assistant,
+                text = "Done",
+                parts = listOf(MessagePart.Text(text = "Done")),
+            ),
+        )
 
     private fun messageUpdatedEvent(
         messageId: String,

@@ -46,11 +46,12 @@
     "snapshots": {
       "after-sse-wins": {
         "syncHealth": "recovering",
-        "catchUpChrome": true,
+        "syncHealthReason": "racedAuthority",
+        "catchUpChrome": false,
         "transcript": [{ "id": "msg-1", "text": "Hello streamed" }],
         "restFetches": [
           { "reason": "initial-subscribe", "count": 1 },
-          { "reason": "stream.reconnected", "count": 1 }
+          { "reason": "connection-snapshot", "count": 1 }
         ]
       },
       "after-second-confirm": {
@@ -59,7 +60,7 @@
         "transcript": [{ "id": "msg-1", "text": "Hello streamed" }],
         "restFetches": [
           { "reason": "initial-subscribe", "count": 1 },
-          { "reason": "stream.reconnected", "count": 2 }
+          { "reason": "connection-snapshot", "count": 2 }
         ]
       }
     }

@@ -806,6 +806,421 @@ struct MessageSyncTests {
         #expect(repo.listMessagesCallCount == callsAfterInitial)
     }
 
+    @Test func hiddenReasoningSnapshotUpdates_doNotRestOrShowCatchUp() async {
+        for _ in 1...10 {
+            let repo = FakeLiveMessageRepository()
+            repo.messages = hiddenReasoningTranscript()
+            let eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(.connected)
+            repo.holdNextListMessages()
+            let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+            let collector = MessageCollector()
+            let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+            var chrome: [Bool] = []
+            let chromeTask = Task {
+                for await flag in sync.observeCatchUpChrome(sessionID: "ses-1", directory: "/repo") {
+                    chrome.append(flag)
+                }
+            }
+            let held = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 1 }
+            #expect(held)
+            repo.resumeListMessages()
+            let loaded = await waitUntil { collector.latest()?.contains(where: { $0.id == "msg-2" }) == true }
+            #expect(loaded)
+            let afterInitial = repo.listMessagesCallCount
+            #expect(afterInitial == 1)
+            #expect(sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy)
+            #expect(chrome.last == false)
+
+            for _ in 1...3 {
+                eventStream.republishSameGeneration()
+            }
+            eventStream.emit(eventWithReasoningPart(partID: "prt-r", messageID: "msg-2", text: "", sessionID: "ses-1"))
+            eventStream.emit(
+                eventWithPartDelta(
+                    partID: "prt-r",
+                    messageID: "msg-2",
+                    delta: "Thinking",
+                    field: "reasoning",
+                    sessionID: "ses-1"
+                )
+            )
+            eventStream.emit(eventWithTextPart(partID: "prt-t", messageID: "msg-2", text: "", sessionID: "ses-1"))
+            eventStream.emit(
+                eventWithPartDelta(partID: "prt-t", messageID: "msg-2", delta: "Answer", sessionID: "ses-1")
+            )
+            let streamed = await waitUntil {
+                guard let assistant = collector.latest()?.first(where: { $0.id == "msg-2" }) else { return false }
+                guard case .reasoning(let reasoning) = assistant.parts.first else { return false }
+                guard assistant.parts.count > 1, case .text(let text) = assistant.parts[1] else { return false }
+                return reasoning.text == "Thinking" && text.text == "Answer"
+            }
+            task.cancel()
+            chromeTask.cancel()
+            #expect(streamed)
+            #expect(repo.listMessagesCallCount == afterInitial)
+            #expect(!chrome.contains(true))
+            #expect(sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy)
+        }
+    }
+
+    @Test func hiddenReasoningTransportGap_reconcilesOnce() async {
+        for _ in 1...10 {
+            let repo = FakeLiveMessageRepository()
+            repo.messages = hiddenReasoningTranscript()
+            let eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(.connected)
+            repo.holdNextListMessages()
+            let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+            var chrome: [Bool] = []
+            let task = Task { for await _ in sync.observeMessages(sessionID: "ses-1", directory: "/repo") {} }
+            let chromeTask = Task {
+                for await flag in sync.observeCatchUpChrome(sessionID: "ses-1", directory: "/repo") {
+                    chrome.append(flag)
+                }
+            }
+            let held = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 1 }
+            #expect(held)
+            repo.resumeListMessages()
+            let loaded = await waitUntil { repo.listMessagesCallCount >= 1 && !repo.isListBlocked }
+            #expect(loaded)
+            let afterInitial = repo.listMessagesCallCount
+            #expect(afterInitial == 1)
+
+            repo.messages = [
+                Message(id: "msg-1", role: .user, text: "Hello", model: nil, mode: nil, sentAtEpochMs: 1),
+                Message(
+                    id: "msg-2",
+                    role: .assistant,
+                    text: "Done",
+                    parts: [.text(TextPart(text: "Done", isStreaming: false))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: 2
+                ),
+            ]
+            repo.holdNextListMessages()
+            eventStream.openGap()
+            let recovering = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 2 }
+            #expect(recovering)
+            repo.resumeListMessages()
+            let healthy = await waitUntil {
+                if case .healthy = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+                    return repo.listMessagesCallCount == afterInitial + 1
+                }
+                return false
+            }
+            task.cancel()
+            chromeTask.cancel()
+            #expect(healthy)
+            #expect(repo.listMessagesCallCount == afterInitial + 1)
+            #expect(chrome.last == false)
+        }
+    }
+
+    @Test func idleDuringInitialSubscribe_paysThenOneIdleRest() async {
+        for _ in 1...10 {
+            let repo = FakeLiveMessageRepository()
+            repo.messages = hiddenReasoningTranscript()
+            let eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(.connected)
+            repo.holdNextListMessages()
+            let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+            let collector = MessageCollector()
+            var chrome: [Bool] = []
+            let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+            let chromeTask = Task {
+                for await flag in sync.observeCatchUpChrome(sessionID: "ses-1", directory: "/repo") {
+                    chrome.append(flag)
+                }
+            }
+            let subscribed = await waitUntil {
+                repo.isListBlocked && eventStream.hasEventSubscriber && repo.listHoldsEntered == 1
+            }
+            #expect(subscribed)
+            let authority = sync.gapAuthority(sessionID: "ses-1", directory: "/repo")
+            let initialBegun = authority.inFlightGeneration()
+            #expect(initialBegun != nil)
+
+            for _ in 1...5 {
+                eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1"))
+            }
+            repo.holdNextListMessages()
+            repo.resumeListMessages()
+            let idleHeld = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 2 }
+            #expect(idleHeld)
+            #expect(sync.recordedRestAttempts() == [StoreRefreshReason.initialSubscribe, "session.idle"])
+            #expect(authority.acknowledgedGeneration() == initialBegun)
+            #expect(authority.obligation(eventStream.snapshot) == initialBegun! + 1)
+            #expect(authority.inFlightGeneration() == initialBegun! + 1)
+
+            repo.messages = completedAssistantTranscript()
+            repo.resumeListMessages()
+            let healthy = await waitUntil {
+                if case .healthy = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+                    return !repo.isListBlocked
+                }
+                return false
+            }
+            task.cancel()
+            chromeTask.cancel()
+            #expect(healthy)
+            #expect(sync.recordedRestAttempts() == [StoreRefreshReason.initialSubscribe, "session.idle"])
+            #expect(authority.acknowledgedGeneration() == initialBegun! + 1)
+            #expect(authority.inFlightGeneration() == nil)
+            #expect(!authority.needsReconcile(eventStream.snapshot))
+            #expect(sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy)
+            #expect(chrome.last == false)
+        }
+    }
+
+    @Test func repeatedIncompleteIdle_reconcilesOnce() async {
+        let repo = FakeLiveMessageRepository()
+        repo.messages = hiddenReasoningTranscript()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        repo.holdNextListMessages()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let held = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 1 }
+        #expect(held)
+        repo.resumeListMessages()
+        let loaded = await waitUntil {
+            collector.latest()?.contains(where: { $0.id == "msg-2" }) == true
+                && sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy
+        }
+        #expect(loaded)
+        let afterInitial = repo.listMessagesCallCount
+        #expect(afterInitial == 1)
+
+        repo.messages = [
+            Message(id: "msg-1", role: .user, text: "Hello", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "Done",
+                parts: [.text(TextPart(text: "Done", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 2
+            ),
+        ]
+        repo.holdNextListMessages()
+        for _ in 1...5 {
+            eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1"))
+        }
+        let idleHeld = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 2 }
+        #expect(idleHeld)
+        #expect(sync.recordedRestAttempts().filter { $0 == "session.idle" }.count == 1)
+        repo.resumeListMessages()
+        let healthy = await waitUntil {
+            if case .healthy = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+                return repo.listMessagesCallCount == afterInitial + 1
+            }
+            return false
+        }
+        task.cancel()
+        #expect(healthy)
+        #expect(repo.listMessagesCallCount == afterInitial + 1)
+        #expect(sync.recordedRestAttempts().filter { $0 == "session.idle" }.count == 1)
+    }
+
+    @Test func unscopedCatchUpChrome_clearsRecoveredSessionAndStaysBounded() async {
+        let repo = FakeLiveMessageRepository()
+        repo.messages = hiddenReasoningTranscript()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        repo.holdNextListMessages()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+        var globalChrome: [Bool] = []
+        let chromeTask = Task {
+            for await flag in sync.observeCatchUpChrome() {
+                globalChrome.append(flag)
+            }
+        }
+        let task = Task { for await _ in sync.observeMessages(sessionID: "ses-1", directory: "/repo") {} }
+        let held = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 1 }
+        #expect(held)
+        repo.resumeListMessages()
+        let loaded = await waitUntil { repo.listMessagesCallCount >= 1 && !repo.isListBlocked }
+        #expect(loaded)
+        #expect(globalChrome.last == false)
+
+        repo.holdNextListMessages()
+        eventStream.openGap()
+        let recovering = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 2 }
+        #expect(recovering)
+        #expect(globalChrome.contains(true))
+        repo.resumeListMessages()
+        let cleared = await waitUntil { globalChrome.last == false && !repo.isListBlocked }
+        #expect(cleared)
+
+        for _ in 1...3 {
+            eventStream.republishSameGeneration()
+        }
+        let stillClear = await waitUntil {
+            globalChrome.last == false && repo.listMessagesCallCount == 2
+        }
+        #expect(stillClear)
+        #expect(repo.listMessagesCallCount == 2)
+
+        task.cancel()
+        let bounded = await waitUntil { globalChrome.last == false }
+        chromeTask.cancel()
+        #expect(bounded)
+    }
+
+    @Test func discardedRacedRecovery_isQuietUntilQuietAcceptedRest() async {
+        for _ in 1...10 {
+            let repo = FakeLiveMessageRepository()
+            repo.messages = racedAuthoritySeed()
+            let eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(.connected)
+            repo.holdNextListMessages()
+            let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+            let collector = MessageCollector()
+            var sessionChrome: [Bool] = []
+            var globalChrome: [Bool] = []
+            let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+            let sessionChromeTask = Task {
+                for await flag in sync.observeCatchUpChrome(sessionID: "ses-1", directory: "/repo") {
+                    sessionChrome.append(flag)
+                }
+            }
+            let globalChromeTask = Task {
+                for await flag in sync.observeCatchUpChrome() {
+                    globalChrome.append(flag)
+                }
+            }
+            let initialHeld = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 1 }
+            #expect(initialHeld)
+            repo.resumeListMessages()
+            let loaded = await waitUntil {
+                collector.latest()?.first?.text == "Hello"
+                    && sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy
+            }
+            #expect(loaded)
+            #expect(sessionChrome.last == false)
+            #expect(globalChrome.last == false)
+
+            repo.holdNextListMessages()
+            eventStream.openGap()
+            let recovering = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 2 }
+            #expect(recovering)
+            #expect(sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .recovering(.reconnect))
+            #expect(sessionChrome.last == true)
+            #expect(globalChrome.last == true)
+            let authority = sync.gapAuthority(sessionID: "ses-1", directory: "/repo")
+            let obligation = authority.obligation(eventStream.snapshot)
+            #expect(authority.acknowledgedGeneration() < obligation)
+            #expect(authority.inFlightGeneration() == obligation)
+
+            let deltas = [" one", " two", " three"]
+            var expectedText = "Hello"
+            var expectedHolds = 2
+            for delta in deltas {
+                eventStream.emit(
+                    eventWithPartDelta(partID: "part-1", messageID: "msg-1", delta: delta, sessionID: "ses-1")
+                )
+                expectedText += delta
+                _ = await waitUntil(timeoutMs: 250) { collector.latest()?.first?.text == expectedText }
+                repo.messages = racedAuthoritySeed(text: "S")
+                repo.holdNextListMessages()
+                repo.resumeListMessages()
+                expectedHolds += 1
+                let raced = await waitUntil {
+                    repo.isListBlocked
+                        && repo.listHoldsEntered == expectedHolds
+                        && collector.latest()?.first?.text == expectedText
+                        && sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .recovering(.racedAuthority)
+                        && sessionChrome.last == false
+                        && globalChrome.last == false
+                }
+                #expect(raced)
+                #expect(authority.acknowledgedGeneration() < obligation)
+                #expect(authority.inFlightGeneration() == obligation)
+                #expect(collector.latest()?.first?.text == expectedText)
+            }
+
+            repo.messages = racedAuthoritySeed(text: expectedText)
+            repo.resumeListMessages()
+            let healthy = await waitUntil {
+                sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy
+                    && authority.acknowledgedGeneration() == obligation
+                    && authority.inFlightGeneration() == nil
+            }
+            task.cancel()
+            sessionChromeTask.cancel()
+            globalChromeTask.cancel()
+            #expect(healthy)
+            #expect(!authority.needsReconcile(eventStream.snapshot))
+            #expect(sessionChrome.last == false)
+            #expect(globalChrome.last == false)
+            #expect(collector.latest()?.first?.text == expectedText)
+        }
+    }
+
+    @Test func failedRecoveryRest_staysVisibleReloadFailed() async {
+        for _ in 1...10 {
+            let repo = FakeLiveMessageRepository()
+            repo.messages = racedAuthoritySeed()
+            let eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(.connected)
+            repo.holdNextListMessages()
+            let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+            var sessionChrome: [Bool] = []
+            var globalChrome: [Bool] = []
+            let task = Task { for await _ in sync.observeMessages(sessionID: "ses-1", directory: "/repo") {} }
+            let sessionChromeTask = Task {
+                for await flag in sync.observeCatchUpChrome(sessionID: "ses-1", directory: "/repo") {
+                    sessionChrome.append(flag)
+                }
+            }
+            let globalChromeTask = Task {
+                for await flag in sync.observeCatchUpChrome() {
+                    globalChrome.append(flag)
+                }
+            }
+            let initialHeld = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 1 }
+            #expect(initialHeld)
+            repo.resumeListMessages()
+            let loaded = await waitUntil {
+                repo.listMessagesCallCount >= 1
+                    && !repo.isListBlocked
+                    && sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy
+            }
+            #expect(loaded)
+
+            repo.holdNextListMessages()
+            eventStream.openGap()
+            let recovering = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 2 }
+            #expect(recovering)
+            #expect(sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .recovering(.reconnect))
+            #expect(sessionChrome.last == true)
+            #expect(globalChrome.last == true)
+            let authority = sync.gapAuthority(sessionID: "ses-1", directory: "/repo")
+            let obligation = authority.obligation(eventStream.snapshot)
+
+            repo.shouldFailList = true
+            repo.holdNextListMessages()
+            repo.resumeListMessages()
+            let failed = await waitUntil {
+                repo.isListBlocked
+                    && repo.listHoldsEntered == 3
+                    && sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .recovering(.reloadFailed)
+                    && sessionChrome.last == true
+                    && globalChrome.last == true
+            }
+            task.cancel()
+            sessionChromeTask.cancel()
+            globalChromeTask.cancel()
+            #expect(failed)
+            #expect(authority.acknowledgedGeneration() < obligation)
+            #expect(authority.inFlightGeneration() == obligation)
+        }
+    }
+
     @Test func reconnectCompatibilityEventsWithoutGap_doNotRest() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
@@ -2201,6 +2616,50 @@ struct MessageSyncTests {
     }
 
     // MARK: - Helpers
+
+    private func racedAuthoritySeed(text: String = "Hello") -> [Message] {
+        [
+            Message(
+                id: "msg-1",
+                role: .user,
+                text: text,
+                parts: [.text(TextPart(id: "part-1", text: text, isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 1
+            ),
+        ]
+    }
+
+    private func hiddenReasoningTranscript() -> [Message] {
+        [
+            Message(id: "msg-1", role: .user, text: "Hello", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "",
+                parts: [.reasoning(ReasoningPart(id: "prt-r", text: "", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 2
+            ),
+        ]
+    }
+
+    private func completedAssistantTranscript() -> [Message] {
+        [
+            Message(id: "msg-1", role: .user, text: "Hello", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "Done",
+                parts: [.text(TextPart(text: "Done", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 2
+            ),
+        ]
+    }
 
     private func waitUntil(
         timeoutMs: Int = 5_000,

@@ -16,12 +16,24 @@ class FakeForegroundEventStream : LiveConnection {
 
     private val _events = MutableSharedFlow<OpencodeEvent>(extraBufferCapacity = 64)
     override val events: SharedFlow<OpencodeEvent> = _events.asSharedFlow()
+    val hasEventSubscriber: Boolean
+        get() = _events.subscriptionCount.value > 0
 
     private val gapClock = AtomicLong(0)
+    private val republishClock = AtomicLong(0)
     private val _snapshot = MutableStateFlow(LiveConnectionSnapshot())
     override val snapshot: StateFlow<LiveConnectionSnapshot> = _snapshot.asStateFlow()
     private var wasConnected = false
     private var occupying = false
+
+    /** Same generation and gap, but a distinct StateFlow value so collectors wake. */
+    fun republishSameGeneration() {
+        _snapshot.update { current ->
+            current.copy(
+                liveTargets = current.liveTargets + "same-generation-${republishClock.incrementAndGet()}",
+            )
+        }
+    }
 
     fun emit(event: OpencodeEvent) {
         _events.tryEmit(event)

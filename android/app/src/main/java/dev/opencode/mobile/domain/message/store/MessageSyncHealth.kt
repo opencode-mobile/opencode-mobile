@@ -18,14 +18,23 @@ sealed interface MessageSyncHealth {
     val requiresAuthoritativeRecovery: Boolean
         get() = this is Recovering
 
-    /** Home refresh + Session Chat Syncing pill. Overflow stays quiet (live stream). */
+    /** Home refresh + Session Chat Syncing pill. Overflow and raced authority stay quiet. */
     val showsCatchUpChrome: Boolean
         get() =
             when (this) {
                 Healthy -> false
                 is Stale -> true
-                is Recovering -> reason != MessageSyncRecoveryReason.Overflow
+                is Recovering ->
+                    reason != MessageSyncRecoveryReason.Overflow &&
+                        reason != MessageSyncRecoveryReason.RacedAuthority
             }
+}
+
+/** REST authority-window result. Discarded means live local state won the race. */
+enum class AuthorityWindowOutcome {
+    Accepted,
+    Discarded,
+    Failed,
 }
 
 enum class MessageSyncRecoveryReason {
