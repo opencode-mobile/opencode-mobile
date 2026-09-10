@@ -1,0 +1,54 @@
+{
+  "id": "ios-profile-a-to-b-old-stream",
+  "title": "Profile A to B must retarget the live stream and drop A publication",
+  "platforms": ["ios", "android"],
+  "surface": "composed",
+  "protocol": "v1",
+  "seed": {
+    "profileId": "profile-a",
+    "directory": "/repo-a",
+    "sessionId": "ses-a",
+    "directories": ["/repo-a"],
+    "messages": [{ "id": "msg-a", "text": "From A" }],
+    "connectionState": "connected",
+    "occupancy": "active"
+  },
+  "steps": [
+    { "t": 0, "op": "observe" },
+    { "t": 0, "op": "stream.start" },
+    {
+      "t": 20,
+      "op": "profile.switch",
+      "profileId": "profile-b",
+      "sessionId": "ses-b",
+      "directory": "/repo-b",
+      "directories": ["/repo-b"]
+    },
+    {
+      "t": 20,
+      "op": "rest.setMessages",
+      "messages": [{ "id": "msg-b", "text": "From B" }]
+    },
+    { "t": 20, "op": "observe" },
+    {
+      "t": 30,
+      "op": "emit",
+      "event": {
+        "type": "message.part.delta",
+        "sessionId": "ses-a",
+        "text": "stale from A"
+      }
+    },
+    { "t": 40, "op": "snapshot", "name": "after-switch" }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-switch": {
+        "publishedProfileId": "profile-b",
+        "streamOps": ["start", "stop", "start"],
+        "requiredTargets": ["global/event", "event:/repo-b"],
+        "transcript": [{ "id": "msg-b", "text": "From B" }]
+      }
+    }
+  }
+}

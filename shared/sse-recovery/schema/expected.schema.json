@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opencode.mobile/sse-recovery/expected.schema.json",
+  "title": "SSE fault oracle expected snapshot",
+  "type": "object",
+  "required": ["snapshots"],
+  "additionalProperties": false,
+  "properties": {
+    "snapshots": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/snapshot" }
+    }
+  },
+  "$defs": {
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "syncHealth": {
+          "type": "string",
+          "enum": ["healthy", "stale", "recovering"]
+        },
+        "syncHealthReason": {
+          "type": "string",
+          "enum": [
+            "overflow",
+            "reconnect",
+            "reloadFailed",
+            "racedAuthority",
+            "transportUnavailable"
+          ]
+        },
+        "catchUpChrome": { "type": "boolean" },
+        "chrome": {
+          "type": "string",
+          "enum": ["live", "connecting", "offline"]
+        },
+        "connectionState": {
+          "type": "string",
+          "enum": [
+            "idle",
+            "connecting",
+            "connected",
+            "disconnected",
+            "reconnecting"
+          ]
+        },
+        "occupancy": {
+          "type": "string",
+          "enum": ["active", "grace", "stopped"]
+        },
+        "epochUnchanged": { "type": "boolean" },
+        "restFetches": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/restFetch" }
+        },
+        "publishedProfileId": { "type": "string" },
+        "transcript": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/transcriptMessage" }
+        },
+        "streamOps": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["start", "stop"] }
+        },
+        "requiredTargets": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "liveTargets": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "openedPaths": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "restFetch": {
+      "type": "object",
+      "required": ["reason", "count"],
+      "additionalProperties": false,
+      "properties": {
+        "reason": { "type": "string" },
+        "count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "transcriptMessage": {
+      "type": "object",
+      "required": ["id", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" }
+      }
+    }
+  }
+}

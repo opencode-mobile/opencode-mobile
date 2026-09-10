@@ -1,0 +1,33 @@
+{
+  "id": "v1-one-target-silent-while-other-heartbeats",
+  "title": "v1 Live requires every required instance stream, not one shared heartbeat",
+  "platforms": ["android", "ios"],
+  "surface": "transport",
+  "protocol": "v1",
+  "seed": {
+    "profileId": "a",
+    "directory": "/repo",
+    "sessionId": "ses-1",
+    "directories": ["/repo"],
+    "connectionState": "idle",
+    "occupancy": "active"
+  },
+  "steps": [
+    { "t": 0, "op": "stream.start" },
+    { "t": 20, "op": "target.open", "target": "global/event" },
+    { "t": 20, "op": "target.open", "target": "event:/repo" },
+    { "t": 30, "op": "target.activity", "target": "global/event" },
+    { "t": 30, "op": "target.silence", "target": "event:/repo" },
+    { "t": 200, "op": "snapshot", "name": "after-instance-silence" }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-instance-silence": {
+        "chrome": "connecting",
+        "requiredTargets": ["global/event", "event:/repo"],
+        "liveTargets": ["global/event"],
+        "openedPaths": ["/global/event", "/event"]
+      }
+    }
+  }
+}

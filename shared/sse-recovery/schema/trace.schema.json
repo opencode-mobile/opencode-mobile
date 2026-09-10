@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opencode.mobile/sse-recovery/trace.schema.json",
+  "title": "SSE fault oracle trace",
+  "type": "object",
+  "required": ["id", "surface", "protocol", "seed", "steps", "expected"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "title": { "type": "string" },
+    "platforms": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["android", "ios"] }
+    },
+    "surface": {
+      "type": "string",
+      "enum": ["recovery", "transport", "composed"]
+    },
+    "protocol": {
+      "type": "string",
+      "enum": ["v1", "v2"]
+    },
+    "seed": { "$ref": "#/$defs/seed" },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "expected": { "$ref": "expected.schema.json" }
+  },
+  "$defs": {
+    "seed": {
+      "type": "object",
+      "required": ["profileId", "directory", "sessionId"],
+      "additionalProperties": false,
+      "properties": {
+        "profileId": { "type": "string" },
+        "directory": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "directories": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "text"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string" }
+            }
+          }
+        },
+        "connectionState": {
+          "type": "string",
+          "enum": [
+            "idle",
+            "connecting",
+            "connected",
+            "disconnected",
+            "reconnecting"
+          ]
+        },
+        "occupancy": {
+          "type": "string",
+          "enum": ["active", "grace", "stopped"]
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "required": ["t", "op"],
+      "properties": {
+        "t": { "type": "integer", "minimum": 0 },
+        "op": {
+          "type": "string",
+          "enum": [
+            "observe",
+            "unobserve",
+            "world.foreground",
+            "world.background",
+            "world.backgroundStop",
+            "world.pathReady",
+            "world.pathLost",
+            "world.profileSwitched",
+            "stream.start",
+            "stream.stop",
+            "connectionState",
+            "epoch.bump",
+            "emit",
+            "target.open",
+            "target.activity",
+            "target.silence",
+            "directories.set",
+            "profile.switch",
+            "rest.hold",
+            "rest.release",
+            "rest.setMessages",
+            "snapshot"
+          ]
+        },
+        "name": { "type": "string" },
+        "state": { "type": "string" },
+        "target": { "type": "string" },
+        "profileId": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "directory": { "type": "string" },
+        "directories": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "text"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string" }
+            }
+          }
+        },
+        "event": { "$ref": "#/$defs/event" }
+      },
+      "additionalProperties": false
+    },
+    "event": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "text": { "type": "string" }
+      }
+    }
+  }
+}

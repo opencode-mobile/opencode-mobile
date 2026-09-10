@@ -1,0 +1,42 @@
+{
+  "id": "add-project-while-v1-live",
+  "title": "Adding a v1 project must open its instance stream without a reconnect cycle",
+  "platforms": ["android", "ios"],
+  "surface": "transport",
+  "protocol": "v1",
+  "seed": {
+    "profileId": "a",
+    "directory": "/repo-a",
+    "sessionId": "ses-1",
+    "directories": ["/repo-a"],
+    "connectionState": "connected",
+    "occupancy": "active"
+  },
+  "steps": [
+    { "t": 0, "op": "stream.start" },
+    { "t": 20, "op": "target.open", "target": "global/event" },
+    { "t": 20, "op": "target.open", "target": "event:/repo-a" },
+    {
+      "t": 40,
+      "op": "directories.set",
+      "directories": ["/repo-a", "/repo-b"]
+    },
+    { "t": 80, "op": "snapshot", "name": "after-add-project" }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-add-project": {
+        "requiredTargets": [
+          "global/event",
+          "event:/repo-a",
+          "event:/repo-b"
+        ],
+        "openedPaths": [
+          "/global/event",
+          "/event?directory=/repo-a",
+          "/event?directory=/repo-b"
+        ]
+      }
+    }
+  }
+}
