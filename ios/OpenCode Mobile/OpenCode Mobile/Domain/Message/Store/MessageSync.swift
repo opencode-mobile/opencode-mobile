@@ -953,16 +953,18 @@ nonisolated final class MessageSync: @unchecked Sendable {
             return
         }
         let snapshot = gapState.liveConnection.snapshot
-        guard snapshot.isReachable else {
-            guard publishedFrame(for: key.storeSlot) != nil else { return }
-            store.finishStreamingText(sessionID: key.storeSlot)
-            let current = syncHealth(
-                sessionID: key.sessionID,
-                directory: key.directory.isEmpty ? nil : key.directory
-            )
-            guard current.isHealthy else { return }
-            staging.enterStale(.transportUnavailable)
-            setHealth(.stale(.transportUnavailable), for: key)
+        guard canCatchUp(occupancy: worldSignals.occupancy, snapshot: snapshot) else {
+            if !snapshot.isReachable {
+                guard publishedFrame(for: key.storeSlot) != nil else { return }
+                store.finishStreamingText(sessionID: key.storeSlot)
+                let current = syncHealth(
+                    sessionID: key.sessionID,
+                    directory: key.directory.isEmpty ? nil : key.directory
+                )
+                guard current.isHealthy else { return }
+                staging.enterStale(.transportUnavailable)
+                setHealth(.stale(.transportUnavailable), for: key)
+            }
             return
         }
         guard gapState.begin(

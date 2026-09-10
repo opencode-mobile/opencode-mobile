@@ -724,6 +724,14 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                         }
                         continuation.yield(.loadFailed(error))
                     case .messages(let messages, let isFromCache):
+                        if !messagesContainStreamingText(messages) {
+                            let skipNoop = synced {
+                                !isFromCache
+                                    && lastPublishedMessages == messages
+                                    && !isStreamingSession
+                            }
+                            if skipNoop { continue }
+                        }
                         let plan = synced { () -> (
                             generation: UInt64,
                             dueForMaxBatch: Bool,

@@ -104,6 +104,15 @@ final class DefaultSessionLiveStore: SessionLiveStore {
 
         @Sendable func refreshFromNetwork(reason: String, force: Bool) async -> Bool {
             let snapshot = liveConnection.snapshot
+            if !force {
+                guard canCatchUp(occupancy: worldSignals.occupancy, snapshot: snapshot) else {
+                    DiagnosticLog.info(
+                        .session,
+                        "sessionLiveStore skip directory=\(directory) reason=\(reason)"
+                    )
+                    return false
+                }
+            }
             let generation: UInt64
             if force {
                 generation = authority.captureBegin(snapshot)

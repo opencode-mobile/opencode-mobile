@@ -75,6 +75,7 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
             directory: directory,
             reason: StoreRefreshReason.initialSubscribe,
             force: true,
+            occupancy: worldSignals.occupancy,
             liveConnection: liveConnection,
             authority: authority,
             gate: gate,
@@ -94,6 +95,7 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
                         directory: directory,
                         reason: reason,
                         force: false,
+                        occupancy: worldSignals.occupancy,
                         liveConnection: liveConnection,
                         authority: authority,
                         gate: gate,
@@ -109,6 +111,7 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
                         directory: directory,
                         reason: StoreRefreshReason.streamReconnected,
                         force: false,
+                        occupancy: worldSignals.occupancy,
                         liveConnection: liveConnection,
                         authority: authority,
                         gate: gate,
@@ -126,6 +129,7 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
                         directory: directory,
                         reason: invalidation.reason,
                         force: false,
+                        occupancy: worldSignals.occupancy,
                         liveConnection: liveConnection,
                         authority: authority,
                         gate: gate,
@@ -151,6 +155,7 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
                                 directory: directory,
                                 reason: reason,
                                 force: false,
+                                occupancy: worldSignals.occupancy,
                                 liveConnection: liveConnection,
                                 authority: authority,
                                 gate: gate,
@@ -169,6 +174,7 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
                             directory: directory,
                             reason: event.type,
                             force: true,
+                            occupancy: worldSignals.occupancy,
                             liveConnection: liveConnection,
                             authority: authority,
                             gate: gate,
@@ -188,6 +194,7 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
         directory: String,
         reason: String,
         force: Bool,
+        occupancy: StreamOccupancy,
         liveConnection: any LiveConnection,
         authority: GapAuthority,
         gate: LiveStoreRefreshGate,
@@ -196,6 +203,12 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
         yield: @escaping @Sendable ([PermissionRequest]) -> Void
     ) async {
         let snapshot = liveConnection.snapshot
+        if !force {
+            guard canCatchUp(occupancy: occupancy, snapshot: snapshot) else {
+                DiagnosticLog.info(.permission, "permission skip reason=\(reason)")
+                return
+            }
+        }
         let generation: UInt64
         if force {
             generation = authority.captureBegin(snapshot)
@@ -230,6 +243,7 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
                     directory: directory,
                     reason: StoreRefreshReason.streamReconnected,
                     force: false,
+                    occupancy: occupancy,
                     liveConnection: liveConnection,
                     authority: authority,
                     gate: gate,

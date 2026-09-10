@@ -55,6 +55,18 @@ extension LiveConnectionSnapshot {
             || connectionState == .connected
             || connectionState == .reconnecting
     }
+
+    /// SSE is actually up. Connecting is reachable for leases, not for REST catch-up.
+    nonisolated var canCatchUp: Bool {
+        connectionState == .connected || connectionState == .reconnecting
+    }
+}
+
+nonisolated func canCatchUp(
+    occupancy: StreamOccupancy,
+    snapshot: LiveConnectionSnapshot
+) -> Bool {
+    occupancy == .active && snapshot.canCatchUp
 }
 
 extension ForegroundEventStream {

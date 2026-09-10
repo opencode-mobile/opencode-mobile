@@ -777,6 +777,42 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_stoppedOccupancy_doesNotRestOnReconnectGap() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val world = FakeWorldSignals()
+            val sync = createMessageSync(repository, eventStream, worldSignals = world)
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(1)
+            val afterInitial = repository.listMessagesCallCount
+
+            world.emit(WorldSignal.BackgroundStop)
+            eventStream.openGap()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(1)
+            assertEquals(
+                "Stopped occupancy must not REST a reconnect gap",
+                afterInitial,
+                repository.listMessagesCallCount,
+            )
+
+            world.emit(WorldSignal.Foreground)
+            advanceTimeBy(1)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+            assertTrue(
+                "Foreground must REST the unpaid gap",
+                repository.listMessagesCallCount > afterInitial,
+            )
+        }
+
+    @Test
     fun observeMessages_backgroundReturn_publishesWhenGapReconcilesDuringCatchUp() =
         runTest(testDispatcher) {
             // Background while streaming, turn finishes off-device, then foreground
@@ -4101,11 +4137,13 @@ class DefaultQuestionLiveStoreTest {
         repository: FakeSessionRepository,
         eventStream: FakeForegroundEventStream,
         scope: CoroutineScope,
+        worldSignals: WorldSignals = SilentWorldSignals,
     ) = DefaultQuestionLiveStore(
         repository,
         eventStream,
         LiveStoreScope(scope),
         DiagnosticLogger(DiagnosticLogBuffer(clockEpochMilliseconds = { 0L })),
+        worldSignals,
     )
 
     @Test
@@ -4252,7 +4290,48 @@ class DefaultQuestionLiveStoreTest {
             assertEquals(listOf("que-b"), second.last().map { it.id })
             assertTrue(second.none { list -> list.any { it.id == "que-a" } })
         }
-}
+
+        @Test
+        fun stoppedOccupancy_doesNotRestOnReconnectUntilForeground() =
+            runTest(testDispatcher) {
+                val repository = FakeSessionRepository()
+                val eventStream = FakeForegroundEventStream()
+                val world = FakeWorldSignals()
+                val store =
+                    store(
+                        repository,
+                        eventStream,
+                        CoroutineScope(SupervisorJob() + testDispatcher),
+                        world,
+                    )
+                val collectJob = launch { store.observeQuestions("/repo").collect { } }
+                advanceUntilIdle()
+                eventStream.setConnectionState(EventStreamConnectionState.Connected)
+                runCurrent()
+                val afterInitial = repository.questionFetchCount
+                assertEquals(1, afterInitial)
+
+                world.emit(WorldSignal.BackgroundStop)
+                eventStream.openGap()
+                eventStream.setConnectionState(EventStreamConnectionState.Connected)
+                eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
+                advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
+                advanceUntilIdle()
+                assertEquals(
+                    "Stopped occupancy must not REST while SSE is down",
+                    afterInitial,
+                    repository.questionFetchCount,
+                )
+
+                world.emit(WorldSignal.Foreground)
+                advanceUntilIdle()
+                collectJob.cancel()
+                assertTrue(
+                    "Foreground catch-up must REST the unpaid gap",
+                    repository.questionFetchCount > afterInitial,
+                )
+            }
+    }
 
 private fun testPermissionRequest(id: String) =
     PermissionRequest(

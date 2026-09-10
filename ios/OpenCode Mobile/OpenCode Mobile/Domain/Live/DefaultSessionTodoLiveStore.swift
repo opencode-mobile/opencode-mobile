@@ -211,6 +211,11 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
         let connection = liveConnection ?? eventStream.asLiveConnection()
         let gap = authority ?? handle.authority
         let snapshot = connection.snapshot
+        if !force {
+            guard canCatchUp(occupancy: worldSignals.occupancy, snapshot: snapshot) else {
+                return handle.hasCache
+            }
+        }
         let generation: UInt64
         if force {
             generation = gap.captureBegin(snapshot)

@@ -6,6 +6,7 @@ import dev.opencode.mobile.domain.event.SilentWorldSignals
 import dev.opencode.mobile.domain.event.StoreRefreshReason
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.event.asLiveConnection
+import dev.opencode.mobile.domain.event.canCatchUp
 import dev.opencode.mobile.domain.event.catchUpReason
 import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
@@ -173,6 +174,9 @@ class DefaultSessionTodoLiveStore
         ): Boolean {
             val liveConnection = eventStream.asLiveConnection()
             val snapshot = liveConnection.snapshot.value
+            if (!force && !canCatchUp(worldSignals.occupancy.value, snapshot)) {
+                return state.hasCache
+            }
             val generation =
                 if (force) {
                     state.authority.captureBegin(snapshot)

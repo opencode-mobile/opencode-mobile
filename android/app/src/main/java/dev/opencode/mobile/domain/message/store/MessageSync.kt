@@ -13,6 +13,7 @@ import dev.opencode.mobile.domain.event.SilentWorldSignals
 import dev.opencode.mobile.domain.event.StoreRefreshReason
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.event.asLiveConnection
+import dev.opencode.mobile.domain.event.canCatchUp
 import dev.opencode.mobile.domain.event.catchUpReason
 import dev.opencode.mobile.domain.event.isReachable
 import dev.opencode.mobile.domain.event.marksStale
@@ -591,11 +592,13 @@ class MessageSync(
                     confirmCacheSyncIfAwaiting()
                     return
                 }
-                if (!snapshot.isReachable()) {
-                    if (lastPublishedFrames[storeSlot] == null) return
-                    engine.finishStreamingText(storeSlot)
-                    if (health.get().isHealthy) {
-                        publishHealth(MessageSyncHealth.Stale(MessageSyncRecoveryReason.TransportUnavailable))
+                if (!canCatchUp(worldSignals.occupancy.value, snapshot)) {
+                    if (!snapshot.isReachable()) {
+                        if (lastPublishedFrames[storeSlot] == null) return
+                        engine.finishStreamingText(storeSlot)
+                        if (health.get().isHealthy) {
+                            publishHealth(MessageSyncHealth.Stale(MessageSyncRecoveryReason.TransportUnavailable))
+                        }
                     }
                     return
                 }

@@ -75,6 +75,7 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
             directory: directory,
             reason: StoreRefreshReason.initialSubscribe,
             force: true,
+            occupancy: worldSignals.occupancy,
             liveConnection: liveConnection,
             authority: authority,
             gate: gate,
@@ -94,6 +95,7 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
                         directory: directory,
                         reason: reason,
                         force: false,
+                        occupancy: worldSignals.occupancy,
                         liveConnection: liveConnection,
                         authority: authority,
                         gate: gate,
@@ -109,6 +111,7 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
                         directory: directory,
                         reason: StoreRefreshReason.streamReconnected,
                         force: false,
+                        occupancy: worldSignals.occupancy,
                         liveConnection: liveConnection,
                         authority: authority,
                         gate: gate,
@@ -126,6 +129,7 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
                         directory: directory,
                         reason: invalidation.reason,
                         force: false,
+                        occupancy: worldSignals.occupancy,
                         liveConnection: liveConnection,
                         authority: authority,
                         gate: gate,
@@ -151,6 +155,7 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
                                 directory: directory,
                                 reason: reason,
                                 force: false,
+                                occupancy: worldSignals.occupancy,
                                 liveConnection: liveConnection,
                                 authority: authority,
                                 gate: gate,
@@ -170,6 +175,7 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
                             directory: directory,
                             reason: event.type,
                             force: true,
+                            occupancy: worldSignals.occupancy,
                             liveConnection: liveConnection,
                             authority: authority,
                             gate: gate,
@@ -189,6 +195,7 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
         directory: String,
         reason: String,
         force: Bool,
+        occupancy: StreamOccupancy,
         liveConnection: any LiveConnection,
         authority: GapAuthority,
         gate: LiveStoreRefreshGate,
@@ -197,6 +204,12 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
         yield: @escaping @Sendable ([QuestionRequest]) -> Void
     ) async {
         let snapshot = liveConnection.snapshot
+        if !force {
+            guard canCatchUp(occupancy: occupancy, snapshot: snapshot) else {
+                DiagnosticLog.info(.question, "question skip reason=\(reason)")
+                return
+            }
+        }
         let generation: UInt64
         if force {
             generation = authority.captureBegin(snapshot)
@@ -231,6 +244,7 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
                     directory: directory,
                     reason: StoreRefreshReason.streamReconnected,
                     force: false,
+                    occupancy: occupancy,
                     liveConnection: liveConnection,
                     authority: authority,
                     gate: gate,

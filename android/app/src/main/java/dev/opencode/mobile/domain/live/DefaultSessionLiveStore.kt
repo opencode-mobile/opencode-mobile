@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.event.SilentWorldSignals
 import dev.opencode.mobile.domain.event.StoreRefreshReason
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.event.asLiveConnection
+import dev.opencode.mobile.domain.event.canCatchUp
 import dev.opencode.mobile.domain.event.catchUpReason
 import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.SessionRepository
@@ -91,6 +92,13 @@ class DefaultSessionLiveStore
                         force: Boolean,
                     ): Boolean {
                         val snapshot = liveConnection.snapshot.value
+                        if (!force && !canCatchUp(worldSignals.occupancy.value, snapshot)) {
+                            DiagnosticLog.info(
+                                DiagnosticLogArea.Session,
+                                "sessionLiveStore skip directory=$directory reason=$reason",
+                            )
+                            return false
+                        }
                         val generation =
                             if (force) {
                                 authority.captureBegin(snapshot)

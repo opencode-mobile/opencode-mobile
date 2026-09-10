@@ -177,6 +177,15 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             emptyActiveGuard: Bool = false
         ) async -> LiveStoreRefreshOutcome {
             let snapshot = liveConnection.snapshot
+            if !force {
+                guard canCatchUp(occupancy: worldSignals.occupancy, snapshot: snapshot) else {
+                    DiagnosticLog.info(
+                        .session,
+                        "statusLiveStore skip directory=\(directory) reason=\(reason)"
+                    )
+                    return .failed
+                }
+            }
             let generation: UInt64
             if force {
                 generation = authority.captureBegin(snapshot)

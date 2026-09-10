@@ -24,6 +24,26 @@ struct DisplayMessagePipelineCharacterizationTests {
         _ = await waitUntil { collector.isFinished }
     }
 
+    @Test func identicalNonStreamingSnapshot_doesNotPrepareAgain() async {
+        let harness = Harness()
+        let collector = CharacterizationDisplayCollector()
+        let task = Task {
+            await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
+        }
+        let messages = [plainAssistant("hi")]
+        await harness.source.emit(.messages(messages, isFromCache: false))
+        _ = await waitUntil { collector.emissions.count == 1 }
+        #expect(harness.preparer.prepareMessagesInvocations.count == 1)
+
+        await harness.source.emit(.messages(messages, isFromCache: false))
+        try? await Task.sleep(for: .milliseconds(20))
+        #expect(harness.preparer.prepareMessagesInvocations.count == 1)
+        #expect(collector.emissions.count == 1)
+
+        task.cancel()
+        _ = await waitUntil { collector.isFinished }
+    }
+
     @Test func largeHistoryPublishesFormatFirstThenAtMostTwoEnrichmentFrames() async {
         let harness = Harness(holdSleep: true)
         let collector = CharacterizationDisplayCollector()

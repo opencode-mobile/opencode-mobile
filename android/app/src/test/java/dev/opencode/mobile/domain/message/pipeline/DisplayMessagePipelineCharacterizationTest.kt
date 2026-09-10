@@ -53,6 +53,22 @@ class DisplayMessagePipelineCharacterizationTest {
         }
 
     @Test
+    fun identicalNonStreamingSnapshot_doesNotPrepareAgain() =
+        runTest(testDispatcher) {
+            val harness = startHarness()
+            val messages = listOf(plainAssistant("hi"))
+            harness.source.emit(MessageListUpdate.Messages(messages))
+            advanceUntilIdle()
+            assertEquals(1, harness.preparer.prepareMessagesInvocations.size)
+            assertEquals(1, harness.emissions.size)
+
+            harness.source.emit(MessageListUpdate.Messages(messages))
+            advanceUntilIdle()
+            assertEquals(1, harness.preparer.prepareMessagesInvocations.size)
+            assertEquals(1, harness.emissions.size)
+        }
+
+    @Test
     fun largeHistoryPublishesFormatFirstThenAtMostTwoEnrichmentFrames() =
         runTest(testDispatcher) {
             val harness = startHarness(holdDelays = true)
