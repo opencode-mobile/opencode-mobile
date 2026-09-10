@@ -212,6 +212,7 @@ private struct OpenCodeDialogOverlayContent: View {
                 )
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                KeyboardOverlap.noteHidden()
                 keyboardOverlap = 0
             }
             .animation(.easeOut(duration: 0.25), value: keyboardOverlap)

@@ -186,14 +186,17 @@ implementation belong in the feature's `parity-gaps.md`.
   presenting screen stays fixed and only the form sheet's available region
   changes, with a fixed header and a scrollable body so focused controls stay
   reachable.
-- iOS behavior: action lists resign first responder on present. The window
-  overlay locks `form` mode to the 50% detent. Keyboard overlap shrinks
-  available height and lifts the card so only the internal scroll region
-  follows the keyboard.
-- Android behavior: action lists clear focus and hide the IME on present. The
-  full-window popup remains over an `adjustNothing` activity; `imePadding()`
-  is applied to the form sheet boundary so it follows animated IME insets
-  without resizing the activity content.
+- iOS behavior: action lists resign first responder on present and when content
+  mode becomes `actionList` (in-sheet Back to providers). The window overlay
+  locks `form` mode to the 50% detent. Form sheets seed keyboard overlap from
+  the last known keyboard frame, then shrink available height from
+  `keyboardWillChangeFrame` so only the internal scroll region follows the
+  keyboard.
+- Android behavior: action lists clear focus and hide the IME on present and
+  when content mode becomes `ActionList`. The full-window popup remains over
+  an `adjustNothing` activity; `imePadding()` is applied to the form sheet
+  boundary so it follows current and animated IME insets without resizing the
+  activity content.
 - Reason: native presentation and inset delivery differ, but both implementations
   preserve the same visible ownership boundary and interaction behavior.
 - Review trigger: revisit if both platforms adopt a shared native modal API with
