@@ -152,8 +152,11 @@ class DefaultForegroundEventStream
                                                         if (parsed.isEmpty()) {
                                                             diagnosticLogger.warning(
                                                                 DiagnosticLogArea.Sse,
-                                                                "SSE event parse failed",
+                                                                SseDiagnosticLogging.parseFailedMessage(dataLine),
                                                             )
+                                                            if (dataLine.isNotBlank()) {
+                                                                _events.tryEmit(OpencodeEvent(type = "sse.parse.failed"))
+                                                            }
                                                             return@streamEvents
                                                         }
                                                         for (event in parsed) {

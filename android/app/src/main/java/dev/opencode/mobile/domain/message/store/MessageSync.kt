@@ -212,6 +212,12 @@ class MessageSync(
                 }
             }
 
+            fun shouldReloadAfterReconnect(slot: String): Boolean {
+                if (claimReconnectCatchUp()) return true
+                if (awaitingCacheSyncConfirm.contains(slot)) return true
+                return SessionTranscriptAuthority.lastAssistantNeedsAuthority(engine.messages(slot))
+            }
+
             suspend fun emitMessages(
                 messages: List<Message>,
                 isFromCache: Boolean = false,
@@ -260,7 +266,7 @@ class MessageSync(
 
             fun isRelevant(event: OpencodeEvent): Boolean =
                 when (event.type) {
-                    "stream.reconnected", "server.connected" -> true
+                    "stream.reconnected", "server.connected", "sse.parse.failed" -> true
                     else -> event.sessionId == key.sessionId
                 }
 
@@ -345,7 +351,9 @@ class MessageSync(
             suspend fun requestResumeCatchUp(fetchReason: String = StoreRefreshReason.STREAM_RECONNECTED): Boolean {
                 if (!seenConnected.get()) return false
                 val needsCatchUp =
-                    health.get() is MessageSyncHealth.Stale || !isCurrentEpoch()
+                    health.get() is MessageSyncHealth.Stale ||
+                        !isCurrentEpoch() ||
+                        awaitingCacheSyncConfirm.contains(storeSlot)
                 if (!needsCatchUp) {
                     logI(
                         "fullReload skip session=${key.sessionId} reason=$fetchReason",
@@ -412,7 +420,8 @@ class MessageSync(
                                     seenConnected.get() &&
                                         (
                                             health.get() is MessageSyncHealth.Stale ||
-                                                !isCurrentEpoch()
+                                                !isCurrentEpoch() ||
+                                                awaitingCacheSyncConfirm.contains(storeSlot)
                                         )
                                 seenConnected.set(true)
                                 if (shouldRecover) {
@@ -544,10 +553,27 @@ class MessageSync(
             suspend fun handleEvent(event: OpencodeEvent) {
                 assertOffMainThread()
                 if (!observationStillCurrent()) return
+                if (event.type == "sse.parse.failed") {
+                    serverConnectedReloadJob?.cancel()
+                    serverConnectedReloadJob = null
+                    if (lastPublishedFrames[storeSlot] == null) return
+                    if (requiresRecovery()) {
+                        noteRelevantWhileRecovering()
+                        return
+                    }
+                    claimReconnectCatchUp()
+                    adoptCurrentEpoch()
+                    enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
+                    performClosedLoopRecovery(
+                        MessageSyncRecoveryReason.Reconnect,
+                        fetchReason = StoreRefreshReason.STREAM_RECONNECTED,
+                    )
+                    return
+                }
                 if (event.type == "stream.reconnected") {
                     serverConnectedReloadJob?.cancel()
                     serverConnectedReloadJob = null
-                    if (!claimReconnectCatchUp()) {
+                    if (!shouldReloadAfterReconnect(storeSlot)) {
                         logI("fullReload skip session=${key.sessionId} reason=${StoreRefreshReason.STREAM_RECONNECTED}")
                         confirmCacheSyncIfAwaiting()
                         return
@@ -566,7 +592,7 @@ class MessageSync(
                         launch {
                             delay(LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS)
                             if (!observationStillCurrent()) return@launch
-                            if (!claimReconnectCatchUp()) {
+                            if (!shouldReloadAfterReconnect(storeSlot)) {
                                 logI(
                                     "fullReload skip session=${key.sessionId} " +
                                         "reason=${StoreRefreshReason.SERVER_CONNECTED}",
@@ -691,13 +717,29 @@ class MessageSync(
                         // REST-reload the transcript. Finalize local streaming parts.
                         engine.finishStreamingText(storeSlot)
                         val recovered = engine.messages(storeSlot)
-                        publishHealth(MessageSyncHealth.Healthy)
                         if (markChanged(storeSlot, recovered)) {
                             logI(
                                 "observeMessages emit session=${key.sessionId} count=${recovered.size} " +
                                     "source=session.idle",
                             )
                             emitMessages(recovered)
+                        }
+                        if (!SessionTranscriptAuthority.lastAssistantNeedsAuthority(recovered)) {
+                            publishHealth(MessageSyncHealth.Healthy)
+                            return
+                        }
+                        when (val result = fullReloadResult(key, reason = "session.idle", mergeExisting = true)) {
+                            is ReloadResult.Success -> {
+                                publishHealth(MessageSyncHealth.Healthy)
+                                logI(
+                                    "observeMessages emit session=${key.sessionId} count=${result.messages.size} " +
+                                        "source=session.idle",
+                                )
+                                emitMessages(result.messages)
+                            }
+                            is ReloadResult.Failure -> {
+                                publishHealth(MessageSyncHealth.Healthy)
+                            }
                         }
                         return
                     }
@@ -815,7 +857,7 @@ class MessageSync(
                         is StagedItem.TransportResumed -> {
                             serverConnectedReloadJob?.cancel()
                             serverConnectedReloadJob = null
-                            if (!claimReconnectCatchUp()) {
+                            if (!shouldReloadAfterReconnect(storeSlot)) {
                                 logI(
                                     "fullReload skip session=${key.sessionId} reason=${item.reason}",
                                 )
@@ -893,7 +935,8 @@ class MessageSync(
                 // TUI does not poll GET …/message while the event iterator is live.
                 // Keep the watchdog for transport drop and stalled streaming only.
                 val connected = eventStream.connectionState.value == EventStreamConnectionState.Connected
-                if (connected && !stalled) continue
+                val awaitingCache = awaitingCacheSyncConfirm.contains(storeSlot)
+                if (connected && !stalled && !awaitingCache) continue
                 val expectedRevision = engine.revision(storeSlot)
                 val load = runCatching { listMessages(key.sessionId, directory) }
                 if (load.isFailure) {

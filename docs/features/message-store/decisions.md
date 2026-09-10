@@ -8,10 +8,14 @@ Still binding:
 - `MessageSync` owns REST + SSE merge. Incremental `message.*` patches stay.
   Live shape tracks TUI v2 ([server-api-v2](../server-api-v2/decisions.md)):
   hydrate / merge on reconnect, patch while the stream is live, do not
-  REST-reload the transcript on `session.idle`. Poll REST only when SSE is
-  not live, or when streaming is stalled. Skip a UI emit when reconnect
-  merge leaves the fingerprint unchanged. Revision-gate in-flight REST
-  so it cannot overwrite a newer SSE revision.
+  REST-reload the transcript on `session.idle` when the last assistant
+  already has visible content. If that last assistant has no visible
+  content (empty/hidden reasoning, dropped `text.ended`), REST-reload.
+  Treat `sse.parse.failed` as an SSE gap and REST-reload. Poll REST when
+  SSE is not live, streaming is stalled, or cache sync is still awaiting
+  confirm. Skip a UI emit when reconnect merge leaves the fingerprint
+  unchanged unless cache confirm is still pending. Revision-gate in-flight
+  REST so it cannot overwrite a newer SSE revision.
 - v2 `session.tool.*` events after `input.started` are sparse. TUI keeps
   name on its tools map (`current.part.name ?? "tool"` is display only).
   Do not invent `"tool"` as part identity. Parse nameless tool updates.

@@ -5,6 +5,12 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
 object SseDiagnosticLogging {
+    fun parseFailedMessage(dataLine: String): String {
+        val trimmed = dataLine.trim()
+        val type = EVENT_TYPE.find(trimmed)?.groupValues?.getOrNull(1) ?: "-"
+        return "SSE event parse failed type=$type chars=${trimmed.length}"
+    }
+
     fun bufferMessage(event: OpencodeEvent): String? =
         when (event.type) {
             "server.heartbeat",
@@ -27,6 +33,8 @@ object SseDiagnosticLogging {
             }
             else -> "SSE event type=${event.type} session=${event.sessionId ?: "-"}"
         }
+
+    private val EVENT_TYPE = Regex(""""type"\s*:\s*"([^"]+)"""")
 }
 
 private fun JsonObject?.statusType(): String? {
