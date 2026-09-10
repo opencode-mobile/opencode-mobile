@@ -648,19 +648,27 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
         }
     }
 
+    var eventSubscriberCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return continuations.count
+    }
+
+    var hasEventSubscriber: Bool { eventSubscriberCount > 0 }
+
     func events() -> AsyncStream<OpencodeEvent> {
         let id = UUID()
-        return AsyncStream { continuation in
+        let (stream, continuation) = AsyncStream.makeStream(of: OpencodeEvent.self)
+        lock.lock()
+        continuations[id] = continuation
+        lock.unlock()
+        continuation.onTermination = { [weak self] _ in
+            guard let self else { return }
             self.lock.lock()
-            self.continuations[id] = continuation
+            self.continuations.removeValue(forKey: id)
             self.lock.unlock()
-            continuation.onTermination = { [weak self] _ in
-                guard let self else { return }
-                self.lock.lock()
-                self.continuations.removeValue(forKey: id)
-                self.lock.unlock()
-            }
         }
+        return stream
     }
 
     func start() {
@@ -708,6 +716,12 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
         }
     }
 
+    func openNewerThan(_ generation: UInt64, reason: LiveGapReason = .reconnect) {
+        repeat {
+            openGap(reason)
+        } while (snapshot.gap?.generation ?? 0) <= generation
+    }
+
     func setConnectionState(_ state: EventStreamConnectionState) {
         lock.lock()
         let dropFromConnected = wasConnected && (state == .idle || state == .disconnected || state == .reconnecting)
@@ -730,6 +744,27 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
         for continuation in stateConts {
             continuation.yield(state)
         }
+        for continuation in snapshotConts {
+            continuation.yield(snapshot)
+        }
+    }
+
+    func applyConfig(profileID: String, protocol serverProtocol: ServerProtocol, directories: [String]) {
+        lock.lock()
+        let config = LiveConnectionConfig(
+            profileID: profileID,
+            connectionIdentity: profileID,
+            serverProtocol: serverProtocol,
+            directories: directories
+        )
+        let targets = SseSubscribeTargets.targets(protocol: serverProtocol, directories: directories).map(\.key)
+        _snapshot.config = config
+        _snapshot.requiredTargets = targets
+        _snapshot.liveTargets = occupying ? targets : []
+        _snapshot.connectionState = _connectionState
+        let snapshotConts = Array(snapshotContinuations.values)
+        let snapshot = _snapshot
+        lock.unlock()
         for continuation in snapshotConts {
             continuation.yield(snapshot)
         }

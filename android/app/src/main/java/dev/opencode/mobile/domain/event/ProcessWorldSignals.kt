@@ -100,6 +100,22 @@ class ProcessWorldSignals(
             }
     }
 
+    fun onBackgroundStop() {
+        stopJob?.cancel()
+        stopJob = null
+        _occupancy.value = StreamOccupancy.Stopped
+        emit(WorldSignal.BackgroundStop)
+        stream.stop()
+    }
+
+    fun onPathReady() {
+        emit(WorldSignal.PathReady)
+    }
+
+    fun onPathLost() {
+        emit(WorldSignal.PathLost)
+    }
+
     fun onProfileSwitched() {
         emit(WorldSignal.ProfileSwitched)
         if (_occupancy.value != StreamOccupancy.Stopped && hasActiveConnection()) {

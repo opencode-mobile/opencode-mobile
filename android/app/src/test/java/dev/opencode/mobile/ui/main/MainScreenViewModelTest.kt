@@ -11,8 +11,11 @@ import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
 import dev.opencode.mobile.domain.live.DefaultSessionReadyStore
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
+import dev.opencode.mobile.domain.live.EmptySessionTodoLiveStore
 import dev.opencode.mobile.domain.live.InMemorySessionReadyPersistence
 import dev.opencode.mobile.domain.live.LiveStoreScope
+import dev.opencode.mobile.domain.live.PermissionLiveStore
+import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyClock
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
@@ -947,6 +950,15 @@ class MainScreenViewModelTest {
             eventDomainAdapter = EventDomainAdapter(json),
             sessionLiveStore = sessionLiveStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
+            permissionLiveStore = object : PermissionLiveStore {
+                override fun observePermissions(directory: String) = emptyFlow<List<dev.opencode.mobile.domain.session.PermissionRequest>>()
+                override fun clearCache() = Unit
+            },
+            questionLiveStore = object : QuestionLiveStore {
+                override fun observeQuestions(directory: String) = emptyFlow<List<dev.opencode.mobile.domain.session.QuestionRequest>>()
+                override fun clearCache() = Unit
+            },
+            sessionTodoLiveStore = EmptySessionTodoLiveStore,
             sessionReadyStore = sessionReadyStore,
             foregroundEventStream = eventStream,
             activeConnectionManager = activeConnectionManager,

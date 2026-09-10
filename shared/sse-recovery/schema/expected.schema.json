@@ -50,7 +50,19 @@
           "type": "string",
           "enum": ["active", "grace", "stopped"]
         },
-        "epochUnchanged": { "type": "boolean" },
+        "generationUnchanged": { "type": "boolean" },
+        "gapReason": {
+          "type": "string",
+          "enum": [
+            "occupancyStart",
+            "reconnect",
+            "configChanged",
+            "stopped",
+            "pathLost",
+            "leaseLost",
+            "parseFailed"
+          ]
+        },
         "restFetches": {
           "type": "array",
           "items": { "$ref": "#/$defs/restFetch" }
@@ -73,6 +85,14 @@
           "items": { "type": "string" }
         },
         "openedPaths": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "openedPathCounts": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "publishedEventTypes": {
           "type": "array",
           "items": { "type": "string" }
         }

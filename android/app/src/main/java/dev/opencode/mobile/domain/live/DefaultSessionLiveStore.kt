@@ -93,7 +93,7 @@ class DefaultSessionLiveStore
                         val snapshot = liveConnection.snapshot.value
                         val generation =
                             if (force) {
-                                null
+                                authority.captureBegin(snapshot)
                             } else {
                                 authority.tryBegin(snapshot) ?: run {
                                     DiagnosticLog.info(
@@ -118,13 +118,16 @@ class DefaultSessionLiveStore
                                     )
                                 },
                             )
-                        if (generation != null) {
-                            when (outcome) {
-                                LiveStoreRefreshOutcome.COMMITTED -> authority.acknowledge(generation)
-                                LiveStoreRefreshOutcome.FAILED,
-                                LiveStoreRefreshOutcome.DISCARDED,
-                                -> authority.fail(generation)
+                        when (outcome) {
+                            LiveStoreRefreshOutcome.COMMITTED -> {
+                                authority.acknowledge(generation)
+                                if (authority.needsReconcile(liveConnection.snapshot.value)) {
+                                    refreshFromNetwork(StoreRefreshReason.STREAM_RECONNECTED, force = false)
+                                }
                             }
+                            LiveStoreRefreshOutcome.FAILED,
+                            LiveStoreRefreshOutcome.DISCARDED,
+                            -> authority.fail(generation)
                         }
                         return outcome == LiveStoreRefreshOutcome.COMMITTED
                     }
@@ -148,7 +151,6 @@ class DefaultSessionLiveStore
                     }
 
                     refreshFromNetwork(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)
-                    authority.acknowledgeCurrent(liveConnection.snapshot.value)
 
                     launch {
                         worldSignals.signals.collect { signal ->
@@ -176,7 +178,9 @@ class DefaultSessionLiveStore
                     ).debounce(LiveStoreRefreshPolicy.SESSION_DEBOUNCE_MS)
                         .collect { reason ->
                             val mutation = reason != "stream.reconnected" && reason != "server.connected"
-                            refreshFromNetwork(reason, force = mutation)
+                            launch {
+                                refreshFromNetwork(reason, force = mutation)
+                            }
                         }
                 } finally {
                     activeDirectories.remove(directory)

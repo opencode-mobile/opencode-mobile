@@ -16,9 +16,12 @@ import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
+import dev.opencode.mobile.domain.live.PermissionLiveStore
+import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
+import dev.opencode.mobile.domain.live.SessionTodoLiveStore
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
@@ -72,6 +75,9 @@ class MainScreenViewModel
         private val eventDomainAdapter: EventDomainAdapter,
         private val sessionLiveStore: SessionLiveStore,
         private val sessionStatusLiveStore: SessionStatusLiveStore,
+        private val permissionLiveStore: PermissionLiveStore,
+        private val questionLiveStore: QuestionLiveStore,
+        private val sessionTodoLiveStore: SessionTodoLiveStore,
         private val sessionReadyStore: SessionReadyStore,
         private val foregroundEventStream: ForegroundEventStream,
         private val activeConnectionManager: ActiveConnectionManager,
@@ -136,6 +142,9 @@ class MainScreenViewModel
                     sessionReadyStore.bindProfile(connectionSessionCoordinator.currentProfile()?.id)
                     sessionLiveStore.clearCache()
                     sessionStatusLiveStore.clearCache()
+                    permissionLiveStore.clearCache()
+                    questionLiveStore.clearCache()
+                    sessionTodoLiveStore.clearCache()
                     messageRepository.clearMessageCache()
                     refresh()
                 }
@@ -146,6 +155,9 @@ class MainScreenViewModel
                     sessionReadyStore.bindProfile(null)
                     sessionLiveStore.clearCache()
                     sessionStatusLiveStore.clearCache()
+                    permissionLiveStore.clearCache()
+                    questionLiveStore.clearCache()
+                    sessionTodoLiveStore.clearCache()
                     messageRepository.clearMessageCache()
                     _uiState.value = MainScreenUiState.Disconnected
                     _serversChrome.value = HomeServersChrome()

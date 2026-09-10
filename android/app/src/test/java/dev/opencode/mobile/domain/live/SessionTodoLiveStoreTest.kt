@@ -57,6 +57,28 @@ class SessionTodoLiveStoreTest {
         }
 
     @Test
+    fun clearCache_isolatesSameDirectoryAfterProfileSwitch() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeTodoSessionRepository(
+                    todos = listOf(SessionTodo(0, "A", SessionTodoStatus.Pending, "low")),
+                )
+            val store = createStore(repository, FakeForegroundEventStream())
+            val first = mutableListOf<List<SessionTodo>>()
+            val firstJob = launch { store.observeTodos("ses-1", "/repo").collect { first.add(it) } }
+            advanceUntilIdle()
+            firstJob.cancel()
+            store.clearCache()
+            repository.todos = listOf(SessionTodo(0, "B", SessionTodoStatus.Pending, "low"))
+            val second = mutableListOf<List<SessionTodo>>()
+            val secondJob = launch { store.observeTodos("ses-1", "/repo").collect { second.add(it) } }
+            advanceUntilIdle()
+            secondJob.cancel()
+            assertEquals("B", second.last().single().content)
+            assertTrue(second.none { list -> list.any { it.content == "A" } })
+        }
+
+    @Test
     fun setLive_forceFetchesTodos() =
         runTest(testDispatcher) {
             val repository =

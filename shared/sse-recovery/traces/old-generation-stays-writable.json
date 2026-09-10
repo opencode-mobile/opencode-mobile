@@ -1,0 +1,46 @@
+{
+  "id": "old-generation-stays-writable",
+  "title": "A writable old SSE channel must not publish after protocol retarget",
+  "platforms": ["android", "ios"],
+  "surface": "transport",
+  "protocol": "v1",
+  "seed": {
+    "profileId": "profile-a",
+    "directory": "/repo",
+    "sessionId": "ses-1",
+    "directories": ["/repo"],
+    "connectionState": "connected",
+    "occupancy": "active"
+  },
+  "steps": [
+    { "t": 0, "op": "stream.start" },
+    { "t": 20, "op": "target.open", "target": "global/event" },
+    { "t": 20, "op": "target.open", "target": "event:/repo" },
+    { "t": 40, "op": "protocol.set", "state": "v2" },
+    { "t": 60, "op": "target.open", "target": "api/event" },
+    {
+      "t": 80,
+      "op": "target.write",
+      "target": "global/event",
+      "event": {
+        "type": "message.part.delta",
+        "sessionId": "ses-1",
+        "text": "stale-old-generation",
+        "messageId": "msg-1",
+        "partId": "part-1",
+        "field": "text"
+      }
+    },
+    { "t": 100, "op": "snapshot", "name": "after-old-write" }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-old-write": {
+        "publishedProfileId": "profile-a",
+        "requiredTargets": ["api/event"],
+        "liveTargets": ["api/event"],
+        "publishedEventTypes": ["server.connected", "stream.reconnected"]
+      }
+    }
+  }
+}

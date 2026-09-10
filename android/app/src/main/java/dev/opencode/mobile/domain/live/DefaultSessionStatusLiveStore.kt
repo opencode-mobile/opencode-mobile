@@ -153,7 +153,7 @@ class DefaultSessionStatusLiveStore
                         val snapshot = liveConnection.snapshot.value
                         val generation =
                             if (force) {
-                                null
+                                authority.captureBegin(snapshot)
                             } else {
                                 authority.tryBegin(snapshot) ?: run {
                                     DiagnosticLog.info(
@@ -180,13 +180,16 @@ class DefaultSessionStatusLiveStore
                                     commitLoaded(loaded, emptyActiveGuard)
                                 },
                             )
-                        if (generation != null) {
-                            when (outcome) {
-                                LiveStoreRefreshOutcome.COMMITTED -> authority.acknowledge(generation)
-                                LiveStoreRefreshOutcome.FAILED,
-                                LiveStoreRefreshOutcome.DISCARDED,
-                                -> authority.fail(generation)
+                        when (outcome) {
+                            LiveStoreRefreshOutcome.COMMITTED -> {
+                                authority.acknowledge(generation)
+                                if (authority.needsReconcile(liveConnection.snapshot.value)) {
+                                    reloadFromServer(StoreRefreshReason.STREAM_RECONNECTED, force = false)
+                                }
                             }
+                            LiveStoreRefreshOutcome.FAILED,
+                            LiveStoreRefreshOutcome.DISCARDED,
+                            -> authority.fail(generation)
                         }
                         if (outcome == LiveStoreRefreshOutcome.DISCARDED) {
                             DiagnosticLog.info(
@@ -237,7 +240,6 @@ class DefaultSessionStatusLiveStore
                     activeDirectories.add(directory)
 
                     reloadFromServer(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)
-                    authority.acknowledgeCurrent(liveConnection.snapshot.value)
 
                     launch {
                         worldSignals.signals.collect { signal ->

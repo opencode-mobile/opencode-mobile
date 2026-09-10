@@ -13,6 +13,7 @@
     "occupancy": "active"
   },
   "steps": [
+    { "t": 0, "op": "rest.hold" },
     { "t": 0, "op": "observe" },
     { "t": 10, "op": "stream.stop" },
     { "t": 10, "op": "connectionState", "state": "idle" },
@@ -27,7 +28,8 @@
     { "t": 40, "op": "emit", "event": { "type": "stream.reconnected" } },
     { "t": 50, "op": "connectionState", "state": "connected" },
     { "t": 50, "op": "emit", "event": { "type": "server.connected" } },
-    { "t": 60, "op": "snapshot", "name": "after-cold-resume" }
+    { "t": 55, "op": "rest.release" },
+    { "t": 80, "op": "snapshot", "name": "after-cold-resume" }
   ],
   "expected": {
     "snapshots": {

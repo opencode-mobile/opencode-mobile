@@ -71,6 +71,9 @@ struct SseFaultEvent: Decodable, Sendable {
     let type: String
     let sessionId: String?
     let text: String?
+    let messageId: String?
+    let partId: String?
+    let field: String?
 }
 
 struct SseFaultExpected: Decodable, Sendable {
@@ -84,7 +87,8 @@ struct SseFaultSnapshot: Decodable, Sendable {
     let chrome: String?
     let connectionState: String?
     let occupancy: String?
-    let epochUnchanged: Bool?
+    let generationUnchanged: Bool?
+    let gapReason: String?
     let restFetches: [SseFaultRestFetch]?
     let publishedProfileId: String?
     let transcript: [SseFaultTranscriptMessage]?
@@ -92,6 +96,8 @@ struct SseFaultSnapshot: Decodable, Sendable {
     let requiredTargets: [String]?
     let liveTargets: [String]?
     let openedPaths: [String]?
+    let openedPathCounts: [String: Int]?
+    let publishedEventTypes: [String]?
 }
 
 struct SseFaultRestFetch: Decodable, Equatable, Sendable {

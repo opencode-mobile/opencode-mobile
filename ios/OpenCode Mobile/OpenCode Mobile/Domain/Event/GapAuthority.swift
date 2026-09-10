@@ -19,7 +19,7 @@ nonisolated final class GapAuthority: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         let target = max(snapshot.gap?.generation ?? 0, localObligation)
-        return target > lastAcknowledged && inFlight != target
+        return target > lastAcknowledged && inFlight == nil
     }
 
     func tryBegin(_ snapshot: LiveConnectionSnapshot) -> UInt64? {
@@ -27,9 +27,36 @@ nonisolated final class GapAuthority: @unchecked Sendable {
         defer { lock.unlock() }
         let target = max(snapshot.gap?.generation ?? 0, localObligation)
         if target <= lastAcknowledged { return nil }
-        if inFlight == target { return nil }
+        if inFlight != nil { return nil }
         inFlight = target
         return target
+    }
+
+    /// Marks the current obligation in-flight so a force REST can ack only that generation.
+    func captureBegin(_ snapshot: LiveConnectionSnapshot) -> UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        let target = max(snapshot.gap?.generation ?? 0, localObligation)
+        inFlight = target
+        return target
+    }
+
+    func isInFlight() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return inFlight != nil
+    }
+
+    func acknowledgedGeneration() -> UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return lastAcknowledged
+    }
+
+    func inFlightGeneration() -> UInt64? {
+        lock.lock()
+        defer { lock.unlock() }
+        return inFlight
     }
 
     func acknowledge(_ generation: UInt64) {

@@ -113,7 +113,7 @@ nonisolated final class EventsAPIClient: Sendable {
         let session = injectedSession ?? Self.makeStreamingSession()
         defer {
             if ownedSession {
-                session.finishTasksAndInvalidate()
+                session.invalidateAndCancel()
             }
         }
         let bytes: URLSession.AsyncBytes

@@ -36,7 +36,10 @@
       "event": {
         "type": "message.part.delta",
         "sessionId": "ses-a",
-        "text": "stale from A"
+        "text": "stale from A",
+        "messageId": "msg-a",
+        "partId": "part-1",
+        "field": "text"
       }
     },
     { "t": 40, "op": "snapshot", "name": "after-switch" }

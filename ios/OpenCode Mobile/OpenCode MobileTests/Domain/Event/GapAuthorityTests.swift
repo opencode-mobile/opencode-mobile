@@ -47,4 +47,40 @@ struct GapAuthorityTests {
         #expect(!authority.needsReconcile(snapshot))
         #expect(authority.tryBegin(snapshot) == nil)
     }
+
+    @Test func acknowledgeCurrent_whileOlderInFlight_pinsInFlightAndSuppressesReconcile() {
+        let authority = GapAuthority()
+        let begun = LiveConnectionSnapshot(
+            connectionState: .connected,
+            gap: LiveGapRevision(generation: 3, reason: .reconnect)
+        )
+        #expect(authority.tryBegin(begun) == 3)
+        let newer = LiveConnectionSnapshot(
+            connectionState: .connected,
+            gap: LiveGapRevision(generation: 4, reason: .reconnect)
+        )
+        authority.acknowledgeCurrent(newer)
+        #expect(authority.acknowledgedGeneration() == 4)
+        #expect(authority.inFlightGeneration() == 3)
+        #expect(!authority.needsReconcile(newer))
+        #expect(authority.tryBegin(newer) == nil)
+    }
+
+    @Test func acknowledge_exactInFlight_clearsAndLeavesNewerUnpaid() {
+        let authority = GapAuthority()
+        let begun = LiveConnectionSnapshot(
+            connectionState: .connected,
+            gap: LiveGapRevision(generation: 3, reason: .reconnect)
+        )
+        #expect(authority.tryBegin(begun) == 3)
+        let newer = LiveConnectionSnapshot(
+            connectionState: .connected,
+            gap: LiveGapRevision(generation: 4, reason: .reconnect)
+        )
+        authority.acknowledge(3)
+        #expect(authority.acknowledgedGeneration() == 3)
+        #expect(authority.inFlightGeneration() == nil)
+        #expect(authority.needsReconcile(newer))
+        #expect(authority.tryBegin(newer) == 4)
+    }
 }

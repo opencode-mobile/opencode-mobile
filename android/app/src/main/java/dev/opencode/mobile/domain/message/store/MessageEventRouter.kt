@@ -26,6 +26,17 @@ object MessageEventRouter {
 
     fun shouldStageForMessageSync(event: OpencodeEvent): Boolean = event.type in messageIntakeTypes
 
+    fun isIncrementalTranscriptEvent(event: OpencodeEvent): Boolean = event.type in incrementalTranscriptTypes
+
+    private val incrementalTranscriptTypes: Set<String> =
+        setOf(
+            "message.updated",
+            "message.part.updated",
+            "message.part.delta",
+            "message.removed",
+            "message.part.removed",
+        )
+
     /**
      * Cheap UTF-8 size proxy for staging byte budgets. Never inspects full
      * message bodies beyond the delta/text fields already on the event.

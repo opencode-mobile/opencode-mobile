@@ -20,6 +20,18 @@ nonisolated enum MessageEventRouter {
         messageIntakeTypes.contains(event.type)
     }
 
+    static func isIncrementalTranscriptEvent(_ event: OpencodeEvent) -> Bool {
+        incrementalTranscriptTypes.contains(event.type)
+    }
+
+    private static let incrementalTranscriptTypes: Set<String> = [
+        "message.updated",
+        "message.part.updated",
+        "message.part.delta",
+        "message.removed",
+        "message.part.removed",
+    ]
+
     /// Cheap UTF-8 size proxy for staging byte budgets. Never inspects full
     /// message bodies beyond the delta/text fields already on the event.
     static func estimatedByteCost(_ event: OpencodeEvent) -> Int {

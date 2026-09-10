@@ -15,19 +15,23 @@ import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.event.composeLiveUpdates
 import dev.opencode.mobile.domain.event.SseSubscribeTargets
 import dev.opencode.mobile.domain.live.LiveStoreScope
-import dev.opencode.mobile.domain.message.ConnectionEpoch
 import dev.opencode.mobile.domain.message.InMemoryMessageStore
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageDomainAdapter
 import dev.opencode.mobile.domain.message.MessageListUpdate
+import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageSync
 import dev.opencode.mobile.domain.message.MessageSyncHealth
 import dev.opencode.mobile.domain.message.SessionMessageEngine
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -38,6 +42,7 @@ import org.junit.Assert.assertTrue
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicReference
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class SseFaultOracleDriver(
     private val scope: TestScope,
 ) {
@@ -51,18 +56,17 @@ class SseFaultOracleDriver(
 
     private suspend fun runRecovery(trace: SseFaultTrace) {
         val stream = RecordingForegroundEventStream()
-        val epoch = ConnectionEpoch()
         val profileId = AtomicReference(trace.seed.profileId)
         val sessionId = AtomicReference(trace.seed.sessionId)
         val directory = AtomicReference(trace.seed.directory)
         val directories = AtomicReference(trace.seed.directories.ifEmpty { listOf(trace.seed.directory) })
         val messages = AtomicReference(seedMessages(trace.seed.messages))
-        val fetchReasons = CopyOnWriteArrayList<String>()
-        var pendingReason = "initial-subscribe"
         val transcript = AtomicReference<List<SseFaultTranscriptMessage>>(emptyList())
         val catchUp = AtomicReference(false)
         val observeJobs = mutableListOf<Job>()
-        val epochAtObserve = AtomicReference<Long?>(null)
+        val generationAtObserve = AtomicReference<Long?>(null)
+        val restHold = RestHoldGate()
+        val restFailures = AtomicInteger(0)
 
         val world: WorldSignals =
             if (trace.surface == "composed") {
@@ -80,10 +84,16 @@ class SseFaultOracleDriver(
                 FakeWorldSignals()
             }
 
+        val protocol = protocolOf(trace.serverProtocol)
+        stream.fake.applyConfig(profileId.get(), protocol, directories.get())
         val sync =
             MessageSync(
                 listMessages = { _, _ ->
-                    fetchReasons += pendingReason
+                    restHold.awaitIfHeld()
+                    if (restFailures.get() > 0) {
+                        restFailures.decrementAndGet()
+                        error("oracle rest failure")
+                    }
                     messages.get()
                 },
                 engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
@@ -92,7 +102,7 @@ class SseFaultOracleDriver(
                 worldSignals = world,
                 pollIntervalMs = 60_000L,
                 connectionProfileIdProvider = { profileId.get() },
-                recoveryDelay = { delay(1) },
+                recoveryDelay = { delay(25) },
                 nowMs = { scope.testScheduler.currentTime },
             )
 
@@ -110,7 +120,6 @@ class SseFaultOracleDriver(
             lastT = step.t
             when (step.op) {
                 "observe" -> {
-                    pendingReason = "initial-subscribe"
                     val observedSession = sessionId.get()
                     val observedDirectory = directory.get()
                     observeJobs +=
@@ -133,62 +142,71 @@ class SseFaultOracleDriver(
                         }
                     scope.advanceTimeBy(1)
                     scope.runCurrent()
-                    if (epochAtObserve.get() == null) {
-                        epochAtObserve.set(epoch.current())
+                    if (generationAtObserve.get() == null) {
+                        generationAtObserve.set(stream.snapshot.value.generation)
                     }
                 }
                 "unobserve" -> {
                     observeJobs.forEach { it.cancel() }
                     observeJobs.clear()
                 }
-                "world.foreground" -> {
-                    pendingReason = "background-return"
-                    emitWorld(world, WorldSignal.Foreground)
-                }
+                "world.foreground" -> emitWorld(world, WorldSignal.Foreground)
                 "world.background" -> emitWorld(world, WorldSignal.Background)
                 "world.backgroundStop" -> emitWorld(world, WorldSignal.BackgroundStop)
-                "world.pathReady" -> {
-                    pendingReason = "path-ready"
-                    emitWorld(world, WorldSignal.PathReady)
-                }
+                "world.pathReady" -> emitWorld(world, WorldSignal.PathReady)
                 "world.pathLost" -> emitWorld(world, WorldSignal.PathLost)
                 "world.profileSwitched" -> emitWorld(world, WorldSignal.ProfileSwitched)
                 "stream.start" -> stream.start()
                 "stream.stop" -> stream.stop()
                 "connectionState" -> {
                     val state = checkNotNull(step.state) { "connectionState step needs state" }
-                    if (state == "connecting") {
-                        pendingReason = "stream.reconnected"
-                    }
                     applyConnectionState(stream, state)
                 }
-                "epoch.bump" -> epoch.bump()
+                "epoch.bump" -> stream.fake.openGap(dev.opencode.mobile.domain.event.LiveGapReason.Reconnect)
+                "openGap" -> {
+                    val reason =
+                        when (step.state) {
+                            "parseFailed" -> dev.opencode.mobile.domain.event.LiveGapReason.ParseFailed
+                            "leaseLost" -> dev.opencode.mobile.domain.event.LiveGapReason.LeaseLost
+                            "pathLost" -> dev.opencode.mobile.domain.event.LiveGapReason.PathLost
+                            "configChanged" -> dev.opencode.mobile.domain.event.LiveGapReason.ConfigChanged
+                            else -> dev.opencode.mobile.domain.event.LiveGapReason.Reconnect
+                        }
+                    stream.fake.openGap(reason)
+                }
+                "cache.clear" -> sync.clearCache()
+                "protocol.set" -> {
+                    val next = protocolOf(checkNotNull(step.state) { "protocol.set needs state" })
+                    stream.fake.applyConfig(profileId.get(), next, directories.get())
+                    stream.start()
+                }
                 "emit" -> {
                     val event = checkNotNull(step.event) { "emit step needs event" }
-                    if (event.type == "stream.reconnected") {
-                        pendingReason = "stream.reconnected"
-                    } else if (event.type == "server.connected") {
-                        pendingReason = "server.connected"
-                    }
                     stream.fake.emit(toOpencodeEvent(event, sessionId.get()))
                 }
                 "rest.setMessages" -> {
                     messages.set(seedMessages(step.messages.orEmpty()))
                 }
-                "rest.hold", "rest.release" -> Unit
+                "rest.hold" -> restHold.hold()
+                "rest.release" -> restHold.release()
+                "rest.fail" -> restFailures.incrementAndGet()
                 "profile.switch" -> {
                     profileId.set(checkNotNull(step.profileId) { "profile.switch needs profileId" })
                     step.sessionId?.let { sessionId.set(it) }
                     step.directory?.let { directory.set(it) }
                     step.directories?.let { directories.set(it) }
                     sync.clearCache()
+                    stream.fake.applyConfig(profileId.get(), protocol, directories.get())
                     if (world is ProcessWorldSignals) {
                         world.onProfileSwitched()
                     } else {
                         emitWorld(world, WorldSignal.ProfileSwitched)
                     }
                 }
-                "directories.set" -> directories.set(step.directories.orEmpty())
+                "directories.set" -> {
+                    directories.set(step.directories.orEmpty())
+                    stream.fake.applyConfig(profileId.get(), protocol, directories.get())
+                }
                 "snapshot" -> {
                     scope.advanceTimeBy(1)
                     scope.runCurrent()
@@ -204,14 +222,10 @@ class SseFaultOracleDriver(
                         directory = directory.get(),
                         stream = stream,
                         world = world,
-                        epoch = epoch,
-                        epochAtObserve = epochAtObserve.get(),
-                        fetchReasons = fetchReasons.toList(),
+                        generationAtObserve = generationAtObserve.get(),
+                        fetchReasons = sync.recordedRestAttempts(),
                         transcript = transcript.get(),
                         catchUpChrome = catchUp.get(),
-                        profileId = profileId.get(),
-                        protocol = protocolOf(trace.serverProtocol),
-                        directories = directories.get(),
                     )
                 }
                 else -> error("Unsupported recovery op ${step.op}")
@@ -230,11 +244,10 @@ class SseFaultOracleDriver(
                 when (signal) {
                     WorldSignal.Foreground -> world.onForeground()
                     WorldSignal.Background -> world.onBackground()
-                    WorldSignal.BackgroundStop,
-                    WorldSignal.PathReady,
-                    WorldSignal.PathLost,
-                    WorldSignal.ProfileSwitched,
-                    -> Unit
+                    WorldSignal.BackgroundStop -> world.onBackgroundStop()
+                    WorldSignal.PathReady -> world.onPathReady()
+                    WorldSignal.PathLost -> world.onPathLost()
+                    WorldSignal.ProfileSwitched -> world.onProfileSwitched()
                 }
             is FakeWorldSignals -> world.emit(signal)
             else -> error("Unsupported world adapter ${world::class.simpleName}")
@@ -255,10 +268,20 @@ class SseFaultOracleDriver(
 
     companion object {
         fun seedMessages(messages: List<SseFaultTranscriptMessage>): List<Message> {
-            if (messages.isEmpty()) {
-                return listOf(Message(id = "msg-1", role = MessageRole.User, text = "Hello"))
+            val source =
+                if (messages.isEmpty()) {
+                    listOf(SseFaultTranscriptMessage("msg-1", "Hello"))
+                } else {
+                    messages
+                }
+            return source.map {
+                Message(
+                    id = it.id,
+                    role = MessageRole.User,
+                    text = it.text,
+                    parts = listOf(MessagePart.Text(text = it.text, id = "part-1")),
+                )
             }
-            return messages.map { Message(id = it.id, role = MessageRole.User, text = it.text) }
         }
 
         fun protocolOf(value: String): ServerProtocol =
@@ -332,8 +355,13 @@ class SseFaultOracleDriver(
         ): OpencodeEvent {
             val sessionId = event.sessionId ?: defaultSessionId
             val properties =
-                if (event.text != null) {
-                    buildJsonObject { put("delta", event.text) }
+                if (event.type == "message.part.delta" || event.text != null) {
+                    buildJsonObject {
+                        put("delta", event.text ?: "")
+                        put("field", event.field ?: "text")
+                        put("messageID", event.messageId ?: "msg-1")
+                        put("partID", event.partId ?: "part-1")
+                    }
                 } else {
                     null
                 }
@@ -364,50 +392,53 @@ class SseFaultOracleDriver(
             directory: String,
             stream: RecordingForegroundEventStream,
             world: WorldSignals,
-            epoch: ConnectionEpoch,
-            epochAtObserve: Long?,
+            generationAtObserve: Long?,
             fetchReasons: List<String>,
             transcript: List<SseFaultTranscriptMessage>,
             catchUpChrome: Boolean,
-            profileId: String,
-            protocol: ServerProtocol,
-            directories: List<String>,
             liveTargets: List<String>? = null,
             openedPaths: List<String>? = null,
+            openedPathCounts: Map<String, Int>? = null,
         ) {
+            val snapshot = stream.snapshot.value
             val health = sync.syncHealth(sessionId, directory)
             expected.syncHealth?.let { assertEquals(it, healthName(health)) }
             expected.syncHealthReason?.let { assertEquals(it, healthReason(health)) }
             expected.catchUpChrome?.let { assertEquals(it, catchUpChrome) }
             expected.connectionState?.let {
-                assertEquals(it, connectionStateName(stream.connectionState.value))
+                assertEquals(it, connectionStateName(snapshot.connectionState))
             }
             expected.occupancy?.let { assertEquals(it, occupancyName(world.occupancy.value)) }
             expected.chrome?.let { label ->
                 val chrome =
                     composeLiveUpdates(
-                        connectionState = stream.connectionState.value,
+                        connectionState = snapshot.connectionState,
                         path = DeviceNetworkPathStatus.Ready,
                         occupancy = world.occupancy.value,
                         hasConnection = true,
                     )
                 assertEquals(label, chrome.label.label)
             }
-            expected.epochUnchanged?.let { unchanged ->
-                val baseline = checkNotNull(epochAtObserve) { "epochUnchanged requires an observe step" }
-                assertEquals(unchanged, epoch.current() == baseline)
+            expected.generationUnchanged?.let { unchanged ->
+                val baseline = checkNotNull(generationAtObserve) { "generationUnchanged requires an observe step" }
+                assertEquals(unchanged, snapshot.generation == baseline)
+            }
+            expected.gapReason?.let { wanted ->
+                assertEquals(wanted, gapReasonName(snapshot.gap?.reason))
             }
             expected.restFetches?.let { wanted ->
                 assertEquals(wanted.sortedBy { it.reason }, groupedFetches(fetchReasons))
             }
-            expected.publishedProfileId?.let { assertEquals(it, profileId) }
+            expected.publishedProfileId?.let { wanted ->
+                val actual = sync.publishedProfileId() ?: snapshot.config?.profileId
+                assertEquals(wanted, actual)
+            }
             expected.transcript?.let { assertEquals(it, transcript) }
             expected.streamOps?.let { assertEquals(it, stream.ops.toList()) }
-            expected.requiredTargets?.let {
-                assertEquals(it, requiredTargets(protocol, directories))
-            }
+            expected.requiredTargets?.let { assertEquals(it, snapshot.requiredTargets) }
             expected.liveTargets?.let { wanted ->
-                assertEquals(wanted.toSet(), checkNotNull(liveTargets).toSet())
+                val actual = liveTargets ?: snapshot.liveTargets
+                assertEquals(wanted.toSet(), actual.toSet())
             }
             expected.openedPaths?.let { wanted ->
                 val actual = checkNotNull(openedPaths)
@@ -415,6 +446,49 @@ class SseFaultOracleDriver(
                     assertTrue("openedPaths missing $path in $actual", actual.any { it == path || it.startsWith(path) })
                 }
             }
+            expected.openedPathCounts?.let { wanted ->
+                val actual = checkNotNull(openedPaths)
+                wanted.forEach { (path, count) ->
+                    val matches =
+                        actual.count {
+                            it == path || it.startsWith("$path?") || path.startsWith("$it?")
+                        }
+                    assertEquals("openedPathCounts for $path", count, matches)
+                }
+            }
+        }
+
+        fun gapReasonName(reason: dev.opencode.mobile.domain.event.LiveGapReason?): String? =
+            when (reason) {
+                null -> null
+                dev.opencode.mobile.domain.event.LiveGapReason.OccupancyStart -> "occupancyStart"
+                dev.opencode.mobile.domain.event.LiveGapReason.Reconnect -> "reconnect"
+                dev.opencode.mobile.domain.event.LiveGapReason.ConfigChanged -> "configChanged"
+                dev.opencode.mobile.domain.event.LiveGapReason.Stopped -> "stopped"
+                dev.opencode.mobile.domain.event.LiveGapReason.PathLost -> "pathLost"
+                dev.opencode.mobile.domain.event.LiveGapReason.LeaseLost -> "leaseLost"
+                dev.opencode.mobile.domain.event.LiveGapReason.ParseFailed -> "parseFailed"
+            }
+    }
+}
+
+class RestHoldGate {
+    private val held = AtomicBoolean(false)
+    private val latch = AtomicReference(CompletableDeferred(Unit))
+
+    fun hold() {
+        held.set(true)
+        latch.set(CompletableDeferred())
+    }
+
+    fun release() {
+        held.set(false)
+        latch.get().complete(Unit)
+    }
+
+    suspend fun awaitIfHeld() {
+        if (held.get()) {
+            latch.get().await()
         }
     }
 }

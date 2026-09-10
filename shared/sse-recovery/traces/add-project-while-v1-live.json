@@ -21,12 +21,20 @@
       "op": "directories.set",
       "directories": ["/repo-a", "/repo-b"]
     },
+    { "t": 80, "op": "target.open", "target": "event:/repo-b" },
     { "t": 80, "op": "snapshot", "name": "after-add-project" }
   ],
   "expected": {
     "snapshots": {
       "after-add-project": {
+        "connectionState": "connected",
+        "generationUnchanged": true,
         "requiredTargets": [
+          "global/event",
+          "event:/repo-a",
+          "event:/repo-b"
+        ],
+        "liveTargets": [
           "global/event",
           "event:/repo-a",
           "event:/repo-b"
@@ -35,7 +43,12 @@
           "/global/event",
           "/event?directory=/repo-a",
           "/event?directory=/repo-b"
-        ]
+        ],
+        "openedPathCounts": {
+          "/global/event": 1,
+          "/event?directory=/repo-a": 1,
+          "/event?directory=/repo-b": 1
+        }
       }
     }
   }

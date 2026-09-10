@@ -27,7 +27,7 @@
         "chrome": "live",
         "connectionState": "connected",
         "occupancy": "active",
-        "epochUnchanged": true,
+        "generationUnchanged": true,
         "restFetches": [{ "reason": "initial-subscribe", "count": 1 }],
         "transcript": [{ "id": "msg-1", "text": "Hello" }]
       }

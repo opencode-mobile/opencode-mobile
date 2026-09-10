@@ -58,4 +58,46 @@ class GapAuthorityTest {
         assertFalse(authority.needsReconcile(snapshot))
         assertNull(authority.tryBegin(snapshot))
     }
+
+    @Test
+    fun acknowledgeCurrent_whileOlderInFlight_pinsInFlightAndSuppressesReconcile() {
+        val authority = GapAuthority()
+        val begun =
+            LiveConnectionSnapshot(
+                gap = LiveGapRevision(3, LiveGapReason.Reconnect),
+                connectionState = EventStreamConnectionState.Connected,
+            )
+        assertEquals(3L, authority.tryBegin(begun))
+        val newer =
+            LiveConnectionSnapshot(
+                gap = LiveGapRevision(4, LiveGapReason.Reconnect),
+                connectionState = EventStreamConnectionState.Connected,
+            )
+        authority.acknowledgeCurrent(newer)
+        assertEquals(4L, authority.acknowledgedGeneration())
+        assertEquals(3L, authority.inFlightGeneration())
+        assertFalse(authority.needsReconcile(newer))
+        assertNull(authority.tryBegin(newer))
+    }
+
+    @Test
+    fun acknowledge_exactInFlight_clearsAndLeavesNewerUnpaid() {
+        val authority = GapAuthority()
+        val begun =
+            LiveConnectionSnapshot(
+                gap = LiveGapRevision(3, LiveGapReason.Reconnect),
+                connectionState = EventStreamConnectionState.Connected,
+            )
+        assertEquals(3L, authority.tryBegin(begun))
+        val newer =
+            LiveConnectionSnapshot(
+                gap = LiveGapRevision(4, LiveGapReason.Reconnect),
+                connectionState = EventStreamConnectionState.Connected,
+            )
+        authority.acknowledge(3)
+        assertEquals(3L, authority.acknowledgedGeneration())
+        assertNull(authority.inFlightGeneration())
+        assertTrue(authority.needsReconcile(newer))
+        assertEquals(4L, authority.tryBegin(newer))
+    }
 }

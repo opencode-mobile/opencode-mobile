@@ -52,7 +52,7 @@ class DefaultPermissionLiveStore
                         val snapshot = liveConnection.snapshot.value
                         val generation =
                             if (force) {
-                                null
+                                authority.captureBegin(snapshot)
                             } else {
                                 authority.tryBegin(snapshot) ?: run {
                                     diagnosticLogger.info(
@@ -86,13 +86,16 @@ class DefaultPermissionLiveStore
                                     }
                                 },
                             )
-                        if (generation != null) {
-                            when (outcome) {
-                                LiveStoreRefreshOutcome.COMMITTED -> authority.acknowledge(generation)
-                                LiveStoreRefreshOutcome.FAILED,
-                                LiveStoreRefreshOutcome.DISCARDED,
-                                -> authority.fail(generation)
+                        when (outcome) {
+                            LiveStoreRefreshOutcome.COMMITTED -> {
+                                authority.acknowledge(generation)
+                                if (authority.needsReconcile(liveConnection.snapshot.value)) {
+                                    refresh(StoreRefreshReason.STREAM_RECONNECTED, force = false)
+                                }
                             }
+                            LiveStoreRefreshOutcome.FAILED,
+                            LiveStoreRefreshOutcome.DISCARDED,
+                            -> authority.fail(generation)
                         }
                         failure?.let {
                             diagnosticLogger.warning(
@@ -103,7 +106,6 @@ class DefaultPermissionLiveStore
                         }
                     }
                     refresh(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)
-                    authority.acknowledgeCurrent(liveConnection.snapshot.value)
                     launch {
                         worldSignals.signals.collect { signal ->
                             if (signal.marksStale()) {
@@ -142,7 +144,7 @@ class DefaultPermissionLiveStore
                                             refresh(event.type, force = false)
                                         }
                                 } else {
-                                    refresh(event.type, force = true)
+                                    launch { refresh(event.type, force = true) }
                                 }
                             }
                     } finally {

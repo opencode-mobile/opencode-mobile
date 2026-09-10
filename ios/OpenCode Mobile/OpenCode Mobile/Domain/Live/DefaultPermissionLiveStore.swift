@@ -82,7 +82,6 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
             sessionRepository: sessionRepository,
             yield: yield
         )
-        authority.acknowledgeCurrent(liveConnection.snapshot)
         await withTaskGroup(of: Void.self) { group in
             group.addTask {
                 for await signal in worldSignals.signals() {
@@ -165,17 +164,19 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
                     guard event.type == "permission.asked"
                         || event.type == "permission.replied"
                     else { continue }
-                    await refresh(
-                        directory: directory,
-                        reason: event.type,
-                        force: true,
-                        liveConnection: liveConnection,
-                        authority: authority,
-                        gate: gate,
-                        lastEmitted: lastEmitted,
-                        sessionRepository: sessionRepository,
-                        yield: yield
-                    )
+                    Task {
+                        await refresh(
+                            directory: directory,
+                            reason: event.type,
+                            force: true,
+                            liveConnection: liveConnection,
+                            authority: authority,
+                            gate: gate,
+                            lastEmitted: lastEmitted,
+                            sessionRepository: sessionRepository,
+                            yield: yield
+                        )
+                    }
                 }
             }
             await group.next()
@@ -195,9 +196,9 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
         yield: @escaping @Sendable ([PermissionRequest]) -> Void
     ) async {
         let snapshot = liveConnection.snapshot
-        let generation: UInt64?
+        let generation: UInt64
         if force {
-            generation = nil
+            generation = authority.captureBegin(snapshot)
         } else {
             guard let started = authority.tryBegin(snapshot) else {
                 DiagnosticLog.info(.permission, "permission skip reason=\(reason)")
@@ -221,13 +222,24 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
                 yield(requests)
             }
         )
-        if let generation {
-            switch outcome {
-            case .committed:
-                authority.acknowledge(generation)
-            case .failed, .discarded:
-                authority.fail(generation)
+        switch outcome {
+        case .committed:
+            authority.acknowledge(generation)
+            if authority.needsReconcile(liveConnection.snapshot) {
+                await refresh(
+                    directory: directory,
+                    reason: StoreRefreshReason.streamReconnected,
+                    force: false,
+                    liveConnection: liveConnection,
+                    authority: authority,
+                    gate: gate,
+                    lastEmitted: lastEmitted,
+                    sessionRepository: sessionRepository,
+                    yield: yield
+                )
             }
+        case .failed, .discarded:
+            authority.fail(generation)
         }
         if outcome == .failed {
             DiagnosticLog.warning(.permission, "permission refresh failed reason=\(reason)")

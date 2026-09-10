@@ -34,6 +34,9 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private var terminalSessionKeys: Set<MessageSessionKey> = []
     private var startedGenerationByKey: [MessageSessionKey: Int] = [:]
     private var lastMessageEventAtMs: [String: Int64] = [:]
+    private var lastPublishedProfileID: String?
+    private var restAttempts: [String] = []
+    private var authorities: [MessageSessionKey: GapAuthority] = [:]
     private let invalidationBus = StoreInvalidationBus()
 
     init(
@@ -123,7 +126,41 @@ nonisolated final class MessageSync: @unchecked Sendable {
         reason: String = StoreRefreshReason.pullToRefresh
     ) async throws -> [Message] {
         let key = sessionKey(sessionID: sessionID, directory: directory)
-        return try await fullReloadOrThrow(key: key, reason: reason)
+        let authority = gapAuthority(for: key)
+        authority.invalidate(liveConnection.snapshot)
+        var begun = authority.captureBegin(liveConnection.snapshot)
+        while true {
+            switch await fullReloadResult(key: key, reason: reason) {
+            case .accepted(let messages):
+                let newerUnpaid = acknowledgeExactGeneration(
+                    authority,
+                    begun: begun,
+                    snapshot: liveConnection.snapshot
+                )
+                if !newerUnpaid {
+                    setHealth(.healthy, for: key)
+                    return messages
+                }
+                guard let next = authority.tryBegin(liveConnection.snapshot) else {
+                    return messages
+                }
+                begun = next
+            case .discarded(let messages):
+                authority.fail(begun)
+                return messages
+            case .failure(let error):
+                authority.fail(begun)
+                setHealth(.recovering(.reloadFailed), for: key)
+                throw error
+            }
+        }
+    }
+
+    /// Production REST attempt reasons, recorded before the fetch succeeds or throws.
+    func recordedRestAttempts() -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return restAttempts
     }
 
     func invalidate(
@@ -141,6 +178,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         lock.lock()
         observationGeneration += 1
         startedGenerationByKey.removeAll()
+        let stale = Array(observationCache.values)
         observationCache.removeAll()
         lastFingerprint.removeAll()
         lastPublishedFrame.removeAll()
@@ -148,9 +186,19 @@ nonisolated final class MessageSync: @unchecked Sendable {
         healthByKey.removeAll()
         catchUpSlots.removeAll()
         awaitingCacheSyncConfirm.removeAll()
+        lastPublishedProfileID = nil
+        authorities.removeAll()
         lock.unlock()
+        stale.forEach { $0.finish() }
         store.clear()
         publishCatchUpChrome()
+    }
+
+    /// Last observation that published a transcript frame.
+    func publishedProfileID() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return lastPublishedProfileID
     }
 
     func peekStoreMessages(sessionID: String, directory: String? = nil) -> [Message] {
@@ -344,7 +392,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
             byteCapacity: eventStagingByteCapacity
         )
         let cacheHandle = openMessageCacheHandle(for: key)
-        let gapState = ObservationGapState(liveConnection: liveConnection)
+        let gapState = ObservationGapState(
+            liveConnection: liveConnection,
+            authority: gapAuthority(for: key)
+        )
         let authority = gapState.authority
         let liveConnection = liveConnection
         defer { clearCatchUp(for: key, startedGeneration: startedGeneration) }
@@ -356,8 +407,12 @@ nonisolated final class MessageSync: @unchecked Sendable {
         func wakeGapEvaluation(reason: String) {
             staging.requestEvaluate(reason: reason)
         }
-        let producer = Task { [eventStream] in
-            for await event in eventStream.events() {
+        // Subscribe before seed/REST so events that arrive during those awaits
+        // are buffered. Lazy AsyncStream builders only register on first
+        // `for await`, which can lose the producer race against fetchMessages.
+        let liveEvents = eventStream.events()
+        let producer = Task {
+            for await event in liveEvents {
                 staging.enqueue(event, sessionID: key.sessionID)
             }
             staging.finish()
@@ -413,10 +468,19 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 self.setAwaitingCacheSyncConfirm(false, for: key.storeSlot)
                 cacheHandle.note(messages: messages)
             }
+            self.lock.lock()
+            self.lastPublishedProfileID = key.connectionProfileID
+            self.lock.unlock()
             yield(.messages(messages, isFromCache: isFromCache))
             // Fingerprint remains the poll / REST authority comparison only.
             self.setFingerprint(self.messageFingerprint(messages), for: key.storeSlot)
             MessagePipelineProbe.emit(.displayFramePublished)
+        }
+
+        snapshotWatcher = Task { [liveConnection] in
+            for await _ in liveConnection.snapshotUpdates() {
+                wakeGapEvaluation(reason: StoreRefreshReason.streamReconnected)
+            }
         }
 
         if let seeded = await cacheHandle.seed() {
@@ -446,12 +510,23 @@ nonisolated final class MessageSync: @unchecked Sendable {
         // DisplayMessagePipeline does not cancel in-flight enrich / plain-first.
         let fingerprintBeforeReload = fingerprint(for: key.storeSlot)
         let expectedRevision = store.revision(sessionID: key.storeSlot)
+        let begun = authority.captureBegin(liveConnection.snapshot)
         let initialStarted = Date()
         do {
             SessionPerformanceProbe.emit("history_request_started")
-            let messages = try await listMessages(key.sessionID, key.directory.isEmpty ? nil : key.directory)
+            let messages = try await fetchMessages(
+                sessionID: key.sessionID,
+                directory: key.directory.isEmpty ? nil : key.directory,
+                reason: StoreRefreshReason.initialSubscribe
+            )
             SessionPerformanceProbe.emit("history_request_finished")
+            await applyQueuedIncrementalEvents(
+                staging.takeQueuedIncrementalEvents(),
+                key: key,
+                publishMessages: { publishMessages($0, false) }
+            )
             if staging.needsAuthoritativeRecovery {
+                authority.fail(begun)
                 OpenCodeLog.messageContent.info(
                     "eventStagingRejectStaleAuthority session=\(key.sessionID) highWater=\(staging.highWater)"
                 )
@@ -463,17 +538,27 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     gapState: gapState
                 )
             } else {
-                _ = store.replaceAllIfRevision(
-                    sessionID: key.storeSlot,
-                    messages: messages,
-                    expectedRevision: expectedRevision
-                )
+                let local = store.messages(sessionID: key.storeSlot)
+                let acceptRemote =
+                    store.revision(sessionID: key.storeSlot) == expectedRevision &&
+                    MessageSnapshotAuthority.isAheadOrEqual(remote: messages, local: local)
+                if acceptRemote {
+                    _ = store.replaceAllIfRevision(
+                        sessionID: key.storeSlot,
+                        messages: messages,
+                        expectedRevision: expectedRevision
+                    )
+                }
                 let merged = store.messages(sessionID: key.storeSlot)
                 let fingerprint = messageFingerprint(merged)
                 setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
                 setFingerprint(fingerprint, for: key.storeSlot)
                 setHealth(.healthy, for: key)
-                authority.acknowledgeCurrent(liveConnection.snapshot)
+                if acceptRemote {
+                    authority.acknowledge(begun)
+                } else {
+                    authority.fail(begun)
+                }
                 DiagnosticLog.info(
                     .chat,
                     "fullReload session=\(key.sessionID) reason=\(StoreRefreshReason.initialSubscribe) count=\(merged.count) ms=\(elapsedMs(since: initialStarted))"
@@ -488,8 +573,19 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     setAwaitingCacheSyncConfirm(false, for: key.storeSlot)
                     yield(.cacheSyncConfirmed)
                 }
+                if authority.needsReconcile(liveConnection.snapshot) || !acceptRemote {
+                    await reconcileGap(
+                        key: key,
+                        reason: StoreRefreshReason.streamReconnected,
+                        staging: staging,
+                        publishMessages: { publishMessages($0, false) },
+                        confirmCacheSync: confirmCacheSyncIfAwaiting,
+                        gapState: gapState
+                    )
+                }
             }
         } catch {
+            authority.fail(begun)
             SessionPerformanceProbe.emit("history_request_finished")
             if staging.needsAuthoritativeRecovery {
                 await performClosedLoopRecovery(
@@ -514,12 +610,6 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     .chat,
                     "fullReload failed session=\(key.sessionID) reason=\(StoreRefreshReason.initialSubscribe) ms=\(elapsedMs(since: initialStarted))"
                 )
-            }
-        }
-
-        snapshotWatcher = Task { [liveConnection] in
-            for await _ in liveConnection.snapshotUpdates() {
-                wakeGapEvaluation(reason: StoreRefreshReason.streamReconnected)
             }
         }
 
@@ -571,12 +661,27 @@ nonisolated final class MessageSync: @unchecked Sendable {
         var backoffMs = MessageSyncRecoveryPolicy.initialBackoffMs
 
         while !Task.isCancelled, observationStillCurrent(key: key) {
-            staging.drain()
+            await applyQueuedIncrementalEvents(
+                staging.takeQueuedIncrementalEvents(),
+                key: key,
+                publishMessages: publishMessages
+            )
             staging.beginAuthorityWindow()
             let fingerprintBefore = fingerprint(for: key.storeSlot)
-            let result = await fullReloadResult(key: key, reason: fetchReason, mergeExisting: true)
+            let result = await fullReloadResult(
+                key: key,
+                reason: fetchReason,
+                mergeExisting: true,
+                beforeCommit: {
+                    await self.applyQueuedIncrementalEvents(
+                        staging.takeQueuedIncrementalEvents(),
+                        key: key,
+                        publishMessages: publishMessages
+                    )
+                }
+            )
             switch result {
-            case .success(let messages):
+            case .accepted(let messages):
                 let becameHealthy = staging.completeAuthorityWindow(reloadSucceeded: true)
                 setHealth(staging.currentHealth, for: key)
                 let published = observationStillCurrent(key: key)
@@ -587,8 +692,16 @@ nonisolated final class MessageSync: @unchecked Sendable {
                         confirmCacheSync()
                     }
                 }
-                if becameHealthy {
-                    gapState.authority.acknowledge(gapState.recoveryGeneration)
+                let newerUnpaid = acknowledgeExactGeneration(
+                    gapState.authority,
+                    begun: gapState.recoveryGeneration,
+                    snapshot: gapState.liveConnection.snapshot
+                )
+                if !newerUnpaid {
+                    if !becameHealthy {
+                        setHealth(.healthy, for: key)
+                    }
+                    staging.clearRecoveringLatch()
                     if published {
                         OpenCodeLog.messageContent.info(
                             "eventStagingRecovery session=\(key.sessionID) highWater=\(staging.highWater)"
@@ -596,6 +709,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     }
                     return
                 }
+                if let next = gapState.authority.tryBegin(gapState.liveConnection.snapshot) {
+                    gapState.recoveryGeneration = next
+                    continue
+                }
+            case .discarded:
+                _ = staging.completeAuthorityWindow(reloadSucceeded: false)
+                setHealth(staging.currentHealth, for: key)
             case .failure(let error):
                 _ = staging.completeAuthorityWindow(reloadSucceeded: false)
                 setHealth(staging.currentHealth, for: key)
@@ -621,8 +741,47 @@ nonisolated final class MessageSync: @unchecked Sendable {
     }
 
     private enum ReloadResult {
-        case success([Message])
+        case accepted([Message])
+        case discarded([Message])
         case failure(Error)
+    }
+
+    private func fetchMessages(
+        sessionID: String,
+        directory: String?,
+        reason: String
+    ) async throws -> [Message] {
+        lock.lock()
+        restAttempts.append(reason)
+        lock.unlock()
+        return try await listMessages(sessionID, directory)
+    }
+
+    func gapAuthority(sessionID: String, directory: String?) -> GapAuthority {
+        gapAuthority(for: sessionKey(sessionID: sessionID, directory: directory))
+    }
+
+    /// Pays only the generation this REST began. A newer gap that opened
+    /// during the GET stays unpaid so `needsReconcile` can start a sequential
+    /// follow-up instead of pinning inFlight to the old revision.
+    private func acknowledgeExactGeneration(
+        _ authority: GapAuthority,
+        begun: UInt64,
+        snapshot: LiveConnectionSnapshot
+    ) -> Bool {
+        authority.acknowledge(begun)
+        return authority.needsReconcile(snapshot)
+    }
+
+    private func gapAuthority(for key: MessageSessionKey) -> GapAuthority {
+        lock.lock()
+        defer { lock.unlock() }
+        if let existing = authorities[key] {
+            return existing
+        }
+        let created = GapAuthority()
+        authorities[key] = created
+        return created
     }
 
     private func fullReloadOrThrow(key: MessageSessionKey, reason: String) async throws -> [Message] {
@@ -630,7 +789,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         let expectedRevision = store.revision(sessionID: key.storeSlot)
         let directory = key.directory.isEmpty ? nil : key.directory
         let started = Date()
-        let messages = try await listMessages(key.sessionID, directory)
+        let messages = try await fetchMessages(sessionID: key.sessionID, directory: directory, reason: reason)
         SessionPerformanceProbe.emit("history_request_finished")
         _ = store.replaceAllIfRevision(
             sessionID: key.storeSlot,
@@ -650,26 +809,38 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private func fullReloadResult(
         key: MessageSessionKey,
         reason: String,
-        mergeExisting: Bool = false
+        mergeExisting: Bool = false,
+        beforeCommit: @escaping @Sendable () async -> Void = {}
     ) async -> ReloadResult {
         SessionPerformanceProbe.emit("history_request_started")
         let expectedRevision = store.revision(sessionID: key.storeSlot)
         let directory = key.directory.isEmpty ? nil : key.directory
         let started = Date()
         do {
-            let messages = try await listMessages(key.sessionID, directory)
-            if mergeExisting {
-                _ = store.mergeAuthoritativeIfRevision(
-                    sessionID: key.storeSlot,
-                    messages: messages,
-                    expectedRevision: expectedRevision
-                )
-            } else {
-                _ = store.replaceAllIfRevision(
-                    sessionID: key.storeSlot,
-                    messages: messages,
-                    expectedRevision: expectedRevision
-                )
+            let messages = try await fetchMessages(
+                sessionID: key.sessionID,
+                directory: directory,
+                reason: reason
+            )
+            await beforeCommit()
+            let local = store.messages(sessionID: key.storeSlot)
+            let acceptRemote =
+                store.revision(sessionID: key.storeSlot) == expectedRevision &&
+                MessageSnapshotAuthority.isAheadOrEqual(remote: messages, local: local)
+            if acceptRemote {
+                if mergeExisting {
+                    _ = store.mergeAuthoritativeIfRevision(
+                        sessionID: key.storeSlot,
+                        messages: messages,
+                        expectedRevision: expectedRevision
+                    )
+                } else {
+                    _ = store.replaceAllIfRevision(
+                        sessionID: key.storeSlot,
+                        messages: messages,
+                        expectedRevision: expectedRevision
+                    )
+                }
             }
             let merged = store.messages(sessionID: key.storeSlot)
             setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
@@ -680,7 +851,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 .chat,
                 "fullReload session=\(key.sessionID) reason=\(reason) count=\(merged.count) ms=\(elapsedMs(since: started))"
             )
-            return .success(merged)
+            return acceptRemote ? .accepted(merged) : .discarded(merged)
         } catch {
             SessionPerformanceProbe.emit("history_request_finished")
             DiagnosticLog.warning(
@@ -702,7 +873,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             staging.beginAuthorityWindow()
         }
         switch await fullReloadResult(key: key, reason: reason) {
-        case .success(let messages):
+        case .accepted(let messages):
             if let staging {
                 let healthy = staging.completeAuthorityWindow(reloadSucceeded: true)
                 setHealth(staging.currentHealth, for: key)
@@ -719,6 +890,19 @@ nonisolated final class MessageSync: @unchecked Sendable {
             } else {
                 publishMessages(messages)
                 setHealth(.healthy, for: key)
+            }
+        case .discarded(let messages):
+            if let staging {
+                _ = staging.completeAuthorityWindow(reloadSucceeded: false)
+                setHealth(staging.currentHealth, for: key)
+                publishMessages(messages)
+                await performClosedLoopRecovery(
+                    key: key,
+                    staging: staging,
+                    reason: .racedAuthority,
+                    publishMessages: publishMessages,
+                    gapState: gapState
+                )
             }
         case .failure:
             if let staging {
@@ -750,6 +934,9 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 store.messages(sessionID: key.storeSlot)
             )
         ) else {
+            if staging.needsAuthoritativeRecovery || gapState.authority.isInFlight() {
+                return
+            }
             DiagnosticLog.info(.chat, "fullReload skip session=\(key.sessionID) reason=\(reason)")
             confirmCacheSync()
             return
@@ -949,15 +1136,39 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 setHealth(.healthy, for: key)
                 return
             }
-            switch await fullReloadResult(key: key, reason: "session.idle", mergeExisting: true) {
-            case .success(let messages):
-                setHealth(.healthy, for: key)
-                publishMessages(messages)
-            case .failure:
-                setHealth(.healthy, for: key)
-            }
+            await reconcileGap(
+                key: key,
+                reason: "session.idle",
+                staging: staging,
+                publishMessages: publishMessages,
+                confirmCacheSync: confirmCacheSync,
+                gapState: gapState
+            )
         default:
             return
+        }
+    }
+
+    private func applyQueuedIncrementalEvents(
+        _ events: [OpencodeEvent],
+        key: MessageSessionKey,
+        publishMessages: @escaping @Sendable ([Message]) -> Void
+    ) async {
+        for event in events {
+            switch event.type {
+            case "message.updated":
+                handleMessageUpdated(event: event, key: key, publishMessages: publishMessages)
+            case "message.part.updated":
+                handleMessagePartUpdated(event: event, key: key, publishMessages: publishMessages)
+            case "message.part.delta":
+                handleMessagePartDelta(event: event, key: key, publishMessages: publishMessages)
+            case "message.removed":
+                handleMessageRemoved(event: event, key: key, publishMessages: publishMessages)
+            case "message.part.removed":
+                handleMessagePartRemoved(event: event, key: key, publishMessages: publishMessages)
+            default:
+                break
+            }
         }
     }
 
@@ -1093,7 +1304,11 @@ nonisolated final class MessageSync: @unchecked Sendable {
             let expectedRevision = store.revision(sessionID: key.storeSlot)
             let directory = key.directory.isEmpty ? nil : key.directory
             do {
-                let messages = try await listMessages(key.sessionID, directory)
+                let messages = try await fetchMessages(
+                    sessionID: key.sessionID,
+                    directory: directory,
+                    reason: "poll"
+                )
                 if streaming {
                     let local = store.messages(sessionID: key.storeSlot)
                     guard MessageSnapshotAuthority.isAheadOrEqual(remote: messages, local: local) else {
@@ -1167,15 +1382,15 @@ nonisolated final class MessageSync: @unchecked Sendable {
         Int((Date().timeIntervalSince(start) * 1000).rounded())
     }
 }
-
 private nonisolated final class ObservationGapState: @unchecked Sendable {
-    let authority = GapAuthority()
+    let authority: GapAuthority
     let liveConnection: any LiveConnection
     private let lock = NSLock()
     private var _recoveryGeneration: UInt64 = 0
 
-    init(liveConnection: any LiveConnection) {
+    init(liveConnection: any LiveConnection, authority: GapAuthority) {
         self.liveConnection = liveConnection
+        self.authority = authority
     }
 
     var recoveryGeneration: UInt64 {
@@ -1210,4 +1425,3 @@ private nonisolated final class ObservationGapState: @unchecked Sendable {
         return generation
     }
 }
-

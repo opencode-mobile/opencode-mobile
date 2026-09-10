@@ -25,6 +25,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -32,6 +33,7 @@ import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
 class DefaultForegroundEventStreamTest {
@@ -477,6 +479,63 @@ class DefaultForegroundEventStreamTest {
         }
 
     @Test
+    fun startDuringHeldConfigResolve_usesPendingConfigNotStale() =
+        runBlocking {
+            val requests = CopyOnWriteArrayList<HttpRequestData>()
+            val opened = CompletableDeferred<Unit>()
+            val hold = CompletableDeferred<Unit>()
+            val client =
+                HttpClient(
+                    MockEngine { request ->
+                        requests += request
+                        if (request.url.parameters["directory"] == "/new") {
+                            opened.complete(Unit)
+                        }
+                        respond(
+                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = HoldingProfileStore(hold, initial = listOf("/old"), next = listOf("/new"))
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V1 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V1)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(2_000) { store.firstResolveEntered.await() }
+                stream.start()
+                withTimeout(2_000) { store.secondResolveEntered.await() }
+                hold.complete(Unit)
+                withTimeout(2_000) { opened.await() }
+                withTimeout(2_000) {
+                    stream.snapshot.first { snap ->
+                        snap.requiredTargets.contains("event:/new") &&
+                            snap.requiredTargets.none { it == "event:/old" }
+                    }
+                }
+                val directories = requests.mapNotNull { it.url.parameters["directory"] }
+                assertTrue(directories.contains("/new"))
+                assertTrue(directories.none { it == "/old" })
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
     fun startThenReconnect_bumpsEpochOnce() =
         runBlocking {
             val opens = AtomicInteger(0)
@@ -532,8 +591,150 @@ class DefaultForegroundEventStreamTest {
             }
         }
 
+    @Test
+    fun concurrentGlobalAndInstanceLiveDead_doesNotDropOrDoubleGap() =
+        runBlocking {
+            val channels = java.util.concurrent.ConcurrentHashMap<String, io.ktor.utils.io.ByteChannel>()
+            val reconnects = java.util.concurrent.CopyOnWriteArrayList<Long>()
+            val client =
+                HttpClient(
+                    MockEngine { request ->
+                        val target =
+                            when {
+                                request.url.encodedPath.contains("global/event") -> "global/event"
+                                request.url.parameters["directory"] != null ->
+                                    "event:${request.url.parameters["directory"]}"
+                                else -> "event"
+                            }
+                        val channel = io.ktor.utils.io.ByteChannel(autoFlush = true)
+                        channels[target] = channel
+                        channel.writeStringUtf8(
+                            "data: {\"payload\":{\"type\":\"server.connected\",\"properties\":{}}}\n\n",
+                        )
+                        respond(
+                            content = channel,
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = FakeProfileStore(worktrees = listOf("/repo"))
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V1 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V1)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                    idleTimeoutMs = 60_000,
+                )
+            val collectJob =
+                launch {
+                    stream.events.collect { event ->
+                        if (event.type == "stream.reconnected") {
+                            reconnects += stream.snapshot.value.gap?.generation ?: 0L
+                        }
+                    }
+                }
+            try {
+                stream.start()
+                withTimeout(2_000) {
+                    while (stream.snapshot.value.liveTargets.toSet() !=
+                        setOf("global/event", "event:/repo")
+                    ) {
+                        delay(10)
+                    }
+                }
+                val gapIds = java.util.concurrent.CopyOnWriteArrayList<Long>()
+                repeat(12) {
+                    channels["event:/repo"]?.close()
+                    withTimeout(2_000) {
+                        while (stream.snapshot.value.gap?.reason != LiveGapReason.LeaseLost ||
+                            "event:/repo" in stream.snapshot.value.liveTargets
+                        ) {
+                            delay(5)
+                        }
+                    }
+                    gapIds += stream.snapshot.value.gap?.generation ?: 0L
+                    withTimeout(2_000) {
+                        while (stream.snapshot.value.liveTargets.toSet() !=
+                            setOf("global/event", "event:/repo")
+                        ) {
+                            delay(10)
+                        }
+                    }
+                }
+                assertEquals(12, gapIds.size)
+                assertEquals(gapIds.toSet().size, gapIds.size)
+                assertEquals(reconnects.toSet().size, reconnects.size)
+                val snapshot = stream.snapshot.value
+                assertEquals(setOf("global/event", "event:/repo"), snapshot.liveTargets.toSet())
+                assertTrue(snapshot.requiredTargets.containsAll(snapshot.liveTargets))
+            } finally {
+                stream.stop()
+                collectJob.cancel()
+                client.close()
+            }
+        }
+
     private val sampleProfile =
         ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", password = "x")
+
+    private class HoldingProfileStore(
+        private val hold: CompletableDeferred<Unit>,
+        private val initial: List<String>,
+        private val next: List<String>,
+    ) : ConnectionProfileStore {
+        private var profile: ConnectionProfile? = null
+        private val resolves = AtomicInteger(0)
+        val firstResolveEntered = CompletableDeferred<Unit>()
+        val secondResolveEntered = CompletableDeferred<Unit>()
+
+        override suspend fun activeProfile(): ConnectionProfile? = profile
+
+        override suspend fun saveProfile(profile: ConnectionProfile) {
+            this.profile = profile
+        }
+
+        override suspend fun addedWorktrees(serverBaseUrl: String): List<String> {
+            val n = resolves.incrementAndGet()
+            if (n == 1) {
+                firstResolveEntered.complete(Unit)
+                hold.await()
+                return initial
+            }
+            if (n == 2) {
+                secondResolveEntered.complete(Unit)
+            }
+            return next
+        }
+
+        override suspend fun addWorktree(
+            serverBaseUrl: String,
+            worktree: String,
+        ) = Unit
+
+        override suspend fun removeWorktree(
+            serverBaseUrl: String,
+            worktree: String,
+        ) = Unit
+
+        override suspend fun setAddedWorktrees(
+            serverBaseUrl: String,
+            worktrees: List<String>,
+        ) = Unit
+
+        override suspend fun clearAll() = Unit
+
+        override fun configurationRevisions(): kotlinx.coroutines.flow.Flow<Unit> =
+            kotlinx.coroutines.flow.emptyFlow()
+    }
 
     private class FakeProfileStore(
         private val worktrees: List<String> = emptyList(),

@@ -755,6 +755,18 @@ private func makeViewModel(
         sessionStatusLiveStore: sessionStatusLiveStore,
         eventStream: eventStream
     )
+    let permissionLiveStore = DefaultPermissionLiveStore(
+        sessionRepository: sessionRepository,
+        eventStream: eventStream
+    )
+    let questionLiveStore = DefaultQuestionLiveStore(
+        sessionRepository: sessionRepository,
+        eventStream: eventStream
+    )
+    let sessionTodoLiveStore = DefaultSessionTodoLiveStore(
+        sessionRepository: sessionRepository,
+        eventStream: eventStream
+    )
     return ProjectListHomeViewModel(
         projectRepository: projectRepository,
         filesystemRepository: filesystemRepository,
@@ -764,6 +776,9 @@ private func makeViewModel(
         activeConnectionManager: manager,
         sessionLiveStore: sessionLiveStore,
         sessionStatusLiveStore: sessionStatusLiveStore,
+        permissionLiveStore: permissionLiveStore,
+        questionLiveStore: questionLiveStore,
+        sessionTodoLiveStore: sessionTodoLiveStore,
         sessionReadyStore: sessionReadyStore,
         foregroundEventStream: eventStream,
         connectionSessionCoordinator: coordinator,

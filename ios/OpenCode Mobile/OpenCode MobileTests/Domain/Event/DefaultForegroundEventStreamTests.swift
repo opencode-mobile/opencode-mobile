@@ -84,6 +84,40 @@ struct DefaultForegroundEventStreamTests {
         #expect(events.filter { $0.type == "stream.reconnected" }.count == 1)
     }
 
+    @Test func stopBetweenReconnectDecisionAndPublish_suppressesStaleReconnect() async {
+        for _ in 0..<8 {
+            let connected = #"data: {"payload":{"type":"server.connected","properties":{}}}"# + "\n\n"
+            let stream = makeStream(responses: [connected, connected, connected])
+            let events = Locked([OpencodeEvent]())
+            let states = Locked([EventStreamConnectionState]())
+            let eventTask = Task {
+                for await event in stream.events() {
+                    events.mutate { $0.append(event) }
+                }
+            }
+            let stateTask = Task {
+                for await state in stream.connectionStateUpdates() {
+                    states.mutate { $0.append(state) }
+                }
+            }
+            await Task.yield()
+            stream.start()
+            try? await Task.sleep(for: .milliseconds(50))
+            let live = await waitUntil(timeoutMs: 3_000) {
+                states.value.contains(.connected)
+            }
+            #expect(live)
+            stateTask.cancel()
+            let reconnectsAtStop = events.value.filter { $0.type == "stream.reconnected" }.count
+            stream.stop()
+            try? await Task.sleep(for: .milliseconds(80))
+            eventTask.cancel()
+            #expect(stream.connectionState == .idle)
+            #expect(events.value.filter { $0.type == "stream.reconnected" }.count == reconnectsAtStop)
+            #expect(stream.snapshot.connectionState == .idle)
+        }
+    }
+
     @Test func startIsIdempotentWhileStreamIsRunning() async {
         let stream = makeStream(
             responses: [
@@ -209,6 +243,31 @@ struct DefaultForegroundEventStreamTests {
         stateTask.cancel()
     }
 
+    @Test func startDuringHeldConfigResolve_usesPendingConfigNotStale() async {
+        let hold = HoldingDirectories(initial: ["/old"], next: ["/new"])
+        let stream = makeStream(
+            responses: [
+                #"data: {"payload":{"type":"server.heartbeat","properties":{}}}"# + "\n\n",
+            ],
+            instanceDirectories: { await hold.next() },
+            protocolHint: { .v1 }
+        )
+        stream.start()
+        let firstHeld = await waitUntil(timeoutMs: 2_000) { hold.isHolding }
+        #expect(firstHeld)
+        stream.start()
+        let pendingCaptured = await waitUntil(timeoutMs: 2_000) { hold.resolveCount >= 2 }
+        #expect(pendingCaptured)
+        await hold.release()
+        let usedNew = await waitUntil(timeoutMs: 2_000) {
+            stream.snapshot.requiredTargets.contains("event:/new") &&
+                !stream.snapshot.requiredTargets.contains("event:/old")
+        }
+        stream.stop()
+        #expect(usedNew)
+        #expect(!stream.snapshot.requiredTargets.contains("event:/old"))
+    }
+
     @Test func unavailablePath_doesNotOpenSseUntilReady() async {
         let path = FakeDeviceNetworkPath(status: .unavailable)
         var states: [EventStreamConnectionState] = []
@@ -237,7 +296,9 @@ struct DefaultForegroundEventStreamTests {
 
     private func makeStream(
         responses: [String],
-        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath()
+        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath(),
+        instanceDirectories: @escaping @Sendable () async -> [String] = { [] },
+        protocolHint: (@Sendable () -> ServerProtocol)? = nil
     ) -> DefaultForegroundEventStream {
         let streamID = UUID().uuidString
         let configuration = URLSessionConfiguration.ephemeral
@@ -255,7 +316,9 @@ struct DefaultForegroundEventStreamTests {
         return DefaultForegroundEventStream(
             api: client,
             adapter: EventDomainAdapter(),
-            deviceNetworkPath: deviceNetworkPath
+            deviceNetworkPath: deviceNetworkPath,
+            instanceDirectories: instanceDirectories,
+            protocolHint: protocolHint
         )
     }
 
@@ -269,6 +332,55 @@ struct DefaultForegroundEventStreamTests {
             try? await Task.sleep(for: .milliseconds(10))
         }
         return predicate()
+    }
+}
+
+private final class HoldingDirectories: @unchecked Sendable {
+    private let lock = NSLock()
+    private let initial: [String]
+    private let next: [String]
+    private var resolves = 0
+    private var holdContinuation: CheckedContinuation<Void, Never>?
+
+    var resolveCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return resolves
+    }
+
+    var isHolding: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return holdContinuation != nil
+    }
+
+    init(initial: [String], next: [String]) {
+        self.initial = initial
+        self.next = next
+    }
+
+    func next() async -> [String] {
+        lock.lock()
+        resolves += 1
+        let count = resolves
+        lock.unlock()
+        if count == 1 {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                lock.lock()
+                holdContinuation = continuation
+                lock.unlock()
+            }
+            return initial
+        }
+        return next
+    }
+
+    func release() async {
+        lock.lock()
+        let continuation = holdContinuation
+        holdContinuation = nil
+        lock.unlock()
+        continuation?.resume()
     }
 }
 

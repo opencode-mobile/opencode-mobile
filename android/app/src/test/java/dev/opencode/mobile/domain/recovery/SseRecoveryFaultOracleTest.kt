@@ -54,6 +54,48 @@ class SseRecoveryFaultOracleTest {
     @Test
     fun addProjectWhileV1Live_opensNewInstanceStream() = runOracle("add-project-while-v1-live")
 
+    @Test
+    fun v1ToV2ProbeWhileOccupying_retargetsRequiredTargets() = runOracle("v1-to-v2-probe-while-occupying")
+
+    @Test
+    fun removeProjectWhileV1Live_cancelsOnlyRemovedLease() = runOracle("remove-project-while-v1-live")
+
+    @Test
+    fun gapDuringInitialRest_requiresSecondReconciliation() = runOracle("gap-during-initial-rest")
+
+    @Test
+    fun profileAToBToA_doesNotPublishCrossProfileEvents() = runOracle("profile-a-to-b-to-a")
+
+    @Test
+    fun restSlowSseWins_doesNotOverwriteLivePatch() = runOracle("rest-slow-sse-wins")
+
+    @Test
+    fun restFailRetriesSameGap_staysUnsyncedUntilSuccess() = runOracle("rest-fail-retries-same-gap")
+
+    @Test
+    fun lateSubscribeWithOpenGap_reconcilesOnce() = runOracle("late-subscribe-open-gap")
+
+    @Test
+    fun clearCache_dropsOldObservationAndReconciles() = runOracle("clear-cache-drops-old-observation")
+
+    @Test
+    fun parseFailure_opensOneGapAndReconciles() = runOracle("sse-parse-failed-opens-gap")
+
+    @Test
+    fun v1InstanceLeaseLost_recoversWithOneReopen() = runOracle("v1-instance-lease-lost-then-recovered")
+
+    @Test
+    fun v1GrowthThenIncumbentDeath_opensOneLeaseLost() = runOracle("v1-growth-then-incumbent-lease-lost")
+
+    @Test
+    fun oldGenerationWritableChannel_doesNotPublish() = runOracle("old-generation-stays-writable")
+
+    @Test
+    fun pathLostThenPathReady_reconcilesOnce() = runOracle("path-lost-then-path-ready")
+
+    @Test
+    fun backgroundStopThenForeground_reconcilesOnce() = runOracle("background-stop-then-foreground")
+
     private fun runOracle(id: String) {
         val trace = SseFaultOracleLoader.loadTrace(id)
         if (trace.surface == "transport") {

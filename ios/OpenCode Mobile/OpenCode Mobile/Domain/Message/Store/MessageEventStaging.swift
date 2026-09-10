@@ -32,6 +32,7 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
     private var authorityWindowOpen = false
     private var racedDuringAuthorityWindow = false
     private var pendingRecoveryWhileIdle = false
+    private var pendingEvaluate: String?
 
     var needsAuthoritativeRecovery: Bool {
         lock.lock()
@@ -64,10 +65,16 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
         }
         let relevant = isRelevant(event, sessionID: sessionID)
         if health.requiresAuthoritativeRecovery {
-            let wake = relevant ? noteRelevantEventWhileRecoveringLocked() : nil
-            lock.unlock()
-            resumeWaiter(wake)
-            return
+            if relevant {
+                _ = noteRelevantEventWhileRecoveringLocked()
+                if !MessageEventRouter.isIncrementalTranscriptEvent(event) {
+                    lock.unlock()
+                    return
+                }
+            } else {
+                lock.unlock()
+                return
+            }
         }
         let cost = MessageEventRouter.estimatedByteCost(event)
         if count >= capacity || queuedBytes + cost > byteCapacity {
@@ -83,6 +90,11 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
 
     func dequeue() async -> Item? {
         lock.lock()
+        if let reason = pendingEvaluate {
+            pendingEvaluate = nil
+            lock.unlock()
+            return .evaluate(reason)
+        }
         if count > 0 {
             let item = popFrontLocked()
             lock.unlock()
@@ -111,6 +123,19 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
         }
     }
 
+    func takeQueuedIncrementalEvents() -> [OpencodeEvent] {
+        lock.lock()
+        defer { lock.unlock() }
+        var events: [OpencodeEvent] = []
+        while count > 0 {
+            if case .event(let event, _) = popFrontLocked(),
+               MessageEventRouter.isIncrementalTranscriptEvent(event) {
+                events.append(event)
+            }
+        }
+        return events
+    }
+
     func enterRecovering(_ reason: MessageSyncRecoveryReason, wakeConsumer: Bool = true) {
         lock.lock()
         let resume = enterRecoveringLocked(reason, wakeConsumer: wakeConsumer)
@@ -133,7 +158,15 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
             lock.unlock()
             return
         }
-        let resume = deliverLocked(.evaluate(reason))
+        pendingEvaluate = reason
+        let resume: (CheckedContinuation<Item?, Never>, Item)?
+        if !waiters.isEmpty {
+            pendingEvaluate = nil
+            let waiter = waiters.removeFirst()
+            resume = (waiter, .evaluate(reason))
+        } else {
+            resume = nil
+        }
         lock.unlock()
         resumeWaiter(resume)
     }

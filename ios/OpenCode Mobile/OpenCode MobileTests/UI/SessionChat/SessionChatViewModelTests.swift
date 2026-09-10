@@ -1765,6 +1765,7 @@ struct SessionChatViewModelTests {
 
         let sendTask = Task { await viewModel.sendPrompt() }
         await waitUntil { viewModel.uiState.isSending }
+        eventStream.openGap()
         eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
         await waitUntil { viewModel.uiState.messages.count == 2 }
         #expect(viewModel.uiState.messages.contains { $0.isPending })
@@ -1781,6 +1782,7 @@ struct SessionChatViewModelTests {
                 sentAtEpochMs: 2
             ),
         ]
+        eventStream.openGap()
         eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
         let reconciled = await waitUntil(timeoutMs: 5_000) {
             viewModel.uiState.messages.count == 2 && !viewModel.uiState.messages.contains(where: \.isPending)
@@ -2971,17 +2973,23 @@ private final class SyncingTestMessageRepository: MessageRepository, @unchecked 
 
 @MainActor
 private final class FakeObservingMessageRepository: MessageRepository, @unchecked Sendable {
+    private let park = ObservationPark()
     private var publish: ((MessageListUpdate) -> Void)?
     private var observation: SharedLiveObservation<MessageListUpdate>?
 
+    deinit {
+        park.finish()
+    }
+
     private func ensureObservation() -> SharedLiveObservation<MessageListUpdate> {
-        if let observation {
+        if let observation, !observation.isTerminated {
             return observation
         }
-        let created = SharedLiveObservation<MessageListUpdate> { yield in
+        let park = park
+        let created = SharedLiveObservation<MessageListUpdate> { [park] yield in
             Task { @MainActor [weak self] in
                 self?.publish = yield
-                await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in }
+                await park.holdUntilCancelled()
             }
         }
         observation = created
@@ -3048,6 +3056,55 @@ private final class FakeObservingMessageRepository: MessageRepository, @unchecke
 
     func emitLoadFailed(_ error: Error) {
         publish?(.loadFailed(error))
+    }
+}
+
+/// Resumes every parked waiter on cancel or shutdown. A single stored
+/// continuation would be overwritten and leak the previous waiter.
+private final class ObservationPark: @unchecked Sendable {
+    private let lock = NSLock()
+    private var waiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+    private var shutdown = false
+
+    func holdUntilCancelled() async {
+        let ticket = UUID()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                lock.lock()
+                if shutdown {
+                    lock.unlock()
+                    continuation.resume()
+                    return
+                }
+                waiters[ticket] = continuation
+                // onCancel can fire before the waiter is stored; take ownership
+                // here so the continuation is not parked after cancel already ran.
+                if Task.isCancelled, let pending = waiters.removeValue(forKey: ticket) {
+                    lock.unlock()
+                    pending.resume()
+                    return
+                }
+                lock.unlock()
+            }
+        } onCancel: {
+            resume(ticket)
+        }
+    }
+
+    func finish() {
+        lock.lock()
+        shutdown = true
+        let pending = Array(waiters.values)
+        waiters.removeAll()
+        lock.unlock()
+        pending.forEach { $0.resume() }
+    }
+
+    private func resume(_ ticket: UUID) {
+        lock.lock()
+        let pending = waiters.removeValue(forKey: ticket)
+        lock.unlock()
+        pending?.resume()
     }
 }
 

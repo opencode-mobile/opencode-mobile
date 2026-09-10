@@ -98,6 +98,76 @@ struct PermissionLiveStoreTests {
         store.clearCache()
         _ = try await collector.awaitEmission { $0.map(\.id) == ["perm-1"] }
     }
+
+    @Test func clearCache_isolatesSameDirectoryAfterProfileSwitch() async throws {
+        let first = testPermission("perm-a")
+        let second = testPermission("perm-b")
+        let repository = PermissionLiveStoreFakeSessionRepository(script: [[first], [second]])
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultPermissionLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream
+        )
+        let firstCollector = PermissionCollector(store: store, directory: "/repo")
+        _ = try await firstCollector.awaitEmission { $0.map(\.id) == ["perm-a"] }
+        firstCollector.cancel()
+        store.clearCache()
+        let secondCollector = PermissionCollector(store: store, directory: "/repo")
+        defer { secondCollector.cancel() }
+        _ = try await secondCollector.awaitEmission { $0.map(\.id) == ["perm-b"] }
+        #expect(secondCollector.emissions.allSatisfy { $0.allSatisfy { $0.id != "perm-a" } })
+    }
+
+    @Test func slowPermissionRefresh_doesNotStallMessageEventDelivery() async {
+        let repository = PermissionLiveStoreFakeSessionRepository(
+            script: [[], [testPermission("perm-slow")]]
+        )
+        repository.delayAfterFirstFetch = .seconds(5)
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let permissionStore = DefaultPermissionLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream
+        )
+        let seed = [
+            Message(
+                id: "msg-1",
+                role: .user,
+                text: "Hello",
+                parts: [.text(TextPart(id: "part-1", text: "Hello", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        let sync = MessageSync(
+            listMessages: { _, _ in seed },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) }
+        )
+        let permissionCollector = PermissionCollector(store: permissionStore, directory: "/repo")
+        defer { permissionCollector.cancel() }
+        let texts = LockedTexts()
+        let messageTask = Task {
+            for await update in sync.observeMessages(sessionID: "ses-1", directory: "/repo") {
+                if case .messages(let messages, _) = update {
+                    texts.append(messages.first?.text ?? "")
+                }
+            }
+        }
+        _ = await waitUntil { texts.latest() == "Hello" }
+        eventStream.emit(OpencodeEvent(type: "permission.asked", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(20))
+        let deltaJSON = """
+        {"payload":{"type":"message.part.delta","properties":{"sessionID":"ses-1","messageID":"msg-1","partID":"part-1","field":"text","delta":" streamed"}}}
+        """
+        eventStream.emit(EventDomainAdapter().parseEvent(dataLine: deltaJSON)!)
+        let streamed = await waitUntil { texts.latest() == "Hello streamed" }
+        messageTask.cancel()
+        #expect(streamed)
+    }
 }
 
 @MainActor
@@ -153,6 +223,36 @@ private func settleBeyondDebounce() async {
     try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs + 400))
 }
 
+@MainActor
+private func waitUntil(
+    timeoutMs: Int = 2_000,
+    predicate: @MainActor () -> Bool
+) async -> Bool {
+    let deadline = Date().addingTimeInterval(TimeInterval(timeoutMs) / 1_000)
+    while Date() < deadline {
+        if predicate() { return true }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return predicate()
+}
+
+private final class LockedTexts: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [String] = []
+
+    func append(_ value: String) {
+        lock.lock()
+        values.append(value)
+        lock.unlock()
+    }
+
+    func latest() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return values.last
+    }
+}
+
 private func testPermission(_ id: String) -> PermissionRequest {
     PermissionRequest(
         id: id,
@@ -171,6 +271,7 @@ private final class PermissionLiveStoreFakeSessionRepository: SessionRepository,
     private let lock = NSLock()
     private var index = 0
     private var _permissionFetchCount = 0
+    var delayAfterFirstFetch: Duration?
 
     var permissionFetchCount: Int {
         lock.lock()
@@ -185,6 +286,8 @@ private final class PermissionLiveStoreFakeSessionRepository: SessionRepository,
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] {
         lock.lock()
         _permissionFetchCount += 1
+        let fetchNumber = _permissionFetchCount
+        let delay = delayAfterFirstFetch
         let result: [PermissionRequest]
         if script.isEmpty {
             result = []
@@ -195,6 +298,9 @@ private final class PermissionLiveStoreFakeSessionRepository: SessionRepository,
             result = script[script.count - 1]
         }
         lock.unlock()
+        if fetchNumber > 1, let delay {
+            try? await Task.sleep(for: delay)
+        }
         return result
     }
 

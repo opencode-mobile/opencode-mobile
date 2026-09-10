@@ -12,17 +12,18 @@ enum SseFaultOracleDriver {
 
     private static func runRecovery(_ trace: SseFaultTrace) async throws {
         let stream = RecordingForegroundEventStream()
-        let epoch = ConnectionEpoch()
         let profileID = Locked(trace.seed.profileId)
         let sessionID = Locked(trace.seed.sessionId)
         let directory = Locked(trace.seed.directory)
         let directories = Locked(trace.seed.directories.isEmpty ? [trace.seed.directory] : trace.seed.directories)
         let messages = Locked(seedMessages(trace.seed.messages))
-        let fetchReasons = Locked([String]())
-        let pendingReason = Locked("initial-subscribe")
         let transcript = Locked([SseFaultTranscriptMessage]())
         let catchUp = Locked(false)
-        let epochAtObserve = Locked<UInt64?>(nil)
+        let generationAtObserve = Locked<UInt64?>(nil)
+        let restHold = RestHoldGate()
+        let restFailures = Locked(0)
+        let restInFlight = Locked(0)
+        let clock = OracleClock()
         var observeTasks: [Task<Void, Never>] = []
 
         let world: any WorldSignals
@@ -37,9 +38,21 @@ enum SseFaultOracleDriver {
             world = FakeWorldSignals()
         }
 
+        let serverProtocol = protocolOf(trace.serverProtocol)
+        stream.fake.applyConfig(
+            profileID: profileID.value,
+            protocol: serverProtocol,
+            directories: directories.value
+        )
         let sync = MessageSync(
             listMessages: { _, _ in
-                fetchReasons.mutate { $0.append(pendingReason.value) }
+                restInFlight.mutate { $0 += 1 }
+                defer { restInFlight.mutate { $0 -= 1 } }
+                await restHold.awaitIfHeld()
+                if restFailures.value > 0 {
+                    restFailures.mutate { $0 -= 1 }
+                    throw NSError(domain: "oracle", code: 1)
+                }
                 return messages.value
             },
             store: SessionMessageEngine(store: InMemoryMessageStore()),
@@ -47,24 +60,28 @@ enum SseFaultOracleDriver {
             worldSignals: world,
             pollIntervalMs: 60_000,
             connectionProfileIDProvider: { profileID.value },
-            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
-            nowMs: { Int64(Date().timeIntervalSince1970 * 1000) }
+            recoveryDelay: { _ in await clock.wait(ms: 25) },
+            nowMs: { clock.current }
         )
 
         applyConnectionState(stream, trace.seed.connectionState)
         seedOccupancy(world, trace.seed.occupancy)
-        try? await Task.sleep(for: .milliseconds(5))
+        await drainOracle(sync: sync, restInFlight: restInFlight, restHold: restHold, expectWork: false)
 
         var lastT = 0
         for step in trace.steps {
-            let delta = step.t - lastT
-            if delta > 0 {
-                try? await Task.sleep(for: .milliseconds(delta))
+            if step.t != lastT {
+                let resumed = clock.advance(to: Int64(step.t))
+                await drainOracle(
+                    sync: sync,
+                    restInFlight: restInFlight,
+                    restHold: restHold,
+                    expectWork: resumed > 0
+                )
             }
             lastT = step.t
             switch step.op {
             case "observe":
-                pendingReason.value = "initial-subscribe"
                 let observedSession = sessionID.value
                 let observedDirectory = directory.value
                 observeTasks.append(Task {
@@ -79,22 +96,20 @@ enum SseFaultOracleDriver {
                         catchUp.value = flag
                     }
                 })
-                _ = await waitUntil(timeoutMs: 1_000) { !transcript.value.isEmpty || !fetchReasons.value.isEmpty }
-                if epochAtObserve.value == nil {
-                    epochAtObserve.value = epoch.current()
+                _ = await waitUntil(timeoutMs: 1_000) { !transcript.value.isEmpty || !sync.recordedRestAttempts().isEmpty }
+                if generationAtObserve.value == nil {
+                    generationAtObserve.value = stream.snapshot.generation
                 }
             case "unobserve":
                 observeTasks.forEach { $0.cancel() }
                 observeTasks.removeAll()
             case "world.foreground":
-                pendingReason.value = "background-return"
                 emitWorld(world, .foreground)
             case "world.background":
                 emitWorld(world, .background)
             case "world.backgroundStop":
                 emitWorld(world, .backgroundStop)
             case "world.pathReady":
-                pendingReason.value = "path-ready"
                 emitWorld(world, .pathReady)
             case "world.pathLost":
                 emitWorld(world, .pathLost)
@@ -106,30 +121,42 @@ enum SseFaultOracleDriver {
                 stream.stop()
             case "connectionState":
                 let state = try unwrap(step.state, "connectionState step needs state")
-                if state == "connecting" {
-                    pendingReason.value = "stream.reconnected"
-                }
                 applyConnectionState(stream, state)
-            case "epoch.bump":
-                _ = epoch.bump()
+            case "epoch.bump", "openGap":
+                stream.fake.openGap(gapReason(step.state))
+            case "cache.clear":
+                sync.clearCache()
+            case "protocol.set":
+                let next = protocolOf(try unwrap(step.state, "protocol.set needs state"))
+                stream.fake.applyConfig(
+                    profileID: profileID.value,
+                    protocol: next,
+                    directories: directories.value
+                )
+                stream.start()
             case "emit":
                 let event = try unwrap(step.event, "emit step needs event")
-                if event.type == "stream.reconnected" {
-                    pendingReason.value = "stream.reconnected"
-                } else if event.type == "server.connected" {
-                    pendingReason.value = "server.connected"
-                }
                 stream.fake.emit(toOpencodeEvent(event, defaultSessionID: sessionID.value))
             case "rest.setMessages":
                 messages.value = seedMessages(step.messages ?? [])
-            case "rest.hold", "rest.release":
-                break
+            case "rest.hold":
+                restHold.hold()
+            case "rest.release":
+                restHold.release()
+                await drainOracle(sync: sync, restInFlight: restInFlight, restHold: restHold, expectWork: true)
+            case "rest.fail":
+                restFailures.mutate { $0 += 1 }
             case "profile.switch":
                 profileID.value = try unwrap(step.profileId, "profile.switch needs profileId")
                 if let next = step.sessionId { sessionID.value = next }
                 if let next = step.directory { directory.value = next }
                 if let next = step.directories { directories.value = next }
                 sync.clearCache()
+                stream.fake.applyConfig(
+                    profileID: profileID.value,
+                    protocol: serverProtocol,
+                    directories: directories.value
+                )
                 if let scene = world as? SceneWorldSignals {
                     scene.onProfileSwitched()
                 } else {
@@ -137,10 +164,24 @@ enum SseFaultOracleDriver {
                 }
             case "directories.set":
                 directories.value = step.directories ?? []
+                stream.fake.applyConfig(
+                    profileID: profileID.value,
+                    protocol: serverProtocol,
+                    directories: directories.value
+                )
             case "snapshot":
-                try? await Task.sleep(for: .milliseconds(20))
+                await drainOracle(sync: sync, restInFlight: restInFlight, restHold: restHold, expectWork: false)
                 let name = try unwrap(step.name, "snapshot step needs name")
                 let expected = try unwrap(trace.expected.snapshots[name], "Missing expected snapshot \(name)")
+                if expected.syncHealth == "healthy" {
+                    _ = await waitUntil(timeoutMs: 2_000) {
+                        if case .healthy = sync.syncHealth(
+                            sessionID: sessionID.value,
+                            directory: directory.value
+                        ) { return true }
+                        return false
+                    }
+                }
                 try assertSnapshot(
                     expected,
                     sync: sync,
@@ -148,14 +189,10 @@ enum SseFaultOracleDriver {
                     directory: directory.value,
                     stream: stream,
                     world: world,
-                    epoch: epoch,
-                    epochAtObserve: epochAtObserve.value,
-                    fetchReasons: fetchReasons.value,
+                    generationAtObserve: generationAtObserve.value,
+                    fetchReasons: sync.recordedRestAttempts(),
                     transcript: transcript.value,
-                    catchUpChrome: catchUp.value,
-                    profileID: profileID.value,
-                    protocol: protocolOf(trace.serverProtocol),
-                    directories: directories.value
+                    catchUpChrome: catchUp.value
                 )
             default:
                 throw SseFaultOracleError.unsupportedOp(step.op)
@@ -172,8 +209,14 @@ enum SseFaultOracleDriver {
                 scene.onForeground()
             case .background:
                 scene.onBackground()
-            default:
-                break
+            case .backgroundStop:
+                scene.onBackgroundStop()
+            case .pathReady:
+                scene.onPathReady()
+            case .pathLost:
+                scene.onPathLost()
+            case .profileSwitched:
+                scene.onProfileSwitched()
             }
             return
         }
@@ -186,9 +229,9 @@ enum SseFaultOracleDriver {
         guard let fake = world as? FakeWorldSignals else { return }
         switch occupancy {
         case "grace":
-            fake.emit(.background)
+            fake.setOccupancy(.grace)
         case "stopped":
-            fake.emit(.backgroundStop)
+            fake.setOccupancy(.stopped)
         default:
             break
         }
@@ -203,7 +246,7 @@ enum SseFaultOracleDriver {
                 id: item.id,
                 role: .user,
                 text: item.text,
-                parts: [.text(TextPart(text: item.text, isStreaming: false))],
+                parts: [.text(TextPart(id: "part-1", text: item.text, isStreaming: false))],
                 model: nil,
                 mode: nil,
                 sentAtEpochMs: nil
@@ -265,7 +308,42 @@ enum SseFaultOracleDriver {
     }
 
     static func toOpencodeEvent(_ event: SseFaultEvent, defaultSessionID: String) -> OpencodeEvent {
-        OpencodeEvent(type: event.type, sessionID: event.sessionId ?? defaultSessionID)
+        let sessionID = event.sessionId ?? defaultSessionID
+        let properties: [String: AnySendable]?
+        if event.type == "message.part.delta" || event.text != nil {
+            properties = [
+                "delta": .string(event.text ?? ""),
+                "field": .string(event.field ?? "text"),
+                "messageID": .string(event.messageId ?? "msg-1"),
+                "partID": .string(event.partId ?? "part-1"),
+            ]
+        } else {
+            properties = nil
+        }
+        return OpencodeEvent(type: event.type, sessionID: sessionID, rawProperties: properties)
+    }
+
+    static func gapReason(_ state: String?) -> LiveGapReason {
+        switch state {
+        case "parseFailed": .parseFailed
+        case "leaseLost": .leaseLost
+        case "pathLost": .pathLost
+        case "configChanged": .configChanged
+        default: .reconnect
+        }
+    }
+
+    static func gapReasonName(_ reason: LiveGapReason?) -> String? {
+        switch reason {
+        case .none: nil
+        case .occupancyStart: "occupancyStart"
+        case .reconnect: "reconnect"
+        case .configChanged: "configChanged"
+        case .stopped: "stopped"
+        case .pathLost: "pathLost"
+        case .leaseLost: "leaseLost"
+        case .parseFailed: "parseFailed"
+        }
     }
 
     static func requiredTargets(protocol serverProtocol: ServerProtocol, directories: [String]) -> [String] {
@@ -285,17 +363,14 @@ enum SseFaultOracleDriver {
         directory: String,
         stream: RecordingForegroundEventStream,
         world: any WorldSignals,
-        epoch: ConnectionEpoch,
-        epochAtObserve: UInt64?,
+        generationAtObserve: UInt64?,
         fetchReasons: [String],
         transcript: [SseFaultTranscriptMessage],
         catchUpChrome: Bool,
-        profileID: String,
-        protocol serverProtocol: ServerProtocol,
-        directories: [String],
         liveTargets: [String]? = nil,
         openedPaths: [String]? = nil
     ) throws {
+        let snapshot = stream.snapshot
         let health = sync.syncHealth(sessionID: sessionID, directory: directory)
         if let wanted = expected.syncHealth {
             try expectEqual(wanted, healthName(health), "syncHealth")
@@ -307,29 +382,33 @@ enum SseFaultOracleDriver {
             try expectEqual(wanted, catchUpChrome, "catchUpChrome")
         }
         if let wanted = expected.connectionState {
-            try expectEqual(wanted, connectionStateName(stream.connectionState), "connectionState")
+            try expectEqual(wanted, connectionStateName(snapshot.connectionState), "connectionState")
         }
         if let wanted = expected.occupancy {
             try expectEqual(wanted, occupancyName(world.occupancy), "occupancy")
         }
         if let wanted = expected.chrome {
             let chrome = composeLiveUpdates(
-                connectionState: stream.connectionState,
+                connectionState: snapshot.connectionState,
                 path: .ready,
                 occupancy: world.occupancy,
                 hasConnection: true
             )
             try expectEqual(wanted, chrome.label.rawValue, "chrome")
         }
-        if let unchanged = expected.epochUnchanged {
-            let baseline = try unwrap(epochAtObserve, "epochUnchanged requires an observe step")
-            try expectEqual(unchanged, epoch.current() == baseline, "epochUnchanged")
+        if let unchanged = expected.generationUnchanged {
+            let baseline = try unwrap(generationAtObserve, "generationUnchanged requires an observe step")
+            try expectEqual(unchanged, snapshot.generation == baseline, "generationUnchanged")
+        }
+        if let wanted = expected.gapReason {
+            try expectEqual(wanted, gapReasonName(snapshot.gap?.reason), "gapReason")
         }
         if let wanted = expected.restFetches {
             try expectEqual(wanted.sorted { $0.reason < $1.reason }, groupedFetches(fetchReasons), "restFetches")
         }
         if let wanted = expected.publishedProfileId {
-            try expectEqual(wanted, profileID, "publishedProfileId")
+            let actual = sync.publishedProfileID() ?? snapshot.config?.profileID
+            try expectEqual(wanted, actual, "publishedProfileId")
         }
         if let wanted = expected.transcript {
             try expectEqual(wanted, transcript, "transcript")
@@ -338,10 +417,11 @@ enum SseFaultOracleDriver {
             try expectEqual(wanted, stream.ops, "streamOps")
         }
         if let wanted = expected.requiredTargets {
-            try expectEqual(wanted, requiredTargets(protocol: serverProtocol, directories: directories), "requiredTargets")
+            try expectEqual(wanted, snapshot.requiredTargets, "requiredTargets")
         }
         if let wanted = expected.liveTargets {
-            try expectEqual(Set(wanted), Set(try unwrap(liveTargets, "liveTargets")), "liveTargets")
+            let actual = liveTargets ?? snapshot.liveTargets
+            try expectEqual(Set(wanted), Set(actual), "liveTargets")
         }
         if let wanted = expected.openedPaths {
             let actual = try unwrap(openedPaths, "openedPaths")
@@ -350,6 +430,13 @@ enum SseFaultOracleDriver {
                 if !found {
                     throw SseFaultOracleError.mismatch("openedPaths missing \(path) in \(actual)")
                 }
+            }
+        }
+        if let wanted = expected.openedPathCounts {
+            let actual = try unwrap(openedPaths, "openedPathCounts")
+            for (path, count) in wanted {
+                let matches = actual.filter { $0 == path || $0.hasPrefix("\(path)?") || path.hasPrefix("\($0)?") }.count
+                try expectEqual(count, matches, "openedPathCounts for \(path)")
             }
         }
     }
@@ -405,6 +492,110 @@ final class Locked<Value: Sendable>: @unchecked Sendable {
         lock.lock()
         body(&_value)
         lock.unlock()
+    }
+}
+
+final class RestHoldGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var held = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    var isHeld: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return held
+    }
+
+    func hold() {
+        lock.lock()
+        held = true
+        lock.unlock()
+    }
+
+    func release() {
+        lock.lock()
+        held = false
+        let pending = waiters
+        waiters.removeAll()
+        lock.unlock()
+        pending.forEach { $0.resume() }
+    }
+
+    func awaitIfHeld() async {
+        lock.lock()
+        if !held {
+            lock.unlock()
+            return
+        }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+            lock.unlock()
+        }
+    }
+}
+
+private func drainOracle(
+    sync: MessageSync,
+    restInFlight: Locked<Int>,
+    restHold: RestHoldGate,
+    expectWork: Bool
+) async {
+    if restHold.isHeld && restInFlight.value > 0 { return }
+    let baseline = sync.recordedRestAttempts()
+    if expectWork {
+        _ = await waitUntil(timeoutMs: 1_000) {
+            restInFlight.value > 0 || sync.recordedRestAttempts() != baseline
+        }
+    }
+    var lastAttempts = sync.recordedRestAttempts()
+    var quiet = 0
+    for _ in 0..<50 {
+        await Task.yield()
+        try? await Task.sleep(for: .milliseconds(2))
+        let attempts = sync.recordedRestAttempts()
+        if restInFlight.value == 0 && attempts == lastAttempts {
+            quiet += 1
+            if quiet >= 4 { return }
+        } else {
+            quiet = 0
+            lastAttempts = attempts
+        }
+    }
+}
+
+final class OracleClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var now: Int64 = 0
+    private var waiters: [(deadline: Int64, continuation: CheckedContinuation<Void, Never>)] = []
+
+    var current: Int64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return now
+    }
+
+    @discardableResult
+    func advance(to t: Int64) -> Int {
+        lock.lock()
+        now = t
+        let due = waiters.filter { $0.deadline <= t }
+        waiters.removeAll { $0.deadline <= t }
+        lock.unlock()
+        due.forEach { $0.continuation.resume() }
+        return due.count
+    }
+
+    func wait(ms: Int) async {
+        lock.lock()
+        let deadline = now + Int64(ms)
+        if now >= deadline {
+            lock.unlock()
+            return
+        }
+        await withCheckedContinuation { continuation in
+            waiters.append((deadline, continuation))
+            lock.unlock()
+        }
     }
 }
 

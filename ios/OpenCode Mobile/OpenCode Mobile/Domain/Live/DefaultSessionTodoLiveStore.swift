@@ -13,6 +13,7 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
         var isLive = false
         var continuations: [UUID: AsyncStream<[SessionTodo]>.Continuation] = [:]
         var eventTask: Task<Void, Never>?
+        let authority = GapAuthority()
     }
 
     private let sessionRepository: any SessionRepository
@@ -53,18 +54,27 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
             let id = UUID()
             handle.continuations[id] = continuation
             continuation.yield(handle.todos)
-            if !handle.hasCache {
-                Task { await self.fetch(key: key, force: true, reason: StoreRefreshReason.initialSubscribe) }
-            }
             if handle.eventTask == nil {
                 let sessionRepository = self.sessionRepository
                 let eventStream = self.eventStream
                 let worldSignals = self.worldSignals
                 let adapter = self.adapter
+                let authority = handle.authority
                 handle.eventTask = Task.detached { [weak self] in
                     let store = self
                     let liveConnection = eventStream.asLiveConnection()
-                    let authority = GapAuthority()
+                    let needsBootstrap = await MainActor.run {
+                        store?.handles[key]?.hasCache != true
+                    }
+                    if needsBootstrap {
+                        _ = await store?.fetch(
+                            key: key,
+                            force: true,
+                            reason: StoreRefreshReason.initialSubscribe,
+                            liveConnection: liveConnection,
+                            authority: authority
+                        )
+                    }
                     await withTaskGroup(of: Void.self) { group in
                         group.addTask {
                             for await signal in worldSignals.signals() {
@@ -199,11 +209,11 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
     ) async -> Bool {
         guard let handle = handles[key] else { return false }
         let connection = liveConnection ?? eventStream.asLiveConnection()
-        let gap = authority ?? GapAuthority()
+        let gap = authority ?? handle.authority
         let snapshot = connection.snapshot
-        let generation: UInt64?
+        let generation: UInt64
         if force {
-            generation = nil
+            generation = gap.captureBegin(snapshot)
         } else {
             guard let started = gap.tryBegin(snapshot) else { return handle.hasCache }
             generation = started
@@ -213,7 +223,7 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
             id: key.sessionID,
             directory: directory
         ) else {
-            if let generation { gap.fail(generation) }
+            gap.fail(generation)
             return false
         }
         if let reason {
@@ -223,10 +233,15 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
             )
         }
         replace(todos: todos, key: key, markCache: true)
-        if let generation {
-            gap.acknowledge(generation)
-        } else {
-            gap.acknowledgeCurrent(connection.snapshot)
+        gap.acknowledge(generation)
+        if gap.needsReconcile(connection.snapshot) {
+            return await fetch(
+                key: key,
+                force: false,
+                reason: StoreRefreshReason.streamReconnected,
+                liveConnection: connection,
+                authority: gap
+            )
         }
         return true
     }

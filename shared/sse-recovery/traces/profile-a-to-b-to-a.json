@@ -1,0 +1,82 @@
+{
+  "id": "profile-a-to-b-to-a",
+  "title": "Profile A to B to A must not publish cross-profile events",
+  "platforms": ["android", "ios"],
+  "surface": "composed",
+  "protocol": "v1",
+  "seed": {
+    "profileId": "profile-a",
+    "directory": "/repo-a",
+    "sessionId": "ses-a",
+    "directories": ["/repo-a"],
+    "messages": [{ "id": "msg-a", "text": "From A" }],
+    "connectionState": "connected",
+    "occupancy": "active"
+  },
+  "steps": [
+    { "t": 0, "op": "observe" },
+    { "t": 0, "op": "stream.start" },
+    {
+      "t": 20,
+      "op": "profile.switch",
+      "profileId": "profile-b",
+      "sessionId": "ses-b",
+      "directory": "/repo-b",
+      "directories": ["/repo-b"]
+    },
+    {
+      "t": 20,
+      "op": "rest.setMessages",
+      "messages": [{ "id": "msg-b", "text": "From B" }]
+    },
+    { "t": 20, "op": "observe" },
+    {
+      "t": 30,
+      "op": "emit",
+      "event": {
+        "type": "message.part.delta",
+        "sessionId": "ses-a",
+        "text": " leak-A",
+        "messageId": "msg-a",
+        "partId": "part-1",
+        "field": "text"
+      }
+    },
+    {
+      "t": 40,
+      "op": "profile.switch",
+      "profileId": "profile-a",
+      "sessionId": "ses-a",
+      "directory": "/repo-a",
+      "directories": ["/repo-a"]
+    },
+    {
+      "t": 40,
+      "op": "rest.setMessages",
+      "messages": [{ "id": "msg-a", "text": "From A again" }]
+    },
+    { "t": 40, "op": "observe" },
+    {
+      "t": 50,
+      "op": "emit",
+      "event": {
+        "type": "message.part.delta",
+        "sessionId": "ses-b",
+        "text": " leak-B",
+        "messageId": "msg-b",
+        "partId": "part-1",
+        "field": "text"
+      }
+    },
+    { "t": 60, "op": "snapshot", "name": "after-return-to-a" }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-return-to-a": {
+        "publishedProfileId": "profile-a",
+        "requiredTargets": ["global/event", "event:/repo-a"],
+        "transcript": [{ "id": "msg-a", "text": "From A again" }]
+      }
+    }
+  }
+}

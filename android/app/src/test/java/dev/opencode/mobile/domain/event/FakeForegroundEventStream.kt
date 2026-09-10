@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.event
 
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -26,6 +27,29 @@ class FakeForegroundEventStream : LiveConnection {
         _events.tryEmit(event)
     }
 
+    fun applyConfig(
+        profileId: String,
+        protocol: ServerProtocol,
+        directories: List<String>,
+    ) {
+        val config =
+            LiveConnectionConfig(
+                profileId = profileId,
+                connectionIdentity = profileId,
+                protocol = protocol,
+                directories = directories,
+            )
+        val targets = SseSubscribeTargets.forProtocol(protocol, directories).map { it.key }
+        _snapshot.update {
+            it.copy(
+                config = config,
+                requiredTargets = targets,
+                liveTargets = if (occupying) targets else emptyList(),
+                connectionState = _connectionState.value,
+            )
+        }
+    }
+
     fun openGap(reason: LiveGapReason = LiveGapReason.Reconnect) {
         val generation = gapClock.incrementAndGet()
         _snapshot.update {
@@ -35,6 +59,12 @@ class FakeForegroundEventStream : LiveConnection {
                 connectionState = _connectionState.value,
             )
         }
+    }
+
+    fun openNewerThan(generation: Long, reason: LiveGapReason = LiveGapReason.Reconnect) {
+        do {
+            openGap(reason)
+        } while ((_snapshot.value.gap?.generation ?: 0L) <= generation)
     }
 
     fun setConnectionState(state: EventStreamConnectionState) {

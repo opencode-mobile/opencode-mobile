@@ -109,6 +109,24 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
         emit(.background)
     }
 
+    func onBackgroundStop() {
+        lock.lock()
+        stopTask?.cancel()
+        stopTask = nil
+        lock.unlock()
+        setOccupancy(.stopped)
+        emit(.backgroundStop)
+        stream.stop()
+    }
+
+    func onPathReady() {
+        emit(.pathReady)
+    }
+
+    func onPathLost() {
+        emit(.pathLost)
+    }
+
     func onProfileSwitched() {
         emit(.profileSwitched)
         if occupancy != .stopped, hasActiveConnection() {

@@ -122,6 +122,9 @@ final class ProjectListHomeViewModel {
     private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver?
     private let sessionLiveStore: any SessionLiveStore
     private let sessionStatusLiveStore: any SessionStatusLiveStore
+    private let permissionLiveStore: any PermissionLiveStore
+    private let questionLiveStore: any QuestionLiveStore
+    private let sessionTodoLiveStore: any SessionTodoLiveStore
     private let sessionReadyStore: any SessionReadyStore
     private let foregroundEventStream: any ForegroundEventStream
     private let liveUpdates: any LiveUpdates
@@ -152,6 +155,9 @@ final class ProjectListHomeViewModel {
         activeConnectionManager: ActiveConnectionManager,
         sessionLiveStore: any SessionLiveStore,
         sessionStatusLiveStore: any SessionStatusLiveStore,
+        permissionLiveStore: any PermissionLiveStore,
+        questionLiveStore: any QuestionLiveStore,
+        sessionTodoLiveStore: any SessionTodoLiveStore,
         sessionReadyStore: any SessionReadyStore,
         foregroundEventStream: any ForegroundEventStream,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
@@ -167,6 +173,9 @@ final class ProjectListHomeViewModel {
         self.activeConnectionManager = activeConnectionManager
         self.sessionLiveStore = sessionLiveStore
         self.sessionStatusLiveStore = sessionStatusLiveStore
+        self.permissionLiveStore = permissionLiveStore
+        self.questionLiveStore = questionLiveStore
+        self.sessionTodoLiveStore = sessionTodoLiveStore
         self.sessionReadyStore = sessionReadyStore
         self.foregroundEventStream = foregroundEventStream
         self.liveUpdates = liveUpdates
@@ -188,6 +197,9 @@ final class ProjectListHomeViewModel {
                 self?.sessionReadyStore.bindProfile(profileID: self?.activeConnectionManager.currentProfile()?.id)
                 self?.sessionLiveStore.clearCache()
                 self?.sessionStatusLiveStore.clearCache()
+                self?.permissionLiveStore.clearCache()
+                self?.questionLiveStore.clearCache()
+                self?.sessionTodoLiveStore.clearCache()
                 self?.messageRepository.clearMessageCache()
                 await self?.refresh()
             }
@@ -197,6 +209,9 @@ final class ProjectListHomeViewModel {
                 self?.sessionReadyStore.bindProfile(profileID: nil)
                 self?.sessionLiveStore.clearCache()
                 self?.sessionStatusLiveStore.clearCache()
+                self?.permissionLiveStore.clearCache()
+                self?.questionLiveStore.clearCache()
+                self?.sessionTodoLiveStore.clearCache()
                 self?.messageRepository.clearMessageCache()
                 self?.stopLiveObservations()
                 self?.state = .disconnected

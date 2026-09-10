@@ -82,6 +82,25 @@ struct QuestionLiveStoreTests {
         #expect(collector.emissions.count == 1)
         #expect(repository.questionFetchCount == 3)
     }
+
+    @Test func clearCache_isolatesSameDirectoryAfterProfileSwitch() async throws {
+        let first = testQuestion("que-a")
+        let second = testQuestion("que-b")
+        let repository = QuestionLiveStoreFakeSessionRepository(script: [[first], [second]])
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultQuestionLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream
+        )
+        let firstCollector = QuestionCollector(store: store, directory: "/repo")
+        _ = try await firstCollector.awaitEmission { $0.map(\.id) == ["que-a"] }
+        firstCollector.cancel()
+        store.clearCache()
+        let secondCollector = QuestionCollector(store: store, directory: "/repo")
+        defer { secondCollector.cancel() }
+        _ = try await secondCollector.awaitEmission { $0.map(\.id) == ["que-b"] }
+        #expect(secondCollector.emissions.allSatisfy { $0.allSatisfy { $0.id != "que-a" } })
+    }
 }
 
 @MainActor

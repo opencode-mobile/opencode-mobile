@@ -50,12 +50,22 @@ class SseFaultOracleTransportDriver {
                     when (step.op) {
                         "stream.start" -> host.stream.start()
                         "stream.stop" -> host.stream.stop()
-                        "target.open" -> host.awaitOpen(checkNotNull(step.target))
+                        "target.open" -> {
+                            host.awaitOpen(checkNotNull(step.target))
+                            host.captureGeneration()
+                        }
+                        "protocol.set" -> host.setProtocol(SseFaultOracleDriver.protocolOf(checkNotNull(step.state)))
                         "target.activity" -> {
                             val target = checkNotNull(step.target)
                             heartbeatJobs += launch { host.heartbeat(target) }
                         }
                         "target.silence" -> host.silence(checkNotNull(step.target))
+                        "target.close" -> host.closeTarget(checkNotNull(step.target))
+                        "target.write" ->
+                            host.write(
+                                checkNotNull(step.target),
+                                checkNotNull(step.event) { "target.write needs event" },
+                            )
                         "directories.set" -> host.setDirectories(step.directories.orEmpty())
                         "snapshot" -> {
                             val name = checkNotNull(step.name)
@@ -77,17 +87,22 @@ class SseFaultOracleTransportDriver {
     private class TransportHost(
         private val trace: SseFaultTrace,
     ) {
-        private val protocol = SseFaultOracleDriver.protocolOf(trace.serverProtocol)
+        private var protocol = SseFaultOracleDriver.protocolOf(trace.serverProtocol)
         private val directories = CopyOnWriteArrayList(trace.seed.directories.ifEmpty { listOf(trace.seed.directory) })
+        private var generationAtStart: Long? = null
         val store = MutableWorktreeProfileStore(directories.toList())
         private val channels = ConcurrentHashMap<String, ByteChannel>()
         private val live = ConcurrentHashMap.newKeySet<String>()
         private val opened = CopyOnWriteArrayList<String>()
         private val silenced = ConcurrentHashMap.newKeySet<String>()
         private val openedSignals = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
+        private val allowOpen = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
         private val client: HttpClient
         val stream: DefaultForegroundEventStream
+        private val manager: ActiveConnectionManager
         private val writerScope = CoroutineScope(Dispatchers.Unconfined + Job())
+        private val publishedTypes = CopyOnWriteArrayList<String>()
+        private var collectJob: Job? = null
 
         init {
             client =
@@ -95,6 +110,7 @@ class SseFaultOracleTransportDriver {
                     MockEngine { request ->
                         val target = targetKey(request)
                         val path = openedPath(request)
+                        allowOpen.getOrPut(target) { CompletableDeferred() }.await()
                         val channel = ByteChannel(autoFlush = true)
                         channels[target] = channel
                         opened += path
@@ -108,7 +124,7 @@ class SseFaultOracleTransportDriver {
                         )
                     },
                 )
-            val manager =
+            manager =
                 ActiveConnectionManager(
                     store,
                     ConnectionProbing { protocol },
@@ -124,13 +140,22 @@ class SseFaultOracleTransportDriver {
                     diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
                     activeConnectionManager = manager,
                     connectionProfileStore = store,
-                    idleTimeoutMs = 150,
+                    idleTimeoutMs =
+                        if (trace.steps.any { it.op == "target.silence" }) 150L else 45_000L,
                 )
+            collectJob =
+                writerScope.launch {
+                    stream.events.collect { publishedTypes += it.type }
+                }
         }
 
         suspend fun awaitOpen(target: String) {
-            withTimeout(2_000) {
+            allowOpen.getOrPut(target) { CompletableDeferred() }.complete(Unit)
+            withTimeout(2_500) {
                 openedSignals.getOrPut(target) { CompletableDeferred() }.await()
+                while (target !in stream.snapshot.value.liveTargets) {
+                    delay(10)
+                }
             }
         }
 
@@ -143,6 +168,35 @@ class SseFaultOracleTransportDriver {
 
         fun silence(target: String) {
             silenced.add(target)
+            live.remove(target)
+            openedSignals.remove(target)
+        }
+
+        fun closeTarget(target: String) {
+            live.remove(target)
+            openedSignals.remove(target)
+            allowOpen[target] = CompletableDeferred()
+            channels[target]?.close()
+        }
+
+        suspend fun write(
+            target: String,
+            event: SseFaultEvent,
+        ) {
+            val sessionId = event.sessionId ?: "ses-1"
+            val payload =
+                if (event.type == "message.part.delta") {
+                    "data: {\"payload\":{\"type\":\"message.part.delta\",\"properties\":{" +
+                        "\"sessionID\":\"$sessionId\"," +
+                        "\"delta\":\"${event.text ?: ""}\"," +
+                        "\"field\":\"${event.field ?: "text"}\"," +
+                        "\"messageID\":\"${event.messageId ?: "msg-1"}\"," +
+                        "\"partID\":\"${event.partId ?: "part-1"}\"}}}\n\n"
+                } else {
+                    "data: {\"payload\":{\"type\":\"${event.type}\",\"properties\":{" +
+                        "\"sessionID\":\"$sessionId\"}}}\n\n"
+                }
+            runCatching { channels[target]?.writeStringUtf8(payload) }
         }
 
         suspend fun setDirectories(next: List<String>) {
@@ -151,20 +205,44 @@ class SseFaultOracleTransportDriver {
             store.setAddedWorktrees(MutableWorktreeProfileStore.DEFAULT_SERVER, next)
         }
 
-        fun assertSnapshot(expected: SseFaultSnapshot) {
-            expected.requiredTargets?.let {
-                assertEquals(
-                    it,
-                    SseFaultOracleDriver.requiredTargets(protocol, directories.toList()),
-                )
+        fun captureGeneration() {
+            if (generationAtStart == null) {
+                generationAtStart = stream.snapshot.value.generation
             }
+        }
+
+        suspend fun setProtocol(next: ServerProtocol) {
+            protocol = next
+            manager.applyProfile(sampleProfile, serverProtocol = next)
+            stream.start()
+            withTimeout(2_000) {
+                while (stream.snapshot.value.requiredTargets !=
+                    SseFaultOracleDriver.requiredTargets(next, directories.toList())
+                ) {
+                    delay(10)
+                }
+            }
+        }
+
+        suspend fun assertSnapshot(expected: SseFaultSnapshot) {
+            expected.publishedEventTypes?.let { wanted ->
+                withTimeout(1_000) {
+                    while (publishedTypes.toSet() != wanted.toSet()) {
+                        delay(10)
+                    }
+                }
+            }
+            val snapshot = stream.snapshot.value
+            expected.requiredTargets?.let { assertEquals(it, snapshot.requiredTargets) }
             expected.liveTargets?.let { wanted ->
-                val actual =
-                    channels
-                        .filterValues { !it.isClosedForWrite }
-                        .keys
-                        .ifEmpty { live }
-                assertEquals(wanted.toSet(), actual.toSet())
+                assertEquals(wanted.toSet(), snapshot.liveTargets.toSet())
+            }
+            expected.generationUnchanged?.let { unchanged ->
+                val baseline = checkNotNull(generationAtStart)
+                assertEquals(unchanged, snapshot.generation == baseline)
+            }
+            expected.gapReason?.let {
+                assertEquals(it, SseFaultOracleDriver.gapReasonName(snapshot.gap?.reason))
             }
             expected.openedPaths?.let { wanted ->
                 wanted.forEach { path ->
@@ -174,8 +252,17 @@ class SseFaultOracleTransportDriver {
                     )
                 }
             }
+            expected.openedPathCounts?.let { wanted ->
+                wanted.forEach { (path, count) ->
+                    val matches =
+                        opened.count {
+                            it == path || it.startsWith("$path?") || path.startsWith("$it?")
+                        }
+                    assertEquals("openedPathCounts for $path", count, matches)
+                }
+            }
             expected.connectionState?.let {
-                assertEquals(it, SseFaultOracleDriver.connectionStateName(stream.connectionState.value))
+                assertEquals(it, SseFaultOracleDriver.connectionStateName(snapshot.connectionState))
             }
             expected.chrome?.let { label ->
                 val chrome =
@@ -187,9 +274,16 @@ class SseFaultOracleTransportDriver {
                     )
                 assertEquals(label, chrome.label.label)
             }
+            expected.publishedProfileId?.let { wanted ->
+                assertEquals(wanted, snapshot.config?.profileId)
+            }
+            expected.publishedEventTypes?.let { wanted ->
+                assertEquals(wanted.toSet(), publishedTypes.toSet())
+            }
         }
 
         fun close() {
+            collectJob?.cancel()
             stream.stop()
             client.close()
         }
@@ -223,6 +317,7 @@ class SseFaultOracleTransportDriver {
                 baseUrl = MutableWorktreeProfileStore.DEFAULT_SERVER,
                 username = "opencode",
                 password = "x",
+                id = "profile-a",
             )
         private const val CONNECTED_FRAME =
             "data: {\"payload\":{\"type\":\"server.connected\",\"properties\":{}}}\n\n"

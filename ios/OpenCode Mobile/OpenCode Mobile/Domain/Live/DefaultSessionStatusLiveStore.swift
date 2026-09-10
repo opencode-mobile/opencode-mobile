@@ -177,9 +177,9 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             emptyActiveGuard: Bool = false
         ) async -> LiveStoreRefreshOutcome {
             let snapshot = liveConnection.snapshot
-            let generation: UInt64?
+            let generation: UInt64
             if force {
-                generation = nil
+                generation = authority.captureBegin(snapshot)
             } else {
                 guard let started = authority.tryBegin(snapshot) else {
                     DiagnosticLog.info(
@@ -205,13 +205,14 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                     commitLoaded(loaded, emptyActiveGuard: emptyActiveGuard)
                 }
             )
-            if let generation {
-                switch outcome {
-                case .committed:
-                    authority.acknowledge(generation)
-                case .failed, .discarded:
-                    authority.fail(generation)
+            switch outcome {
+            case .committed:
+                authority.acknowledge(generation)
+                if authority.needsReconcile(liveConnection.snapshot) {
+                    _ = await reloadFromServer(reason: StoreRefreshReason.streamReconnected, force: false)
                 }
+            case .failed, .discarded:
+                authority.fail(generation)
             }
             if outcome == .discarded {
                 DiagnosticLog.info(
@@ -246,7 +247,6 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         defer { mutationTask.cancel() }
 
         await reloadFromServer(reason: StoreRefreshReason.initialSubscribe, force: true)
-        authority.acknowledgeCurrent(liveConnection.snapshot)
 
         await withTaskGroup(of: Void.self) { group in
             group.addTask {

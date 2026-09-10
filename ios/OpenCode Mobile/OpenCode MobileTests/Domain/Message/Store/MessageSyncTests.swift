@@ -215,25 +215,33 @@ struct MessageSyncTests {
     }
 
     @Test func initialLoad_buffersEventsThatArriveDuringRestRequest() async {
-        let repo = FakeLiveMessageRepository()
-        repo.holdNextListMessages()
-        let eventStream = FakeForegroundEventStream()
-        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
-        let collector = MessageCollector()
-        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
-        let blocked = await waitUntil { repo.isListBlocked }
-        #expect(blocked)
+        for iteration in 0..<20 {
+            let sessionID = "ses-buffer-\(iteration)"
+            let repo = FakeLiveMessageRepository()
+            repo.holdNextListMessages()
+            let eventStream = FakeForegroundEventStream()
+            let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+            let collector = MessageCollector()
+            let task = Task {
+                await collector.collect(sync.observeMessages(sessionID: sessionID, directory: "/repo"))
+            }
+            let ready = await waitUntil {
+                repo.isListBlocked && eventStream.hasEventSubscriber
+            }
+            #expect(ready, "iteration \(iteration) never reached held REST + event subscriber")
 
-        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
-        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
-        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Hello", sessionID: "ses-1"))
-        repo.resumeListMessages()
+            eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: sessionID))
+            eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: sessionID))
+            eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Hello", sessionID: sessionID))
+            #expect(repo.isListBlocked, "iteration \(iteration) emitted after REST already resumed")
+            repo.resumeListMessages()
 
-        let streamed = await waitUntil {
-            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Hello"
+            let streamed = await waitUntil {
+                collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Hello"
+            }
+            task.cancel()
+            #expect(streamed, "iteration \(iteration) missed event that arrived during held REST")
         }
-        task.cancel()
-        #expect(streamed)
     }
 
     @Test func initialLoad_overflowDuringRestTriggersAuthoritativeRecovery() async {
@@ -254,7 +262,7 @@ struct MessageSyncTests {
         let sync = makeMessageSync(repo: repo, eventStream: eventStream, eventStagingCapacity: 2)
         let collector = MessageCollector()
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
-        let blocked = await waitUntil { repo.isListBlocked }
+        let blocked = await waitUntil { repo.isListBlocked && eventStream.hasEventSubscriber }
         #expect(blocked)
 
         for index in 0..<4 {
@@ -1283,6 +1291,7 @@ struct MessageSyncTests {
             ),
         ]
         let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
         let sync = makeMessageSync(repo: repo, eventStream: eventStream)
         let collector = MessageCollector()
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
@@ -1308,6 +1317,183 @@ struct MessageSyncTests {
         task.cancel()
         #expect(reloaded)
         #expect(repo.listMessagesCallCount > afterInitial)
+    }
+
+    @Test func sessionIdleRestFailureStaysRecoveringUntilRetrySucceeds() async {
+        let repo = FakeLiveMessageRepository()
+        repo.messages = [
+            Message(id: "msg-1", role: .user, text: "Hello", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "",
+                parts: [.reasoning(ReasoningPart(text: "", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 2
+            ),
+        ]
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+        let task = Task { for await _ in sync.observeMessages(sessionID: "ses-1", directory: "/repo") {} }
+        _ = await waitUntil { repo.listMessagesCallCount >= 1 }
+        repo.shouldFailList = true
+        eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1"))
+        let recovering = await waitUntil {
+            if case .recovering(let reason) = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+                return reason == .reloadFailed
+            }
+            return false
+        }
+        #expect(recovering)
+        repo.shouldFailList = false
+        repo.messages = [
+            Message(id: "msg-1", role: .user, text: "Hello", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "Done",
+                parts: [.text(TextPart(text: "Done", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 2
+            ),
+        ]
+        let healthy = await waitUntil {
+            if case .healthy = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+                return true
+            }
+            return false
+        }
+        task.cancel()
+        #expect(healthy)
+        #expect(sync.recordedRestAttempts().contains("session.idle"))
+    }
+
+    @Test func refreshMessages_acksOnlyAcceptedAuthorityAndFailedLeavesUnpaid() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+        let task = Task { for await _ in sync.observeMessages(sessionID: "ses-1", directory: "/repo") {} }
+        _ = await waitUntil { repo.listMessagesCallCount >= 1 }
+
+        repo.messages = [
+            Message(id: "msg-1", role: .user, text: "Pulled", model: nil, mode: nil, sentAtEpochMs: 1),
+        ]
+        let pulled = try? await sync.refreshMessages(sessionID: "ses-1", directory: "/repo")
+        #expect(pulled?.first?.text == "Pulled")
+        #expect(sync.recordedRestAttempts().contains(StoreRefreshReason.pullToRefresh))
+        if case .healthy = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+            #expect(true)
+        } else {
+            #expect(Bool(false), "accepted manual refresh must be healthy")
+        }
+
+        repo.shouldFailList = true
+        do {
+            _ = try await sync.refreshMessages(sessionID: "ses-1", directory: "/repo")
+            #expect(Bool(false), "failed manual refresh must throw")
+        } catch {
+            if case .recovering(let reason) = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+                #expect(reason == .reloadFailed)
+            } else {
+                #expect(Bool(false), "failed manual refresh must stay recovering")
+            }
+        }
+        repo.shouldFailList = false
+        repo.messages = [
+            Message(id: "msg-1", role: .user, text: "Recovered pull", model: nil, mode: nil, sentAtEpochMs: 1),
+        ]
+        let recovered = try? await sync.refreshMessages(sessionID: "ses-1", directory: "/repo")
+        task.cancel()
+        #expect(recovered?.first?.text == "Recovered pull")
+        if case .healthy = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+            #expect(true)
+        } else {
+            #expect(Bool(false), "accepted retry must be healthy")
+        }
+    }
+
+    @Test func refreshMessages_newerGapDuringAcceptedFetch_paysExactBegunThenSecondRest() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+        repo.holdNextListMessages()
+        let refreshTask = Task {
+            try await sync.refreshMessages(sessionID: "ses-1", directory: "/repo")
+        }
+        let firstHeld = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 1 }
+        #expect(firstHeld)
+        let authority = sync.gapAuthority(sessionID: "ses-1", directory: "/repo")
+        let begun = authority.inFlightGeneration()
+        #expect(begun != nil)
+        eventStream.openNewerThan(begun!)
+        let newer = eventStream.snapshot.gap?.generation
+        #expect(newer != nil && newer! > begun!)
+        repo.holdNextListMessages()
+        repo.resumeListMessages()
+        let secondHeld = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 2 }
+        #expect(secondHeld)
+        #expect(authority.acknowledgedGeneration() == begun)
+        #expect(authority.inFlightGeneration() == newer)
+        #expect(repo.listMessagesCallCount == 2)
+        #expect(sync.recordedRestAttempts().filter { $0 == StoreRefreshReason.pullToRefresh }.count == 2)
+        repo.resumeListMessages()
+        let messages = try? await refreshTask.value
+        #expect(messages != nil)
+        #expect(authority.acknowledgedGeneration() == newer)
+        #expect(authority.inFlightGeneration() == nil)
+        #expect(!authority.needsReconcile(eventStream.snapshot))
+        if case .healthy = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+            #expect(true)
+        } else {
+            #expect(Bool(false), "second accepted REST must leave Healthy")
+        }
+        #expect(repo.listMessagesCallCount == 2)
+    }
+
+    @Test func observeMessages_newerGapDuringAcceptedRecovery_paysExactBegunThenSecondRest() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+        let task = Task { for await _ in sync.observeMessages(sessionID: "ses-1", directory: "/repo") {} }
+        let loaded = await waitUntil { repo.listMessagesCallCount >= 1 }
+        #expect(loaded)
+        repo.holdNextListMessages()
+        eventStream.openGap()
+        let firstHeld = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 1 }
+        #expect(firstHeld)
+        let authority = sync.gapAuthority(sessionID: "ses-1", directory: "/repo")
+        let begun = authority.inFlightGeneration()
+        #expect(begun != nil)
+        eventStream.openNewerThan(begun!)
+        let newer = eventStream.snapshot.gap?.generation
+        #expect(newer != nil && newer! > begun!)
+        repo.holdNextListMessages()
+        repo.resumeListMessages()
+        let secondHeld = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 2 }
+        #expect(secondHeld)
+        #expect(authority.acknowledgedGeneration() == begun)
+        #expect(authority.inFlightGeneration() == newer)
+        repo.resumeListMessages()
+        let settled = await waitUntil {
+            authority.acknowledgedGeneration() == newer &&
+                authority.inFlightGeneration() == nil &&
+                {
+                    if case .healthy = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+                        return true
+                    }
+                    return false
+                }()
+        }
+        task.cancel()
+        #expect(settled)
+        #expect(!authority.needsReconcile(eventStream.snapshot))
+        #expect(repo.listMessagesCallCount == 3)
     }
 
     @Test func parseFailedEventReloadsTranscript() async {
@@ -2195,6 +2381,14 @@ private final class FakeLiveMessageRepository: MessageRepository, @unchecked Sen
     private var blockedListContinuation: CheckedContinuation<Void, Never>?
     private let lock = NSLock()
 
+    private var _listHoldsEntered = 0
+
+    var listHoldsEntered: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _listHoldsEntered
+    }
+
     var isListBlocked: Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -2244,6 +2438,7 @@ private final class FakeLiveMessageRepository: MessageRepository, @unchecked Sen
             holdNextList = false
             await withCheckedContinuation { continuation in
                 lock.lock()
+                _listHoldsEntered += 1
                 blockedListContinuation = continuation
                 lock.unlock()
             }

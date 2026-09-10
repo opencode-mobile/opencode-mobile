@@ -93,11 +93,17 @@
             "target.open",
             "target.activity",
             "target.silence",
+            "target.close",
+            "target.write",
             "directories.set",
             "profile.switch",
             "rest.hold",
             "rest.release",
+            "rest.fail",
             "rest.setMessages",
+            "openGap",
+            "cache.clear",
+            "protocol.set",
             "snapshot"
           ]
         },
@@ -134,7 +140,10 @@
       "properties": {
         "type": { "type": "string" },
         "sessionId": { "type": "string" },
-        "text": { "type": "string" }
+        "text": { "type": "string" },
+        "messageId": { "type": "string" },
+        "partId": { "type": "string" },
+        "field": { "type": "string" }
       }
     }
   }

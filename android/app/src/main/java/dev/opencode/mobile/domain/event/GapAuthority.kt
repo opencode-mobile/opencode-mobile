@@ -19,17 +19,31 @@ class GapAuthority {
     fun needsReconcile(snapshot: LiveConnectionSnapshot): Boolean =
         synchronized(lock) {
             val target = maxOf(snapshot.gap?.generation ?: 0L, localObligation)
-            target > lastAcknowledged && inFlight != target
+            target > lastAcknowledged && inFlight == null
         }
 
     fun tryBegin(snapshot: LiveConnectionSnapshot): Long? =
         synchronized(lock) {
             val target = maxOf(snapshot.gap?.generation ?: 0L, localObligation)
             if (target <= lastAcknowledged) return null
-            if (inFlight == target) return null
+            if (inFlight != null) return null
             inFlight = target
             target
         }
+
+    /** Marks the current obligation in-flight so a force REST can ack only that generation. */
+    fun captureBegin(snapshot: LiveConnectionSnapshot): Long =
+        synchronized(lock) {
+            val target = maxOf(snapshot.gap?.generation ?: 0L, localObligation)
+            inFlight = target
+            target
+        }
+
+    fun isInFlight(): Boolean = synchronized(lock) { inFlight != null }
+
+    fun acknowledgedGeneration(): Long = synchronized(lock) { lastAcknowledged }
+
+    fun inFlightGeneration(): Long? = synchronized(lock) { inFlight }
 
     fun acknowledge(generation: Long) {
         synchronized(lock) {

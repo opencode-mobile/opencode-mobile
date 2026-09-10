@@ -50,4 +50,66 @@ struct SseRecoveryFaultOracleTests {
     @Test func addProjectWhileV1LiveOpensNewInstanceStream() async throws {
         try await SseFaultOracleDriver.run(SseFaultOracleLoader.loadTrace("add-project-while-v1-live"))
     }
+
+    @Test func v1ToV2ProbeWhileOccupyingRetargetsRequiredTargets() async throws {
+        try await SseFaultOracleDriver.run(SseFaultOracleLoader.loadTrace("v1-to-v2-probe-while-occupying"))
+    }
+
+    @Test func removeProjectWhileV1LiveCancelsOnlyRemovedLease() async throws {
+        try await SseFaultOracleDriver.run(SseFaultOracleLoader.loadTrace("remove-project-while-v1-live"))
+    }
+
+    @Test func gapDuringInitialRestRequiresSecondReconciliation() async throws {
+        try await SseFaultOracleDriver.run(SseFaultOracleLoader.loadTrace("gap-during-initial-rest"))
+    }
+
+    @Test func profileAToBToADoesNotPublishCrossProfileEvents() async throws {
+        try await SseFaultOracleDriver.run(SseFaultOracleLoader.loadTrace("profile-a-to-b-to-a"))
+    }
+
+    @Test func restSlowSseWinsDoesNotOverwriteLivePatch() async throws {
+        try await SseFaultOracleDriver.run(SseFaultOracleLoader.loadTrace("rest-slow-sse-wins"))
+    }
+
+    @Test func restFailRetriesSameGapStaysUnsyncedUntilSuccess() async throws {
+        try await SseFaultOracleDriver.run(SseFaultOracleLoader.loadTrace("rest-fail-retries-same-gap"))
+    }
+
+    @Test func lateSubscribeWithOpenGapReconcilesOnce() async throws {
+        try await SseFaultOracleDriver.run(SseFaultOracleLoader.loadTrace("late-subscribe-open-gap"))
+    }
+
+    @Test func clearCacheDropsOldObservationAndReconciles() async throws {
+        try await SseFaultOracleDriver.run(SseFaultOracleLoader.loadTrace("clear-cache-drops-old-observation"))
+    }
+
+    @Test func parseFailureOpensOneGapAndReconciles() async throws {
+        try await SseFaultOracleDriver.run(SseFaultOracleLoader.loadTrace("sse-parse-failed-opens-gap"))
+    }
+
+    @Test func v1InstanceLeaseLostRecoversWithOneReopen() async throws {
+        try await SseFaultOracleDriver.run(
+            SseFaultOracleLoader.loadTrace("v1-instance-lease-lost-then-recovered")
+        )
+    }
+
+    @Test func v1GrowthThenIncumbentDeathOpensOneLeaseLost() async throws {
+        try await SseFaultOracleDriver.run(
+            SseFaultOracleLoader.loadTrace("v1-growth-then-incumbent-lease-lost")
+        )
+    }
+
+    @Test func oldGenerationWritableChannelDoesNotPublish() async throws {
+        try await SseFaultOracleDriver.run(SseFaultOracleLoader.loadTrace("old-generation-stays-writable"))
+    }
+
+    @Test func pathLostThenPathReadyReconcilesOnce() async throws {
+        try await SseFaultOracleDriver.run(SseFaultOracleLoader.loadTrace("path-lost-then-path-ready"))
+    }
+
+    @Test func backgroundStopThenForegroundReconcilesOnce() async throws {
+        try await SseFaultOracleDriver.run(
+            SseFaultOracleLoader.loadTrace("background-stop-then-foreground")
+        )
+    }
 }

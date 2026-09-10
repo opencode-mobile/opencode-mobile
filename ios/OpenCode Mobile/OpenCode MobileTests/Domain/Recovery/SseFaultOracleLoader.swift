@@ -7,6 +7,20 @@ enum SseFaultOracleLoader {
         "ios-profile-a-to-b-old-stream",
         "v1-one-target-silent-while-other-heartbeats",
         "add-project-while-v1-live",
+        "v1-to-v2-probe-while-occupying",
+        "remove-project-while-v1-live",
+        "gap-during-initial-rest",
+        "profile-a-to-b-to-a",
+        "rest-slow-sse-wins",
+        "rest-fail-retries-same-gap",
+        "late-subscribe-open-gap",
+        "clear-cache-drops-old-observation",
+        "sse-parse-failed-opens-gap",
+        "v1-instance-lease-lost-then-recovered",
+        "v1-growth-then-incumbent-lease-lost",
+        "old-generation-stays-writable",
+        "path-lost-then-path-ready",
+        "background-stop-then-foreground",
     ]
 
     static func repoRoot(from filePath: String = #filePath) -> URL {

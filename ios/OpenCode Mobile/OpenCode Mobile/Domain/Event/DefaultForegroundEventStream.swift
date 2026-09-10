@@ -25,19 +25,29 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private let instanceDirectories: @Sendable () async -> [String]
     private let configurationRevisions: @Sendable () -> AsyncStream<Void>
     private let profileID: @Sendable () async -> String
+    private let connectionIdentity: @Sendable () async -> String
+    private let protocolHint: @Sendable () -> ServerProtocol
+    private let protocolProbe: (@Sendable () async -> ServerProtocol)?
     private let connectionEpoch: ConnectionEpoch
     private var occupancyTask: Task<Void, Never>?
+    private var revisionTask: Task<Void, Never>?
+    private var protocolProbeTask: Task<Void, Never>?
     /// Invalidates in-flight cancel/error handlers after `stop()` or a newer `start()`.
     private var streamGeneration: UInt64 = 0
     private var appliedConfig: LiveConnectionConfig?
+    private var pendingStartConfig: LiveConnectionConfig?
+    private var inFlightStartApplies = 0
     private var wasFullyConnected = false
     private var occupyingConnected = false
     private var emittedReconnectForCurrentGap = false
     private var emittedConnectedForCurrentGeneration = false
     private var pendingResumeBarrier = false
+    private var suppressReconnectForRequiredGrowth = false
     private var currentGap: LiveGapRevision?
     private var gapClock: UInt64 = 0
     private var lastAllLive = false
+    private var lastRequiredTargets: [String] = []
+    private var lastLiveTargets: Set<String> = []
     private let eventDeduper = SseEventDeduper()
     private var leases: [String: Lease] = [:]
     private var subscriberContinuations: [UUID: AsyncStream<OpencodeEvent>.Continuation] = [:]
@@ -54,7 +64,10 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         instanceDirectories: @escaping @Sendable () async -> [String] = { [] },
         configurationRevisions: @escaping @Sendable () -> AsyncStream<Void> = { AsyncStream { $0.finish() } },
         connectionEpoch: ConnectionEpoch = .shared,
-        profileID: @escaping @Sendable () async -> String = { "" }
+        profileID: @escaping @Sendable () async -> String = { "" },
+        connectionIdentity: (@Sendable () async -> String)? = nil,
+        protocolHint: (@Sendable () -> ServerProtocol)? = nil,
+        protocolProbe: (@Sendable () async -> ServerProtocol)? = nil
     ) {
         self.api = api
         self.adapter = adapter
@@ -64,21 +77,24 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         self.configurationRevisions = configurationRevisions
         self.connectionEpoch = connectionEpoch
         self.profileID = profileID
+        self.connectionIdentity = connectionIdentity ?? profileID
+        self.protocolHint = protocolHint ?? { api.eventProtocol }
+        self.protocolProbe = protocolProbe
     }
 
     func events() -> AsyncStream<OpencodeEvent> {
         let subscriberID = UUID()
-        return AsyncStream { continuation in
+        let (stream, continuation) = AsyncStream.makeStream(of: OpencodeEvent.self)
+        lock.lock()
+        subscriberContinuations[subscriberID] = continuation
+        lock.unlock()
+        continuation.onTermination = { [weak self] _ in
+            guard let self else { return }
             self.lock.lock()
-            self.subscriberContinuations[subscriberID] = continuation
+            self.subscriberContinuations.removeValue(forKey: subscriberID)
             self.lock.unlock()
-            continuation.onTermination = { [weak self] _ in
-                guard let self else { return }
-                self.lock.lock()
-                self.subscriberContinuations.removeValue(forKey: subscriberID)
-                self.lock.unlock()
-            }
         }
+        return stream
     }
 
     func connectionStateUpdates() -> AsyncStream<EventStreamConnectionState> {
@@ -118,8 +134,10 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     func start() {
         lock.lock()
         if occupancyTask != nil {
+            inFlightStartApplies += 1
             lock.unlock()
             Task { [weak self] in
+                defer { self?.endInFlightStartApply() }
                 await self?.applyStartWhileOccupying()
             }
             return
@@ -149,6 +167,11 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         let generation = streamGeneration
         occupancyTask?.cancel()
         occupancyTask = nil
+        revisionTask?.cancel()
+        revisionTask = nil
+        protocolProbeTask?.cancel()
+        protocolProbeTask = nil
+        pendingStartConfig = nil
         cancelAllLeasesLocked()
         eventDeduper.clear()
         appliedConfig = nil
@@ -156,7 +179,10 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         occupyingConnected = false
         emittedReconnectForCurrentGap = false
         emittedConnectedForCurrentGeneration = false
+        suppressReconnectForRequiredGrowth = false
         lastAllLive = false
+        lastRequiredTargets = []
+        lastLiveTargets = []
         openGapLocked(.stopped)
         lock.unlock()
         if hadTask || state != .idle {
@@ -167,56 +193,154 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     }
 
     private func applyStartWhileOccupying() async {
+        lock.lock()
+        let occupancy = occupancyTask
+        let generation = streamGeneration
+        lock.unlock()
+        guard occupancy != nil, isOccupying() else { return }
         let config = await resolveConfig()
         lock.lock()
+        let stillSameOccupancy = occupancyTask == occupancy && occupancyTask != nil
         let applied = appliedConfig
+        if !stillSameOccupancy || occupancyTask == nil {
+            lock.unlock()
+            return
+        }
+        if applied == nil {
+            pendingStartConfig = config
+            lock.unlock()
+            return
+        }
+        if streamGeneration != generation {
+            pendingStartConfig = config
+            lock.unlock()
+            return
+        }
         lock.unlock()
         guard let applied else { return }
-        if applied.identity == config.identity {
+        if applied.identity == config.identity && applied.serverProtocol == config.serverProtocol {
             if applied.directories == config.directories {
                 DiagnosticLog.debug(.sse, "foreground SSE start ignored; already running")
                 return
             }
-            reconcileLeases(config, generation: currentGeneration())
+            guard stillCurrent(generation) else { return }
+            reconcileLeases(config, generation: generation)
             return
         }
+        guard stillCurrent(generation) else { return }
         retargetIdentity(config, reason: .configChanged)
+    }
+
+    private func endInFlightStartApply() {
+        lock.lock()
+        inFlightStartApplies = max(0, inFlightStartApplies - 1)
+        lock.unlock()
+    }
+
+    private func waitForInFlightStartApplies() async {
+        while true {
+            lock.lock()
+            let inFlight = inFlightStartApplies
+            lock.unlock()
+            if inFlight == 0 { return }
+            await Task.yield()
+        }
     }
 
     private func beginOccupancy(generation: UInt64) async {
         let config = await resolveConfig()
+        guard stillCurrent(generation), isOccupying() else { return }
+        await waitForInFlightStartApplies()
+        guard stillCurrent(generation), isOccupying() else { return }
         lock.lock()
-        appliedConfig = config
+        let pendingAtCommit = pendingStartConfig
+        pendingStartConfig = nil
+        let merged = pendingAtCommit ?? config
+        appliedConfig = merged
         lock.unlock()
         publishSnapshot()
-        Task { [weak self] in
-            guard let self else { return }
-            for await _ in self.configurationRevisions() {
-                if Task.isCancelled { return }
-                await self.onConfigurationRevision()
-            }
+        lock.lock()
+        revisionTask?.cancel()
+        revisionTask = Task { [weak self] in
+            await self?.collectConfigurationRevisions(generation: generation)
         }
+        protocolProbeTask?.cancel()
+        protocolProbeTask = Task { [weak self] in
+            await self?.probeProtocolWhileOccupying(generation: generation)
+        }
+        lock.unlock()
         await deviceNetworkPath.waitUntilReady()
-        guard generation == currentGeneration() else { return }
+        guard stillCurrent(generation), isOccupying() else { return }
+        lock.lock()
+        let pending = pendingStartConfig
+        pendingStartConfig = nil
+        let effective = pending ?? merged
+        lock.unlock()
+        guard stillCurrent(generation) else { return }
         applyConnectionState(
             (wasFullyConnected || pendingResumeBarrier) ? .reconnecting : .connecting,
             generation: generation
         )
-        reconcileLeases(config, generation: generation)
+        if let pending,
+           pending.identity != merged.identity || pending.serverProtocol != merged.serverProtocol {
+            guard stillCurrent(generation) else { return }
+            retargetIdentity(pending, reason: .configChanged)
+            return
+        }
+        guard stillCurrent(generation) else { return }
+        reconcileLeases(effective, generation: generation)
     }
 
-    private func onConfigurationRevision() async {
-        let config = await resolveConfig()
+    private func collectConfigurationRevisions(generation: UInt64) async {
+        await onConfigurationRevision(generation: generation)
+        for await _ in configurationRevisions() {
+            if Task.isCancelled { return }
+            guard stillCurrent(generation) else { return }
+            await onConfigurationRevision(generation: generation)
+        }
+    }
+
+    private func probeProtocolWhileOccupying(generation: UInt64) async {
+        guard let protocolProbe else { return }
+        let resolved = await protocolProbe()
+        guard stillCurrent(generation), isOccupying() else { return }
         lock.lock()
         let applied = appliedConfig
         lock.unlock()
-        guard let applied, applied.identity == config.identity else { return }
+        guard let applied, resolved != applied.serverProtocol else { return }
+        DiagnosticLog.info(
+            .sse,
+            "SSE protocol resolved \(applied.serverProtocol.wireValue) -> \(resolved.wireValue); reconnecting"
+        )
+        retargetIdentity(
+            LiveConnectionConfig(
+                profileID: applied.profileID,
+                connectionIdentity: applied.connectionIdentity,
+                serverProtocol: resolved,
+                directories: applied.directories
+            ),
+            reason: .configChanged
+        )
+    }
+
+    private func onConfigurationRevision(generation: UInt64) async {
+        let config = await resolveConfig()
+        guard stillCurrent(generation), isOccupying() else { return }
+        lock.lock()
+        let applied = appliedConfig
+        lock.unlock()
+        guard let applied else { return }
+        if applied.identity != config.identity || applied.serverProtocol != config.serverProtocol {
+            retargetIdentity(config, reason: .configChanged)
+            return
+        }
         if applied.directories != config.directories {
             reconcileLeases(config, generation: currentGeneration())
         }
     }
 
     private func retargetIdentity(_ config: LiveConnectionConfig, reason: LiveGapReason) {
+        guard isOccupying() else { return }
         lock.lock()
         streamGeneration += 1
         let generation = streamGeneration
@@ -226,13 +350,16 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         occupyingConnected = false
         emittedReconnectForCurrentGap = false
         emittedConnectedForCurrentGeneration = false
+        suppressReconnectForRequiredGrowth = false
         cancelAllLeasesLocked()
         lock.unlock()
         _ = connectionEpoch.bump()
+        guard stillCurrent(generation) else { return }
         reconcileLeases(config, generation: generation)
     }
 
     private func reconcileLeases(_ config: LiveConnectionConfig, generation: UInt64) {
+        guard stillCurrent(generation), isOccupying() else { return }
         lock.lock()
         appliedConfig = config
         let targets = SseSubscribeTargets.targets(protocol: config.serverProtocol, directories: config.directories)
@@ -259,11 +386,13 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                 await self.deviceNetworkPath.waitUntilReady()
                 guard generation == self.currentGeneration(), self.isRequired(target.key) else { return }
                 lease.activity.touch()
+                let attemptId = lease.nextAttempt()
                 let streamTask = Task {
                     try await self.api.streamEvents(
                         path: target.path,
                         directory: target.directory,
                         onHTTPResponse: { statusCode in
+                            guard lease.currentAttempt() == attemptId else { return }
                             lease.activity.touch()
                             DiagnosticLog.info(
                                 .sse,
@@ -314,8 +443,10 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                 }
                 watchTask.cancel()
                 pathTask.cancel()
-                lease.streamTask = nil
-                self.markLeaseDead(lease, generation: generation)
+                if lease.currentAttempt() == attemptId {
+                    lease.streamTask = nil
+                    self.markLeaseDead(lease, generation: generation)
+                }
                 guard generation == self.currentGeneration(), self.isRequired(target.key) else { return }
                 if self.deviceNetworkPath.status == .unavailable {
                     continue
@@ -374,52 +505,78 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     }
 
     private func markLeaseLive(_ lease: Lease, generation: UInt64) {
-        guard generation == currentGeneration() else { return }
-        lease.live = true
+        guard stillCurrent(generation) else { return }
+        lease.setLive(true)
         refreshOverallState(generation: generation)
     }
 
     private func markLeaseDead(_ lease: Lease, generation: UInt64) {
-        guard generation == currentGeneration() else { return }
-        lease.live = false
+        guard stillCurrent(generation) else { return }
+        lease.setLive(false)
         lock.lock()
         occupyingConnected = false
-        emittedReconnectForCurrentGap = false
         lock.unlock()
         refreshOverallState(generation: generation)
     }
 
     private func refreshOverallState(generation: UInt64) {
-        guard generation == currentGeneration() else { return }
+        guard stillCurrent(generation) else { return }
         lock.lock()
         let config = appliedConfig
         let required = config.map {
             SseSubscribeTargets.targets(protocol: $0.serverProtocol, directories: $0.directories).map(\.key)
         } ?? []
-        let allLive = !required.isEmpty && required.allSatisfy { leases[$0]?.live == true }
-        if lastAllLive && !allLive {
-            let pathLost = deviceNetworkPath.status == .unavailable
+        let live = Set(leases.filter { $0.value.isLive }.map(\.key))
+        let allLive = !required.isEmpty && required.allSatisfy { live.contains($0) }
+        let incumbentLost = lastRequiredTargets.contains { key in
+            required.contains(key) && lastLiveTargets.contains(key) && !live.contains(key)
+        }
+        let requiredGrew = !lastRequiredTargets.isEmpty
+            && lastRequiredTargets.allSatisfy { required.contains($0) }
+            && required.count > lastRequiredTargets.count
+        let pathLost = deviceNetworkPath.status == .unavailable
+        let lostLive = lastAllLive && !allLive
+        if incumbentLost {
             openGapLocked(pathLost ? .pathLost : .leaseLost)
+            suppressReconnectForRequiredGrowth = false
+        } else if lostLive && pathLost {
+            openGapLocked(.pathLost)
+        } else if lostLive && requiredGrew {
+            suppressReconnectForRequiredGrowth = true
         }
         lastAllLive = allLive
-        let shouldPublishReconnect = (wasFullyConnected || pendingResumeBarrier) && !emittedReconnectForCurrentGap
+        lastRequiredTargets = required
+        lastLiveTargets = live
+        let shouldPublishReconnect = (wasFullyConnected || pendingResumeBarrier)
+            && !emittedReconnectForCurrentGap
+            && !suppressReconnectForRequiredGrowth
+        let nextState: EventStreamConnectionState
+        let publishReconnect: Bool
         if allLive {
             occupyingConnected = true
             wasFullyConnected = true
-            if shouldPublishReconnect {
+            suppressReconnectForRequiredGrowth = false
+            nextState = .connected
+            publishReconnect = shouldPublishReconnect
+            if publishReconnect {
                 emittedReconnectForCurrentGap = true
                 pendingResumeBarrier = false
             }
+        } else {
+            nextState = wasFullyConnected ? .reconnecting : .connecting
+            publishReconnect = false
         }
+        let decisionGeneration = streamGeneration
         lock.unlock()
-        if allLive {
-            applyConnectionState(.connected, generation: generation)
-            if shouldPublishReconnect {
+        applyConnectionState(nextState, generation: decisionGeneration)
+        if publishReconnect {
+            lock.lock()
+            let stillSameGeneration = occupancyTask != nil && streamGeneration == decisionGeneration
+            lock.unlock()
+            if stillSameGeneration {
                 DiagnosticLog.info(.sse, "foreground SSE stream reconnected")
                 publish(OpencodeEvent(type: "stream.reconnected", sessionID: nil))
             }
-        } else {
-            applyConnectionState(wasFullyConnected ? .reconnecting : .connecting, generation: generation)
         }
         publishSnapshot()
     }
@@ -460,7 +617,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         let required = config.map {
             SseSubscribeTargets.targets(protocol: $0.serverProtocol, directories: $0.directories).map(\.key)
         } ?? []
-        let live = leases.filter { $0.value.live }.map(\.key)
+        let live = leases.filter { $0.value.isLive }.map(\.key)
         _snapshot = LiveConnectionSnapshot(
             config: config,
             generation: streamGeneration,
@@ -479,15 +636,21 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
 
     private func resolveConfig() async -> LiveConnectionConfig {
         let directories = await instanceDirectories()
-        let identityName = await profileID()
-        let serverProtocol = api.eventProtocol
-        let identity = identityName
+        let profile = await profileID()
+        let identity = await connectionIdentity()
+        let serverProtocol = protocolHint()
         return LiveConnectionConfig(
-            profileID: identity,
+            profileID: profile,
             connectionIdentity: identity,
             serverProtocol: serverProtocol,
             directories: directories
         )
+    }
+
+    private func stillCurrent(_ generation: UInt64) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return occupancyTask != nil && streamGeneration == generation
     }
 
     private func openGapLocked(_ reason: LiveGapReason) {
@@ -525,16 +688,43 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private final class Lease: @unchecked Sendable {
         let target: SseSubscribeTargets.Target
         let activity = ActivityBox()
-        var live = false
+        private let liveLock = NSLock()
+        private var _live = false
         var loopTask: Task<Void, Never>?
         var streamTask: Task<Void, any Error>?
+        private var attempt = 0
+
+        func nextAttempt() -> Int {
+            liveLock.lock()
+            defer { liveLock.unlock() }
+            attempt += 1
+            return attempt
+        }
+
+        func currentAttempt() -> Int {
+            liveLock.lock()
+            defer { liveLock.unlock() }
+            return attempt
+        }
+
+        var isLive: Bool {
+            liveLock.lock()
+            defer { liveLock.unlock() }
+            return _live
+        }
 
         init(target: SseSubscribeTargets.Target) {
             self.target = target
         }
 
+        func setLive(_ live: Bool) {
+            liveLock.lock()
+            _live = live
+            liveLock.unlock()
+        }
+
         func cancel() {
-            live = false
+            setLive(false)
             streamTask?.cancel()
             loopTask?.cancel()
             streamTask = nil

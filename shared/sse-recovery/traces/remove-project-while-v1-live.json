@@ -1,0 +1,38 @@
+{
+  "id": "remove-project-while-v1-live",
+  "title": "Removing a v1 project cancels only that lease and leaves incumbents live",
+  "platforms": ["android", "ios"],
+  "surface": "transport",
+  "protocol": "v1",
+  "seed": {
+    "profileId": "a",
+    "directory": "/repo-a",
+    "sessionId": "ses-1",
+    "directories": ["/repo-a", "/repo-b"],
+    "connectionState": "idle",
+    "occupancy": "active"
+  },
+  "steps": [
+    { "t": 0, "op": "stream.start" },
+    { "t": 20, "op": "target.open", "target": "global/event" },
+    { "t": 20, "op": "target.open", "target": "event:/repo-a" },
+    { "t": 20, "op": "target.open", "target": "event:/repo-b" },
+    { "t": 40, "op": "directories.set", "directories": ["/repo-a"] },
+    { "t": 80, "op": "snapshot", "name": "after-remove-project" }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-remove-project": {
+        "connectionState": "connected",
+        "generationUnchanged": true,
+        "requiredTargets": ["global/event", "event:/repo-a"],
+        "liveTargets": ["global/event", "event:/repo-a"],
+        "openedPathCounts": {
+          "/global/event": 1,
+          "/event?directory=/repo-a": 1,
+          "/event?directory=/repo-b": 1
+        }
+      }
+    }
+  }
+}

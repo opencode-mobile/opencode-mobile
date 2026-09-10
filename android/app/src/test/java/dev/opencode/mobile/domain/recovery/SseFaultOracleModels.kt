@@ -46,6 +46,9 @@ data class SseFaultEvent(
     val type: String,
     val sessionId: String? = null,
     val text: String? = null,
+    val messageId: String? = null,
+    val partId: String? = null,
+    val field: String? = null,
 )
 
 @Serializable
@@ -61,7 +64,8 @@ data class SseFaultSnapshot(
     val chrome: String? = null,
     val connectionState: String? = null,
     val occupancy: String? = null,
-    val epochUnchanged: Boolean? = null,
+    val generationUnchanged: Boolean? = null,
+    val gapReason: String? = null,
     val restFetches: List<SseFaultRestFetch>? = null,
     val publishedProfileId: String? = null,
     val transcript: List<SseFaultTranscriptMessage>? = null,
@@ -69,6 +73,8 @@ data class SseFaultSnapshot(
     val requiredTargets: List<String>? = null,
     val liveTargets: List<String>? = null,
     val openedPaths: List<String>? = null,
+    val openedPathCounts: Map<String, Int>? = null,
+    val publishedEventTypes: List<String>? = null,
 )
 
 @Serializable

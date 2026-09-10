@@ -118,6 +118,16 @@ nonisolated final class FakeWorldSignals: WorldSignals, @unchecked Sendable {
         }
     }
 
+    func setOccupancy(_ occupancy: StreamOccupancy) {
+        lock.lock()
+        _occupancy = occupancy
+        let occupancySubscribers = Array(occupancyContinuations.values)
+        lock.unlock()
+        for continuation in occupancySubscribers {
+            continuation.yield(occupancy)
+        }
+    }
+
     func emit(_ signal: WorldSignal) {
         lock.lock()
         switch signal {

@@ -1,0 +1,40 @@
+{
+  "id": "gap-during-initial-rest",
+  "title": "A gap during the initial REST must require a second reconciliation",
+  "platforms": ["android", "ios"],
+  "surface": "recovery",
+  "protocol": "v2",
+  "seed": {
+    "profileId": "a",
+    "directory": "/repo",
+    "sessionId": "ses-1",
+    "messages": [{ "id": "msg-1", "text": "Hello" }],
+    "connectionState": "connected",
+    "occupancy": "active"
+  },
+  "steps": [
+    { "t": 0, "op": "rest.hold" },
+    { "t": 0, "op": "observe" },
+    { "t": 10, "op": "openGap", "state": "reconnect" },
+    {
+      "t": 20,
+      "op": "rest.setMessages",
+      "messages": [{ "id": "msg-1", "text": "After gap" }]
+    },
+    { "t": 20, "op": "rest.release" },
+    { "t": 40, "op": "snapshot", "name": "after-second-reconcile" }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-second-reconcile": {
+        "syncHealth": "healthy",
+        "catchUpChrome": false,
+        "restFetches": [
+          { "reason": "initial-subscribe", "count": 1 },
+          { "reason": "stream.reconnected", "count": 1 }
+        ],
+        "transcript": [{ "id": "msg-1", "text": "After gap" }]
+      }
+    }
+  }
+}

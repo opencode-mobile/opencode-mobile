@@ -104,9 +104,9 @@ final class DefaultSessionLiveStore: SessionLiveStore {
 
         @Sendable func refreshFromNetwork(reason: String, force: Bool) async -> Bool {
             let snapshot = liveConnection.snapshot
-            let generation: UInt64?
+            let generation: UInt64
             if force {
-                generation = nil
+                generation = authority.captureBegin(snapshot)
             } else {
                 guard let started = authority.tryBegin(snapshot) else {
                     DiagnosticLog.info(
@@ -134,13 +134,17 @@ final class DefaultSessionLiveStore: SessionLiveStore {
                     )
                 }
             )
-            if let generation {
-                switch outcome {
-                case .committed:
-                    authority.acknowledge(generation)
-                case .failed, .discarded:
-                    authority.fail(generation)
+            switch outcome {
+            case .committed:
+                authority.acknowledge(generation)
+                if authority.needsReconcile(liveConnection.snapshot) {
+                    _ = await refreshFromNetwork(
+                        reason: StoreRefreshReason.streamReconnected,
+                        force: false
+                    )
                 }
+            case .failed, .discarded:
+                authority.fail(generation)
             }
             return outcome == .committed
         }
@@ -150,7 +154,6 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         }
 
         _ = await refreshFromNetwork(reason: StoreRefreshReason.initialSubscribe, force: true)
-        authority.acknowledgeCurrent(liveConnection.snapshot)
 
         await withTaskGroup(of: Void.self) { group in
             group.addTask {

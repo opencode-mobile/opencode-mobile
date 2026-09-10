@@ -15,8 +15,7 @@ nonisolated final class SharedLiveObservation<Value: Sendable>: @unchecked Senda
     }
 
     deinit {
-        stopTask?.cancel()
-        upstreamTask?.cancel()
+        finish()
     }
 
     var isTerminated: Bool {
@@ -27,6 +26,10 @@ nonisolated final class SharedLiveObservation<Value: Sendable>: @unchecked Senda
 
     func finish() {
         lock.lock()
+        if isFinished {
+            lock.unlock()
+            return
+        }
         isFinished = true
         stopTask?.cancel()
         stopTask = nil

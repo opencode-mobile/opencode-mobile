@@ -67,11 +67,6 @@ class DefaultSessionTodoLiveStore
                     state.observerCount += 1
                     ensureEventLoop(key, state)
                     emit(state.todos)
-                    if (!state.hasCache) {
-                        liveStoreScope.coroutineScope.launch {
-                            fetch(key, state, force = true, reason = StoreRefreshReason.INITIAL_SUBSCRIBE)
-                        }
-                    }
                 }
                 .onCompletion {
                     state.observerCount = (state.observerCount - 1).coerceAtLeast(0)
@@ -123,8 +118,8 @@ class DefaultSessionTodoLiveStore
             state.eventJob =
                 liveStoreScope.coroutineScope.launch {
                     val liveConnection = eventStream.asLiveConnection()
-                    if (state.hasCache) {
-                        state.authority.acknowledgeCurrent(liveConnection.snapshot.value)
+                    if (!state.hasCache) {
+                        fetch(key, state, force = true, reason = StoreRefreshReason.INITIAL_SUBSCRIBE)
                     }
                     launch {
                         worldSignals.signals.collect { signal ->
@@ -180,7 +175,7 @@ class DefaultSessionTodoLiveStore
             val snapshot = liveConnection.snapshot.value
             val generation =
                 if (force) {
-                    null
+                    state.authority.captureBegin(snapshot)
                 } else {
                     state.authority.tryBegin(snapshot) ?: return state.hasCache
                 }
@@ -190,13 +185,13 @@ class DefaultSessionTodoLiveStore
                     sessionRepository.listSessionTodos(key.sessionId, directory)
                 }.getOrNull()
             if (todos == null) {
-                generation?.let { state.authority.fail(it) }
+                state.authority.fail(generation)
                 return false
             }
             replace(state, todos, markCache = true)
-            generation?.let { state.authority.acknowledge(it) }
-            if (force) {
-                state.authority.acknowledgeCurrent(liveConnection.snapshot.value)
+            state.authority.acknowledge(generation)
+            if (state.authority.needsReconcile(liveConnection.snapshot.value)) {
+                fetch(key, state, force = false, reason = StoreRefreshReason.STREAM_RECONNECTED)
             }
             return true
         }

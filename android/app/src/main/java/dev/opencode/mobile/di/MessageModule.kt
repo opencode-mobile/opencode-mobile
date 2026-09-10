@@ -69,11 +69,17 @@ abstract class MessageModule {
                 liveStoreScope = liveStoreScope,
                 worldSignals = worldSignals,
                 connectionProfileIdProvider = {
-                    val connection = activeConnectionManager.current()
-                    if (connection == null) {
-                        "local"
+                    val profile = activeConnectionManager.currentProfile()
+                    val profileId = profile?.id?.ifBlank { null }
+                    if (profileId != null) {
+                        profileId
                     } else {
-                        "${connection.baseUrl.lowercase()}|${connection.username.lowercase()}"
+                        val connection = activeConnectionManager.current()
+                        if (connection == null) {
+                            "local"
+                        } else {
+                            "${connection.baseUrl.lowercase()}|${connection.username.lowercase()}"
+                        }
                     }
                 },
                 sessionCache = sessionCache,
