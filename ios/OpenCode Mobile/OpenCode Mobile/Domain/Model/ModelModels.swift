@@ -65,7 +65,7 @@ struct ModelSelectionOption: Equatable, Sendable, Identifiable {
         self.supportsPdfInput = supportsPdfInput
     }
 
-    var modelLabel: String { modelName.isEmpty ? modelID : modelName }
+    var modelLabel: String { TitleCaseIdentifier.displayName(for: modelName.isEmpty ? modelID : modelName) }
     var providerLabel: String { providerName.isEmpty ? providerID : providerName }
     var displayLabel: String { "\(modelLabel) · \(providerLabel)" }
     var supportsVariants: Bool { !variants.isEmpty }
@@ -98,7 +98,7 @@ struct ModelSelection: Equatable, Sendable {
 
     var modelLabel: String { option.modelLabel }
     var modelDisplayLabel: String { option.displayLabel }
-    var variantLabel: String { selectedVariant ?? Self.defaultVariantLabel }
+    var variantLabel: String { TitleCaseIdentifier.displayName(for: selectedVariant ?? Self.defaultVariantLabel) }
 }
 
 enum ModelSelectionError: Error, Equatable {

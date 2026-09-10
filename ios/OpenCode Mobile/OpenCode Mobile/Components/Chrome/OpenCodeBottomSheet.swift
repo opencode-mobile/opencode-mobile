@@ -426,6 +426,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
         private var isAnimatingOut = false
         private var dismissGeneration = 0
         private var wasPresented = false
+        private var presentedContentMode: OpenCodeBottomSheetContentMode?
 
         func update(
             isPresented: Bool,
@@ -447,6 +448,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
                 return
             }
 
+            let hostFrame = window.convert(window.bounds, to: nil)
             let content = OpenCodeBottomSheetOverlayContent(
                 title: title,
                 leadingAction: leadingAction,
@@ -454,16 +456,23 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
                 contentMode: contentMode,
                 alwaysFixedHeight: alwaysFixedHeight,
                 displaySafeAreaBottom: window.safeAreaInsets.bottom,
+                seededKeyboardOverlap: contentMode == .form
+                    ? KeyboardOverlap.currentAmount(in: hostFrame)
+                    : 0,
                 onDismiss: onDismiss,
                 pinnedContent: pinnedContent,
                 sheetContent: sheetContent
             )
 
             if isPresented {
-                if !wasPresented, contentMode == .actionList {
-                    KeyboardOverlap.dismissSoftwareKeyboard()
-                }
+                let shouldDismiss = KeyboardOverlap.shouldDismissActionListKeyboard(
+                    isPresented: true,
+                    wasPresented: wasPresented,
+                    contentMode: contentMode,
+                    presentedContentMode: presentedContentMode
+                )
                 wasPresented = true
+                presentedContentMode = contentMode
                 cancelDismissIfNeeded()
                 if let overlayController {
                     configureOverlay(overlayController)
@@ -479,8 +488,12 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
                         controller.view.alpha = 1
                     }
                 }
+                if shouldDismiss {
+                    window.endEditing(true)
+                }
             } else {
                 wasPresented = false
+                presentedContentMode = nil
                 if overlayController != nil, !isAnimatingOut {
                     dismissOverlay()
                 }
@@ -491,6 +504,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
             dismissGeneration += 1
             isAnimatingOut = false
             wasPresented = false
+            presentedContentMode = nil
             overlayController?.view.layer.removeAllAnimations()
             overlayController?.view.removeFromSuperview()
             overlayController = nil
@@ -550,16 +564,23 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedContent: View, SheetConte
     let contentMode: OpenCodeBottomSheetContentMode
     let alwaysFixedHeight: Bool
     let displaySafeAreaBottom: CGFloat
+    let seededKeyboardOverlap: CGFloat
     let onDismiss: () -> Void
     @ViewBuilder let pinnedContent: () -> PinnedContent
     @ViewBuilder let sheetContent: () -> SheetContent
     @State private var revealed = false
-    @State private var keyboardOverlap: CGFloat = 0
+    @State private var notifiedKeyboardOverlap: CGFloat = 0
+    @State private var receivedKeyboardNotification = false
+
+    private var keyboardOverlap: CGFloat {
+        guard contentMode == .form else { return 0 }
+        return receivedKeyboardNotification ? notifiedKeyboardOverlap : seededKeyboardOverlap
+    }
 
     var body: some View {
         GeometryReader { geometry in
             let displayFrame = geometry.frame(in: .global)
-            let keyboardInset = contentMode == .form ? keyboardOverlap : 0
+            let keyboardInset = keyboardOverlap
             let availableHeight = max(0, geometry.size.height - bottomSheetInset - keyboardInset)
             ZStack(alignment: .bottom) {
                 Color.black.opacity(revealed ? bottomSheetScrimAlpha : 0)
@@ -589,15 +610,22 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedContent: View, SheetConte
                 .offset(y: revealed ? 0 : 28)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
+            .onChange(of: contentMode) { _, _ in
+                receivedKeyboardNotification = false
+                notifiedKeyboardOverlap = 0
+            }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
                 guard contentMode == .form else { return }
-                keyboardOverlap = KeyboardOverlap.amount(
+                receivedKeyboardNotification = true
+                notifiedKeyboardOverlap = KeyboardOverlap.amount(
                     from: notification,
                     in: displayFrame
                 )
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-                keyboardOverlap = 0
+                KeyboardOverlap.noteHidden()
+                receivedKeyboardNotification = true
+                notifiedKeyboardOverlap = 0
             }
         }
         .ignoresSafeArea()

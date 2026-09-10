@@ -188,7 +188,7 @@ fun OpenCodeBottomSheet(
 
     LaunchedEffect(visible, contentMode) {
         if (visible && contentMode == OpenCodeBottomSheetContentMode.ActionList) {
-            focusManager.clearFocus()
+            focusManager.clearFocus(force = true)
             keyboardController?.hide()
         }
     }

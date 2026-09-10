@@ -17,6 +17,7 @@ import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.SessionTodo
+import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.changes.ChangeSource
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
@@ -47,7 +48,7 @@ data class SessionChatComposerState(
         get() = if (isModelSelectionReady) selectedModel?.modelLabel ?: "Model" else "Loading model…"
 
     val selectedVariantLabel: String
-        get() = selectedVariant ?: ModelSelection.DefaultVariantLabel
+        get() = TitleCaseIdentifier.displayName(selectedVariant ?: ModelSelection.DefaultVariantLabel)
 
     val variantOptions: List<String>
         get() = listOf(ModelSelection.DefaultVariantLabel) + selectedModel?.option?.variants.orEmpty()
