@@ -1,5 +1,7 @@
 package dev.opencode.mobile.network
 
+import dev.opencode.mobile.data.remote.dto.CommandFilePartDto
+import dev.opencode.mobile.data.remote.dto.RunCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.SendMessagePartDto
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
 import dev.opencode.mobile.domain.message.Attachment
@@ -46,5 +48,45 @@ class PromptJsonBodyWriterTest {
         assertTrue(json.contains("\"filename\":\"note.txt\""))
         assertTrue(json.contains("data:text/plain;base64,AQIDBA=="))
         assertEquals(4, source.length())
+    }
+
+    @Test
+    fun writeV1Command_includesFilePartType() {
+        val source =
+            File(System.getProperty("java.io.tmpdir"), "command-writer-source.bin").apply {
+                writeBytes(byteArrayOf(1, 2, 3, 4))
+            }
+        val attachment =
+            Attachment(
+                id = "a1",
+                filename = "shot.png",
+                mime = "image/png",
+                kind = AttachmentKind.Image,
+                dataUrl = "",
+                byteCount = 4,
+                localPath = source.absolutePath,
+            )
+        val body =
+            RunCommandRequestDto(
+                command = "publish-prototype",
+                arguments = "improve this UI",
+                parts =
+                    listOf(
+                        CommandFilePartDto(mime = "image/png", url = "", filename = "shot.png"),
+                    ),
+            )
+
+        val file =
+            PromptJsonBodyWriter.writeV1Command(
+                body,
+                listOf(attachment),
+                File(System.getProperty("java.io.tmpdir"), "command-writer-out"),
+            )
+        val json = file.readText()
+
+        assertTrue(json.contains("\"command\":\"publish-prototype\""))
+        assertTrue(json.contains("\"type\":\"file\""))
+        assertTrue(json.contains("\"filename\":\"shot.png\""))
+        assertTrue(json.contains("data:image/png;base64,AQIDBA=="))
     }
 }

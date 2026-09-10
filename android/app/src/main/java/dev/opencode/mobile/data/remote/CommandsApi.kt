@@ -21,6 +21,7 @@ import io.ktor.client.call.body
 import io.ktor.client.plugins.ResponseException
 import io.ktor.client.request.get
 import io.ktor.client.request.post
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlin.coroutines.coroutineContext
@@ -82,9 +83,7 @@ class CommandsApi private constructor(
             } finally {
                 file?.delete()
             }
-        if (!response.status.isSuccess()) {
-            throw ResponseException(response, "session.command failed with status ${response.status.value}")
-        }
+        throwIfUnsuccessful(response, "session.command")
         response.bodyAsText()
     }
 
@@ -106,10 +105,20 @@ class CommandsApi private constructor(
             } finally {
                 file?.delete()
             }
-        if (!response.status.isSuccess()) {
-            throw ResponseException(response, "session.command failed with status ${response.status.value}")
-        }
+        throwIfUnsuccessful(response, "session.command")
         response.bodyAsText()
+    }
+
+    private suspend fun throwIfUnsuccessful(
+        response: HttpResponse,
+        operation: String,
+    ) {
+        if (response.status.isSuccess()) return
+        val body = runCatching { response.bodyAsText() }.getOrNull()?.trim().orEmpty()
+        throw ResponseException(
+            response,
+            body.ifBlank { "$operation failed with status ${response.status.value}" },
+        )
     }
 
     private fun promptFile(

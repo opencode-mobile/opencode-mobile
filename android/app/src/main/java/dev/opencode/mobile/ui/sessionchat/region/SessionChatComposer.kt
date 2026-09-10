@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.agent.AgentRepository
 import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.agent.ComposerMentionRouting
 import dev.opencode.mobile.domain.agent.ComposerSuggestionMode
+import dev.opencode.mobile.domain.command.CommandError
 import dev.opencode.mobile.domain.command.CommandInvocationCollapser
 import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.command.CommandRunOptions
@@ -1315,11 +1316,15 @@ class SessionChatComposer(
             is MessageError.Http -> throwable.message ?: "Request failed"
             is MessageError.Transport -> "Unable to reach the server"
             is MessageError.Decoding -> "Unable to read server response"
+            is CommandError.Http -> throwable.message ?: "Request failed"
+            is CommandError.Transport -> "Unable to reach the server"
+            is CommandError.Decoding -> "Unable to read server response"
             else -> throwable.message ?: "Something went wrong"
         }
 
     private fun logSendFailure(throwable: Throwable) {
-        DiagnosticLog.error(DiagnosticLogArea.Chat, "sendPromptAsync failed", throwable)
+        val detail = throwable.message ?: throwable::class.simpleName
+        DiagnosticLog.error(DiagnosticLogArea.Chat, "sendPromptAsync failed error=$detail", throwable)
     }
 
     private fun logI(message: String) {

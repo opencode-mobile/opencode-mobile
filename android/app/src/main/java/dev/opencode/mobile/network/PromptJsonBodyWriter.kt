@@ -177,6 +177,8 @@ object PromptJsonBodyWriter {
                 writer.beginArray()
                 body.parts.forEachIndexed { index, part ->
                     writer.beginObject()
+                    writer.key("type")
+                    writer.writeString(part.type)
                     writer.key("mime")
                     writer.writeString(part.mime)
                     writer.key("url")
