@@ -376,6 +376,85 @@ struct ChangesViewModelTests {
     }
 }
 
+struct ChangedFileGroupsTests {
+    @Test func stripsSharedPrefixIntoRelativeFolders() {
+        let groups = groupChangedFiles([
+            file("android/app/src/main/java/dev/opencode/mobile/ui/changes/ChangesScreen.kt"),
+            file("android/app/src/main/java/dev/opencode/mobile/ui/changes/ChangesViewModel.kt"),
+            file("android/app/src/main/java/dev/opencode/mobile/ui/sessionchat/SessionChatScreen.kt"),
+        ])
+        #expect(groups.map(\.directory) == ["changes", "sessionchat"])
+        #expect(groups[0].files.map { changedFileName($0.path) } == ["ChangesScreen.kt", "ChangesViewModel.kt"])
+        #expect(groups[1].files.map { changedFileName($0.path) } == ["SessionChatScreen.kt"])
+    }
+
+    @Test func keepsDotGroupForFilesInTheSharedDirectory() {
+        let groups = groupChangedFiles([
+            file("android/app/src/main/java/dev/opencode/mobile/OpenCodeApplication.kt"),
+            file("android/app/src/main/java/dev/opencode/mobile/ui/changes/ChangesScreen.kt"),
+        ])
+        #expect(groups.map(\.directory) == [".", "ui/changes"])
+        #expect(changedFileName(groups[0].files[0].path) == "OpenCodeApplication.kt")
+        #expect(changedFileName(groups[1].files[0].path) == "ChangesScreen.kt")
+    }
+
+    @Test func usesFullFolderWhenEveryFileSharesOneParent() {
+        let groups = groupChangedFiles([
+            file("Sources/App.swift"),
+            file("Sources/New.swift"),
+            file("Sources/Removed.swift"),
+        ])
+        #expect(groups.map(\.directory) == ["Sources"])
+        #expect(groups[0].files.map { changedFileName($0.path) } == ["App.swift", "New.swift", "Removed.swift"])
+    }
+
+    @Test func groupsMixedRootsWithoutASharedPrefix() {
+        let groups = groupChangedFiles([
+            file("android/Foo.kt"),
+            file("docs/list-item.md"),
+            file("ios/Bar.swift"),
+        ])
+        #expect(groups.map(\.directory) == ["android", "docs", "ios"])
+    }
+
+    @Test func groupsRootLevelFiles() {
+        let groups = groupChangedFiles([file("README.md"), file("LICENSE")])
+        #expect(groups.map(\.directory) == ["."])
+        #expect(groups[0].files.map { changedFileName($0.path) } == ["README.md", "LICENSE"])
+    }
+
+    @Test func fileGroupsFollowTheFilter() {
+        let content = ChangesContentState(
+            files: [
+                file("android/app/src/main/java/dev/opencode/mobile/ui/changes/ChangesScreen.kt"),
+                file("android/app/src/main/java/dev/opencode/mobile/ui/sessionchat/SessionChatScreen.kt"),
+            ],
+            filter: "changes"
+        )
+        #expect(content.fileGroups.map(\.directory) == ["changes"])
+        #expect(changedFileName(content.fileGroups[0].files[0].path) == "ChangesScreen.kt")
+    }
+
+    @Test func filterKeepsUnfilteredPrefix() {
+        let content = ChangesContentState(
+            files: [
+                file("android/app/src/main/java/dev/opencode/mobile/OpenCodeApplication.kt"),
+                file("android/app/src/main/java/dev/opencode/mobile/ui/changes/ChangesScreen.kt"),
+            ],
+            filter: "ChangesScreen"
+        )
+        #expect(content.fileGroups.map(\.directory) == ["ui/changes"])
+    }
+
+    @Test func emptyFilesYieldNoGroups() {
+        #expect(groupChangedFiles([]).isEmpty)
+    }
+
+    private func file(_ path: String) -> FileDiff {
+        FileDiff(path: path, patch: nil, additions: 1, deletions: 0, status: .modified)
+    }
+}
+
 struct ReviewChangesPillVisibilityTests {
     @Test func showsWhenLatestTurnChangedFiles() {
         let summary = ReviewChangesSummary(fileCount: 2, additions: 4, deletions: 1)

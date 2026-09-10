@@ -170,8 +170,13 @@ struct ChangesView: View {
                         )
                     }
                 } else {
-                    OpenCodeListGroup(changeSet.filteredFiles, id: \.path) { file in
-                        fileRow(file, changeSet: changeSet)
+                    ForEach(changeSet.fileGroups) { group in
+                        VStack(alignment: .leading, spacing: 8) {
+                            folderHeader(group)
+                            OpenCodeListGroup(group.files, id: \.path) { file in
+                                fileRow(file, changeSet: changeSet)
+                            }
+                        }
                     }
                 }
             }
@@ -218,8 +223,23 @@ struct ChangesView: View {
         .accessibilityElement(children: .combine)
     }
 
+    private func folderHeader(_ group: ChangedFileGroup) -> some View {
+        HStack {
+            Text(group.directory)
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textBase)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text("\(group.files.count)")
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textWeak)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(group.directory), \(group.files.count) \(group.files.count == 1 ? "file" : "files")")
+    }
+
     private func fileRow(_ file: FileDiff, changeSet: ChangesContentState) -> some View {
-        OpenCodeListItem(title: file.path, action: {
+        OpenCodeListItem(title: changedFileName(file.path), action: {
             logAction(ProductAnalytics.Action.changesOpenFile)
             selectedPath = file.path
         }, trailing: {

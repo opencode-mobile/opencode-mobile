@@ -45,6 +45,8 @@ struct ChangesContentState: Equatable {
         return query.isEmpty ? files : files.filter { $0.path.localizedCaseInsensitiveContains(query) }
     }
 
+    var fileGroups: [ChangedFileGroup] { groupChangedFiles(filteredFiles, prefixSource: files) }
+
     var additions: Int { filteredFiles.reduce(0) { $0 + $1.additions } }
     var deletions: Int { filteredFiles.reduce(0) { $0 + $1.deletions } }
 
