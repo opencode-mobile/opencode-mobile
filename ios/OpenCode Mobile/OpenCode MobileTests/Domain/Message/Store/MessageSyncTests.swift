@@ -781,7 +781,7 @@ struct MessageSyncTests {
                 id: "msg-2",
                 role: .assistant,
                 text: "Caught up while connecting",
-                parts: [],
+                parts: [.text(TextPart(text: "Caught up while connecting", isStreaming: false))],
                 model: nil,
                 mode: nil,
                 sentAtEpochMs: nil
@@ -1351,6 +1351,28 @@ struct MessageSyncTests {
         task.cancel()
         #expect(reloaded)
         #expect(repo.listMessagesCallCount > afterInitial)
+    }
+
+    @Test func parseFailedCancelsPendingServerConnectedReload() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+        eventStream.setConnectionState(.connected)
+        let afterInitial = repo.listMessagesCallCount
+        repo.messages = [
+            Message(id: "msg-1", role: .user, text: "After gap", model: nil, mode: nil, sentAtEpochMs: 1),
+        ]
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil, rawProperties: nil))
+        eventStream.emit(OpencodeEvent(type: "sse.parse.failed", sessionID: nil))
+        let reloaded = await waitUntil { collector.latest()?.first?.text == "After gap" }
+        try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.messageDebounceMs + 250))
+        task.cancel()
+        #expect(reloaded)
+        #expect(repo.listMessagesCallCount == afterInitial + 1)
     }
 
     @Test func reconnectUnchangedFingerprintDoesNotRepaint() async {

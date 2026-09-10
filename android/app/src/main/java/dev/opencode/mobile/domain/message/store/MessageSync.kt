@@ -554,11 +554,14 @@ class MessageSync(
                 assertOffMainThread()
                 if (!observationStillCurrent()) return
                 if (event.type == "sse.parse.failed") {
+                    serverConnectedReloadJob?.cancel()
+                    serverConnectedReloadJob = null
                     if (lastPublishedFrames[storeSlot] == null) return
                     if (requiresRecovery()) {
                         noteRelevantWhileRecovering()
                         return
                     }
+                    claimReconnectCatchUp()
                     adoptCurrentEpoch()
                     enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
                     performClosedLoopRecovery(

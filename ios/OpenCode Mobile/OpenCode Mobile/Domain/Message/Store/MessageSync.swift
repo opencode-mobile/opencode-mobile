@@ -904,8 +904,14 @@ nonisolated final class MessageSync: @unchecked Sendable {
         confirmCacheSync: @escaping @Sendable () -> Void
     ) async {
         if event.type == "sse.parse.failed" {
+            debounceTask?.cancel()
+            debounceTask = nil
             guard publishedFrame(for: key.storeSlot) != nil else { return }
-            if staging.needsAuthoritativeRecovery { return }
+            if staging.needsAuthoritativeRecovery {
+                staging.noteRelevantEventWhileRecovering()
+                return
+            }
+            _ = catchUpGate.claim(connectionEpoch.current())
             observationEpoch.adopt(connectionEpoch.current())
             staging.enterRecovering(.reconnect, wakeConsumer: false)
             setHealth(staging.currentHealth, for: key)
@@ -1031,7 +1037,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 setHealth(.healthy, for: key)
                 return
             }
-            switch await fullReloadResult(key: key, reason: "session.idle") {
+            switch await fullReloadResult(key: key, reason: "session.idle", mergeExisting: true) {
             case .success(let messages):
                 setHealth(.healthy, for: key)
                 publishMessages(messages)
