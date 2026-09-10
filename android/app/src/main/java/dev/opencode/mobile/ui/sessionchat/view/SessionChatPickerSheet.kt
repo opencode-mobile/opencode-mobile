@@ -20,9 +20,11 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.agent.SelectableAgent
+import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.ModelSelectionProvider
+import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
@@ -64,7 +66,7 @@ internal fun SessionChatPickerSheet(
     selectedModel: ModelSelectionOption?,
     selectedMode: String,
     selectableAgents: List<SelectableAgent>,
-    selectedVariantLabel: String,
+    selectedVariant: String?,
     variantOptions: List<String>,
     onDismiss: () -> Unit,
     onActiveModelProviderIdChange: (String?) -> Unit,
@@ -190,9 +192,13 @@ internal fun SessionChatPickerSheet(
             ComposerPickerKind.Variant ->
                 variantOptions.forEach { variant ->
                     OpenCodeBottomSheetEntry(
-                        title = variant,
+                        title = TitleCaseIdentifier.displayName(variant),
                         endDecorator =
-                            if (variant == selectedVariantLabel) {
+                            if (variant.equals(
+                                    selectedVariant ?: ModelSelection.DefaultVariantLabel,
+                                    ignoreCase = true,
+                                )
+                            ) {
                                 BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
                             } else {
                                 BottomSheetEntryDecorator.None

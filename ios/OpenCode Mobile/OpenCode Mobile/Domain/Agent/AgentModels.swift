@@ -19,11 +19,7 @@ struct SelectableAgent: Equatable, Sendable, Identifiable {
     ]
 
     static func displayName(for id: String) -> String {
-        let parts = id.split { $0 == "-" || $0 == "_" }
-        let titled = parts.map { part in
-            part.prefix(1).uppercased() + part.dropFirst()
-        }.joined(separator: " ")
-        return titled.isEmpty ? id : titled
+        TitleCaseIdentifier.displayName(for: id)
     }
 }
 

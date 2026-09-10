@@ -124,7 +124,7 @@ struct SessionChatComposerState: Equatable {
     }
 
     var selectedVariantLabel: String {
-        selectedVariant ?? ModelSelection.defaultVariantLabel
+        TitleCaseIdentifier.displayName(for: selectedVariant ?? ModelSelection.defaultVariantLabel)
     }
 
     var variantOptions: [String] {

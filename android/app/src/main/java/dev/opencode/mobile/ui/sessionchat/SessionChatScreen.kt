@@ -854,7 +854,7 @@ fun SessionChatScreen(
             selectedModel = uiState.composer.selectedModel?.option,
             selectedMode = uiState.composer.selectedMode,
             selectableAgents = uiState.composer.selectableAgents,
-            selectedVariantLabel = uiState.composer.selectedVariantLabel,
+            selectedVariant = uiState.composer.selectedVariant,
             variantOptions = uiState.composer.variantOptions,
             onDismiss = {
                 activePicker = null

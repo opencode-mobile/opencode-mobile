@@ -1,6 +1,6 @@
 package dev.opencode.mobile.domain.agent
 
-import java.util.Locale
+import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 
 data class SelectableAgent(
     val id: String,
@@ -16,15 +16,7 @@ data class SelectableAgent(
                 SelectableAgent(id = "plan", displayName = "Plan"),
             )
 
-        fun displayNameFor(id: String): String =
-            id
-                .split('-', '_')
-                .filter { it.isNotEmpty() }
-                .joinToString(" ") { word ->
-                    word.replaceFirstChar { ch ->
-                        if (ch.isLowerCase()) ch.titlecase(Locale.US) else ch.toString()
-                    }
-                }.ifEmpty { id }
+        fun displayNameFor(id: String): String = TitleCaseIdentifier.displayName(id)
     }
 }
 

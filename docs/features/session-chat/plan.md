@@ -104,6 +104,8 @@ architectural decision — see
   opens the shared **`OpenCodeBottomSheet`** with one row per option for **model**,
   **agent mode** (server-backed primary/`all` agents that are not hidden), and
   **Variant** (`Default` plus server variant keys for the selected model).
+  Model, agent, and variant/effort IDs are title-cased in chips, picker
+  rows, and user-message metadata.
 - Agent mode is server-backed by `GET /agent` (v2: `GET /api/agent`). Hidden
   system primaries stay out of the picker. `@` mentions stay the non-primary
   path and do not change the selected agent. The selected agent id is sent with

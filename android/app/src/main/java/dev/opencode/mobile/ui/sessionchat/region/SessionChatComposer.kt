@@ -35,6 +35,7 @@ import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
 import dev.opencode.mobile.ui.sessionchat.LatestAgentHint
 import dev.opencode.mobile.ui.sessionchat.LatestModelHint
@@ -1225,7 +1226,7 @@ class SessionChatComposer(
         listOfNotNull(
             composer.selectedModeLabel,
             composer.selectedModel?.modelLabel,
-            composer.selectedVariant,
+            composer.selectedVariant?.let(TitleCaseIdentifier::displayName),
             formatSentTime(System.currentTimeMillis()),
         ).joinToString(" · ")
 

@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -181,7 +182,12 @@ object TimelineProjector {
 
     fun metadataLabel(message: Message): String {
         val timeLabel = message.sentAtEpochMs?.let(::formatSentTime)
-        return listOfNotNull(message.mode, message.model, message.variant, timeLabel).joinToString(" · ")
+        return listOfNotNull(
+            message.mode?.let(TitleCaseIdentifier::displayName),
+            message.model?.let(TitleCaseIdentifier::displayName),
+            message.variant?.let(TitleCaseIdentifier::displayName),
+            timeLabel,
+        ).joinToString(" · ")
     }
 
     fun isStreaming(message: Message): Boolean =

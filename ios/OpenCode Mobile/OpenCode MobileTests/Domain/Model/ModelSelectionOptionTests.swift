@@ -11,6 +11,18 @@ struct ModelSelectionOptionTests {
         variants: []
     )
 
+    @Test func modelLabel_titleCasesIdWhenNameIsBlank() {
+        let unnamed = ModelSelectionOption(
+            providerID: "xai",
+            providerName: "xAI",
+            modelID: "grok-4.6",
+            modelName: "",
+            variants: []
+        )
+        #expect(unnamed.modelLabel == "Grok 4.6")
+        #expect(option.modelLabel == "Claude Sonnet")
+    }
+
     @Test func matchesFilter_emptyQueryMatchesAll() {
         #expect(option.matchesFilter(""))
         #expect(option.matchesFilter("   "))
