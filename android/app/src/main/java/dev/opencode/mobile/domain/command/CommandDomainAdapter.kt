@@ -117,11 +117,19 @@ class CommandDomainAdapter {
             is ResponseException ->
                 CommandError.Http(
                     statusCode = throwable.response.status.value,
-                    message = throwable.message,
+                    message = responseExceptionBody(throwable),
                 )
             is JsonConvertException -> CommandError.Decoding(throwable)
             else -> CommandError.Transport(throwable)
         }
+
+    private fun responseExceptionBody(throwable: ResponseException): String? {
+        val raw = throwable.message ?: return null
+        val marker = ". Text: \""
+        val start = raw.indexOf(marker)
+        if (start < 0) return raw
+        return raw.substring(start + marker.length).removeSuffix("\"").takeIf { it.isNotBlank() }
+    }
 
     private fun toSource(raw: String?): ServerCommandSource =
         when (raw?.lowercase()) {

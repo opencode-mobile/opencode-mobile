@@ -22,6 +22,7 @@ import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class CommandProtocolRepositoryTest {
@@ -103,6 +104,29 @@ class CommandProtocolRepositoryTest {
             assertTrue(!(requests.single().body as io.ktor.http.content.TextContent).text.contains("\"parts\""))
             assertNull(requests.single().url.parameters["directory"])
             assertNull(requests.single().url.parameters["location[directory]"])
+        }
+
+    @Test
+    fun v1RunCommand_http400_surfacesResponseBody() =
+        runTest {
+            val client =
+                testClient {
+                    respond("parts.0.type Required", HttpStatusCode.BadRequest)
+                }
+            val repository =
+                DefaultCommandRepository(
+                    CommandsApi(client, json),
+                    CommandDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            try {
+                repository.runCommand("ses_1", CommandRunOptions(command = "init", arguments = "now"), "/repo")
+                fail("expected CommandError.Http")
+            } catch (error: CommandError.Http) {
+                assertEquals(400, error.statusCode)
+                assertEquals("parts.0.type Required", error.message)
+            }
         }
 
     private suspend fun manager(protocol: ServerProtocol): ActiveConnectionManager {

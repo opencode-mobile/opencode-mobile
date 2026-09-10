@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.command.ClientSlashAction
+import dev.opencode.mobile.domain.command.CommandError
 import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.command.CommandRunOptions
 import dev.opencode.mobile.domain.command.ServerCommand
@@ -1387,6 +1388,43 @@ class SessionChatViewModelTest {
             assertEquals("please", commandRepository.lastRunOptions?.arguments)
             assertFalse(repository.sendPromptAsyncCalled)
             assertEquals("", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
+    fun sendPrompt_serverCommandHttpFailure_showsServerMessage() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val commandRepository =
+                FakeCommandRepository(runError = CommandError.Http(400, "parts.0.type Required"))
+            val viewModel = createViewModel(repository = repository, commandRepository = commandRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("/init please")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertTrue(commandRepository.runCommandCalled)
+            assertEquals("parts.0.type Required", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+        }
+
+    @Test
+    fun sendPrompt_serverCommandTransportFailure_showsReachabilityError() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val commandRepository =
+                FakeCommandRepository(runError = CommandError.Transport(RuntimeException("boom")))
+            val viewModel = createViewModel(repository = repository, commandRepository = commandRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("/init please")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals("Unable to reach the server", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
         }
 
     @Test
@@ -4149,6 +4187,7 @@ private class FakeCommandRepository(
             ServerCommand(name = "my-skill", description = "A skill", source = ServerCommandSource.Skill),
         ),
     private val holdRunUntil: CompletableDeferred<Unit>? = null,
+    private val runError: Throwable? = null,
 ) : CommandRepository {
     var runCommandCalled: Boolean = false
     var lastRunOptions: CommandRunOptions? = null
@@ -4165,6 +4204,7 @@ private class FakeCommandRepository(
         lastRunSessionId = sessionId
         lastRunOptions = options
         holdRunUntil?.await()
+        runError?.let { throw it }
     }
 }
 
