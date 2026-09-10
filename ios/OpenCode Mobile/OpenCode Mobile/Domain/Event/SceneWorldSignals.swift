@@ -65,10 +65,10 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
         guard let coordinator = connectionSessionCoordinator else { return }
         Task { @MainActor [weak self] in
             coordinator.onProfileSaved {
-                self?.emit(.profileSwitched)
+                self?.onProfileSwitched()
             }
             coordinator.onProfileCleared {
-                self?.emit(.profileSwitched)
+                self?.onProfileCleared()
             }
         }
     }
@@ -107,6 +107,19 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
             continuation.yield(.grace)
         }
         emit(.background)
+    }
+
+    func onProfileSwitched() {
+        emit(.profileSwitched)
+        if occupancy != .stopped, hasActiveConnection() {
+            stream.stop()
+            stream.start()
+        }
+    }
+
+    func onProfileCleared() {
+        emit(.profileSwitched)
+        stream.stop()
     }
 
     var occupancy: StreamOccupancy {

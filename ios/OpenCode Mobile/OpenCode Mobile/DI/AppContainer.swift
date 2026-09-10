@@ -342,6 +342,14 @@ extension Container {
                 instanceDirectories: {
                     guard let url = manager.connection?.baseURL.absoluteString else { return [] }
                     return await store.addedWorktrees(serverBaseURL: url)
+                },
+                configurationRevisions: { store.configurationRevisions() },
+                profileID: {
+                    if let id = manager.currentProfile()?.id, !id.isEmpty {
+                        return id
+                    }
+                    guard let connection = manager.connection else { return "" }
+                    return "\(ConnectionProfileIdentity.normalizeBaseURL(connection.baseURL.absoluteString))|\(ConnectionProfileIdentity.normalizeUsername(connection.username))"
                 }
             )
         }.singleton

@@ -1,6 +1,7 @@
 import Foundation
 
 protocol ConnectionProfileStore: Sendable {
+    func configurationRevisions() -> AsyncStream<Void>
     func activeProfile() async -> ConnectionProfile?
     func listProfiles() async -> [ConnectionProfile]
     func saveProfile(_ profile: ConnectionProfile) async throws
@@ -14,6 +15,10 @@ protocol ConnectionProfileStore: Sendable {
 }
 
 extension ConnectionProfileStore {
+    func configurationRevisions() -> AsyncStream<Void> {
+        AsyncStream { $0.finish() }
+    }
+
     func listProfiles() async -> [ConnectionProfile] {
         if let active = await activeProfile() { return [active] }
         return []
@@ -41,6 +46,7 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
     private let defaults: UserDefaults
     private let secureCredentialStore: SecureCredentialStore
     private let lock = NSLock()
+    private let revisionSignal = LiveConnectionRevisionSignal()
     private let worktreePrefix = "addedProjectWorktrees."
     private let worktreeIdPrefix = "worktrees."
     private let catalogKey = "connection_profiles_v2"
@@ -54,6 +60,10 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
     ) {
         self.defaults = defaults
         self.secureCredentialStore = secureCredentialStore
+    }
+
+    func configurationRevisions() -> AsyncStream<Void> {
+        revisionSignal.stream()
     }
 
     func activeProfile() async -> ConnectionProfile? {
@@ -85,12 +95,14 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
         }) {
             writePassword(saved, password: profile.password)
         }
+        revisionSignal.yield()
     }
 
     func applyProfile(id: String) async {
         lock.lock()
         defer { lock.unlock() }
         writeCatalog(migratedCatalog().apply(id: id))
+        revisionSignal.yield()
     }
 
     func removeProfile(id: String) async {
@@ -105,6 +117,7 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
             defaults.removeObject(forKey: worktreeIdPrefix + existing.id)
             defaults.removeObject(forKey: worktreePrefix + existing.baseURL)
         }
+        revisionSignal.yield()
     }
 
     func addedWorktrees(serverBaseURL: String) async -> [String] {
@@ -148,6 +161,7 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
             key = worktreePrefix + ConnectionProfileIdentity.normalizeBaseURL(serverBaseURL)
         }
         defaults.set(ordered, forKey: key)
+        revisionSignal.yield()
     }
 
     func clearAll() async {
@@ -163,6 +177,7 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
         for key in keys {
             defaults.removeObject(forKey: key)
         }
+        revisionSignal.yield()
     }
 
     private func migratedCatalog() -> ConnectionProfileCatalog {

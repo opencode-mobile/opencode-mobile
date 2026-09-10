@@ -24,9 +24,7 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageSync
 import dev.opencode.mobile.domain.message.MessageSyncHealth
 import dev.opencode.mobile.domain.message.SessionMessageEngine
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
@@ -75,7 +73,7 @@ class SseFaultOracleDriver(
                     hasActiveConnection = { true },
                     profileSaved = MutableSharedFlow(),
                     profileCleared = MutableSharedFlow(),
-                    scope = scope,
+                    scope = scope.backgroundScope,
                     stopGraceMs = 5_000L,
                 )
             } else {
@@ -90,7 +88,7 @@ class SseFaultOracleDriver(
                 },
                 engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
                 eventStream = stream,
-                liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + scope.coroutineContext)),
+                liveStoreScope = LiveStoreScope(scope.backgroundScope),
                 worldSignals = world,
                 pollIntervalMs = 60_000L,
                 connectionProfileIdProvider = { profileId.get() },
@@ -185,7 +183,11 @@ class SseFaultOracleDriver(
                     step.directory?.let { directory.set(it) }
                     step.directories?.let { directories.set(it) }
                     sync.clearCache()
-                    emitWorld(world, WorldSignal.ProfileSwitched)
+                    if (world is ProcessWorldSignals) {
+                        world.onProfileSwitched()
+                    } else {
+                        emitWorld(world, WorldSignal.ProfileSwitched)
+                    }
                 }
                 "directories.set" -> directories.set(step.directories.orEmpty())
                 "snapshot" -> {
@@ -347,9 +349,7 @@ class SseFaultOracleDriver(
             protocol: ServerProtocol,
             directories: List<String>,
         ): List<String> =
-            SseSubscribeTargets.forProtocol(protocol, directories).map { target ->
-                target.directory?.let { "${target.path}:$it" } ?: target.path
-            }
+            SseSubscribeTargets.forProtocol(protocol, directories).map { it.key }
 
         fun groupedFetches(reasons: List<String>): List<SseFaultRestFetch> =
             reasons

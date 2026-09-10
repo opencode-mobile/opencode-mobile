@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
-import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
@@ -32,7 +31,6 @@ class AppRootViewModel
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
         private val httpClient: OpencodeHttpClient,
         private val sseHttpClient: OpencodeSseHttpClient,
-        private val foregroundEventStream: ForegroundEventStream,
     ) : ViewModel() {
         private val _state = MutableStateFlow(AppRootState.Loading)
         val state: StateFlow<AppRootState> = _state.asStateFlow()
@@ -83,7 +81,5 @@ class AppRootViewModel
             httpClient.rebuild()
             sseHttpClient.rebuild()
             _state.value = AppRootState.Home
-            foregroundEventStream.stop()
-            foregroundEventStream.start()
         }
     }

@@ -131,7 +131,11 @@ enum SseFaultOracleDriver {
                 if let next = step.directory { directory.value = next }
                 if let next = step.directories { directories.value = next }
                 sync.clearCache()
-                emitWorld(world, .profileSwitched)
+                if let scene = world as? SceneWorldSignals {
+                    scene.onProfileSwitched()
+                } else {
+                    emitWorld(world, .profileSwitched)
+                }
             case "directories.set":
                 directories.value = step.directories ?? []
             case "snapshot":
@@ -266,12 +270,7 @@ enum SseFaultOracleDriver {
     }
 
     static func requiredTargets(protocol serverProtocol: ServerProtocol, directories: [String]) -> [String] {
-        SseSubscribeTargets.targets(protocol: serverProtocol, directories: directories).map { target in
-            if let directory = target.directory {
-                return "\(target.path):\(directory)"
-            }
-            return target.path
-        }
+        SseSubscribeTargets.targets(protocol: serverProtocol, directories: directories).map(\.key)
     }
 
     static func groupedFetches(_ reasons: [String]) -> [SseFaultRestFetch] {

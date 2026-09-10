@@ -12,7 +12,9 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.UUID
@@ -25,6 +27,8 @@ class DataStoreConnectionProfileStore
         private val json: Json,
         private val secureCredentialStore: SecureCredentialStore,
     ) : ConnectionProfileStore {
+        override fun configurationRevisions(): Flow<Unit> = context.connectionProfileDataStore.data.map { }
+
         override suspend fun activeProfile(): ConnectionProfile? {
             val catalog = migratedCatalog()
             return catalog.activeProfile()?.withPassword()

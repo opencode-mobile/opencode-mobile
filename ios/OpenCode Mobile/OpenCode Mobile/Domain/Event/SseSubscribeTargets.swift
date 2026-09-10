@@ -4,6 +4,13 @@ nonisolated enum SseSubscribeTargets {
     struct Target: Equatable, Sendable {
         let path: String
         let directory: String?
+
+        var key: String {
+            if let directory {
+                return "\(path):\(directory)"
+            }
+            return path
+        }
     }
 
     static func targets(protocol serverProtocol: ServerProtocol, directories: [String] = []) -> [Target] {

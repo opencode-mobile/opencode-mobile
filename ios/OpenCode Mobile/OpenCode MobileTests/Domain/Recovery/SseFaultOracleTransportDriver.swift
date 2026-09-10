@@ -51,12 +51,14 @@ private final class TransportHost: @unchecked Sendable {
     private let worktrees: Locked<[String]>
     private let streamID: String
     private let session: URLSession
+    private let revisions: LiveConnectionRevisionSignal
 
     init(trace: SseFaultTrace) {
         protocolValue = SseFaultOracleDriver.protocolOf(trace.serverProtocol)
         let initial = trace.seed.directories.isEmpty ? [trace.seed.directory] : trace.seed.directories
         directories = Locked(initial)
         worktrees = Locked(initial)
+        let revisions = LiveConnectionRevisionSignal()
         streamID = UUID().uuidString
         OracleSseURLProtocol.register(streamID: streamID)
         let configuration = URLSessionConfiguration.ephemeral
@@ -75,8 +77,10 @@ private final class TransportHost: @unchecked Sendable {
             api: client,
             adapter: EventDomainAdapter(),
             idleTimeout: .milliseconds(150),
-            instanceDirectories: { trees.value }
+            instanceDirectories: { trees.value },
+            configurationRevisions: { revisions.stream() }
         )
+        self.revisions = revisions
     }
 
     func awaitOpen(_ target: String) async throws {
@@ -102,6 +106,7 @@ private final class TransportHost: @unchecked Sendable {
     func setDirectories(_ next: [String]) {
         directories.value = next
         worktrees.value = next
+        revisions.yield()
     }
 
     func assertSnapshot(_ expected: SseFaultSnapshot) throws {

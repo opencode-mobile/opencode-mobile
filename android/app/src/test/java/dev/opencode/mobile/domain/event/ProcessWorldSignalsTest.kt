@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.connection.DeviceNetworkPath
 import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
+import dev.opencode.mobile.domain.recovery.RecordingForegroundEventStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -90,6 +91,31 @@ class ProcessWorldSignalsTest {
                 collected,
             )
             job.cancel()
+        }
+
+    @Test
+    fun profileSwitchWhileOccupyingRetargetsStream() =
+        runTest(testDispatcher) {
+            val stream = RecordingForegroundEventStream()
+            val signals =
+                ProcessWorldSignals(
+                    stream = stream,
+                    deviceNetworkPath = ReadyPath,
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    hasActiveConnection = { true },
+                    profileSaved = MutableSharedFlow(),
+                    profileCleared = MutableSharedFlow(),
+                    scope = this,
+                    stopGraceMs = 5_000L,
+                )
+            signals.onForeground()
+            runCurrent()
+            assertEquals(EventStreamConnectionState.Connected, stream.connectionState.value)
+
+            signals.onProfileSwitched()
+            runCurrent()
+            assertEquals(EventStreamConnectionState.Connected, stream.connectionState.value)
+            assertEquals(listOf("start", "stop", "start"), stream.ops.toList())
         }
 
     @Test

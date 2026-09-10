@@ -62,10 +62,10 @@ class ProcessWorldSignals(
             }
         }
         scope.launch {
-            profileSaved.collect { emit(WorldSignal.ProfileSwitched) }
+            profileSaved.collect { onProfileSwitched() }
         }
         scope.launch {
-            profileCleared.collect { emit(WorldSignal.ProfileSwitched) }
+            profileCleared.collect { onProfileCleared() }
         }
     }
 
@@ -98,6 +98,19 @@ class ProcessWorldSignals(
                 emit(WorldSignal.BackgroundStop)
                 stream.stop()
             }
+    }
+
+    fun onProfileSwitched() {
+        emit(WorldSignal.ProfileSwitched)
+        if (_occupancy.value != StreamOccupancy.Stopped && hasActiveConnection()) {
+            stream.stop()
+            stream.start()
+        }
+    }
+
+    fun onProfileCleared() {
+        emit(WorldSignal.ProfileSwitched)
+        stream.stop()
     }
 
     private fun emit(signal: WorldSignal) {

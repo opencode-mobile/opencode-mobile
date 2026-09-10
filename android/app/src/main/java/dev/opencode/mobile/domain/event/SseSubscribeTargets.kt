@@ -6,7 +6,10 @@ object SseSubscribeTargets {
     data class Target(
         val path: String,
         val directory: String? = null,
-    )
+    ) {
+        val key: String
+            get() = directory?.let { "$path:$it" } ?: path
+    }
 
     fun forProtocol(
         protocol: ServerProtocol,

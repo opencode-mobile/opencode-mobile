@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.connection.FakeDeviceNetworkPath
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
+import dev.opencode.mobile.domain.message.ConnectionEpoch
 import dev.opencode.mobile.network.ActiveConnectionManager
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -469,6 +470,62 @@ class DefaultForegroundEventStreamTest {
                 assertEquals(1, requests.size)
                 assertTrue(requests.single().url.encodedPath.contains("/api/event"))
                 assertEquals(null, requests.single().url.parameters["directory"])
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun startThenReconnect_bumpsEpochOnce() =
+        runBlocking {
+            val opens = AtomicInteger(0)
+            val secondOpen = CompletableDeferred<Unit>()
+            val client =
+                HttpClient(
+                    MockEngine {
+                        val n = opens.incrementAndGet()
+                        if (n == 1) {
+                            val channel = ByteChannel(autoFlush = true)
+                            channel.writeStringUtf8("data: {\"type\":\"server.connected\",\"data\":{}}\n\n")
+                            respond(
+                                content = channel,
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                            )
+                        } else {
+                            secondOpen.complete(Unit)
+                            respond(
+                                content = "data: {\"type\":\"server.heartbeat\",\"data\":{}}\n\n",
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                            )
+                        }
+                    },
+                )
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            val epoch = ConnectionEpoch()
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                    idleTimeoutMs = 150,
+                    connectionEpoch = epoch,
+                )
+            try {
+                val before = epoch.current()
+                stream.start()
+                withTimeout(2_000) { secondOpen.await() }
+                assertEquals(before + 1, epoch.current())
             } finally {
                 stream.stop()
                 client.close()
