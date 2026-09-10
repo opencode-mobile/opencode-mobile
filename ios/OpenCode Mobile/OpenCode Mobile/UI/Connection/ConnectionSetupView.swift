@@ -238,6 +238,7 @@ struct ConnectionSetupView: View {
                     .onReceive(
                         NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
                     ) { _ in
+                        KeyboardOverlap.noteHidden()
                         isKeyboardVisible = false
                     }
             }

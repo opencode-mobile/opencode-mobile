@@ -4,6 +4,8 @@ import UIKit
 /// Shared keyboard-frame overlap math for views that own keyboard avoidance
 /// instead of relying on SwiftUI's automatic keyboard safe area.
 enum KeyboardOverlap {
+    private static var lastEndFrame: CGRect?
+
     static func amount(from notification: Notification, in hostFrame: CGRect) -> CGFloat {
         guard
             let frameValue = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue
@@ -11,11 +13,8 @@ enum KeyboardOverlap {
             return 0
         }
         let keyboardFrame = frameValue.cgRectValue
-        // A zero or off-screen end frame means the keyboard is dismissed.
-        guard keyboardFrame.height > 0, keyboardFrame.minY < hostFrame.maxY else {
-            return 0
-        }
-        return max(0, hostFrame.maxY - keyboardFrame.minY)
+        lastEndFrame = keyboardFrame
+        return overlap(of: keyboardFrame, in: hostFrame)
     }
 
     static func animationDuration(from notification: Notification) -> Double {
@@ -23,15 +22,57 @@ enum KeyboardOverlap {
             .doubleValue ?? 0.25
     }
 
+    /// Last keyboard end frame, for sheets that present while the keyboard is
+    /// already visible and will not get a fresh `keyboardWillChangeFrame`.
+    static func currentAmount(in hostFrame: CGRect) -> CGFloat {
+        overlap(of: lastEndFrame, in: hostFrame)
+    }
+
+    static func noteHidden() {
+        lastEndFrame = .zero
+    }
+
+    static func resetCachedFrameForTesting() {
+        lastEndFrame = nil
+    }
+
+    /// Action lists dismiss on first present and when content mode becomes
+    /// `actionList` while already presented (Model picker Back to providers).
+    static func shouldDismissActionListKeyboard(
+        isPresented: Bool,
+        wasPresented: Bool,
+        contentMode: OpenCodeBottomSheetContentMode,
+        presentedContentMode: OpenCodeBottomSheetContentMode?
+    ) -> Bool {
+        isPresented
+            && contentMode == .actionList
+            && (!wasPresented || presentedContentMode != .actionList)
+    }
+
     /// Action-list sheets resign the current first responder so they are not
     /// stacked over an already-visible software keyboard.
     static func dismissSoftwareKeyboard() {
+        let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)
+        if let keyWindow {
+            keyWindow.endEditing(true)
+            return
+        }
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder),
             to: nil,
             from: nil,
             for: nil
         )
+    }
+
+    private static func overlap(of keyboardFrame: CGRect?, in hostFrame: CGRect) -> CGFloat {
+        guard let keyboardFrame, keyboardFrame.height > 0, keyboardFrame.minY < hostFrame.maxY else {
+            return 0
+        }
+        return max(0, hostFrame.maxY - keyboardFrame.minY)
     }
 }
 
@@ -77,6 +118,7 @@ struct KeyboardOverlapPaddingModifier: ViewModifier {
                 .onReceive(
                     NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
                 ) { _ in
+                    KeyboardOverlap.noteHidden()
                     overlap = 0
                 }
         }

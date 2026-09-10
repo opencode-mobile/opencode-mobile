@@ -83,11 +83,14 @@ context actions feel clickable.
 Use `form` mode when the sheet hosts text fields. While the sheet is presented,
 the presenting screen ignores keyboard-driven safe-area resizing so background
 layout stays stable even if the sheet switches content modes. Action lists
-dismiss the software keyboard on present so Add attachment, Commands, and other
-choice sheets get the full bottom of the display. Form sheets keep the keyboard:
-the card lifts, the header stays fixed, and the body scrolls so focused fields
-stay reachable. This avoids remeasuring compact content against a changing
-keyboard safe area.
+dismiss the software keyboard on present, and again if content mode switches to
+`actionList` while presented (Model picker Back to providers), so choice sheets
+get the full bottom of the display. Form sheets keep the keyboard: the card
+lifts from the current keyboard frame even when no new keyboard notification
+fires (opening a filtered provider model list over an already-visible composer
+keyboard), the header stays fixed, and the body scrolls so focused fields stay
+reachable. This avoids remeasuring compact content against a changing keyboard
+safe area.
 
 `actionList` keeps content-measured compact sizing and switches to a fixed
 fraction-height scroll sheet only when the content exceeds the compact
@@ -112,9 +115,11 @@ accessibility label or description using the platform convention.
 - iOS: presented with a window overlay (same pattern as Dialog) so the card can
   inset from the display edge without system sheet chrome. The hosting view is
   pinned to the window edges (not the safe-area layout guide), is
-  accessibility-modal, and is removed when the host leaves the tree.   Form sheets use the 50% scroll detent. Action lists resign first responder
-  on present. Form sheets read the keyboard frame and lift so the internal
-  scroll region, not the presenting screen, follows the keyboard.
+  accessibility-modal, and is removed when the host leaves the tree. Form
+  sheets use the 50% scroll detent. Action lists resign first responder on
+  present and when content mode becomes `actionList`. Form sheets seed lift
+  from the last known keyboard frame, then follow `keyboardWillChangeFrame`, so
+  the internal scroll region, not the presenting screen, follows the keyboard.
   Short entry lists start at content height so the first measure is intrinsic
   row height. Compact height is header + rows + tight bottom padding. Measured
   content height is never shrunk after the intrinsic size is known, and updates
