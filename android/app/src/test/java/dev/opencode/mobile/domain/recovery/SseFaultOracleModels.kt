@@ -58,29 +58,13 @@ data class SseFaultExpected(
 
 @Serializable
 data class SseFaultSnapshot(
-    val syncHealth: String? = null,
-    val syncHealthReason: String? = null,
     val catchUpChrome: Boolean? = null,
     val chrome: String? = null,
-    val connectionState: String? = null,
-    val occupancy: String? = null,
-    val generationUnchanged: Boolean? = null,
-    val gapReason: String? = null,
-    val restFetches: List<SseFaultRestFetch>? = null,
     val publishedProfileId: String? = null,
     val transcript: List<SseFaultTranscriptMessage>? = null,
-    val streamOps: List<String>? = null,
     val requiredTargets: List<String>? = null,
     val liveTargets: List<String>? = null,
-    val openedPaths: List<String>? = null,
-    val openedPathCounts: Map<String, Int>? = null,
-    val publishedEventTypes: List<String>? = null,
-)
-
-@Serializable
-data class SseFaultRestFetch(
-    val reason: String,
-    val count: Int,
+    val unpublishedEventTypes: List<String>? = null,
 )
 
 @Serializable

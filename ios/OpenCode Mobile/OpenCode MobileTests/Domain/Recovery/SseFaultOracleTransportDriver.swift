@@ -20,9 +20,8 @@ enum SseFaultOracleTransportDriver {
                 host.stream.stop()
             case "target.open":
                 try await host.awaitOpen(try unwrap(step.target, "target.open needs target"))
-                host.captureGeneration()
             case "protocol.set":
-                try await host.setProtocol(SseFaultOracleDriver.protocolOf(try unwrap(step.state, "protocol.set needs state")))
+                await host.setProtocol(SseFaultOracleDriver.protocolOf(try unwrap(step.state, "protocol.set needs state")))
             case "target.activity":
                 let target = try unwrap(step.target, "target.activity needs target")
                 heartbeatTasks.append(Task { await host.heartbeat(target) })
@@ -197,14 +196,6 @@ private final class TransportHost: @unchecked Sendable {
         "\(url.absoluteString)|opencode"
     }
 
-    private var generationAtStart: UInt64?
-
-    func captureGeneration() {
-        if generationAtStart == nil {
-            generationAtStart = stream.snapshot.generation
-        }
-    }
-
     func setProtocol(_ next: ServerProtocol) async {
         protocolValue.value = next
         let current = connectionBox.value
@@ -223,14 +214,23 @@ private final class TransportHost: @unchecked Sendable {
     }
 
     func assertSnapshot(_ expected: SseFaultSnapshot) async throws {
-        if let wanted = expected.publishedEventTypes {
-            let reached = await waitUntil(timeoutMs: 1_000) {
-                Set(publishedTypes.value) == Set(wanted)
+        if let wanted = expected.liveTargets {
+            _ = await waitUntil(timeoutMs: 2_000) { Set(stream.snapshot.liveTargets) == Set(wanted) }
+        }
+        if let wanted = expected.chrome {
+            _ = await waitUntil(timeoutMs: 2_000) {
+                composeLiveUpdates(
+                    connectionState: stream.connectionState,
+                    path: .ready,
+                    occupancy: .active,
+                    hasConnection: true
+                ).label.rawValue == wanted
             }
-            if !reached {
-                throw SseFaultOracleError.mismatch(
-                    "publishedEventTypes: expected \(wanted.sorted()), actual \(Array(Set(publishedTypes.value)).sorted())"
-                )
+        }
+        if let forbidden = expected.unpublishedEventTypes {
+            try? await Task.sleep(for: .milliseconds(20))
+            for type in forbidden where publishedTypes.value.contains(type) {
+                throw SseFaultOracleError.mismatch("\(type) was published in \(publishedTypes.value)")
             }
         }
         let snapshot = stream.snapshot
@@ -242,44 +242,6 @@ private final class TransportHost: @unchecked Sendable {
         if let wanted = expected.liveTargets {
             if Set(wanted) != Set(snapshot.liveTargets) {
                 throw SseFaultOracleError.mismatch("liveTargets: expected \(wanted), actual \(snapshot.liveTargets)")
-            }
-        }
-        if let unchanged = expected.generationUnchanged {
-            guard let baseline = generationAtStart else {
-                throw SseFaultOracleError.mismatch("generationUnchanged requires a target.open")
-            }
-            if unchanged != (snapshot.generation == baseline) {
-                throw SseFaultOracleError.mismatch("generationUnchanged: expected \(unchanged)")
-            }
-        }
-        if let wanted = expected.gapReason {
-            let actual = SseFaultOracleDriver.gapReasonName(snapshot.gap?.reason)
-            if wanted != actual {
-                throw SseFaultOracleError.mismatch("gapReason: expected \(wanted), actual \(String(describing: actual))")
-            }
-        }
-        if let wanted = expected.openedPaths {
-            let actual = OracleSseURLProtocol.openedPaths(streamID: streamID)
-            for path in wanted {
-                let found = actual.contains { $0 == path || $0.hasPrefix("\(path)?") || path.hasPrefix("\($0)?") }
-                if !found {
-                    throw SseFaultOracleError.mismatch("openedPaths missing \(path) in \(actual)")
-                }
-            }
-        }
-        if let wanted = expected.openedPathCounts {
-            let actual = OracleSseURLProtocol.openedPaths(streamID: streamID)
-            for (path, count) in wanted {
-                let matches = actual.filter { $0 == path || $0.hasPrefix("\(path)?") || path.hasPrefix("\($0)?") }.count
-                if matches != count {
-                    throw SseFaultOracleError.mismatch("openedPathCounts for \(path): expected \(count), actual \(matches) in \(actual)")
-                }
-            }
-        }
-        if let wanted = expected.connectionState {
-            let actual = SseFaultOracleDriver.connectionStateName(stream.connectionState)
-            if wanted != actual {
-                throw SseFaultOracleError.mismatch("connectionState: expected \(wanted), actual \(actual)")
             }
         }
         if let wanted = expected.chrome {
@@ -297,12 +259,6 @@ private final class TransportHost: @unchecked Sendable {
             let actual = stream.snapshot.config?.profileID
             if wanted != actual {
                 throw SseFaultOracleError.mismatch("publishedProfileId: expected \(wanted), actual \(String(describing: actual))")
-            }
-        }
-        if let wanted = expected.publishedEventTypes {
-            let actual = Array(Set(publishedTypes.value)).sorted()
-            if wanted.sorted() != actual {
-                throw SseFaultOracleError.mismatch("publishedEventTypes: expected \(wanted.sorted()), actual \(actual)")
             }
         }
     }

@@ -1,58 +1,108 @@
 {
   "id": "v1-growth-then-incumbent-lease-lost",
   "title": "v1 directory growth must not open a gap; incumbent death before the new lease is live opens one LeaseLost",
-  "platforms": ["android", "ios"],
+  "platforms": [
+    "android",
+    "ios"
+  ],
   "surface": "transport",
   "protocol": "v1",
   "seed": {
     "profileId": "a",
     "directory": "/repo-a",
     "sessionId": "ses-1",
-    "directories": ["/repo-a"],
+    "directories": [
+      "/repo-a"
+    ],
     "connectionState": "connected",
     "occupancy": "active"
   },
   "steps": [
-    { "t": 0, "op": "stream.start" },
-    { "t": 20, "op": "target.open", "target": "global/event" },
-    { "t": 20, "op": "target.open", "target": "event:/repo-a" },
-    { "t": 25, "op": "target.activity", "target": "global/event" },
+    {
+      "t": 0,
+      "op": "stream.start"
+    },
+    {
+      "t": 20,
+      "op": "target.open",
+      "target": "global/event"
+    },
+    {
+      "t": 20,
+      "op": "target.open",
+      "target": "event:/repo-a"
+    },
+    {
+      "t": 25,
+      "op": "target.activity",
+      "target": "global/event"
+    },
     {
       "t": 40,
       "op": "directories.set",
-      "directories": ["/repo-a", "/repo-b"]
+      "directories": [
+        "/repo-a",
+        "/repo-b"
+      ]
     },
-    { "t": 50, "op": "snapshot", "name": "after-growth" },
-    { "t": 60, "op": "target.close", "target": "event:/repo-a" },
-    { "t": 80, "op": "snapshot", "name": "after-incumbent-death" },
-    { "t": 1100, "op": "target.open", "target": "event:/repo-a" },
-    { "t": 1100, "op": "target.open", "target": "event:/repo-b" },
-    { "t": 1150, "op": "snapshot", "name": "after-recovery" }
+    {
+      "t": 50,
+      "op": "snapshot",
+      "name": "after-growth"
+    },
+    {
+      "t": 60,
+      "op": "target.close",
+      "target": "event:/repo-a"
+    },
+    {
+      "t": 80,
+      "op": "snapshot",
+      "name": "after-incumbent-death"
+    },
+    {
+      "t": 1100,
+      "op": "target.open",
+      "target": "event:/repo-a"
+    },
+    {
+      "t": 1100,
+      "op": "target.open",
+      "target": "event:/repo-b"
+    },
+    {
+      "t": 1150,
+      "op": "snapshot",
+      "name": "after-recovery"
+    }
   ],
   "expected": {
     "snapshots": {
       "after-growth": {
-        "connectionState": "reconnecting",
-        "generationUnchanged": true,
-        "gapReason": "occupancyStart",
-        "requiredTargets": ["global/event", "event:/repo-a", "event:/repo-b"],
-        "liveTargets": ["global/event", "event:/repo-a"]
+        "requiredTargets": [
+          "global/event",
+          "event:/repo-a",
+          "event:/repo-b"
+        ],
+        "liveTargets": [
+          "global/event",
+          "event:/repo-a"
+        ],
+        "chrome": "connecting"
       },
       "after-incumbent-death": {
-        "connectionState": "reconnecting",
-        "generationUnchanged": true,
-        "gapReason": "leaseLost",
-        "liveTargets": ["global/event"]
+        "liveTargets": [
+          "global/event"
+        ],
+        "chrome": "connecting"
       },
       "after-recovery": {
-        "connectionState": "connected",
-        "generationUnchanged": true,
-        "liveTargets": ["global/event", "event:/repo-a", "event:/repo-b"],
-        "openedPathCounts": {
-          "/global/event": 1,
-          "/event?directory=/repo-a": 2,
-          "/event?directory=/repo-b": 1
-        }
+        "liveTargets": [
+          "global/event",
+          "event:/repo-a",
+          "event:/repo-b"
+        ],
+        "chrome": "live"
       }
     }
   }

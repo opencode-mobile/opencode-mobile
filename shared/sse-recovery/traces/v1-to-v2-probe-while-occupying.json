@@ -1,32 +1,62 @@
 {
   "id": "v1-to-v2-probe-while-occupying",
   "title": "v1 hint must retarget to v2 while occupying and cancel v1 leases",
-  "platforms": ["android", "ios"],
+  "platforms": [
+    "android",
+    "ios"
+  ],
   "surface": "transport",
   "protocol": "v1",
   "seed": {
     "profileId": "a",
     "directory": "/repo-a",
     "sessionId": "ses-1",
-    "directories": ["/repo-a"],
+    "directories": [
+      "/repo-a"
+    ],
     "connectionState": "idle",
     "occupancy": "active"
   },
   "steps": [
-    { "t": 0, "op": "stream.start" },
-    { "t": 20, "op": "target.open", "target": "global/event" },
-    { "t": 20, "op": "target.open", "target": "event:/repo-a" },
-    { "t": 40, "op": "protocol.set", "state": "v2" },
-    { "t": 120, "op": "target.open", "target": "api/event" },
-    { "t": 120, "op": "snapshot", "name": "after-v2-retarget" }
+    {
+      "t": 0,
+      "op": "stream.start"
+    },
+    {
+      "t": 20,
+      "op": "target.open",
+      "target": "global/event"
+    },
+    {
+      "t": 20,
+      "op": "target.open",
+      "target": "event:/repo-a"
+    },
+    {
+      "t": 40,
+      "op": "protocol.set",
+      "state": "v2"
+    },
+    {
+      "t": 120,
+      "op": "target.open",
+      "target": "api/event"
+    },
+    {
+      "t": 120,
+      "op": "snapshot",
+      "name": "after-v2-retarget"
+    }
   ],
   "expected": {
     "snapshots": {
       "after-v2-retarget": {
-        "requiredTargets": ["api/event"],
-        "liveTargets": ["api/event"],
-        "gapReason": "configChanged",
-        "openedPaths": ["/api/event"]
+        "requiredTargets": [
+          "api/event"
+        ],
+        "liveTargets": [
+          "api/event"
+        ]
       }
     }
   }

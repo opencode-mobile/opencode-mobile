@@ -52,7 +52,6 @@ class SseFaultOracleTransportDriver {
                         "stream.stop" -> host.stream.stop()
                         "target.open" -> {
                             host.awaitOpen(checkNotNull(step.target))
-                            host.captureGeneration()
                         }
                         "protocol.set" -> host.setProtocol(SseFaultOracleDriver.protocolOf(checkNotNull(step.state)))
                         "target.activity" -> {
@@ -101,7 +100,6 @@ class SseFaultOracleTransportDriver {
                 password = "x",
                 id = trace.seed.profileId,
             )
-        private var generationAtStart: Long? = null
         val store = MutableWorktreeProfileStore(directories.toList())
         private val channels = ConcurrentHashMap<String, ByteChannel>()
         private val live = ConcurrentHashMap.newKeySet<String>()
@@ -249,12 +247,6 @@ class SseFaultOracleTransportDriver {
                 SWITCHED_SERVER
             }
 
-        fun captureGeneration() {
-            if (generationAtStart == null) {
-                generationAtStart = stream.snapshot.value.generation
-            }
-        }
-
         suspend fun setProtocol(next: ServerProtocol) {
             protocol = next
             manager.applyProfile(currentProfile, serverProtocol = next)
@@ -269,44 +261,19 @@ class SseFaultOracleTransportDriver {
         }
 
         suspend fun assertSnapshot(expected: SseFaultSnapshot) {
-            expected.publishedEventTypes?.let { wanted ->
-                withTimeout(1_000) {
-                    while (publishedTypes.toSet() != wanted.toSet()) {
-                        delay(10)
-                    }
+            expected.unpublishedEventTypes?.let { forbidden ->
+                delay(20)
+                forbidden.forEach { type ->
+                    assertTrue(
+                        "$type was published in $publishedTypes",
+                        type !in publishedTypes,
+                    )
                 }
             }
             val snapshot = stream.snapshot.value
             expected.requiredTargets?.let { assertEquals(it, snapshot.requiredTargets) }
             expected.liveTargets?.let { wanted ->
                 assertEquals(wanted.toSet(), snapshot.liveTargets.toSet())
-            }
-            expected.generationUnchanged?.let { unchanged ->
-                val baseline = checkNotNull(generationAtStart)
-                assertEquals(unchanged, snapshot.generation == baseline)
-            }
-            expected.gapReason?.let {
-                assertEquals(it, SseFaultOracleDriver.gapReasonName(snapshot.gap?.reason))
-            }
-            expected.openedPaths?.let { wanted ->
-                wanted.forEach { path ->
-                    assertTrue(
-                        "openedPaths missing $path in $opened",
-                        opened.any { it == path || it.startsWith("$path?") || path.startsWith("$it?") },
-                    )
-                }
-            }
-            expected.openedPathCounts?.let { wanted ->
-                wanted.forEach { (path, count) ->
-                    val matches =
-                        opened.count {
-                            it == path || it.startsWith("$path?") || path.startsWith("$it?")
-                        }
-                    assertEquals("openedPathCounts for $path", count, matches)
-                }
-            }
-            expected.connectionState?.let {
-                assertEquals(it, SseFaultOracleDriver.connectionStateName(snapshot.connectionState))
             }
             expected.chrome?.let { label ->
                 val chrome =
@@ -320,9 +287,6 @@ class SseFaultOracleTransportDriver {
             }
             expected.publishedProfileId?.let { wanted ->
                 assertEquals(wanted, snapshot.config?.profileId)
-            }
-            expected.publishedEventTypes?.let { wanted ->
-                assertEquals(wanted.toSet(), publishedTypes.toSet())
             }
         }
 

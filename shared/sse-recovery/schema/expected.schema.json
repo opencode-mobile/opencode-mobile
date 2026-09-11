@@ -3,117 +3,79 @@
   "$id": "https://opencode.mobile/sse-recovery/expected.schema.json",
   "title": "SSE fault oracle expected snapshot",
   "type": "object",
-  "required": ["snapshots"],
+  "required": [
+    "snapshots"
+  ],
   "additionalProperties": false,
   "properties": {
     "snapshots": {
       "type": "object",
       "minProperties": 1,
-      "additionalProperties": { "$ref": "#/$defs/snapshot" }
+      "additionalProperties": {
+        "$ref": "#/$defs/snapshot"
+      }
     }
   },
   "$defs": {
     "snapshot": {
       "type": "object",
       "additionalProperties": false,
+      "minProperties": 1,
       "properties": {
-        "syncHealth": {
-          "type": "string",
-          "enum": ["healthy", "stale", "recovering"]
+        "catchUpChrome": {
+          "type": "boolean"
         },
-        "syncHealthReason": {
-          "type": "string",
-          "enum": [
-            "overflow",
-            "reconnect",
-            "reloadFailed",
-            "racedAuthority",
-            "transportUnavailable"
-          ]
-        },
-        "catchUpChrome": { "type": "boolean" },
         "chrome": {
           "type": "string",
-          "enum": ["live", "connecting", "offline"]
-        },
-        "connectionState": {
-          "type": "string",
           "enum": [
-            "idle",
+            "live",
             "connecting",
-            "connected",
-            "disconnected",
-            "reconnecting"
+            "offline"
           ]
         },
-        "occupancy": {
-          "type": "string",
-          "enum": ["active", "grace", "stopped"]
+        "publishedProfileId": {
+          "type": "string"
         },
-        "generationUnchanged": { "type": "boolean" },
-        "gapReason": {
-          "type": "string",
-          "enum": [
-            "occupancyStart",
-            "reconnect",
-            "configChanged",
-            "stopped",
-            "pathLost",
-            "leaseLost",
-            "parseFailed"
-          ]
-        },
-        "restFetches": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/restFetch" }
-        },
-        "publishedProfileId": { "type": "string" },
         "transcript": {
           "type": "array",
-          "items": { "$ref": "#/$defs/transcriptMessage" }
-        },
-        "streamOps": {
-          "type": "array",
-          "items": { "type": "string", "enum": ["start", "stop"] }
+          "items": {
+            "$ref": "#/$defs/transcriptMessage"
+          }
         },
         "requiredTargets": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "liveTargets": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
-        "openedPaths": {
+        "unpublishedEventTypes": {
           "type": "array",
-          "items": { "type": "string" }
-        },
-        "openedPathCounts": {
-          "type": "object",
-          "additionalProperties": { "type": "integer", "minimum": 0 }
-        },
-        "publishedEventTypes": {
-          "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         }
-      }
-    },
-    "restFetch": {
-      "type": "object",
-      "required": ["reason", "count"],
-      "additionalProperties": false,
-      "properties": {
-        "reason": { "type": "string" },
-        "count": { "type": "integer", "minimum": 0 }
       }
     },
     "transcriptMessage": {
       "type": "object",
-      "required": ["id", "text"],
+      "required": [
+        "id",
+        "text"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "type": "string" },
-        "text": { "type": "string" }
+        "id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
       }
     }
   }

@@ -356,9 +356,11 @@ None. Reuse existing list rows, chat chrome, and status bar.
 
 ## Validation
 
-Shared SSE recovery traces live under `shared/sse-recovery/`. Both
-platforms execute the same oracle. Do not check transient run logs into
-the repo.
+Shared traces under `shared/sse-recovery/` assert user-visible recovery
+outcomes: transcript, catch-up chrome, live versus required leases, and
+published profile. They do not pin REST counts, generation, or gap-reason
+machinery. Both platforms run the same oracle. Do not check transient run
+logs into the repo.
 
 ## Remaining
 

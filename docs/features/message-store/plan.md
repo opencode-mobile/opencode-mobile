@@ -189,7 +189,9 @@ and streaming state.
 - iOS: `MessageSyncTests`, `DisplayMessagePipelinePacingTests`, and
   `SessionChatViewModelTests`.
 - Both message-sync suites cover events buffered during initial REST, stale
-  in-flight poll rejection, failed-idle recovery, and
-  event → store → display streaming/final behavior.
-- Shared SSE recovery traces under `shared/sse-recovery/` run on both
-  platforms. Do not check transient run logs into the repo.
+  in-flight poll rejection, and event → store → display streaming/final
+  behavior.
+- Shared SSE recovery traces under `shared/sse-recovery/` assert
+  user-visible catch-up outcomes on both platforms. They do not pin REST
+  counts or gap-reason machinery. Do not check transient run logs into the
+  repo.

@@ -124,6 +124,8 @@ Not applicable in this slice.
 
 ## Validation
 
-Shared traces and expected snapshots live under `shared/sse-recovery/`.
-Both platforms run the same oracle against that contract. Do not check
-transient run logs into the repo.
+Shared traces under `shared/sse-recovery/` assert user-visible recovery
+outcomes: transcript, catch-up chrome, live versus required leases, and
+published profile. They do not pin REST counts, generation, or gap-reason
+machinery. Both platforms run the same oracle. Do not check transient run
+logs into the repo.

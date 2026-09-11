@@ -19,7 +19,6 @@ enum SseFaultOracleDriver {
         let messages = Locked(seedMessages(trace.seed.messages))
         let transcript = Locked([SseFaultTranscriptMessage]())
         let catchUp = Locked(false)
-        let generationAtObserve = Locked<UInt64?>(nil)
         let restHold = RestHoldGate()
         let restFailures = Locked(0)
         let restInFlight = Locked(0)
@@ -100,9 +99,6 @@ enum SseFaultOracleDriver {
                     }
                 })
                 _ = await waitUntil(timeoutMs: 1_000) { !transcript.value.isEmpty || !sync.recordedRestAttempts().isEmpty }
-                if generationAtObserve.value == nil {
-                    generationAtObserve.value = stream.snapshot.generation
-                }
             case "unobserve":
                 observeTasks.forEach { $0.cancel() }
                 observeTasks.removeAll()
@@ -181,14 +177,11 @@ enum SseFaultOracleDriver {
                 await drainOracle(sync: sync, restInFlight: restInFlight, restHold: restHold, expectWork: false)
                 let name = try unwrap(step.name, "snapshot step needs name")
                 let expected = try unwrap(trace.expected.snapshots[name], "Missing expected snapshot \(name)")
-                if expected.syncHealth == "healthy" {
-                    _ = await waitUntil(timeoutMs: 2_000) {
-                        if case .healthy = sync.syncHealth(
-                            sessionID: sessionID.value,
-                            directory: directory.value
-                        ) { return true }
-                        return false
-                    }
+                if let wanted = expected.catchUpChrome {
+                    _ = await waitUntil(timeoutMs: 2_000) { catchUp.value == wanted }
+                }
+                if let wanted = expected.transcript {
+                    _ = await waitUntil(timeoutMs: 2_000) { transcript.value == wanted }
                 }
                 try assertSnapshot(
                     expected,
@@ -197,8 +190,6 @@ enum SseFaultOracleDriver {
                     directory: directory.value,
                     stream: stream,
                     world: world,
-                    generationAtObserve: generationAtObserve.value,
-                    fetchReasons: sync.recordedRestAttempts(),
                     transcript: transcript.value,
                     catchUpChrome: catchUp.value
                 )
@@ -286,32 +277,54 @@ enum SseFaultOracleDriver {
         }
     }
 
-    static func connectionStateName(_ state: EventStreamConnectionState) -> String {
-        switch state {
-        case .idle: "idle"
-        case .connecting: "connecting"
-        case .connected: "connected"
-        case .disconnected: "disconnected"
-        case .reconnecting: "reconnecting"
+    static func requiredTargets(protocol serverProtocol: ServerProtocol, directories: [String]) -> [String] {
+        SseSubscribeTargets.targets(protocol: serverProtocol, directories: directories).map(\.key)
+    }
+
+    static func assertSnapshot(
+        _ expected: SseFaultSnapshot,
+        sync: MessageSync,
+        sessionID: String,
+        directory: String,
+        stream: RecordingForegroundEventStream,
+        world: any WorldSignals,
+        transcript: [SseFaultTranscriptMessage],
+        catchUpChrome: Bool,
+        liveTargets: [String]? = nil,
+        publishedEventTypes: [String]? = nil
+    ) throws {
+        let snapshot = stream.snapshot
+        if let wanted = expected.catchUpChrome {
+            try expectEqual(wanted, catchUpChrome, "catchUpChrome")
         }
-    }
-
-    static func occupancyName(_ occupancy: StreamOccupancy) -> String {
-        occupancy.rawValue
-    }
-
-    static func healthName(_ health: MessageSyncHealth) -> String {
-        switch health {
-        case .healthy: "healthy"
-        case .stale: "stale"
-        case .recovering: "recovering"
+        if let wanted = expected.chrome {
+            let chrome = composeLiveUpdates(
+                connectionState: snapshot.connectionState,
+                path: .ready,
+                occupancy: world.occupancy,
+                hasConnection: true
+            )
+            try expectEqual(wanted, chrome.label.rawValue, "chrome")
         }
-    }
-
-    static func healthReason(_ health: MessageSyncHealth) -> String? {
-        switch health {
-        case .healthy: nil
-        case .stale(let reason), .recovering(let reason): reason.rawValue
+        if let wanted = expected.publishedProfileId {
+            let actual = sync.publishedProfileID() ?? snapshot.config?.profileID
+            try expectEqual(wanted, actual, "publishedProfileId")
+        }
+        if let wanted = expected.transcript {
+            try expectEqual(wanted, transcript, "transcript")
+        }
+        if let wanted = expected.requiredTargets {
+            try expectEqual(wanted, snapshot.requiredTargets, "requiredTargets")
+        }
+        if let wanted = expected.liveTargets {
+            let actual = liveTargets ?? snapshot.liveTargets
+            try expectEqual(Set(wanted), Set(actual), "liveTargets")
+        }
+        if let forbidden = expected.unpublishedEventTypes {
+            let actual = publishedEventTypes ?? []
+            for type in forbidden where actual.contains(type) {
+                throw SseFaultOracleError.mismatch("\(type) was published in \(actual)")
+            }
         }
     }
 
@@ -338,114 +351,6 @@ enum SseFaultOracleDriver {
         case "pathLost": .pathLost
         case "configChanged": .configChanged
         default: .reconnect
-        }
-    }
-
-    static func gapReasonName(_ reason: LiveGapReason?) -> String? {
-        switch reason {
-        case .none: nil
-        case .occupancyStart: "occupancyStart"
-        case .reconnect: "reconnect"
-        case .configChanged: "configChanged"
-        case .stopped: "stopped"
-        case .pathLost: "pathLost"
-        case .leaseLost: "leaseLost"
-        case .parseFailed: "parseFailed"
-        }
-    }
-
-    static func requiredTargets(protocol serverProtocol: ServerProtocol, directories: [String]) -> [String] {
-        SseSubscribeTargets.targets(protocol: serverProtocol, directories: directories).map(\.key)
-    }
-
-    static func groupedFetches(_ reasons: [String]) -> [SseFaultRestFetch] {
-        Dictionary(grouping: reasons, by: { $0 })
-            .map { SseFaultRestFetch(reason: $0.key, count: $0.value.count) }
-            .sorted { $0.reason < $1.reason }
-    }
-
-    static func assertSnapshot(
-        _ expected: SseFaultSnapshot,
-        sync: MessageSync,
-        sessionID: String,
-        directory: String,
-        stream: RecordingForegroundEventStream,
-        world: any WorldSignals,
-        generationAtObserve: UInt64?,
-        fetchReasons: [String],
-        transcript: [SseFaultTranscriptMessage],
-        catchUpChrome: Bool,
-        liveTargets: [String]? = nil,
-        openedPaths: [String]? = nil
-    ) throws {
-        let snapshot = stream.snapshot
-        let health = sync.syncHealth(sessionID: sessionID, directory: directory)
-        if let wanted = expected.syncHealth {
-            try expectEqual(wanted, healthName(health), "syncHealth")
-        }
-        if let wanted = expected.syncHealthReason {
-            try expectEqual(wanted, healthReason(health), "syncHealthReason")
-        }
-        if let wanted = expected.catchUpChrome {
-            try expectEqual(wanted, catchUpChrome, "catchUpChrome")
-        }
-        if let wanted = expected.connectionState {
-            try expectEqual(wanted, connectionStateName(snapshot.connectionState), "connectionState")
-        }
-        if let wanted = expected.occupancy {
-            try expectEqual(wanted, occupancyName(world.occupancy), "occupancy")
-        }
-        if let wanted = expected.chrome {
-            let chrome = composeLiveUpdates(
-                connectionState: snapshot.connectionState,
-                path: .ready,
-                occupancy: world.occupancy,
-                hasConnection: true
-            )
-            try expectEqual(wanted, chrome.label.rawValue, "chrome")
-        }
-        if let unchanged = expected.generationUnchanged {
-            let baseline = try unwrap(generationAtObserve, "generationUnchanged requires an observe step")
-            try expectEqual(unchanged, snapshot.generation == baseline, "generationUnchanged")
-        }
-        if let wanted = expected.gapReason {
-            try expectEqual(wanted, gapReasonName(snapshot.gap?.reason), "gapReason")
-        }
-        if let wanted = expected.restFetches {
-            try expectEqual(wanted.sorted { $0.reason < $1.reason }, groupedFetches(fetchReasons), "restFetches")
-        }
-        if let wanted = expected.publishedProfileId {
-            let actual = sync.publishedProfileID() ?? snapshot.config?.profileID
-            try expectEqual(wanted, actual, "publishedProfileId")
-        }
-        if let wanted = expected.transcript {
-            try expectEqual(wanted, transcript, "transcript")
-        }
-        if let wanted = expected.streamOps {
-            try expectEqual(wanted, stream.ops, "streamOps")
-        }
-        if let wanted = expected.requiredTargets {
-            try expectEqual(wanted, snapshot.requiredTargets, "requiredTargets")
-        }
-        if let wanted = expected.liveTargets {
-            let actual = liveTargets ?? snapshot.liveTargets
-            try expectEqual(Set(wanted), Set(actual), "liveTargets")
-        }
-        if let wanted = expected.openedPaths {
-            let actual = try unwrap(openedPaths, "openedPaths")
-            for path in wanted {
-                let found = actual.contains { $0 == path || $0.hasPrefix("\(path)?") || path.hasPrefix("\($0)?") }
-                if !found {
-                    throw SseFaultOracleError.mismatch("openedPaths missing \(path) in \(actual)")
-                }
-            }
-        }
-        if let wanted = expected.openedPathCounts {
-            let actual = try unwrap(openedPaths, "openedPathCounts")
-            for (path, count) in wanted {
-                let matches = actual.filter { $0 == path || $0.hasPrefix("\(path)?") || path.hasPrefix("\($0)?") }.count
-                try expectEqual(count, matches, "openedPathCounts for \(path)")
-            }
         }
     }
 

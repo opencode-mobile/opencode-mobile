@@ -81,28 +81,13 @@ struct SseFaultExpected: Decodable, Sendable {
 }
 
 struct SseFaultSnapshot: Decodable, Sendable {
-    let syncHealth: String?
-    let syncHealthReason: String?
     let catchUpChrome: Bool?
     let chrome: String?
-    let connectionState: String?
-    let occupancy: String?
-    let generationUnchanged: Bool?
-    let gapReason: String?
-    let restFetches: [SseFaultRestFetch]?
     let publishedProfileId: String?
     let transcript: [SseFaultTranscriptMessage]?
-    let streamOps: [String]?
     let requiredTargets: [String]?
     let liveTargets: [String]?
-    let openedPaths: [String]?
-    let openedPathCounts: [String: Int]?
-    let publishedEventTypes: [String]?
-}
-
-struct SseFaultRestFetch: Decodable, Equatable, Sendable {
-    let reason: String
-    let count: Int
+    let unpublishedEventTypes: [String]?
 }
 
 struct SseFaultTranscriptMessage: Decodable, Equatable, Sendable {

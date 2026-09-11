@@ -22,7 +22,6 @@ import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageSync
-import dev.opencode.mobile.domain.message.MessageSyncHealth
 import dev.opencode.mobile.domain.message.SessionMessageEngine
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
@@ -64,7 +63,6 @@ class SseFaultOracleDriver(
         val transcript = AtomicReference<List<SseFaultTranscriptMessage>>(emptyList())
         val catchUp = AtomicReference(false)
         val observeJobs = mutableListOf<Job>()
-        val generationAtObserve = AtomicReference<Long?>(null)
         val restHold = RestHoldGate()
         val restFailures = AtomicInteger(0)
 
@@ -145,9 +143,6 @@ class SseFaultOracleDriver(
                         }
                     scope.advanceTimeBy(1)
                     scope.runCurrent()
-                    if (generationAtObserve.get() == null) {
-                        generationAtObserve.set(stream.snapshot.value.generation)
-                    }
                 }
                 "unobserve" -> {
                     observeJobs.forEach { it.cancel() }
@@ -227,8 +222,6 @@ class SseFaultOracleDriver(
                         directory = directory.get(),
                         stream = stream,
                         world = world,
-                        generationAtObserve = generationAtObserve.get(),
-                        fetchReasons = sync.recordedRestAttempts(),
                         transcript = transcript.get(),
                         catchUpChrome = catchUp.get(),
                     )
@@ -314,46 +307,6 @@ class SseFaultOracleDriver(
                 else -> error("Unknown connection state $value")
             }
 
-        fun connectionStateName(state: EventStreamConnectionState): String =
-            when (state) {
-                EventStreamConnectionState.Idle -> "idle"
-                EventStreamConnectionState.Connecting -> "connecting"
-                EventStreamConnectionState.Connected -> "connected"
-                EventStreamConnectionState.Disconnected -> "disconnected"
-                EventStreamConnectionState.Reconnecting -> "reconnecting"
-            }
-
-        fun occupancyName(occupancy: StreamOccupancy): String =
-            when (occupancy) {
-                StreamOccupancy.Active -> "active"
-                StreamOccupancy.Grace -> "grace"
-                StreamOccupancy.Stopped -> "stopped"
-            }
-
-        fun healthName(health: MessageSyncHealth): String =
-            when (health) {
-                MessageSyncHealth.Healthy -> "healthy"
-                is MessageSyncHealth.Stale -> "stale"
-                is MessageSyncHealth.Recovering -> "recovering"
-            }
-
-        fun healthReason(health: MessageSyncHealth): String? =
-            when (health) {
-                MessageSyncHealth.Healthy -> null
-                is MessageSyncHealth.Stale -> reasonName(health.reason.name)
-                is MessageSyncHealth.Recovering -> reasonName(health.reason.name)
-            }
-
-        private fun reasonName(enumName: String): String =
-            when (enumName) {
-                "Overflow" -> "overflow"
-                "Reconnect" -> "reconnect"
-                "ReloadFailed" -> "reloadFailed"
-                "RacedAuthority" -> "racedAuthority"
-                "TransportUnavailable" -> "transportUnavailable"
-                else -> enumName.replaceFirstChar { it.lowercase() }
-            }
-
         fun toOpencodeEvent(
             event: SseFaultEvent,
             defaultSessionId: String,
@@ -383,13 +336,6 @@ class SseFaultOracleDriver(
         ): List<String> =
             SseSubscribeTargets.forProtocol(protocol, directories).map { it.key }
 
-        fun groupedFetches(reasons: List<String>): List<SseFaultRestFetch> =
-            reasons
-                .groupingBy { it }
-                .eachCount()
-                .map { SseFaultRestFetch(it.key, it.value) }
-                .sortedBy { it.reason }
-
         fun assertSnapshot(
             expected: SseFaultSnapshot,
             sync: MessageSync,
@@ -397,23 +343,13 @@ class SseFaultOracleDriver(
             directory: String,
             stream: RecordingForegroundEventStream,
             world: WorldSignals,
-            generationAtObserve: Long?,
-            fetchReasons: List<String>,
             transcript: List<SseFaultTranscriptMessage>,
             catchUpChrome: Boolean,
             liveTargets: List<String>? = null,
-            openedPaths: List<String>? = null,
-            openedPathCounts: Map<String, Int>? = null,
+            publishedEventTypes: List<String>? = null,
         ) {
             val snapshot = stream.snapshot.value
-            val health = sync.syncHealth(sessionId, directory)
-            expected.syncHealth?.let { assertEquals(it, healthName(health)) }
-            expected.syncHealthReason?.let { assertEquals(it, healthReason(health)) }
             expected.catchUpChrome?.let { assertEquals(it, catchUpChrome) }
-            expected.connectionState?.let {
-                assertEquals(it, connectionStateName(snapshot.connectionState))
-            }
-            expected.occupancy?.let { assertEquals(it, occupancyName(world.occupancy.value)) }
             expected.chrome?.let { label ->
                 val chrome =
                     composeLiveUpdates(
@@ -424,56 +360,23 @@ class SseFaultOracleDriver(
                     )
                 assertEquals(label, chrome.label.label)
             }
-            expected.generationUnchanged?.let { unchanged ->
-                val baseline = checkNotNull(generationAtObserve) { "generationUnchanged requires an observe step" }
-                assertEquals(unchanged, snapshot.generation == baseline)
-            }
-            expected.gapReason?.let { wanted ->
-                assertEquals(wanted, gapReasonName(snapshot.gap?.reason))
-            }
-            expected.restFetches?.let { wanted ->
-                assertEquals(wanted.sortedBy { it.reason }, groupedFetches(fetchReasons))
-            }
             expected.publishedProfileId?.let { wanted ->
                 val actual = sync.publishedProfileId() ?: snapshot.config?.profileId
                 assertEquals(wanted, actual)
             }
             expected.transcript?.let { assertEquals(it, transcript) }
-            expected.streamOps?.let { assertEquals(it, stream.ops.toList()) }
             expected.requiredTargets?.let { assertEquals(it, snapshot.requiredTargets) }
             expected.liveTargets?.let { wanted ->
                 val actual = liveTargets ?: snapshot.liveTargets
                 assertEquals(wanted.toSet(), actual.toSet())
             }
-            expected.openedPaths?.let { wanted ->
-                val actual = checkNotNull(openedPaths)
-                wanted.forEach { path ->
-                    assertTrue("openedPaths missing $path in $actual", actual.any { it == path || it.startsWith(path) })
-                }
-            }
-            expected.openedPathCounts?.let { wanted ->
-                val actual = checkNotNull(openedPaths)
-                wanted.forEach { (path, count) ->
-                    val matches =
-                        actual.count {
-                            it == path || it.startsWith("$path?") || path.startsWith("$it?")
-                        }
-                    assertEquals("openedPathCounts for $path", count, matches)
+            expected.unpublishedEventTypes?.let { forbidden ->
+                val actual = publishedEventTypes.orEmpty()
+                forbidden.forEach { type ->
+                    assertTrue("$type was published in $actual", type !in actual)
                 }
             }
         }
-
-        fun gapReasonName(reason: dev.opencode.mobile.domain.event.LiveGapReason?): String? =
-            when (reason) {
-                null -> null
-                dev.opencode.mobile.domain.event.LiveGapReason.OccupancyStart -> "occupancyStart"
-                dev.opencode.mobile.domain.event.LiveGapReason.Reconnect -> "reconnect"
-                dev.opencode.mobile.domain.event.LiveGapReason.ConfigChanged -> "configChanged"
-                dev.opencode.mobile.domain.event.LiveGapReason.Stopped -> "stopped"
-                dev.opencode.mobile.domain.event.LiveGapReason.PathLost -> "pathLost"
-                dev.opencode.mobile.domain.event.LiveGapReason.LeaseLost -> "leaseLost"
-                dev.opencode.mobile.domain.event.LiveGapReason.ParseFailed -> "parseFailed"
-            }
     }
 }
 

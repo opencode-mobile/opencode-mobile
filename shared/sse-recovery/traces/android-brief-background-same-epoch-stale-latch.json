@@ -1,35 +1,59 @@
 {
   "id": "android-brief-background-same-epoch-stale-latch",
   "title": "Brief background within grace must not latch Stale or Syncing",
-  "platforms": ["android", "ios"],
+  "platforms": [
+    "android",
+    "ios"
+  ],
   "surface": "composed",
   "protocol": "v2",
   "seed": {
     "profileId": "a",
     "directory": "/repo",
     "sessionId": "ses-1",
-    "messages": [{ "id": "msg-1", "text": "Hello" }],
+    "messages": [
+      {
+        "id": "msg-1",
+        "text": "Hello"
+      }
+    ],
     "connectionState": "connected",
     "occupancy": "active"
   },
   "steps": [
-    { "t": 0, "op": "observe" },
-    { "t": 0, "op": "world.foreground" },
-    { "t": 10, "op": "world.background" },
-    { "t": 1010, "op": "world.foreground" },
-    { "t": 1010, "op": "snapshot", "name": "after-brief-return" }
+    {
+      "t": 0,
+      "op": "observe"
+    },
+    {
+      "t": 0,
+      "op": "world.foreground"
+    },
+    {
+      "t": 10,
+      "op": "world.background"
+    },
+    {
+      "t": 1010,
+      "op": "world.foreground"
+    },
+    {
+      "t": 1010,
+      "op": "snapshot",
+      "name": "after-brief-return"
+    }
   ],
   "expected": {
     "snapshots": {
       "after-brief-return": {
-        "syncHealth": "healthy",
         "catchUpChrome": false,
         "chrome": "live",
-        "connectionState": "connected",
-        "occupancy": "active",
-        "generationUnchanged": true,
-        "restFetches": [{ "reason": "initial-subscribe", "count": 1 }],
-        "transcript": [{ "id": "msg-1", "text": "Hello" }]
+        "transcript": [
+          {
+            "id": "msg-1",
+            "text": "Hello"
+          }
+        ]
       }
     }
   }

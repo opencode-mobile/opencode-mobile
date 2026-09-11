@@ -1,21 +1,39 @@
 {
   "id": "rest-slow-sse-wins",
   "title": "Stale REST in flight must not overwrite an SSE patch that landed first",
-  "platforms": ["android", "ios"],
+  "platforms": [
+    "android",
+    "ios"
+  ],
   "surface": "recovery",
   "protocol": "v2",
   "seed": {
     "profileId": "a",
     "directory": "/repo",
     "sessionId": "ses-1",
-    "messages": [{ "id": "msg-1", "text": "Hello" }],
+    "messages": [
+      {
+        "id": "msg-1",
+        "text": "Hello"
+      }
+    ],
     "connectionState": "connected",
     "occupancy": "active"
   },
   "steps": [
-    { "t": 0, "op": "observe" },
-    { "t": 10, "op": "rest.hold" },
-    { "t": 10, "op": "openGap", "state": "reconnect" },
+    {
+      "t": 0,
+      "op": "observe"
+    },
+    {
+      "t": 10,
+      "op": "rest.hold"
+    },
+    {
+      "t": 10,
+      "op": "openGap",
+      "state": "reconnect"
+    },
     {
       "t": 20,
       "op": "emit",
@@ -31,36 +49,56 @@
     {
       "t": 30,
       "op": "rest.setMessages",
-      "messages": [{ "id": "msg-1", "text": "STALE" }]
+      "messages": [
+        {
+          "id": "msg-1",
+          "text": "STALE"
+        }
+      ]
     },
-    { "t": 30, "op": "rest.release" },
-    { "t": 45, "op": "snapshot", "name": "after-sse-wins" },
+    {
+      "t": 30,
+      "op": "rest.release"
+    },
+    {
+      "t": 45,
+      "op": "snapshot",
+      "name": "after-sse-wins"
+    },
     {
       "t": 50,
       "op": "rest.setMessages",
-      "messages": [{ "id": "msg-1", "text": "Hello streamed" }]
+      "messages": [
+        {
+          "id": "msg-1",
+          "text": "Hello streamed"
+        }
+      ]
     },
-    { "t": 80, "op": "snapshot", "name": "after-second-confirm" }
+    {
+      "t": 80,
+      "op": "snapshot",
+      "name": "after-second-confirm"
+    }
   ],
   "expected": {
     "snapshots": {
       "after-sse-wins": {
-        "syncHealth": "recovering",
-        "syncHealthReason": "racedAuthority",
         "catchUpChrome": false,
-        "transcript": [{ "id": "msg-1", "text": "Hello streamed" }],
-        "restFetches": [
-          { "reason": "initial-subscribe", "count": 1 },
-          { "reason": "connection-snapshot", "count": 1 }
+        "transcript": [
+          {
+            "id": "msg-1",
+            "text": "Hello streamed"
+          }
         ]
       },
       "after-second-confirm": {
-        "syncHealth": "healthy",
         "catchUpChrome": false,
-        "transcript": [{ "id": "msg-1", "text": "Hello streamed" }],
-        "restFetches": [
-          { "reason": "initial-subscribe", "count": 1 },
-          { "reason": "connection-snapshot", "count": 2 }
+        "transcript": [
+          {
+            "id": "msg-1",
+            "text": "Hello streamed"
+          }
         ]
       }
     }

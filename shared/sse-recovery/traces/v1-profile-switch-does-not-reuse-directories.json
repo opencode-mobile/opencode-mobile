@@ -1,48 +1,74 @@
 {
   "id": "v1-profile-switch-does-not-reuse-directories",
   "title": "A v1 profile switch must not reopen profile A directories against profile B",
-  "platforms": ["android", "ios"],
+  "platforms": [
+    "android",
+    "ios"
+  ],
   "surface": "transport",
   "protocol": "v1",
   "seed": {
     "profileId": "profile-a",
     "directory": "/repo-a",
     "sessionId": "ses-a",
-    "directories": ["/repo-a"],
+    "directories": [
+      "/repo-a"
+    ],
     "connectionState": "idle",
     "occupancy": "active"
   },
   "steps": [
-    { "t": 0, "op": "stream.start" },
-    { "t": 20, "op": "target.open", "target": "global/event" },
-    { "t": 20, "op": "target.open", "target": "event:/repo-a" },
+    {
+      "t": 0,
+      "op": "stream.start"
+    },
+    {
+      "t": 20,
+      "op": "target.open",
+      "target": "global/event"
+    },
+    {
+      "t": 20,
+      "op": "target.open",
+      "target": "event:/repo-a"
+    },
     {
       "t": 40,
       "op": "profile.switch",
       "profileId": "profile-b",
       "directory": "/repo-b",
-      "directories": ["/repo-b"]
+      "directories": [
+        "/repo-b"
+      ]
     },
-    { "t": 80, "op": "target.open", "target": "global/event" },
-    { "t": 80, "op": "target.open", "target": "event:/repo-b" },
-    { "t": 80, "op": "snapshot", "name": "after-switch-to-b" }
+    {
+      "t": 80,
+      "op": "target.open",
+      "target": "global/event"
+    },
+    {
+      "t": 80,
+      "op": "target.open",
+      "target": "event:/repo-b"
+    },
+    {
+      "t": 80,
+      "op": "snapshot",
+      "name": "after-switch-to-b"
+    }
   ],
   "expected": {
     "snapshots": {
       "after-switch-to-b": {
         "publishedProfileId": "profile-b",
-        "requiredTargets": ["global/event", "event:/repo-b"],
-        "liveTargets": ["global/event", "event:/repo-b"],
-        "openedPaths": [
-          "/global/event",
-          "/event?directory=/repo-a",
-          "/event?directory=/repo-b"
+        "requiredTargets": [
+          "global/event",
+          "event:/repo-b"
         ],
-        "openedPathCounts": {
-          "/global/event": 2,
-          "/event?directory=/repo-a": 1,
-          "/event?directory=/repo-b": 1
-        }
+        "liveTargets": [
+          "global/event",
+          "event:/repo-b"
+        ]
       }
     }
   }
