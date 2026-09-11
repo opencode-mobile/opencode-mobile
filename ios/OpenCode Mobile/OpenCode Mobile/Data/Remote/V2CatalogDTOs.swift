@@ -7,6 +7,36 @@ nonisolated struct V2CommandDTO: Decodable, Sendable {
     let agent: String?
     let source: String?
     let subtask: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case name, template, description, agent, source, subtask
+    }
+
+    init(
+        name: String,
+        template: String? = nil,
+        description: String? = nil,
+        agent: String? = nil,
+        source: String? = nil,
+        subtask: Bool? = nil
+    ) {
+        self.name = name
+        self.template = template
+        self.description = description
+        self.agent = agent
+        self.source = source
+        self.subtask = subtask
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        template = try? container.decode(String.self, forKey: .template)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        agent = try container.decodeIfPresent(String.self, forKey: .agent)
+        source = try container.decodeIfPresent(String.self, forKey: .source)
+        subtask = try container.decodeIfPresent(Bool.self, forKey: .subtask)
+    }
 }
 
 nonisolated struct V2SkillDTO: Decodable, Sendable {

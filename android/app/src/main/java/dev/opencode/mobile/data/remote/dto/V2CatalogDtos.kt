@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class V2CommandDto(
     val name: String,
+    @Serializable(with = LenientOptionalStringSerializer::class)
     val template: String? = null,
     val description: String? = null,
     val agent: String? = null,

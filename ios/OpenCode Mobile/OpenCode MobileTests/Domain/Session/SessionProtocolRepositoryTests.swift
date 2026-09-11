@@ -537,6 +537,32 @@ struct SessionProtocolRepositoryTests {
         #expect(ProtocolRoutingURLProtocol.requests.isEmpty)
     }
 
+    @Test func v1ListCommandsAcceptsObjectTemplate() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(
+                #"""
+                [
+                  {"name":"init","description":"Setup","source":"command","template":"do init"},
+                  {"name":"firebase:firebase_init","description":"Init Firebase","source":"mcp","template":{}}
+                ]
+                """#
+            ),
+        ])
+        let manager = makeManager(serverProtocol: .v1)
+        let repository = DefaultCommandRepository(
+            api: CommandsAPIClient(connectionProvider: { manager.connection }, urlSession: makeURLSession()),
+            adapter: CommandDomainAdapter(),
+            activeConnectionManager: manager
+        )
+
+        let commands = try await repository.listCommands(directory: "/repo")
+
+        #expect(commands.map(\.name) == ["init", "firebase:firebase_init"])
+        #expect(commands[0].template == "do init")
+        #expect(commands[1].template == nil)
+        #expect(commands[1].source == .mcp)
+    }
+
     @Test func v2ListCommandsUnwrapsLocationEnvelope() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
             .json(#"{"data":[{"name":"init","template":"do init","description":"Setup"}]}"#)

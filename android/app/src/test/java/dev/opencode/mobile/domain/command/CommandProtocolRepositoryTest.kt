@@ -27,6 +27,63 @@ import org.junit.Test
 
 class CommandProtocolRepositoryTest {
     @Test
+    fun v1ListCommands_objectTemplateDoesNotFailCatalog() =
+        runTest {
+            val client =
+                testClient {
+                    respondJson(
+                        """
+                        [
+                          {"name":"init","description":"Setup","source":"command","template":"do init"},
+                          {"name":"firebase:firebase_init","description":"Init Firebase","source":"mcp","template":{}}
+                        ]
+                        """.trimIndent(),
+                    )
+                }
+            val repository =
+                DefaultCommandRepository(
+                    CommandsApi(client, json),
+                    CommandDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            val commands = repository.listCommands("/repo")
+
+            assertEquals(listOf("init", "firebase:firebase_init"), commands.map { it.name })
+            assertEquals("do init", commands[0].template)
+            assertNull(commands[1].template)
+            assertEquals(ServerCommandSource.Mcp, commands[1].source)
+        }
+
+    @Test
+    fun v2ListCommands_objectTemplateDoesNotFailCatalog() =
+        runTest {
+            val client =
+                testClient { request ->
+                    when {
+                        request.url.encodedPath.contains("/api/skill") ->
+                            respondJson("""{"data":[]}""")
+                        else ->
+                            respondJson(
+                                """{"data":[{"name":"firebase:firebase_init","description":"Init Firebase","source":"mcp","template":{}}]}""",
+                            )
+                    }
+                }
+            val repository =
+                DefaultCommandRepository(
+                    CommandsApi(client, json),
+                    CommandDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val commands = repository.listCommands("/repo")
+
+            assertEquals("firebase:firebase_init", commands.single().name)
+            assertNull(commands.single().template)
+            assertEquals(ServerCommandSource.Mcp, commands.single().source)
+        }
+
+    @Test
     fun v2ListCommands_unwrapsLocationEnvelope() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()
