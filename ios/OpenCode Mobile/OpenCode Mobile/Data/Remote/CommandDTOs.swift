@@ -9,6 +9,42 @@ nonisolated struct CommandDTO: Codable, Sendable {
     let template: String?
     let subtask: Bool?
     let hints: [String]?
+
+    private enum CodingKeys: String, CodingKey {
+        case name, description, agent, model, source, template, subtask, hints
+    }
+
+    init(
+        name: String,
+        description: String? = nil,
+        agent: String? = nil,
+        model: String? = nil,
+        source: String? = nil,
+        template: String? = nil,
+        subtask: Bool? = nil,
+        hints: [String]? = nil
+    ) {
+        self.name = name
+        self.description = description
+        self.agent = agent
+        self.model = model
+        self.source = source
+        self.template = template
+        self.subtask = subtask
+        self.hints = hints
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        agent = try container.decodeIfPresent(String.self, forKey: .agent)
+        model = try container.decodeIfPresent(String.self, forKey: .model)
+        source = try container.decodeIfPresent(String.self, forKey: .source)
+        template = try? container.decode(String.self, forKey: .template)
+        subtask = try container.decodeIfPresent(Bool.self, forKey: .subtask)
+        hints = try container.decodeIfPresent([String].self, forKey: .hints)
+    }
 }
 
 nonisolated struct RunCommandRequestDTO: Codable, Sendable {

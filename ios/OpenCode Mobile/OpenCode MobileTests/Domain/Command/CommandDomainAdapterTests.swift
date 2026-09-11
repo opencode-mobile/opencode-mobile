@@ -163,6 +163,38 @@ struct CommandDomainAdapterTests {
         #expect(commands[0].source == .command)
     }
 
+    @Test func commandDTO_decodesObjectTemplateAsNil() throws {
+        let json = Data(
+            """
+            [
+              {"name":"init","description":"Setup","source":"command","template":"do init","hints":["$ARGUMENTS"]},
+              {"name":"firebase:firebase_init","description":"Init Firebase","source":"mcp","template":{},"hints":[]}
+            ]
+            """.utf8
+        )
+
+        let commands = try JSONDecoder().decode([CommandDTO].self, from: json)
+
+        #expect(commands.map(\.name) == ["init", "firebase:firebase_init"])
+        #expect(commands[0].template == "do init")
+        #expect(commands[1].template == nil)
+        #expect(commands[1].source == "mcp")
+    }
+
+    @Test func v2CommandDTO_decodesObjectTemplateAsNil() throws {
+        let json = Data(
+            """
+            {"name":"firebase:firebase_init","description":"Init Firebase","source":"mcp","template":{}}
+            """.utf8
+        )
+
+        let command = try JSONDecoder().decode(V2CommandDTO.self, from: json)
+
+        #expect(command.name == "firebase:firebase_init")
+        #expect(command.template == nil)
+        #expect(command.source == "mcp")
+    }
+
     @Test func mapError_mapsHttpAndDecoding() {
         #expect(
             adapter.mapError(CommandsAPIError.httpStatus(404, "missing"))
