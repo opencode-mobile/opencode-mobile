@@ -58,16 +58,18 @@ fun LiveConnectionSnapshot.isReachable(): Boolean =
         connectionState == EventStreamConnectionState.Connected ||
         connectionState == EventStreamConnectionState.Reconnecting
 
-/** Non-force REST catch-up: occupancy is live and SSE is actually up. */
+/** Every required SSE lease is actually up. Connecting/Reconnecting are not live. */
+fun LiveConnectionSnapshot.isFullyLive(): Boolean =
+    requiredTargets.isNotEmpty() && liveTargets.containsAll(requiredTargets)
+
+/** Non-force REST catch-up: occupancy is live and every required lease is up. */
 fun canCatchUp(
     occupancy: StreamOccupancy,
     snapshot: LiveConnectionSnapshot,
 ): Boolean =
     occupancy == StreamOccupancy.Active &&
-        (
-            snapshot.connectionState == EventStreamConnectionState.Connected ||
-                snapshot.connectionState == EventStreamConnectionState.Reconnecting
-        )
+        snapshot.connectionState == EventStreamConnectionState.Connected &&
+        snapshot.isFullyLive()
 
 fun ForegroundEventStream.asLiveConnection(): LiveConnection =
     this as? LiveConnection ?: AdaptedLiveConnection(this)

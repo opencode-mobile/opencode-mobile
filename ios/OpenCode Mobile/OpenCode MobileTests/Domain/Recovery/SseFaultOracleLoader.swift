@@ -21,6 +21,8 @@ enum SseFaultOracleLoader {
         "old-generation-stays-writable",
         "path-lost-then-path-ready",
         "background-stop-then-foreground",
+        "v1-profile-switch-does-not-reuse-directories",
+        "v1-catch-up-waits-for-required-leases",
     ]
 
     static func repoRoot(from filePath: String = #filePath) -> URL {

@@ -111,10 +111,13 @@
   protocol and both v1 event paths stay required. Connected requires
   every required lease. 5s stop grace and per-target 45s idle watchdog
   stay. REST is history and gap authority, not a substitute for
-  heartbeat-only SSE. Store catch-up after a process gap lives in this
+  heartbeat-only SSE.   Store catch-up after a process gap lives in this
   feature, not in the stream type. `GapAuthority` is the unpaid-revision
-  clock. `stream.reconnected`, `server.connected`, and snapshot changes
-  only wake evaluation of the current revision.
+  clock. Non-force catch-up requires Active occupancy and every
+  required lease live. `stream.reconnected`, `server.connected`, and
+  `connection-snapshot` only wake evaluation of the current revision.
+  `SessionStatusLiveStore` background-return uses that same gate; it
+  does not bypass `GapAuthority` to confirm or drop optimistic Working.
 - Reason: folding catch-up into the stream would make
   `ForegroundEventStream` the coordinator this slice refuses. Leaving
   catch-up only on SSE events is what made OPE-197 add ForegroundRestore.

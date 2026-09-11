@@ -1,0 +1,62 @@
+{
+  "id": "v1-catch-up-waits-for-required-leases",
+  "title": "Non-force catch-up waits until every required v1 lease is live",
+  "platforms": ["android", "ios"],
+  "surface": "recovery",
+  "protocol": "v1",
+  "seed": {
+    "profileId": "a",
+    "directory": "/repo",
+    "sessionId": "ses-1",
+    "directories": ["/repo"],
+    "messages": [{ "id": "msg-1", "text": "Hello" }],
+    "connectionState": "connected",
+    "occupancy": "active"
+  },
+  "steps": [
+    { "t": 0, "op": "observe" },
+    { "t": 10, "op": "world.backgroundStop" },
+    { "t": 20, "op": "snapshot", "name": "after-background-stop" },
+    {
+      "t": 30,
+      "op": "rest.setMessages",
+      "messages": [{ "id": "msg-1", "text": "After all leases" }]
+    },
+    { "t": 30, "op": "world.foreground" },
+    { "t": 40, "op": "target.open", "target": "global/event" },
+    { "t": 50, "op": "snapshot", "name": "after-partial-leases" },
+    { "t": 60, "op": "target.open", "target": "event:/repo" },
+    { "t": 90, "op": "snapshot", "name": "after-all-leases-live" }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-background-stop": {
+        "syncHealth": "stale",
+        "syncHealthReason": "transportUnavailable",
+        "catchUpChrome": true,
+        "requiredTargets": ["global/event", "event:/repo"],
+        "liveTargets": [],
+        "restFetches": [{ "reason": "initial-subscribe", "count": 1 }]
+      },
+      "after-partial-leases": {
+        "syncHealth": "stale",
+        "syncHealthReason": "transportUnavailable",
+        "catchUpChrome": true,
+        "requiredTargets": ["global/event", "event:/repo"],
+        "liveTargets": ["global/event"],
+        "restFetches": [{ "reason": "initial-subscribe", "count": 1 }]
+      },
+      "after-all-leases-live": {
+        "syncHealth": "healthy",
+        "catchUpChrome": false,
+        "requiredTargets": ["global/event", "event:/repo"],
+        "liveTargets": ["global/event", "event:/repo"],
+        "restFetches": [
+          { "reason": "connection-snapshot", "count": 1 },
+          { "reason": "initial-subscribe", "count": 1 }
+        ],
+        "transcript": [{ "id": "msg-1", "text": "After all leases" }]
+      }
+    }
+  }
+}

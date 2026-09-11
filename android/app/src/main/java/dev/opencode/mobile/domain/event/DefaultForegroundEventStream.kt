@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.data.remote.EventsApi
+import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.DeviceNetworkPath
@@ -17,6 +18,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +32,6 @@ import kotlinx.coroutines.yield
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -79,10 +80,11 @@ class DefaultForegroundEventStream
         private val streamGeneration = AtomicLong(0)
 
         /** Invalidates overlapping start() applies after stop() or a new occupancy. */
-        private val occupancySerial = AtomicLong(0)
+        private var occupancySerial = 0L
         private var appliedConfig: LiveConnectionConfig? = null
-        private val pendingStartConfig = AtomicReference<LiveConnectionConfig?>(null)
-        private val inFlightStartApplies = AtomicInteger(0)
+        private var pendingStartConfig: LiveConnectionConfig? = null
+        private var inFlightStartApplies = 0
+        private val lastDirectoriesByIdentity = mutableMapOf<LiveConnectionConfig.Identity, List<String>>()
         private var wasFullyConnected = false
         private var occupyingConnected = false
         private var emittedReconnectForCurrentGap = false
@@ -94,7 +96,6 @@ class DefaultForegroundEventStream
         private var lastAllLive = false
         private var lastRequiredTargets: List<String> = emptyList()
         private var lastLiveTargets: Set<String> = emptySet()
-        private var lastDirectories: List<String> = emptyList()
         private val configEpoch = AtomicLong(0)
 
         private val _connectionState = MutableStateFlow(EventStreamConnectionState.Idle)
@@ -107,87 +108,121 @@ class DefaultForegroundEventStream
         override val events: SharedFlow<OpencodeEvent> = _events.asSharedFlow()
 
         override fun start() {
-            val existing = occupancyJob
-            if (existing?.isActive == true) {
-                val stuckIdle =
-                    _connectionState.value == EventStreamConnectionState.Idle && appliedConfig == null
-                if (!stuckIdle) {
-                    val serial = occupancySerial.get()
-                    inFlightStartApplies.incrementAndGet()
-                    CoroutineScope(existing).launch {
-                        try {
-                            applyStartWhileOccupying()
-                        } finally {
-                            endInFlightStartApply(serial)
-                        }
+            var overlappingJob: Job? = null
+            var overlappingSerial = 0L
+            var newJob: Job? = null
+            synchronized(stateLock) {
+                val existing = occupancyJob
+                if (existing?.isActive == true) {
+                    val stuckIdle =
+                        _connectionState.value == EventStreamConnectionState.Idle && appliedConfig == null
+                    if (!stuckIdle) {
+                        inFlightStartApplies += 1
+                        overlappingJob = existing
+                        overlappingSerial = occupancySerial
+                        return@synchronized
                     }
-                    return
+                    existing.cancel()
+                    occupancyJob = null
                 }
-                existing.cancel()
-                occupancyJob = null
+                diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream starting")
+                occupancySerial += 1
+                val serial = occupancySerial
+                val job =
+                    scope.launch(start = CoroutineStart.LAZY) {
+                        val bootstrap =
+                            synchronized(stateLock) {
+                                pendingStartConfig.also { pendingStartConfig = null }
+                            } ?: bootstrapConfig()
+                        if (!isActive) return@launch
+                        beginOccupancy(this, bootstrap, serial)
+                        awaitCancellation()
+                    }
+                occupancyJob = job
+                newJob = job
             }
-            diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream starting")
-            val serial = occupancySerial.incrementAndGet()
-            val job =
-                scope.launch(start = CoroutineStart.LAZY) {
-                    val bootstrap = pendingStartConfig.getAndSet(null) ?: bootstrapConfig()
-                    if (!isActive) return@launch
-                    beginOccupancy(this, bootstrap, serial)
-                    awaitCancellation()
+            if (overlappingJob != null) {
+                val serial = overlappingSerial
+                scope.launch {
+                    try {
+                        applyStartWhileOccupying()
+                    } finally {
+                        endInFlightStartApply(serial)
+                    }
                 }
-            occupancyJob = job
-            job.start()
+                return
+            }
+            newJob?.start()
         }
 
         private suspend fun applyStartWhileOccupying() {
-            val occupancy = occupancyJob
-            if (occupancy?.isActive != true) return
-            val generation = streamGeneration.get()
+            val occupancy: Job
+            synchronized(stateLock) {
+                val job = occupancyJob
+                if (job?.isActive != true) return
+                occupancy = job
+            }
+            val claim = claimConfigEpoch()
             val config = resolveConfig()
-            if (occupancyJob !== occupancy || occupancyJob?.isActive != true) return
-            val applied = appliedConfig
-            if (applied == null) {
-                if (occupancyJob === occupancy && occupancy.isActive) {
-                    pendingStartConfig.set(config)
+            if (!isLatestConfigClaim(claim)) return
+            val decision =
+                synchronized(stateLock) {
+                    if (occupancyJob !== occupancy || occupancyJob?.isActive != true) {
+                        return@synchronized StartApplyDecision.Ignore
+                    }
+                    val applied = appliedConfig
+                    if (applied == null) {
+                        pendingStartConfig = config
+                        return@synchronized StartApplyDecision.Ignore
+                    }
+                    val currentGeneration = streamGeneration.get()
+                    if (applied.identity == config.identity && applied.protocol == config.protocol) {
+                        if (applied.directories == config.directories) {
+                            StartApplyDecision.Idempotent
+                        } else {
+                            StartApplyDecision.Reconcile(currentGeneration, config)
+                        }
+                    } else {
+                        StartApplyDecision.Retarget(currentGeneration, config)
+                    }
                 }
-                return
-            }
-            if (streamGeneration.get() != generation) {
-                if (isOccupying()) {
-                    pendingStartConfig.set(config)
+            when (decision) {
+                StartApplyDecision.Ignore,
+                StartApplyDecision.Idempotent,
+                -> {
+                    if (decision == StartApplyDecision.Idempotent) {
+                        diagnosticLogger.debug(
+                            DiagnosticLogArea.Sse,
+                            "foreground SSE start ignored; already running",
+                        )
+                    }
                 }
-                return
-            }
-            if (applied.identity == config.identity && applied.protocol == config.protocol) {
-                if (applied.directories == config.directories) {
-                    diagnosticLogger.debug(
-                        DiagnosticLogArea.Sse,
-                        "foreground SSE start ignored; already running",
-                    )
-                    return
+                is StartApplyDecision.Reconcile -> {
+                    if (!stillCurrent(decision.generation)) return
+                    reconcileLeases(decision.config)
                 }
-                if (!stillCurrent(generation)) return
-                reconcileLeases(config)
-                return
+                is StartApplyDecision.Retarget -> {
+                    if (!stillCurrent(decision.generation)) return
+                    retargetIdentity(decision.config, LiveGapReason.ConfigChanged)
+                }
             }
-            if (!stillCurrent(generation)) return
-            retargetIdentity(config, LiveGapReason.ConfigChanged)
         }
 
         override fun stop() {
             diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream stopping")
             val generation: Long
             val snapshot: LiveConnectionSnapshot
+            val toCancel: Job?
             synchronized(stateLock) {
                 if (wasFullyConnected || occupyingConnected) {
                     pendingResumeBarrier = true
                 }
-                occupancySerial.incrementAndGet()
-                inFlightStartApplies.set(0)
+                occupancySerial += 1
+                inFlightStartApplies = 0
                 generation = streamGeneration.incrementAndGet()
-                occupancyJob?.cancel()
+                toCancel = occupancyJob
                 occupancyJob = null
-                pendingStartConfig.set(null)
+                pendingStartConfig = null
                 cancelAllLeases()
                 eventDeduper.clear()
                 appliedConfig = null
@@ -202,13 +237,16 @@ class DefaultForegroundEventStream
                 openGapLocked(LiveGapReason.Stopped)
                 snapshot = buildSnapshotLocked(EventStreamConnectionState.Idle)
             }
+            toCancel?.cancel()
             setConnectionState(EventStreamConnectionState.Idle, generation)
             _snapshot.value = snapshot
         }
 
         private fun endInFlightStartApply(serial: Long) {
-            if (occupancySerial.get() == serial) {
-                inFlightStartApplies.updateAndGet { current -> maxOf(0, current - 1) }
+            synchronized(stateLock) {
+                if (occupancySerial == serial) {
+                    inFlightStartApplies = maxOf(0, inFlightStartApplies - 1)
+                }
             }
         }
 
@@ -216,13 +254,15 @@ class DefaultForegroundEventStream
             occupancyScope: CoroutineScope,
             serial: Long,
         ) {
-            while (inFlightStartApplies.get() > 0) {
-                if (!occupancyScope.isActive ||
-                    !isOccupying() ||
-                    occupancySerial.get() != serial
-                ) {
-                    return
-                }
+            while (true) {
+                val done =
+                    synchronized(stateLock) {
+                        inFlightStartApplies == 0 ||
+                            !occupancyScope.isActive ||
+                            occupancyJob?.isActive != true ||
+                            occupancySerial != serial
+                    }
+                if (done) return
                 yield()
             }
         }
@@ -235,47 +275,64 @@ class DefaultForegroundEventStream
             if (!isOccupying()) return
             waitForInFlightStartApplies(occupancyScope, serial)
             if (!isOccupying() || !occupancyScope.isActive) return
-            val merged = pendingStartConfig.getAndSet(null) ?: config
+            val merged =
+                synchronized(stateLock) {
+                    val pending = pendingStartConfig
+                    pendingStartConfig = null
+                    (pending ?: config).also { appliedConfig = it }
+                }
             val generation = beginGeneration(LiveGapReason.OccupancyStart)
             if (!stillCurrent(generation)) return
-            appliedConfig = merged
             publishSnapshot()
             deviceNetworkPath.waitUntilReady()
-            if (!stillCurrent(generation)) return
-            val pending = pendingStartConfig.getAndSet(null)
-            val effective = pending ?: merged
-            if (!stillCurrent(generation)) return
+            if (!isOccupying() || !occupancyScope.isActive) return
+            val latest: LiveConnectionConfig
+            val appliedNow: LiveConnectionConfig?
+            val generationAfterWait: Long
+            synchronized(stateLock) {
+                val pending = pendingStartConfig
+                pendingStartConfig = null
+                latest = pending ?: appliedConfig ?: merged
+                appliedNow = appliedConfig
+                generationAfterWait = streamGeneration.get()
+            }
             setConnectionState(
                 if (wasFullyConnected || pendingResumeBarrier) {
                     EventStreamConnectionState.Reconnecting
                 } else {
                     EventStreamConnectionState.Connecting
                 },
-                generation,
+                generationAfterWait,
             )
-            if (pending != null &&
-                (pending.identity != merged.identity || pending.protocol != merged.protocol)
-            ) {
-                if (!stillCurrent(generation)) return
-                retargetIdentity(pending, LiveGapReason.ConfigChanged)
-            } else if (stillCurrent(generation)) {
-                reconcileLeases(effective)
+            if (stillCurrent(generationAfterWait)) {
+                if (appliedNow != null &&
+                    (appliedNow.identity != latest.identity || appliedNow.protocol != latest.protocol)
+                ) {
+                    retargetIdentity(latest, LiveGapReason.ConfigChanged)
+                } else {
+                    reconcileLeases(latest)
+                }
             }
-            if (!stillCurrent(generation)) return
-            occupancyScope.launch {
-                collectConfigurationRevisions(generation)
+            val collectorGeneration = streamGeneration.get()
+            if (!stillCurrent(collectorGeneration)) return
+            occupancyScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                collectConfigurationRevisions(collectorGeneration)
             }
             occupancyScope.launch {
-                probeProtocolWhileOccupying(generation)
+                probeProtocolWhileOccupying(collectorGeneration)
             }
         }
 
         private suspend fun collectConfigurationRevisions(generation: Long) {
-            // Recheck after subscribe so a directory mutation in the
-            // resolve→subscribe window is not lost.
-            onConfigurationRevision(generation)
-            connectionProfileStore.configurationRevisions().collect {
-                if (!stillCurrent(generation)) return@collect
+            // Subscribe first so a replay-0 revision emitted during the
+            // initial resolve is not lost, then recheck current worktrees.
+            coroutineScope {
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    connectionProfileStore.configurationRevisions().collect {
+                        if (!stillCurrent(generation)) return@collect
+                        onConfigurationRevision(generation)
+                    }
+                }
                 onConfigurationRevision(generation)
             }
         }
@@ -294,25 +351,36 @@ class DefaultForegroundEventStream
         }
 
         private suspend fun onConfigurationRevision(generation: Long) {
-            val epoch = configEpoch.get()
+            val claim = claimConfigEpoch()
             val config = resolveConfig()
             if (!stillCurrent(generation)) return
-            if (configEpoch.get() != epoch) return
+            if (!isLatestConfigClaim(claim)) return
             applyResolvedConfig(config)
         }
 
+        private fun claimConfigEpoch(): Long = configEpoch.incrementAndGet()
+
+        private fun isLatestConfigClaim(epoch: Long): Boolean = configEpoch.get() == epoch
+
         private fun applyResolvedConfig(config: LiveConnectionConfig) {
-            val applied = appliedConfig
+            val (applied, effective) =
+                synchronized(stateLock) {
+                    val applied = appliedConfig
+                    val pending = pendingStartConfig
+                    pendingStartConfig = null
+                    val effective = if (applied == null) pending ?: config else config
+                    applied to effective
+                }
             if (applied == null) {
-                reconcileLeases(config)
+                reconcileLeases(effective)
                 return
             }
-            if (applied.identity != config.identity || applied.protocol != config.protocol) {
-                retargetIdentity(config, LiveGapReason.ConfigChanged)
+            if (applied.identity != effective.identity || applied.protocol != effective.protocol) {
+                retargetIdentity(effective, LiveGapReason.ConfigChanged)
                 return
             }
-            if (applied.directories != config.directories) {
-                reconcileLeases(config)
+            if (applied.directories != effective.directories) {
+                reconcileLeases(effective)
             }
         }
 
@@ -360,12 +428,13 @@ class DefaultForegroundEventStream
         private fun reconcileLeases(config: LiveConnectionConfig) {
             val generation = streamGeneration.get()
             if (!stillCurrent(generation)) return
-            appliedConfig = config
-            lastDirectories = config.directories
-            configEpoch.incrementAndGet()
             val targets = SseSubscribeTargets.forProtocol(config.protocol, config.directories)
             val required = targets.associateBy { it.key }
             synchronized(stateLock) {
+                if (generation != streamGeneration.get() || occupancyJob?.isActive != true) return
+                appliedConfig = config
+                lastDirectoriesByIdentity[config.identity] = config.directories
+                configEpoch.incrementAndGet()
                 synchronized(leaseLock) {
                     val stale = leases.keys.filter { it !in required }
                     stale.forEach { key ->
@@ -690,9 +759,14 @@ class DefaultForegroundEventStream
         }
 
         private fun stillCurrent(generation: Long): Boolean =
-            occupancyJob?.isActive == true && streamGeneration.get() == generation
+            synchronized(stateLock) {
+                occupancyJob?.isActive == true && streamGeneration.get() == generation
+            }
 
-        private fun isOccupying(): Boolean = occupancyJob?.isActive == true
+        private fun isOccupying(): Boolean =
+            synchronized(stateLock) {
+                occupancyJob?.isActive == true
+            }
 
         private fun isRequired(key: String): Boolean {
             val config = appliedConfig ?: return false
@@ -709,17 +783,17 @@ class DefaultForegroundEventStream
         private fun bootstrapConfig(): LiveConnectionConfig {
             val profile = activeConnectionManager.currentProfile()
             val protocol = activeConnectionManager.protocolHint()
-            val identity =
-                if (profile == null) {
-                    ""
-                } else {
-                    "${ConnectionProfileIdentity.normalizeBaseUrl(profile.baseUrl)}|${ConnectionProfileIdentity.normalizeUsername(profile.username)}"
+            val (profileId, identity) = profileIdentity(profile)
+            val directories =
+                synchronized(stateLock) {
+                    lastDirectoriesByIdentity[LiveConnectionConfig.Identity(profileId, identity, protocol)]
+                        .orEmpty()
                 }
             return LiveConnectionConfig(
-                profileId = profile?.id?.ifBlank { identity } ?: identity,
+                profileId = profileId,
                 connectionIdentity = identity,
                 protocol = protocol,
-                directories = lastDirectories,
+                directories = directories,
             )
         }
 
@@ -727,18 +801,23 @@ class DefaultForegroundEventStream
             val profile = activeConnectionManager.currentProfile()
             val protocol = activeConnectionManager.protocolHint()
             val directories = instanceDirectories()
+            val (profileId, identity) = profileIdentity(profile)
+            return LiveConnectionConfig(
+                profileId = profileId,
+                connectionIdentity = identity,
+                protocol = protocol,
+                directories = directories,
+            )
+        }
+
+        private fun profileIdentity(profile: ConnectionProfile?): Pair<String, String> {
             val identity =
                 if (profile == null) {
                     ""
                 } else {
                     "${ConnectionProfileIdentity.normalizeBaseUrl(profile.baseUrl)}|${ConnectionProfileIdentity.normalizeUsername(profile.username)}"
                 }
-            return LiveConnectionConfig(
-                profileId = profile?.id?.ifBlank { identity } ?: identity,
-                connectionIdentity = identity,
-                protocol = protocol,
-                directories = directories,
-            )
+            return (profile?.id?.ifBlank { identity } ?: identity) to identity
         }
 
         private suspend fun instanceDirectories(): List<String> {
@@ -766,6 +845,22 @@ class DefaultForegroundEventStream
                 streamJob = null
                 loopJob = null
             }
+        }
+
+        private sealed class StartApplyDecision {
+            data object Ignore : StartApplyDecision()
+
+            data object Idempotent : StartApplyDecision()
+
+            data class Reconcile(
+                val generation: Long,
+                val config: LiveConnectionConfig,
+            ) : StartApplyDecision()
+
+            data class Retarget(
+                val generation: Long,
+                val config: LiveConnectionConfig,
+            ) : StartApplyDecision()
         }
 
         private companion object {

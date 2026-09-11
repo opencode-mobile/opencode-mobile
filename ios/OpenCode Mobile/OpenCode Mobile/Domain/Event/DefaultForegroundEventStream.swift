@@ -50,7 +50,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private var lastAllLive = false
     private var lastRequiredTargets: [String] = []
     private var lastLiveTargets: Set<String> = []
-    private var lastDirectories: [String] = []
+    private var lastDirectoriesByIdentity: [LiveConnectionConfig.Identity: [String]] = [:]
     private var configEpoch: UInt64 = 0
     private let eventDeduper = SseEventDeduper()
     private var leases: [String: Lease] = [:]
@@ -209,40 +209,41 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private func applyStartWhileOccupying() async {
         lock.lock()
         let occupancy = occupancyTask
-        let generation = streamGeneration
         lock.unlock()
         guard occupancy != nil, isOccupying() else { return }
+        let claim = claimConfigEpoch()
         let config = await resolveConfig()
+        guard isLatestConfigClaim(claim) else { return }
+        let decision: StartApplyDecision
         lock.lock()
-        let stillSameOccupancy = occupancyTask == occupancy && occupancyTask != nil
-        let applied = appliedConfig
-        if !stillSameOccupancy || occupancyTask == nil {
-            lock.unlock()
-            return
-        }
-        if applied == nil {
+        if occupancyTask != occupancy || occupancyTask == nil {
+            decision = .ignore
+        } else if let applied = appliedConfig {
+            let currentGeneration = streamGeneration
+            if applied.identity == config.identity && applied.serverProtocol == config.serverProtocol {
+                decision = applied.directories == config.directories
+                    ? .idempotent
+                    : .reconcile(generation: currentGeneration, config: config)
+            } else {
+                decision = .retarget(generation: currentGeneration, config: config)
+            }
+        } else {
             pendingStartConfig = config
-            lock.unlock()
-            return
-        }
-        if streamGeneration != generation {
-            pendingStartConfig = config
-            lock.unlock()
-            return
+            decision = .ignore
         }
         lock.unlock()
-        guard let applied else { return }
-        if applied.identity == config.identity && applied.serverProtocol == config.serverProtocol {
-            if applied.directories == config.directories {
-                DiagnosticLog.debug(.sse, "foreground SSE start ignored; already running")
-                return
-            }
+        switch decision {
+        case .ignore:
+            break
+        case .idempotent:
+            DiagnosticLog.debug(.sse, "foreground SSE start ignored; already running")
+        case let .reconcile(generation, config):
             guard stillCurrent(generation) else { return }
             reconcileLeases(config, generation: generation)
-            return
+        case let .retarget(generation, config):
+            guard stillCurrent(generation) else { return }
+            retargetIdentity(config, reason: .configChanged)
         }
-        guard stillCurrent(generation) else { return }
-        retargetIdentity(config, reason: .configChanged)
     }
 
     private func endInFlightStartApply(_ serial: UInt64) {
@@ -266,7 +267,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     }
 
     private func beginOccupancy(generation: UInt64, serial: UInt64) async {
-        let config = bootstrapConfig()
+        let config = await bootstrapConfig()
         guard stillCurrent(generation), isOccupying() else { return }
         await waitForInFlightStartApplies(serial)
         guard stillCurrent(generation), isOccupying() else { return }
@@ -278,40 +279,51 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         lock.unlock()
         publishSnapshot()
         await deviceNetworkPath.waitUntilReady()
-        guard stillCurrent(generation), isOccupying() else { return }
+        guard isOccupying() else { return }
+        // Overlapping start/revision may have already applied newer directories
+        // or identity without invalidating occupancy. Reconcile last-current
+        // (pending mailbox, else applied, else pre-wait merge) on the current
+        // generation — not the pre-wait bootstrap.
         lock.lock()
         let pending = pendingStartConfig
         pendingStartConfig = nil
-        let effective = pending ?? merged
+        let latest = pending ?? appliedConfig ?? merged
+        let generationAfterWait = streamGeneration
+        let appliedNow = appliedConfig
         lock.unlock()
-        guard stillCurrent(generation) else { return }
         applyConnectionState(
             (wasFullyConnected || pendingResumeBarrier) ? .reconnecting : .connecting,
-            generation: generation
+            generation: generationAfterWait
         )
-        if let pending,
-           pending.identity != merged.identity || pending.serverProtocol != merged.serverProtocol {
-            guard stillCurrent(generation) else { return }
-            retargetIdentity(pending, reason: .configChanged)
-        } else if stillCurrent(generation) {
-            reconcileLeases(effective, generation: generation)
+        if stillCurrent(generationAfterWait) {
+            if let appliedNow,
+               appliedNow.identity != latest.identity || appliedNow.serverProtocol != latest.serverProtocol {
+                retargetIdentity(latest, reason: .configChanged)
+            } else {
+                reconcileLeases(latest, generation: generationAfterWait)
+            }
         }
-        guard stillCurrent(generation) else { return }
+        let collectorGeneration = currentGeneration()
+        guard stillCurrent(collectorGeneration) else { return }
         lock.lock()
         revisionTask?.cancel()
         revisionTask = Task { [weak self] in
-            await self?.collectConfigurationRevisions(generation: generation)
+            await self?.collectConfigurationRevisions(generation: collectorGeneration)
         }
         protocolProbeTask?.cancel()
         protocolProbeTask = Task { [weak self] in
-            await self?.probeProtocolWhileOccupying(generation: generation)
+            await self?.probeProtocolWhileOccupying(generation: collectorGeneration)
         }
         lock.unlock()
     }
 
     private func collectConfigurationRevisions(generation: UInt64) async {
+        // Subscribe first so a directory mutation during the initial
+        // resolve is buffered instead of lost. Then recheck current
+        // worktrees so path/lease setup does not miss a revision.
+        let revisions = configurationRevisions()
         await onConfigurationRevision(generation: generation)
-        for await _ in configurationRevisions() {
+        for await _ in revisions {
             if Task.isCancelled { return }
             guard stillCurrent(generation) else { return }
             await onConfigurationRevision(generation: generation)
@@ -342,27 +354,34 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     }
 
     private func onConfigurationRevision(generation: UInt64) async {
-        let epoch = currentConfigEpoch()
+        let claim = claimConfigEpoch()
         let config = await resolveConfig()
         guard stillCurrent(generation), isOccupying() else { return }
-        guard currentConfigEpoch() == epoch else { return }
+        guard isLatestConfigClaim(claim) else { return }
         applyResolvedConfig(config, generation: generation)
     }
 
     private func applyResolvedConfig(_ config: LiveConnectionConfig, generation: UInt64) {
+        // Last-current is appliedConfig once occupancy has committed a target.
+        // pendingStartConfig is only a pre-commit mailbox. A leftover pending
+        // must not override this fresh resolve and retarget back to an older
+        // profile/protocol.
         lock.lock()
         let applied = appliedConfig
+        let pending = pendingStartConfig
+        pendingStartConfig = nil
+        let effective = applied == nil ? (pending ?? config) : config
         lock.unlock()
         guard let applied else {
-            reconcileLeases(config, generation: generation)
+            reconcileLeases(effective, generation: generation)
             return
         }
-        if applied.identity != config.identity || applied.serverProtocol != config.serverProtocol {
-            retargetIdentity(config, reason: .configChanged)
+        if applied.identity != effective.identity || applied.serverProtocol != effective.serverProtocol {
+            retargetIdentity(effective, reason: .configChanged)
             return
         }
-        if applied.directories != config.directories {
-            reconcileLeases(config, generation: currentGeneration())
+        if applied.directories != effective.directories {
+            reconcileLeases(effective, generation: currentGeneration())
         }
     }
 
@@ -389,7 +408,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         guard stillCurrent(generation), isOccupying() else { return }
         lock.lock()
         appliedConfig = config
-        lastDirectories = config.directories
+        lastDirectoriesByIdentity[config.identity] = config.directories
         configEpoch += 1
         let targets = SseSubscribeTargets.targets(protocol: config.serverProtocol, directories: config.directories)
         let required = Set(targets.map(\.key))
@@ -663,17 +682,36 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         }
     }
 
-    private func bootstrapConfig() -> LiveConnectionConfig {
+    private func bootstrapConfig() async -> LiveConnectionConfig {
+        let profile = await profileID()
+        let identity = await connectionIdentity()
+        let serverProtocol = protocolHint()
+        let key = LiveConnectionConfig.Identity(
+            profileID: profile,
+            connectionIdentity: identity,
+            serverProtocol: serverProtocol
+        )
         lock.lock()
-        let directories = lastDirectories
-        let previous = appliedConfig
+        let directories = lastDirectoriesByIdentity[key] ?? []
         lock.unlock()
         return LiveConnectionConfig(
-            profileID: previous?.profileID ?? "",
-            connectionIdentity: previous?.connectionIdentity ?? "",
-            serverProtocol: protocolHint(),
+            profileID: profile,
+            connectionIdentity: identity,
+            serverProtocol: serverProtocol,
             directories: directories
         )
+    }
+
+    private func claimConfigEpoch() -> UInt64 {
+        lock.lock()
+        configEpoch += 1
+        let epoch = configEpoch
+        lock.unlock()
+        return epoch
+    }
+
+    private func isLatestConfigClaim(_ epoch: UInt64) -> Bool {
+        currentConfigEpoch() == epoch
     }
 
     private func currentConfigEpoch() -> UInt64 {
@@ -819,5 +857,12 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             lock.unlock()
             return ContinuousClock.now - last
         }
+    }
+
+    private enum StartApplyDecision {
+        case ignore
+        case idempotent
+        case reconcile(generation: UInt64, config: LiveConnectionConfig)
+        case retarget(generation: UInt64, config: LiveConnectionConfig)
     }
 }

@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.event.GapAuthority
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.SilentWorldSignals
 import dev.opencode.mobile.domain.event.StoreRefreshReason
+import dev.opencode.mobile.domain.event.WorldSignal
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.event.asLiveConnection
 import dev.opencode.mobile.domain.event.canCatchUp
@@ -120,6 +121,7 @@ class DefaultSessionStatusLiveStore
                 val liveConnection = eventStream.asLiveConnection()
                 val authority = GapAuthority()
                 val gate = LiveStoreRefreshGate()
+                var dropUnconfirmedPendingAfterBackgroundCatchUp = false
                 try {
                     suspend fun emitOverlay(base: Map<String, SessionStatus>) {
                         val next = overlayPending(directory, base, confirmFrom = emptyMap())
@@ -149,6 +151,9 @@ class DefaultSessionStatusLiveStore
                                 loaded,
                                 dropUnconfirmedPending = dropUnconfirmedPending,
                             )
+                        if (dropUnconfirmedPending) {
+                            dropUnconfirmedPendingAfterBackgroundCatchUp = false
+                        }
                         send(current)
                     }
 
@@ -194,7 +199,7 @@ class DefaultSessionStatusLiveStore
                                     commitLoaded(
                                         loaded,
                                         emptyActiveGuard,
-                                        dropUnconfirmedPending = reason == StoreRefreshReason.BACKGROUND_RETURN,
+                                        dropUnconfirmedPending = dropUnconfirmedPendingAfterBackgroundCatchUp,
                                     )
                                 },
                             )
@@ -263,13 +268,13 @@ class DefaultSessionStatusLiveStore
                         worldSignals.signals.collect { signal ->
                             if (signal.marksStale()) {
                                 authority.invalidate(liveConnection.snapshot.value)
+                                if (signal == WorldSignal.BackgroundStop) {
+                                    dropUnconfirmedPendingAfterBackgroundCatchUp = true
+                                }
                                 return@collect
                             }
                             val reason = signal.catchUpReason() ?: return@collect
-                            reloadFromServer(
-                                reason,
-                                force = reason == StoreRefreshReason.BACKGROUND_RETURN,
-                            )
+                            reloadFromServer(reason, force = false)
                         }
                     }
                     launch {

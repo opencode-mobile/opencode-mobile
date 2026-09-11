@@ -67,6 +67,11 @@ class SseFaultOracleTransportDriver {
                                 checkNotNull(step.event) { "target.write needs event" },
                             )
                         "directories.set" -> host.setDirectories(step.directories.orEmpty())
+                        "profile.switch" ->
+                            host.switchProfile(
+                                profileId = checkNotNull(step.profileId) { "profile.switch needs profileId" },
+                                directories = step.directories ?: listOfNotNull(step.directory),
+                            )
                         "snapshot" -> {
                             val name = checkNotNull(step.name)
                             val expected =
@@ -89,6 +94,13 @@ class SseFaultOracleTransportDriver {
     ) {
         private var protocol = SseFaultOracleDriver.protocolOf(trace.serverProtocol)
         private val directories = CopyOnWriteArrayList(trace.seed.directories.ifEmpty { listOf(trace.seed.directory) })
+        private var currentProfile =
+            ConnectionProfile(
+                baseUrl = baseUrlFor(trace.seed.profileId),
+                username = "opencode",
+                password = "x",
+                id = trace.seed.profileId,
+            )
         private var generationAtStart: Long? = null
         val store = MutableWorktreeProfileStore(directories.toList())
         private val channels = ConcurrentHashMap<String, ByteChannel>()
@@ -130,8 +142,8 @@ class SseFaultOracleTransportDriver {
                     ConnectionProbing { protocol },
                 )
             runBlocking {
-                store.saveProfile(sampleProfile)
-                manager.applyProfile(sampleProfile, serverProtocol = protocol)
+                store.saveProfile(currentProfile)
+                manager.applyProfile(currentProfile, serverProtocol = protocol)
             }
             stream =
                 DefaultForegroundEventStream(
@@ -202,8 +214,40 @@ class SseFaultOracleTransportDriver {
         suspend fun setDirectories(next: List<String>) {
             directories.clear()
             directories.addAll(next)
-            store.setAddedWorktrees(MutableWorktreeProfileStore.DEFAULT_SERVER, next)
+            store.setAddedWorktrees(currentProfile.baseUrl, next)
         }
+
+        suspend fun switchProfile(
+            profileId: String,
+            directories: List<String>,
+        ) {
+            val next =
+                ConnectionProfile(
+                    baseUrl = baseUrlFor(profileId),
+                    username = "opencode",
+                    password = "x",
+                    id = profileId,
+                )
+            currentProfile = next
+            this.directories.clear()
+            this.directories.addAll(directories)
+            store.saveProfile(next)
+            store.setAddedWorktrees(next.baseUrl, directories)
+            manager.applyProfile(next, serverProtocol = protocol)
+            openedSignals.clear()
+            live.clear()
+            channels.values.forEach { it.close() }
+            channels.clear()
+            stream.stop()
+            stream.start()
+        }
+
+        private fun baseUrlFor(profileId: String): String =
+            if (profileId == trace.seed.profileId) {
+                MutableWorktreeProfileStore.DEFAULT_SERVER
+            } else {
+                SWITCHED_SERVER
+            }
 
         fun captureGeneration() {
             if (generationAtStart == null) {
@@ -213,7 +257,7 @@ class SseFaultOracleTransportDriver {
 
         suspend fun setProtocol(next: ServerProtocol) {
             protocol = next
-            manager.applyProfile(sampleProfile, serverProtocol = next)
+            manager.applyProfile(currentProfile, serverProtocol = next)
             stream.start()
             withTimeout(2_000) {
                 while (stream.snapshot.value.requiredTargets !=
@@ -312,13 +356,7 @@ class SseFaultOracleTransportDriver {
     }
 
     companion object {
-        private val sampleProfile =
-            ConnectionProfile(
-                baseUrl = MutableWorktreeProfileStore.DEFAULT_SERVER,
-                username = "opencode",
-                password = "x",
-                id = "profile-a",
-            )
+        private const val SWITCHED_SERVER = "http://10.0.0.2:5096/"
         private const val CONNECTED_FRAME =
             "data: {\"payload\":{\"type\":\"server.connected\",\"properties\":{}}}\n\n"
         private const val HEARTBEAT_FRAME =

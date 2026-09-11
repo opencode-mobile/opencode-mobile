@@ -40,10 +40,14 @@ Screen Models by protocol. Live Session Chat shape is TUI v2 — see
   Adding or removing directories starts or cancels only the affected
   leases. Incumbents that stay live do not force a full reconnect or a
   new gap. Profile, protocol, or connection-identity change retargets
-  the whole set and opens `ConfigChanged`.
+  the whole set and opens `ConfigChanged`. Cached instance directories
+  are keyed by complete connection identity (profile ID, connection
+  identity, protocol). A later start on profile B must not reopen
+  profile A's directories.
 - Reason: a heartbeat on `/global/event` must not keep chrome live while
   an instance `/event` is dead. Adding a project must not drop the
-  existing bus.
+  existing bus. Reusing another profile's cached directories opened the
+  previous server's instance leases against the new host.
 - Revisit when: v1 instance leases are no longer required.
 
 ## Event envelope
@@ -117,6 +121,11 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
   chrome. iOS `AppRootViewModel.enterHome()` calls
   `SceneWorldSignals.onForeground()` so the first active scene is not
   missed; AppRoot is not a second stream owner.
+  Android and iOS start occupancy in different adapter order on
+  purpose: Android may see `onForeground()` before async profile load
+  and starts from `onConnectionAvailable()` once a connection exists;
+  iOS loads the profile before `enterHome()` / `onForeground()`. That
+  is platform adapter sequencing, not a shared-trace contract.
 - **REST after a gap:** not this module. Stores reconcile by
   `GapAuthority` revision. Do not register open sessions or home
   visibility on the stream.

@@ -9,6 +9,7 @@ struct LiveStoreRevisionGateTests {
             statuses: [SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
         )
         let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
         let store = DefaultSessionStatusLiveStore(
             sessionRepository: repository,
             eventStream: eventStream
@@ -17,6 +18,8 @@ struct LiveStoreRevisionGateTests {
         defer { collector.cancel() }
 
         _ = try await collector.awaitEmission { $0["ses-1"]?.raw["type"] == "busy" }
+        try await poll { eventStream.hasEventSubscriber }
+        #expect(canCatchUp(occupancy: .active, snapshot: eventStream.snapshot))
 
         let gate = RestGate()
         repository.nextGetGate = gate
@@ -28,7 +31,10 @@ struct LiveStoreRevisionGateTests {
         _ = try await collector.awaitEmission { $0["ses-1"] == nil }
 
         gate.open()
-        await settle()
+        try await poll { repository.completedFetchCount >= 2 }
+        for _ in 0..<32 {
+            await Task.yield()
+        }
 
         #expect(collector.emissions.last?["ses-1"] == nil)
     }
@@ -42,6 +48,7 @@ struct LiveStoreRevisionGateTests {
             ]
         )
         let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
         let store = DefaultPermissionLiveStore(
             sessionRepository: repository,
             eventStream: eventStream
@@ -50,6 +57,8 @@ struct LiveStoreRevisionGateTests {
         defer { collector.cancel() }
 
         _ = try await collector.awaitEmission { $0.isEmpty }
+        try await poll { eventStream.hasEventSubscriber }
+        #expect(canCatchUp(occupancy: .active, snapshot: eventStream.snapshot))
 
         let gate = RestGate()
         repository.nextGetGate = gate
@@ -57,7 +66,6 @@ struct LiveStoreRevisionGateTests {
         try await poll { repository.permissionFetchCount == 2 }
 
         store.invalidate(directory: "/repo")
-        await settle()
         #expect(repository.permissionFetchCount == 2)
 
         gate.open()
@@ -106,11 +114,6 @@ private func poll(
         try await Task.sleep(for: .milliseconds(20))
     }
     throw GateTimeoutError()
-}
-
-@MainActor
-private func settle() async {
-    try? await Task.sleep(for: .milliseconds(250))
 }
 
 private struct GateTimeoutError: Error {}
@@ -199,11 +202,18 @@ private final class GatedStatusRepository: SessionRepository, @unchecked Sendabl
     var nextGetGate: RestGate?
     private let lock = NSLock()
     private var _statusFetchCount = 0
+    private var _completedFetchCount = 0
 
     var statusFetchCount: Int {
         lock.lock()
         defer { lock.unlock() }
         return _statusFetchCount
+    }
+
+    var completedFetchCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _completedFetchCount
     }
 
     init(statuses: [SessionStatus]) {
@@ -220,6 +230,9 @@ private final class GatedStatusRepository: SessionRepository, @unchecked Sendabl
         if let gate {
             await gate.wait()
         }
+        lock.lock()
+        _completedFetchCount += 1
+        lock.unlock()
         return result
     }
 

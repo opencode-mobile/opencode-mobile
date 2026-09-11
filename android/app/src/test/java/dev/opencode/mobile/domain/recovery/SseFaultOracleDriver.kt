@@ -85,6 +85,9 @@ class SseFaultOracleDriver(
             }
 
         val protocol = protocolOf(trace.serverProtocol)
+        if (trace.steps.any { it.op == "target.open" || it.op == "target.close" }) {
+            stream.fake.modelLeasesExplicitly()
+        }
         stream.fake.applyConfig(profileId.get(), protocol, directories.get())
         val sync =
             MessageSync(
@@ -207,6 +210,8 @@ class SseFaultOracleDriver(
                     directories.set(step.directories.orEmpty())
                     stream.fake.applyConfig(profileId.get(), protocol, directories.get())
                 }
+                "target.open" -> stream.fake.openTarget(checkNotNull(step.target) { "target.open needs target" })
+                "target.close" -> stream.fake.closeTarget(checkNotNull(step.target) { "target.close needs target" })
                 "snapshot" -> {
                     scope.advanceTimeBy(1)
                     scope.runCurrent()

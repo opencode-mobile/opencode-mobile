@@ -39,6 +39,9 @@ enum SseFaultOracleDriver {
         }
 
         let serverProtocol = protocolOf(trace.serverProtocol)
+        if trace.steps.contains(where: { $0.op == "target.open" || $0.op == "target.close" }) {
+            stream.fake.modelLeasesExplicitly()
+        }
         stream.fake.applyConfig(
             profileID: profileID.value,
             protocol: serverProtocol,
@@ -169,6 +172,11 @@ enum SseFaultOracleDriver {
                     protocol: serverProtocol,
                     directories: directories.value
                 )
+            case "target.open":
+                stream.fake.openTarget(try unwrap(step.target, "target.open needs target"))
+                await drainOracle(sync: sync, restInFlight: restInFlight, restHold: restHold, expectWork: false)
+            case "target.close":
+                stream.fake.closeTarget(try unwrap(step.target, "target.close needs target"))
             case "snapshot":
                 await drainOracle(sync: sync, restInFlight: restInFlight, restHold: restHold, expectWork: false)
                 let name = try unwrap(step.name, "snapshot step needs name")

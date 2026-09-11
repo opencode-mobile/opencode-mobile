@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.live
 
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
@@ -299,6 +300,9 @@ class MessageSyncTest {
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val initialHold = CompletableDeferred<Unit>()
+            repository.nextLoadGate = initialHold
             val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
             val chrome = mutableListOf<Boolean>()
             val chromeJob =
@@ -310,28 +314,127 @@ class MessageSyncTest {
                     sync.observeMessages("ses-1", "/repo").collect { }
                 }
             advanceTimeBy(1)
-            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            runCurrent()
+            assertEquals(1, repository.listHoldsEntered.get())
+            initialHold.complete(Unit)
             advanceTimeBy(1)
+            runCurrent()
             assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
             assertEquals(false, chrome.lastOrNull() ?: false)
 
             val recoveryGate = CompletableDeferred<Unit>()
             repository.nextLoadGate = recoveryGate
             eventStream.openGap()
-            eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
             advanceTimeBy(1)
-            assertTrue(sync.syncHealth("ses-1", "/repo") is MessageSyncHealth.Recovering)
-            assertEquals(true, chrome.lastOrNull())
+            runCurrent()
+            assertEquals(2, repository.listHoldsEntered.get())
+            assertTrue(
+                "held reconnect REST must show Recovering, was ${sync.syncHealth("ses-1", "/repo")}",
+                sync.syncHealth("ses-1", "/repo") is MessageSyncHealth.Recovering,
+            )
+            assertEquals(true, chrome.last())
 
             repeat(4) { eventStream.emit(OpencodeEvent(type = "server.connected")) }
             advanceTimeBy(1)
+            runCurrent()
             recoveryGate.complete(Unit)
-            advanceTimeBy(50)
+            advanceTimeBy(1)
+            runCurrent()
 
             assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
-            assertEquals(false, chrome.lastOrNull())
+            assertEquals(false, chrome.last())
             collectJob.cancel()
             chromeJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_inFlightReconnectRest_appliesIncrementalWithoutStackedRecovery() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val initialHold = CompletableDeferred<Unit>()
+            repository.nextLoadGate = initialHold
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(1, repository.listHoldsEntered.get())
+            initialHold.complete(Unit)
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals("Hello", emissions.last().single().text)
+            val afterInitial = repository.listMessagesCallCount
+            assertEquals(1, afterInitial)
+
+            val recoveryGate = CompletableDeferred<Unit>()
+            repository.nextLoadGate = recoveryGate
+            eventStream.openGap()
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
+            advanceTimeBy(1)
+            runCurrent()
+
+            val authority = sync.gapAuthority("ses-1", "/repo")
+            assertEquals(2, repository.listHoldsEntered.get())
+            assertEquals(afterInitial, repository.listMessagesCallCount)
+            assertEquals(
+                listOf(StoreRefreshReason.INITIAL_SUBSCRIBE, StoreRefreshReason.CONNECTION_SNAPSHOT),
+                sync.recordedRestAttempts(),
+            )
+            val inFlight = authority.inFlightGeneration()
+            assertNotNull(inFlight)
+            assertTrue(
+                "held reconnect REST must stay Recovering, was ${sync.syncHealth("ses-1", "/repo")}",
+                sync.syncHealth("ses-1", "/repo") is MessageSyncHealth.Recovering,
+            )
+
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Live"))
+            advanceTimeBy(1)
+            runCurrent()
+
+            assertEquals(
+                "in-flight authority must not start a stacked recovery",
+                2,
+                repository.listHoldsEntered.get(),
+            )
+            assertEquals(afterInitial, repository.listMessagesCallCount)
+            assertEquals(inFlight, authority.inFlightGeneration())
+            assertEquals(
+                listOf(StoreRefreshReason.INITIAL_SUBSCRIBE, StoreRefreshReason.CONNECTION_SNAPSHOT),
+                sync.recordedRestAttempts(),
+            )
+            assertTrue(sync.syncHealth("ses-1", "/repo") is MessageSyncHealth.Recovering)
+            assertEquals("Live", emissions.last().first { it.id == "msg-2" }.text)
+
+            repository.messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "Hello"),
+                    Message(
+                        id = "msg-2",
+                        role = MessageRole.Assistant,
+                        text = "Live",
+                        parts = listOf(MessagePart.Text(id = "prt-1", text = "Live")),
+                    ),
+                )
+            recoveryGate.complete(Unit)
+            advanceTimeBy(1)
+            runCurrent()
+
+            assertTrue(repository.listMessagesCallCount >= afterInitial + 1)
+            assertFalse(sync.recordedRestAttempts().contains("overflow-recovery"))
+            assertNull(authority.inFlightGeneration())
+            assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
+            collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
         }
 
@@ -855,7 +958,7 @@ class MessageSyncTest {
 
             val gate = CompletableDeferred<Unit>()
             repository.nextLoadGate = gate
-            eventStream.setConnectionState(EventStreamConnectionState.Connecting)
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             world.emit(WorldSignal.Foreground)
             advanceTimeBy(1)
 
@@ -958,10 +1061,10 @@ class MessageSyncTest {
         }
 
     @Test
-    fun observeMessages_resumeCatchUp_startsOnConnectingAndCoalescesServerConnected() =
+    fun observeMessages_resumeCatchUp_waitsUntilFullyLiveThenCoalescesServerConnected() =
         runTest(testDispatcher) {
-            // OPE-165 snapshot: cached messages stay, one list fetch before live,
-            // TransportResumed + server.connected share one catch-up.
+            // Cached messages stay during Connecting. Catch-up waits until every
+            // required lease is live; server.connected then shares that one GET.
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
             val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
@@ -988,22 +1091,58 @@ class MessageSyncTest {
                     Message(
                         id = "msg-2",
                         role = MessageRole.Assistant,
-                        text = "Caught up while connecting",
-                        parts = listOf(MessagePart.Text(text = "Caught up while connecting")),
+                        text = "Caught up when live",
+                        parts = listOf(MessagePart.Text(text = "Caught up when live")),
                     ),
                 )
             eventStream.setConnectionState(EventStreamConnectionState.Connecting)
             advanceTimeBy(50)
-            assertEquals("Caught up while connecting", emissions.last().single().text)
-            assertEquals(callsAfterInitial + 1, repository.listMessagesCallCount)
+            assertEquals("Hello", emissions.last().single().text)
+            assertEquals(callsAfterInitial, repository.listMessagesCallCount)
 
             eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(50)
+            assertEquals("Caught up when live", emissions.last().single().text)
+            assertEquals(callsAfterInitial + 1, repository.listMessagesCallCount)
+
             eventStream.emit(OpencodeEvent(type = "server.connected"))
             advanceTimeBy(LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS + 50)
 
             assertEquals(callsAfterInitial + 1, repository.listMessagesCallCount)
-            assertEquals("Caught up while connecting", emissions.last().single().text)
+            assertEquals("Caught up when live", emissions.last().single().text)
             collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_partialV1Leases_doNotCatchUpUntilAllRequiredAreLive() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            eventStream.applyConfig("profile-a", ServerProtocol.V1, listOf("/repo-a"))
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            eventStream.setLiveTargets(listOf("global/event"))
+            advanceTimeBy(1)
+            val afterPartial = repository.listMessagesCallCount
+            repository.messages =
+                listOf(Message(id = "msg-2", role = MessageRole.Assistant, text = "Need every lease"))
+
+            eventStream.openGap()
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
+            advanceTimeBy(50)
+            assertEquals(afterPartial, repository.listMessagesCallCount)
+
+            eventStream.setLiveTargets(listOf("global/event", "event:/repo-a"))
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
+            advanceTimeBy(50)
+            collectJob.cancel()
+            assertEquals(afterPartial + 1, repository.listMessagesCallCount)
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
         }
 
@@ -3293,7 +3432,84 @@ class SessionStatusLiveStoreTest {
             advanceUntilIdle()
             assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
 
+            world.emit(WorldSignal.BackgroundStop)
             world.emit(WorldSignal.Foreground)
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertTrue(emissions.last()["ses-1"] == null)
+        }
+
+    @Test
+    fun markBusy_backgroundReturnWhileReconnecting_skipsUntilFullyLiveThenDropsPending() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(statuses = emptyList())
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val world = FakeWorldSignals()
+            val store = createStatusStore(repository, eventStream, world)
+            val emissions = mutableListOf<Map<String, SessionStatus>>()
+            val collectJob =
+                launch {
+                    store.observeStatuses("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+            val fetchesAfterBootstrap = repository.statusFetchCount
+
+            store.markBusy("/repo", "ses-1")
+            advanceUntilIdle()
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+
+            eventStream.setConnectionState(EventStreamConnectionState.Reconnecting)
+            world.emit(WorldSignal.BackgroundStop)
+            world.emit(WorldSignal.Foreground)
+            advanceUntilIdle()
+            assertEquals(fetchesAfterBootstrap, repository.statusFetchCount)
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertTrue(repository.statusFetchCount > fetchesAfterBootstrap)
+            assertTrue(emissions.last()["ses-1"] == null)
+        }
+
+    @Test
+    fun markBusy_backgroundReturnFailedCatchUp_retainsPendingClearUntilAcceptedFetch() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(statuses = emptyList())
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val world = FakeWorldSignals()
+            val store = createStatusStore(repository, eventStream, world)
+            val emissions = mutableListOf<Map<String, SessionStatus>>()
+            val collectJob =
+                launch {
+                    store.observeStatuses("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+            val fetchesAfterBootstrap = repository.statusFetchCount
+
+            store.markBusy("/repo", "ses-1")
+            advanceUntilIdle()
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+
+            eventStream.setConnectionState(EventStreamConnectionState.Reconnecting)
+            world.emit(WorldSignal.BackgroundStop)
+            world.emit(WorldSignal.Foreground)
+            advanceUntilIdle()
+            assertEquals(fetchesAfterBootstrap, repository.statusFetchCount)
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+
+            repository.shouldFailStatuses = true
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceUntilIdle()
+            assertTrue(repository.statusFetchCount > fetchesAfterBootstrap)
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+
+            repository.shouldFailStatuses = false
+            eventStream.openGap()
             advanceUntilIdle()
             collectJob.cancel()
 
@@ -3633,6 +3849,7 @@ class LiveObservationTeardownTest {
         runTest(testDispatcher) {
             val repository = FakeSessionRepository(statuses = emptyList())
             val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             val statusStore = createStatusStore(repository, eventStream)
             val readyStore = createReadyStore(statusStore, eventStream)
             readyStore.bindProfile("profile-a")
@@ -3742,10 +3959,12 @@ class InvalidationAckTest {
         runTest(testDispatcher) {
             val repository = FakeSessionRepository(sessions = listOf(testSession("1", "Alpha")))
             val sessionCache = GatedSessionCache()
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             val store =
                 DefaultSessionLiveStore(
                     repository,
-                    FakeForegroundEventStream(),
+                    eventStream,
                     LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
                     sessionCache = sessionCache,
                 )
@@ -3793,6 +4012,7 @@ class LiveStoreRevisionGateTest {
                     statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
                 )
             val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             val store =
                 DefaultSessionStatusLiveStore(
                     repository,
@@ -3839,6 +4059,7 @@ class LiveStoreRevisionGateTest {
                     statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
                 )
             val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             val store =
                 DefaultSessionStatusLiveStore(
                     repository,
@@ -3884,6 +4105,7 @@ class LiveStoreRevisionGateTest {
             repository.permissionScript += 5_000L to emptyList<PermissionRequest>()
             repository.permissionScript += 0L to listOf(testPermissionRequest("perm-2"))
             val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             val store =
                 DefaultPermissionLiveStore(
                     repository,

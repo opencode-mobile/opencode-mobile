@@ -26,6 +26,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -34,6 +39,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 class DefaultForegroundEventStreamTest {
@@ -366,6 +372,235 @@ class DefaultForegroundEventStreamTest {
                 assertEquals(1, opens.get())
             } finally {
                 writerJob.cancel()
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun unavailablePath_overlappingStartDuringWait_keepsNewestTargets() =
+        runBlocking<Unit> {
+            val client =
+                HttpClient(
+                    MockEngine {
+                        respond(
+                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = MutableWorktreeTestStore(listOf("/old"))
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V1 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V1)
+            val path = FakeDeviceNetworkPath(DeviceNetworkPathStatus.Ready)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                    deviceNetworkPath = path,
+                )
+            try {
+                stream.start()
+                withTimeout(2_000) {
+                    stream.snapshot.first { snap -> snap.requiredTargets.contains("event:/old") }
+                }
+                stream.stop()
+                withTimeout(2_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.Idle }
+                }
+
+                path.set(DeviceNetworkPathStatus.Unavailable)
+                store.setWorktrees(listOf("/new"))
+                stream.start()
+                withTimeout(2_000) {
+                    stream.snapshot.first { snap -> snap.requiredTargets.contains("event:/old") }
+                }
+                stream.start()
+                withTimeout(2_000) {
+                    stream.snapshot.first { snap -> snap.requiredTargets.contains("event:/new") }
+                }
+                path.set(DeviceNetworkPathStatus.Ready)
+                withTimeout(2_000) {
+                    stream.snapshot.first { snap ->
+                        snap.requiredTargets.contains("event:/new") &&
+                            snap.requiredTargets.none { it == "event:/old" }
+                    }
+                }
+                delay(80)
+                val required = stream.snapshot.value.requiredTargets
+                assertTrue(required.contains("event:/new"))
+                assertTrue(required.none { it == "event:/old" })
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun configurationRevision_emittedDuringInitialResolve_isNotLost() =
+        runBlocking<Unit> {
+            val client =
+                HttpClient(
+                    MockEngine {
+                        respond(
+                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = ReplayZeroRevisionStore(first = listOf("/old"), next = listOf("/new"))
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V1 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V1)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(2_000) { store.firstResolveEntered.await() }
+                store.setWorktrees(listOf("/new"))
+                assertTrue(store.emitRevision())
+                store.releaseFirstResolve()
+                withTimeout(2_000) {
+                    stream.snapshot.first { snap ->
+                        snap.requiredTargets.contains("event:/new") &&
+                            snap.requiredTargets.none { it == "event:/old" }
+                    }
+                }
+            } finally {
+                store.releaseFirstResolve()
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun newerIdempotentStart_preventsOlderStaleResolve() =
+        runBlocking<Unit> {
+            val client =
+                HttpClient(
+                    MockEngine {
+                        respond(
+                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = HeldRevisionProfileStore(initial = listOf("/old"))
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V1 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V1)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(2_000) {
+                    stream.snapshot.first { snap -> snap.requiredTargets.contains("event:/old") }
+                }
+                store.holdNextAddedWorktrees = true
+                store.emitRevision()
+                withTimeout(2_000) { store.revisionResolveEntered.await() }
+                val resolvesBeforeNewerStart = store.resolveCount()
+                stream.start()
+                withTimeout(2_000) {
+                    while (store.resolveCount() <= resolvesBeforeNewerStart) {
+                        delay(10)
+                    }
+                }
+                store.setWorktrees(listOf("/stale"))
+                store.releaseRevisionResolve()
+                delay(80)
+                val required = stream.snapshot.value.requiredTargets
+                assertTrue(required.contains("event:/old"))
+                assertTrue(required.none { it == "event:/stale" })
+            } finally {
+                store.releaseRevisionResolve()
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun configurationRevision_afterPathWait_appliesCurrentDirectories() =
+        runBlocking<Unit> {
+            val client =
+                HttpClient(
+                    MockEngine {
+                        respond(
+                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = HeldRevisionProfileStore(initial = listOf("/old"))
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V1 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V1)
+            val path = FakeDeviceNetworkPath(DeviceNetworkPathStatus.Ready)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                    deviceNetworkPath = path,
+                )
+            try {
+                stream.start()
+                withTimeout(2_000) {
+                    stream.snapshot.first { snap -> snap.requiredTargets.contains("event:/old") }
+                }
+                stream.stop()
+                withTimeout(2_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.Idle }
+                }
+                path.set(DeviceNetworkPathStatus.Unavailable)
+                store.setWorktrees(listOf("/new"))
+                stream.start()
+                withTimeout(2_000) {
+                    stream.snapshot.first { snap -> snap.requiredTargets.contains("event:/old") }
+                }
+                path.set(DeviceNetworkPathStatus.Ready)
+                store.emitRevision()
+                withTimeout(2_000) {
+                    stream.snapshot.first { snap ->
+                        snap.requiredTargets.contains("event:/new") &&
+                            snap.requiredTargets.none { it == "event:/old" }
+                    }
+                }
+            } finally {
                 stream.stop()
                 client.close()
             }
@@ -834,6 +1069,230 @@ class DefaultForegroundEventStreamTest {
             }
         }
 
+    @Test
+    fun concurrentStartStop_doesNotDeadlockOrLeakOccupancy() =
+        runBlocking<Unit> {
+            val client =
+                HttpClient(
+                    MockEngine {
+                        respond(
+                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(2_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.Connected }
+                }
+                val workers =
+                    (1..8).map {
+                        launch(Dispatchers.Default) {
+                            repeat(12) {
+                                stream.start()
+                                stream.stop()
+                                stream.start()
+                            }
+                        }
+                    }
+                withTimeout(8_000) { workers.joinAll() }
+                stream.stop()
+                withTimeout(2_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.Idle }
+                }
+                stream.start()
+                withTimeout(2_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.Connected }
+                }
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun stopThenStart_doesNotReuseCachedDirectoriesAcrossProfiles() =
+        runBlocking {
+            val requests = CopyOnWriteArrayList<HttpRequestData>()
+            val holdB = CompletableDeferred<Unit>()
+            val stallB = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine { request ->
+                        requests += request
+                        respond(
+                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store =
+                PerUrlHoldingProfileStore(
+                    worktreesByUrl =
+                        mapOf(
+                            "http://127.0.0.1:4096/" to listOf("/repo-a"),
+                            "http://10.0.0.2:5096/" to listOf("/repo-b"),
+                        ),
+                    hold = holdB,
+                    stallNext = stallB,
+                    stallUrlContains = "5096",
+                )
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V1 },
+                )
+            val profileA =
+                ConnectionProfile(
+                    baseUrl = "http://127.0.0.1:4096/",
+                    username = "opencode",
+                    password = "x",
+                    id = "profile-a",
+                )
+            val profileB =
+                ConnectionProfile(
+                    baseUrl = "http://10.0.0.2:5096/",
+                    username = "opencode",
+                    password = "x",
+                    id = "profile-b",
+                )
+            manager.applyProfile(profileA, serverProtocol = ServerProtocol.V1)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(2_000) {
+                    stream.snapshot.first { snap -> snap.requiredTargets.contains("event:/repo-a") }
+                }
+                stream.stop()
+                manager.applyProfile(profileB, serverProtocol = ServerProtocol.V1)
+                stallB.incrementAndGet()
+                requests.clear()
+                stream.start()
+                withTimeout(2_000) {
+                    stream.snapshot.first { snap ->
+                        snap.config?.profileId == "profile-b" &&
+                            snap.requiredTargets.contains("global/event")
+                    }
+                }
+                delay(80)
+                val directories = requests.mapNotNull { it.url.parameters["directory"] }
+                assertTrue(directories.none { it == "/repo-a" })
+                assertTrue(requests.any { it.url.encodedPath.contains("/global/event") })
+                assertTrue(requests.none { it.url.parameters["directory"] == "/repo-b" })
+            } finally {
+                holdB.complete(Unit)
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun stopThenStart_v2DoesNotOpenPreviousProfileV1Directories() =
+        runBlocking {
+            val requests = CopyOnWriteArrayList<HttpRequestData>()
+            val holdB = CompletableDeferred<Unit>()
+            val stallB = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine { request ->
+                        requests += request
+                        respond(
+                            content = "data: {\"type\":\"server.connected\",\"data\":{}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store =
+                PerUrlHoldingProfileStore(
+                    worktreesByUrl =
+                        mapOf(
+                            "http://127.0.0.1:4096/" to listOf("/repo-a"),
+                            "http://10.0.0.2:5096/" to listOf("/repo-b"),
+                        ),
+                    hold = holdB,
+                    stallNext = stallB,
+                    stallUrlContains = "5096",
+                )
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            val profileA =
+                ConnectionProfile(
+                    baseUrl = "http://127.0.0.1:4096/",
+                    username = "opencode",
+                    password = "x",
+                    id = "profile-a",
+                )
+            val profileB =
+                ConnectionProfile(
+                    baseUrl = "http://10.0.0.2:5096/",
+                    username = "opencode",
+                    password = "x",
+                    id = "profile-b",
+                )
+            manager.applyProfile(profileA, serverProtocol = ServerProtocol.V1)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(2_000) {
+                    stream.snapshot.first { snap -> snap.requiredTargets.contains("event:/repo-a") }
+                }
+                stream.stop()
+                manager.applyProfile(profileB, serverProtocol = ServerProtocol.V2)
+                stallB.incrementAndGet()
+                requests.clear()
+                stream.start()
+                withTimeout(2_000) {
+                    stream.snapshot.first { snap ->
+                        snap.config?.protocol == ServerProtocol.V2 &&
+                            snap.requiredTargets.contains("api/event")
+                    }
+                }
+                delay(80)
+                assertTrue(requests.all { it.url.encodedPath.contains("/api/event") })
+                assertTrue(requests.none { it.url.parameters["directory"] != null })
+            } finally {
+                holdB.complete(Unit)
+                stream.stop()
+                client.close()
+            }
+        }
+
     private val sampleProfile =
         ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", password = "x")
 
@@ -975,6 +1434,226 @@ class DefaultForegroundEventStreamTest {
 
         override fun configurationRevisions(): kotlinx.coroutines.flow.Flow<Unit> =
             kotlinx.coroutines.flow.emptyFlow()
+    }
+
+    private class PerUrlHoldingProfileStore(
+        private val worktreesByUrl: Map<String, List<String>>,
+        private val hold: CompletableDeferred<Unit>,
+        private val stallNext: AtomicInteger,
+        private val stallUrlContains: String,
+    ) : ConnectionProfileStore {
+        private var profile: ConnectionProfile? = null
+
+        override suspend fun activeProfile(): ConnectionProfile? = profile
+
+        override suspend fun saveProfile(profile: ConnectionProfile) {
+            this.profile = profile
+        }
+
+        override suspend fun addedWorktrees(serverBaseUrl: String): List<String> {
+            if (stallNext.get() > 0 && serverBaseUrl.contains(stallUrlContains)) {
+                hold.await()
+            }
+            return worktreesByUrl.entries
+                .firstOrNull { serverBaseUrl.startsWith(it.key.trimEnd('/')) || serverBaseUrl == it.key }
+                ?.value
+                .orEmpty()
+        }
+
+        override suspend fun addWorktree(
+            serverBaseUrl: String,
+            worktree: String,
+        ) = Unit
+
+        override suspend fun removeWorktree(
+            serverBaseUrl: String,
+            worktree: String,
+        ) = Unit
+
+        override suspend fun setAddedWorktrees(
+            serverBaseUrl: String,
+            worktrees: List<String>,
+        ) = Unit
+
+        override suspend fun clearAll() = Unit
+
+        override fun configurationRevisions(): kotlinx.coroutines.flow.Flow<Unit> =
+            kotlinx.coroutines.flow.emptyFlow()
+    }
+
+    private class MutableWorktreeTestStore(
+        private var worktrees: List<String>,
+    ) : ConnectionProfileStore {
+        private var profile: ConnectionProfile? = null
+
+        fun setWorktrees(directories: List<String>) {
+            worktrees = directories
+        }
+
+        override suspend fun activeProfile(): ConnectionProfile? = profile
+
+        override suspend fun saveProfile(profile: ConnectionProfile) {
+            this.profile = profile
+        }
+
+        override suspend fun addedWorktrees(serverBaseUrl: String): List<String> = worktrees
+
+        override suspend fun addWorktree(
+            serverBaseUrl: String,
+            worktree: String,
+        ) = Unit
+
+        override suspend fun removeWorktree(
+            serverBaseUrl: String,
+            worktree: String,
+        ) = Unit
+
+        override suspend fun setAddedWorktrees(
+            serverBaseUrl: String,
+            worktrees: List<String>,
+        ) {
+            this.worktrees = worktrees
+        }
+
+        override suspend fun clearAll() {
+            profile = null
+            worktrees = emptyList()
+        }
+
+        override fun configurationRevisions(): kotlinx.coroutines.flow.Flow<Unit> =
+            kotlinx.coroutines.flow.emptyFlow()
+    }
+
+    private class ReplayZeroRevisionStore(
+        first: List<String>,
+        next: List<String>,
+    ) : ConnectionProfileStore {
+        private var profile: ConnectionProfile? = null
+        private var worktrees = next
+        private val firstWorktrees = first
+        private val resolves = AtomicInteger(0)
+        private val revisions = Channel<Unit>(capacity = Channel.RENDEZVOUS)
+        private val firstResolveHold = CompletableDeferred<Unit>()
+        val firstResolveEntered = CompletableDeferred<Unit>()
+
+        fun setWorktrees(directories: List<String>) {
+            worktrees = directories
+        }
+
+        fun emitRevision(): Boolean = revisions.trySend(Unit).isSuccess
+
+        fun releaseFirstResolve() {
+            firstResolveHold.complete(Unit)
+        }
+
+        override suspend fun activeProfile(): ConnectionProfile? = profile
+
+        override suspend fun saveProfile(profile: ConnectionProfile) {
+            this.profile = profile
+        }
+
+        override suspend fun addedWorktrees(serverBaseUrl: String): List<String> {
+            val n = resolves.incrementAndGet()
+            if (n == 1) {
+                firstResolveEntered.complete(Unit)
+                firstResolveHold.await()
+                return firstWorktrees
+            }
+            return worktrees
+        }
+
+        override suspend fun addWorktree(
+            serverBaseUrl: String,
+            worktree: String,
+        ) = Unit
+
+        override suspend fun removeWorktree(
+            serverBaseUrl: String,
+            worktree: String,
+        ) = Unit
+
+        override suspend fun setAddedWorktrees(
+            serverBaseUrl: String,
+            worktrees: List<String>,
+        ) = Unit
+
+        override suspend fun clearAll() {
+            profile = null
+        }
+
+        override fun configurationRevisions(): kotlinx.coroutines.flow.Flow<Unit> =
+            flow {
+                for (unit in revisions) {
+                    emit(unit)
+                }
+            }
+    }
+
+    private class HeldRevisionProfileStore(
+        initial: List<String>,
+    ) : ConnectionProfileStore {
+        private var profile: ConnectionProfile? = null
+        private var worktrees = initial
+        private val revisions = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        private val hold = CompletableDeferred<Unit>()
+        private val holdingRevision = AtomicBoolean(false)
+        private val resolves = AtomicInteger(0)
+        val revisionResolveEntered = CompletableDeferred<Unit>()
+        var holdNextAddedWorktrees = false
+
+        fun resolveCount(): Int = resolves.get()
+
+        fun setWorktrees(directories: List<String>) {
+            worktrees = directories
+        }
+
+        fun emitRevision() {
+            revisions.tryEmit(Unit)
+        }
+
+        fun releaseRevisionResolve() {
+            hold.complete(Unit)
+        }
+
+        override suspend fun activeProfile(): ConnectionProfile? = profile
+
+        override suspend fun saveProfile(profile: ConnectionProfile) {
+            this.profile = profile
+        }
+
+        override suspend fun addedWorktrees(serverBaseUrl: String): List<String> {
+            resolves.incrementAndGet()
+            if (holdNextAddedWorktrees && holdingRevision.compareAndSet(false, true)) {
+                holdNextAddedWorktrees = false
+                revisionResolveEntered.complete(Unit)
+                hold.await()
+            }
+            return worktrees
+        }
+
+        override suspend fun addWorktree(
+            serverBaseUrl: String,
+            worktree: String,
+        ) = Unit
+
+        override suspend fun removeWorktree(
+            serverBaseUrl: String,
+            worktree: String,
+        ) = Unit
+
+        override suspend fun setAddedWorktrees(
+            serverBaseUrl: String,
+            worktrees: List<String>,
+        ) {
+            this.worktrees = worktrees
+        }
+
+        override suspend fun clearAll() {
+            profile = null
+            worktrees = emptyList()
+        }
+
+        override fun configurationRevisions(): kotlinx.coroutines.flow.Flow<Unit> = revisions.asSharedFlow()
     }
 
     private class FakeProfileStore(

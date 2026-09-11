@@ -165,9 +165,94 @@ struct SessionStatusLiveStoreTests {
         store.markBusy(directory: "/repo", sessionID: "ses-1")
         _ = try await collector.awaitEmission { $0["ses-1"]?.raw["type"] == "busy" }
 
+        world.emit(.backgroundStop)
         world.emit(.foreground)
-        _ = try await collector.awaitEmission { $0["ses-1"] == nil }
+        let dropped = try await collector.awaitLastEmission { $0["ses-1"] == nil }
         collector.cancel()
+
+        #expect(dropped["ses-1"] == nil)
+    }
+
+    @Test func markBusy_backgroundReturnWhileReconnecting_skipsUntilFullyLiveThenDropsPending() async throws {
+        let repository = StatusLiveStoreFakeSessionRepository(statuses: [])
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let world = FakeWorldSignals()
+        let store = DefaultSessionStatusLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream,
+            worldSignals: world
+        )
+
+        let collector = StatusCollector(store: store, directory: "/repo")
+        _ = try await collector.awaitEmission(matching: { _ in true })
+        let fetchesAfterBootstrap = repository.statusFetchCount
+
+        store.markBusy(directory: "/repo", sessionID: "ses-1")
+        _ = try await collector.awaitEmission { $0["ses-1"]?.raw["type"] == "busy" }
+
+        eventStream.setConnectionState(.reconnecting)
+        world.emit(.backgroundStop)
+        world.emit(.foreground)
+        try await Task.sleep(for: .milliseconds(80))
+        #expect(repository.statusFetchCount == fetchesAfterBootstrap)
+        #expect(collector.emissions.last?["ses-1"]?.raw["type"] == "busy")
+
+        eventStream.setConnectionState(.connected)
+        let dropped = try await collector.awaitLastEmission { statuses in
+            repository.statusFetchCount > fetchesAfterBootstrap && statuses["ses-1"] == nil
+        }
+        collector.cancel()
+
+        #expect(dropped["ses-1"] == nil)
+        #expect(repository.statusFetchCount > fetchesAfterBootstrap)
+    }
+
+    @Test func markBusy_backgroundReturnFailedCatchUp_retainsPendingClearUntilAcceptedFetch() async throws {
+        let repository = StatusLiveStoreFakeSessionRepository(statuses: [])
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let world = FakeWorldSignals()
+        let store = DefaultSessionStatusLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream,
+            worldSignals: world
+        )
+
+        let collector = StatusCollector(store: store, directory: "/repo")
+        _ = try await collector.awaitEmission(matching: { _ in true })
+        let fetchesAfterBootstrap = repository.statusFetchCount
+
+        store.markBusy(directory: "/repo", sessionID: "ses-1")
+        _ = try await collector.awaitEmission { $0["ses-1"]?.raw["type"] == "busy" }
+
+        eventStream.setConnectionState(.reconnecting)
+        world.emit(.backgroundStop)
+        world.emit(.foreground)
+        try await Task.sleep(for: .milliseconds(80))
+        #expect(repository.statusFetchCount == fetchesAfterBootstrap)
+        #expect(collector.emissions.last?["ses-1"]?.raw["type"] == "busy")
+
+        repository.shouldFailStatuses = true
+        eventStream.setConnectionState(.connected)
+        let failedFetchDeadline = ContinuousClock.now + .seconds(2)
+        var failedFetch = false
+        while ContinuousClock.now < failedFetchDeadline {
+            if repository.statusFetchCount > fetchesAfterBootstrap {
+                failedFetch = true
+                break
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(failedFetch)
+        #expect(collector.emissions.last?["ses-1"]?.raw["type"] == "busy")
+
+        repository.shouldFailStatuses = false
+        eventStream.openGap()
+        let dropped = try await collector.awaitLastEmission { $0["ses-1"] == nil }
+        collector.cancel()
+
+        #expect(dropped["ses-1"] == nil)
     }
 
     @Test func markBusy_thenEmptyActiveSnapshot_keepsPendingBusy() async throws {
@@ -245,6 +330,7 @@ struct SessionStatusLiveStoreTests {
 
         repository.statuses = []
         eventStream.openGap()
+        eventStream.setConnectionState(.connected)
         eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
         try await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs + 80))
         collector.cancel()
@@ -374,6 +460,20 @@ private final class StatusCollector {
         while ContinuousClock.now < deadline {
             if let match = emissions.last(where: predicate) {
                 return match
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        throw TimeoutError()
+    }
+
+    func awaitLastEmission(
+        timeout: Duration = .seconds(3),
+        matching predicate: @escaping ([String: SessionStatus]) -> Bool
+    ) async throws -> [String: SessionStatus] {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if let last = emissions.last, predicate(last) {
+                return last
             }
             try await Task.sleep(for: .milliseconds(20))
         }

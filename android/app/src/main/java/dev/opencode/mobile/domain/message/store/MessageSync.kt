@@ -906,6 +906,7 @@ class MessageSync(
                     if (!observationStillCurrent()) break
                     when (item) {
                         is StagedItem.Overflow, is StagedItem.RecoveryRequired -> {
+                            if (authority.isInFlight() && requiresRecovery()) continue
                             val reason =
                                 (health.get() as? MessageSyncHealth.Recovering)?.reason
                                     ?: MessageSyncRecoveryReason.Overflow
@@ -917,10 +918,16 @@ class MessageSync(
                         is StagedItem.Event -> {
                             noteDequeued(item.byteCost)
                             if (requiresRecovery() || pendingRecoveryWhileIdle.getAndSet(false)) {
-                                val reason =
-                                    (health.get() as? MessageSyncHealth.Recovering)?.reason
-                                        ?: MessageSyncRecoveryReason.Overflow
-                                performClosedLoopRecovery(reason)
+                                if (authority.isInFlight()) {
+                                    if (MessageEventRouter.isIncrementalTranscriptEvent(item.event)) {
+                                        handleEvent(item.event)
+                                    }
+                                } else {
+                                    val reason =
+                                        (health.get() as? MessageSyncHealth.Recovering)?.reason
+                                            ?: MessageSyncRecoveryReason.Overflow
+                                    performClosedLoopRecovery(reason)
+                                }
                             } else {
                                 handleEvent(item.event)
                             }

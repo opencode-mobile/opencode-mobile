@@ -87,10 +87,6 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
         startIfConnected(reason: "foreground")
     }
 
-    func onConnectionAvailable() {
-        startIfConnected(reason: "connection-available")
-    }
-
     private func startIfConnected(reason: String) {
         if occupancy == .stopped { return }
         if hasActiveConnection() {

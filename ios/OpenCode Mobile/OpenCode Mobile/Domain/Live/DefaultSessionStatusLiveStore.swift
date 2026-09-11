@@ -127,6 +127,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         let liveConnection = eventStream.asLiveConnection()
         let authority = GapAuthority()
         let gate = LiveStoreRefreshGate()
+        let dropUnconfirmedPendingAfterBackgroundCatchUp = DropPendingFlag()
 
         @Sendable func overlayPending(
             _ base: [String: SessionStatus],
@@ -173,6 +174,9 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             }
             serverBox.replace(loaded)
             let next = overlayPending(loaded, dropUnconfirmedPending: dropUnconfirmedPending)
+            if dropUnconfirmedPending {
+                dropUnconfirmedPendingAfterBackgroundCatchUp.clear()
+            }
             currentBox.replace(next)
             yield(next)
         }
@@ -221,7 +225,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                     commitLoaded(
                         loaded,
                         emptyActiveGuard: emptyActiveGuard,
-                        dropUnconfirmedPending: reason == StoreRefreshReason.backgroundReturn
+                        dropUnconfirmedPending: dropUnconfirmedPendingAfterBackgroundCatchUp.isArmed
                     )
                 }
             )
@@ -273,13 +277,13 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                 for await signal in worldSignals.signals() {
                     if signal.marksStale {
                         authority.invalidate(liveConnection.snapshot)
+                        if signal == .backgroundStop {
+                            dropUnconfirmedPendingAfterBackgroundCatchUp.arm()
+                        }
                         continue
                     }
                     guard let reason = signal.catchUpReason else { continue }
-                    await reloadFromServer(
-                        reason: reason,
-                        force: reason == StoreRefreshReason.backgroundReturn
-                    )
+                    await reloadFromServer(reason: reason, force: false)
                 }
             }
             group.addTask {
@@ -480,6 +484,29 @@ private nonisolated final class PendingBusySet: @unchecked Sendable {
     func removeAll() {
         lock.lock()
         values.removeAll()
+        lock.unlock()
+    }
+}
+
+private nonisolated final class DropPendingFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var armed = false
+
+    var isArmed: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return armed
+    }
+
+    func arm() {
+        lock.lock()
+        armed = true
+        lock.unlock()
+    }
+
+    func clear() {
+        lock.lock()
+        armed = false
         lock.unlock()
     }
 }

@@ -34,6 +34,8 @@ object SseFaultOracleLoader {
             "old-generation-stays-writable",
             "path-lost-then-path-ready",
             "background-stop-then-foreground",
+            "v1-profile-switch-does-not-reuse-directories",
+            "v1-catch-up-waits-for-required-leases",
         )
 
     fun loadTrace(id: String): SseFaultTrace = json.decodeFromString(readResource("/traces/$id.json"))

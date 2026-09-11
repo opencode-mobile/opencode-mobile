@@ -346,7 +346,9 @@ class SessionTodoLiveStoreTest {
                     todos = listOf(SessionTodo(0, "A", SessionTodoStatus.Pending, "low")),
                 )
             val world = FakeWorldSignals()
-            val store = createStore(repository, FakeForegroundEventStream(), world)
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val store = createStore(repository, eventStream, world)
             val emissions = mutableListOf<List<SessionTodo>>()
             val job =
                 launch {

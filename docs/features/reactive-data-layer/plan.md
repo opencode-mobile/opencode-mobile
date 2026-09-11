@@ -12,7 +12,9 @@ World signals, `GapAuthority` revisions, and observe-only Screen Models are
 wired on Android and iOS. Screens subscribe and mutate.
 `ProcessWorldSignals` / `SceneWorldSignals` own desired occupancy and start
 or stop SSE. Stores treat observe subscription as interest and reconcile
-REST by gap revision. Reconnect events only wake that evaluation.
+REST by gap revision. Non-force catch-up waits for Active occupancy and
+every required lease. Reconnect and `connection-snapshot` only wake that
+evaluation.
 
 ## In Scope
 
@@ -28,11 +30,15 @@ REST by gap revision. Reconnect events only wake that evaluation.
   way to drop interest.
 - Each of those stores keeps a `GapAuthority`. `BackgroundStop` and
   `PathLost` invalidate it. `Background` grace does not. Dirty plus
-  interested plus a reachable `LiveConnection` snapshot runs REST catch-up
-  for the current obligation. Expected log: `reason=background-return` or
-  `reason=path-ready` on the store's fetch, then the UI shows server state.
-  A skip log uses the same `reason=` when the revision is already
-  acknowledged.
+  interested plus Active occupancy and a fully live `LiveConnection`
+  snapshot (every required lease up) runs non-force REST catch-up for
+  the current obligation. Expected log: `reason=background-return`,
+  `reason=path-ready`, or `reason=connection-snapshot` on the store's
+  fetch, then the UI shows server state. A skip log uses the same
+  `reason=` when the revision is already acknowledged or when occupancy
+  / leases are not yet live. Background-return status reconciliation
+  uses the same `GapAuthority` and `canCatchUp` gate; it does not
+  bypass them for optimistic Working.
 - SSE patches while `ForegroundEventStream` is live. REST covers a gap
   revision. Expected: a `message.part.delta` after catch-up still merges; a
   missed `BackgroundStop` turn appears from REST, not from a replayed SSE
@@ -146,6 +152,7 @@ Closed `reason=` values for this slice:
 - `initial-subscribe`
 - `stream.reconnected`
 - `server.connected`
+- `connection-snapshot`
 
 Keep existing MessageSync reasons: `overflow-recovery`,
 `message.part.updated-rest-seeded`, and the rest. Do not invent a second

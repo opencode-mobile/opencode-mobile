@@ -37,6 +37,11 @@ enum SseFaultOracleTransportDriver {
                 )
             case "directories.set":
                 host.setDirectories(step.directories ?? [])
+            case "profile.switch":
+                host.switchProfile(
+                    profileId: try unwrap(step.profileId, "profile.switch needs profileId"),
+                    directories: step.directories ?? step.directory.map { [$0] } ?? []
+                )
             case "snapshot":
                 let name = try unwrap(step.name, "snapshot step needs name")
                 let expected = try unwrap(trace.expected.snapshots[name], "Missing expected snapshot \(name)")
@@ -60,6 +65,9 @@ private final class TransportHost: @unchecked Sendable {
     private let directories: Locked<[String]>
     private let worktrees: Locked<[String]>
     private let streamID: String
+    private let seedProfileId: String
+    private let profileID: Locked<String>
+    private let connectionIdentity: Locked<String>
     private let session: URLSession
     private let revisions: LiveConnectionRevisionSignal
     private let connectionBox: Locked<ServerConnection>
@@ -72,6 +80,7 @@ private final class TransportHost: @unchecked Sendable {
         worktrees = Locked(initial)
         let revisions = LiveConnectionRevisionSignal()
         streamID = UUID().uuidString
+        seedProfileId = trace.seed.profileId
         OracleSseURLProtocol.register(streamID: streamID)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [OracleSseURLProtocol.self]
@@ -79,14 +88,17 @@ private final class TransportHost: @unchecked Sendable {
         configuration.timeoutIntervalForResource = TimeInterval.infinity
         session = URLSession(configuration: configuration)
         let connection = ServerConnection(
-            baseURL: URL(string: "http://127.0.0.1:4096/\(streamID)/")!,
+            baseURL: Self.baseURL(for: trace.seed.profileId, streamID: streamID, seedProfileId: trace.seed.profileId),
             password: "secret",
             serverProtocol: initialProtocol
         )
         let connectionBox = Locked(connection)
         self.connectionBox = connectionBox
         let trees = worktrees
-        let seedProfile = trace.seed.profileId
+        let profileID = Locked(trace.seed.profileId)
+        let connectionIdentity = Locked(Self.identity(for: connection.baseURL))
+        self.profileID = profileID
+        self.connectionIdentity = connectionIdentity
         let client = EventsAPIClient(connectionProvider: { connectionBox.value }, urlSession: session)
         stream = DefaultForegroundEventStream(
             api: client,
@@ -94,7 +106,8 @@ private final class TransportHost: @unchecked Sendable {
             idleTimeout: .milliseconds(trace.steps.contains(where: { $0.op == "target.silence" }) ? 150 : 45_000),
             instanceDirectories: { trees.value },
             configurationRevisions: { revisions.stream() },
-            profileID: { seedProfile },
+            profileID: { profileID.value },
+            connectionIdentity: { connectionIdentity.value },
             protocolHint: { connectionBox.value.serverProtocol ?? .v1 },
             protocolProbe: { connectionBox.value.serverProtocol ?? .v1 }
         )
@@ -156,6 +169,32 @@ private final class TransportHost: @unchecked Sendable {
         directories.value = next
         worktrees.value = next
         revisions.yield()
+    }
+
+    func switchProfile(profileId: String, directories: [String]) {
+        let url = Self.baseURL(for: profileId, streamID: streamID, seedProfileId: seedProfileId)
+        profileID.value = profileId
+        connectionIdentity.value = Self.identity(for: url)
+        let current = connectionBox.value
+        connectionBox.value = ServerConnection(
+            baseURL: url,
+            password: current.password,
+            serverProtocol: current.serverProtocol
+        )
+        self.directories.value = directories
+        worktrees.value = directories
+        OracleSseURLProtocol.resetLiveClients(streamID: streamID)
+        stream.stop()
+        stream.start()
+    }
+
+    private static func baseURL(for profileId: String, streamID: String, seedProfileId: String) -> URL {
+        let host = profileId == seedProfileId ? "127.0.0.1:4096" : "10.0.0.2:5096"
+        return URL(string: "http://\(host)/\(streamID)/")!
+    }
+
+    private static func identity(for url: URL) -> String {
+        "\(url.absoluteString)|opencode"
     }
 
     private var generationAtStart: UInt64?
@@ -334,6 +373,18 @@ private final class OracleSseURLProtocol: URLProtocol, @unchecked Sendable {
         streams[streamID]?.liveTargets.remove(target)
         streams[streamID]?.clients.removeValue(forKey: target)
         lock.unlock()
+    }
+
+    static func resetLiveClients(streamID: String) {
+        lock.lock()
+        let clients = streams[streamID]?.clients ?? [:]
+        streams[streamID]?.clients.removeAll()
+        streams[streamID]?.liveTargets.removeAll()
+        streams[streamID]?.pending.removeAll()
+        lock.unlock()
+        for client in clients.values {
+            client.client?.urlProtocolDidFinishLoading(client)
+        }
     }
 
     static func finish(streamID: String, target: String) {

@@ -13,9 +13,10 @@ the stream.
 connection state, events). `DefaultForegroundEventStream` implements the
 deeper `LiveConnection` authority: one atomic profile / protocol /
 directory config identity, one generation per occupancy attempt, and a
-monotonic gap revision. Process adapters own desired occupancy. Stores
-reconcile by gap revision; they do not treat reconnect events as new
-obligations.
+monotonic gap revision. Cached instance directories are scoped to that
+complete connection identity, not to protocol or a leftover profile.
+Process adapters own desired occupancy. Stores reconcile by gap
+revision; they do not treat reconnect events as new obligations.
 
 ## In Scope
 
@@ -112,11 +113,13 @@ Not applicable in this slice.
 ## Navigation Entry Points
 
 - Android: `ProcessWorldSignals` from `ProcessLifecycleOwner` starts and
-  stops the stream. Wired at app start.
-- iOS: `SceneWorldSignals` from `scenePhase`. `AppRootView` feeds
-  `Foreground` / `Background` and calls `onForeground()` on cold home
-  enter so the first active phase is not missed. That call is occupancy
-  signaling, not a second stream owner.
+  stops the stream. Wired at app start. Profile load is async, so
+  `onForeground()` may run before a connection exists;
+  `onConnectionAvailable()` starts SSE after the profile is bound.
+- iOS: `SceneWorldSignals` from `scenePhase`. `AppRootView` loads the
+  connection first, then `enterHome()` / `onForeground()`. Occupancy
+  starts with a profile already bound. That call is occupancy signaling,
+  not a second stream owner.
 
 ## Validation
 

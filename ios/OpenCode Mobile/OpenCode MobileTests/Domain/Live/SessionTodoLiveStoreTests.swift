@@ -96,9 +96,11 @@ struct SessionTodoLiveStoreTests {
             todos: [SessionTodo(position: 0, content: "A", status: .pending, priority: "low")]
         )
         let world = FakeWorldSignals()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
         let store = DefaultSessionTodoLiveStore(
             sessionRepository: repository,
-            eventStream: FakeForegroundEventStream(),
+            eventStream: eventStream,
             worldSignals: world
         )
         let collector = TodoCollector(store: store)

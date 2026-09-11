@@ -600,6 +600,7 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
     private var gapClock: UInt64 = 0
     private var wasConnected = false
     private var occupying = false
+    private var explicitLeaseModeling = false
     var connectionState: EventStreamConnectionState {
         lock.lock()
         defer { lock.unlock() }
@@ -688,10 +689,10 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
     func stop() {
         lock.lock()
         occupying = false
-        _connectionState = .idle
         wasConnected = false
+        _connectionState = .idle
         openGapLocked(.stopped)
-        _snapshot.connectionState = .idle
+        applyLeaseOccupancyLocked(.idle)
         let stateConts = Array(connectionStateContinuations.values)
         let snapshotConts = Array(snapshotContinuations.values)
         let snapshot = _snapshot
@@ -722,14 +723,60 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
         } while (snapshot.gap?.generation ?? 0) <= generation
     }
 
+    /// Traces that emit `target.open` / `target.close` own live-target occupancy.
+    /// Other tests keep instant-live on Connected.
+    func modelLeasesExplicitly() {
+        lock.lock()
+        explicitLeaseModeling = true
+        lock.unlock()
+    }
+
+    func openTarget(_ target: String) {
+        lock.lock()
+        explicitLeaseModeling = true
+        if !_snapshot.liveTargets.contains(target) {
+            _snapshot.liveTargets.append(target)
+        }
+        let snapshotConts = Array(snapshotContinuations.values)
+        let snapshot = _snapshot
+        lock.unlock()
+        for continuation in snapshotConts {
+            continuation.yield(snapshot)
+        }
+    }
+
+    func closeTarget(_ target: String) {
+        lock.lock()
+        explicitLeaseModeling = true
+        _snapshot.liveTargets.removeAll { $0 == target }
+        let snapshotConts = Array(snapshotContinuations.values)
+        let snapshot = _snapshot
+        lock.unlock()
+        for continuation in snapshotConts {
+            continuation.yield(snapshot)
+        }
+    }
+
+    func setLiveTargets(_ targets: [String]) {
+        lock.lock()
+        _snapshot.liveTargets = targets
+        let snapshotConts = Array(snapshotContinuations.values)
+        let snapshot = _snapshot
+        lock.unlock()
+        for continuation in snapshotConts {
+            continuation.yield(snapshot)
+        }
+    }
+
     func setConnectionState(_ state: EventStreamConnectionState) {
         lock.lock()
         let dropFromConnected = wasConnected && (state == .idle || state == .disconnected || state == .reconnecting)
+        occupying = state != .idle && state != .disconnected
         _connectionState = state
         if dropFromConnected {
             openGapLocked(.reconnect)
         }
-        _snapshot.connectionState = state
+        applyLeaseOccupancyLocked(state)
         if state == .connected {
             wasConnected = true
             occupying = true
@@ -760,7 +807,7 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
         let targets = SseSubscribeTargets.targets(protocol: serverProtocol, directories: directories).map(\.key)
         _snapshot.config = config
         _snapshot.requiredTargets = targets
-        _snapshot.liveTargets = occupying ? targets : []
+        _snapshot.liveTargets = liveTargets(current: _snapshot.liveTargets, required: targets, state: _connectionState)
         _snapshot.connectionState = _connectionState
         let snapshotConts = Array(snapshotContinuations.values)
         let snapshot = _snapshot
@@ -787,6 +834,30 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
         lock.unlock()
         for continuation in snapshotConts {
             continuation.yield(snapshot)
+        }
+    }
+
+    private func applyLeaseOccupancyLocked(_ state: EventStreamConnectionState) {
+        let required = _snapshot.requiredTargets.isEmpty
+            ? (state == .connected || state == .connecting || state == .reconnecting ? ["api/event"] : [])
+            : _snapshot.requiredTargets
+        _snapshot.connectionState = state
+        _snapshot.requiredTargets = required
+        _snapshot.liveTargets = liveTargets(current: _snapshot.liveTargets, required: required, state: state)
+    }
+
+    private func liveTargets(
+        current: [String],
+        required: [String],
+        state: EventStreamConnectionState
+    ) -> [String] {
+        switch state {
+        case .idle, .disconnected:
+            []
+        case .connected where !explicitLeaseModeling:
+            required
+        default:
+            explicitLeaseModeling ? current : []
         }
     }
 

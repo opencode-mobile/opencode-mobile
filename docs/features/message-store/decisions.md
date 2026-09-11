@@ -45,5 +45,5 @@ Still binding:
   [reactive-data-layer](../reactive-data-layer/decisions.md): MessageSync
   `GapAuthority` plus interest. MessageSync owns bounded staging,
   reduction, and revision-gated authority. It does not own transport or
-  lifecycle reconnect clocks. `stream.reconnected` / `server.connected`
-  only wake current-gap evaluation.
+  lifecycle reconnect clocks.   `stream.reconnected` / `server.connected` /
+  `connection-snapshot` only wake current-gap evaluation.

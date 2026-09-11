@@ -112,4 +112,16 @@ struct SseRecoveryFaultOracleTests {
             SseFaultOracleLoader.loadTrace("background-stop-then-foreground")
         )
     }
+
+    @Test func v1ProfileSwitchDoesNotReuseDirectories() async throws {
+        try await SseFaultOracleDriver.run(
+            SseFaultOracleLoader.loadTrace("v1-profile-switch-does-not-reuse-directories")
+        )
+    }
+
+    @Test func v1CatchUpWaitsUntilRequiredLeasesAreLive() async throws {
+        try await SseFaultOracleDriver.run(
+            SseFaultOracleLoader.loadTrace("v1-catch-up-waits-for-required-leases")
+        )
+    }
 }

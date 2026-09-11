@@ -96,6 +96,14 @@ class SseRecoveryFaultOracleTest {
     @Test
     fun backgroundStopThenForeground_reconcilesOnce() = runOracle("background-stop-then-foreground")
 
+    @Test
+    fun v1ProfileSwitch_doesNotReuseDirectories() =
+        runOracle("v1-profile-switch-does-not-reuse-directories")
+
+    @Test
+    fun v1CatchUp_waitsUntilRequiredLeasesAreLive() =
+        runOracle("v1-catch-up-waits-for-required-leases")
+
     private fun runOracle(id: String) {
         val trace = SseFaultOracleLoader.loadTrace(id)
         if (trace.surface == "transport") {

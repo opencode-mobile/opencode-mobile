@@ -170,7 +170,7 @@ struct MessageSyncTests {
         ]
 
         repo.holdNextListMessages()
-        eventStream.setConnectionState(.connecting)
+        eventStream.setConnectionState(.connected)
         world.emit(.foreground)
         let blocked = await waitUntil { repo.isListBlocked }
         #expect(blocked)
@@ -717,9 +717,9 @@ struct MessageSyncTests {
         #expect(refreshed)
     }
 
-    @Test func resumeCatchUp_startsOnConnectingAndCoalescesServerConnected() async {
-        // OPE-165 snapshot: cached messages stay, one list fetch before live,
-        // TransportResumed + server.connected share one catch-up.
+    @Test func resumeCatchUp_waitsUntilFullyLiveThenCoalescesServerConnected() async {
+        // Cached messages stay during Connecting. Catch-up waits until every
+        // required lease is live; server.connected then shares that one GET.
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
         var listCallTimestamps: [Date] = []
@@ -755,28 +755,70 @@ struct MessageSyncTests {
             Message(
                 id: "msg-2",
                 role: .assistant,
-                text: "Caught up while connecting",
-                parts: [.text(TextPart(text: "Caught up while connecting", isStreaming: false))],
+                text: "Caught up when live",
+                parts: [.text(TextPart(text: "Caught up when live", isStreaming: false))],
                 model: nil,
                 mode: nil,
                 sentAtEpochMs: nil
             ),
         ]
         eventStream.setConnectionState(.connecting)
-        let refreshedBeforeLive = await waitUntil {
-            collector.latest()?.first?.text == "Caught up while connecting"
-        }
-        #expect(refreshedBeforeLive)
-        #expect(repo.listMessagesCallCount == callsAfterInitial + 1)
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(collector.latest()?.first?.text == "Hello")
+        #expect(repo.listMessagesCallCount == callsAfterInitial)
 
         eventStream.setConnectionState(.connected)
+        let refreshedWhenLive = await waitUntil {
+            collector.latest()?.first?.text == "Caught up when live"
+        }
+        #expect(refreshedWhenLive)
+        #expect(repo.listMessagesCallCount == callsAfterInitial + 1)
+
         eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil, rawProperties: nil))
         try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.messageDebounceMs + 250))
         task.cancel()
 
         #expect(repo.listMessagesCallCount == callsAfterInitial + 1)
-        #expect(collector.latest()?.first?.text == "Caught up while connecting")
+        #expect(collector.latest()?.first?.text == "Caught up when live")
         #expect(!listCallTimestamps.isEmpty)
+    }
+
+    @Test func observeMessages_partialV1Leases_doNotCatchUpUntilAllRequiredAreLive() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+
+        eventStream.applyConfig(profileID: "profile-a", protocol: .v1, directories: ["/repo-a"])
+        eventStream.setConnectionState(.connected)
+        eventStream.setLiveTargets(["global/event"])
+        try? await Task.sleep(for: .milliseconds(40))
+        let afterPartial = repo.listMessagesCallCount
+        repo.messages = [
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "Need every lease",
+                parts: [],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+
+        eventStream.openGap()
+        eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: nil, rawProperties: nil))
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(repo.listMessagesCallCount == afterPartial)
+
+        eventStream.setLiveTargets(["global/event", "event:/repo-a"])
+        eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: nil, rawProperties: nil))
+        let refreshed = await waitUntil { repo.listMessagesCallCount == afterPartial + 1 }
+        task.cancel()
+        #expect(refreshed)
     }
 
     @Test func clearedObservation_doesNotPublishLaterDeltas() async {

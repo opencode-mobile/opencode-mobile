@@ -1,7 +1,7 @@
 import Foundation
 
 nonisolated struct LiveConnectionConfig: Equatable, Sendable {
-    struct Identity: Equatable, Sendable {
+    struct Identity: Equatable, Hashable, Sendable {
         let profileID: String
         let connectionIdentity: String
         let serverProtocol: ServerProtocol
@@ -56,9 +56,14 @@ extension LiveConnectionSnapshot {
             || connectionState == .reconnecting
     }
 
-    /// SSE is actually up. Connecting is reachable for leases, not for REST catch-up.
+    /// Every required SSE lease is actually up. Connecting/Reconnecting are not live.
+    nonisolated var isFullyLive: Bool {
+        !requiredTargets.isEmpty && requiredTargets.allSatisfy { liveTargets.contains($0) }
+    }
+
+    /// Non-force REST catch-up: occupancy is live and every required lease is up.
     nonisolated var canCatchUp: Bool {
-        connectionState == .connected || connectionState == .reconnecting
+        connectionState == .connected && isFullyLive
     }
 }
 
@@ -117,17 +122,17 @@ nonisolated final class LiveConnectionRevisionSignal: @unchecked Sendable {
 
     func stream() -> AsyncStream<Void> {
         let id = UUID()
-        return AsyncStream { continuation in
-            lock.lock()
-            continuations[id] = continuation
-            lock.unlock()
-            continuation.onTermination = { [weak self] _ in
-                guard let self else { return }
-                self.lock.lock()
-                self.continuations.removeValue(forKey: id)
-                self.lock.unlock()
-            }
+        let (stream, continuation) = AsyncStream.makeStream(of: Void.self)
+        lock.lock()
+        continuations[id] = continuation
+        lock.unlock()
+        continuation.onTermination = { [weak self] _ in
+            guard let self else { return }
+            self.lock.lock()
+            self.continuations.removeValue(forKey: id)
+            self.lock.unlock()
         }
+        return stream
     }
 
     func yield() {

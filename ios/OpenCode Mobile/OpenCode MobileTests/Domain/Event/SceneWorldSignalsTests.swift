@@ -92,34 +92,6 @@ struct SceneWorldSignalsTests {
         #expect(stream.connectionState == .connected)
     }
 
-    @Test func foregroundWithoutConnectionThenConnectionAvailableStartsStream() async {
-        let stream = RecordingForegroundEventStream()
-        final class Gate: @unchecked Sendable {
-            var connected = false
-        }
-        let gate = Gate()
-        let signals = SceneWorldSignals(
-            stream: stream,
-            deviceNetworkPath: ReadyDeviceNetworkPath(),
-            hasActiveConnection: { gate.connected },
-            stopGrace: .milliseconds(50)
-        )
-        signals.onForeground()
-        try? await Task.sleep(for: .milliseconds(20))
-        #expect(stream.ops.isEmpty)
-        #expect(stream.connectionState == .idle)
-
-        signals.onConnectionAvailable()
-        try? await Task.sleep(for: .milliseconds(20))
-        #expect(stream.ops.isEmpty)
-
-        gate.connected = true
-        signals.onConnectionAvailable()
-        try? await Task.sleep(for: .milliseconds(20))
-        #expect(stream.ops == ["start"])
-        #expect(stream.connectionState == .connected)
-    }
-
     private func sceneWorldSignals(
         stream: FakeForegroundEventStream,
         stopGrace: Duration
