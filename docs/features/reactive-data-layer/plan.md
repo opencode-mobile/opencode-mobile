@@ -311,8 +311,9 @@ No new screen. Existing home rows, Session Chat timeline, and
 occupancy × SSE). Session Cache Syncing chrome unchanged.
 
 Catch-up does not flash a full-screen spinner on return from background.
-Home shows the existing pull-to-refresh indicator and Session Chat shows the
-**Syncing…** pill while MessageSync catch-up is in flight.
+Session Chat shows the **Syncing…** pill while MessageSync catch-up is in
+flight. Home does not; reconnect uses LiveUpdates chrome, and pull-to-refresh
+is a user pull only. Home rows stay tappable while stores catch up.
 
 ## Error States
 

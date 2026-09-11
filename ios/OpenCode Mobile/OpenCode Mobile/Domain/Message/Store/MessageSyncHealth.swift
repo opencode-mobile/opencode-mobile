@@ -16,7 +16,7 @@ nonisolated enum MessageSyncHealth: Equatable, Sendable {
         return false
     }
 
-    /// Home refresh + Session Chat Syncing pill. Overflow and raced authority stay quiet.
+    /// Session Chat Syncing pill. Overflow and raced authority stay quiet.
     var showsCatchUpChrome: Bool {
         switch self {
         case .healthy:

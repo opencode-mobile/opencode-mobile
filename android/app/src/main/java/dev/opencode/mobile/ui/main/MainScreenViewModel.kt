@@ -89,10 +89,7 @@ class MainScreenViewModel
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
         private val _userRefreshing = MutableStateFlow(false)
-        private val _catchUpRefreshing = MutableStateFlow(false)
-        val isRefreshing: StateFlow<Boolean> =
-            combine(_userRefreshing, _catchUpRefreshing) { user, catchUp -> user || catchUp }
-                .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+        val isRefreshing: StateFlow<Boolean> = _userRefreshing.asStateFlow()
         private val _removalSnackbar = MutableStateFlow<OpenCodeSnackbarMessage?>(null)
         val removalSnackbar: StateFlow<OpenCodeSnackbarMessage?> = _removalSnackbar.asStateFlow()
         private val sessionActionsRegion =
@@ -161,11 +158,6 @@ class MainScreenViewModel
                     messageRepository.clearMessageCache()
                     _uiState.value = MainScreenUiState.Disconnected
                     _serversChrome.value = HomeServersChrome()
-                }
-            }
-            viewModelScope.launch {
-                messageRepository.observeCatchUpChrome().collect { catchingUp ->
-                    _catchUpRefreshing.value = catchingUp
                 }
             }
         }

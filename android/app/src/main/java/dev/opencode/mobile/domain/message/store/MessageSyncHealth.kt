@@ -18,7 +18,7 @@ sealed interface MessageSyncHealth {
     val requiresAuthoritativeRecovery: Boolean
         get() = this is Recovering
 
-    /** Home refresh + Session Chat Syncing pill. Overflow and raced authority stay quiet. */
+    /** Session Chat Syncing pill. Overflow and raced authority stay quiet. */
     val showsCatchUpChrome: Boolean
         get() =
             when (this) {

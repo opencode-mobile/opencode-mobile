@@ -34,6 +34,27 @@ struct ProjectListHomeViewModelTests {
         #expect(!viewModel.isRefreshing)
     }
 
+    @Test func catchUpChrome_doesNotDriveHomePullToRefresh() async {
+        let sessions = [
+            Session(id: "1", title: "Alpha", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
+        ]
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: FakeSessionRepository(sessions: sessions),
+            messageRepository: FakeMessageRepository(catchUpChrome: true),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        let loaded = await waitUntil {
+            if case let .loaded(sections, _, _, _) = viewModel.state {
+                return sections.first?.allSessions.isEmpty == false
+            }
+            return false
+        }
+        #expect(loaded)
+        #expect(!viewModel.isRefreshing)
+    }
+
     @Test func pullToRefresh_recoversFromAStalledCatchUp_andStillWorksAfterwards() async {
         let sessions = [
             Session(id: "1", title: "Alpha", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
@@ -1153,10 +1174,21 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
 private final class FakeMessageRepository: MessageRepository, @unchecked Sendable {
     let messages: [Message]
     let listError: Error?
+    let catchUpChrome: Bool
 
-    init(messages: [Message] = [], listError: Error? = nil) {
+    init(messages: [Message] = [], listError: Error? = nil, catchUpChrome: Bool = false) {
         self.messages = messages
         self.listError = listError
+        self.catchUpChrome = catchUpChrome
+    }
+
+    func observeCatchUpChrome() -> AsyncStream<Bool> {
+        AsyncStream { continuation in
+            continuation.yield(catchUpChrome)
+            if !catchUpChrome {
+                continuation.finish()
+            }
+        }
     }
 
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {

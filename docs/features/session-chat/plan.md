@@ -79,8 +79,9 @@ architectural decision — see
   (`Working`, `Retrying`, `Compacting…`), except while the last painted row is
   Thinking.
 - Top **Syncing…** pill while cached messages or resume/reconnect REST catch-up
-  still wait for network confirmation. Not a full-screen spinner. Home uses the
-  existing pull-to-refresh indicator for the same catch-up.
+  still wait for network confirmation. Not a full-screen spinner. Home does not
+  show catch-up progress; reconnect uses `live` / `connecting` / `offline`, and
+  pull-to-refresh is a user pull only. Rows stay tappable while stores catch up.
 
 ## Error States
 

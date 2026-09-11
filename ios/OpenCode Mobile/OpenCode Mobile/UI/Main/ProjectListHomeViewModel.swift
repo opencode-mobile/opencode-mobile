@@ -93,9 +93,7 @@ final class ProjectListHomeViewModel {
     private(set) var state: ProjectListHomeState = .probing
     /// Soft pull-to-refresh indicator; content stays on Loaded/Empty.
     private var userRefreshing = false
-    private var catchUpRefreshing = false
     private(set) var isRefreshing = false
-    private var catchUpChromeTask: Task<Void, Never>?
     /// Sheet presentation is tracked here so SwiftUI `.sheet` can observe it directly.
     private(set) var isAddProjectPresented = false
     private(set) var addProjectNavigator = AddProjectNavigatorState.empty
@@ -219,23 +217,11 @@ final class ProjectListHomeViewModel {
             }
         }
         startObservingConnectionState()
-        startObservingCatchUpChrome()
-    }
-
-    private func startObservingCatchUpChrome() {
-        catchUpChromeTask?.cancel()
-        catchUpChromeTask = Task {
-            for await catchingUp in messageRepository.observeCatchUpChrome() {
-                catchUpRefreshing = catchingUp
-                publishRefreshing()
-            }
-        }
     }
 
     private func publishRefreshing() {
-        let next = userRefreshing || catchUpRefreshing
-        if isRefreshing != next {
-            isRefreshing = next
+        if isRefreshing != userRefreshing {
+            isRefreshing = userRefreshing
         }
     }
 

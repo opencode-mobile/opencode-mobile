@@ -53,6 +53,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -622,6 +623,29 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun catchUpChrome_doesNotDriveHomePullToRefresh() =
+        runTest(testDispatcher) {
+            val messages = FakeMessageRepository()
+            messages.catchUpChrome.value = true
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree =
+                        mapOf(
+                            "/repo" to listOf(Session(id = "1", title = "Session 1", updatedAtEpochMs = 1L)),
+                        ),
+                    messageRepository = messages,
+                )
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value is MainScreenUiState.Loaded)
+            assertFalse(
+                "resume catch-up must not latch the pull-to-refresh spinner",
+                viewModel.isRefreshing.value,
+            )
+        }
+
+    @Test
     fun refreshOnSessionCreatedEvent() =
         runTest(testDispatcher) {
             val eventStream = FakeForegroundEventStream()
@@ -1167,6 +1191,10 @@ private class FakeMessageRepository(
     private val messagesBySession: Map<String, List<Message>> = emptyMap(),
     private val listError: Throwable? = null,
 ) : MessageRepository {
+    val catchUpChrome = MutableStateFlow(false)
+
+    override fun observeCatchUpChrome(): Flow<Boolean> = catchUpChrome
+
     override fun observeMessages(
         sessionId: String,
         directory: String?,
