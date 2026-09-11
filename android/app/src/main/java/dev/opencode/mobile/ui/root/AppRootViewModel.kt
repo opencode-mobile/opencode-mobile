@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
@@ -29,6 +30,7 @@ class AppRootViewModel
         private val connectionProfileStore: ConnectionProfileStore,
         private val activeConnectionManager: ActiveConnectionManager,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
+        private val worldSignals: WorldSignals,
         private val httpClient: OpencodeHttpClient,
         private val sseHttpClient: OpencodeSseHttpClient,
     ) : ViewModel() {
@@ -57,6 +59,7 @@ class AppRootViewModel
             activeConnectionManager.ensureLoaded()
             httpClient.rebuild()
             sseHttpClient.rebuild()
+            worldSignals.onConnectionAvailable()
             val hasProfile = connectionProfileStore.activeProfile() != null
             if (!AppOnboardingPreferences.isCompleted && !hasProfile) {
                 _state.value = AppRootState.AppOnboarding

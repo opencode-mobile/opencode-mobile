@@ -82,12 +82,21 @@ class ProcessWorldSignals(
         stopJob = null
         _occupancy.value = StreamOccupancy.Active
         emit(WorldSignal.Foreground)
+        startIfConnected("foreground")
+    }
+
+    override fun onConnectionAvailable() {
+        startIfConnected("connection-available")
+    }
+
+    private fun startIfConnected(reason: String) {
+        if (_occupancy.value == StreamOccupancy.Stopped) return
         if (hasActiveConnection()) {
             stream.start()
         } else {
             diagnosticLogger.info(
                 DiagnosticLogArea.Sse,
-                "foreground SSE start skipped; no active connection",
+                "$reason SSE start skipped; no active connection",
             )
         }
     }

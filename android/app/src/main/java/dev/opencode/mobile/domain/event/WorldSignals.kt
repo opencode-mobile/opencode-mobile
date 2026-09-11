@@ -27,6 +27,8 @@ interface WorldSignals {
     val occupancy: StateFlow<StreamOccupancy>
 
     fun register() {}
+
+    fun onConnectionAvailable() {}
 }
 
 object SilentWorldSignals : WorldSignals {

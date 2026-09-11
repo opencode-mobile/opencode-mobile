@@ -169,6 +169,38 @@ class ProcessWorldSignalsTest {
             assertEquals(listOf("start", "stop", "start"), stream.ops.toList())
         }
 
+    @Test
+    fun foregroundWithoutConnectionThenConnectionAvailableStartsStream() =
+        runTest(testDispatcher) {
+            val stream = RecordingForegroundEventStream()
+            var connected = false
+            val signals =
+                ProcessWorldSignals(
+                    stream = stream,
+                    deviceNetworkPath = ReadyPath,
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    hasActiveConnection = { connected },
+                    profileSaved = MutableSharedFlow(),
+                    profileCleared = MutableSharedFlow(),
+                    scope = this,
+                    stopGraceMs = 5_000L,
+                )
+            signals.onForeground()
+            runCurrent()
+            assertEquals(emptyList<String>(), stream.ops.toList())
+            assertEquals(EventStreamConnectionState.Idle, stream.connectionState.value)
+
+            signals.onConnectionAvailable()
+            runCurrent()
+            assertEquals(emptyList<String>(), stream.ops.toList())
+
+            connected = true
+            signals.onConnectionAvailable()
+            runCurrent()
+            assertEquals(listOf("start"), stream.ops.toList())
+            assertEquals(EventStreamConnectionState.Connected, stream.connectionState.value)
+        }
+
     private fun processWorldSignals(
         stream: FakeForegroundEventStream,
         scope: CoroutineScope,

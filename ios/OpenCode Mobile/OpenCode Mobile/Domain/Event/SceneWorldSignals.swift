@@ -84,10 +84,19 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
             continuation.yield(.active)
         }
         emit(.foreground)
+        startIfConnected(reason: "foreground")
+    }
+
+    func onConnectionAvailable() {
+        startIfConnected(reason: "connection-available")
+    }
+
+    private func startIfConnected(reason: String) {
+        if occupancy == .stopped { return }
         if hasActiveConnection() {
             stream.start()
         } else {
-            DiagnosticLog.info(.sse, "foreground SSE start skipped; no active connection")
+            DiagnosticLog.info(.sse, "\(reason) SSE start skipped; no active connection")
         }
     }
 
