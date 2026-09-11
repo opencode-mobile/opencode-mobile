@@ -98,16 +98,33 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         let invalidations = invalidationBus.events()
         activeDirectories.insert(directory)
         defer { activeDirectories.remove(directory) }
-        let stale = StaleBit()
+        let liveConnection = eventStream.asLiveConnection()
+        let authority = GapAuthority()
         let gate = LiveStoreRefreshGate()
 
         @Sendable func refreshFromNetwork(reason: String, force: Bool) async -> Bool {
-            if !force, !stale.isSet {
-                DiagnosticLog.info(
-                    .session,
-                    "sessionLiveStore skip directory=\(directory) reason=\(reason)"
-                )
-                return false
+            let snapshot = liveConnection.snapshot
+            if !force {
+                guard canCatchUp(occupancy: worldSignals.occupancy, snapshot: snapshot) else {
+                    DiagnosticLog.info(
+                        .session,
+                        "sessionLiveStore skip directory=\(directory) reason=\(reason)"
+                    )
+                    return false
+                }
+            }
+            let generation: UInt64
+            if force {
+                generation = authority.captureBegin(snapshot)
+            } else {
+                guard let started = authority.tryBegin(snapshot) else {
+                    DiagnosticLog.info(
+                        .session,
+                        "sessionLiveStore skip directory=\(directory) reason=\(reason)"
+                    )
+                    return false
+                }
+                generation = started
             }
             let outcome = await gate.refresh(
                 load: { () async -> [Session]? in
@@ -119,7 +136,6 @@ final class DefaultSessionLiveStore: SessionLiveStore {
                 commit: { sessions in
                     await sessionCache.rememberSessions(worktree: directory, sessions: sessions)
                     yield(SessionListSnapshot(sessions: sessions, isFromCache: false))
-                    stale.clear()
                     DiagnosticLog.info(
                         .session,
                         "sessionLiveStore refresh directory=\(directory) reason=\(reason) "
@@ -127,6 +143,18 @@ final class DefaultSessionLiveStore: SessionLiveStore {
                     )
                 }
             )
+            switch outcome {
+            case .committed:
+                authority.acknowledge(generation)
+                if authority.needsReconcile(liveConnection.snapshot) {
+                    _ = await refreshFromNetwork(
+                        reason: StoreRefreshReason.streamReconnected,
+                        force: false
+                    )
+                }
+            case .failed, .discarded:
+                authority.fail(generation)
+            }
             return outcome == .committed
         }
 
@@ -140,7 +168,7 @@ final class DefaultSessionLiveStore: SessionLiveStore {
             group.addTask {
                 for await signal in worldSignals.signals() {
                     if signal.marksStale {
-                        stale.mark()
+                        authority.invalidate(liveConnection.snapshot)
                         continue
                     }
                     guard let reason = signal.catchUpReason else { continue }
@@ -148,12 +176,20 @@ final class DefaultSessionLiveStore: SessionLiveStore {
                 }
             }
             group.addTask {
+                for await _ in liveConnection.snapshotUpdates() {
+                    _ = await refreshFromNetwork(
+                        reason: StoreRefreshReason.streamReconnected,
+                        force: false
+                    )
+                }
+            }
+            group.addTask {
                 for await invalidation in invalidations {
                     if let key = invalidation.key, key != directory { continue }
                     let ack = invalidation.ack
                     defer { ack?() }
-                    stale.mark()
-                    _ = await refreshFromNetwork(reason: invalidation.reason, force: true)
+                    authority.invalidate(liveConnection.snapshot)
+                    _ = await refreshFromNetwork(reason: invalidation.reason, force: false)
                 }
             }
             group.addTask {
@@ -166,10 +202,11 @@ final class DefaultSessionLiveStore: SessionLiveStore {
                     else { continue }
                     refreshTask?.cancel()
                     let reason = event.type
+                    let mutation = reason != "stream.reconnected" && reason != "server.connected"
                     refreshTask = Task {
                         try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.sessionDebounceMs))
                         guard !Task.isCancelled else { return }
-                        _ = await refreshFromNetwork(reason: reason, force: true)
+                        _ = await refreshFromNetwork(reason: reason, force: mutation)
                     }
                 }
             }

@@ -580,6 +580,12 @@ class DisplayMessagePipeline(
                                     scheduleStreamingPublish(currentGeneration)
                                 }
                             } else {
+                                if (!sourceIsFromCache &&
+                                    lastPublishedMessages != null &&
+                                    update.messages == lastPublishedMessages
+                                ) {
+                                    return@collect
+                                }
                                 val generation = nextGeneration()
                                 invalidateInFlightWork()
                                 pendingMessages = null

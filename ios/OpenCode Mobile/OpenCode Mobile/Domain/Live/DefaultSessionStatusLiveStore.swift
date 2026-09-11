@@ -124,18 +124,23 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         defer { activeDirectories.remove(directory) }
         let serverBox = StatusBox()
         let currentBox = StatusBox()
-        let stale = StaleBit()
+        let liveConnection = eventStream.asLiveConnection()
+        let authority = GapAuthority()
         let gate = LiveStoreRefreshGate()
+        let dropUnconfirmedPendingAfterBackgroundCatchUp = DropPendingFlag()
 
         @Sendable func overlayPending(
             _ base: [String: SessionStatus],
-            confirmFrom: [String: SessionStatus]? = nil
+            confirmFrom: [String: SessionStatus]? = nil,
+            dropUnconfirmedPending: Bool = false
         ) -> [String: SessionStatus] {
             let confirm = confirmFrom ?? base
             var result = base
             for sessionID in pendingBusy.snapshot(directory: directory) {
                 let restType = confirm[sessionID]?.raw["type"]
                 if restType == "busy" || restType == "retry" {
+                    pendingBusy.remove(directory: directory, sessionID: sessionID)
+                } else if dropUnconfirmedPending {
                     pendingBusy.remove(directory: directory, sessionID: sessionID)
                 } else {
                     result[sessionID] = SessionStatus(sessionID: sessionID, raw: ["type": "busy"])
@@ -151,7 +156,11 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             yield(next)
         }
 
-        @Sendable func commitLoaded(_ loaded: [String: SessionStatus], emptyActiveGuard: Bool = false) {
+        @Sendable func commitLoaded(
+            _ loaded: [String: SessionStatus],
+            emptyActiveGuard: Bool = false,
+            dropUnconfirmedPending: Bool = false
+        ) {
             // Empty active maps are a between-step gap on v2, not idle.
             // True idle is session.idle / execution.*. Overlay pending
             // onto the kept server map; do not skip overlay because
@@ -164,7 +173,10 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                 }
             }
             serverBox.replace(loaded)
-            let next = overlayPending(loaded)
+            let next = overlayPending(loaded, dropUnconfirmedPending: dropUnconfirmedPending)
+            if dropUnconfirmedPending {
+                dropUnconfirmedPendingAfterBackgroundCatchUp.clear()
+            }
             currentBox.replace(next)
             yield(next)
         }
@@ -175,12 +187,28 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             force: Bool,
             emptyActiveGuard: Bool = false
         ) async -> LiveStoreRefreshOutcome {
-            if !force, !stale.isSet {
-                DiagnosticLog.info(
-                    .session,
-                    "statusLiveStore skip directory=\(directory) reason=\(reason)"
-                )
-                return .failed
+            let snapshot = liveConnection.snapshot
+            if !force {
+                guard canCatchUp(occupancy: worldSignals.occupancy, snapshot: snapshot) else {
+                    DiagnosticLog.info(
+                        .session,
+                        "statusLiveStore skip directory=\(directory) reason=\(reason)"
+                    )
+                    return .failed
+                }
+            }
+            let generation: UInt64
+            if force {
+                generation = authority.captureBegin(snapshot)
+            } else {
+                guard let started = authority.tryBegin(snapshot) else {
+                    DiagnosticLog.info(
+                        .session,
+                        "statusLiveStore skip directory=\(directory) reason=\(reason)"
+                    )
+                    return .failed
+                }
+                generation = started
             }
             let outcome = await gate.refresh(
                 load: { () async -> [String: SessionStatus]? in
@@ -190,14 +218,26 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                     )
                 },
                 commit: { loaded in
-                    stale.clear()
                     DiagnosticLog.info(
                         .session,
                         "statusLiveStore refresh directory=\(directory) reason=\(reason)"
                     )
-                    commitLoaded(loaded, emptyActiveGuard: emptyActiveGuard)
+                    commitLoaded(
+                        loaded,
+                        emptyActiveGuard: emptyActiveGuard,
+                        dropUnconfirmedPending: dropUnconfirmedPendingAfterBackgroundCatchUp.isArmed
+                    )
                 }
             )
+            switch outcome {
+            case .committed:
+                authority.acknowledge(generation)
+                if authority.needsReconcile(liveConnection.snapshot) {
+                    _ = await reloadFromServer(reason: StoreRefreshReason.streamReconnected, force: false)
+                }
+            case .failed, .discarded:
+                authority.fail(generation)
+            }
             if outcome == .discarded {
                 DiagnosticLog.info(
                     .session,
@@ -236,7 +276,10 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             group.addTask {
                 for await signal in worldSignals.signals() {
                     if signal.marksStale {
-                        stale.mark()
+                        authority.invalidate(liveConnection.snapshot)
+                        if signal == .backgroundStop {
+                            dropUnconfirmedPendingAfterBackgroundCatchUp.arm()
+                        }
                         continue
                     }
                     guard let reason = signal.catchUpReason else { continue }
@@ -244,12 +287,17 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                 }
             }
             group.addTask {
+                for await _ in liveConnection.snapshotUpdates() {
+                    await reloadFromServer(reason: StoreRefreshReason.streamReconnected, force: false)
+                }
+            }
+            group.addTask {
                 for await invalidation in invalidations {
                     if let key = invalidation.key, key != directory { continue }
                     let ack = invalidation.ack
                     defer { ack?() }
-                    stale.mark()
-                    await reloadFromServer(reason: invalidation.reason, force: true)
+                    authority.invalidate(liveConnection.snapshot)
+                    await reloadFromServer(reason: invalidation.reason, force: false)
                 }
             }
             group.addTask {
@@ -262,7 +310,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         reconnectTask = Task {
                             try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs))
                             guard !Task.isCancelled else { return }
-                            await reloadFromServer(reason: reason, force: true)
+                            await reloadFromServer(reason: reason, force: false)
                         }
                         continue
                     }
@@ -436,6 +484,29 @@ private nonisolated final class PendingBusySet: @unchecked Sendable {
     func removeAll() {
         lock.lock()
         values.removeAll()
+        lock.unlock()
+    }
+}
+
+private nonisolated final class DropPendingFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var armed = false
+
+    var isArmed: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return armed
+    }
+
+    func arm() {
+        lock.lock()
+        armed = true
+        lock.unlock()
+    }
+
+    func clear() {
+        lock.lock()
+        armed = false
         lock.unlock()
     }
 }

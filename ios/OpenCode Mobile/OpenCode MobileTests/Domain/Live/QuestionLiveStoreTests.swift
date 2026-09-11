@@ -52,11 +52,43 @@ struct QuestionLiveStoreTests {
         _ = try await collector.awaitEmission { $0.isEmpty }
         #expect(repository.questionFetchCount == 1)
 
+        eventStream.openGap()
+        eventStream.setConnectionState(.connected)
         eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: nil))
         eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
         await settleBeyondDebounce()
 
         #expect(repository.questionFetchCount == 2)
+    }
+
+    @Test func stoppedOccupancy_doesNotRestOnReconnectUntilForeground() async throws {
+        let repository = QuestionLiveStoreFakeSessionRepository(script: [[], []])
+        let eventStream = FakeForegroundEventStream()
+        let world = FakeWorldSignals()
+        let store = DefaultQuestionLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream,
+            worldSignals: world
+        )
+        let collector = QuestionCollector(store: store, directory: "/repo")
+        defer { collector.cancel() }
+
+        _ = try await collector.awaitEmission { $0.isEmpty }
+        eventStream.setConnectionState(.connected)
+        await settleBeyondDebounce()
+        let afterInitial = repository.questionFetchCount
+        #expect(afterInitial == 1)
+
+        world.emit(.backgroundStop)
+        eventStream.openGap()
+        eventStream.setConnectionState(.connected)
+        eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: nil))
+        await settleBeyondDebounce()
+        #expect(repository.questionFetchCount == afterInitial)
+
+        world.emit(.foreground)
+        await settleBeyondDebounce()
+        #expect(repository.questionFetchCount > afterInitial)
     }
 
     @Test func unchangedList_doesNotReEmit() async throws {
@@ -79,6 +111,25 @@ struct QuestionLiveStoreTests {
 
         #expect(collector.emissions.count == 1)
         #expect(repository.questionFetchCount == 3)
+    }
+
+    @Test func clearCache_isolatesSameDirectoryAfterProfileSwitch() async throws {
+        let first = testQuestion("que-a")
+        let second = testQuestion("que-b")
+        let repository = QuestionLiveStoreFakeSessionRepository(script: [[first], [second]])
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultQuestionLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream
+        )
+        let firstCollector = QuestionCollector(store: store, directory: "/repo")
+        _ = try await firstCollector.awaitEmission { $0.map(\.id) == ["que-a"] }
+        firstCollector.cancel()
+        store.clearCache()
+        let secondCollector = QuestionCollector(store: store, directory: "/repo")
+        defer { secondCollector.cancel() }
+        _ = try await secondCollector.awaitEmission { $0.map(\.id) == ["que-b"] }
+        #expect(secondCollector.emissions.allSatisfy { $0.allSatisfy { $0.id != "que-a" } })
     }
 }
 

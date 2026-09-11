@@ -17,6 +17,7 @@ import dev.opencode.mobile.domain.event.DefaultForegroundEventStream
 import dev.opencode.mobile.domain.event.DefaultLiveUpdates
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.LiveConnection
 import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.event.ProcessWorldSignals
 import dev.opencode.mobile.domain.event.WorldSignals
@@ -75,6 +76,10 @@ abstract class EventStreamModule {
     @Binds
     @Singleton
     abstract fun bindForegroundEventStream(impl: DefaultForegroundEventStream): ForegroundEventStream
+
+    @Binds
+    @Singleton
+    abstract fun bindLiveConnection(impl: DefaultForegroundEventStream): LiveConnection
 
     @Binds
     @Singleton

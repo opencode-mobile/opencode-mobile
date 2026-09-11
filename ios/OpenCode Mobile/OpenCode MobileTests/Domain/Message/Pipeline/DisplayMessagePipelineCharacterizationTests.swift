@@ -24,6 +24,26 @@ struct DisplayMessagePipelineCharacterizationTests {
         _ = await waitUntil { collector.isFinished }
     }
 
+    @Test func identicalNonStreamingSnapshot_doesNotPrepareAgain() async {
+        let harness = Harness()
+        let collector = CharacterizationDisplayCollector()
+        let task = Task {
+            await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
+        }
+        let messages = [plainAssistant("hi")]
+        await harness.source.emit(.messages(messages, isFromCache: false))
+        _ = await waitUntil { collector.emissions.count == 1 }
+        #expect(harness.preparer.prepareMessagesInvocations.count == 1)
+
+        await harness.source.emit(.messages(messages, isFromCache: false))
+        try? await Task.sleep(for: .milliseconds(20))
+        #expect(harness.preparer.prepareMessagesInvocations.count == 1)
+        #expect(collector.emissions.count == 1)
+
+        task.cancel()
+        _ = await waitUntil { collector.isFinished }
+    }
+
     @Test func largeHistoryPublishesFormatFirstThenAtMostTwoEnrichmentFrames() async {
         let harness = Harness(holdSleep: true)
         let collector = CharacterizationDisplayCollector()
@@ -736,6 +756,56 @@ struct DisplayMessagePipelineCharacterizationTests {
         task.cancel()
         _ = await waitUntil { collector.isFinished }
     }
+
+    @Test func controllableClock_overlappingHeldSleepsBothResumeOnSingleRelease() async {
+        let clock = ControllablePipelineClock(holdSleep: true)
+        let done = LockedFlagPair()
+        let first = Task {
+            await clock.sleep(for: .milliseconds(10))
+            done.setFirst()
+        }
+        let firstParked = await waitUntil { clock.sleepCallCount >= 1 && clock.pendingSleepCount >= 1 }
+        #expect(firstParked)
+        let second = Task {
+            await clock.sleep(for: .milliseconds(20))
+            done.setSecond()
+        }
+        let bothParked = await waitUntil { clock.sleepCallCount >= 2 && clock.pendingSleepCount >= 2 }
+        #expect(bothParked)
+        clock.releaseSleep()
+        let finished = await waitUntil { done.both }
+        #expect(finished)
+        #expect(clock.pendingSleep == nil)
+        #expect(clock.pendingSleepCount == 0)
+        _ = await first.value
+        _ = await second.value
+    }
+
+    @Test func controllableClock_cancellingOneHeldSleepDoesNotResumeSibling() async {
+        let clock = ControllablePipelineClock(holdSleep: true)
+        let done = LockedFlagPair()
+        let first = Task {
+            await clock.sleep(for: .milliseconds(10))
+            done.setFirst()
+        }
+        let firstParked = await waitUntil { clock.pendingSleepCount >= 1 }
+        #expect(firstParked)
+        let second = Task {
+            await clock.sleep(for: .milliseconds(20))
+            done.setSecond()
+        }
+        let bothParked = await waitUntil { clock.pendingSleepCount >= 2 }
+        #expect(bothParked)
+        first.cancel()
+        let firstFinished = await waitUntil { done.first }
+        #expect(firstFinished)
+        #expect(!done.second)
+        #expect(clock.pendingSleepCount == 1)
+        clock.releaseSleep()
+        let secondFinished = await waitUntil { done.second }
+        #expect(secondFinished)
+        _ = await second.value
+    }
 }
 
 @MainActor
@@ -1037,12 +1107,44 @@ private final class ControllableDisplayMessagePreparing: DisplayMessagePreparing
     }
 }
 
+private final class LockedFlagPair: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _first = false
+    private var _second = false
+
+    var first: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _first
+    }
+
+    var second: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _second
+    }
+
+    var both: Bool { first && second }
+
+    func setFirst() {
+        lock.lock()
+        _first = true
+        lock.unlock()
+    }
+
+    func setSecond() {
+        lock.lock()
+        _second = true
+        lock.unlock()
+    }
+}
+
 private final class ControllablePipelineClock: DisplayMessagePipelineClock, @unchecked Sendable {
     private let lock = NSLock()
     private var _now: Duration = .zero
     private let holdSleep: Bool
     private var _pendingSleep: Duration?
-    private var sleepContinuation: CheckedContinuation<Void, Never>?
+    private var sleepContinuations: [UUID: CheckedContinuation<Void, Never>] = [:]
     private var _sleepCallCount = 0
 
     var now: Duration {
@@ -1055,6 +1157,12 @@ private final class ControllablePipelineClock: DisplayMessagePipelineClock, @unc
         lock.lock()
         defer { lock.unlock() }
         return _pendingSleep
+    }
+
+    var pendingSleepCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return sleepContinuations.count
     }
 
     var sleepCallCount: Int {
@@ -1081,11 +1189,13 @@ private final class ControllablePipelineClock: DisplayMessagePipelineClock, @unc
 
     func releaseSleep() {
         lock.lock()
-        let continuation = sleepContinuation
-        sleepContinuation = nil
+        let waiting = Array(sleepContinuations.values)
+        sleepContinuations.removeAll()
         _pendingSleep = nil
         lock.unlock()
-        continuation?.resume()
+        for continuation in waiting {
+            continuation.resume()
+        }
     }
 
     func sleep(for duration: Duration) async {
@@ -1094,11 +1204,22 @@ private final class ControllablePipelineClock: DisplayMessagePipelineClock, @unc
         _now += duration
         lock.unlock()
         guard holdSleep else { return }
-        await withCheckedContinuation { continuation in
+        let id = UUID()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                lock.lock()
+                _pendingSleep = duration
+                sleepContinuations[id] = continuation
+                lock.unlock()
+            }
+        } onCancel: {
             lock.lock()
-            _pendingSleep = duration
-            sleepContinuation = continuation
+            let continuation = sleepContinuations.removeValue(forKey: id)
+            if sleepContinuations.isEmpty {
+                _pendingSleep = nil
+            }
             lock.unlock()
+            continuation?.resume()
         }
     }
 }

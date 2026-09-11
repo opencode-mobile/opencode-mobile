@@ -1,0 +1,64 @@
+{
+  "id": "sse-parse-failed-opens-gap",
+  "title": "A transport parse failure must open one gap and reconcile once",
+  "platforms": [
+    "android",
+    "ios"
+  ],
+  "surface": "recovery",
+  "protocol": "v2",
+  "seed": {
+    "profileId": "a",
+    "directory": "/repo",
+    "sessionId": "ses-1",
+    "messages": [
+      {
+        "id": "msg-1",
+        "text": "Hello"
+      }
+    ],
+    "connectionState": "connected",
+    "occupancy": "active"
+  },
+  "steps": [
+    {
+      "t": 0,
+      "op": "observe"
+    },
+    {
+      "t": 10,
+      "op": "rest.setMessages",
+      "messages": [
+        {
+          "id": "msg-1",
+          "text": "Repaired"
+        }
+      ]
+    },
+    {
+      "t": 10,
+      "op": "emit",
+      "event": {
+        "type": "sse.parse.failed"
+      }
+    },
+    {
+      "t": 30,
+      "op": "snapshot",
+      "name": "after-parse-failed"
+    }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-parse-failed": {
+        "catchUpChrome": false,
+        "transcript": [
+          {
+            "id": "msg-1",
+            "text": "Repaired"
+          }
+        ]
+      }
+    }
+  }
+}

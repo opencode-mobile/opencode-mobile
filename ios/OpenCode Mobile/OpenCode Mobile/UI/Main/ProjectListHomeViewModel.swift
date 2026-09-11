@@ -93,9 +93,7 @@ final class ProjectListHomeViewModel {
     private(set) var state: ProjectListHomeState = .probing
     /// Soft pull-to-refresh indicator; content stays on Loaded/Empty.
     private var userRefreshing = false
-    private var catchUpRefreshing = false
     private(set) var isRefreshing = false
-    private var catchUpChromeTask: Task<Void, Never>?
     /// Sheet presentation is tracked here so SwiftUI `.sheet` can observe it directly.
     private(set) var isAddProjectPresented = false
     private(set) var addProjectNavigator = AddProjectNavigatorState.empty
@@ -122,6 +120,9 @@ final class ProjectListHomeViewModel {
     private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver?
     private let sessionLiveStore: any SessionLiveStore
     private let sessionStatusLiveStore: any SessionStatusLiveStore
+    private let permissionLiveStore: any PermissionLiveStore
+    private let questionLiveStore: any QuestionLiveStore
+    private let sessionTodoLiveStore: any SessionTodoLiveStore
     private let sessionReadyStore: any SessionReadyStore
     private let foregroundEventStream: any ForegroundEventStream
     private let liveUpdates: any LiveUpdates
@@ -152,6 +153,9 @@ final class ProjectListHomeViewModel {
         activeConnectionManager: ActiveConnectionManager,
         sessionLiveStore: any SessionLiveStore,
         sessionStatusLiveStore: any SessionStatusLiveStore,
+        permissionLiveStore: any PermissionLiveStore,
+        questionLiveStore: any QuestionLiveStore,
+        sessionTodoLiveStore: any SessionTodoLiveStore,
         sessionReadyStore: any SessionReadyStore,
         foregroundEventStream: any ForegroundEventStream,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
@@ -167,6 +171,9 @@ final class ProjectListHomeViewModel {
         self.activeConnectionManager = activeConnectionManager
         self.sessionLiveStore = sessionLiveStore
         self.sessionStatusLiveStore = sessionStatusLiveStore
+        self.permissionLiveStore = permissionLiveStore
+        self.questionLiveStore = questionLiveStore
+        self.sessionTodoLiveStore = sessionTodoLiveStore
         self.sessionReadyStore = sessionReadyStore
         self.foregroundEventStream = foregroundEventStream
         self.liveUpdates = liveUpdates
@@ -188,6 +195,9 @@ final class ProjectListHomeViewModel {
                 self?.sessionReadyStore.bindProfile(profileID: self?.activeConnectionManager.currentProfile()?.id)
                 self?.sessionLiveStore.clearCache()
                 self?.sessionStatusLiveStore.clearCache()
+                self?.permissionLiveStore.clearCache()
+                self?.questionLiveStore.clearCache()
+                self?.sessionTodoLiveStore.clearCache()
                 self?.messageRepository.clearMessageCache()
                 await self?.refresh()
             }
@@ -197,6 +207,9 @@ final class ProjectListHomeViewModel {
                 self?.sessionReadyStore.bindProfile(profileID: nil)
                 self?.sessionLiveStore.clearCache()
                 self?.sessionStatusLiveStore.clearCache()
+                self?.permissionLiveStore.clearCache()
+                self?.questionLiveStore.clearCache()
+                self?.sessionTodoLiveStore.clearCache()
                 self?.messageRepository.clearMessageCache()
                 self?.stopLiveObservations()
                 self?.state = .disconnected
@@ -204,23 +217,11 @@ final class ProjectListHomeViewModel {
             }
         }
         startObservingConnectionState()
-        startObservingCatchUpChrome()
-    }
-
-    private func startObservingCatchUpChrome() {
-        catchUpChromeTask?.cancel()
-        catchUpChromeTask = Task {
-            for await catchingUp in messageRepository.observeCatchUpChrome() {
-                catchUpRefreshing = catchingUp
-                publishRefreshing()
-            }
-        }
     }
 
     private func publishRefreshing() {
-        let next = userRefreshing || catchUpRefreshing
-        if isRefreshing != next {
-            isRefreshing = next
+        if isRefreshing != userRefreshing {
+            isRefreshing = userRefreshing
         }
     }
 

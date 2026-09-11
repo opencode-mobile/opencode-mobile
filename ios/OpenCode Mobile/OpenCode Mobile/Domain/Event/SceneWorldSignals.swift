@@ -65,10 +65,10 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
         guard let coordinator = connectionSessionCoordinator else { return }
         Task { @MainActor [weak self] in
             coordinator.onProfileSaved {
-                self?.emit(.profileSwitched)
+                self?.onProfileSwitched()
             }
             coordinator.onProfileCleared {
-                self?.emit(.profileSwitched)
+                self?.onProfileCleared()
             }
         }
     }
@@ -84,8 +84,15 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
             continuation.yield(.active)
         }
         emit(.foreground)
+        startIfConnected(reason: "foreground")
+    }
+
+    private func startIfConnected(reason: String) {
+        if occupancy == .stopped { return }
         if hasActiveConnection() {
             stream.start()
+        } else {
+            DiagnosticLog.info(.sse, "\(reason) SSE start skipped; no active connection")
         }
     }
 
@@ -107,6 +114,37 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
             continuation.yield(.grace)
         }
         emit(.background)
+    }
+
+    func onBackgroundStop() {
+        lock.lock()
+        stopTask?.cancel()
+        stopTask = nil
+        lock.unlock()
+        setOccupancy(.stopped)
+        emit(.backgroundStop)
+        stream.stop()
+    }
+
+    func onPathReady() {
+        emit(.pathReady)
+    }
+
+    func onPathLost() {
+        emit(.pathLost)
+    }
+
+    func onProfileSwitched() {
+        emit(.profileSwitched)
+        if occupancy != .stopped, hasActiveConnection() {
+            stream.stop()
+            stream.start()
+        }
+    }
+
+    func onProfileCleared() {
+        emit(.profileSwitched)
+        stream.stop()
     }
 
     var occupancy: StreamOccupancy {

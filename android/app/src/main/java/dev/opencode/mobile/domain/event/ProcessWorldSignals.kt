@@ -62,10 +62,10 @@ class ProcessWorldSignals(
             }
         }
         scope.launch {
-            profileSaved.collect { emit(WorldSignal.ProfileSwitched) }
+            profileSaved.collect { onProfileSwitched() }
         }
         scope.launch {
-            profileCleared.collect { emit(WorldSignal.ProfileSwitched) }
+            profileCleared.collect { onProfileCleared() }
         }
     }
 
@@ -82,8 +82,22 @@ class ProcessWorldSignals(
         stopJob = null
         _occupancy.value = StreamOccupancy.Active
         emit(WorldSignal.Foreground)
+        startIfConnected("foreground")
+    }
+
+    override fun onConnectionAvailable() {
+        startIfConnected("connection-available")
+    }
+
+    private fun startIfConnected(reason: String) {
+        if (_occupancy.value == StreamOccupancy.Stopped) return
         if (hasActiveConnection()) {
             stream.start()
+        } else {
+            diagnosticLogger.info(
+                DiagnosticLogArea.Sse,
+                "$reason SSE start skipped; no active connection",
+            )
         }
     }
 
@@ -98,6 +112,35 @@ class ProcessWorldSignals(
                 emit(WorldSignal.BackgroundStop)
                 stream.stop()
             }
+    }
+
+    fun onBackgroundStop() {
+        stopJob?.cancel()
+        stopJob = null
+        _occupancy.value = StreamOccupancy.Stopped
+        emit(WorldSignal.BackgroundStop)
+        stream.stop()
+    }
+
+    fun onPathReady() {
+        emit(WorldSignal.PathReady)
+    }
+
+    fun onPathLost() {
+        emit(WorldSignal.PathLost)
+    }
+
+    fun onProfileSwitched() {
+        emit(WorldSignal.ProfileSwitched)
+        if (_occupancy.value != StreamOccupancy.Stopped && hasActiveConnection()) {
+            stream.stop()
+            stream.start()
+        }
+    }
+
+    fun onProfileCleared() {
+        emit(WorldSignal.ProfileSwitched)
+        stream.stop()
     }
 
     private fun emit(signal: WorldSignal) {

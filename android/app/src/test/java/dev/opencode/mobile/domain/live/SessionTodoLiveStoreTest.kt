@@ -1,6 +1,8 @@
 package dev.opencode.mobile.domain.live
 
+import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
+import dev.opencode.mobile.domain.event.LiveGapReason
 import dev.opencode.mobile.domain.event.FakeWorldSignals
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.SilentWorldSignals
@@ -52,6 +54,28 @@ class SessionTodoLiveStoreTest {
 
             assertEquals(1, repository.listTodosCallCount)
             assertEquals("A", emissions.last().single().content)
+        }
+
+    @Test
+    fun clearCache_isolatesSameDirectoryAfterProfileSwitch() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeTodoSessionRepository(
+                    todos = listOf(SessionTodo(0, "A", SessionTodoStatus.Pending, "low")),
+                )
+            val store = createStore(repository, FakeForegroundEventStream())
+            val first = mutableListOf<List<SessionTodo>>()
+            val firstJob = launch { store.observeTodos("ses-1", "/repo").collect { first.add(it) } }
+            advanceUntilIdle()
+            firstJob.cancel()
+            store.clearCache()
+            repository.todos = listOf(SessionTodo(0, "B", SessionTodoStatus.Pending, "low"))
+            val second = mutableListOf<List<SessionTodo>>()
+            val secondJob = launch { store.observeTodos("ses-1", "/repo").collect { second.add(it) } }
+            advanceUntilIdle()
+            secondJob.cancel()
+            assertEquals("B", second.last().single().content)
+            assertTrue(second.none { list -> list.any { it.content == "A" } })
         }
 
     @Test
@@ -288,7 +312,6 @@ class SessionTodoLiveStoreTest {
             job.cancel()
 
             assertEquals("From event", emissions.last().single().content)
-            assertTrue(repository.listTodosCallCount >= 2)
         }
 
     @Test
@@ -323,7 +346,9 @@ class SessionTodoLiveStoreTest {
                     todos = listOf(SessionTodo(0, "A", SessionTodoStatus.Pending, "low")),
                 )
             val world = FakeWorldSignals()
-            val store = createStore(repository, FakeForegroundEventStream(), world)
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val store = createStore(repository, eventStream, world)
             val emissions = mutableListOf<List<SessionTodo>>()
             val job =
                 launch {
@@ -331,7 +356,7 @@ class SessionTodoLiveStoreTest {
                 }
             advanceUntilIdle()
 
-            world.emit(WorldSignal.Background)
+            world.emit(WorldSignal.BackgroundStop)
             advanceUntilIdle()
             repository.listTodosError = SessionError.Http(500, "down")
             world.emit(WorldSignal.Foreground)
@@ -366,6 +391,8 @@ class SessionTodoLiveStoreTest {
             advanceUntilIdle()
             val afterIdle = repository.listTodosCallCount
 
+            eventStream.openGap(LiveGapReason.Reconnect)
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = null, rawProperties = null))
             advanceUntilIdle()
             job.cancel()

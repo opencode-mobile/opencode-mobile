@@ -1,13 +1,14 @@
 # Reactive data layer decisions
 
-## World signals, interest, and stale stores
+## World signals, interest, and gap revisions
 
 - Date: 2026-08-20
 - Decision: three facts, not a refresh event bus. `WorldSignals` publishes
-  process edges. Interest is the observe subscription. Catch-up is a stale
-  bit inside `MessageSync` and the Live Stores. Dirty plus interested plus
-  reachable runs REST. SSE patches while the pipe is live. Foreground is
-  not "refresh now." Background marks a gap.
+  process edges. Interest is the observe subscription. Catch-up is a
+  `GapAuthority` revision inside `MessageSync` and the Live Stores.
+  Unacknowledged obligation plus interested plus reachable runs REST. SSE
+  patches while the pipe is live. Foreground is not "refresh now."
+  Background grace is not a data gap.
 - Reason: PR 218 / `ForegroundRestore` already starts SSE, then REST for a
   UI registry, while `MessageSync` and `SessionLiveStore` also REST on
   `stream.reconnected`. That is three owners. The registry is
@@ -37,7 +38,7 @@
 - Revisit when: home list REST while chat is open is a measured problem.
   Pause by cancelling the home collect, not by `setHomeVisible`.
 
-## WorldSignals is the invalidation clock
+## WorldSignals is the occupancy clock
 
 - Date: 2026-08-20
 - Decision: `WorldSignal` is `Foreground`, `Background`, `BackgroundStop`,
@@ -45,14 +46,15 @@
   `SceneWorldSignals` are the prod adapters. `FakeWorldSignals` is the
   test adapter. Stores subscribe. The world adapter starts and stops
   `ForegroundEventStream` and does not call feature REST. `Background`
-  and `BackgroundStop` both set the stale bit; `BackgroundStop` after 5s
-  also stops SSE. Idle-timeout can emit `BackgroundStop` without
+  is 5s occupancy grace only. `BackgroundStop` after 5s stops SSE and
+  opens a gap. Idle-timeout can emit `BackgroundStop` without
   `Background`, and catch-up must still run on the next `Foreground`.
   `.inactive` does not stop the stream. Device network path stays its own
   OS seam for chrome, `EventStreamConnectionState` composed with
   `DeviceNetworkPathStatus`, and for `waitUntilReady` inside
   `DefaultForegroundEventStream`. `WorldSignals` also consumes path edges
   so stores do not wait on SSE occupancy to learn they are stale.
+  `AppRoot` forwards scene edges; it is not a second stream owner.
 - Reason: one clock. Two adapters at each true-external seam, lifecycle
   and path, plus fakes, justify the seams. Opencode REST/SSE stay behind
   existing remotes.
@@ -63,16 +65,16 @@
 ## Network path is a world signal
 
 - Date: 2026-08-20
-- Decision: `PathLost` marks dirty and does not REST. `PathReady` is the
-  same catch-up class as `Foreground`, `reason=path-ready`. Do not add a
-  network-specific `restore()` policy on `ForegroundRestore` or Screen
-  Models.
+- Decision: `PathLost` invalidates `GapAuthority` and does not REST.
+  `PathReady` is the same catch-up class as `Foreground`,
+  `reason=path-ready`: wake current-gap evaluation. Do not add a
+  network-specific `restore()` policy on Screen Models.
 - Reason: radio-off already cancels the SSE read. Catch-up still sat on
   return-to-foreground only, so a path that recovered while staying
   foregrounded depended on lucky `stream.reconnected` delivery. Same gap,
-  same store bit.
+  same unpaid revision.
 - Revisit when: path-ready catch-up races an in-flight SSE reconnect
-  enough to need a tighter claim than debounce plus `ConnectionEpoch`.
+  enough to need a tighter claim than `GapAuthority` single-flight.
 
 ## Pull-to-refresh is mark-dirty
 
@@ -104,29 +106,59 @@
 ## SSE transport vs REST catch-up
 
 - Date: 2026-08-20
-- Decision: `ForegroundEventStream` stays the one app-wide SSE occupancy.
-  Dual protocol and both v1 event paths stay required. 5s stop grace and
-  45s idle watchdog stay. REST is history and gap authority, not a
-  substitute for heartbeat-only SSE. Store catch-up after a process gap
-  lives in this feature, not in the stream type. `ConnectionEpoch` still
-  coalesces warm reconnect of TransportResumed, `server.connected`, and
-  `stream.reconnected` with world-signal REST so they share one fetch.
+- Decision: `ForegroundEventStream` stays the caller seam.
+  `DefaultForegroundEventStream` implements `LiveConnection`. Dual
+  protocol and both v1 event paths stay required. Connected requires
+  every required lease. 5s stop grace and per-target 45s idle watchdog
+  stay. REST is history and gap authority, not a substitute for
+  heartbeat-only SSE.   Store catch-up after a process gap lives in this
+  feature, not in the stream type. `GapAuthority` is the unpaid-revision
+  clock. Non-force catch-up requires Active occupancy and every
+  required lease live. `stream.reconnected`, `server.connected`, and
+  `connection-snapshot` only wake evaluation of the current revision.
+  `SessionStatusLiveStore` background-return uses that same gate; it
+  does not bypass `GapAuthority` to confirm or drop optimistic Working.
 - Reason: folding catch-up into the stream would make
   `ForegroundEventStream` the coordinator this slice refuses. Leaving
   catch-up only on SSE events is what made OPE-197 add ForegroundRestore.
+  `ConnectionEpoch` is not the catch-up claim.
 - Revisit when: the server publishes a heartbeat interval that justifies a
   tighter idle bound. That is still a transport change.
+
+## GapAuthority acknowledges only accepted REST
+
+- Date: 2026-09-10
+- Decision: reconcile iff the current obligation is newer than the last
+  successfully acknowledged revision. Failed or discarded REST does not
+  acknowledge. Successful accepted replace or equality confirmation
+  does. A newer gap during REST remains pending. Local invalidate
+  (pull-to-refresh, parse failure, incomplete idle transcript) bumps a
+  local obligation on the same authority. `BackgroundStop` and
+  `PathLost` invalidate; `Background` does not.
+- Reason: acknowledging a failed fetch, or treating reconnect as a new
+  obligation, either dropped a gap or double-fetched a live bus.
+- Revisit when: a store needs more than one unpaid revision at a time.
+
+## Profile isolation
+
+- Date: 2026-09-10
+- Decision: profile switch clears session, status, message, permission,
+  question, and todo observations. `SessionReadyStore.bindProfile` parks
+  Ready watches per Connection Profile instead of wiping them.
+- Reason: leftover observations 404 on the previous server's ids; wiping
+  Ready dropped idle catch-up on return.
+- Revisit when: a later live surface observes across profiles.
 
 ## Foreground Event Stream and Message Store decisions
 
 - Date: 2026-08-20
 - Decision: [foreground-event-stream](../foreground-event-stream/decisions.md)
-  is narrowed to transport, occupancy chrome, and dual-protocol SSE.
-  Return-from-background REST and the UI registry in that file are
+  is narrowed to transport, occupancy chrome, lease set, and dual-protocol
+  SSE. Return-from-background REST and the UI registry in that file are
   replaced by this file. [message-store](../message-store/decisions.md)
-  still owns incremental `message.*` merge, revision gating, and poll
-  while SSE is not live. Its "return from background is owned by
-  `ForegroundRestore`" line is replaced by this file.
+  still owns incremental `message.*` merge, bounded staging, and
+  revision-gated authority. It does not own transport or lifecycle
+  reconnect clocks.
 - Reason: two live contracts must not both assign catch-up.
 - Revisit when: MessageSync is split; keep catch-up on the observation
   loop that already owns REST plus SSE merge.

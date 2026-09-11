@@ -9,20 +9,42 @@ import Testing
         for _ in 0..<8 {
             staging.enqueue(
                 eventWithPartDelta(partID: "prt-1", messageID: "msg-1", delta: delta, sessionID: "ses-1"),
-                sessionID: "ses-1",
-                epoch: 1
+                sessionID: "ses-1"
             )
         }
         #expect(staging.currentHealth == .recovering(.overflow))
         #expect(staging.highWaterBytes > 0)
     }
 
+    @Test func enqueue_serverConnectedWhileRecovering_doesNotRaceAuthority() {
+        let staging = MessageEventStaging(capacity: 8, byteCapacity: 10_000)
+        staging.enterRecovering(.reconnect, wakeConsumer: false)
+        staging.beginAuthorityWindow()
+        staging.enqueue(
+            OpencodeEvent(type: "server.connected", sessionID: nil, rawProperties: nil),
+            sessionID: "ses-1"
+        )
+        #expect(staging.completeAuthorityWindow(.accepted))
+        #expect(staging.currentHealth == .healthy)
+    }
+
+    @Test func enqueue_sessionEventWhileRecovering_racesAuthority() {
+        let staging = MessageEventStaging(capacity: 8, byteCapacity: 10_000)
+        staging.enterRecovering(.reconnect, wakeConsumer: false)
+        staging.beginAuthorityWindow()
+        staging.enqueue(
+            eventWithPartDelta(partID: "prt-1", messageID: "msg-1", delta: "x", sessionID: "ses-1"),
+            sessionID: "ses-1"
+        )
+        #expect(!staging.completeAuthorityWindow(.accepted))
+        #expect(staging.currentHealth == .recovering(.racedAuthority))
+    }
+
     @Test func enqueue_ignoresNonMessageIntakeTypes() {
         let staging = MessageEventStaging(capacity: 64, byteCapacity: 200)
         staging.enqueue(
             OpencodeEvent(type: "permission.asked", sessionID: "ses-1", rawProperties: nil),
-            sessionID: "ses-1",
-            epoch: 1
+            sessionID: "ses-1"
         )
         #expect(staging.currentHealth == .healthy)
         #expect(staging.highWater == 0)
@@ -37,11 +59,10 @@ import Testing
         try? await Task.sleep(for: .milliseconds(20))
         staging.enqueue(
             eventWithPartDelta(partID: "prt-1", messageID: "msg-1", delta: "hi", sessionID: "ses-1"),
-            sessionID: "ses-1",
-            epoch: 1
+            sessionID: "ses-1"
         )
         let item = await waiter.value
-        guard case .event(let event, _, _)? = item else {
+        guard case .event(let event, _)? = item else {
             Issue.record("expected staged event")
             return
         }

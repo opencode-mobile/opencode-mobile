@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
@@ -372,6 +373,7 @@ class ConnectionSetupViewModelTest {
             composerDraftStore = InMemoryComposerDraftStore(),
             httpClient = OpencodeHttpClient(json, activeConnectionManager),
             sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+            eventStream = FakeForegroundEventStream(),
         )
     }
 }

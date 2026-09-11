@@ -9,9 +9,10 @@ tokenize run in a content-preparation layer so UI receives almost-ready rows.
 ## In Scope
 
 - `MessageStore` / `InMemoryMessageStore` — per-session message state and SSE patches.
-- `MessageSync` — event subscription before initial load, incremental SSE merge,
-  selective reconciliation, reconnect catch-up, and revision-gated fingerprint
-  polling. Policy: [decisions.md](decisions.md).
+- `MessageSync` — bounded event staging, incremental SSE merge,
+  selective reconciliation, revision-gated fingerprint polling, and
+  `GapAuthority` catch-up. It does not own transport or lifecycle
+  reconnect clocks. Policy: [decisions.md](decisions.md).
 - `MessageContentPreparer` + `DisplayMessagePipeline` — parse, highlight, cache → `DisplayMessage`.
 - `MessageRepository.observeDisplayMessages` / `refreshDisplayMessages` / `prepareOptimisticUserMessage`.
 - Session Chat timeline depends on display-message APIs only (no UI-layer markdown mapper).
@@ -26,8 +27,9 @@ tokenize run in a content-preparation layer so UI receives almost-ready rows.
 ## Server APIs Involved
 
 - `GET /session/:id/message` — seed and reload history.
-- `GET /global/event` (via `ForegroundEventStream`) — ordered live patches,
-  connection events, and reconnect signals.
+- v1 `GET /global/event` and instance `GET /event?directory=`, v2
+  `GET /api/event` (via `ForegroundEventStream` / `LiveConnection`) —
+  ordered live patches, connection events, and reconnect signals.
 
 ## Expected Logs
 
@@ -43,6 +45,8 @@ tokenize run in a content-preparation layer so UI receives almost-ready rows.
 
 - `Message`, `MessagePatch`, `MessageListUpdate`, `MessageStore`, `MessageSync`, `MessageRepository`.
 - `DisplayMessage`, `DisplayMessageListUpdate`, `MessageContentPreparer`, `DisplayMessagePipeline`.
+- Reuses `ForegroundEventStream`, `LiveConnection`, and `GapAuthority`
+  for transport occupancy and unpaid-revision catch-up.
 
 ## Architecture
 
@@ -128,7 +132,11 @@ Observation registers for foreground events before requesting initial history,
 so events that arrive during the REST request are buffered and merged after the
 snapshot. REST responses replace the store only when its revision still matches
 the revision captured before the request; an intervening SSE patch makes that
-response stale and it is discarded.
+response stale and it is discarded. Failed or discarded REST does not
+acknowledge the current `GapAuthority` revision; accepted replace or
+equality confirmation does. A newer gap during REST stays pending.
+`session.idle` with an incomplete last assistant, and `sse.parse.failed`,
+are authoritative REST barriers. Failed idle authority stays recovering.
 
 REST mapping retains stable part identities so selective updates do not consume
 the event loop with a reload or lose subsequent deltas. Legacy parts without a
@@ -160,8 +168,9 @@ bridge on iOS).
 - Initial history failure produces a load-failed update.
 - Explicit refresh failure is returned to the caller.
 - SSE or reconciliation failure keeps the last good snapshot.
-- SSE or reconnect failure keeps the last good snapshot. Catch-up policy is
-  in [decisions.md](decisions.md).
+- Failed idle or parse-failure authority stays recovering until accepted
+  REST acknowledges the gap. Catch-up policy is in
+  [decisions.md](decisions.md).
 
 ## Permission Behavior
 
@@ -180,5 +189,9 @@ and streaming state.
 - iOS: `MessageSyncTests`, `DisplayMessagePipelinePacingTests`, and
   `SessionChatViewModelTests`.
 - Both message-sync suites cover events buffered during initial REST, stale
-  in-flight poll rejection, failed-idle recovery, and
-  event → store → display streaming/final behavior.
+  in-flight poll rejection, and event → store → display streaming/final
+  behavior.
+- Shared SSE recovery traces under `shared/sse-recovery/` assert
+  user-visible catch-up outcomes on both platforms. They do not pin REST
+  counts or gap-reason machinery. Do not check transient run logs into the
+  repo.

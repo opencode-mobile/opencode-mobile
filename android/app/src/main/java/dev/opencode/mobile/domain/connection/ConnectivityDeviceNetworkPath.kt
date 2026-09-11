@@ -51,4 +51,11 @@ class ConnectivityDeviceNetworkPath
         init {
             connectivityManager.registerDefaultNetworkCallback(callback)
         }
+
+        override suspend fun waitUntilReady() {
+            waitUntilDeviceNetworkReady(
+                isCurrentlyReachable = connectivityManager.activeNetwork != null,
+                status = _status,
+            )
+        }
     }

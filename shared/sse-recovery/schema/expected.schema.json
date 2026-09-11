@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opencode.mobile/sse-recovery/expected.schema.json",
+  "title": "SSE fault oracle expected snapshot",
+  "type": "object",
+  "required": [
+    "snapshots"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "snapshots": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/snapshot"
+      }
+    }
+  },
+  "$defs": {
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "catchUpChrome": {
+          "type": "boolean"
+        },
+        "chrome": {
+          "type": "string",
+          "enum": [
+            "live",
+            "connecting",
+            "offline"
+          ]
+        },
+        "publishedProfileId": {
+          "type": "string"
+        },
+        "transcript": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/transcriptMessage"
+          }
+        },
+        "requiredTargets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "liveTargets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unpublishedEventTypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "transcriptMessage": {
+      "type": "object",
+      "required": [
+        "id",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "id": "late-subscribe-open-gap",
+  "title": "Late subscribe with an open occupancy gap must reconcile once",
+  "platforms": [
+    "android",
+    "ios"
+  ],
+  "surface": "recovery",
+  "protocol": "v2",
+  "seed": {
+    "profileId": "a",
+    "directory": "/repo",
+    "sessionId": "ses-1",
+    "messages": [
+      {
+        "id": "msg-1",
+        "text": "Hello"
+      }
+    ],
+    "connectionState": "idle",
+    "occupancy": "stopped"
+  },
+  "steps": [
+    {
+      "t": 0,
+      "op": "stream.start"
+    },
+    {
+      "t": 10,
+      "op": "observe"
+    },
+    {
+      "t": 20,
+      "op": "snapshot",
+      "name": "after-late-subscribe"
+    }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-late-subscribe": {
+        "catchUpChrome": false,
+        "transcript": [
+          {
+            "id": "msg-1",
+            "text": "Hello"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -113,7 +113,7 @@ nonisolated final class EventsAPIClient: Sendable {
         let session = injectedSession ?? Self.makeStreamingSession()
         defer {
             if ownedSession {
-                session.finishTasksAndInvalidate()
+                session.invalidateAndCancel()
             }
         }
         let bytes: URLSession.AsyncBytes
@@ -152,8 +152,35 @@ nonisolated final class EventsAPIClient: Sendable {
         Self.subscribePath(for: connectionProvider()?.serverProtocol)
     }
 
+    var eventProtocol: ServerProtocol {
+        connectionProvider()?.serverProtocol ?? .v1
+    }
+
     var eventProtocolWireValue: String {
-        (connectionProvider()?.serverProtocol ?? .v1).wireValue
+        eventProtocol.wireValue
+    }
+
+    func streamEvents(
+        path: String,
+        directory: String?,
+        onHTTPResponse: (@Sendable (Int) async -> Void)? = nil,
+        onActivity: (@Sendable () async -> Void)? = nil,
+        onDataLine: @escaping @Sendable (String) async -> Void
+    ) async throws {
+        guard let connection = connectionProvider() else {
+            throw EventsAPIError.noActiveConnection
+        }
+        if let protocolResolver {
+            Task { _ = await protocolResolver() }
+        }
+        try await streamEvents(
+            connection: connection,
+            path: path,
+            directory: directory,
+            onHTTPResponse: onHTTPResponse,
+            onActivity: onActivity,
+            onDataLine: onDataLine
+        )
     }
 
     private static func subscribePath(for serverProtocol: ServerProtocol?) -> String {

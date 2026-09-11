@@ -1,0 +1,106 @@
+{
+  "id": "rest-slow-sse-wins",
+  "title": "Stale REST in flight must not overwrite an SSE patch that landed first",
+  "platforms": [
+    "android",
+    "ios"
+  ],
+  "surface": "recovery",
+  "protocol": "v2",
+  "seed": {
+    "profileId": "a",
+    "directory": "/repo",
+    "sessionId": "ses-1",
+    "messages": [
+      {
+        "id": "msg-1",
+        "text": "Hello"
+      }
+    ],
+    "connectionState": "connected",
+    "occupancy": "active"
+  },
+  "steps": [
+    {
+      "t": 0,
+      "op": "observe"
+    },
+    {
+      "t": 10,
+      "op": "rest.hold"
+    },
+    {
+      "t": 10,
+      "op": "openGap",
+      "state": "reconnect"
+    },
+    {
+      "t": 20,
+      "op": "emit",
+      "event": {
+        "type": "message.part.delta",
+        "sessionId": "ses-1",
+        "text": " streamed",
+        "messageId": "msg-1",
+        "partId": "part-1",
+        "field": "text"
+      }
+    },
+    {
+      "t": 30,
+      "op": "rest.setMessages",
+      "messages": [
+        {
+          "id": "msg-1",
+          "text": "STALE"
+        }
+      ]
+    },
+    {
+      "t": 30,
+      "op": "rest.release"
+    },
+    {
+      "t": 45,
+      "op": "snapshot",
+      "name": "after-sse-wins"
+    },
+    {
+      "t": 50,
+      "op": "rest.setMessages",
+      "messages": [
+        {
+          "id": "msg-1",
+          "text": "Hello streamed"
+        }
+      ]
+    },
+    {
+      "t": 80,
+      "op": "snapshot",
+      "name": "after-second-confirm"
+    }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-sse-wins": {
+        "catchUpChrome": false,
+        "transcript": [
+          {
+            "id": "msg-1",
+            "text": "Hello streamed"
+          }
+        ]
+      },
+      "after-second-confirm": {
+        "catchUpChrome": false,
+        "transcript": [
+          {
+            "id": "msg-1",
+            "text": "Hello streamed"
+          }
+        ]
+      }
+    }
+  }
+}

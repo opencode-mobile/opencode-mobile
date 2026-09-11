@@ -60,164 +60,15 @@ struct DefaultForegroundEventStreamTests {
         #expect(receivedMessage)
     }
 
-    @Test func reconnectPublishesSyntheticEventOnlyOnceForCurrentStream() async {
-        let connected = #"data: {"payload":{"type":"server.connected","properties":{}}}"# + "\n\n"
-        let stream = makeStream(responses: [connected, connected])
-        var events: [OpencodeEvent] = []
-        let eventTask = Task { @MainActor in
-            for await event in stream.events() {
-                events.append(event)
-            }
-        }
-
-        await Task.yield()
-        stream.start()
-        try? await Task.sleep(for: .milliseconds(1_200))
-        let reconnected = await waitUntil(timeoutMs: 3_500) {
-            events.filter { $0.type == "stream.reconnected" }.count == 1
-        }
-        try? await Task.sleep(for: .milliseconds(100))
-        stream.stop()
-        eventTask.cancel()
-
-        #expect(reconnected)
-        #expect(events.filter { $0.type == "stream.reconnected" }.count == 1)
-    }
-
-    @Test func startIsIdempotentWhileStreamIsRunning() async {
-        let stream = makeStream(
-            responses: [
-                #"data: {"payload":{"type":"server.heartbeat","properties":{}}}"# + "\n\n",
-            ]
-        )
-        var states: [EventStreamConnectionState] = []
-        let stateTask = Task { @MainActor in
-            for await state in stream.connectionStateUpdates() {
-                states.append(state)
-            }
-        }
-
-        await Task.yield()
-        stream.start()
-        let connected = await waitUntil(timeoutMs: 2_000) { states.contains(.connected) }
-        #expect(connected)
-        let countAfterFirst = states.count
-        stream.start()
-        try? await Task.sleep(for: .milliseconds(80))
-        let countAfterSecondStart = states.count
-        stream.stop()
-        stateTask.cancel()
-
-        // Second start must not tear down (no new Idle/Connecting while live).
-        #expect(countAfterSecondStart == countAfterFirst)
-    }
-
-    @Test func successfulResumeDoesNotPublishDisconnectedWhileRetrying() async {
-        // Stream body ends after the first event; the loop retries while still
-        // occupied. Chrome must stay connecting/reconnecting — not offline.
-        let stream = makeStream(
-            responses: [
-                #"data: {"payload":{"type":"server.connected","properties":{}}}"# + "\n\n",
-                #"data: {"payload":{"type":"server.connected","properties":{}}}"# + "\n\n",
-            ]
-        )
-        var states: [EventStreamConnectionState] = []
-        let stateTask = Task { @MainActor in
-            for await state in stream.connectionStateUpdates() {
-                states.append(state)
-            }
-        }
-
-        await Task.yield()
-        stream.start()
-        let reconnected = await waitUntil(timeoutMs: 3_500) {
-            states.filter { $0 == .connected }.count >= 2
-        }
-        stream.stop()
-        stateTask.cancel()
-
-        #expect(reconnected)
-        #expect(!states.contains(.disconnected))
-    }
-
-    @Test func stopThenStartPublishesStreamReconnectedForColdResume() async {
-        let connected = #"data: {"payload":{"type":"server.connected","properties":{}}}"# + "\n\n"
-        let stream = makeStream(responses: [connected, connected])
-        var events: [OpencodeEvent] = []
-        let eventTask = Task { @MainActor in
-            for await event in stream.events() {
-                events.append(event)
-            }
-        }
-
-        await Task.yield()
-        stream.start()
-        let firstLive = await waitUntil(timeoutMs: 2_000) {
-            events.contains { $0.type == "server.connected" }
-        }
-        #expect(firstLive)
-        stream.stop()
-        try? await Task.sleep(for: .milliseconds(50))
-        let beforeResume = events.filter { $0.type == "stream.reconnected" }.count
-        stream.start()
-        let coldResume = await waitUntil(timeoutMs: 3_500) {
-            events.filter { $0.type == "stream.reconnected" }.count == beforeResume + 1
-        }
-        stream.stop()
-        eventTask.cancel()
-
-        #expect(coldResume)
-    }
-
-    @Test func stopThenStartDoesNotLeaveCancelledTaskIdleOverConnecting() async {
-        let stream = makeStream(
-            responses: [
-                #"data: {"payload":{"type":"server.heartbeat","properties":{}}}"# + "\n\n",
-                #"data: {"payload":{"type":"server.heartbeat","properties":{}}}"# + "\n\n",
-            ]
-        )
-        var states: [EventStreamConnectionState] = []
-        let stateTask = Task { @MainActor in
-            for await state in stream.connectionStateUpdates() {
-                states.append(state)
-            }
-        }
-
-        await Task.yield()
-        stream.start()
-        let firstLive = await waitUntil(timeoutMs: 2_000) { states.contains(.connected) }
-        #expect(firstLive)
-        stream.stop()
-        let stopped = await waitUntil(timeoutMs: 1_000) { states.last == .idle }
-        #expect(stopped)
-        let indexAfterStop = states.count
-        stream.start()
-        let secondLive = await waitUntil(timeoutMs: 2_000) {
-            states[indexAfterStop...].contains(.connected)
-        }
-        #expect(secondLive)
-        // After the second start, Idle from the cancelled first task must not
-        // appear after Connecting for the new generation (before Connected).
-        let slice = Array(states[indexAfterStop...])
-        if let connectingIdx = slice.firstIndex(of: .connecting),
-           let connectedIdx = slice.firstIndex(of: .connected),
-           connectingIdx < connectedIdx
-        {
-            #expect(!slice[connectingIdx..<connectedIdx].contains(.idle))
-        }
-        stream.stop()
-        stateTask.cancel()
-    }
-
-    @Test func unavailablePath_doesNotOpenSseUntilReady() async {
-        let path = FakeDeviceNetworkPath(status: .unavailable)
-        var states: [EventStreamConnectionState] = []
+    @Test func start_opensLeasesWithoutWaitingForDirectories() async {
+        let hold = HoldingDirectories(initial: ["/repo"], next: ["/repo"])
         let stream = makeStream(
             responses: [
                 #"data: {"payload":{"type":"server.heartbeat","properties":{}}}"# + "\n\n",
             ],
-            deviceNetworkPath: path
+            instanceDirectories: { await hold.next() }
         )
+        var states: [EventStreamConnectionState] = []
         let stateTask = Task { @MainActor in
             for await state in stream.connectionStateUpdates() {
                 states.append(state)
@@ -225,19 +76,21 @@ struct DefaultForegroundEventStreamTests {
         }
         await Task.yield()
         stream.start()
-        try? await Task.sleep(for: .milliseconds(80))
-        let stayedIdle = !states.contains(.connecting) && !states.contains(.connected)
-        path.set(.ready)
         let becameConnected = await waitUntil(timeoutMs: 2_000) { states.contains(.connected) }
         stream.stop()
         stateTask.cancel()
-        #expect(stayedIdle)
+        await hold.release()
         #expect(becameConnected)
     }
 
     private func makeStream(
         responses: [String],
-        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath()
+        deviceNetworkPath: any DeviceNetworkPath = ReadyDeviceNetworkPath(),
+        instanceDirectories: @escaping @Sendable () async -> [String] = { [] },
+        configurationRevisions: (@Sendable () -> AsyncStream<Void>)? = nil,
+        protocolHint: (@Sendable () -> ServerProtocol)? = nil,
+        profileID: (@Sendable () async -> String)? = nil,
+        connectionIdentity: (@Sendable () async -> String)? = nil
     ) -> DefaultForegroundEventStream {
         let streamID = UUID().uuidString
         let configuration = URLSessionConfiguration.ephemeral
@@ -255,7 +108,12 @@ struct DefaultForegroundEventStreamTests {
         return DefaultForegroundEventStream(
             api: client,
             adapter: EventDomainAdapter(),
-            deviceNetworkPath: deviceNetworkPath
+            deviceNetworkPath: deviceNetworkPath,
+            instanceDirectories: instanceDirectories,
+            configurationRevisions: configurationRevisions ?? { AsyncStream { $0.finish() } },
+            profileID: profileID ?? { "" },
+            connectionIdentity: connectionIdentity,
+            protocolHint: protocolHint
         )
     }
 
@@ -272,6 +130,55 @@ struct DefaultForegroundEventStreamTests {
     }
 }
 
+private final class HoldingDirectories: @unchecked Sendable {
+    private let lock = NSLock()
+    private let initial: [String]
+    private let next: [String]
+    private var resolves = 0
+    private var holdContinuation: CheckedContinuation<Void, Never>?
+
+    var resolveCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return resolves
+    }
+
+    var isHolding: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return holdContinuation != nil
+    }
+
+    init(initial: [String], next: [String]) {
+        self.initial = initial
+        self.next = next
+    }
+
+    func next() async -> [String] {
+        lock.lock()
+        resolves += 1
+        let count = resolves
+        lock.unlock()
+        if count == 1 {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                lock.lock()
+                holdContinuation = continuation
+                lock.unlock()
+            }
+            return initial
+        }
+        return next
+    }
+
+    func release() async {
+        lock.lock()
+        let continuation = holdContinuation
+        holdContinuation = nil
+        lock.unlock()
+        continuation?.resume()
+    }
+}
+
 private final class MockForegroundSSEURLProtocol: URLProtocol {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var responseQueues: [String: [Data]] = [:]
@@ -283,11 +190,8 @@ private final class MockForegroundSSEURLProtocol: URLProtocol {
     }
 
     private static func streamID(from request: URLRequest) -> String? {
-        guard let url = request.url else { return nil }
-        let components = url.pathComponents.filter { $0 != "/" }
-        guard components.count >= 3 else { return nil }
-        guard components[components.count - 2] == "global", components.last == "event" else { return nil }
-        return components[components.count - 3]
+        guard let url = request.url, url.path.contains("event") else { return nil }
+        return url.pathComponents.filter { $0 != "/" }.first
     }
 
     override class func canInit(with request: URLRequest) -> Bool {

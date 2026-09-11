@@ -1,0 +1,68 @@
+{
+  "id": "clear-cache-drops-old-observation",
+  "title": "Clearing the cache must drop the old observation so the next one reconciles",
+  "platforms": [
+    "android",
+    "ios"
+  ],
+  "surface": "recovery",
+  "protocol": "v2",
+  "seed": {
+    "profileId": "a",
+    "directory": "/repo",
+    "sessionId": "ses-1",
+    "messages": [
+      {
+        "id": "msg-1",
+        "text": "Old"
+      }
+    ],
+    "connectionState": "connected",
+    "occupancy": "active"
+  },
+  "steps": [
+    {
+      "t": 0,
+      "op": "observe"
+    },
+    {
+      "t": 10,
+      "op": "unobserve"
+    },
+    {
+      "t": 10,
+      "op": "cache.clear"
+    },
+    {
+      "t": 20,
+      "op": "rest.setMessages",
+      "messages": [
+        {
+          "id": "msg-2",
+          "text": "New"
+        }
+      ]
+    },
+    {
+      "t": 20,
+      "op": "observe"
+    },
+    {
+      "t": 30,
+      "op": "snapshot",
+      "name": "after-recache"
+    }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-recache": {
+        "transcript": [
+          {
+            "id": "msg-2",
+            "text": "New"
+          }
+        ]
+      }
+    }
+  }
+}

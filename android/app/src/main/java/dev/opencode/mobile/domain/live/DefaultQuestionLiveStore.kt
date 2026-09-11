@@ -3,9 +3,12 @@ package dev.opencode.mobile.domain.live
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.GapAuthority
 import dev.opencode.mobile.domain.event.SilentWorldSignals
 import dev.opencode.mobile.domain.event.StoreRefreshReason
 import dev.opencode.mobile.domain.event.WorldSignals
+import dev.opencode.mobile.domain.event.asLiveConnection
+import dev.opencode.mobile.domain.event.canCatchUp
 import dev.opencode.mobile.domain.event.catchUpReason
 import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.QuestionRequest
@@ -37,7 +40,8 @@ class DefaultQuestionLiveStore
         override fun observeQuestions(directory: String): Flow<List<QuestionRequest>> =
             cache.observe(directory) { sharingScope ->
                 channelFlow {
-                    var stale = false
+                    val liveConnection = eventStream.asLiveConnection()
+                    val authority = GapAuthority()
                     var reconnectRefresh: Job? = null
                     var lastEmitted: List<QuestionRequest>? = null
                     val gate = LiveStoreRefreshGate()
@@ -46,37 +50,61 @@ class DefaultQuestionLiveStore
                         reason: String,
                         force: Boolean,
                     ) {
-                        if (!force && !stale) {
+                        val snapshot = liveConnection.snapshot.value
+                        if (!force && !canCatchUp(worldSignals.occupancy.value, snapshot)) {
                             diagnosticLogger.info(
                                 DiagnosticLogArea.Question,
                                 "question skip reason=$reason",
                             )
                             return
                         }
-                        var failure: Throwable? = null
-                        gate.refresh(
-                            load = {
-                                runCatching { sessionRepository.listPendingQuestions(directory) }
-                                    .onFailure { failure = it }
-                                    .getOrNull()
-                            },
-                            commit = { requests ->
-                                stale = false
-                                diagnosticLogger.info(
-                                    DiagnosticLogArea.Question,
-                                    "question refresh reason=$reason count=${requests.size}",
-                                )
-                                if (requests == lastEmitted) {
+                        val generation =
+                            if (force) {
+                                authority.captureBegin(snapshot)
+                            } else {
+                                authority.tryBegin(snapshot) ?: run {
                                     diagnosticLogger.info(
                                         DiagnosticLogArea.Question,
-                                        "question emit skipped reason=$reason cause=unchanged",
+                                        "question skip reason=$reason",
                                     )
-                                } else {
-                                    lastEmitted = requests
-                                    send(requests)
+                                    return
                                 }
-                            },
-                        )
+                            }
+                        var failure: Throwable? = null
+                        val outcome =
+                            gate.refresh(
+                                load = {
+                                    runCatching { sessionRepository.listPendingQuestions(directory) }
+                                        .onFailure { failure = it }
+                                        .getOrNull()
+                                },
+                                commit = { requests ->
+                                    diagnosticLogger.info(
+                                        DiagnosticLogArea.Question,
+                                        "question refresh reason=$reason count=${requests.size}",
+                                    )
+                                    if (requests == lastEmitted) {
+                                        diagnosticLogger.info(
+                                            DiagnosticLogArea.Question,
+                                            "question emit skipped reason=$reason cause=unchanged",
+                                        )
+                                    } else {
+                                        lastEmitted = requests
+                                        send(requests)
+                                    }
+                                },
+                            )
+                        when (outcome) {
+                            LiveStoreRefreshOutcome.COMMITTED -> {
+                                authority.acknowledge(generation)
+                                if (authority.needsReconcile(liveConnection.snapshot.value)) {
+                                    refresh(StoreRefreshReason.STREAM_RECONNECTED, force = false)
+                                }
+                            }
+                            LiveStoreRefreshOutcome.FAILED,
+                            LiveStoreRefreshOutcome.DISCARDED,
+                            -> authority.fail(generation)
+                        }
                         failure?.let {
                             diagnosticLogger.warning(
                                 DiagnosticLogArea.Question,
@@ -89,18 +117,23 @@ class DefaultQuestionLiveStore
                     launch {
                         worldSignals.signals.collect { signal ->
                             if (signal.marksStale()) {
-                                stale = true
+                                authority.invalidate(liveConnection.snapshot.value)
                                 return@collect
                             }
                             signal.catchUpReason()?.let { refresh(it, force = false) }
                         }
                     }
                     launch {
+                        liveConnection.snapshot.collect {
+                            refresh(StoreRefreshReason.STREAM_RECONNECTED, force = false)
+                        }
+                    }
+                    launch {
                         invalidationBus.events
                             .filter { it.key == null || it.key == directory }
                             .collect {
-                                stale = true
-                                refresh(it.reason, force = true)
+                                authority.invalidate(liveConnection.snapshot.value)
+                                refresh(it.reason, force = false)
                             }
                     }
                     try {
@@ -117,10 +150,10 @@ class DefaultQuestionLiveStore
                                     reconnectRefresh =
                                         launch {
                                             delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
-                                            refresh(event.type, force = true)
+                                            refresh(event.type, force = false)
                                         }
                                 } else {
-                                    refresh(event.type, force = true)
+                                    launch { refresh(event.type, force = true) }
                                 }
                             }
                     } finally {

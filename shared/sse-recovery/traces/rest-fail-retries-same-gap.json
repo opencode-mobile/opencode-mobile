@@ -1,0 +1,82 @@
+{
+  "id": "rest-fail-retries-same-gap",
+  "title": "Failed REST must retry the same gap and stay unsynced until success",
+  "platforms": [
+    "android",
+    "ios"
+  ],
+  "surface": "recovery",
+  "protocol": "v2",
+  "seed": {
+    "profileId": "a",
+    "directory": "/repo",
+    "sessionId": "ses-1",
+    "messages": [
+      {
+        "id": "msg-1",
+        "text": "Hello"
+      }
+    ],
+    "connectionState": "connected",
+    "occupancy": "active"
+  },
+  "steps": [
+    {
+      "t": 0,
+      "op": "observe"
+    },
+    {
+      "t": 10,
+      "op": "rest.fail"
+    },
+    {
+      "t": 10,
+      "op": "rest.hold"
+    },
+    {
+      "t": 10,
+      "op": "openGap",
+      "state": "reconnect"
+    },
+    {
+      "t": 30,
+      "op": "snapshot",
+      "name": "while-retrying"
+    },
+    {
+      "t": 40,
+      "op": "rest.setMessages",
+      "messages": [
+        {
+          "id": "msg-1",
+          "text": "Recovered"
+        }
+      ]
+    },
+    {
+      "t": 40,
+      "op": "rest.release"
+    },
+    {
+      "t": 80,
+      "op": "snapshot",
+      "name": "after-retry-success"
+    }
+  ],
+  "expected": {
+    "snapshots": {
+      "while-retrying": {
+        "catchUpChrome": true
+      },
+      "after-retry-success": {
+        "catchUpChrome": false,
+        "transcript": [
+          {
+            "id": "msg-1",
+            "text": "Recovered"
+          }
+        ]
+      }
+    }
+  }
+}

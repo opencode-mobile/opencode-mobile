@@ -20,6 +20,18 @@ nonisolated enum MessageEventRouter {
         messageIntakeTypes.contains(event.type)
     }
 
+    static func isIncrementalTranscriptEvent(_ event: OpencodeEvent) -> Bool {
+        incrementalTranscriptTypes.contains(event.type)
+    }
+
+    private static let incrementalTranscriptTypes: Set<String> = [
+        "message.updated",
+        "message.part.updated",
+        "message.part.delta",
+        "message.removed",
+        "message.part.removed",
+    ]
+
     /// Cheap UTF-8 size proxy for staging byte budgets. Never inspects full
     /// message bodies beyond the delta/text fields already on the event.
     static func estimatedByteCost(_ event: OpencodeEvent) -> Int {
@@ -57,43 +69,6 @@ nonisolated final class ConnectionEpoch: @unchecked Sendable {
         defer { lock.unlock() }
         value &+= 1
         return value
-    }
-}
-
-/// Per-observation generation. Adopted forward on stream.reconnected /
-/// server.connected so an SSE start/reconnect bump does not latch Recovering.
-nonisolated final class ObservationEpoch: @unchecked Sendable {
-    private let lock = NSLock()
-    private var value: UInt64
-
-    init(_ value: UInt64) {
-        self.value = value
-    }
-
-    var current: UInt64 {
-        lock.lock()
-        defer { lock.unlock() }
-        return value
-    }
-
-    func adopt(_ newValue: UInt64) {
-        lock.lock()
-        defer { lock.unlock() }
-        value = newValue
-    }
-}
-
-/// One MessageSync reconnect catch-up per ConnectionEpoch (OPE-165).
-nonisolated final class ReconnectCatchUpGate: @unchecked Sendable {
-    private let lock = NSLock()
-    private var lastEpoch: UInt64?
-
-    func claim(_ epoch: UInt64) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        if lastEpoch == epoch { return false }
-        lastEpoch = epoch
-        return true
     }
 }
 

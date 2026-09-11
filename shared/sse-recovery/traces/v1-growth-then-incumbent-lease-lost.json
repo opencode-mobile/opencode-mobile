@@ -1,0 +1,109 @@
+{
+  "id": "v1-growth-then-incumbent-lease-lost",
+  "title": "v1 directory growth must not open a gap; incumbent death before the new lease is live opens one LeaseLost",
+  "platforms": [
+    "android",
+    "ios"
+  ],
+  "surface": "transport",
+  "protocol": "v1",
+  "seed": {
+    "profileId": "a",
+    "directory": "/repo-a",
+    "sessionId": "ses-1",
+    "directories": [
+      "/repo-a"
+    ],
+    "connectionState": "connected",
+    "occupancy": "active"
+  },
+  "steps": [
+    {
+      "t": 0,
+      "op": "stream.start"
+    },
+    {
+      "t": 20,
+      "op": "target.open",
+      "target": "global/event"
+    },
+    {
+      "t": 20,
+      "op": "target.open",
+      "target": "event:/repo-a"
+    },
+    {
+      "t": 25,
+      "op": "target.activity",
+      "target": "global/event"
+    },
+    {
+      "t": 40,
+      "op": "directories.set",
+      "directories": [
+        "/repo-a",
+        "/repo-b"
+      ]
+    },
+    {
+      "t": 50,
+      "op": "snapshot",
+      "name": "after-growth"
+    },
+    {
+      "t": 60,
+      "op": "target.close",
+      "target": "event:/repo-a"
+    },
+    {
+      "t": 80,
+      "op": "snapshot",
+      "name": "after-incumbent-death"
+    },
+    {
+      "t": 1100,
+      "op": "target.open",
+      "target": "event:/repo-a"
+    },
+    {
+      "t": 1100,
+      "op": "target.open",
+      "target": "event:/repo-b"
+    },
+    {
+      "t": 1150,
+      "op": "snapshot",
+      "name": "after-recovery"
+    }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-growth": {
+        "requiredTargets": [
+          "global/event",
+          "event:/repo-a",
+          "event:/repo-b"
+        ],
+        "liveTargets": [
+          "global/event",
+          "event:/repo-a"
+        ],
+        "chrome": "connecting"
+      },
+      "after-incumbent-death": {
+        "liveTargets": [
+          "global/event"
+        ],
+        "chrome": "connecting"
+      },
+      "after-recovery": {
+        "liveTargets": [
+          "global/event",
+          "event:/repo-a",
+          "event:/repo-b"
+        ],
+        "chrome": "live"
+      }
+    }
+  }
+}

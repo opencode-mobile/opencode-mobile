@@ -1,6 +1,11 @@
 package dev.opencode.mobile.domain.connection
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+
 interface ConnectionProfileStore {
+    fun configurationRevisions(): Flow<Unit> = emptyFlow()
+
     suspend fun activeProfile(): ConnectionProfile?
 
     suspend fun listProfiles(): List<ConnectionProfile> = listOfNotNull(activeProfile())

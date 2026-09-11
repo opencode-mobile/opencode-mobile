@@ -191,6 +191,9 @@ extension Container {
                 eventStream: self.foregroundEventStream(),
                 worldSignals: self.worldSignals(),
                 connectionProfileIDProvider: {
+                    if let id = manager.currentProfile()?.id, !id.isEmpty {
+                        return id
+                    }
                     guard let connection = manager.connection else { return "local" }
                     return PreparedHistoryCacheKey.profileID(
                         baseURL: connection.baseURL.absoluteString,
@@ -213,6 +216,9 @@ extension Container {
                 messageSync: self.messageSync(),
                 contentPreparer: self.messageContentPreparer(),
                 connectionProfileIDProvider: {
+                    if let id = manager.currentProfile()?.id, !id.isEmpty {
+                        return id
+                    }
                     guard let connection = manager.connection else { return "local" }
                     return PreparedHistoryCacheKey.profileID(
                         baseURL: connection.baseURL.absoluteString,
@@ -342,7 +348,21 @@ extension Container {
                 instanceDirectories: {
                     guard let url = manager.connection?.baseURL.absoluteString else { return [] }
                     return await store.addedWorktrees(serverBaseURL: url)
-                }
+                },
+                configurationRevisions: { store.configurationRevisions() },
+                profileID: {
+                    if let id = manager.currentProfile()?.id, !id.isEmpty {
+                        return id
+                    }
+                    guard let connection = manager.connection else { return "" }
+                    return "\(ConnectionProfileIdentity.normalizeBaseURL(connection.baseURL.absoluteString))|\(ConnectionProfileIdentity.normalizeUsername(connection.username))"
+                },
+                connectionIdentity: {
+                    guard let connection = manager.connection else { return "" }
+                    return "\(ConnectionProfileIdentity.normalizeBaseURL(connection.baseURL.absoluteString))|\(ConnectionProfileIdentity.normalizeUsername(connection.username))"
+                },
+                protocolHint: { manager.protocolHint() },
+                protocolProbe: { await manager.currentProtocolOrProbe() }
             )
         }.singleton
     }
@@ -479,6 +499,9 @@ extension Container {
                 activeConnectionManager: self.activeConnectionManager(),
                 sessionLiveStore: self.sessionLiveStore(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
+                permissionLiveStore: self.permissionLiveStore(),
+                questionLiveStore: self.questionLiveStore(),
+                sessionTodoLiveStore: self.sessionTodoLiveStore(),
                 sessionReadyStore: self.sessionReadyStore(),
                 foregroundEventStream: self.foregroundEventStream(),
                 connectionSessionCoordinator: self.connectionSessionCoordinator(),

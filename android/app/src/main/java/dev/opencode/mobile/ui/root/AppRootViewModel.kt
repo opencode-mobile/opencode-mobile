@@ -6,6 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 import javax.inject.Inject
 
 enum class AppRootState {
@@ -30,9 +32,10 @@ class AppRootViewModel
         private val connectionProfileStore: ConnectionProfileStore,
         private val activeConnectionManager: ActiveConnectionManager,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
+        private val worldSignals: WorldSignals,
+        private val eventStream: ForegroundEventStream,
         private val httpClient: OpencodeHttpClient,
         private val sseHttpClient: OpencodeSseHttpClient,
-        private val foregroundEventStream: ForegroundEventStream,
     ) : ViewModel() {
         private val _state = MutableStateFlow(AppRootState.Loading)
         val state: StateFlow<AppRootState> = _state.asStateFlow()
@@ -57,6 +60,8 @@ class AppRootViewModel
 
         private suspend fun loadInitialState() {
             activeConnectionManager.ensureLoaded()
+            eventStream.stop()
+            yield()
             httpClient.rebuild()
             sseHttpClient.rebuild()
             val hasProfile = connectionProfileStore.activeProfile() != null
@@ -64,6 +69,7 @@ class AppRootViewModel
                 _state.value = AppRootState.AppOnboarding
             } else {
                 enterHome()
+                worldSignals.onConnectionAvailable()
             }
         }
 
@@ -80,10 +86,6 @@ class AppRootViewModel
         }
 
         private fun enterHome() {
-            httpClient.rebuild()
-            sseHttpClient.rebuild()
             _state.value = AppRootState.Home
-            foregroundEventStream.stop()
-            foregroundEventStream.start()
         }
     }

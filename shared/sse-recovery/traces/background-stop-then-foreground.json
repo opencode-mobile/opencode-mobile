@@ -1,0 +1,73 @@
+{
+  "id": "background-stop-then-foreground",
+  "title": "BackgroundStop then foreground must catch up once and not stick Syncing",
+  "platforms": [
+    "android",
+    "ios"
+  ],
+  "surface": "recovery",
+  "protocol": "v1",
+  "seed": {
+    "profileId": "a",
+    "directory": "/repo",
+    "sessionId": "ses-1",
+    "messages": [
+      {
+        "id": "msg-1",
+        "text": "Hello"
+      }
+    ],
+    "connectionState": "connected",
+    "occupancy": "active"
+  },
+  "steps": [
+    {
+      "t": 0,
+      "op": "observe"
+    },
+    {
+      "t": 10,
+      "op": "world.backgroundStop"
+    },
+    {
+      "t": 20,
+      "op": "snapshot",
+      "name": "after-background-stop"
+    },
+    {
+      "t": 30,
+      "op": "rest.setMessages",
+      "messages": [
+        {
+          "id": "msg-1",
+          "text": "After foreground"
+        }
+      ]
+    },
+    {
+      "t": 30,
+      "op": "world.foreground"
+    },
+    {
+      "t": 60,
+      "op": "snapshot",
+      "name": "after-foreground"
+    }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-background-stop": {
+        "catchUpChrome": true
+      },
+      "after-foreground": {
+        "catchUpChrome": false,
+        "transcript": [
+          {
+            "id": "msg-1",
+            "text": "After foreground"
+          }
+        ]
+      }
+    }
+  }
+}

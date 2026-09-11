@@ -58,6 +58,24 @@ struct SceneWorldSignalsTests {
         job.cancel()
     }
 
+    @Test func profileSwitchWhileOccupyingRetargetsStream() async {
+        let stream = RecordingForegroundEventStream()
+        let signals = SceneWorldSignals(
+            stream: stream,
+            deviceNetworkPath: ReadyDeviceNetworkPath(),
+            hasActiveConnection: { true },
+            stopGrace: .milliseconds(50)
+        )
+        signals.onForeground()
+        try? await Task.sleep(for: .milliseconds(20))
+        #expect(stream.connectionState == .connected)
+
+        signals.onProfileSwitched()
+        try? await Task.sleep(for: .milliseconds(20))
+        #expect(stream.connectionState == .connected)
+        #expect(stream.ops == ["start", "stop", "start"])
+    }
+
     @Test func occupancyTracksForegroundGraceAndStop() async {
         let stream = FakeForegroundEventStream()
         let signals = sceneWorldSignals(stream: stream, stopGrace: .milliseconds(50))
@@ -71,6 +89,7 @@ struct SceneWorldSignalsTests {
 
         signals.onForeground()
         #expect(signals.occupancy == .active)
+        #expect(stream.connectionState == .connected)
     }
 
     private func sceneWorldSignals(

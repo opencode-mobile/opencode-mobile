@@ -21,6 +21,23 @@ interface DeviceNetworkPath {
     }
 }
 
+/**
+ * Wait for a ready path without clobbering a Ready that arrived after a
+ * stale "not reachable" read. Writing Unavailable in that window lost the
+ * callback and hung occupancy before leases opened.
+ */
+internal suspend fun waitUntilDeviceNetworkReady(
+    isCurrentlyReachable: Boolean,
+    status: MutableStateFlow<DeviceNetworkPathStatus>,
+) {
+    if (status.value == DeviceNetworkPathStatus.Ready) return
+    if (isCurrentlyReachable) {
+        status.value = DeviceNetworkPathStatus.Ready
+        return
+    }
+    status.first { it == DeviceNetworkPathStatus.Ready }
+}
+
 object ReadyDeviceNetworkPath : DeviceNetworkPath {
     override val status: StateFlow<DeviceNetworkPathStatus> =
         MutableStateFlow(DeviceNetworkPathStatus.Ready)

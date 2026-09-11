@@ -2,6 +2,8 @@ package dev.opencode.mobile.domain.connection
 
 import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore
+import dev.opencode.mobile.domain.event.FakeForegroundEventStream
+import dev.opencode.mobile.domain.recovery.RecordingForegroundEventStream
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
@@ -47,6 +49,7 @@ class ConnectionSessionCoordinatorTest {
                     composerDraftStore = draftStore,
                     httpClient = OpencodeHttpClient(json, activeConnectionManager),
                     sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+                    eventStream = FakeForegroundEventStream(),
                 )
 
             draftStore.save(
@@ -89,6 +92,7 @@ class ConnectionSessionCoordinatorTest {
                     composerDraftStore = InMemoryComposerDraftStore(),
                     httpClient = OpencodeHttpClient(json, activeConnectionManager),
                     sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+                    eventStream = FakeForegroundEventStream(),
                 )
             val events = mutableListOf<Unit>()
             backgroundScope.launch { coordinator.profileSaved.collect { events += it } }
@@ -119,6 +123,49 @@ class ConnectionSessionCoordinatorTest {
             assertTrue(events.isEmpty())
             assertEquals("Work", connectionProfileStore.activeProfile()?.name)
             assertEquals("Studio", connectionProfileStore.listProfiles().first { it.id == home.id }.name)
+        }
+
+    @Test
+    fun switchProfile_stopsStreamBeforeRebuildingClients() =
+        runTest {
+            val connectionProfileStore = CatalogConnectionProfileStore()
+            val json = Json { ignoreUnknownKeys = true }
+            val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
+            val stream = RecordingForegroundEventStream()
+            val coordinator =
+                ConnectionSessionCoordinator(
+                    activeConnectionManager = activeConnectionManager,
+                    connectionProfileStore = connectionProfileStore,
+                    secureCredentialStore = FakeSecureCredentialStore(),
+                    sessionModelSelectionStore = FakeSessionModelSelectionStore(),
+                    composerDraftStore = InMemoryComposerDraftStore(),
+                    httpClient = OpencodeHttpClient(json, activeConnectionManager),
+                    sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+                    eventStream = stream,
+                )
+            coordinator.saveProfile(
+                ConnectionProfile(
+                    baseUrl = "http://10.0.0.1:4096/",
+                    username = "opencode",
+                    password = "secret",
+                    name = "Home",
+                ),
+            )
+            coordinator.saveProfile(
+                ConnectionProfile(
+                    baseUrl = "http://10.0.0.2:4096/",
+                    username = "opencode",
+                    password = "secret",
+                    name = "Work",
+                ),
+            )
+            val home = connectionProfileStore.listProfiles().first { it.name == "Home" }
+            stream.start()
+            stream.ops.clear()
+            coordinator.switchProfile(home.id)
+            advanceUntilIdle()
+            assertEquals(listOf("stop"), stream.ops.toList())
+            assertEquals("Home", connectionProfileStore.activeProfile()?.name)
         }
 }
 

@@ -118,6 +118,16 @@ nonisolated final class FakeWorldSignals: WorldSignals, @unchecked Sendable {
         }
     }
 
+    func setOccupancy(_ occupancy: StreamOccupancy) {
+        lock.lock()
+        _occupancy = occupancy
+        let occupancySubscribers = Array(occupancyContinuations.values)
+        lock.unlock()
+        for continuation in occupancySubscribers {
+            continuation.yield(occupancy)
+        }
+    }
+
     func emit(_ signal: WorldSignal) {
         lock.lock()
         switch signal {
@@ -151,7 +161,7 @@ nonisolated final class FakeWorldSignals: WorldSignals, @unchecked Sendable {
 
 extension WorldSignal {
     nonisolated var marksStale: Bool {
-        self == .background || self == .backgroundStop || self == .pathLost
+        self == .backgroundStop || self == .pathLost || self == .profileSwitched
     }
 
     nonisolated var catchUpReason: String? {
@@ -173,4 +183,5 @@ nonisolated enum StoreRefreshReason {
     static let initialSubscribe = "initial-subscribe"
     static let streamReconnected = "stream.reconnected"
     static let serverConnected = "server.connected"
+    static let connectionSnapshot = "connection-snapshot"
 }

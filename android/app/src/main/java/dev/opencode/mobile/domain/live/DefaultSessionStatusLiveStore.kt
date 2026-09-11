@@ -4,10 +4,14 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.GapAuthority
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.SilentWorldSignals
 import dev.opencode.mobile.domain.event.StoreRefreshReason
+import dev.opencode.mobile.domain.event.WorldSignal
 import dev.opencode.mobile.domain.event.WorldSignals
+import dev.opencode.mobile.domain.event.asLiveConnection
+import dev.opencode.mobile.domain.event.canCatchUp
 import dev.opencode.mobile.domain.event.catchUpReason
 import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.SessionRepository
@@ -114,8 +118,10 @@ class DefaultSessionStatusLiveStore
                 var server = emptyMap<String, SessionStatus>()
                 var current = emptyMap<String, SessionStatus>()
                 var reconnectRefresh: Job? = null
-                var stale = false
+                val liveConnection = eventStream.asLiveConnection()
+                val authority = GapAuthority()
                 val gate = LiveStoreRefreshGate()
+                var dropUnconfirmedPendingAfterBackgroundCatchUp = false
                 try {
                     suspend fun emitOverlay(base: Map<String, SessionStatus>) {
                         val next = overlayPending(directory, base, confirmFrom = emptyMap())
@@ -128,6 +134,7 @@ class DefaultSessionStatusLiveStore
                     suspend fun commitLoaded(
                         loaded: Map<String, SessionStatus>,
                         emptyActiveGuard: Boolean = false,
+                        dropUnconfirmedPending: Boolean = false,
                     ) {
                         // Empty active maps are a between-step gap on v2, not idle.
                         // True idle is session.idle / execution.*. Overlay pending
@@ -138,7 +145,15 @@ class DefaultSessionStatusLiveStore
                             return
                         }
                         server = loaded
-                        current = overlayPending(directory, loaded)
+                        current =
+                            overlayPending(
+                                directory,
+                                loaded,
+                                dropUnconfirmedPending = dropUnconfirmedPending,
+                            )
+                        if (dropUnconfirmedPending) {
+                            dropUnconfirmedPendingAfterBackgroundCatchUp = false
+                        }
                         send(current)
                     }
 
@@ -147,13 +162,26 @@ class DefaultSessionStatusLiveStore
                         force: Boolean,
                         emptyActiveGuard: Boolean = false,
                     ): LiveStoreRefreshOutcome {
-                        if (!force && !stale) {
+                        val snapshot = liveConnection.snapshot.value
+                        if (!force && !canCatchUp(worldSignals.occupancy.value, snapshot)) {
                             DiagnosticLog.info(
                                 DiagnosticLogArea.Session,
                                 "statusLiveStore skip directory=$directory reason=$reason",
                             )
                             return LiveStoreRefreshOutcome.FAILED
                         }
+                        val generation =
+                            if (force) {
+                                authority.captureBegin(snapshot)
+                            } else {
+                                authority.tryBegin(snapshot) ?: run {
+                                    DiagnosticLog.info(
+                                        DiagnosticLogArea.Session,
+                                        "statusLiveStore skip directory=$directory reason=$reason",
+                                    )
+                                    return LiveStoreRefreshOutcome.FAILED
+                                }
+                            }
                         val outcome =
                             gate.refresh(
                                 load = {
@@ -164,14 +192,28 @@ class DefaultSessionStatusLiveStore
                                     }.getOrNull()
                                 },
                                 commit = { loaded ->
-                                    stale = false
                                     DiagnosticLog.info(
                                         DiagnosticLogArea.Session,
                                         "statusLiveStore refresh directory=$directory reason=$reason",
                                     )
-                                    commitLoaded(loaded, emptyActiveGuard)
+                                    commitLoaded(
+                                        loaded,
+                                        emptyActiveGuard,
+                                        dropUnconfirmedPending = dropUnconfirmedPendingAfterBackgroundCatchUp,
+                                    )
                                 },
                             )
+                        when (outcome) {
+                            LiveStoreRefreshOutcome.COMMITTED -> {
+                                authority.acknowledge(generation)
+                                if (authority.needsReconcile(liveConnection.snapshot.value)) {
+                                    reloadFromServer(StoreRefreshReason.STREAM_RECONNECTED, force = false)
+                                }
+                            }
+                            LiveStoreRefreshOutcome.FAILED,
+                            LiveStoreRefreshOutcome.DISCARDED,
+                            -> authority.fail(generation)
+                        }
                         if (outcome == LiveStoreRefreshOutcome.DISCARDED) {
                             DiagnosticLog.info(
                                 DiagnosticLogArea.Session,
@@ -211,8 +253,8 @@ class DefaultSessionStatusLiveStore
                             .filter { it.key == null || it.key == directory }
                             .collect { invalidation ->
                                 try {
-                                    stale = true
-                                    reloadFromServer(invalidation.reason, force = true)
+                                    authority.invalidate(liveConnection.snapshot.value)
+                                    reloadFromServer(invalidation.reason, force = false)
                                 } finally {
                                     invalidation.ack?.complete(Unit)
                                 }
@@ -225,11 +267,19 @@ class DefaultSessionStatusLiveStore
                     launch {
                         worldSignals.signals.collect { signal ->
                             if (signal.marksStale()) {
-                                stale = true
+                                authority.invalidate(liveConnection.snapshot.value)
+                                if (signal == WorldSignal.BackgroundStop) {
+                                    dropUnconfirmedPendingAfterBackgroundCatchUp = true
+                                }
                                 return@collect
                             }
                             val reason = signal.catchUpReason() ?: return@collect
                             reloadFromServer(reason, force = false)
+                        }
+                    }
+                    launch {
+                        liveConnection.snapshot.collect {
+                            reloadFromServer(StoreRefreshReason.STREAM_RECONNECTED, force = false)
                         }
                     }
 
@@ -241,7 +291,7 @@ class DefaultSessionStatusLiveStore
                                     reconnectRefresh =
                                         launch {
                                             delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
-                                            reloadFromServer(event.type, force = true)
+                                            reloadFromServer(event.type, force = false)
                                         }
                                 }
                                 event.type == "session.active.snapshot" -> {
@@ -306,6 +356,7 @@ class DefaultSessionStatusLiveStore
             directory: String,
             base: Map<String, SessionStatus>,
             confirmFrom: Map<String, SessionStatus> = base,
+            dropUnconfirmedPending: Boolean = false,
         ): Map<String, SessionStatus> {
             val pending = pendingBusy[directory]?.toSet().orEmpty()
             if (pending.isEmpty()) return base
@@ -313,6 +364,8 @@ class DefaultSessionStatusLiveStore
             for (sessionId in pending) {
                 val restType = confirmFrom[sessionId]?.raw?.get("type")
                 if (restType == "busy" || restType == "retry") {
+                    pendingBusy[directory]?.remove(sessionId)
+                } else if (dropUnconfirmedPending) {
                     pendingBusy[directory]?.remove(sessionId)
                 } else {
                     result = result + (sessionId to localBusy(sessionId))

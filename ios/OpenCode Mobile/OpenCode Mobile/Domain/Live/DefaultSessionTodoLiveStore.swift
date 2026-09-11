@@ -13,6 +13,7 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
         var isLive = false
         var continuations: [UUID: AsyncStream<[SessionTodo]>.Continuation] = [:]
         var eventTask: Task<Void, Never>?
+        let authority = GapAuthority()
     }
 
     private let sessionRepository: any SessionRepository
@@ -53,17 +54,27 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
             let id = UUID()
             handle.continuations[id] = continuation
             continuation.yield(handle.todos)
-            if !handle.hasCache {
-                Task { await self.fetch(key: key, force: false, reason: StoreRefreshReason.initialSubscribe) }
-            }
             if handle.eventTask == nil {
                 let sessionRepository = self.sessionRepository
                 let eventStream = self.eventStream
                 let worldSignals = self.worldSignals
                 let adapter = self.adapter
+                let authority = handle.authority
                 handle.eventTask = Task.detached { [weak self] in
                     let store = self
-                    let stale = StaleBit()
+                    let liveConnection = eventStream.asLiveConnection()
+                    let needsBootstrap = await MainActor.run {
+                        store?.handles[key]?.hasCache != true
+                    }
+                    if needsBootstrap {
+                        _ = await store?.fetch(
+                            key: key,
+                            force: true,
+                            reason: StoreRefreshReason.initialSubscribe,
+                            liveConnection: liveConnection,
+                            authority: authority
+                        )
+                    }
                     await withTaskGroup(of: Void.self) { group in
                         group.addTask {
                             for await signal in worldSignals.signals() {
@@ -72,14 +83,32 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
                                 }
                                 guard isObserved else { continue }
                                 if signal.marksStale {
-                                    stale.mark()
+                                    authority.invalidate(liveConnection.snapshot)
                                     continue
                                 }
                                 guard let reason = signal.catchUpReason else { continue }
-                                guard stale.isSet else { continue }
-                                if await store?.fetch(key: key, force: true, reason: reason) == true {
-                                    stale.clear()
+                                _ = await store?.fetch(
+                                    key: key,
+                                    force: false,
+                                    reason: reason,
+                                    liveConnection: liveConnection,
+                                    authority: authority
+                                )
+                            }
+                        }
+                        group.addTask {
+                            for await _ in liveConnection.snapshotUpdates() {
+                                let isObserved = await MainActor.run {
+                                    store?.handles[key]?.continuations.isEmpty == false
                                 }
+                                guard isObserved else { continue }
+                                _ = await store?.fetch(
+                                    key: key,
+                                    force: false,
+                                    reason: StoreRefreshReason.streamReconnected,
+                                    liveConnection: liveConnection,
+                                    authority: authority
+                                )
                             }
                         }
                         group.addTask {
@@ -106,9 +135,13 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
                                             store?.handles[key]?.continuations.isEmpty == false
                                         }
                                         guard isObserved else { return }
-                                        if await store?.fetch(key: key, force: true, reason: reason) == true {
-                                            stale.clear()
-                                        }
+                                        _ = await store?.fetch(
+                                            key: key,
+                                            force: false,
+                                            reason: reason,
+                                            liveConnection: liveConnection,
+                                            authority: authority
+                                        )
                                     }
                                 }
                             }
@@ -136,7 +169,7 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
         guard wasLive != isLive else { return }
         guard isLive else { return }
         Task {
-            await self.fetch(key: key, force: handle.hasCache)
+            await self.fetch(key: key, force: true)
         }
     }
 
@@ -167,14 +200,37 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
         }
     }
 
-    private func fetch(key: SessionKey, force: Bool, reason: String? = nil) async -> Bool {
+    private func fetch(
+        key: SessionKey,
+        force: Bool,
+        reason: String? = nil,
+        liveConnection: (any LiveConnection)? = nil,
+        authority: GapAuthority? = nil
+    ) async -> Bool {
         guard let handle = handles[key] else { return false }
-        if handle.hasCache, !force { return true }
+        let connection = liveConnection ?? eventStream.asLiveConnection()
+        let gap = authority ?? handle.authority
+        let snapshot = connection.snapshot
+        if !force {
+            guard canCatchUp(occupancy: worldSignals.occupancy, snapshot: snapshot) else {
+                return handle.hasCache
+            }
+        }
+        let generation: UInt64
+        if force {
+            generation = gap.captureBegin(snapshot)
+        } else {
+            guard let started = gap.tryBegin(snapshot) else { return handle.hasCache }
+            generation = started
+        }
         let directory = key.directory.isEmpty ? nil : key.directory
         guard let todos = try? await sessionRepository.listSessionTodos(
             id: key.sessionID,
             directory: directory
-        ) else { return false }
+        ) else {
+            gap.fail(generation)
+            return false
+        }
         if let reason {
             DiagnosticLog.info(
                 .session,
@@ -182,6 +238,16 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
             )
         }
         replace(todos: todos, key: key, markCache: true)
+        gap.acknowledge(generation)
+        if gap.needsReconcile(connection.snapshot) {
+            return await fetch(
+                key: key,
+                force: false,
+                reason: StoreRefreshReason.streamReconnected,
+                liveConnection: connection,
+                authority: gap
+            )
+        }
         return true
     }
 

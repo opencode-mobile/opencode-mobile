@@ -27,6 +27,8 @@ interface WorldSignals {
     val occupancy: StateFlow<StreamOccupancy>
 
     fun register() {}
+
+    fun onConnectionAvailable() {}
 }
 
 object SilentWorldSignals : WorldSignals {
@@ -56,9 +58,9 @@ class FakeWorldSignals : WorldSignals {
 }
 
 fun WorldSignal.marksStale(): Boolean =
-    this == WorldSignal.Background ||
-        this == WorldSignal.BackgroundStop ||
-        this == WorldSignal.PathLost
+    this == WorldSignal.BackgroundStop ||
+        this == WorldSignal.PathLost ||
+        this == WorldSignal.ProfileSwitched
 
 fun WorldSignal.catchUpReason(): String? =
     when (this) {
@@ -74,4 +76,5 @@ object StoreRefreshReason {
     const val INITIAL_SUBSCRIBE = "initial-subscribe"
     const val STREAM_RECONNECTED = "stream.reconnected"
     const val SERVER_CONNECTED = "server.connected"
+    const val CONNECTION_SNAPSHOT = "connection-snapshot"
 }

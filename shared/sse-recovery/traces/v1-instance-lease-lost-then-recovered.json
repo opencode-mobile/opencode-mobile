@@ -1,0 +1,71 @@
+{
+  "id": "v1-instance-lease-lost-then-recovered",
+  "title": "A lost v1 instance lease must recover with one gap and reopen that path",
+  "platforms": [
+    "android",
+    "ios"
+  ],
+  "surface": "transport",
+  "protocol": "v1",
+  "seed": {
+    "profileId": "a",
+    "directory": "/repo",
+    "sessionId": "ses-1",
+    "directories": [
+      "/repo"
+    ],
+    "connectionState": "idle",
+    "occupancy": "active"
+  },
+  "steps": [
+    {
+      "t": 0,
+      "op": "stream.start"
+    },
+    {
+      "t": 20,
+      "op": "target.open",
+      "target": "global/event"
+    },
+    {
+      "t": 20,
+      "op": "target.open",
+      "target": "event:/repo"
+    },
+    {
+      "t": 30,
+      "op": "target.activity",
+      "target": "global/event"
+    },
+    {
+      "t": 30,
+      "op": "target.silence",
+      "target": "event:/repo"
+    },
+    {
+      "t": 250,
+      "op": "target.open",
+      "target": "event:/repo"
+    },
+    {
+      "t": 250,
+      "op": "snapshot",
+      "name": "after-instance-recovered"
+    }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-instance-recovered": {
+        "requiredTargets": [
+          "global/event",
+          "event:/repo"
+        ],
+        "liveTargets": [
+          "global/event",
+          "event:/repo"
+        ],
+        "chrome": "live"
+      }
+    }
+  }
+}

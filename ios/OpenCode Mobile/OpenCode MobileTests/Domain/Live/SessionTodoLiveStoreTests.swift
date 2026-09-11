@@ -96,15 +96,17 @@ struct SessionTodoLiveStoreTests {
             todos: [SessionTodo(position: 0, content: "A", status: .pending, priority: "low")]
         )
         let world = FakeWorldSignals()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
         let store = DefaultSessionTodoLiveStore(
             sessionRepository: repository,
-            eventStream: FakeForegroundEventStream(),
+            eventStream: eventStream,
             worldSignals: world
         )
         let collector = TodoCollector(store: store)
         _ = try await collector.awaitEmission { !$0.isEmpty }
 
-        world.emit(.background)
+        world.emit(.backgroundStop)
         try await Task.sleep(for: .milliseconds(40))
         repository.listTodosError = URLError(.cannotConnectToHost)
         world.emit(.foreground)
@@ -141,6 +143,25 @@ struct SessionTodoLiveStoreTests {
         try await Task.sleep(for: .milliseconds(40))
 
         #expect(repository.listTodosCallCount == afterObserve)
+    }
+
+    @Test func clearCache_isolatesSameDirectoryAfterProfileSwitch() async throws {
+        let repository = TodoLiveStoreFakeSessionRepository(
+            todos: [SessionTodo(position: 0, content: "A", status: .pending, priority: "low")]
+        )
+        let store = DefaultSessionTodoLiveStore(
+            sessionRepository: repository,
+            eventStream: FakeForegroundEventStream()
+        )
+        let first = TodoCollector(store: store)
+        _ = try await first.awaitEmission { $0.first?.content == "A" }
+        first.cancel()
+        store.clearCache()
+        repository.todos = [SessionTodo(position: 0, content: "B", status: .pending, priority: "low")]
+        let second = TodoCollector(store: store)
+        defer { second.cancel() }
+        _ = try await second.awaitEmission { $0.first?.content == "B" }
+        #expect(second.emissions.allSatisfy { $0.allSatisfy { $0.content != "A" } })
     }
 }
 

@@ -1,0 +1,73 @@
+{
+  "id": "path-lost-then-path-ready",
+  "title": "PathLost then PathReady must reopen one unpaid gap and leave Live healthy",
+  "platforms": [
+    "android",
+    "ios"
+  ],
+  "surface": "recovery",
+  "protocol": "v2",
+  "seed": {
+    "profileId": "a",
+    "directory": "/repo",
+    "sessionId": "ses-1",
+    "messages": [
+      {
+        "id": "msg-1",
+        "text": "Hello"
+      }
+    ],
+    "connectionState": "connected",
+    "occupancy": "active"
+  },
+  "steps": [
+    {
+      "t": 0,
+      "op": "observe"
+    },
+    {
+      "t": 10,
+      "op": "world.pathLost"
+    },
+    {
+      "t": 20,
+      "op": "snapshot",
+      "name": "after-path-lost"
+    },
+    {
+      "t": 30,
+      "op": "rest.setMessages",
+      "messages": [
+        {
+          "id": "msg-1",
+          "text": "After path ready"
+        }
+      ]
+    },
+    {
+      "t": 30,
+      "op": "world.pathReady"
+    },
+    {
+      "t": 60,
+      "op": "snapshot",
+      "name": "after-path-ready"
+    }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-path-lost": {
+        "catchUpChrome": true
+      },
+      "after-path-ready": {
+        "catchUpChrome": false,
+        "transcript": [
+          {
+            "id": "msg-1",
+            "text": "After path ready"
+          }
+        ]
+      }
+    }
+  }
+}

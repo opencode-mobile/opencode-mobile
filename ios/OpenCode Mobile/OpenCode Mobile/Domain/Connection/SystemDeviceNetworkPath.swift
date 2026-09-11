@@ -41,6 +41,13 @@ final class SystemDeviceNetworkPath: DeviceNetworkPath, @unchecked Sendable {
     }
 
     func waitUntilReady() async {
+        let current: DeviceNetworkPathStatus =
+            monitor.currentPath.status == .satisfied ? .ready : .unavailable
+        if current == .ready {
+            setStatus(.ready)
+            return
+        }
+        setStatus(.unavailable)
         lock.lock()
         if _status == .ready {
             lock.unlock()

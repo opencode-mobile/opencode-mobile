@@ -1,0 +1,107 @@
+{
+  "id": "cold-resume-double-epoch",
+  "title": "Cold resume must not open a second catch-up from a double epoch bump",
+  "platforms": [
+    "android",
+    "ios"
+  ],
+  "surface": "recovery",
+  "protocol": "v2",
+  "seed": {
+    "profileId": "a",
+    "directory": "/repo",
+    "sessionId": "ses-1",
+    "messages": [
+      {
+        "id": "msg-1",
+        "text": "Hello"
+      }
+    ],
+    "connectionState": "connected",
+    "occupancy": "active"
+  },
+  "steps": [
+    {
+      "t": 0,
+      "op": "rest.hold"
+    },
+    {
+      "t": 0,
+      "op": "observe"
+    },
+    {
+      "t": 10,
+      "op": "stream.stop"
+    },
+    {
+      "t": 10,
+      "op": "connectionState",
+      "state": "idle"
+    },
+    {
+      "t": 20,
+      "op": "rest.setMessages",
+      "messages": [
+        {
+          "id": "msg-1",
+          "text": "Finished while away"
+        }
+      ]
+    },
+    {
+      "t": 30,
+      "op": "epoch.bump"
+    },
+    {
+      "t": 30,
+      "op": "connectionState",
+      "state": "connecting"
+    },
+    {
+      "t": 40,
+      "op": "epoch.bump"
+    },
+    {
+      "t": 40,
+      "op": "emit",
+      "event": {
+        "type": "stream.reconnected"
+      }
+    },
+    {
+      "t": 50,
+      "op": "connectionState",
+      "state": "connected"
+    },
+    {
+      "t": 50,
+      "op": "emit",
+      "event": {
+        "type": "server.connected"
+      }
+    },
+    {
+      "t": 55,
+      "op": "rest.release"
+    },
+    {
+      "t": 80,
+      "op": "snapshot",
+      "name": "after-cold-resume"
+    }
+  ],
+  "expected": {
+    "snapshots": {
+      "after-cold-resume": {
+        "catchUpChrome": false,
+        "chrome": "live",
+        "transcript": [
+          {
+            "id": "msg-1",
+            "text": "Finished while away"
+          }
+        ]
+      }
+    }
+  }
+}
