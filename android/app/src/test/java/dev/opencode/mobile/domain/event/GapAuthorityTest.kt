@@ -81,6 +81,46 @@ class GapAuthorityTest {
     }
 
     @Test
+    fun captureBegin_doesNotClobberExistingInFlight() {
+        val authority = GapAuthority()
+        val snapshot =
+            LiveConnectionSnapshot(
+                gap = LiveGapRevision(5, LiveGapReason.Reconnect),
+                connectionState = EventStreamConnectionState.Connected,
+            )
+        assertEquals(5L, authority.tryBegin(snapshot))
+        assertEquals(5L, authority.captureBegin(snapshot))
+        assertEquals(5L, authority.inFlightGeneration())
+        authority.acknowledge(5)
+        assertNull(authority.inFlightGeneration())
+        assertFalse(authority.needsReconcile(snapshot))
+    }
+
+    @Test
+    fun captureBegin_takesNewerObligation() {
+        val authority = GapAuthority()
+        val begun =
+            LiveConnectionSnapshot(
+                gap = LiveGapRevision(5, LiveGapReason.Reconnect),
+                connectionState = EventStreamConnectionState.Connected,
+            )
+        assertEquals(5L, authority.tryBegin(begun))
+        val newer =
+            LiveConnectionSnapshot(
+                gap = LiveGapRevision(6, LiveGapReason.Reconnect),
+                connectionState = EventStreamConnectionState.Connected,
+            )
+        assertEquals(6L, authority.captureBegin(newer))
+        assertEquals(6L, authority.inFlightGeneration())
+        authority.acknowledge(5)
+        assertEquals(5L, authority.acknowledgedGeneration())
+        assertEquals(6L, authority.inFlightGeneration())
+        assertFalse(authority.needsReconcile(newer))
+        authority.fail(6)
+        assertTrue(authority.needsReconcile(newer))
+    }
+
+    @Test
     fun acknowledge_exactInFlight_clearsAndLeavesNewerUnpaid() {
         val authority = GapAuthority()
         val begun =

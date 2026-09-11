@@ -542,19 +542,16 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 let acceptRemote =
                     store.revision(sessionID: key.storeSlot) == expectedRevision &&
                     MessageSnapshotAuthority.isAheadOrEqual(remote: messages, local: local)
-                if acceptRemote {
-                    _ = store.replaceAllIfRevision(
-                        sessionID: key.storeSlot,
-                        messages: messages,
-                        expectedRevision: expectedRevision
-                    )
-                }
+                let applied = acceptRemote && store.replaceAllIfRevision(
+                    sessionID: key.storeSlot,
+                    messages: messages,
+                    expectedRevision: expectedRevision
+                )
                 let merged = store.messages(sessionID: key.storeSlot)
                 let fingerprint = messageFingerprint(merged)
                 setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
                 setFingerprint(fingerprint, for: key.storeSlot)
-                setHealth(.healthy, for: key)
-                if acceptRemote {
+                if applied {
                     authority.acknowledge(begun)
                 } else {
                     authority.fail(begun)
@@ -573,7 +570,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     setAwaitingCacheSyncConfirm(false, for: key.storeSlot)
                     yield(.cacheSyncConfirmed)
                 }
-                if authority.needsReconcile(liveConnection.snapshot) || !acceptRemote {
+                if authority.needsReconcile(liveConnection.snapshot) || !applied {
                     await reconcileGap(
                         key: key,
                         reason: StoreRefreshReason.streamReconnected,
@@ -582,6 +579,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
                         confirmCacheSync: confirmCacheSyncIfAwaiting,
                         gapState: gapState
                     )
+                } else {
+                    setHealth(.healthy, for: key)
                 }
             }
         } catch {
@@ -829,20 +828,23 @@ nonisolated final class MessageSync: @unchecked Sendable {
             let acceptRemote =
                 store.revision(sessionID: key.storeSlot) == expectedRevision &&
                 MessageSnapshotAuthority.isAheadOrEqual(remote: messages, local: local)
+            let applied: Bool
             if acceptRemote {
                 if mergeExisting {
-                    _ = store.mergeAuthoritativeIfRevision(
+                    applied = store.mergeAuthoritativeIfRevision(
                         sessionID: key.storeSlot,
                         messages: messages,
                         expectedRevision: expectedRevision
                     )
                 } else {
-                    _ = store.replaceAllIfRevision(
+                    applied = store.replaceAllIfRevision(
                         sessionID: key.storeSlot,
                         messages: messages,
                         expectedRevision: expectedRevision
                     )
                 }
+            } else {
+                applied = false
             }
             let merged = store.messages(sessionID: key.storeSlot)
             setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
@@ -853,7 +855,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 .chat,
                 "fullReload session=\(key.sessionID) reason=\(reason) count=\(merged.count) ms=\(elapsedMs(since: started))"
             )
-            return acceptRemote ? .accepted(merged) : .discarded(merged)
+            return applied ? .accepted(merged) : .discarded(merged)
         } catch {
             SessionPerformanceProbe.emit("history_request_finished")
             DiagnosticLog.warning(

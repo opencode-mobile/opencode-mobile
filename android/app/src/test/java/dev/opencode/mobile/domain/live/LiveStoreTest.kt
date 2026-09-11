@@ -143,6 +143,31 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_subscribeWhileLiveUnpaidGap_doesNotStartSecondRest() =
+        runTest(testDispatcher) {
+            val initialLoadGate = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository(holdLoadUntil = initialLoadGate)
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            eventStream.openGap()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            runCurrent()
+
+            assertEquals(1, repository.listMessagesStarted.get())
+
+            initialLoadGate.complete(Unit)
+            advanceTimeBy(1)
+            runCurrent()
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
     fun observeMessages_overflowDuringInitialRestTriggersAuthoritativeRecovery() =
         runTest(testDispatcher) {
             val initialLoadGate = CompletableDeferred<Unit>()
@@ -3279,6 +3304,7 @@ private class FakeMessageRepository(
     var listMessagesCallCount = 0
     var nextLoadGate: CompletableDeferred<Unit>? = null
     val listHoldsEntered = AtomicInteger(0)
+    val listMessagesStarted = AtomicInteger(0)
 
     override fun observeMessages(
         sessionId: String,
@@ -3318,6 +3344,7 @@ private class FakeMessageRepository(
         sessionId: String,
         directory: String?,
     ): List<Message> {
+        listMessagesStarted.incrementAndGet()
         holdLoadUntil?.await()
         nextLoadGate?.also {
             nextLoadGate = null

@@ -31,10 +31,17 @@ class GapAuthority {
             target
         }
 
-    /** Marks the current obligation in-flight so a force REST can ack only that generation. */
+    /**
+     * Marks the current obligation in-flight so a force REST can ack only that
+     * generation. Does not clobber a same-or-newer in-flight begin.
+     */
     fun captureBegin(snapshot: LiveConnectionSnapshot): Long =
         synchronized(lock) {
             val target = maxOf(snapshot.gap?.generation ?: 0L, localObligation)
+            val current = inFlight
+            if (current != null && current >= target) {
+                return current
+            }
             inFlight = target
             target
         }

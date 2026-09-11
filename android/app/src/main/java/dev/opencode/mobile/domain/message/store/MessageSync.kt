@@ -795,20 +795,6 @@ class MessageSync(
 
             logI("observeMessages subscribe session=${key.sessionId} directory=${directory ?: "-"}")
             try {
-                snapshotWatcher =
-                    launch {
-                        liveConnection.snapshot.collect {
-                            if (!observationStillCurrent()) return@collect
-                            wakeGapEvaluation(StoreRefreshReason.CONNECTION_SNAPSHOT)
-                        }
-                    }
-                evaluateConsumer =
-                    launch {
-                        for (reason in evaluateWake) {
-                            if (!observationStillCurrent()) break
-                            reconcileGap(reason)
-                        }
-                    }
                 val seeded = cacheHandle.seed()
                 if (seeded != null) {
                     val seedRevision = engine.revision(storeSlot)
@@ -825,6 +811,13 @@ class MessageSync(
 
                 val expectedRevision = engine.revision(storeSlot)
                 val begun = authority.captureBegin(currentSnapshot())
+                snapshotWatcher =
+                    launch {
+                        liveConnection.snapshot.collect {
+                            if (!observationStillCurrent()) return@collect
+                            wakeGapEvaluation(StoreRefreshReason.CONNECTION_SNAPSHOT)
+                        }
+                    }
                 var loaded: List<Message>? = null
                 var failure: Throwable? = null
                 val elapsedMs =
@@ -862,12 +855,11 @@ class MessageSync(
                         val acceptRemote =
                             engine.revision(storeSlot) == expectedRevision &&
                                 MessageSnapshotAuthority.isAheadOrEqual(remote = messages, local = local)
-                        if (acceptRemote) {
-                            engine.replaceAllIfRevision(storeSlot, messages, expectedRevision)
-                        }
+                        val applied =
+                            acceptRemote &&
+                                engine.replaceAllIfRevision(storeSlot, messages, expectedRevision)
                         val merged = engine.messages(storeSlot)
                         rememberPublishedFrame(storeSlot, merged)
-                        publishHealth(MessageSyncHealth.Healthy)
                         logI(
                             "fullReload session=${key.sessionId} reason=initial-subscribe " +
                                 "count=${merged.size} ms=$elapsedMs",
@@ -891,16 +883,26 @@ class MessageSync(
                             )
                             send(MessageListUpdate.CacheSyncConfirmed)
                         }
-                        if (acceptRemote) {
+                        if (applied) {
                             authority.acknowledge(begun)
                         } else {
                             authority.fail(begun)
                         }
-                        if (authority.needsReconcile(currentSnapshot()) || !acceptRemote) {
+                        if (authority.needsReconcile(currentSnapshot()) || !applied) {
                             reconcileGap(StoreRefreshReason.STREAM_RECONNECTED)
+                        } else {
+                            publishHealth(MessageSyncHealth.Healthy)
                         }
                     }
                 }
+
+                evaluateConsumer =
+                    launch {
+                        for (reason in evaluateWake) {
+                            if (!observationStillCurrent()) break
+                            reconcileGap(reason)
+                        }
+                    }
 
                 for (item in staging) {
                     if (!observationStillCurrent()) break
@@ -1115,20 +1117,22 @@ class MessageSync(
         val acceptRemote =
             engine.revision(storeSlot) == expectedRevision &&
                 MessageSnapshotAuthority.isAheadOrEqual(remote = loaded, local = local)
-        if (acceptRemote) {
-            if (mergeExisting) {
-                engine.mergeAuthoritativeIfRevision(storeSlot, loaded, expectedRevision)
-            } else {
-                engine.replaceAllIfRevision(storeSlot, loaded, expectedRevision)
-            }
-        }
+        val applied =
+            acceptRemote &&
+                (
+                    if (mergeExisting) {
+                        engine.mergeAuthoritativeIfRevision(storeSlot, loaded, expectedRevision)
+                    } else {
+                        engine.replaceAllIfRevision(storeSlot, loaded, expectedRevision)
+                    }
+                )
         val merged = engine.messages(storeSlot)
         rememberPublishedFrame(storeSlot, merged)
         logI(
             "fullReload session=${key.sessionId} reason=$reason count=${merged.size} ms=$elapsedMs",
         )
         MessagePipelineProbe.emit(MessagePipelineProbe.Marker.ReducerCommitted)
-        return if (acceptRemote) {
+        return if (applied) {
             ReloadResult.Accepted(merged)
         } else {
             ReloadResult.Discarded(merged)

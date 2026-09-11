@@ -32,11 +32,15 @@ nonisolated final class GapAuthority: @unchecked Sendable {
         return target
     }
 
-    /// Marks the current obligation in-flight so a force REST can ack only that generation.
+    /// Marks the current obligation in-flight so a force REST can ack only that
+    /// generation. Does not clobber a same-or-newer in-flight begin.
     func captureBegin(_ snapshot: LiveConnectionSnapshot) -> UInt64 {
         lock.lock()
         defer { lock.unlock() }
         let target = max(snapshot.gap?.generation ?? 0, localObligation)
+        if let current = inFlight, current >= target {
+            return current
+        }
         inFlight = target
         return target
     }
