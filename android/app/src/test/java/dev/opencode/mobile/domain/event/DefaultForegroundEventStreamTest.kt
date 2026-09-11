@@ -653,6 +653,51 @@ class DefaultForegroundEventStreamTest {
         }
 
     @Test
+    fun connectFailure_retriesUntilConnected() =
+        runBlocking {
+            val opens = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine {
+                        val n = opens.incrementAndGet()
+                        if (n == 1) {
+                            throw java.net.ConnectException("Failed to connect")
+                        }
+                        respond(
+                            content = "data: {\"type\":\"server.connected\",\"data\":{}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(5_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.Connected }
+                }
+                assertTrue(opens.get() >= 2)
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
     fun retryAfterStreamEnd_doesNotPublishDisconnected() =
         runBlocking {
             val opens = AtomicInteger(0)

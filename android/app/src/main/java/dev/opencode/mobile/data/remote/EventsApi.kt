@@ -47,39 +47,45 @@ class EventsApi private constructor(
         onActivity: suspend () -> Unit = {},
         onDataLine: suspend (String) -> Unit,
     ) {
-        httpClient
-            .get()
-            .prepareGet(path) {
-                accept(ContentType.Text.EventStream)
-                header(HttpHeaders.CacheControl, "no-cache")
-                header(HttpHeaders.AcceptEncoding, "identity")
-                applyDirectory(directory)
-            }.execute { response ->
-                if (response.status.value !in 200..299) {
-                    throw IllegalStateException("SSE HTTP ${response.status.value}")
-                }
-                onHTTPResponse(response.status.value)
-                val channel = response.bodyAsChannel()
-                val parser = SseDataLineParser()
-                try {
-                    while (!channel.isClosedForRead) {
-                        val line = channel.readUTF8Line() ?: break
-                        // Comments, id/event fields, and incomplete data still prove the
-                        // socket is alive. TUI keeps the iterator open on those frames.
-                        onActivity()
-                        for (payload in parser.ingest(line)) {
+        try {
+            httpClient
+                .get()
+                .prepareGet(path) {
+                    accept(ContentType.Text.EventStream)
+                    header(HttpHeaders.CacheControl, "no-cache")
+                    header(HttpHeaders.AcceptEncoding, "identity")
+                    applyDirectory(directory)
+                }.execute { response ->
+                    if (response.status.value !in 200..299) {
+                        throw IllegalStateException("SSE HTTP ${response.status.value}")
+                    }
+                    onHTTPResponse(response.status.value)
+                    val channel = response.bodyAsChannel()
+                    val parser = SseDataLineParser()
+                    try {
+                        while (!channel.isClosedForRead) {
+                            val line = channel.readUTF8Line() ?: break
+                            // Comments, id/event fields, and incomplete data still prove the
+                            // socket is alive. TUI keeps the iterator open on those frames.
+                            onActivity()
+                            for (payload in parser.ingest(line)) {
+                                onDataLine(payload)
+                            }
+                        }
+                        for (payload in parser.finish()) {
                             onDataLine(payload)
                         }
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Exception) {
+                        // Socket abort, closed engine, or chunked-read EOF: the lease
+                        // loop retries. Do not let OkHttp/Ktor IO kill the occupancy job.
                     }
-                    for (payload in parser.finish()) {
-                        onDataLine(payload)
-                    }
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    // Socket abort, closed engine, or chunked-read EOF: the lease
-                    // loop retries. Do not let OkHttp/Ktor IO kill the occupancy job.
                 }
-            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            // Connect/reset before the read loop: the lease loop retries.
+        }
     }
 }

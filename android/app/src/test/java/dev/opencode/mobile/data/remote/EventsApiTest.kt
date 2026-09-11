@@ -11,9 +11,22 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
+import java.net.ConnectException
 import java.net.SocketException
 
 class EventsApiTest {
+    @Test
+    fun streamEvents_connectFailureEndsWithoutThrowing() =
+        runBlocking {
+            val client =
+                HttpClient(
+                    MockEngine {
+                        throw ConnectException("Failed to connect")
+                    },
+                )
+            EventsApi(client).streamEvents(path = "global/event") { }
+        }
+
     @Test
     fun streamEvents_socketAbortEndsWithoutThrowing() =
         runBlocking {

@@ -478,27 +478,37 @@ class DefaultForegroundEventStream
                         val attemptId = lease.nextAttempt()
                         val streamJob =
                             launch {
-                                val path = "/${target.path}"
-                                eventsApi.streamEvents(
-                                    path = target.path,
-                                    directory = target.directory,
-                                    onHTTPResponse = { statusCode ->
-                                        if (lease.currentAttempt() == attemptId) {
+                                try {
+                                    val path = "/${target.path}"
+                                    eventsApi.streamEvents(
+                                        path = target.path,
+                                        directory = target.directory,
+                                        onHTTPResponse = { statusCode ->
+                                            if (lease.currentAttempt() == attemptId) {
+                                                lastActivityMs.set(System.currentTimeMillis())
+                                                diagnosticLogger.info(
+                                                    DiagnosticLogArea.Sse,
+                                                    "GET $path opened status=$statusCode protocol=${appliedConfig?.protocol?.wireValue}",
+                                                )
+                                                markLeaseLive(lease, generation)
+                                                retryAttempt = 0
+                                            }
+                                        },
+                                        onActivity = {
                                             lastActivityMs.set(System.currentTimeMillis())
-                                            diagnosticLogger.info(
-                                                DiagnosticLogArea.Sse,
-                                                "GET $path opened status=$statusCode protocol=${appliedConfig?.protocol?.wireValue}",
-                                            )
-                                            markLeaseLive(lease, generation)
-                                            retryAttempt = 0
-                                        }
-                                    },
-                                    onActivity = {
+                                        },
+                                    ) { dataLine ->
                                         lastActivityMs.set(System.currentTimeMillis())
-                                    },
-                                ) { dataLine ->
-                                    lastActivityMs.set(System.currentTimeMillis())
-                                    publishDataLine(dataLine, generation)
+                                        publishDataLine(dataLine, generation)
+                                    }
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (throwable: Throwable) {
+                                    diagnosticLogger.warning(
+                                        DiagnosticLogArea.Sse,
+                                        "foreground SSE stream failed target=${target.key}",
+                                        throwable,
+                                    )
                                 }
                             }
                         lease.streamJob = streamJob
