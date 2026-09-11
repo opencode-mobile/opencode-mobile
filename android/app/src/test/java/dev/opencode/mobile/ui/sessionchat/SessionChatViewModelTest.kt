@@ -3952,6 +3952,7 @@ class SessionChatViewModelTest {
                 composerDraftStore = composerDraftStore,
                 httpClient = OpencodeHttpClient(json, activeConnectionManager),
                 sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+                eventStream = eventStream,
             )
         return SessionChatViewModel(
             messageRepository = repository,

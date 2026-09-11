@@ -16,8 +16,11 @@ import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.http.HttpHeaders
 import io.ktor.serialization.kotlinx.json.json
+import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.Json
+import okhttp3.Dispatcher
 
 object KtorClientFactory {
     fun create(
@@ -31,8 +34,9 @@ object KtorClientFactory {
          */
         sse: Boolean = false,
         probe: Boolean = false,
-    ): HttpClient =
-        HttpClient(OkHttp) {
+    ): HttpClient {
+        HttpEngineShutdownGuard.install()
+        return HttpClient(OkHttp) {
             engine {
                 config {
                     // Keep connect fail-fast. Read/call stay open so Ktor HttpTimeout (and
@@ -42,6 +46,7 @@ object KtorClientFactory {
                     readTimeout(0, TimeUnit.MILLISECONDS)
                     writeTimeout(if (probe) 60 else 0, TimeUnit.SECONDS)
                     callTimeout(0, TimeUnit.MILLISECONDS)
+                    dispatcher(nonAbortingDispatcher())
                 }
             }
             install(HttpTimeout) {
@@ -79,6 +84,26 @@ object KtorClientFactory {
                 }
             }
         }
+    }
+
+    /**
+     * OkHttp's default AbortPolicy turns [HttpClient.close] into
+     * [java.util.concurrent.RejectedExecutionException] on the next enqueue.
+     * Drop those tasks so a rebuild cannot kill the process.
+     */
+    private fun nonAbortingDispatcher(): Dispatcher {
+        val executor =
+            ThreadPoolExecutor(
+                0,
+                Int.MAX_VALUE,
+                60L,
+                TimeUnit.SECONDS,
+                SynchronousQueue(),
+                { runnable -> Thread(runnable, "OkHttp Dispatcher").apply { isDaemon = true } },
+                ThreadPoolExecutor.DiscardPolicy(),
+            )
+        return Dispatcher(executor)
+    }
 
     private object AndroidApiLogger : Logger {
         override fun log(message: String) {

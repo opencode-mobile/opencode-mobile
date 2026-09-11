@@ -928,6 +928,7 @@ class MainScreenViewModelTest {
                 composerDraftStore = dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore(),
                 httpClient = OpencodeHttpClient(json, activeConnectionManager),
                 sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+                eventStream = eventStream,
             )
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
         val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope, EventDomainAdapter(json))

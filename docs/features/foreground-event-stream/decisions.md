@@ -197,6 +197,21 @@ create a new catch-up obligation.
   the bus was still live.
 - Revisit when: a new loss cause must become a data gap.
 
+## Android HTTP clients never close under live SSE
+
+- Date: 2026-09-11
+- Decision: Stop the foreground stream before `HttpClient.rebuild()`.
+  `AppRoot.enterHome` does not rebuild clients. Cold start binds clients,
+  enters Home, then starts SSE. Socket abort and closed-engine errors on
+  the OkHttp/Ktor copy path are reconnectable; they must not kill the
+  process. iOS `URLSession` already fails those as request errors.
+- Reason: Android Crashlytics on `0.1.0-merge.212` recorded FATAL
+  `ClientEngineClosedException`, `RejectedExecutionException` on a
+  terminated OkHttp dispatcher, and `SocketException` during chunked SSE
+  reads. `enterHome` rebuilt after `onConnectionAvailable` started SSE.
+- Revisit when: Ktor's OkHttp engine parents the response-copy job to the
+  request instead of `GlobalScope`.
+
 ## Logging
 
 Foreground event stream implementations log connection lifecycle, retry timing,

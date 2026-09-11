@@ -13,6 +13,7 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.message.ConnectionEpoch
 import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -67,7 +68,17 @@ class DefaultForegroundEventStream
             this.connectionEpoch = connectionEpoch
         }
 
-        private val scope = CoroutineScope(SupervisorJob())
+        private val scope =
+            CoroutineScope(
+                SupervisorJob() +
+                    CoroutineExceptionHandler { _, throwable ->
+                        diagnosticLogger.warning(
+                            DiagnosticLogArea.Sse,
+                            "foreground SSE uncaught",
+                            throwable,
+                        )
+                    },
+            )
         private var occupancyJob: Job? = null
         private var idleTimeoutMs: Long = DEFAULT_IDLE_TIMEOUT_MS
         private var connectionEpoch: ConnectionEpoch = ConnectionEpoch.shared

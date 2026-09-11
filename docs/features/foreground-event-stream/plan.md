@@ -96,7 +96,8 @@ revision; they do not treat reconnect events as new obligations.
 
 - Stream transport failure maps to `disconnected` / `reconnecting`; manual home
   refresh still works. One silent v1 target is not kept live by heartbeats on
-  another.
+  another. Android must not crash the process when OkHttp/Ktor abort a live
+  SSE or REST call during client rebuild.
 - Message synchronization keeps the last good snapshot when event-driven REST
   reconciliation fails; a failed idle reconciliation ends local streaming state
   so the watchdog can recover.

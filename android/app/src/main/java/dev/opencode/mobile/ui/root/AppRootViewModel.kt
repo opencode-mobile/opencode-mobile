@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 import javax.inject.Inject
 
 enum class AppRootState {
@@ -31,6 +33,7 @@ class AppRootViewModel
         private val activeConnectionManager: ActiveConnectionManager,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
         private val worldSignals: WorldSignals,
+        private val eventStream: ForegroundEventStream,
         private val httpClient: OpencodeHttpClient,
         private val sseHttpClient: OpencodeSseHttpClient,
     ) : ViewModel() {
@@ -57,14 +60,16 @@ class AppRootViewModel
 
         private suspend fun loadInitialState() {
             activeConnectionManager.ensureLoaded()
+            eventStream.stop()
+            yield()
             httpClient.rebuild()
             sseHttpClient.rebuild()
-            worldSignals.onConnectionAvailable()
             val hasProfile = connectionProfileStore.activeProfile() != null
             if (!AppOnboardingPreferences.isCompleted && !hasProfile) {
                 _state.value = AppRootState.AppOnboarding
             } else {
                 enterHome()
+                worldSignals.onConnectionAvailable()
             }
         }
 
@@ -81,8 +86,6 @@ class AppRootViewModel
         }
 
         private fun enterHome() {
-            httpClient.rebuild()
-            sseHttpClient.rebuild()
             _state.value = AppRootState.Home
         }
     }

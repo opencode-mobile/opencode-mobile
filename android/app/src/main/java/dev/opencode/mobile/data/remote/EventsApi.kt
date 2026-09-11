@@ -76,6 +76,9 @@ class EventsApi private constructor(
                     }
                 } catch (error: CancellationException) {
                     throw error
+                } catch (_: Exception) {
+                    // Socket abort, closed engine, or chunked-read EOF: the lease
+                    // loop retries. Do not let OkHttp/Ktor IO kill the occupancy job.
                 }
             }
     }

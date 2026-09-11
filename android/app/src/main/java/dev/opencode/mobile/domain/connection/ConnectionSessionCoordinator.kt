@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.connection
 
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
+import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
@@ -8,6 +9,7 @@ import dev.opencode.mobile.network.OpencodeSseHttpClient
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.yield
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,6 +24,7 @@ class ConnectionSessionCoordinator
         private val composerDraftStore: ComposerDraftStore,
         private val httpClient: OpencodeHttpClient,
         private val sseHttpClient: OpencodeSseHttpClient,
+        private val eventStream: ForegroundEventStream,
     ) {
         private val profileSavedEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         val profileSaved: SharedFlow<Unit> = profileSavedEvents.asSharedFlow()
@@ -58,8 +61,7 @@ class ConnectionSessionCoordinator
             connectionProfileStore.removeProfile(id)
             if (connectionProfileStore.activeProfile() == null) {
                 activeConnectionManager.disconnect()
-                httpClient.rebuild()
-                sseHttpClient.rebuild()
+                rebuildClients()
                 profileClearedEvents.tryEmit(Unit)
             } else {
                 rebindActive()
@@ -73,13 +75,21 @@ class ConnectionSessionCoordinator
             sessionModelSelectionStore.clearAll()
             composerDraftStore.clearAll()
             activeConnectionManager.disconnect()
-            httpClient.rebuild()
-            sseHttpClient.rebuild()
+            rebuildClients()
             profileClearedEvents.tryEmit(Unit)
         }
 
         private suspend fun rebindActive() {
+            eventStream.stop()
+            yield()
             activeConnectionManager.reloadFromStore()
+            httpClient.rebuild()
+            sseHttpClient.rebuild()
+        }
+
+        private suspend fun rebuildClients() {
+            eventStream.stop()
+            yield()
             httpClient.rebuild()
             sseHttpClient.rebuild()
         }
