@@ -36,6 +36,11 @@ import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Occupancy owner for foreground SSE. Config apply, live policy, and event
+ * filtering live in [LiveConnectionApply], [LiveOverallPolicy], and
+ * [SseEventIngress].
+ */
 @Singleton
 class DefaultForegroundEventStream
     @Inject
@@ -82,7 +87,6 @@ class DefaultForegroundEventStream
         private var occupancyJob: Job? = null
         private var idleTimeoutMs: Long = DEFAULT_IDLE_TIMEOUT_MS
         private var connectionEpoch: ConnectionEpoch = ConnectionEpoch.shared
-        private val eventDeduper = SseEventDeduper()
         private val leaseLock = Any()
         private val stateLock = Any()
         private val leases = mutableMapOf<String, Lease>()
@@ -96,17 +100,10 @@ class DefaultForegroundEventStream
         private var pendingStartConfig: LiveConnectionConfig? = null
         private var inFlightStartApplies = 0
         private val lastDirectoriesByIdentity = mutableMapOf<LiveConnectionConfig.Identity, List<String>>()
-        private var wasFullyConnected = false
-        private var occupyingConnected = false
-        private var emittedReconnectForCurrentGap = false
-        private var emittedConnectedForCurrentGeneration = false
-        private var pendingResumeBarrier = false
-        private var suppressReconnectForRequiredGrowth = false
+        private val eventIngress = SseEventIngress(eventDomainAdapter)
+        private var overall = LiveOverallFlags()
         private var currentGap: LiveGapRevision? = null
         private val gapClock = AtomicLong(0)
-        private var lastAllLive = false
-        private var lastRequiredTargets: List<String> = emptyList()
-        private var lastLiveTargets: Set<String> = emptySet()
         private val configEpoch = AtomicLong(0)
 
         private val _connectionState = MutableStateFlow(EventStreamConnectionState.Idle)
@@ -178,41 +175,35 @@ class DefaultForegroundEventStream
             if (!isLatestConfigClaim(claim)) return
             val decision =
                 synchronized(stateLock) {
-                    if (occupancyJob !== occupancy || occupancyJob?.isActive != true) {
-                        return@synchronized StartApplyDecision.Ignore
-                    }
-                    val applied = appliedConfig
-                    if (applied == null) {
+                    val occupancyCurrent =
+                        occupancyJob === occupancy && occupancyJob?.isActive == true
+                    val decided =
+                        LiveConnectionApply.startDecision(
+                            occupancyCurrent = occupancyCurrent,
+                            applied = appliedConfig,
+                            requested = config,
+                            generation = streamGeneration.get(),
+                        )
+                    if (decided is LiveConnectionApply.StartDecision.StashPending) {
                         pendingStartConfig = config
-                        return@synchronized StartApplyDecision.Ignore
                     }
-                    val currentGeneration = streamGeneration.get()
-                    if (applied.identity == config.identity && applied.protocol == config.protocol) {
-                        if (applied.directories == config.directories) {
-                            StartApplyDecision.Idempotent
-                        } else {
-                            StartApplyDecision.Reconcile(currentGeneration, config)
-                        }
-                    } else {
-                        StartApplyDecision.Retarget(currentGeneration, config)
-                    }
+                    decided
                 }
             when (decision) {
-                StartApplyDecision.Ignore,
-                StartApplyDecision.Idempotent,
-                -> {
-                    if (decision == StartApplyDecision.Idempotent) {
-                        diagnosticLogger.debug(
-                            DiagnosticLogArea.Sse,
-                            "foreground SSE start ignored; already running",
-                        )
-                    }
+                LiveConnectionApply.StartDecision.Ignore,
+                LiveConnectionApply.StartDecision.StashPending,
+                -> Unit
+                LiveConnectionApply.StartDecision.Idempotent -> {
+                    diagnosticLogger.debug(
+                        DiagnosticLogArea.Sse,
+                        "foreground SSE start ignored; already running",
+                    )
                 }
-                is StartApplyDecision.Reconcile -> {
+                is LiveConnectionApply.StartDecision.Reconcile -> {
                     if (!stillCurrent(decision.generation)) return
                     reconcileLeases(decision.config)
                 }
-                is StartApplyDecision.Retarget -> {
+                is LiveConnectionApply.StartDecision.Retarget -> {
                     if (!stillCurrent(decision.generation)) return
                     retargetIdentity(decision.config, LiveGapReason.ConfigChanged)
                 }
@@ -225,9 +216,10 @@ class DefaultForegroundEventStream
             val snapshot: LiveConnectionSnapshot
             val toCancel: Job?
             synchronized(stateLock) {
-                if (wasFullyConnected || occupyingConnected) {
-                    pendingResumeBarrier = true
-                }
+                val pendingResume =
+                    overall.pendingResumeBarrier ||
+                        overall.wasFullyConnected ||
+                        overall.occupyingConnected
                 occupancySerial += 1
                 inFlightStartApplies = 0
                 generation = streamGeneration.incrementAndGet()
@@ -235,16 +227,9 @@ class DefaultForegroundEventStream
                 occupancyJob = null
                 pendingStartConfig = null
                 cancelAllLeases()
-                eventDeduper.clear()
+                eventIngress.reset()
                 appliedConfig = null
-                wasFullyConnected = false
-                occupyingConnected = false
-                emittedReconnectForCurrentGap = false
-                emittedConnectedForCurrentGeneration = false
-                suppressReconnectForRequiredGrowth = false
-                lastAllLive = false
-                lastRequiredTargets = emptyList()
-                lastLiveTargets = emptySet()
+                overall = LiveOverallFlags(pendingResumeBarrier = pendingResume)
                 openGapLocked(LiveGapReason.Stopped)
                 snapshot = buildSnapshotLocked(EventStreamConnectionState.Idle)
             }
@@ -300,15 +285,17 @@ class DefaultForegroundEventStream
             val latest: LiveConnectionConfig
             val appliedNow: LiveConnectionConfig?
             val generationAfterWait: Long
+            val resumeChrome: Boolean
             synchronized(stateLock) {
                 val pending = pendingStartConfig
                 pendingStartConfig = null
                 latest = pending ?: appliedConfig ?: merged
                 appliedNow = appliedConfig
                 generationAfterWait = streamGeneration.get()
+                resumeChrome = overall.wasFullyConnected || overall.pendingResumeBarrier
             }
             setConnectionState(
-                if (wasFullyConnected || pendingResumeBarrier) {
+                if (resumeChrome) {
                     EventStreamConnectionState.Reconnecting
                 } else {
                     EventStreamConnectionState.Connecting
@@ -317,7 +304,7 @@ class DefaultForegroundEventStream
             )
             if (stillCurrent(generationAfterWait)) {
                 if (appliedNow != null &&
-                    (appliedNow.identity != latest.identity || appliedNow.protocol != latest.protocol)
+                    LiveConnectionApply.change(appliedNow, latest) == LiveConnectionApply.Change.Identity
                 ) {
                     retargetIdentity(latest, LiveGapReason.ConfigChanged)
                 } else {
@@ -386,12 +373,11 @@ class DefaultForegroundEventStream
                 reconcileLeases(effective)
                 return
             }
-            if (applied.identity != effective.identity || applied.protocol != effective.protocol) {
-                retargetIdentity(effective, LiveGapReason.ConfigChanged)
-                return
-            }
-            if (applied.directories != effective.directories) {
-                reconcileLeases(effective)
+            when (LiveConnectionApply.change(applied, effective)) {
+                LiveConnectionApply.Change.Identity ->
+                    retargetIdentity(effective, LiveGapReason.ConfigChanged)
+                LiveConnectionApply.Change.Directories -> reconcileLeases(effective)
+                LiveConnectionApply.Change.None -> Unit
             }
         }
 
@@ -405,11 +391,13 @@ class DefaultForegroundEventStream
             synchronized(stateLock) {
                 if (generation != streamGeneration.get()) return
                 appliedConfig = config
-                eventDeduper.clear()
-                occupyingConnected = false
-                emittedReconnectForCurrentGap = false
-                emittedConnectedForCurrentGeneration = false
-                suppressReconnectForRequiredGrowth = false
+                eventIngress.reset()
+                overall =
+                    overall.copy(
+                        occupyingConnected = false,
+                        emittedReconnectForCurrentGap = false,
+                        suppressReconnectForRequiredGrowth = false,
+                    )
                 cancelAllLeases()
             }
             if (!stillCurrent(generation)) return
@@ -430,10 +418,14 @@ class DefaultForegroundEventStream
             }
         }
 
-        private fun openGapLocked(reason: LiveGapReason) {
+        private fun recordGapLocked(reason: LiveGapReason) {
             val revision = gapClock.incrementAndGet()
             currentGap = LiveGapRevision(revision, reason)
-            emittedReconnectForCurrentGap = false
+        }
+
+        private fun openGapLocked(reason: LiveGapReason) {
+            recordGapLocked(reason)
+            overall = overall.copy(emittedReconnectForCurrentGap = false)
         }
 
         private fun reconcileLeases(config: LiveConnectionConfig) {
@@ -579,20 +571,22 @@ class DefaultForegroundEventStream
             generation: Long,
         ) {
             if (generation != streamGeneration.get()) return
-            val parsed = eventDomainAdapter.parseEvents(dataLine)
-            if (parsed.isEmpty()) {
+            val result = eventIngress.accept(dataLine)
+            if (result.parsed.isEmpty()) {
                 diagnosticLogger.warning(
                     DiagnosticLogArea.Sse,
                     SseDiagnosticLogging.parseFailedMessage(dataLine),
                 )
-                if (dataLine.isNotBlank()) {
+                if (result.parseFailed) {
                     openGap(LiveGapReason.ParseFailed)
                     publishSnapshot()
-                    emitIfCurrent(OpencodeEvent(type = "sse.parse.failed"), generation)
+                    for (event in result.toEmit) {
+                        emitIfCurrent(event, generation)
+                    }
                 }
                 return
             }
-            for (event in parsed) {
+            for (event in result.parsed) {
                 val bufferLine = SseDiagnosticLogging.bufferMessage(event)
                 if (bufferLine != null) {
                     diagnosticLogger.info(DiagnosticLogArea.Sse, bufferLine)
@@ -602,20 +596,9 @@ class DefaultForegroundEventStream
                         "SSE event type=${event.type} session=${event.sessionId ?: "-"}",
                     )
                 }
-                when (event.type) {
-                    "server.connected" -> {
-                        if (!emittedConnectedForCurrentGeneration) {
-                            emittedConnectedForCurrentGeneration = true
-                            emitIfCurrent(event, generation)
-                        }
-                    }
-                    "server.heartbeat" -> Unit
-                    else -> {
-                        if (eventDeduper.accept(event.id)) {
-                            emitIfCurrent(event, generation)
-                        }
-                    }
-                }
+            }
+            for (event in result.toEmit) {
+                emitIfCurrent(event, generation)
             }
         }
 
@@ -644,7 +627,7 @@ class DefaultForegroundEventStream
             lease.live.set(false)
             synchronized(stateLock) {
                 if (generation != streamGeneration.get()) return
-                occupyingConnected = false
+                overall = overall.copy(occupyingConnected = false)
             }
             refreshOverallState(generation)
         }
@@ -684,57 +667,22 @@ class DefaultForegroundEventStream
                 synchronized(leaseLock) {
                     leases.filterValues { it.live.get() }.keys.toSet()
                 }
-            val allLive = required.isNotEmpty() && required.all { it in live }
-            val incumbentLost =
-                lastRequiredTargets.any { key ->
-                    key in required && key in lastLiveTargets && key !in live
-                }
-            val requiredGrew =
-                lastRequiredTargets.isNotEmpty() &&
-                    lastRequiredTargets.all { it in required } &&
-                    required.size > lastRequiredTargets.size
-            val pathLost = deviceNetworkPath.status.value == DeviceNetworkPathStatus.Unavailable
-            val lostLive = lastAllLive && !allLive
-            if (incumbentLost) {
-                openGapLocked(if (pathLost) LiveGapReason.PathLost else LiveGapReason.LeaseLost)
-                suppressReconnectForRequiredGrowth = false
-            } else if (lostLive && pathLost) {
-                openGapLocked(LiveGapReason.PathLost)
-            } else if (lostLive && requiredGrew) {
-                suppressReconnectForRequiredGrowth = true
-            }
-            lastAllLive = allLive
-            lastRequiredTargets = required
-            lastLiveTargets = live
-            var publishReconnect = false
-            val nextState: EventStreamConnectionState
-            if (allLive) {
-                val shouldPublishReconnect =
-                    (wasFullyConnected || pendingResumeBarrier) &&
-                        !emittedReconnectForCurrentGap &&
-                        !suppressReconnectForRequiredGrowth
-                nextState = EventStreamConnectionState.Connected
-                occupyingConnected = true
-                wasFullyConnected = true
-                suppressReconnectForRequiredGrowth = false
-                if (shouldPublishReconnect) {
-                    emittedReconnectForCurrentGap = true
-                    pendingResumeBarrier = false
-                    publishReconnect = true
-                }
-            } else {
-                nextState =
-                    if (wasFullyConnected) {
-                        EventStreamConnectionState.Reconnecting
-                    } else {
-                        EventStreamConnectionState.Connecting
-                    }
-            }
+            val decided =
+                LiveOverallPolicy.decide(
+                    overall,
+                    LiveOverallInput(
+                        required = required,
+                        live = live,
+                        pathLost = deviceNetworkPath.status.value == DeviceNetworkPathStatus.Unavailable,
+                    ),
+                )
+            decided.openGap?.let { recordGapLocked(it) }
+            overall = decided.flags
             return OverallDecision(
                 generation = generation,
-                connectionState = nextState,
-                publishReconnect = publishReconnect,
-                snapshot = buildSnapshotLocked(nextState),
+                connectionState = decided.connectionState,
+                publishReconnect = decided.publishReconnect,
+                snapshot = buildSnapshotLocked(decided.connectionState),
             )
         }
 
@@ -866,22 +814,6 @@ class DefaultForegroundEventStream
                 streamJob = null
                 loopJob = null
             }
-        }
-
-        private sealed class StartApplyDecision {
-            data object Ignore : StartApplyDecision()
-
-            data object Idempotent : StartApplyDecision()
-
-            data class Reconcile(
-                val generation: Long,
-                val config: LiveConnectionConfig,
-            ) : StartApplyDecision()
-
-            data class Retarget(
-                val generation: Long,
-                val config: LiveConnectionConfig,
-            ) : StartApplyDecision()
         }
 
         private companion object {
