@@ -13,6 +13,8 @@ enum SessionListStatus: Hashable {
         case .idle: false
         }
     }
+
+    var isReady: Bool { self == .ready }
 }
 
 struct SessionListSession: Identifiable, Hashable {
@@ -239,13 +241,6 @@ struct SessionList<EmptyContent: View>: View {
     @ViewBuilder
     private func listBody(filterId: String, isCurrent: Bool) -> some View {
         let visible = sessions.visibleForFilter(filterId)
-        let sections = HomeSessionLadder.group(
-            sessions: visible,
-            updatedAtEpochMs: \.updatedAtEpochMs,
-            isAttention: \.status.isAttention,
-            recentWindowHours: homeDisplayPreferences.recentWindowHours,
-            nowEpochMs: Int64(Date().timeIntervalSince1970 * 1000)
-        )
         Group {
             if visible.isEmpty, showsEmptyContent {
                 ScrollView {
@@ -257,9 +252,9 @@ struct SessionList<EmptyContent: View>: View {
                 .background(OpenCodeColors.backgroundBase)
                 .modifier(SessionListRefreshableModifier(onRefresh: isCurrent ? onRefresh : nil))
             } else {
-                SessionListScrollView(
-                    ladderSections: sections,
-                    newestSessionId: visible.first?.id,
+                SessionListStabilizedScrollView(
+                    visible: visible,
+                    recentWindowHours: homeDisplayPreferences.recentWindowHours,
                     revealNewestToken: isCurrent ? revealNewestToken : 0,
                     followingTop: isCurrent ? $followingTop : .constant(true),
                     onRefresh: isCurrent ? onRefresh : nil
@@ -271,6 +266,7 @@ struct SessionList<EmptyContent: View>: View {
                         dayOrWeekSection(section)
                     }
                 }
+                .id(filterId)
             }
         }
     }
@@ -405,6 +401,87 @@ private struct SessionListFeedLayer: Identifiable, Equatable {
 }
 
 private let sessionListTopAnchorID = "session-list-top"
+
+private struct SessionListStabilizedScrollView<SectionContent: View>: View {
+    let visible: [SessionListSession]
+    let recentWindowHours: Int
+    let revealNewestToken: Int
+    @Binding var followingTop: Bool
+    let onRefresh: (() async -> Void)?
+    let sectionContent: (HomeSessionLadderSection<SessionListSession>) -> SectionContent
+
+    @State private var previousSections: [HomeSessionLadderSection<SessionListSession>] = []
+    @State private var lastAppliedAtEpochMs: Int64?
+    @State private var displayedSections: [HomeSessionLadderSection<SessionListSession>] = []
+    @State private var nextApplyAtEpochMs: Int64?
+    @State private var newcomerId: String?
+    @State private var seenIds: Set<String> = []
+
+    init(
+        visible: [SessionListSession],
+        recentWindowHours: Int,
+        revealNewestToken: Int,
+        followingTop: Binding<Bool>,
+        onRefresh: (() async -> Void)?,
+        @ViewBuilder sectionContent: @escaping (HomeSessionLadderSection<SessionListSession>) -> SectionContent
+    ) {
+        self.visible = visible
+        self.recentWindowHours = recentWindowHours
+        self.revealNewestToken = revealNewestToken
+        _followingTop = followingTop
+        self.onRefresh = onRefresh
+        self.sectionContent = sectionContent
+    }
+
+    var body: some View {
+        SessionListScrollView(
+            ladderSections: displayedSections,
+            newestSessionId: newcomerId,
+            revealNewestToken: revealNewestToken,
+            followingTop: $followingTop,
+            onRefresh: onRefresh,
+            sectionContent: sectionContent
+        )
+        .onAppear { ingest() }
+        .onChange(of: visible) { _, _ in ingest() }
+        .onChange(of: recentWindowHours) { _, _ in ingest() }
+        .task(id: nextApplyAtEpochMs ?? 0) {
+            guard let nextApplyAtEpochMs else { return }
+            let wait = nextApplyAtEpochMs - Int64(Date().timeIntervalSince1970 * 1000)
+            if wait > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(wait) * 1_000_000)
+            }
+            guard !Task.isCancelled else { return }
+            ingest()
+        }
+    }
+
+    private func ingest() {
+        let desired = HomeSessionLadder.group(
+            sessions: visible,
+            updatedAtEpochMs: \.updatedAtEpochMs,
+            isAttention: \.status.isAttention,
+            recentWindowHours: recentWindowHours,
+            nowEpochMs: Int64(Date().timeIntervalSince1970 * 1000)
+        )
+        let result = HomeSessionOrderStabilizer.stabilize(
+            previousSections: previousSections,
+            previousLastAppliedAtEpochMs: lastAppliedAtEpochMs,
+            desired: desired,
+            itemId: \.id,
+            isAttention: \.status.isAttention,
+            isReady: \.status.isReady,
+            nowEpochMs: Int64(Date().timeIntervalSince1970 * 1000)
+        )
+        displayedSections = result.sections
+        previousSections = result.sections
+        lastAppliedAtEpochMs = result.lastAppliedAtEpochMs
+        nextApplyAtEpochMs = result.nextApplyAtEpochMs
+        let displayedIds = result.sections.flatMap { $0.items.map(\.id) }
+        newcomerId = displayedIds.first { !seenIds.contains($0) }
+        seenIds.formUnion(displayedIds)
+    }
+}
 
 private struct SessionListScrollView<SectionContent: View>: View {
     let ladderSections: [HomeSessionLadderSection<SessionListSession>]
