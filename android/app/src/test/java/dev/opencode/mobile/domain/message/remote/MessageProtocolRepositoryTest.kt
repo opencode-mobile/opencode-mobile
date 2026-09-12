@@ -184,6 +184,122 @@ class MessageProtocolRepositoryTest {
         }
 
     @Test
+    fun v1ListMessageTail_sendsLimitWithoutBeforeAndReadsNextCursor() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond(
+                        content = """[{"info":{"id":"msg_new","role":"user"},"parts":[{"type":"text","text":"Hi"}]}]""",
+                        status = HttpStatusCode.OK,
+                        headers =
+                            headersOf(
+                                HttpHeaders.ContentType to listOf("application/json"),
+                                "X-Next-Cursor" to listOf("cursor-old"),
+                            ),
+                    )
+                }
+            val router = router(client, ServerProtocol.V1)
+
+            val page = router.listMessagePage("ses_1", "/repo", MessageHistoryQuery.tail())
+
+            assertEquals(listOf("msg_new"), page.messages.map { it.id })
+            assertEquals("cursor-old", page.olderCursor)
+            assertTrue(page.hasOlder)
+            assertEquals("20", requests.single().url.parameters["limit"])
+            assertEquals(null, requests.single().url.parameters["before"])
+        }
+
+    @Test
+    fun v1ListOlderMessages_sendsLimitAndBefore() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond(
+                        content = """[{"info":{"id":"msg_old","role":"user"},"parts":[{"type":"text","text":"Old"}]}]""",
+                        status = HttpStatusCode.OK,
+                        headers =
+                            headersOf(
+                                HttpHeaders.ContentType to listOf("application/json"),
+                                HttpHeaders.Link to listOf("</session/ses_1/message?before=even-older>; rel=\"next\""),
+                            ),
+                    )
+                }
+            val router = router(client, ServerProtocol.V1)
+
+            val page = router.listMessagePage("ses_1", "/repo", MessageHistoryQuery.older("cursor-old"))
+
+            assertEquals(listOf("msg_old"), page.messages.map { it.id })
+            assertEquals("even-older", page.olderCursor)
+            assertEquals("200", requests.single().url.parameters["limit"])
+            assertEquals("cursor-old", requests.single().url.parameters["before"])
+        }
+
+    @Test
+    fun v2ListMessageTail_sendsLimitAndDescThenReturnsChronological() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """
+                        {
+                          "data":[
+                            {"id":"msg_new","type":"user","text":"New","time":{"created":2}},
+                            {"id":"msg_old","type":"user","text":"Old","time":{"created":1}}
+                          ],
+                          "cursor":{"previous":null,"next":"older"}
+                        }
+                        """.trimIndent(),
+                    )
+                }
+            val router = router(client, ServerProtocol.V2)
+
+            val page = router.listMessagePage("ses_2", "/repo", MessageHistoryQuery.tail())
+
+            assertEquals(listOf("msg_old", "msg_new"), page.messages.map { it.id })
+            assertEquals("older", page.olderCursor)
+            assertEquals("20", requests.single().url.parameters["limit"])
+            assertEquals("desc", requests.single().url.parameters["order"])
+            assertEquals(null, requests.single().url.parameters["cursor"])
+        }
+
+    @Test
+    fun v2ListOlderMessages_sendsCursorWithoutOrder() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """
+                        {
+                          "data":[
+                            {"id":"msg_b","type":"user","text":"B","time":{"created":2}},
+                            {"id":"msg_a","type":"user","text":"A","time":{"created":1}}
+                          ],
+                          "cursor":{"next":null}
+                        }
+                        """.trimIndent(),
+                    )
+                }
+            val router = router(client, ServerProtocol.V2)
+
+            val page = router.listMessagePage("ses_2", "/repo", MessageHistoryQuery.older("older"))
+
+            assertEquals(listOf("msg_a", "msg_b"), page.messages.map { it.id })
+            assertEquals(null, page.olderCursor)
+            assertEquals(false, page.hasOlder)
+            assertEquals("200", requests.single().url.parameters["limit"])
+            assertEquals("older", requests.single().url.parameters["cursor"])
+            assertEquals(null, requests.single().url.parameters["order"])
+        }
+
+    @Test
     fun unknownProtocol_probesBeforeRoutingToV2() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()

@@ -615,6 +615,48 @@ class SessionMessageEngineTest {
         assertEquals("Waiting to steer", message.waitingCaption)
     }
 
+    @Test
+    fun applyTail_preservesOlderLocalRows() {
+        engine.replaceAll(
+            "ses-1",
+            listOf(
+                Message(id = "old", role = MessageRole.User, text = "Old"),
+                Message(id = "new", role = MessageRole.User, text = "New"),
+            ),
+        )
+        val revision = engine.revision("ses-1")
+        assertTrue(
+            engine.applyTailIfRevision(
+                "ses-1",
+                listOf(Message(id = "new", role = MessageRole.User, text = "New")),
+                revision,
+            ),
+        )
+        assertEquals(listOf("old", "new"), engine.messages("ses-1").map { it.id })
+    }
+
+    @Test
+    fun prependOlder_doesNotOverwriteNewerLiveText() {
+        engine.replaceAll(
+            "ses-1",
+            listOf(Message(id = "new", role = MessageRole.User, text = "Live")),
+        )
+        val revision = engine.revision("ses-1")
+        assertTrue(
+            engine.prependOlderIfRevision(
+                "ses-1",
+                listOf(
+                    Message(id = "old", role = MessageRole.User, text = "Older"),
+                    Message(id = "new", role = MessageRole.User, text = "Stale"),
+                ),
+                revision,
+            ),
+        )
+        val messages = engine.messages("ses-1")
+        assertEquals(listOf("old", "new"), messages.map { it.id })
+        assertEquals("Live", messages.last().text)
+    }
+
     private fun seedStreamingAssistant() {
         engine.replaceAll(
             "ses-1",

@@ -26,6 +26,12 @@ class ProtocolSelectedMessageRemote
             directory: String?,
         ): List<Message> = selected().listMessages(sessionId, directory)
 
+        override suspend fun listMessagePage(
+            sessionId: String,
+            directory: String?,
+            query: MessageHistoryQuery,
+        ): MessagePage = selected().listMessagePage(sessionId, directory, query)
+
         override suspend fun sendPromptAsync(
             sessionId: String,
             options: PromptSendOptions,

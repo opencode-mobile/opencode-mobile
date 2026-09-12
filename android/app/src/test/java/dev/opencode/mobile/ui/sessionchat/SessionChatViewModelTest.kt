@@ -618,7 +618,7 @@ class SessionChatViewModelTest {
         }
 
     @Test
-    fun completedLatestTurnLoadsReviewChangesSummaryWithWorktree() =
+    fun bindDoesNotFetchLastTurnReviewChangesDiff() =
         runTest(testDispatcher) {
             val sessionRepository =
                 FakeSessionRepository(
@@ -656,8 +656,8 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
 
-            assertEquals(ReviewChangesSummary(2, 4, 2), viewModel.uiState.value.reviewChangesSummary)
-            assertEquals(FakeSessionRepository.DiffRequest("ses-1", "user-1", "/repo"), sessionRepository.diffRequest)
+            assertEquals(null, viewModel.uiState.value.reviewChangesSummary)
+            assertEquals(null, sessionRepository.diffRequest)
         }
 
     @Test
@@ -727,7 +727,8 @@ class SessionChatViewModelTest {
             runCurrent()
 
             assertEquals("user-2", region.state.value.messageId)
-            assertEquals(ReviewChangesSummary(1, 5, 3), region.state.value.summary)
+            assertEquals(null, region.state.value.summary)
+            assertEquals(null, repository.diffRequest)
         }
 
     @Test
@@ -754,7 +755,7 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(null, viewModel.uiState.value.reviewChangesSummary)
-            assertEquals(FakeSessionRepository.DiffRequest("ses-1", "user-1", "/repo"), sessionRepository.diffRequest)
+            assertEquals(null, sessionRepository.diffRequest)
         }
 
     @Test
@@ -4293,7 +4294,8 @@ private class FakeMessageRepository(
             observeMessages(sessionId, directory).collect { update ->
                 when (update) {
                     is MessageListUpdate.LoadFailed -> emit(DisplayMessageListUpdate.LoadFailed(update.error))
-                    is MessageListUpdate.CacheSyncConfirmed -> emit(DisplayMessageListUpdate.CacheSyncConfirmed)
+                    is MessageListUpdate.CacheSyncConfirmed ->
+                        emit(DisplayMessageListUpdate.CacheSyncConfirmed(hasOlder = update.hasOlder))
                     is MessageListUpdate.Messages -> {
                         val prepared = contentPreparer.prepareMessages(update.messages, previousById)
                         previousById = prepared.associateBy { it.id }

@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -63,6 +64,7 @@ import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeSyncingPill
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
+import dev.opencode.mobile.ui.scroll.MessageListOlderHistory
 import dev.opencode.mobile.ui.scroll.MessageListReversedTimelineColumn
 import dev.opencode.mobile.ui.scroll.MessageListTimelineApplyHold
 import dev.opencode.mobile.ui.scroll.MessageListTimelineDefaults
@@ -89,6 +91,8 @@ internal data class SessionChatTimelineViewProps(
     val messages: List<SessionChatMessageItem>,
     val timelineFrame: TimelineFrame? = null,
     val isRefreshing: Boolean,
+    val hasOlder: Boolean = false,
+    val isLoadingOlder: Boolean = false,
     val errorMessage: String?,
     val reviewChangesSummary: ReviewChangesSummary?,
     val syncingIndicatorLabel: String? = null,
@@ -102,6 +106,7 @@ internal data class SessionChatTimelineViewProps(
     /** Extra bottom inset so the timeline can scroll under a floating composer. */
     val bottomOverlayInset: Dp = 0.dp,
     val onRefresh: () -> Unit,
+    val onLoadOlder: () -> Unit = {},
     val onReviewChangesClick: () -> Unit,
     val onSessionTodosClick: () -> Unit = {},
     val onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
@@ -164,6 +169,8 @@ internal fun SessionChatTimelineView(
                 messages = props.messages,
                 timelineFrame = props.timelineFrame,
                 isRefreshing = props.isRefreshing,
+                hasOlder = props.hasOlder,
+                isLoadingOlder = props.isLoadingOlder,
                 reviewChangesSummary = props.reviewChangesSummary,
                 syncingIndicatorLabel = props.syncingIndicatorLabel,
                 workingIndicatorLabel = props.workingIndicatorLabel,
@@ -175,6 +182,7 @@ internal fun SessionChatTimelineView(
                 hideFloatStack = props.hideFloatStack,
                 bottomOverlayInset = props.bottomOverlayInset,
                 onRefresh = props.onRefresh,
+                onLoadOlder = props.onLoadOlder,
                 onReviewChangesClick = props.onReviewChangesClick,
                 onSessionTodosClick = props.onSessionTodosClick,
                 onMessageActionsTap = props.onMessageActionsTap,
@@ -195,6 +203,8 @@ private fun SessionChatTimelineReadyView(
     messages: List<SessionChatMessageItem>,
     timelineFrame: TimelineFrame?,
     isRefreshing: Boolean,
+    hasOlder: Boolean,
+    isLoadingOlder: Boolean,
     reviewChangesSummary: ReviewChangesSummary?,
     syncingIndicatorLabel: String?,
     workingIndicatorLabel: String?,
@@ -206,6 +216,7 @@ private fun SessionChatTimelineReadyView(
     hideFloatStack: Boolean,
     bottomOverlayInset: Dp,
     onRefresh: () -> Unit,
+    onLoadOlder: () -> Unit,
     onReviewChangesClick: () -> Unit,
     onSessionTodosClick: () -> Unit,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
@@ -276,6 +287,25 @@ private fun SessionChatTimelineReadyView(
             listState = listState,
             userScroll = userScroll,
         )
+
+    val oldestMessageId = committedMessages.firstOrNull()?.id
+    val oldestVisible by remember(listState, oldestMessageId) {
+        derivedStateOf {
+            oldestMessageId != null &&
+                listState.layoutInfo.visibleItemsInfo.any { it.key == oldestMessageId }
+        }
+    }
+    LaunchedEffect(oldestVisible, hasOlder, isLoadingOlder) {
+        if (
+            MessageListOlderHistory.shouldLoadOlder(
+                hasOlder = hasOlder,
+                isLoadingOlder = isLoadingOlder,
+                oldestVisible = oldestVisible,
+            )
+        ) {
+            onLoadOlder()
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         PullToRefreshBox(

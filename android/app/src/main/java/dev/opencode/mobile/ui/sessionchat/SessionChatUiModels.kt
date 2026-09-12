@@ -116,6 +116,8 @@ data class SessionChatUiState(
     val composer: SessionChatComposerState = SessionChatComposerState(),
     val isSending: Boolean = false,
     val isRefreshing: Boolean = false,
+    val hasOlder: Boolean = false,
+    val isLoadingOlder: Boolean = false,
     val isAborting: Boolean = false,
     val sessionStatusLabel: String? = null,
     /** In-chat Working/Thinking/Retrying label for an active turn. */
@@ -322,6 +324,8 @@ data class SessionChatTimelineRegionState(
     val isRefreshing: Boolean = false,
     val messagesFromCache: Boolean = false,
     val isSyncingMessages: Boolean = false,
+    val hasOlder: Boolean = false,
+    val isLoadingOlder: Boolean = false,
     val errorMessage: String? = null,
 )
 

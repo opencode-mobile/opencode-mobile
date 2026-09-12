@@ -207,6 +207,47 @@ class SessionChatTimeline(
         scope.launch { refreshMessagesSuspending() }
     }
 
+    fun loadOlder() {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        val current = _state.value
+        if (!current.hasOlder || current.isLoadingOlder) return
+        _state.update { it.copy(isLoadingOlder = true) }
+        scope.launch {
+            if (!isCurrentBinding(sessionId, worktree)) return@launch
+            runCatching {
+                withContext(ioDispatcher) {
+                    messageRepository.loadOlderMessages(sessionId, worktree)
+                }
+            }.onSuccess { result ->
+                if (!isCurrentBinding(sessionId, worktree)) return@launch
+                _state.update { it.copy(hasOlder = result.hasOlder, isLoadingOlder = false) }
+                if (result.addedCount > 0) {
+                    val displayMessages =
+                        lastLoadedDisplayMessages
+                            .associateBy { it.id }
+                            .let { previous ->
+                                result.messages.map { message ->
+                                    previous[message.id] ?: DisplayMessage(message)
+                                }
+                            }
+                    applyLoadedDisplayMessages(
+                        displayMessages = displayMessages,
+                        sourceSessionId = sessionId,
+                        sourceWorktree = worktree,
+                        fromQuietRefresh = false,
+                        source = "load-older",
+                        hasOlder = result.hasOlder,
+                    )
+                }
+            }.onFailure {
+                if (isCurrentBinding(sessionId, worktree)) {
+                    _state.update { it.copy(isLoadingOlder = false) }
+                }
+            }
+        }
+    }
+
     suspend fun refreshMessagesSuspending() {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
@@ -462,7 +503,7 @@ class SessionChatTimeline(
                             }
                             is DisplayMessageListUpdate.CacheSyncConfirmed -> {
                                 logD("live display cache sync confirmed session=$sessionId")
-                                confirmCacheSync()
+                                confirmCacheSync(hasOlder = update.hasOlder)
                             }
                             is DisplayMessageListUpdate.Messages -> {
                                 logD("live display messages session=$sessionId count=${update.messages.size}")
@@ -473,6 +514,7 @@ class SessionChatTimeline(
                                     fromQuietRefresh = true,
                                     source = "display-pipeline",
                                     messagesFromCache = update.isFromCache,
+                                    hasOlder = update.hasOlder,
                                 )
                             }
                         }
@@ -488,6 +530,7 @@ class SessionChatTimeline(
         fromQuietRefresh: Boolean = false,
         source: String,
         messagesFromCache: Boolean = false,
+        hasOlder: Boolean? = null,
         onPublished: (() -> Unit)? = null,
     ) {
         if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return
@@ -504,6 +547,7 @@ class SessionChatTimeline(
                 fromQuietRefresh = fromQuietRefresh,
                 source = source,
                 messagesFromCache = messagesFromCache,
+                hasOlder = hasOlder,
                 onPublished = onPublished,
             )
         if (fromQuietRefresh && onPublished == null) {
@@ -544,6 +588,7 @@ class SessionChatTimeline(
         val fromQuietRefresh: Boolean,
         val source: String,
         val messagesFromCache: Boolean,
+        val hasOlder: Boolean?,
         val onPublished: (() -> Unit)?,
     )
 
@@ -645,6 +690,8 @@ class SessionChatTimeline(
                 messagesFromCache = pending.messagesFromCache && !networkCacheSyncConfirmed,
                 isSyncingMessages =
                     (pending.messagesFromCache && !networkCacheSyncConfirmed) || catchUpSyncing,
+                hasOlder = pending.hasOlder ?: state.hasOlder,
+                isLoadingOlder = if (pending.hasOlder == false) false else state.isLoadingOlder,
                 errorMessage =
                     if (fromQuietRefresh) {
                         if (merged.isNotEmpty() && state.timeline == SessionChatTimelineState.Error) {
@@ -661,12 +708,13 @@ class SessionChatTimeline(
         onPublished?.invoke()
     }
 
-    private fun confirmCacheSync() {
+    private fun confirmCacheSync(hasOlder: Boolean) {
         networkCacheSyncConfirmed = true
         _state.update {
             it.copy(
                 messagesFromCache = false,
                 isSyncingMessages = catchUpSyncing,
+                hasOlder = hasOlder,
             )
         }
     }

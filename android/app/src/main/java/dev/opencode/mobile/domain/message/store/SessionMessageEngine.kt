@@ -35,6 +35,18 @@ class SessionMessageEngine
             expectedRevision: Long,
         ): Boolean = store.mergeAuthoritativeIfRevision(sessionId, messages, expectedRevision)
 
+        fun applyTailIfRevision(
+            sessionId: String,
+            tail: List<Message>,
+            expectedRevision: Long,
+        ): Boolean = store.applyTailIfRevision(sessionId, tail, expectedRevision)
+
+        fun prependOlderIfRevision(
+            sessionId: String,
+            older: List<Message>,
+            expectedRevision: Long,
+        ): Boolean = store.prependOlderIfRevision(sessionId, older, expectedRevision)
+
         fun messages(sessionId: String): List<Message> = store.messages(sessionId)
 
         fun message(

@@ -59,6 +59,11 @@ class DefaultMessageRepository
             messageSync.clearCache()
         }
 
+        override suspend fun loadOlderMessages(
+            sessionId: String,
+            directory: String?,
+        ): OlderLoadResult = messageSync.loadOlderMessages(sessionId, directory)
+
         override suspend fun listMessages(
             sessionId: String,
             directory: String?,

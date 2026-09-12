@@ -184,6 +184,30 @@ class InMemoryMessageStore
         }
 
         @Synchronized
+        override fun applyTailIfRevision(
+            sessionId: String,
+            tail: List<Message>,
+            expectedRevision: Long,
+        ): Boolean {
+            if (revision(sessionId) != expectedRevision) return false
+            val local = messages(sessionId)
+            val merged = MessageWindowMerge.applyTail(local, tail)
+            replaceAllLocked(sessionId, merged)
+            return true
+        }
+
+        @Synchronized
+        override fun prependOlderIfRevision(
+            sessionId: String,
+            older: List<Message>,
+            expectedRevision: Long,
+        ): Boolean {
+            if (revision(sessionId) != expectedRevision) return false
+            prependOlderLocked(sessionId, older)
+            return true
+        }
+
+        @Synchronized
         override fun finishStreamingText(sessionId: String) {
             var changed = false
             for ((messageId, messageParts) in partsCaches[sessionId].orEmpty()) {
@@ -699,6 +723,26 @@ class InMemoryMessageStore
                 }
             }
             return starts
+        }
+
+        private fun prependOlderLocked(
+            sessionId: String,
+            older: List<Message>,
+        ) {
+            ensureCaches(sessionId)
+            val order = messageOrders[sessionId]!!
+            val existing = order.toHashSet()
+            val prepended = older.filter { it.id !in existing }
+            if (prepended.isEmpty()) return
+            val previousStarts = toolStartTimesLocked(sessionId)
+            messageOrders[sessionId] = (prepended.map { it.id } + order).toMutableList()
+            val byId = baseMessages[sessionId].orEmpty().associateBy { it.id }.toMutableMap()
+            for (message in prepended) {
+                byId[message.id] = message
+            }
+            baseMessages[sessionId] = messageOrders[sessionId]!!.mapNotNull { byId[it] }
+            seedPartIdentities(sessionId, prepended, previousStarts)
+            bumpRevision(sessionId)
         }
 
         private fun mergeAuthoritativeLocked(

@@ -48,6 +48,11 @@ interface MessageRepository {
         directory: String? = null,
     ): List<Message>
 
+    suspend fun loadOlderMessages(
+        sessionId: String,
+        directory: String? = null,
+    ): OlderLoadResult = OlderLoadResult(messages = emptyList(), hasOlder = false, addedCount = 0)
+
     suspend fun getMessage(
         sessionId: String,
         messageId: String,

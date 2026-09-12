@@ -725,7 +725,7 @@ class DisplayMessagePipelineCharacterizationTest {
             assertTrue(harness.preparer.hasPendingPrepareMessagesHold())
             assertTrue(harness.emissions.isEmpty())
 
-            harness.source.emit(MessageListUpdate.CacheSyncConfirmed)
+            harness.source.emit(MessageListUpdate.CacheSyncConfirmed())
             advanceUntilIdle()
             assertTrue(harness.emissions.single() is DisplayMessageListUpdate.CacheSyncConfirmed)
 

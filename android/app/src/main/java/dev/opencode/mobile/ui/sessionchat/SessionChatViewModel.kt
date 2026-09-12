@@ -385,6 +385,10 @@ class SessionChatViewModel
             composer.loadMentionableAgents(force = true)
         }
 
+        fun loadOlderMessages() {
+            timeline.loadOlder()
+        }
+
         fun archiveSession() {
             if (!hasCreatedSession()) return
             logAction(
@@ -1020,6 +1024,8 @@ class SessionChatViewModel
                     ),
                 isSending = composerState.isSending,
                 isRefreshing = timelineState.isRefreshing,
+                hasOlder = timelineState.hasOlder,
+                isLoadingOlder = timelineState.isLoadingOlder,
                 isAborting = composerState.isAborting,
                 sessionStatusLabel = sessionStatusLabel,
                 workingIndicatorLabel = workingIndicatorLabel,
