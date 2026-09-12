@@ -1229,7 +1229,13 @@ class MessageSync(
         val acceptRemote =
             engine.revision(storeSlot) == expectedRevision &&
                 MessageWindowMerge.isTailAcceptable(remote = loaded.messages, local = local)
-        val applied = acceptRemote && engine.applyTailIfRevision(storeSlot, loaded.messages, expectedRevision)
+        val applied =
+            acceptRemote &&
+                if (mergeExisting) {
+                    engine.mergeTailAuthoritativeIfRevision(storeSlot, loaded.messages, expectedRevision)
+                } else {
+                    engine.applyTailIfRevision(storeSlot, loaded.messages, expectedRevision)
+                }
         val merged = engine.messages(storeSlot)
         rememberPublishedFrame(storeSlot, merged)
         logI(

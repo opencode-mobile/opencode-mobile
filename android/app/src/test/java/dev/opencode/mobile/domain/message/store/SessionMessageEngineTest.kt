@@ -636,6 +636,63 @@ class SessionMessageEngineTest {
     }
 
     @Test
+    fun mergeTailAuthoritative_preservesExistingPartState() {
+        engine.replaceAll(
+            "ses-1",
+            listOf(
+                Message(id = "old", role = MessageRole.User, text = "Old"),
+                Message(
+                    id = "new",
+                    role = MessageRole.Assistant,
+                    text = "",
+                    parts =
+                        listOf(
+                            MessagePart.Tool(
+                                toolName = "bash",
+                                status = ToolStatus.Running,
+                                output = "partial output",
+                                id = "tool-1",
+                                timeStartEpochMs = 42L,
+                            ),
+                        ),
+                ),
+            ),
+        )
+        val originalTool =
+            engine.messages("ses-1").last().parts.filterIsInstance<MessagePart.Tool>().single()
+        val revision = engine.revision("ses-1")
+
+        assertTrue(
+            engine.mergeTailAuthoritativeIfRevision(
+                "ses-1",
+                listOf(
+                    Message(
+                        id = "new",
+                        role = MessageRole.Assistant,
+                        text = "",
+                        parts =
+                            listOf(
+                                MessagePart.Tool(
+                                    toolName = "bash",
+                                    status = ToolStatus.Completed,
+                                    id = "tool-1",
+                                ),
+                            ),
+                    ),
+                ),
+                revision,
+            ),
+        )
+
+        val messages = engine.messages("ses-1")
+        val tool = messages.last().parts.filterIsInstance<MessagePart.Tool>().single()
+        assertEquals(listOf("old", "new"), messages.map { it.id })
+        assertEquals(ToolStatus.Completed, tool.status)
+        assertEquals("partial output", tool.output)
+        assertEquals(originalTool.timeStartEpochMs, tool.timeStartEpochMs)
+    }
+
+    @Test
     fun prependOlder_doesNotOverwriteNewerLiveText() {
         engine.replaceAll(
             "ses-1",

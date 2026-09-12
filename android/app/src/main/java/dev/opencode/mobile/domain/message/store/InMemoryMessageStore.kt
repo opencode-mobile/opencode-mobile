@@ -197,6 +197,19 @@ class InMemoryMessageStore
         }
 
         @Synchronized
+        override fun mergeTailAuthoritativeIfRevision(
+            sessionId: String,
+            tail: List<Message>,
+            expectedRevision: Long,
+        ): Boolean {
+            if (revision(sessionId) != expectedRevision) return false
+            val local = messages(sessionId)
+            val merged = MessageWindowMerge.applyTail(local, tail)
+            mergeAuthoritativeLocked(sessionId, merged)
+            return true
+        }
+
+        @Synchronized
         override fun prependOlderIfRevision(
             sessionId: String,
             older: List<Message>,

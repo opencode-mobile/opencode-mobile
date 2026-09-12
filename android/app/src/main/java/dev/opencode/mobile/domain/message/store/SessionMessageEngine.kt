@@ -41,6 +41,12 @@ class SessionMessageEngine
             expectedRevision: Long,
         ): Boolean = store.applyTailIfRevision(sessionId, tail, expectedRevision)
 
+        fun mergeTailAuthoritativeIfRevision(
+            sessionId: String,
+            tail: List<Message>,
+            expectedRevision: Long,
+        ): Boolean = store.mergeTailAuthoritativeIfRevision(sessionId, tail, expectedRevision)
+
         fun prependOlderIfRevision(
             sessionId: String,
             older: List<Message>,
