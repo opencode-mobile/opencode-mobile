@@ -296,7 +296,17 @@ class MessageSync(
         preserveOlderThanTail: Boolean = false,
     ) {
         val current = historyWindows[storeSlot]
-        if (preserveOlderThanTail && current != null && current.hasOlder && !current.olderCursor.isNullOrBlank()) {
+        val local = engine.messages(storeSlot)
+        val noOverlapReset =
+            page.messages.isNotEmpty() &&
+                !MessageWindowMerge.hasOverlap(local, page.messages)
+        if (
+            preserveOlderThanTail &&
+            !noOverlapReset &&
+            current != null &&
+            current.hasOlder &&
+            !current.olderCursor.isNullOrBlank()
+        ) {
             return
         }
         historyWindows[storeSlot] =

@@ -257,6 +257,64 @@ class MessageSyncWindowedHistoryTest {
         }
 
     @Test
+    fun noOverlapTail_replacesOlderCursor() =
+        runTest(testDispatcher) {
+            val olderCalls = mutableListOf<String>()
+            var tailPage =
+                MessagePage(
+                    messages = listOf(user("m3")),
+                    olderCursor = "c-tail",
+                    hasOlder = true,
+                )
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ -> tailPage },
+                    listOlderMessages = { _, _, cursor ->
+                        olderCalls += cursor
+                        when (cursor) {
+                            "c-tail" ->
+                                MessagePage(
+                                    messages = listOf(user("m1"), user("m3")),
+                                    olderCursor = "c-older",
+                                    hasOlder = true,
+                                )
+                            "c-reset" ->
+                                MessagePage(
+                                    messages = listOf(user("n0")),
+                                    olderCursor = null,
+                                    hasOlder = false,
+                                )
+                            else ->
+                                MessagePage(
+                                    messages = listOf(user("stale")),
+                                    olderCursor = null,
+                                    hasOlder = false,
+                                )
+                        }
+                    },
+                )
+
+            sync.observeMessages("ses-1", "/repo").first()
+            advanceUntilIdle()
+            sync.loadOlderMessages("ses-1", "/repo")
+            assertEquals(listOf("c-tail"), olderCalls)
+
+            tailPage =
+                MessagePage(
+                    messages = listOf(user("n1"), user("n2")),
+                    olderCursor = "c-reset",
+                    hasOlder = true,
+                )
+            sync.refreshMessages("ses-1", "/repo")
+            val result = sync.loadOlderMessages("ses-1", "/repo")
+
+            assertEquals(listOf("c-tail", "c-reset"), olderCalls)
+            assertEquals(listOf("n0", "n1", "n2"), result.messages.map { it.id })
+            assertFalse(result.hasOlder)
+            assertFalse(result.messages.any { it.id == "stale" || it.id == "m1" })
+        }
+
+    @Test
     fun refresh_usesTailFetcherNotFullList() =
         runTest(testDispatcher) {
             var fullCalls = 0

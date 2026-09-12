@@ -26,6 +26,15 @@ object MessageWindowMerge {
         return prefix + tail + suffix
     }
 
+    fun hasOverlap(
+        local: List<Message>,
+        tail: List<Message>,
+    ): Boolean {
+        if (local.isEmpty() || tail.isEmpty()) return false
+        val tailIds = tail.map { it.id }.toHashSet()
+        return local.any { it.id in tailIds }
+    }
+
     fun prependOlder(
         local: List<Message>,
         older: List<Message>,
