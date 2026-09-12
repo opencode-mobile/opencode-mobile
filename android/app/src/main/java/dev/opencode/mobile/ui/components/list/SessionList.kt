@@ -18,7 +18,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -35,12 +37,14 @@ import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.domain.home.HomeSessionLadder
 import dev.opencode.mobile.domain.home.HomeSessionLadderKind
 import dev.opencode.mobile.domain.home.HomeSessionLadderSection
+import dev.opencode.mobile.domain.home.HomeSessionOrderStabilizer
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.theme.openCodeColor
+import kotlinx.coroutines.delay
 
 private val SessionListFallbackBottomSpacer = 168.dp
 
@@ -229,7 +233,7 @@ private fun SessionListFeedPage(
         remember(sessions, filterId) {
             sessions.visibleForFilter(filterId)
         }
-    val ladderSections =
+    val desiredSections =
         remember(visibleSessions, recentWindowHours) {
             HomeSessionLadder.group(
                 sessions = visibleSessions,
@@ -239,9 +243,12 @@ private fun SessionListFeedPage(
                 nowEpochMs = System.currentTimeMillis(),
             )
         }
+    val ladderSections = rememberStabilizedLadder(filterId, desiredSections)
     val listState = rememberLazyListState()
     var followingTop by remember { mutableStateOf(true) }
-    val newestSessionId = visibleSessions.firstOrNull()?.id
+    var seenIds by remember(filterId) { mutableStateOf(emptySet<String>()) }
+    val displayedIds = ladderSections.flatMap { section -> section.items.map { it.id } }
+    val newcomerId = displayedIds.firstOrNull { it !in seenIds }
 
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }.collect { inProgress ->
@@ -269,8 +276,14 @@ private fun SessionListFeedPage(
             if (atTop) followingTop = true
         }
     }
-    LaunchedEffect(newestSessionId) {
-        if (SessionListScrollPin.shouldScrollToTrueTop(
+    SideEffect {
+        if (displayedIds.isNotEmpty()) {
+            seenIds = seenIds + displayedIds
+        }
+    }
+    LaunchedEffect(newcomerId) {
+        if (newcomerId != null &&
+            SessionListScrollPin.shouldScrollToTrueTop(
                 followingTop = followingTop,
                 newestIdentityChanged = true,
                 forceRevealNewest = false,
@@ -421,6 +434,43 @@ private fun SessionListRow(
             color = borderWeaker,
         )
     }
+}
+
+private class HomeSessionOrderHold {
+    var sections: List<HomeSessionLadderSection<SessionListSession>> = emptyList()
+    var lastAppliedAtEpochMs: Long? = null
+}
+
+@Composable
+private fun rememberStabilizedLadder(
+    filterId: String,
+    desired: List<HomeSessionLadderSection<SessionListSession>>,
+): List<HomeSessionLadderSection<SessionListSession>> {
+    val hold = remember(filterId) { HomeSessionOrderHold() }
+    var flushTick by remember(filterId) { mutableIntStateOf(0) }
+    val result =
+        remember(desired, flushTick) {
+            val next =
+                HomeSessionOrderStabilizer.stabilize(
+                    previousSections = hold.sections,
+                    previousLastAppliedAtEpochMs = hold.lastAppliedAtEpochMs,
+                    desired = desired,
+                    itemId = SessionListSession::id,
+                    isAttention = { it.status == SessionListStatus.Running || it.status == SessionListStatus.Ready },
+                    isReady = { it.status == SessionListStatus.Ready },
+                    nowEpochMs = System.currentTimeMillis(),
+                )
+            hold.sections = next.sections
+            hold.lastAppliedAtEpochMs = next.lastAppliedAtEpochMs
+            next
+        }
+    LaunchedEffect(result.nextApplyAtEpochMs, desired, filterId) {
+        val nextAt = result.nextApplyAtEpochMs ?: return@LaunchedEffect
+        val wait = nextAt - System.currentTimeMillis()
+        if (wait > 0) delay(wait)
+        flushTick++
+    }
+    return result.sections
 }
 
 fun List<SessionListSession>.visibleForFilter(selectedFilterId: String): List<SessionListSession> =

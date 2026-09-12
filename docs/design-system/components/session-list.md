@@ -73,8 +73,13 @@ sheet without changing the selected filter.
 
 Session List applies the selected project filter, then groups via
 `HomeSessionLadder` using `updatedAtEpochMs`, Running/Ready attention, and
-`HomeDisplayPreferences.recentWindowHours`. Within each section, rows sort by
-`updatedAtEpochMs` descending.
+`HomeDisplayPreferences.recentWindowHours`. Desired within-section order is
+`updatedAtEpochMs` descending. Title, caption, and Idle/Running/Ready update
+in place. Row position follows a 5s rate limit: the first rank change applies
+immediately, then order locks for 5s and flushes the latest desired ladder.
+New sessions and attention changes (Running/Ready, including becoming Ready)
+skip the lock. Pin-to-top is for newly appeared sessions and the reveal-newest
+token, not a throttled recency shuffle.
 
 Layout:
 
