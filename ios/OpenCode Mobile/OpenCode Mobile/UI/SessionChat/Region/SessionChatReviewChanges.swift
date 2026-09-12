@@ -10,14 +10,31 @@ final class SessionChatReviewChanges {
     private let worktree: String
     private let sessionRepository: any SessionRepository
     private let supportsSessionMessageDiff: () -> Bool
+    private let lastTurnReviewChangesStore: LastTurnReviewChangesStore
     private var requestTask: Task<Void, Never>?
     private var candidateMessageID: String?
+    private var storeObservation: UUID?
 
-    init(sessionID: String, worktree: String, sessionRepository: any SessionRepository, supportsSessionMessageDiff: @escaping () -> Bool = { true }) {
+    init(
+        sessionID: String,
+        worktree: String,
+        sessionRepository: any SessionRepository,
+        supportsSessionMessageDiff: @escaping () -> Bool = { true },
+        lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil
+    ) {
         self.sessionID = sessionID
         self.worktree = worktree
         self.sessionRepository = sessionRepository
         self.supportsSessionMessageDiff = supportsSessionMessageDiff
+        self.lastTurnReviewChangesStore = lastTurnReviewChangesStore ?? LastTurnReviewChangesStore()
+        storeObservation = self.lastTurnReviewChangesStore.observe { [weak self] changedSessionID in
+            guard let self, changedSessionID == self.sessionID else { return }
+            let previous = self.state
+            self.applyPublishedSnapshot()
+            if self.state != previous {
+                self.notifyChange()
+            }
+        }
     }
 
     func rebind(sessionID: String) {
@@ -27,6 +44,7 @@ final class SessionChatReviewChanges {
         candidateMessageID = nil
         self.sessionID = sessionID
         state = SessionChatReviewChangesRegionState()
+        applyPublishedSnapshot()
         notifyChange()
     }
 
@@ -40,22 +58,36 @@ final class SessionChatReviewChanges {
             $0.role == .user && !$0.isPending && !$0.isStreaming
         })?.id
         let eligibleMessageID = supportsSessionMessageDiff() && hasResolvedSessionStatus && !isTurnActive && !isSending ? messageID : nil
-        guard eligibleMessageID != candidateMessageID else { return }
-
-        requestTask?.cancel()
-        requestTask = nil
-        candidateMessageID = eligibleMessageID
-        // Bind does not fetch last-turn diff. The Changes screen owns that GET.
-        // Without a loaded summary the pill stays hidden.
-        state = SessionChatReviewChangesRegionState(messageID: eligibleMessageID, summary: nil)
-        notifyChange()
+        let previous = state
+        if eligibleMessageID != candidateMessageID {
+            requestTask?.cancel()
+            requestTask = nil
+            candidateMessageID = eligibleMessageID
+            // Bind does not fetch last-turn diff. The Changes screen owns that GET.
+            // Without a loaded summary the pill stays hidden.
+            state = SessionChatReviewChangesRegionState(messageID: eligibleMessageID, summary: nil)
+        }
+        applyPublishedSnapshot()
+        if state != previous {
+            notifyChange()
+        }
     }
 
     func stop() {
         requestTask?.cancel()
         requestTask = nil
+        if let storeObservation {
+            lastTurnReviewChangesStore.stopObserving(storeObservation)
+        }
+        storeObservation = nil
         candidateMessageID = nil
         state = SessionChatReviewChangesRegionState()
+    }
+
+    private func applyPublishedSnapshot() {
+        guard let snapshot = lastTurnReviewChangesStore.snapshot(sessionID: sessionID) else { return }
+        guard snapshot.messageID == candidateMessageID else { return }
+        state = SessionChatReviewChangesRegionState(messageID: snapshot.messageID, summary: snapshot.summary)
     }
 
     private func notifyChange() {

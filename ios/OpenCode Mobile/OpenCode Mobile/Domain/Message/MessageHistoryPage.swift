@@ -49,18 +49,3 @@ nonisolated struct MessageHistoryPage: Equatable, Sendable {
 }
 
 typealias MessagePageFetcher = @Sendable (String, String?, MessageHistoryQuery) async throws -> MessageHistoryPage
-
-extension Array where Element == Message {
-    func chronological() -> [Message] {
-        guard count > 1 else { return self }
-        let firstTime = first?.sentAtEpochMs
-        let lastTime = last?.sentAtEpochMs
-        if let firstTime, let lastTime, firstTime > lastTime {
-            return Array(reversed())
-        }
-        if firstTime == nil || lastTime == nil {
-            return Array(reversed())
-        }
-        return self
-    }
-}

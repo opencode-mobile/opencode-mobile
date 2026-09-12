@@ -732,6 +732,42 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun publishedLastTurnSummaryShowsPillWithoutBindFetch() =
+        runTest(testDispatcher) {
+            val store = LastTurnReviewChangesStore()
+            val repository = FakeSessionRepository()
+            val region =
+                SessionChatReviewChanges(
+                    repository,
+                    backgroundScope,
+                    lastTurnReviewChangesStore = store,
+                ).apply { ioDispatcher = testDispatcher }
+            region.bind("ses-1", "/repo")
+            region.updateCandidate(
+                messages = listOf(reviewChangesMessage("user-1")),
+                hasResolvedSessionStatus = true,
+                isTurnActive = false,
+                isSending = false,
+            )
+            runCurrent()
+
+            assertEquals(null, region.state.value.summary)
+            assertEquals(null, repository.diffRequest)
+
+            store.publish(
+                sessionId = "ses-1",
+                messageId = "user-1",
+                summary = ReviewChangesSummary(2, 4, 1, "user-1"),
+            )
+            runCurrent()
+
+            assertEquals(ReviewChangesSummary(2, 4, 1, "user-1"), region.state.value.summary)
+            assertEquals("user-1", region.state.value.messageId)
+            assertEquals(null, repository.diffRequest)
+            assertTrue(ReviewChangesPillVisibility.shouldShow(region.state.value.summary))
+        }
+
+    @Test
     fun failedReviewChangesCountStaysHidden() =
         runTest(testDispatcher) {
             val sessionRepository =

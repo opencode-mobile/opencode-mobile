@@ -41,6 +41,18 @@ nonisolated final class SessionMessageEngine: @unchecked Sendable {
         )
     }
 
+    func prependOlderIfRevision(
+        sessionID: String,
+        older: [Message],
+        expectedRevision: UInt64
+    ) -> Bool {
+        store.prependOlderIfRevision(
+            sessionID: sessionID,
+            older: older,
+            expectedRevision: expectedRevision
+        )
+    }
+
     func messages(sessionID: String) -> [Message] {
         store.messages(sessionID: sessionID)
     }

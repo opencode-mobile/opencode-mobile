@@ -93,7 +93,8 @@ struct V2MessageRemote: MessageRemote, Sendable {
             cursor: cursor
         )
         return MessageHistoryPage(
-            messages: adapter.messages(fromV2: dtos).chronological(),
+            // desc / cursor-desc pages are newest-first. Reverse exactly once.
+            messages: adapter.messages(fromV2: Array(dtos.reversed())),
             olderCursor: nextCursor,
             hasOlder: nextCursor != nil
         )

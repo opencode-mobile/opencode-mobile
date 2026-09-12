@@ -171,6 +171,59 @@ class MessageSyncWindowedHistoryTest {
         }
 
     @Test
+    fun loadOlder_preservesSseRevisionRace() =
+        runTest(testDispatcher) {
+            val engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter()))
+            val storeSlot = MessageSessionKey.of("local", "/repo", "ses-1").storeSlot
+            val sync =
+                MessageSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages =
+                                listOf(
+                                    Message(
+                                        id = "m3",
+                                        role = MessageRole.Assistant,
+                                        text = "Hello",
+                                        parts = listOf(MessagePart.Text(text = "Hello", isStreaming = true, id = "prt-1")),
+                                    ),
+                                ),
+                            olderCursor = "c1",
+                            hasOlder = true,
+                        )
+                    },
+                    listOlderMessages = { _, _, _ ->
+                        engine.apply(
+                            storeSlot,
+                            MessagePatch.PartDelta(messageId = "m3", partId = "prt-1", delta = " world"),
+                        )
+                        MessagePage(
+                            messages =
+                                listOf(
+                                    user("m1"),
+                                    Message(id = "m3", role = MessageRole.Assistant, text = "Stale"),
+                                ),
+                            olderCursor = null,
+                            hasOlder = false,
+                        )
+                    },
+                    engine = engine,
+                    eventStream = FakeForegroundEventStream(),
+                    liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
+                    pollIntervalMs = 60_000L,
+                    recoveryDelay = { },
+                    nowMs = { testDispatcher.scheduler.currentTime },
+                )
+
+            sync.observeMessages("ses-1", "/repo").first()
+            advanceUntilIdle()
+            val result = sync.loadOlderMessages("ses-1", "/repo")
+
+            assertEquals(listOf("m1", "m3"), result.messages.map { it.id })
+            assertEquals("Hello world", result.messages.last().text)
+        }
+
+    @Test
     fun loadOlder_doesNotExtraPublishThroughObservePath() =
         runTest(testDispatcher) {
             val updates = mutableListOf<MessageListUpdate>()

@@ -526,6 +526,10 @@ extension Container {
         }
     }
 
+    var lastTurnReviewChangesStore: Factory<LastTurnReviewChangesStore> {
+        self { @MainActor in LastTurnReviewChangesStore() }.singleton
+    }
+
     var sessionChatViewModel: ParameterFactory<(sessionID: String, sessionTitle: String, worktree: String), SessionChatViewModel> {
         self { @MainActor in
             SessionChatViewModel(
@@ -551,7 +555,8 @@ extension Container {
                     store: self.sessionModelSelectionStore(),
                     modelRepository: self.modelRepository()
                 ),
-                liveUpdates: self.liveUpdates()
+                liveUpdates: self.liveUpdates(),
+                lastTurnReviewChangesStore: self.lastTurnReviewChangesStore()
             )
         }
     }

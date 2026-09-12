@@ -62,8 +62,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
         sessionCache: any SessionCache = NoOpSessionCache.shared
     ) {
         self.listMessages = listMessages
-        self.listMessagePage = listMessagePage ?? { sessionID, directory, _ in
-            .complete(try await listMessages(sessionID, directory))
+        self.listMessagePage = listMessagePage ?? { sessionID, directory, query in
+            switch query {
+            case .newest:
+                return .complete(try await listMessages(sessionID, directory))
+            case .older:
+                return MessageHistoryPage(messages: [], olderCursor: nil, hasOlder: false)
+            }
         }
         self.store = store
         self.eventStream = eventStream
@@ -251,20 +256,11 @@ nonisolated final class MessageSync: @unchecked Sendable {
             query: .older(cursor: cursor, limit: MessageHistoryPaging.olderPageLimit),
             reason: "load-older"
         )
-        let local = store.messages(sessionID: key.storeSlot)
-        let merged = MessageHistoryMerge.applyOlder(local: local, older: page.messages)
-        let expectedRevision = store.revision(sessionID: key.storeSlot)
-        let applied = store.replaceAllIfRevision(
-            sessionID: key.storeSlot,
-            messages: merged,
-            expectedRevision: expectedRevision
-        )
-        if !applied {
-            let latest = store.messages(sessionID: key.storeSlot)
-            let retried = MessageHistoryMerge.applyOlder(local: latest, older: page.messages)
-            _ = store.replaceAllIfRevision(
+        var applied = false
+        while !applied {
+            applied = store.prependOlderIfRevision(
                 sessionID: key.storeSlot,
-                messages: retried,
+                older: page.messages,
                 expectedRevision: store.revision(sessionID: key.storeSlot)
             )
         }
@@ -948,30 +944,6 @@ nonisolated final class MessageSync: @unchecked Sendable {
         let created = GapAuthority()
         authorities[key] = created
         return created
-    }
-
-    private func fullReloadOrThrow(key: MessageSessionKey, reason: String) async throws -> [Message] {
-        SessionPerformanceProbe.emit("history_request_started")
-        let expectedRevision = store.revision(sessionID: key.storeSlot)
-        let directory = key.directory.isEmpty ? nil : key.directory
-        let started = Date()
-        let page = try await fetchTailPage(sessionID: key.sessionID, directory: directory, reason: reason)
-        rememberTailWindow(page, for: key.storeSlot)
-        SessionPerformanceProbe.emit("history_request_finished")
-        _ = applyTailMessages(
-            sessionID: key.storeSlot,
-            tail: page.messages,
-            expectedRevision: expectedRevision,
-            mergeExisting: false
-        )
-        let merged = store.messages(sessionID: key.storeSlot)
-        setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
-        setFingerprint(messageFingerprint(merged), for: key.storeSlot)
-        DiagnosticLog.info(
-            .chat,
-            "fullReload session=\(key.sessionID) reason=\(reason) count=\(merged.count) ms=\(elapsedMs(since: started))"
-        )
-        return merged
     }
 
     private func fullReloadResult(

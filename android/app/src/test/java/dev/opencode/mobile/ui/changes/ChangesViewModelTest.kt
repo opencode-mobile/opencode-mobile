@@ -14,6 +14,8 @@ import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.VcsDiffMode
 import dev.opencode.mobile.domain.session.VcsInfo
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
+import dev.opencode.mobile.ui.sessionchat.LastTurnReviewChangesStore
+import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
@@ -240,7 +242,7 @@ class ChangesViewModelTest {
                     vcsDiffResults = ArrayDeque(listOf(Result.success(listOf(file("git.kt"))))),
                 )
             val viewModel =
-                ChangesViewModel(repository) { ServerCapabilities.forProtocol(detected) }
+                ChangesViewModel(repository, capabilitiesProvider = { ServerCapabilities.forProtocol(detected) })
             detected = ServerProtocol.V2
             viewModel.bind("s", "/w", "m", ChangeSource.LastTurn)
             advanceUntilIdle()
@@ -301,6 +303,75 @@ class ChangesViewModelTest {
         expandable = expandable.toggleContextMode()
         assertEquals(UnifiedDiffContextMode.Expanded, expandable.contextMode)
         assertFalse(FileViewerState(FileDiff("image.png", null, 0, 0, FileDiffStatus.Modified)).hasPreview)
+    }
+
+    @Test fun lastTurnLoadPublishesReviewChangesSummary() =
+        runTest(dispatcher) {
+            val store = LastTurnReviewChangesStore()
+            val repository =
+                FakeRepository(
+                    results = ArrayDeque(listOf(Result.success(listOf(file("A.kt", additions = 2, deletions = 1))))),
+                )
+            val viewModel = ChangesViewModel(repository, lastTurnReviewChangesStore = store)
+            viewModel.bind("s", "/repo", "user-1")
+            advanceUntilIdle()
+
+            val snapshot = store.snapshot("s")
+            assertEquals("user-1", snapshot?.messageId)
+            assertEquals(ReviewChangesSummary(1, 2, 1, "user-1"), snapshot?.summary)
+        }
+
+    @Test fun emptyOrFailedLastTurnKeepsSummaryHidden() =
+        runTest(dispatcher) {
+            val emptyStore = LastTurnReviewChangesStore()
+            val empty =
+                ChangesViewModel(
+                    FakeRepository(results = ArrayDeque(listOf(Result.success(emptyList())))),
+                    lastTurnReviewChangesStore = emptyStore,
+                )
+            empty.bind("s", "/repo", "user-1")
+            advanceUntilIdle()
+            assertEquals("user-1", emptyStore.snapshot("s")?.messageId)
+            assertNull(emptyStore.snapshot("s")?.summary)
+
+            val failedStore = LastTurnReviewChangesStore()
+            val failed =
+                ChangesViewModel(
+                    FakeRepository(results = ArrayDeque(listOf(Result.failure(SessionError.Transport(IllegalStateException("offline")))))),
+                    lastTurnReviewChangesStore = failedStore,
+                )
+            failed.bind("s", "/repo", "user-1")
+            advanceUntilIdle()
+            assertNull(failedStore.snapshot("s")?.summary)
+        }
+
+    @Test fun workingTreeLoadDoesNotPublishLastTurnSummary() =
+        runTest(dispatcher) {
+            val store = LastTurnReviewChangesStore()
+            val repository =
+                FakeRepository(
+                    vcsInfoResults = ArrayDeque(listOf(Result.success(VcsInfo("feature", "main")))),
+                    vcsDiffResults = ArrayDeque(listOf(Result.success(listOf(file("git.kt"))))),
+                )
+            val viewModel = ChangesViewModel(repository, lastTurnReviewChangesStore = store)
+            viewModel.bind("s", "/repo", "user-1", ChangeSource.WorkingTree)
+            advanceUntilIdle()
+
+            assertNull(store.snapshot("s"))
+            assertEquals(ChangeSource.WorkingTree, viewModel.uiState.value.selectedSource)
+        }
+
+    @Test fun workingTreeOverflowWorksWithoutLastTurnPill() {
+        val state =
+            SessionChatUiState(
+                "s",
+                "Session",
+                SessionChatTimelineState.Ready,
+                messages = listOf(row("user", MessageRole.User), row("assistant", MessageRole.Assistant)),
+            )
+        assertEquals(ChangeSource.WorkingTree, state.changesNavigationTarget("/repo").initialSource)
+        assertNull(state.reviewChangesNavigationTarget("/repo"))
+        assertFalse(ReviewChangesPillVisibility.shouldShow(state.reviewChangesSummary))
     }
 
     @Test fun entryPointsChooseGitAndLastTurn() {

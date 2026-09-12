@@ -376,19 +376,22 @@ struct ReviewChangesSummary: Equatable {
     let fileCount: Int
     let additions: Int
     let deletions: Int
+    let messageID: String?
 
-    init(fileCount: Int, additions: Int, deletions: Int) {
+    init(fileCount: Int, additions: Int, deletions: Int, messageID: String? = nil) {
         self.fileCount = fileCount
         self.additions = additions
         self.deletions = deletions
+        self.messageID = messageID
     }
 
-    init?(files: [FileDiff]) {
+    init?(files: [FileDiff], messageID: String? = nil) {
         guard !files.isEmpty else { return nil }
         self.init(
             fileCount: files.count,
             additions: files.reduce(0) { $0 + $1.additions },
-            deletions: files.reduce(0) { $0 + $1.deletions }
+            deletions: files.reduce(0) { $0 + $1.deletions },
+            messageID: messageID
         )
     }
 }

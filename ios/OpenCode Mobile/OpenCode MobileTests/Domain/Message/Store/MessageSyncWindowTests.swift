@@ -58,6 +58,70 @@ struct MessageSyncWindowTests {
         #expect(collector.latest()?.map(\.id) == ["new-1", "new-2"])
     }
 
+    @Test func loadOlderPreservesSseRevisionRace() async throws {
+        let store = InMemoryMessageStore()
+        let engine = SessionMessageEngine(store: store)
+        let slot = MessageSessionKey(connectionProfileID: "local", directory: "/repo", sessionID: "ses-1").storeSlot
+        let pages = WindowPageRepository(pages: [
+            MessageHistoryPage(
+                messages: [
+                    windowMessage("m2", role: .user, text: "prompt"),
+                    Message(
+                        id: "m3",
+                        role: .assistant,
+                        text: "Hello",
+                        parts: [.text(TextPart(id: "prt-1", text: "Hello", isStreaming: true))],
+                        model: nil,
+                        mode: nil,
+                        sentAtEpochMs: nil
+                    ),
+                ],
+                olderCursor: "c1",
+                hasOlder: true
+            ),
+            MessageHistoryPage(
+                messages: [
+                    windowMessage("m1", role: .user, text: "old"),
+                    windowMessage("m2", role: .user, text: "prompt"),
+                    Message(
+                        id: "m3",
+                        role: .assistant,
+                        text: "Stale",
+                        parts: [.text(TextPart(id: "prt-1", text: "Stale", isStreaming: false))],
+                        model: nil,
+                        mode: nil,
+                        sentAtEpochMs: nil
+                    ),
+                ],
+                olderCursor: nil,
+                hasOlder: false
+            ),
+        ])
+        let sync = MessageSync(
+            listMessages: { _, _ in [] },
+            listMessagePage: { _, _, query in
+                if case .older = query {
+                    _ = engine.apply(
+                        sessionID: slot,
+                        patch: .partDelta(messageID: "m3", partID: "prt-1", delta: " world")
+                    )
+                }
+                return try await pages.page(query: query)
+            },
+            store: engine,
+            eventStream: FakeForegroundEventStream(),
+            recoveryDelay: { _ in }
+        )
+        let collector = WindowMessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        _ = await waitUntil { collector.latest()?.map(\.id) == ["m2", "m3"] }
+
+        let merged = try await sync.loadOlderMessages(sessionID: "ses-1", directory: "/repo")
+        task.cancel()
+        #expect(merged.map(\.id) == ["m1", "m2", "m3"])
+        #expect(merged.last?.text == "Hello world")
+    }
+
     @Test func loadOlderPrependsWithoutOverwritingNewer() async throws {
         let store = InMemoryMessageStore()
         let pages = WindowPageRepository(pages: [

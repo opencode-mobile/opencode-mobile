@@ -195,6 +195,52 @@ struct MessageProtocolRepositoryTests {
         #expect(queryValue(url, "limit") == "200")
     }
 
+    @Test func v2DescPageReversesOnceIgnoringTimestamps() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            .json(#"""
+            {
+              "data": [
+                {"id":"msg_new","type":"user","text":"New","time":{"created":1}},
+                {"id":"msg_old","type":"user","text":"Old","time":{"created":100}}
+              ],
+              "cursor": {"next":"older-cursor"}
+            }
+            """#)
+        ])
+        let router = makeRouter(serverProtocol: .v2)
+
+        let page = try await router.listMessagePage(
+            sessionID: "ses_2",
+            directory: "/repo",
+            query: .newest(limit: 20)
+        )
+
+        #expect(page.messages.map(\.id) == ["msg_old", "msg_new"])
+    }
+
+    @Test func v2CursorDescPageReversesOnceIgnoringTimestamps() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            .json(#"""
+            {
+              "data": [
+                {"id":"msg_b","type":"user","text":"B","time":{"created":1}},
+                {"id":"msg_a","type":"user","text":"A","time":{"created":100}}
+              ],
+              "cursor": {"next":null}
+            }
+            """#)
+        ])
+        let router = makeRouter(serverProtocol: .v2)
+
+        let page = try await router.listMessagePage(
+            sessionID: "ses_2",
+            directory: "/repo",
+            query: .older(cursor: "older-cursor", limit: 200)
+        )
+
+        #expect(page.messages.map(\.id) == ["msg_a", "msg_b"])
+    }
+
     @Test func unknownProtocolProbesBeforeRoutingToV2() async throws {
         MessageProtocolURLProtocol.reset(responses: [
             .json(#"""

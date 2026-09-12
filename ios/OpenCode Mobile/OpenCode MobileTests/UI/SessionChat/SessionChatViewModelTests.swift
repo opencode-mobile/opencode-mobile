@@ -513,6 +513,37 @@ struct SessionChatViewModelTests {
         #expect(sessionRepository.diffRequest == nil)
     }
 
+    @Test func publishedLastTurnSummaryShowsPillWithoutBindFetch() async {
+        let store = LastTurnReviewChangesStore()
+        let sessionRepository = FakeChatSessionRepository()
+        let region = SessionChatReviewChanges(
+            sessionID: "ses-1",
+            worktree: "/repo",
+            sessionRepository: sessionRepository,
+            lastTurnReviewChangesStore: store
+        )
+        region.updateCandidate(
+            messages: [reviewChangesRow(id: "user-1")],
+            hasResolvedSessionStatus: true,
+            isTurnActive: false,
+            isSending: false
+        )
+
+        #expect(region.state.summary == nil)
+        #expect(sessionRepository.diffRequest == nil)
+
+        store.publish(
+            sessionID: "ses-1",
+            messageID: "user-1",
+            summary: ReviewChangesSummary(fileCount: 2, additions: 4, deletions: 1, messageID: "user-1")
+        )
+
+        #expect(region.state.summary == ReviewChangesSummary(fileCount: 2, additions: 4, deletions: 1, messageID: "user-1"))
+        #expect(region.state.messageID == "user-1")
+        #expect(sessionRepository.diffRequest == nil)
+        #expect(ReviewChangesPillVisibility.shouldShow(summary: region.state.summary))
+    }
+
     @Test func failedReviewChangesCountStaysHidden() async {
         let sessionRepository = FakeChatSessionRepository(sessionDiffError: .transport("offline"))
         let viewModel = makeViewModel(

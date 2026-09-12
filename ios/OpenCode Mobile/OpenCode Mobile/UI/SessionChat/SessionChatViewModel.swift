@@ -61,7 +61,8 @@ final class SessionChatViewModel {
         activeConnectionManager: ActiveConnectionManager,
         connectionProfileStore: any ConnectionProfileStore,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
-        liveUpdates: any LiveUpdates = FixedLiveUpdates()
+        liveUpdates: any LiveUpdates = FixedLiveUpdates(),
+        lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil
     ) {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
@@ -106,7 +107,8 @@ final class SessionChatViewModel {
             sessionID: sessionID,
             worktree: worktree,
             sessionRepository: sessionRepository,
-            supportsSessionMessageDiff: { activeConnectionManager.capabilities.supportsSessionMessageDiff }
+            supportsSessionMessageDiff: { activeConnectionManager.capabilities.supportsSessionMessageDiff },
+            lastTurnReviewChangesStore: lastTurnReviewChangesStore ?? LastTurnReviewChangesStore()
         )
         self.commands = SessionChatCommands(
             sessionID: sessionID,

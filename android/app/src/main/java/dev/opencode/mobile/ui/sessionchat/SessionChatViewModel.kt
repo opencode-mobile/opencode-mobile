@@ -85,6 +85,7 @@ class SessionChatViewModel
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         private val connectionProfileStore: ConnectionProfileStore,
         private val activeConnectionManager: ActiveConnectionManager,
+        lastTurnReviewChangesStore: LastTurnReviewChangesStore = LastTurnReviewChangesStore(),
         liveUpdates: LiveUpdates = FixedLiveUpdates(),
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -130,6 +131,7 @@ class SessionChatViewModel
                 supportsSessionMessageDiff = {
                     activeConnectionManager.currentCapabilities().supportsSessionMessageDiff
                 },
+                lastTurnReviewChangesStore = lastTurnReviewChangesStore,
             )
         private val commands =
             SessionChatCommands(

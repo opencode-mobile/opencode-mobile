@@ -24,6 +24,7 @@ internal class V2MessageRemote(
                 newestFirst = query.isTail,
                 cursor = query.olderCursor,
             )
+        // desc / cursor-desc pages are newest-first. Reverse exactly once.
         val chronological = envelope.data.asReversed()
         val olderCursor = envelope.cursor?.next?.takeIf { it.isNotBlank() }
         return MessagePage(

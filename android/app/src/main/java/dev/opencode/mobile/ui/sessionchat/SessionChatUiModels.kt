@@ -284,14 +284,19 @@ data class ReviewChangesSummary(
     val fileCount: Int,
     val additions: Int,
     val deletions: Int,
+    val messageId: String? = null,
 ) {
     companion object {
-        fun from(files: List<FileDiff>): ReviewChangesSummary? =
+        fun from(
+            files: List<FileDiff>,
+            messageId: String? = null,
+        ): ReviewChangesSummary? =
             files.takeIf { it.isNotEmpty() }?.let {
                 ReviewChangesSummary(
                     fileCount = it.size,
                     additions = it.sumOf(FileDiff::additions),
                     deletions = it.sumOf(FileDiff::deletions),
+                    messageId = messageId,
                 )
             }
     }

@@ -182,7 +182,10 @@ class MessageSync(
             restAttempts += "load-older"
             val page = listOlder(key.sessionId, key.directory.ifEmpty { null }, window.olderCursor)
             val beforeIds = engine.messages(storeSlot).map { it.id }.toSet()
-            engine.prependOlderIfRevision(storeSlot, page.messages, engine.revision(storeSlot))
+            var applied = false
+            while (!applied) {
+                applied = engine.prependOlderIfRevision(storeSlot, page.messages, engine.revision(storeSlot))
+            }
             val after = engine.messages(storeSlot)
             val added = after.count { it.id !in beforeIds }
             rememberHistoryWindow(storeSlot, page)
@@ -1183,29 +1186,6 @@ class MessageSync(
 
     private fun gapAuthority(key: MessageSessionKey): GapAuthority =
         authorities.getOrPut(key) { GapAuthority() }
-
-    private suspend fun fullReloadOrThrow(
-        key: MessageSessionKey,
-        reason: String,
-    ): List<Message> {
-        var page: MessagePage? = null
-        val storeSlot = key.storeSlot
-        val directory = key.directory.ifEmpty { null }
-        val expectedRevision = engine.revision(storeSlot)
-        val elapsedMs =
-            measureTimeMillis {
-                page = fetchTail(key.sessionId, directory, reason)
-            }
-        val loaded = page!!
-        rememberHistoryWindow(storeSlot, loaded)
-        engine.applyTailIfRevision(storeSlot, loaded.messages, expectedRevision)
-        val merged = engine.messages(storeSlot)
-        rememberPublishedFrame(storeSlot, merged)
-        logI(
-            "fullReload session=${key.sessionId} reason=$reason count=${merged.size} ms=$elapsedMs",
-        )
-        return merged
-    }
 
     private suspend fun fullReloadResult(
         key: MessageSessionKey,

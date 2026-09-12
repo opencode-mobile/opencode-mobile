@@ -657,6 +657,49 @@ class SessionMessageEngineTest {
         assertEquals("Live", messages.last().text)
     }
 
+    @Test
+    fun prependOlder_staleRevisionIsNoOpAndPreservesSse() {
+        engine.replaceAll(
+            "ses-1",
+            listOf(
+                Message(
+                    id = "live",
+                    role = MessageRole.Assistant,
+                    text = "Hello",
+                    parts = listOf(MessagePart.Text(text = "Hello", isStreaming = true, id = "prt-1")),
+                ),
+            ),
+        )
+        val stale = engine.revision("ses-1")
+        engine.apply("ses-1", MessagePatch.PartDelta(messageId = "live", partId = "prt-1", delta = " world"))
+        assertFalse(
+            engine.prependOlderIfRevision(
+                "ses-1",
+                listOf(
+                    Message(id = "old", role = MessageRole.User, text = "Older"),
+                    Message(id = "live", role = MessageRole.Assistant, text = "Stale"),
+                ),
+                stale,
+            ),
+        )
+        assertEquals(listOf("live"), engine.messages("ses-1").map { it.id })
+        assertEquals("Hello world", engine.messages("ses-1").first().text)
+
+        assertTrue(
+            engine.prependOlderIfRevision(
+                "ses-1",
+                listOf(
+                    Message(id = "old", role = MessageRole.User, text = "Older"),
+                    Message(id = "live", role = MessageRole.Assistant, text = "Stale"),
+                ),
+                engine.revision("ses-1"),
+            ),
+        )
+        val messages = engine.messages("ses-1")
+        assertEquals(listOf("old", "live"), messages.map { it.id })
+        assertEquals("Hello world", messages.last().text)
+    }
+
     private fun seedStreamingAssistant() {
         engine.replaceAll(
             "ses-1",

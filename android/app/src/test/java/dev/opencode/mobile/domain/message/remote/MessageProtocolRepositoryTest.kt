@@ -300,6 +300,54 @@ class MessageProtocolRepositoryTest {
         }
 
     @Test
+    fun v2ListMessageTail_reversesDescPageOnceIgnoringTimestamps() =
+        runTest {
+            val client =
+                testClient { _ ->
+                    respondJson(
+                        """
+                        {
+                          "data":[
+                            {"id":"msg_new","type":"user","text":"New","time":{"created":1}},
+                            {"id":"msg_old","type":"user","text":"Old","time":{"created":100}}
+                          ],
+                          "cursor":{"next":"older"}
+                        }
+                        """.trimIndent(),
+                    )
+                }
+            val router = router(client, ServerProtocol.V2)
+
+            val page = router.listMessagePage("ses_2", "/repo", MessageHistoryQuery.tail())
+
+            assertEquals(listOf("msg_old", "msg_new"), page.messages.map { it.id })
+        }
+
+    @Test
+    fun v2ListOlderMessages_reversesCursorDescPageOnceIgnoringTimestamps() =
+        runTest {
+            val client =
+                testClient { _ ->
+                    respondJson(
+                        """
+                        {
+                          "data":[
+                            {"id":"msg_b","type":"user","text":"B","time":{"created":1}},
+                            {"id":"msg_a","type":"user","text":"A","time":{"created":100}}
+                          ],
+                          "cursor":{"next":null}
+                        }
+                        """.trimIndent(),
+                    )
+                }
+            val router = router(client, ServerProtocol.V2)
+
+            val page = router.listMessagePage("ses_2", "/repo", MessageHistoryQuery.older("older"))
+
+            assertEquals(listOf("msg_a", "msg_b"), page.messages.map { it.id })
+        }
+
+    @Test
     fun unknownProtocol_probesBeforeRoutingToV2() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()
