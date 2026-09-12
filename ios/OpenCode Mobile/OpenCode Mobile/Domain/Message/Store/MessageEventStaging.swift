@@ -182,10 +182,18 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
 
     /// Clears a Recovering latch when authority cannot run for this generation.
     func clearRecoveringLatch() {
+        clearCatchUpLatch()
+    }
+
+    /// Clears Recovering or Stale catch-up chrome when this generation is already paid.
+    func clearCatchUpLatch() {
         lock.lock()
         defer { lock.unlock() }
-        if case .recovering = health {
+        switch health {
+        case .recovering, .stale:
             health = .healthy
+        case .healthy:
+            break
         }
         pendingRecoveryWhileIdle = false
     }

@@ -1067,14 +1067,12 @@ nonisolated final class MessageSync: @unchecked Sendable {
             if gapState.authority.isInFlight() {
                 return
             }
-            if case .recovering(.reconnect) = staging.currentHealth {
-                staging.clearRecoveringLatch()
-                setHealth(.healthy, for: key)
-                confirmCacheSync()
-                return
-            }
             if staging.needsAuthoritativeRecovery {
                 return
+            }
+            if staging.currentHealth != .healthy {
+                staging.clearCatchUpLatch()
+                setHealth(.healthy, for: key)
             }
             DiagnosticLog.info(.chat, "fullReload skip session=\(key.sessionID) reason=\(reason)")
             confirmCacheSync()
@@ -1440,6 +1438,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
             let streaming = store.hasStreamingText(sessionID: key.storeSlot)
             let stalled = streaming && isStreamingStalled(storeSlot: key.storeSlot)
             if streaming && !stalled { continue }
+            // Hung initial REST must not leave Syncing on a painted cache while SSE
+            // is already live. Confirm without another GET — poll GET also hangs
+            // on the same dead URLSession.
+            if isAwaitingCacheSyncConfirm(for: key.storeSlot),
+               fingerprint(for: key.storeSlot) != nil {
+                confirmCacheSync()
+            }
             // TUI does not poll GET …/message while the event iterator is live.
             // Keep the watchdog for transport drop and stalled streaming only.
             if eventStream.connectionState == .connected && !stalled { continue }
