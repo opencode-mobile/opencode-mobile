@@ -64,6 +64,42 @@ struct SessionChatTimelineOlderHistoryTests {
         await timeline.loadOlderMessages()
         #expect(repository.loadOlderCount == 0)
     }
+
+    @Test func cacheSyncConfirmedQueriesHasOlderAfterCacheApply() async {
+        let repository = ConfirmableOlderHistoryRepository(
+            initial: [display("m3", role: .user)]
+        )
+        let timeline = SessionChatTimeline(
+            sessionID: "ses-1",
+            worktree: "/repo",
+            messageRepository: repository
+        )
+        timeline.startObserving()
+        let painted = await waitUntil {
+            !timeline.state.messages.isEmpty && timeline.state.messagesFromCache
+        }
+        #expect(painted)
+        #expect(!timeline.state.hasOlder)
+
+        repository.windowHasOlder = true
+        repository.emitCacheSyncConfirmed()
+        let confirmed = await waitUntil { timeline.state.hasOlder }
+        #expect(confirmed)
+        #expect(!timeline.state.messagesFromCache)
+        timeline.reset()
+    }
+
+    private func waitUntil(
+        timeoutNanoseconds: UInt64 = 2_000_000_000,
+        _ condition: @escaping @MainActor () -> Bool
+    ) async -> Bool {
+        let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNanoseconds
+        while DispatchTime.now().uptimeNanoseconds < deadline {
+            if condition() { return true }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return condition()
+    }
 }
 
 private func display(_ id: String, role: MessageRole) -> DisplayMessage {
@@ -116,6 +152,69 @@ private final class OlderHistoryMessageRepository: MessageRepository, @unchecked
 
     func hasOlderMessages(sessionID: String, directory: String?) -> Bool {
         loadOlderCount == 0 ? hasOlderInitially : hasOlderAfterLoad
+    }
+
+    func prepareOptimisticUserMessage(id: String, text: String) async -> DisplayMessage {
+        DisplayMessage(message: Message(id: id, role: .user, text: text, model: nil, mode: nil, sentAtEpochMs: 0))
+    }
+
+    func clearMessageCache() {}
+
+    func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
+        initial.map(\.message)
+    }
+
+    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {
+        initial.map(\.message).first { $0.id == messageID }!
+    }
+
+    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message {
+        Message(id: "sent", role: .user, text: text, model: nil, mode: nil, sentAtEpochMs: 0)
+    }
+
+    func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
+}
+
+private final class ConfirmableOlderHistoryRepository: MessageRepository, @unchecked Sendable {
+    private let initial: [DisplayMessage]
+    var windowHasOlder = false
+    private let lock = NSLock()
+    private var confirm: (() -> Void)?
+
+    init(initial: [DisplayMessage]) {
+        self.initial = initial
+    }
+
+    func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
+        AsyncStream { $0.finish() }
+    }
+
+    func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate> {
+        AsyncStream { continuation in
+            continuation.yield(.messages(initial, isFromCache: true))
+            lock.lock()
+            confirm = { continuation.yield(.cacheSyncConfirmed) }
+            lock.unlock()
+        }
+    }
+
+    func emitCacheSyncConfirmed() {
+        lock.lock()
+        let confirm = confirm
+        lock.unlock()
+        confirm?()
+    }
+
+    func refreshMessages(sessionID: String, directory: String?) async throws -> [Message] {
+        initial.map(\.message)
+    }
+
+    func refreshDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage] {
+        initial
+    }
+
+    func hasOlderMessages(sessionID: String, directory: String?) -> Bool {
+        windowHasOlder
     }
 
     func prepareOptimisticUserMessage(id: String, text: String) async -> DisplayMessage {

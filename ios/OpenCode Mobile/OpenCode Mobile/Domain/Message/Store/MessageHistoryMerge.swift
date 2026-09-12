@@ -11,12 +11,14 @@ nonisolated enum MessageHistoryMerge {
     }
 
     static func applyTail(local: [Message], tail: [Message]) -> [Message] {
-        if tail.isEmpty { return [] }
-        guard let overlapIndex = oldestOverlapIndex(local: local, tail: tail) else {
+        if tail.isEmpty { return local }
+        guard let firstOverlap = oldestOverlapIndex(local: local, tail: tail) else {
             return tail
         }
-        let olderPrefix = Array(local.prefix(overlapIndex))
-        return olderPrefix + tail
+        let lastOverlap = newestOverlapIndex(local: local, tail: tail) ?? firstOverlap
+        let olderPrefix = Array(local.prefix(firstOverlap))
+        let newerSuffix = Array(local.suffix(from: min(local.count, lastOverlap + 1)))
+        return olderPrefix + tail + newerSuffix
     }
 
     static func applyOlder(local: [Message], older: [Message]) -> [Message] {
@@ -38,8 +40,17 @@ nonisolated enum MessageHistoryMerge {
     }
 
     private static func oldestOverlapIndex(local: [Message], tail: [Message]) -> Int? {
+        overlapIndex(local: local, tail: tail, reversed: false)
+    }
+
+    private static func newestOverlapIndex(local: [Message], tail: [Message]) -> Int? {
+        overlapIndex(local: local, tail: tail, reversed: true)
+    }
+
+    private static func overlapIndex(local: [Message], tail: [Message], reversed: Bool) -> Int? {
         let localIndex = Dictionary(uniqueKeysWithValues: local.enumerated().map { ($1.id, $0) })
-        for message in tail {
+        let sequence = reversed ? Array(tail.reversed()) : tail
+        for message in sequence {
             if let index = localIndex[message.id] {
                 return index
             }

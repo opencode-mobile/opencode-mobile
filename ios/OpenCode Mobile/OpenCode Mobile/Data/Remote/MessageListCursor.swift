@@ -16,7 +16,10 @@ nonisolated enum MessageListCursor {
             if let before = queryValue(url, name: "before"), !before.isEmpty {
                 return before
             }
-            return url
+            if let cursor = queryValue(url, name: "cursor"), !cursor.isEmpty {
+                return cursor
+            }
+            return nil
         }
         return nil
     }

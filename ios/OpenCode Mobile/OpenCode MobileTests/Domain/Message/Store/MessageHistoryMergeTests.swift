@@ -3,31 +3,45 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct MessageHistoryMergeTests {
+    @Test func applyTailEmptyTailKeepsLocal() {
+        let local = [message("m1", role: .user), message("m2", role: .assistant)]
+
+        #expect(MessageHistoryMerge.applyTail(local: local, tail: []).map(\.id) == ["m1", "m2"])
+    }
+
     @Test func applyTailPreservesOlderThanOverlapAndUpsertsNewer() {
         let local = [
             message("m1", role: .user, text: "old"),
             message("m2", role: .assistant, text: "cached"),
             message("m3", role: .user, text: "stale"),
-            message("m4", role: .assistant, text: "disproved"),
+            message("m4", role: .assistant, text: "sse"),
         ]
         let tail = [
             message("m2", role: .assistant, text: "fresh"),
             message("m3", role: .user, text: "latest"),
         ]
 
-        #expect(MessageHistoryMerge.applyTail(local: local, tail: tail).map(\.id) == ["m1", "m2", "m3"])
-        #expect(MessageHistoryMerge.applyTail(local: local, tail: tail)[1].text == "fresh")
+        let merged = MessageHistoryMerge.applyTail(local: local, tail: tail)
+        #expect(merged.map(\.id) == ["m1", "m2", "m3", "m4"])
+        #expect(merged[1].text == "fresh")
+        #expect(merged[2].text == "latest")
+        #expect(merged[3].text == "sse")
     }
 
-    @Test func applyTailDropsNewerLocalRowsDisprovedByTail() {
+    @Test func applyTailDropsRowsInsideOverlapWindowAndKeepsSSESuffix() {
         let local = [
             message("m1", role: .user, text: "old"),
             message("m2", role: .assistant, text: "overlap"),
             message("gone", role: .assistant, text: "disproved"),
+            message("m3", role: .user, text: "overlap-end"),
+            message("sse", role: .assistant, text: "live"),
         ]
-        let tail = [message("m2", role: .assistant, text: "overlap")]
+        let tail = [
+            message("m2", role: .assistant, text: "overlap"),
+            message("m3", role: .user, text: "overlap-end"),
+        ]
 
-        #expect(MessageHistoryMerge.applyTail(local: local, tail: tail).map(\.id) == ["m1", "m2"])
+        #expect(MessageHistoryMerge.applyTail(local: local, tail: tail).map(\.id) == ["m1", "m2", "m3", "sse"])
     }
 
     @Test func applyTailResetsWhenNonemptyTailHasNoOverlap() {

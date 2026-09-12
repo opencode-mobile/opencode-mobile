@@ -22,6 +22,17 @@ struct MessageProtocolRepositoryTests {
         #expect(queryValue(url, "before") == nil)
     }
 
+    @Test func remoteDefaultPageRequestDoesNotDumpFullHistory() async {
+        let remote = UnpagedMessageRemote()
+        await #expect(throws: MessageHistoryPagingError.pageRequestNotImplemented) {
+            _ = try await remote.listMessagePage(
+                sessionID: "ses_1",
+                directory: "/repo",
+                query: .newest(limit: 20)
+            )
+        }
+    }
+
     @Test func v1TailUsesLimitWithoutBefore() async throws {
         MessageProtocolURLProtocol.reset(responses: [
             MessageStubResponse(
@@ -341,4 +352,12 @@ private final class MessageProtocolURLProtocol: URLProtocol {
 
 private struct StubV2Probe: ConnectionProbing {
     func probe(connection: ServerConnection) async throws -> ServerProtocol { .v2 }
+}
+
+private struct UnpagedMessageRemote: MessageRemote {
+    func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
+        [Message(id: "full", role: .user, text: "dump", model: nil, mode: nil, sentAtEpochMs: nil)]
+    }
+
+    func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
 }

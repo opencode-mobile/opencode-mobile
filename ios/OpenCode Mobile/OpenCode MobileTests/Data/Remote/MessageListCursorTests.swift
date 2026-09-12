@@ -17,4 +17,21 @@ struct MessageListCursorTests {
         ])
         #expect(cursor == "abc+1")
     }
+
+    @Test func prefersBeforeThenCursorAndNeverReturnsRawURL() {
+        let before = MessageListCursor.nextCursor(fromLink:
+            "</api/session/s/message?cursor=ignored&before=from-before>; rel=\"next\""
+        )
+        #expect(before == "from-before")
+
+        let cursor = MessageListCursor.nextCursor(fromLink:
+            "</api/session/s/message?limit=50&cursor=from-cursor>; rel=\"next\""
+        )
+        #expect(cursor == "from-cursor")
+
+        let missing = MessageListCursor.nextCursor(fromLink:
+            "</session/s/message?limit=20>; rel=\"next\""
+        )
+        #expect(missing == nil)
+    }
 }

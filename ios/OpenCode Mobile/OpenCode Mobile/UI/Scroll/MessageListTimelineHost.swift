@@ -121,6 +121,10 @@ where Item.ID == String {
     private var preservedOffsetY: CGFloat?
     private var isCoveredByNavigation = false
     private var userScrollEndTask: Task<Void, Never>?
+    /// User must drag toward oldest after the first paint before older pages load.
+    private var pendingOlderLoadFromUserScroll = false
+    private var didFireOlderLoadThisGesture = false
+    private var lastUserScrollOffsetY: CGFloat?
     private var contentSizeObservation: NSKeyValueObservation?
     private var refreshControl: UIRefreshControl?
     /// Enrich publishes coalesce here while the user is actively scrolling so
@@ -502,7 +506,6 @@ where Item.ID == String {
                     // Declared structure growth with stable count — not decorate-only.
                     self.scrollController?.notifyContentGrew()
                 }
-                self.notifyNearOldestIfNeeded()
             }
         }
         diffableSnapshotApplyCount += 1
@@ -640,30 +643,52 @@ where Item.ID == String {
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         reportGeometry()
-        notifyNearOldestIfNeeded()
         guard scrollView.isDragging || scrollView.isTracking else { return }
         scrollController?.beginUserScrolling()
         scheduleUserScrollEnd()
+        noteUserScrollTowardOldestIfNeeded(scrollView)
     }
 
     func testNotifyNearOldestIfNeeded() {
         notifyNearOldestIfNeeded()
     }
 
+    func testArmUserScrollTowardOldest() {
+        pendingOlderLoadFromUserScroll = true
+        didFireOlderLoadThisGesture = false
+        hasCompletedInitialScroll = true
+        isSettlingInitialLoad = false
+    }
+
+    private func noteUserScrollTowardOldestIfNeeded(_ scrollView: UIScrollView) {
+        guard pendingOlderLoadFromUserScroll, !didFireOlderLoadThisGesture else { return }
+        let y = scrollView.contentOffset.y
+        let movedTowardOldest = lastUserScrollOffsetY.map { y < $0 - 0.5 } ?? false
+        lastUserScrollOffsetY = y
+        guard movedTowardOldest else { return }
+        notifyNearOldestIfNeeded()
+    }
+
     private func notifyNearOldestIfNeeded() {
         guard canLoadOlder, !orderedIDs.isEmpty, let collectionView else { return }
+        guard hasCompletedInitialScroll, !isSettlingInitialLoad else { return }
+        guard pendingOlderLoadFromUserScroll, !didFireOlderLoadThisGesture else { return }
         let visible = collectionView.indexPathsForVisibleItems.sorted { $0.item < $1.item }
         let oldestVisible = visible.first?.item == 0
         let nearTop =
             collectionView.contentOffset.y
             <= -collectionView.adjustedContentInset.top + MessageListTimelineDefaults.autoFollowTolerance
         guard oldestVisible || nearTop else { return }
+        didFireOlderLoadThisGesture = true
         onNearOldestVisible?()
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         onUserScrollDismissKeyboard?()
         scrollController?.beginUserScrolling()
+        pendingOlderLoadFromUserScroll = true
+        didFireOlderLoadThisGesture = false
+        lastUserScrollOffsetY = scrollView.contentOffset.y
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {

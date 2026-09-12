@@ -36,15 +36,15 @@ extension MessageRepository {
     func peekWarmDisplayMessages(sessionID: String, directory: String?) -> [DisplayMessage]? { nil }
 
     func listMessagePage(
-        sessionID: String,
-        directory: String?,
+        sessionID _: String,
+        directory _: String?,
         query _: MessageHistoryQuery
     ) async throws -> MessageHistoryPage {
-        .complete(try await listMessages(sessionID: sessionID, directory: directory))
+        throw MessageHistoryPagingError.pageRequestNotImplemented
     }
 
-    func loadOlderMessages(sessionID: String, directory: String?) async throws -> [Message] {
-        try await listMessages(sessionID: sessionID, directory: directory)
+    func loadOlderMessages(sessionID _: String, directory _: String?) async throws -> [Message] {
+        throw MessageHistoryPagingError.pageRequestNotImplemented
     }
 
     func loadOlderDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage] {

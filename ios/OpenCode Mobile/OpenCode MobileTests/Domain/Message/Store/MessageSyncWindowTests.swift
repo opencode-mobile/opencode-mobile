@@ -117,6 +117,123 @@ struct MessageSyncWindowTests {
         ])
     }
 
+    @Test func pollAndRefreshPreserveFurtherBackOlderCursor() async throws {
+        let newest = MessageHistoryPage(
+            messages: [windowMessage("m3", role: .user, text: "live")],
+            olderCursor: "c-tail",
+            hasOlder: true
+        )
+        let pages = QueryKeyedWindowPages(
+            newest: newest,
+            older: [
+                "c-tail": MessageHistoryPage(
+                    messages: [windowMessage("m1", role: .user, text: "old"), windowMessage("m3", role: .user, text: "live")],
+                    olderCursor: "c-older",
+                    hasOlder: true
+                ),
+                "c-older": MessageHistoryPage(
+                    messages: [windowMessage("m0", role: .user, text: "oldest")],
+                    olderCursor: "c-oldest",
+                    hasOlder: true
+                ),
+            ]
+        )
+        let events = FakeForegroundEventStream()
+        events.setConnectionState(.disconnected)
+        let sync = MessageSync(
+            listMessages: { _, _ in [] },
+            listMessagePage: { _, _, query in
+                try await pages.page(query: query)
+            },
+            store: InMemoryMessageStore(),
+            eventStream: events,
+            pollIntervalMs: 20,
+            recoveryDelay: { _ in }
+        )
+        let collector = WindowMessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        _ = await waitUntil { collector.latest()?.map(\.id) == ["m3"] }
+
+        _ = try await sync.loadOlderMessages(sessionID: "ses-1", directory: "/repo")
+        #expect(pages.olderCursors == ["c-tail"])
+
+        _ = await waitUntil { pages.newestCount >= 2 }
+        _ = try await sync.refreshMessages(sessionID: "ses-1", directory: "/repo")
+        _ = try await sync.loadOlderMessages(sessionID: "ses-1", directory: "/repo")
+        task.cancel()
+
+        #expect(pages.olderCursors == ["c-tail", "c-older"])
+        #expect(sync.hasOlderMessages(sessionID: "ses-1", directory: "/repo"))
+    }
+
+    @Test func noOverlapTailReplacesOlderCursor() async throws {
+        let pages = QueryKeyedWindowPages(
+            newest: MessageHistoryPage(
+                messages: [windowMessage("m3", role: .user)],
+                olderCursor: "c-tail",
+                hasOlder: true
+            ),
+            older: [
+                "c-tail": MessageHistoryPage(
+                    messages: [windowMessage("m1", role: .user), windowMessage("m3", role: .user)],
+                    olderCursor: "c-older",
+                    hasOlder: true
+                ),
+                "c-reset": MessageHistoryPage(
+                    messages: [windowMessage("n0", role: .user)],
+                    olderCursor: nil,
+                    hasOlder: false
+                ),
+            ]
+        )
+        let sync = makeWindowSync(pages: pages, store: InMemoryMessageStore())
+        let collector = WindowMessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        _ = await waitUntil { collector.latest()?.map(\.id) == ["m3"] }
+        _ = try await sync.loadOlderMessages(sessionID: "ses-1", directory: "/repo")
+
+        pages.newest = MessageHistoryPage(
+            messages: [windowMessage("n1", role: .user), windowMessage("n2", role: .assistant)],
+            olderCursor: "c-reset",
+            hasOlder: true
+        )
+        _ = try await sync.refreshMessages(sessionID: "ses-1", directory: "/repo")
+        _ = try await sync.loadOlderMessages(sessionID: "ses-1", directory: "/repo")
+        task.cancel()
+
+        #expect(pages.olderCursors == ["c-tail", "c-reset"])
+        #expect(!sync.hasOlderMessages(sessionID: "ses-1", directory: "/repo"))
+    }
+
+    @Test func cacheHitUnchangedFingerprintKeepsOlderWindow() async {
+        let cached = [
+            windowMessage("m2", role: .user, text: "cached"),
+            windowMessage("m3", role: .assistant, text: "tail"),
+        ]
+        let pages = QueryKeyedWindowPages(
+            newest: MessageHistoryPage(messages: cached, olderCursor: "older", hasOlder: true),
+            older: [:]
+        )
+        let sync = MessageSync(
+            listMessages: { _, _ in cached },
+            listMessagePage: { _, _, query in
+                try await pages.page(query: query)
+            },
+            store: InMemoryMessageStore(),
+            eventStream: FakeForegroundEventStream(),
+            recoveryDelay: { _ in },
+            sessionCache: SeedingSessionCache(messages: cached)
+        )
+        let collector = WindowMessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let confirmed = await waitUntil {
+            collector.sawCacheSyncConfirmed && sync.hasOlderMessages(sessionID: "ses-1", directory: "/repo")
+        }
+        task.cancel()
+        #expect(confirmed)
+        #expect(sync.hasOlderMessages(sessionID: "ses-1", directory: "/repo"))
+    }
+
     @Test func pollUsesBoundedTailQuery() async {
         let pages = WindowPageRepository(pages: [
             MessageHistoryPage(messages: [windowMessage("m1", role: .user)], olderCursor: nil, hasOlder: false),
@@ -142,6 +259,18 @@ struct MessageSyncWindowTests {
             if case .newest(let limit) = query { return limit == 20 }
             return true
         })
+    }
+
+    private func makeWindowSync(pages: QueryKeyedWindowPages, store: InMemoryMessageStore) -> MessageSync {
+        MessageSync(
+            listMessages: { _, _ in [] },
+            listMessagePage: { _, _, query in
+                try await pages.page(query: query)
+            },
+            store: store,
+            eventStream: FakeForegroundEventStream(),
+            recoveryDelay: { _ in }
+        )
     }
 
     private func makeWindowSync(pages: WindowPageRepository, store: InMemoryMessageStore) -> MessageSync {
@@ -201,14 +330,20 @@ private final class WindowPageRepository: @unchecked Sendable {
 private final class WindowMessageCollector: @unchecked Sendable {
     private let lock = NSLock()
     private var emissions: [[Message]] = []
+    private var _sawCacheSyncConfirmed = false
 
     func collect(_ stream: AsyncStream<MessageListUpdate>) async {
         for await update in stream {
-            if case .messages(let messages, _) = update {
-                lock.lock()
+            lock.lock()
+            switch update {
+            case .messages(let messages, _):
                 emissions.append(messages)
-                lock.unlock()
+            case .cacheSyncConfirmed:
+                _sawCacheSyncConfirmed = true
+            default:
+                break
             }
+            lock.unlock()
         }
     }
 
@@ -217,4 +352,95 @@ private final class WindowMessageCollector: @unchecked Sendable {
         defer { lock.unlock() }
         return emissions.last
     }
+
+    var sawCacheSyncConfirmed: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _sawCacheSyncConfirmed
+    }
+}
+
+private final class QueryKeyedWindowPages: @unchecked Sendable {
+    private let lock = NSLock()
+    private var newestPage: MessageHistoryPage
+    private var older: [String: MessageHistoryPage]
+    private var queries: [MessageHistoryQuery] = []
+
+    var newest: MessageHistoryPage {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return newestPage
+        }
+        set {
+            lock.lock()
+            newestPage = newValue
+            lock.unlock()
+        }
+    }
+
+    init(newest: MessageHistoryPage, older: [String: MessageHistoryPage]) {
+        newestPage = newest
+        self.older = older
+    }
+
+    func page(query: MessageHistoryQuery) async throws -> MessageHistoryPage {
+        lock.lock()
+        defer { lock.unlock() }
+        queries.append(query)
+        switch query {
+        case .newest:
+            return newestPage
+        case .older(let cursor, _):
+            return older[cursor] ?? .complete([])
+        }
+    }
+
+    var olderCursors: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return queries.compactMap { query in
+            if case .older(let cursor, _) = query { return cursor }
+            return nil
+        }
+    }
+
+    var newestCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return queries.filter {
+            if case .newest = $0 { return true }
+            return false
+        }.count
+    }
+}
+
+private final class SeedingSessionCache: SessionCache, @unchecked Sendable {
+    private let messages: [Message]
+
+    init(messages: [Message]) {
+        self.messages = messages
+    }
+
+    func seedSessions(worktree: String) async -> [Session]? { nil }
+    func rememberSessions(worktree: String, sessions: [Session]) async {}
+    func openMessages(sessionID: String, worktree: String) -> any SessionMessageCacheHandle {
+        SeedingSessionMessageCacheHandle(messages: messages)
+    }
+    func purgeWorktree(serverBaseURL: String, worktree: String) async {}
+    func clearAll() async {}
+    func estimatedSizeBytes() async -> Int64 { 0 }
+}
+
+private final class SeedingSessionMessageCacheHandle: SessionMessageCacheHandle, @unchecked Sendable {
+    private let messages: [Message]
+
+    init(messages: [Message]) {
+        self.messages = messages
+    }
+
+    func seed() async -> [Message]? { messages }
+    func note(messages: [Message]) {}
+    func flush() async {}
+    func close() {}
 }

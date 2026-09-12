@@ -8,11 +8,11 @@ protocol MessageRemote: Sendable {
 
 extension MessageRemote {
     func listMessagePage(
-        sessionID: String,
-        directory: String?,
+        sessionID _: String,
+        directory _: String?,
         query _: MessageHistoryQuery
     ) async throws -> MessageHistoryPage {
-        .complete(try await listMessages(sessionID: sessionID, directory: directory))
+        throw MessageHistoryPagingError.pageRequestNotImplemented
     }
 }
 

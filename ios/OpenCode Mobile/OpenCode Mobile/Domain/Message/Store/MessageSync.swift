@@ -268,7 +268,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 expectedRevision: store.revision(sessionID: key.storeSlot)
             )
         }
-        rememberWindow(page, for: key.storeSlot)
+        rememberWindow(page, for: key.storeSlot, update: .replace)
         let result = store.messages(sessionID: key.storeSlot)
         setPublishedFrame(result, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
         setFingerprint(messageFingerprint(result), for: key.storeSlot)
@@ -588,7 +588,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 directory: key.directory.isEmpty ? nil : key.directory,
                 reason: StoreRefreshReason.initialSubscribe
             )
-            rememberWindow(page, for: key.storeSlot)
+            rememberTailWindow(page, for: key.storeSlot)
             SessionPerformanceProbe.emit("history_request_finished")
             await applyQueuedIncrementalEvents(
                 staging.takeQueuedIncrementalEvents(),
@@ -869,15 +869,33 @@ nonisolated final class MessageSync: @unchecked Sendable {
         return page
     }
 
-    private func rememberWindow(_ page: MessageHistoryPage, for storeSlot: String) {
+    private enum HistoryWindowUpdate {
+        case replace
+        case preserveExisting
+    }
+
+    private func rememberTailWindow(_ page: MessageHistoryPage, for storeSlot: String) {
+        let local = store.messages(sessionID: storeSlot)
+        let isReset = !page.messages.isEmpty && !MessageHistoryMerge.hasOverlap(local: local, tail: page.messages)
+        rememberWindow(page, for: storeSlot, update: isReset ? .replace : .preserveExisting)
+    }
+
+    private func rememberWindow(
+        _ page: MessageHistoryPage,
+        for storeSlot: String,
+        update: HistoryWindowUpdate
+    ) {
         lock.lock()
+        defer { lock.unlock() }
+        if update == .preserveExisting, hasOlderBySlot[storeSlot] != nil {
+            return
+        }
         if let cursor = page.olderCursor {
             olderCursorBySlot[storeSlot] = cursor
         } else {
             olderCursorBySlot.removeValue(forKey: storeSlot)
         }
         hasOlderBySlot[storeSlot] = page.hasOlder
-        lock.unlock()
     }
 
     private func applyTailMessages(
@@ -938,7 +956,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         let directory = key.directory.isEmpty ? nil : key.directory
         let started = Date()
         let page = try await fetchTailPage(sessionID: key.sessionID, directory: directory, reason: reason)
-        rememberWindow(page, for: key.storeSlot)
+        rememberTailWindow(page, for: key.storeSlot)
         SessionPerformanceProbe.emit("history_request_finished")
         _ = applyTailMessages(
             sessionID: key.storeSlot,
@@ -972,7 +990,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 directory: directory,
                 reason: reason
             )
-            rememberWindow(page, for: key.storeSlot)
+            rememberTailWindow(page, for: key.storeSlot)
             await beforeCommit()
             let applied =
                 store.revision(sessionID: key.storeSlot) == expectedRevision &&
@@ -1461,7 +1479,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     directory: directory,
                     reason: "poll"
                 )
-                rememberWindow(page, for: key.storeSlot)
+                rememberTailWindow(page, for: key.storeSlot)
                 let local = store.messages(sessionID: key.storeSlot)
                 if streaming {
                     guard MessageHistoryMerge.shouldAcceptTail(remote: page.messages, local: local) else {

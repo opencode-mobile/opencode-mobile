@@ -7,6 +7,10 @@ nonisolated enum MessageHistoryPaging {
     static let maxSplitTurnBackfillPages = 3
 }
 
+nonisolated enum MessageHistoryPagingError: Error, Equatable, Sendable {
+    case pageRequestNotImplemented
+}
+
 nonisolated enum MessageHistoryQuery: Equatable, Sendable {
     case newest(limit: Int)
     case older(cursor: String, limit: Int)

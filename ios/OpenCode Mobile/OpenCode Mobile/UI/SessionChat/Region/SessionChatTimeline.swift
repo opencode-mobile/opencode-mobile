@@ -557,6 +557,7 @@ final class SessionChatTimeline {
         networkCacheSyncConfirmed = true
         state.messagesFromCache = false
         state.isSyncingMessages = catchUpSyncing
+        state.hasOlder = messageRepository.hasOlderMessages(sessionID: sessionID, directory: worktree)
         notifyChange()
     }
 

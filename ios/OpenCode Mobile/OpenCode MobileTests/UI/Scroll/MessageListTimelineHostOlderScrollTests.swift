@@ -80,7 +80,7 @@ struct MessageListTimelineHostOlderScrollTests {
         #expect(!scroll.isProgrammaticScrolling)
     }
 
-    @Test func nearOldestVisibleFiresOnceWhileLoadable() {
+    @Test func nearOldestDoesNotFireOnInitialApply() {
         let controller = MessageListTimelineViewController<OlderScrollItem, Text>(
             itemContent: { Text($0.label) },
             horizontalContentPadding: 0,
@@ -117,7 +117,56 @@ struct MessageListTimelineHostOlderScrollTests {
         controller.view.layoutIfNeeded()
         controller.testSetContentOffsetY(-controller.view.safeAreaInsets.top)
         controller.testNotifyNearOldestIfNeeded()
-        #expect(fires >= 1)
+        #expect(fires == 0)
+    }
+
+    @Test func nearOldestVisibleFiresOncePerUserScrollTowardOldest() {
+        let controller = MessageListTimelineViewController<OlderScrollItem, Text>(
+            itemContent: { Text($0.label) },
+            horizontalContentPadding: 0,
+            topContentPadding: 0,
+            bottomContentPadding: 0,
+            bottomOverlayInset: 0,
+            interItemSpacing: 0
+        )
+        controller.loadViewIfNeeded()
+        controller.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+        let window = UIWindow(frame: controller.view.frame)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        var fires = 0
+        controller.canLoadOlder = true
+        controller.onNearOldestVisible = { fires += 1 }
+        controller.apply(
+            items: [OlderScrollItem(id: "m1", label: "One")],
+            packet: MessageListTimelineApplyPacket(
+                frameRevision: 1,
+                insertedRowIDs: ["m1"],
+                changedRowIDs: [],
+                removedRowIDs: [],
+                layoutChangedRowIDs: ["m1"],
+                grewBottomRowIDs: [],
+                decorateRowIDs: [],
+                isRequired: false,
+                kinds: [.structure]
+            ),
+            animatingDifferences: false
+        )
+        controller.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.08))
+        controller.view.layoutIfNeeded()
+        controller.testSetContentOffsetY(-controller.view.safeAreaInsets.top)
+
+        controller.testArmUserScrollTowardOldest()
+        controller.testNotifyNearOldestIfNeeded()
+        #expect(fires == 1)
+
+        controller.testNotifyNearOldestIfNeeded()
+        #expect(fires == 1)
+
+        controller.testArmUserScrollTowardOldest()
+        controller.testNotifyNearOldestIfNeeded()
+        #expect(fires == 2)
     }
 }
 
