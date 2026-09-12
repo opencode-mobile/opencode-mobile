@@ -24,6 +24,9 @@ Chat screen with visible messages and a composer ready for new prompts.
 
 - Real server-backed message history and async prompt send are implemented in
   [Message Repository](../message-repository/plan.md) and wired into Session Chat.
+- Session Chat opens from a newest 20-message history window. Older messages
+  load in 200-message pages only after the user scrolls toward the oldest loaded
+  row; prepend preserves the visible message and does not re-arm auto-follow.
 - Foreground SSE observation, reconnect refresh, and live session/message state
   shipped in Foreground Event Stream.
 - Abort/stop is wired through `SessionRepository` from the composer.
@@ -34,6 +37,9 @@ Chat screen with visible messages and a composer ready for new prompts.
   matching `/undo`. Copy stays clipboard-only. While revert is pending, the
   composer shows an attachment-style chip (`Reverting this message` / `REVERT`)
   with X to cancel. Live timeline truncation after revert is still outstanding.
+- Last Turn patch text is not fetched on bind. The Review Changes pill stays
+  hidden until Changes has loaded a non-empty Last Turn diff; the Changes screen
+  publishes only its count and line totals back to the open Session Chat.
 
 ## Still Out Of Scope
 
@@ -70,6 +76,8 @@ architectural decision — see
 ## UI States
 
 - Loaded with messages.
+- Loaded with a partial history window; reaching its oldest edge after a user
+  scroll can load more without moving the visible reading position.
 - Empty composer.
 - Composer with pending text input.
 - Composer selector changes for model, mode, and Variant.

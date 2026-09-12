@@ -5,6 +5,18 @@ Still binding:
 - Session Chat reads `observeDisplayMessages` / `refreshDisplayMessages`. Send
   stays on the same repository.
 - Store is in-memory (`InMemoryMessageStore`). No local DB until we add one.
+- Session Chat history is a chronological in-memory window. Bind and every
+  authoritative refresh request the newest 20 messages, with at most three
+  additional 20-message pages to complete a split turn. One user scroll toward
+  the oldest edge requests one 200-message older page. v1 maps this to
+  `limit` / `before`; v2 maps it to `limit` / `order=desc` / `cursor`, never
+  sending `order` with a cursor. Full-list reads remain only for explicit
+  off-chat consumers that need whole-history totals.
+- Tail authority updates overlapping and newer rows without dropping loaded
+  older rows. A non-empty tail with no ID overlap resets the window rather than
+  concatenating an unproven gap. An SSE revision during REST rejects that
+  response. Older-page prepend deduplicates IDs and cannot overwrite newer live
+  state.
 - `MessageSync` owns REST + SSE merge. Incremental `message.*` patches stay.
   Live shape tracks TUI v2 ([server-api-v2](../server-api-v2/decisions.md)):
   hydrate / merge on reconnect, patch while the stream is live, do not

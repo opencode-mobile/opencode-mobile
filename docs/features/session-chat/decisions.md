@@ -6,6 +6,15 @@ Still binding:
   review changes, commands, and inbox (permission / question / todo) are
   regions.
 - Timeline is oldest-to-newest. Pin to bottom when auto-follow is armed.
+- Session Chat bind paints a newest 20-message window, not complete REST
+  history. Only a user scroll toward the oldest loaded edge requests the next
+  200-message page. Prepend preserves the visible item and offset and does not
+  arm auto-follow.
+- Do not request Last Turn patch text to decide whether to show Review Changes
+  on bind. Changes owns that request. Its non-empty Last Turn result publishes
+  only file and line totals to the in-memory Session Chat review region; no
+  patch text is cached there. Until then, the pill stays hidden and Review
+  Changes remains available from overflow.
 - Session Running chrome: show iff this session’s status is not idle.
   Optimistic busy on send is the same status. Place it as the last
   timeline row with a stable list identity; do not pin it to the
