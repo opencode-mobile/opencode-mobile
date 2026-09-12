@@ -126,7 +126,6 @@ class SessionChatViewModel
             )
         private val reviewChanges =
             SessionChatReviewChanges(
-                sessionRepository = sessionRepository,
                 scope = viewModelScope,
                 supportsSessionMessageDiff = {
                     activeConnectionManager.currentCapabilities().supportsSessionMessageDiff

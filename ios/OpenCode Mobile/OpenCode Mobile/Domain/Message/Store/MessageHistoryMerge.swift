@@ -33,9 +33,9 @@ nonisolated enum MessageHistoryMerge {
 
     static func shouldAcceptTail(remote: [Message], local: [Message]) -> Bool {
         if remote.isEmpty { return true }
-        guard hasOverlap(local: local, tail: remote) else { return true }
-        let overlapIndex = oldestOverlapIndex(local: local, tail: remote) ?? 0
-        let localWindow = Array(local[overlapIndex...])
+        guard let firstOverlap = oldestOverlapIndex(local: local, tail: remote) else { return true }
+        let lastOverlap = newestOverlapIndex(local: local, tail: remote) ?? firstOverlap
+        let localWindow = Array(local[firstOverlap...lastOverlap])
         return MessageSnapshotAuthority.isAheadOrEqual(remote: remote, local: localWindow)
     }
 

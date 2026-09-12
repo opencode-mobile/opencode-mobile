@@ -329,7 +329,6 @@ private fun SessionChatTimelineReadyView(
             lastVisibleOffset = offset
             olderLoadIntent.onUserScroll(
                 inProgress = inProgress,
-                oldestVisible = oldestVisible,
                 towardOldest = towardOldest,
             )
             olderLoadArmed =

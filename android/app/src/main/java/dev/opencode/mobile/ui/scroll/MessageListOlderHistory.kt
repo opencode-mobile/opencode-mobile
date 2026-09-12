@@ -31,7 +31,6 @@ internal class MessageListOlderLoadIntent {
 
     fun onUserScroll(
         inProgress: Boolean,
-        oldestVisible: Boolean,
         towardOldest: Boolean,
     ) {
         if (!inProgress) {
@@ -40,10 +39,9 @@ internal class MessageListOlderLoadIntent {
             consumedThisGesture = false
             return
         }
-        val newDrag = !this.inProgress
         this.inProgress = true
         if (!presentationSettled || consumedThisGesture) return
-        if ((newDrag && oldestVisible) || towardOldest) {
+        if (towardOldest) {
             armed = true
         }
     }

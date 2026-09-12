@@ -76,6 +76,24 @@ struct MessageHistoryMergeTests {
         #expect(MessageHistoryMerge.shouldAcceptTail(remote: tail, local: local))
     }
 
+    @Test func overlappingTailIgnoresNewerLocalSSERowAndKeepsSuffix() {
+        let local = [
+            message("old", role: .user, text: "old"),
+            message("mid", role: .assistant, text: "mid"),
+            message("tail-end", role: .user, text: "tail-end"),
+            message("sse-new", role: .assistant, text: "live sse extra text"),
+        ]
+        let tail = [
+            message("mid", role: .assistant, text: "mid"),
+            message("tail-end", role: .user, text: "tail-end"),
+        ]
+
+        #expect(MessageHistoryMerge.shouldAcceptTail(remote: tail, local: local))
+        let merged = MessageHistoryMerge.applyTail(local: local, tail: tail)
+        #expect(merged.map(\.id) == ["old", "mid", "tail-end", "sse-new"])
+        #expect(merged.last?.text == "live sse extra text")
+    }
+
     private func message(
         _ id: String,
         role: MessageRole,

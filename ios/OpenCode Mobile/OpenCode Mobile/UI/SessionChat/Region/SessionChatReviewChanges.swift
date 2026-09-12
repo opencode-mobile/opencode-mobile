@@ -8,23 +8,19 @@ final class SessionChatReviewChanges {
 
     private var sessionID: String
     private let worktree: String
-    private let sessionRepository: any SessionRepository
     private let supportsSessionMessageDiff: () -> Bool
     private let lastTurnReviewChangesStore: LastTurnReviewChangesStore
-    private var requestTask: Task<Void, Never>?
     private var candidateMessageID: String?
     private var storeObservation: UUID?
 
     init(
         sessionID: String,
         worktree: String,
-        sessionRepository: any SessionRepository,
         supportsSessionMessageDiff: @escaping () -> Bool = { true },
         lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil
     ) {
         self.sessionID = sessionID
         self.worktree = worktree
-        self.sessionRepository = sessionRepository
         self.supportsSessionMessageDiff = supportsSessionMessageDiff
         self.lastTurnReviewChangesStore = lastTurnReviewChangesStore ?? LastTurnReviewChangesStore()
         storeObservation = self.lastTurnReviewChangesStore.observe { [weak self] changedSessionID in
@@ -39,8 +35,6 @@ final class SessionChatReviewChanges {
 
     func rebind(sessionID: String) {
         guard sessionID != self.sessionID else { return }
-        requestTask?.cancel()
-        requestTask = nil
         candidateMessageID = nil
         self.sessionID = sessionID
         state = SessionChatReviewChangesRegionState()
@@ -60,8 +54,6 @@ final class SessionChatReviewChanges {
         let eligibleMessageID = supportsSessionMessageDiff() && hasResolvedSessionStatus && !isTurnActive && !isSending ? messageID : nil
         let previous = state
         if eligibleMessageID != candidateMessageID {
-            requestTask?.cancel()
-            requestTask = nil
             candidateMessageID = eligibleMessageID
             // Bind does not fetch last-turn diff. The Changes screen owns that GET.
             // Without a loaded summary the pill stays hidden.
@@ -74,8 +66,6 @@ final class SessionChatReviewChanges {
     }
 
     func stop() {
-        requestTask?.cancel()
-        requestTask = nil
         if let storeObservation {
             lastTurnReviewChangesStore.stopObserving(storeObservation)
         }

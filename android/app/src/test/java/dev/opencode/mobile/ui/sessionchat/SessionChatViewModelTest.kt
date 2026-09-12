@@ -701,14 +701,7 @@ class SessionChatViewModelTest {
     @Test
     fun newerLatestTurnCancelsStaleReviewChangesSummary() =
         runTest(testDispatcher) {
-            val staleDiff = FileDiff("stale.kt", null, 99, 99, FileDiffStatus.Modified)
-            val latestDiff = FileDiff("latest.kt", null, 5, 3, FileDiffStatus.Modified)
-            val repository =
-                FakeSessionRepository(
-                    sessionDiffsByMessageId = mapOf("user-1" to listOf(staleDiff), "user-2" to listOf(latestDiff)),
-                    sessionDiffDelayMsByMessageId = mapOf("user-1" to 1_000L),
-                )
-            val region = SessionChatReviewChanges(repository, backgroundScope).apply { ioDispatcher = testDispatcher }
+            val region = SessionChatReviewChanges(backgroundScope).apply { ioDispatcher = testDispatcher }
             region.bind("ses-1", "/repo")
 
             region.updateCandidate(
@@ -728,17 +721,14 @@ class SessionChatViewModelTest {
 
             assertEquals("user-2", region.state.value.messageId)
             assertEquals(null, region.state.value.summary)
-            assertEquals(null, repository.diffRequest)
         }
 
     @Test
     fun publishedLastTurnSummaryShowsPillWithoutBindFetch() =
         runTest(testDispatcher) {
             val store = LastTurnReviewChangesStore()
-            val repository = FakeSessionRepository()
             val region =
                 SessionChatReviewChanges(
-                    repository,
                     backgroundScope,
                     lastTurnReviewChangesStore = store,
                 ).apply { ioDispatcher = testDispatcher }
@@ -752,7 +742,6 @@ class SessionChatViewModelTest {
             runCurrent()
 
             assertEquals(null, region.state.value.summary)
-            assertEquals(null, repository.diffRequest)
 
             store.publish(
                 sessionId = "ses-1",
@@ -763,7 +752,6 @@ class SessionChatViewModelTest {
 
             assertEquals(ReviewChangesSummary(2, 4, 1, "user-1"), region.state.value.summary)
             assertEquals("user-1", region.state.value.messageId)
-            assertEquals(null, repository.diffRequest)
             assertTrue(ReviewChangesPillVisibility.shouldShow(region.state.value.summary))
         }
 

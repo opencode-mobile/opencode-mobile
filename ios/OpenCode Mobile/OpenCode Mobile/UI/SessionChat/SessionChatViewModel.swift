@@ -106,7 +106,6 @@ final class SessionChatViewModel {
         self.reviewChanges = SessionChatReviewChanges(
             sessionID: sessionID,
             worktree: worktree,
-            sessionRepository: sessionRepository,
             supportsSessionMessageDiff: { activeConnectionManager.capabilities.supportsSessionMessageDiff },
             lastTurnReviewChangesStore: lastTurnReviewChangesStore ?? LastTurnReviewChangesStore()
         )

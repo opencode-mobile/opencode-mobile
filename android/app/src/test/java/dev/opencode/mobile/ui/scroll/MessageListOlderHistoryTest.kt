@@ -66,20 +66,25 @@ class MessageListOlderHistoryTest {
     }
 
     @Test
-    fun intentIgnoresOldestVisibleUntilUserDragAfterPresentation() {
+    fun intentIgnoresOldestVisibleUntilUserScrollsTowardOldestAfterPresentation() {
         val intent = MessageListOlderLoadIntent()
-        intent.onUserScroll(inProgress = false, oldestVisible = true, towardOldest = false)
+        intent.onUserScroll(inProgress = false, towardOldest = false)
         assertFalse(
             intent.shouldLoadOlder(hasOlder = true, isLoadingOlder = false, oldestVisible = true),
         )
 
         intent.markPresentationSettled()
-        intent.onUserScroll(inProgress = false, oldestVisible = true, towardOldest = false)
+        intent.onUserScroll(inProgress = false, towardOldest = false)
         assertFalse(
             intent.shouldLoadOlder(hasOlder = true, isLoadingOlder = false, oldestVisible = true),
         )
 
-        intent.onUserScroll(inProgress = true, oldestVisible = true, towardOldest = false)
+        intent.onUserScroll(inProgress = true, towardOldest = false)
+        assertFalse(
+            intent.shouldLoadOlder(hasOlder = true, isLoadingOlder = false, oldestVisible = true),
+        )
+
+        intent.onUserScroll(inProgress = true, towardOldest = true)
         assertTrue(
             intent.shouldLoadOlder(hasOlder = true, isLoadingOlder = false, oldestVisible = true),
         )
@@ -89,8 +94,8 @@ class MessageListOlderHistoryTest {
     fun intentConsumesOneLoadPerGestureAndAllowsLaterScroll() {
         val intent = MessageListOlderLoadIntent()
         intent.markPresentationSettled()
-        intent.onUserScroll(inProgress = true, oldestVisible = false, towardOldest = true)
-        intent.onUserScroll(inProgress = true, oldestVisible = true, towardOldest = true)
+        intent.onUserScroll(inProgress = true, towardOldest = true)
+        intent.onUserScroll(inProgress = true, towardOldest = true)
         assertTrue(
             intent.shouldLoadOlder(hasOlder = true, isLoadingOlder = false, oldestVisible = true),
         )
@@ -99,13 +104,17 @@ class MessageListOlderHistoryTest {
         assertFalse(
             intent.shouldLoadOlder(hasOlder = true, isLoadingOlder = false, oldestVisible = true),
         )
-        intent.onUserScroll(inProgress = true, oldestVisible = true, towardOldest = true)
+        intent.onUserScroll(inProgress = true, towardOldest = true)
         assertFalse(
             intent.shouldLoadOlder(hasOlder = true, isLoadingOlder = false, oldestVisible = true),
         )
 
-        intent.onUserScroll(inProgress = false, oldestVisible = true, towardOldest = false)
-        intent.onUserScroll(inProgress = true, oldestVisible = true, towardOldest = false)
+        intent.onUserScroll(inProgress = false, towardOldest = false)
+        intent.onUserScroll(inProgress = true, towardOldest = false)
+        assertFalse(
+            intent.shouldLoadOlder(hasOlder = true, isLoadingOlder = false, oldestVisible = true),
+        )
+        intent.onUserScroll(inProgress = true, towardOldest = true)
         assertTrue(
             intent.shouldLoadOlder(hasOlder = true, isLoadingOlder = false, oldestVisible = true),
         )

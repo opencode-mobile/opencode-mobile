@@ -479,19 +479,9 @@ struct SessionChatViewModelTests {
     }
 
     @Test func newerLatestTurnCancelsStaleReviewChangesSummary() async {
-        let sessionRepository = FakeChatSessionRepository(
-            sessionDiffProvider: { messageID in
-                if messageID == "user-1" {
-                    try await Task.sleep(for: .seconds(1))
-                    return [FileDiff(path: "stale.swift", patch: nil, additions: 99, deletions: 99, status: .modified)]
-                }
-                return [FileDiff(path: "latest.swift", patch: nil, additions: 5, deletions: 3, status: .modified)]
-            }
-        )
         let region = SessionChatReviewChanges(
             sessionID: "ses-1",
-            worktree: "/repo",
-            sessionRepository: sessionRepository
+            worktree: "/repo"
         )
 
         region.updateCandidate(
@@ -510,16 +500,13 @@ struct SessionChatViewModelTests {
 
         #expect(region.state.messageID == "user-2")
         #expect(region.state.summary == nil)
-        #expect(sessionRepository.diffRequest == nil)
     }
 
     @Test func publishedLastTurnSummaryShowsPillWithoutBindFetch() async {
         let store = LastTurnReviewChangesStore()
-        let sessionRepository = FakeChatSessionRepository()
         let region = SessionChatReviewChanges(
             sessionID: "ses-1",
             worktree: "/repo",
-            sessionRepository: sessionRepository,
             lastTurnReviewChangesStore: store
         )
         region.updateCandidate(
@@ -530,7 +517,6 @@ struct SessionChatViewModelTests {
         )
 
         #expect(region.state.summary == nil)
-        #expect(sessionRepository.diffRequest == nil)
 
         store.publish(
             sessionID: "ses-1",
@@ -540,7 +526,6 @@ struct SessionChatViewModelTests {
 
         #expect(region.state.summary == ReviewChangesSummary(fileCount: 2, additions: 4, deletions: 1, messageID: "user-1"))
         #expect(region.state.messageID == "user-1")
-        #expect(sessionRepository.diffRequest == nil)
         #expect(ReviewChangesPillVisibility.shouldShow(summary: region.state.summary))
     }
 

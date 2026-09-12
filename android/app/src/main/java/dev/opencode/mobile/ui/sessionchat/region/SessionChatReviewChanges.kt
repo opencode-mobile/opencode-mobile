@@ -1,7 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import dev.opencode.mobile.domain.message.MessageRole
-import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.LastTurnReviewChangesStore
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatReviewChangesRegionState
@@ -15,8 +14,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class SessionChatReviewChanges(
-    @Suppress("unused")
-    private val sessionRepository: SessionRepository,
     private val scope: CoroutineScope,
     private val supportsSessionMessageDiff: () -> Boolean = { true },
     private val lastTurnReviewChangesStore: LastTurnReviewChangesStore = LastTurnReviewChangesStore(),
