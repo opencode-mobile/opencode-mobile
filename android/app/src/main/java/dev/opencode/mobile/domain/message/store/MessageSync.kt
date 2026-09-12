@@ -179,35 +179,15 @@ class MessageSync(
             if (!window.hasOlder || window.olderCursor.isNullOrBlank()) {
                 return OlderLoadResult(engine.messages(storeSlot), hasOlder = false, addedCount = 0)
             }
-            var cursor = window.olderCursor
-            var hasOlder = window.hasOlder
-            var added = 0
-            var pages = 0
-            while (!cursor.isNullOrBlank() && hasOlder && pages < 5) {
-                restAttempts += "load-older"
-                val page = listOlder(key.sessionId, key.directory.ifEmpty { null }, cursor)
-                val beforeIds = engine.messages(storeSlot).map { it.id }.toSet()
-                engine.prependOlderIfRevision(storeSlot, page.messages, engine.revision(storeSlot))
-                val after = engine.messages(storeSlot)
-                added += after.count { it.id !in beforeIds }
-                rememberHistoryWindow(storeSlot, page)
-                cursor = page.olderCursor
-                hasOlder = page.hasOlder
-                pages += 1
-                if (after.any { it.id !in beforeIds }) break
-            }
-            val merged = engine.messages(storeSlot)
-            rememberPublishedFrame(storeSlot, merged)
-            if (added > 0) {
-                extraPublishFlow(storeSlot).tryEmit(
-                    MessageListUpdate.Messages(
-                        messages = merged,
-                        isFromCache = false,
-                        hasOlder = historyWindow(storeSlot).hasOlder,
-                    ),
-                )
-            }
-            return OlderLoadResult(merged, historyWindow(storeSlot).hasOlder, addedCount = added)
+            restAttempts += "load-older"
+            val page = listOlder(key.sessionId, key.directory.ifEmpty { null }, window.olderCursor)
+            val beforeIds = engine.messages(storeSlot).map { it.id }.toSet()
+            engine.prependOlderIfRevision(storeSlot, page.messages, engine.revision(storeSlot))
+            val after = engine.messages(storeSlot)
+            val added = after.count { it.id !in beforeIds }
+            rememberHistoryWindow(storeSlot, page)
+            rememberPublishedFrame(storeSlot, after)
+            return OlderLoadResult(after, historyWindow(storeSlot).hasOlder, addedCount = added)
         } finally {
             olderLoadsInFlight.remove(storeSlot)
         }

@@ -35,7 +35,10 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -65,6 +68,7 @@ import dev.opencode.mobile.ui.components.OpenCodeSyncingPill
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
 import dev.opencode.mobile.ui.scroll.MessageListOlderHistory
+import dev.opencode.mobile.ui.scroll.MessageListOlderLoadIntent
 import dev.opencode.mobile.ui.scroll.MessageListReversedTimelineColumn
 import dev.opencode.mobile.ui.scroll.MessageListTimelineApplyHold
 import dev.opencode.mobile.ui.scroll.MessageListTimelineDefaults
@@ -84,6 +88,7 @@ import dev.opencode.mobile.ui.sessionchat.TimelineApply
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
 import dev.opencode.mobile.ui.sessionchat.displayLabel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.yield
 
 internal data class SessionChatTimelineViewProps(
@@ -295,15 +300,57 @@ private fun SessionChatTimelineReadyView(
                 listState.layoutInfo.visibleItemsInfo.any { it.key == oldestMessageId }
         }
     }
-    LaunchedEffect(oldestVisible, hasOlder, isLoadingOlder) {
+    val olderLoadIntent = remember { MessageListOlderLoadIntent() }
+    var lastVisibleIndex by remember { mutableIntStateOf(listState.firstVisibleItemIndex) }
+    var lastVisibleOffset by remember { mutableIntStateOf(listState.firstVisibleItemScrollOffset) }
+    var olderLoadArmed by remember { mutableStateOf(false) }
+    val latestOnLoadOlder by rememberUpdatedState(onLoadOlder)
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > 0 }
+        withFrameNanos { }
+        olderLoadIntent.markPresentationSettled()
+    }
+    LaunchedEffect(listState, userScroll.inProgress, oldestVisible, hasOlder, isLoadingOlder) {
+        snapshotFlow {
+            Triple(
+                userScroll.inProgress,
+                listState.firstVisibleItemIndex,
+                listState.firstVisibleItemScrollOffset,
+            )
+        }.collect { (inProgress, index, offset) ->
+            val towardOldest =
+                MessageListOlderHistory.isTowardOldest(
+                    previousIndex = lastVisibleIndex,
+                    previousOffset = lastVisibleOffset,
+                    index = index,
+                    offset = offset,
+                )
+            lastVisibleIndex = index
+            lastVisibleOffset = offset
+            olderLoadIntent.onUserScroll(
+                inProgress = inProgress,
+                oldestVisible = oldestVisible,
+                towardOldest = towardOldest,
+            )
+            olderLoadArmed =
+                olderLoadIntent.shouldLoadOlder(
+                    hasOlder = hasOlder,
+                    isLoadingOlder = isLoadingOlder,
+                    oldestVisible = oldestVisible,
+                )
+        }
+    }
+    LaunchedEffect(oldestVisible, hasOlder, isLoadingOlder, olderLoadArmed) {
         if (
-            MessageListOlderHistory.shouldLoadOlder(
+            olderLoadIntent.shouldLoadOlder(
                 hasOlder = hasOlder,
                 isLoadingOlder = isLoadingOlder,
                 oldestVisible = oldestVisible,
             )
         ) {
-            onLoadOlder()
+            olderLoadIntent.consume()
+            olderLoadArmed = false
+            latestOnLoadOlder()
         }
     }
 

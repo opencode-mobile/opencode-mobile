@@ -639,6 +639,33 @@ class DisplayMessagePipeline(
         return contentPreparer.prepareMessages(messages, mode = MessagePreparationMode.Final)
     }
 
+    suspend fun loadOlderDisplayMessages(
+        sessionId: String,
+        directory: String?,
+    ): OlderDisplayLoadResult {
+        val sync =
+            messageSync
+                ?: error("loadOlderDisplayMessages requires a MessageSync-backed pipeline")
+        val result = sync.loadOlderMessages(sessionId, directory)
+        if (result.addedCount == 0) {
+            return OlderDisplayLoadResult(
+                messages = emptyList(),
+                hasOlder = result.hasOlder,
+                addedCount = 0,
+            )
+        }
+        val prepared =
+            contentPreparer.prepareMessages(
+                result.messages,
+                mode = MessagePreparationMode.Final,
+            )
+        return OlderDisplayLoadResult(
+            messages = prepared,
+            hasOlder = result.hasOlder,
+            addedCount = result.addedCount,
+        )
+    }
+
     private fun hasStreamingDelta(messages: List<Message>): Boolean =
         messages.any(::messageHasStreamingText)
 }

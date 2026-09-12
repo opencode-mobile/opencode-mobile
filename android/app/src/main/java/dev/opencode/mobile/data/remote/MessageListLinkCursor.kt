@@ -28,8 +28,7 @@ internal object MessageListLinkCursor {
             queryParameter(query, "before")?.let { return it }
             queryParameter(query, "cursor")?.let { return it }
         }
-        val last = url.substringBefore('?').substringAfterLast('/')
-        return last.takeIf { it.isNotBlank() }
+        return null
     }
 
     private fun queryParameter(

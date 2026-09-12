@@ -53,6 +53,18 @@ interface MessageRepository {
         directory: String? = null,
     ): OlderLoadResult = OlderLoadResult(messages = emptyList(), hasOlder = false, addedCount = 0)
 
+    suspend fun loadOlderDisplayMessages(
+        sessionId: String,
+        directory: String? = null,
+    ): OlderDisplayLoadResult {
+        val result = loadOlderMessages(sessionId, directory)
+        return OlderDisplayLoadResult(
+            messages = result.messages.map(::DisplayMessage),
+            hasOlder = result.hasOlder,
+            addedCount = result.addedCount,
+        )
+    }
+
     suspend fun getMessage(
         sessionId: String,
         messageId: String,

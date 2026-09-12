@@ -45,6 +45,12 @@ data class OlderLoadResult(
     val addedCount: Int,
 )
 
+data class OlderDisplayLoadResult(
+    val messages: List<DisplayMessage>,
+    val hasOlder: Boolean,
+    val addedCount: Int,
+)
+
 fun beginsMidTurn(messages: List<Message>): Boolean {
     val oldest = messages.firstOrNull() ?: return false
     return oldest.role != MessageRole.User && oldest.role != MessageRole.Command

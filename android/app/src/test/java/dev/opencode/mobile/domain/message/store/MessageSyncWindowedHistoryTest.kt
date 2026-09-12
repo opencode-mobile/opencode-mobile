@@ -7,6 +7,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -115,6 +116,91 @@ class MessageSyncWindowedHistoryTest {
             assertEquals(listOf("a", "b", "c", "d"), result.messages.map { it.id })
             assertFalse(result.hasOlder)
             assertEquals(2, result.addedCount)
+        }
+
+    @Test
+    fun loadOlder_oneRequestEvenWhenPageFullyOverlapsCache() =
+        runTest(testDispatcher) {
+            val olderCalls = mutableListOf<String>()
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages = listOf(user("c"), user("d")),
+                            olderCursor = "page-1",
+                            hasOlder = true,
+                        )
+                    },
+                    listOlderMessages = { _, _, cursor ->
+                        olderCalls += cursor
+                        when (cursor) {
+                            "page-1" ->
+                                MessagePage(
+                                    messages = listOf(user("a"), user("b")),
+                                    olderCursor = "page-2",
+                                    hasOlder = true,
+                                )
+                            else ->
+                                MessagePage(
+                                    messages = listOf(user("pre")),
+                                    olderCursor = null,
+                                    hasOlder = false,
+                                )
+                        }
+                    },
+                    sessionCache =
+                        SeededSessionCache(
+                            listOf(user("a"), user("b"), user("c"), user("d")),
+                        ),
+                )
+
+            sync.observeMessages("ses-1", "/repo").first()
+            advanceUntilIdle()
+            val first = sync.loadOlderMessages("ses-1", "/repo")
+
+            assertEquals(listOf("page-1"), olderCalls)
+            assertEquals(0, first.addedCount)
+            assertTrue(first.hasOlder)
+            assertEquals(listOf("a", "b", "c", "d"), first.messages.map { it.id })
+
+            val second = sync.loadOlderMessages("ses-1", "/repo")
+            assertEquals(listOf("page-1", "page-2"), olderCalls)
+            assertEquals(1, second.addedCount)
+            assertEquals(listOf("pre", "a", "b", "c", "d"), second.messages.map { it.id })
+            assertFalse(second.hasOlder)
+        }
+
+    @Test
+    fun loadOlder_doesNotExtraPublishThroughObservePath() =
+        runTest(testDispatcher) {
+            val updates = mutableListOf<MessageListUpdate>()
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages = listOf(user("c"), user("d")),
+                            olderCursor = "page-older",
+                            hasOlder = true,
+                        )
+                    },
+                    listOlderMessages = { _, _, _ ->
+                        MessagePage(
+                            messages = listOf(user("a"), user("b")),
+                            olderCursor = null,
+                            hasOlder = false,
+                        )
+                    },
+                )
+
+            backgroundScope.launch {
+                sync.observeMessages("ses-1", "/repo").collect { updates += it }
+            }
+            advanceUntilIdle()
+            val publishedBefore = updates.count { it is MessageListUpdate.Messages }
+            sync.loadOlderMessages("ses-1", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(publishedBefore, updates.count { it is MessageListUpdate.Messages })
         }
 
     @Test

@@ -34,6 +34,22 @@ class MessageWindowMergeTest {
     }
 
     @Test
+    fun applyTail_overlappingKeepsLocalSseRowsNewerThanRemoteTail() {
+        val local = messages("old", "mid", "tail-end", "sse-new")
+        val tail = messages("mid", "tail-end")
+        assertEquals(
+            listOf("old", "mid", "tail-end", "sse-new"),
+            MessageWindowMerge.applyTail(local, tail).map { it.id },
+        )
+    }
+
+    @Test
+    fun applyTail_emptyLocalTakesNonemptyTail() {
+        val tail = messages("x", "y")
+        assertEquals(listOf("x", "y"), MessageWindowMerge.applyTail(emptyList(), tail).map { it.id })
+    }
+
+    @Test
     fun prependOlder_deduplicatesAndDoesNotOverwriteLocal() {
         val local = listOf(user("b", "live"), user("c", "live"))
         val older = listOf(user("a", "old"), user("b", "stale"))

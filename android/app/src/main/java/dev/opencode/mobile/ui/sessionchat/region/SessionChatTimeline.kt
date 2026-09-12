@@ -217,22 +217,14 @@ class SessionChatTimeline(
             if (!isCurrentBinding(sessionId, worktree)) return@launch
             runCatching {
                 withContext(ioDispatcher) {
-                    messageRepository.loadOlderMessages(sessionId, worktree)
+                    messageRepository.loadOlderDisplayMessages(sessionId, worktree)
                 }
             }.onSuccess { result ->
                 if (!isCurrentBinding(sessionId, worktree)) return@launch
                 _state.update { it.copy(hasOlder = result.hasOlder, isLoadingOlder = false) }
                 if (result.addedCount > 0) {
-                    val displayMessages =
-                        lastLoadedDisplayMessages
-                            .associateBy { it.id }
-                            .let { previous ->
-                                result.messages.map { message ->
-                                    previous[message.id] ?: DisplayMessage(message)
-                                }
-                            }
                     applyLoadedDisplayMessages(
-                        displayMessages = displayMessages,
+                        displayMessages = result.messages,
                         sourceSessionId = sessionId,
                         sourceWorktree = worktree,
                         fromQuietRefresh = false,
