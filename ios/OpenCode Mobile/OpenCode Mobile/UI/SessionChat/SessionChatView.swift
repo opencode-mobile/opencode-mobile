@@ -175,7 +175,8 @@ struct SessionChatView: View {
                         // Composer + 16 end-pin gap; Scroll to end uses this as-is
                         // (no extra scrollToEndPillBottomPadding).
                         bottomOverlayInset: sessionChatTimelineBottomInset(composerOverlayHeight)
-                            + composerHomeIndicatorLift,
+                            + composerHomeIndicatorLift
+                            + keyboardOverlap,
                         onRefresh: { await viewModel.refreshMessages() },
                         onReviewChangesTap: {
                             logChatAction(ProductAnalytics.Action.chatOpenChanges)

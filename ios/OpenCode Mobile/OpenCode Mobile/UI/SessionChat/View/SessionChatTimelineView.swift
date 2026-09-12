@@ -102,25 +102,30 @@ struct SessionChatTimelineView: View {
                     accessibilityIdentifier: "sessionChatLoading"
                 )
             case .empty:
-                Spacer()
-                Text("No messages yet. Send a prompt to start.")
-                    .font(OpenCodeTypography.body)
-                    .foregroundStyle(OpenCodeColors.textBase)
-                    .padding(.horizontal, 16)
-                Spacer()
+                VStack {
+                    Spacer()
+                    Text("No messages yet. Send a prompt to start.")
+                        .font(OpenCodeTypography.body)
+                        .foregroundStyle(OpenCodeColors.textBase)
+                        .padding(.horizontal, 16)
+                    Spacer()
+                }
             case .error:
-                Spacer()
-                Text(props.errorMessage ?? "Unable to load messages")
-                    .font(OpenCodeTypography.body)
-                    .foregroundStyle(OpenCodeColors.textBase)
-                    .padding(.horizontal, 16)
-                Spacer()
+                VStack {
+                    Spacer()
+                    Text(props.errorMessage ?? "Unable to load messages")
+                        .font(OpenCodeTypography.body)
+                        .foregroundStyle(OpenCodeColors.textBase)
+                        .padding(.horizontal, 16)
+                    Spacer()
+                }
             case .ready:
                 SessionChatTimelineReadyView(props: props)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, props.timeline == .ready ? 0 : props.bottomOverlayInset)
     }
 }
 
