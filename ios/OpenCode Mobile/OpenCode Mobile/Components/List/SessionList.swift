@@ -402,6 +402,59 @@ private struct SessionListFeedLayer: Identifiable, Equatable {
 
 private let sessionListTopAnchorID = "session-list-top"
 
+enum SessionListStabilizedOrder {
+    struct Snapshot: Equatable {
+        var sections: [HomeSessionLadderSection<SessionListSession>]
+        var lastAppliedAtEpochMs: Int64?
+        var nextApplyAtEpochMs: Int64?
+        var newcomerId: String?
+        var seenIds: Set<String>
+    }
+
+    static func apply(
+        visible: [SessionListSession],
+        recentWindowHours: Int,
+        previousSections: [HomeSessionLadderSection<SessionListSession>],
+        previousLastAppliedAtEpochMs: Int64?,
+        previousSeenIds: Set<String>,
+        nowEpochMs: Int64
+    ) -> Snapshot {
+        let desired = HomeSessionLadder.group(
+            sessions: visible,
+            updatedAtEpochMs: \.updatedAtEpochMs,
+            isAttention: \.status.isAttention,
+            recentWindowHours: recentWindowHours,
+            nowEpochMs: nowEpochMs
+        )
+        let result = HomeSessionOrderStabilizer.stabilize(
+            previousSections: previousSections,
+            previousLastAppliedAtEpochMs: previousLastAppliedAtEpochMs,
+            desired: desired,
+            itemId: \.id,
+            isAttention: \.status.isAttention,
+            isReady: \.status.isReady,
+            nowEpochMs: nowEpochMs
+        )
+        let displayedIds = result.sections.flatMap { $0.items.map(\.id) }
+        var seenIds = previousSeenIds
+        let newcomerId = displayedIds.first { !seenIds.contains($0) }
+        seenIds.formUnion(displayedIds)
+        return Snapshot(
+            sections: result.sections,
+            lastAppliedAtEpochMs: result.lastAppliedAtEpochMs,
+            nextApplyAtEpochMs: result.nextApplyAtEpochMs,
+            newcomerId: newcomerId,
+            seenIds: seenIds
+        )
+    }
+}
+
+private struct SessionListFlushTaskID: Hashable {
+    let deadlineEpochMs: Int64
+    let visible: [SessionListSession]
+    let recentWindowHours: Int
+}
+
 private struct SessionListStabilizedScrollView<SectionContent: View>: View {
     let visible: [SessionListSession]
     let recentWindowHours: Int
@@ -410,12 +463,12 @@ private struct SessionListStabilizedScrollView<SectionContent: View>: View {
     let onRefresh: (() async -> Void)?
     let sectionContent: (HomeSessionLadderSection<SessionListSession>) -> SectionContent
 
-    @State private var previousSections: [HomeSessionLadderSection<SessionListSession>] = []
+    @State private var previousSections: [HomeSessionLadderSection<SessionListSession>]
     @State private var lastAppliedAtEpochMs: Int64?
-    @State private var displayedSections: [HomeSessionLadderSection<SessionListSession>] = []
+    @State private var displayedSections: [HomeSessionLadderSection<SessionListSession>]
     @State private var nextApplyAtEpochMs: Int64?
     @State private var newcomerId: String?
-    @State private var seenIds: Set<String> = []
+    @State private var seenIds: Set<String>
 
     init(
         visible: [SessionListSession],
@@ -431,6 +484,20 @@ private struct SessionListStabilizedScrollView<SectionContent: View>: View {
         _followingTop = followingTop
         self.onRefresh = onRefresh
         self.sectionContent = sectionContent
+        let seeded = SessionListStabilizedOrder.apply(
+            visible: visible,
+            recentWindowHours: recentWindowHours,
+            previousSections: [],
+            previousLastAppliedAtEpochMs: nil,
+            previousSeenIds: [],
+            nowEpochMs: Int64(Date().timeIntervalSince1970 * 1000)
+        )
+        _displayedSections = State(initialValue: seeded.sections)
+        _previousSections = State(initialValue: seeded.sections)
+        _lastAppliedAtEpochMs = State(initialValue: seeded.lastAppliedAtEpochMs)
+        _nextApplyAtEpochMs = State(initialValue: seeded.nextApplyAtEpochMs)
+        _newcomerId = State(initialValue: seeded.newcomerId)
+        _seenIds = State(initialValue: seeded.seenIds)
     }
 
     var body: some View {
@@ -445,7 +512,11 @@ private struct SessionListStabilizedScrollView<SectionContent: View>: View {
         .onAppear { ingest() }
         .onChange(of: visible) { _, _ in ingest() }
         .onChange(of: recentWindowHours) { _, _ in ingest() }
-        .task(id: nextApplyAtEpochMs ?? 0) {
+        .task(id: SessionListFlushTaskID(
+            deadlineEpochMs: nextApplyAtEpochMs ?? 0,
+            visible: visible,
+            recentWindowHours: recentWindowHours
+        )) {
             guard let nextApplyAtEpochMs else { return }
             let wait = nextApplyAtEpochMs - Int64(Date().timeIntervalSince1970 * 1000)
             if wait > 0 {
@@ -457,29 +528,20 @@ private struct SessionListStabilizedScrollView<SectionContent: View>: View {
     }
 
     private func ingest() {
-        let desired = HomeSessionLadder.group(
-            sessions: visible,
-            updatedAtEpochMs: \.updatedAtEpochMs,
-            isAttention: \.status.isAttention,
+        let snapshot = SessionListStabilizedOrder.apply(
+            visible: visible,
             recentWindowHours: recentWindowHours,
-            nowEpochMs: Int64(Date().timeIntervalSince1970 * 1000)
-        )
-        let result = HomeSessionOrderStabilizer.stabilize(
             previousSections: previousSections,
             previousLastAppliedAtEpochMs: lastAppliedAtEpochMs,
-            desired: desired,
-            itemId: \.id,
-            isAttention: \.status.isAttention,
-            isReady: \.status.isReady,
+            previousSeenIds: seenIds,
             nowEpochMs: Int64(Date().timeIntervalSince1970 * 1000)
         )
-        displayedSections = result.sections
-        previousSections = result.sections
-        lastAppliedAtEpochMs = result.lastAppliedAtEpochMs
-        nextApplyAtEpochMs = result.nextApplyAtEpochMs
-        let displayedIds = result.sections.flatMap { $0.items.map(\.id) }
-        newcomerId = displayedIds.first { !seenIds.contains($0) }
-        seenIds.formUnion(displayedIds)
+        displayedSections = snapshot.sections
+        previousSections = snapshot.sections
+        lastAppliedAtEpochMs = snapshot.lastAppliedAtEpochMs
+        nextApplyAtEpochMs = snapshot.nextApplyAtEpochMs
+        newcomerId = snapshot.newcomerId
+        seenIds = snapshot.seenIds
     }
 }
 
