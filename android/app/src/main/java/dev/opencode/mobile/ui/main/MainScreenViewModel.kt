@@ -125,6 +125,7 @@ class MainScreenViewModel
         private val serverBaseUrl: String
             get() = activeConnectionManager.current()?.baseUrl.orEmpty()
         private var liveObservationJobs: List<Job> = emptyList()
+        private var observedWorktrees: List<String> = emptyList()
 
         // Title fields report one edit per dialog appearance instead of per keystroke.
         private var renameDraftEditReported = false
@@ -657,6 +658,9 @@ class MainScreenViewModel
             // Disk-first home: local worktrees + Session Cache paint Loaded
             // without Probing/Loading. Live store then SWR-refreshes.
             if (!preserveContent && worktrees.isNotEmpty()) {
+                if (_uiState.value is MainScreenUiState.Loaded && liveObservationsRunning(worktrees)) {
+                    return
+                }
                 val sections = loadSectionsFromCache(worktrees)
                 _uiState.value = MainScreenUiState.Loaded(sections = sections)
                 if (!skipProbe) {
@@ -935,7 +939,9 @@ class MainScreenViewModel
             }
 
         private fun startLiveObservations(worktrees: List<String>) {
+            if (liveObservationsRunning(worktrees)) return
             stopLiveObservations()
+            observedWorktrees = worktrees
             liveObservationJobs =
                 worktrees.map { worktree ->
                     viewModelScope.launch {
@@ -961,7 +967,11 @@ class MainScreenViewModel
         private fun stopLiveObservations() {
             liveObservationJobs.forEach { it.cancel() }
             liveObservationJobs = emptyList()
+            observedWorktrees = emptyList()
         }
+
+        private fun liveObservationsRunning(worktrees: List<String>): Boolean =
+            liveObservationJobs.isNotEmpty() && observedWorktrees == worktrees
 
         private fun updateSectionFromLiveData(
             worktree: String,

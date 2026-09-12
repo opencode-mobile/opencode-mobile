@@ -739,6 +739,86 @@ struct ProjectListHomeViewModelTests {
         #expect(viewModel.removalSnackbar?.text == "Couldn't delete session.")
         #expect(viewModel.sessionActionsTarget == nil)
     }
+
+    @Test func returningToHome_readyIdsBeforeStatuses_doesNotFlashReady() async {
+        let sessions = [
+            Session(id: "ses-1", title: "Alpha", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
+        ]
+        let sessionLive = ControllableSessionLiveStore()
+        let statusLive = ControllableStatusLiveStore()
+        let readyLive = ControllableReadyStore()
+        sessionLive.emit(directory: "/repo", sessions: sessions)
+        readyLive.emit(directory: "/repo", ids: ["ses-1"])
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: FakeSessionRepository(sessions: sessions),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            sessionLiveStoreOverride: sessionLive,
+            sessionStatusLiveStoreOverride: statusLive,
+            sessionReadyStoreOverride: readyLive
+        )
+
+        await viewModel.refresh()
+        var flashedReady = false
+        let deadline = Date().addingTimeInterval(0.4)
+        while Date() < deadline {
+            if homeSession(viewModel, id: "ses-1")?.isReady == true,
+               homeSession(viewModel, id: "ses-1")?.statusLabel == nil
+            {
+                flashedReady = true
+                break
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(!flashedReady)
+
+        statusLive.emit(
+            directory: "/repo",
+            statuses: ["ses-1": SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
+        )
+        let working = await waitUntil {
+            homeSession(viewModel, id: "ses-1")?.statusLabel == "Working"
+        }
+        #expect(working)
+    }
+
+    @Test func refreshWhileLive_doesNotClobberWorkingStatus() async {
+        let sessions = [
+            Session(id: "ses-1", title: "Alpha", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
+        ]
+        let sessionLive = ControllableSessionLiveStore()
+        let statusLive = ControllableStatusLiveStore()
+        let readyLive = ControllableReadyStore()
+        sessionLive.emit(directory: "/repo", sessions: sessions)
+        readyLive.emit(directory: "/repo", ids: ["ses-1"])
+        statusLive.emit(
+            directory: "/repo",
+            statuses: ["ses-1": SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: FakeSessionRepository(sessions: sessions),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            sessionLiveStoreOverride: sessionLive,
+            sessionStatusLiveStoreOverride: statusLive,
+            sessionReadyStoreOverride: readyLive
+        )
+        await viewModel.refresh()
+        let working = await waitUntil {
+            homeSession(viewModel, id: "ses-1")?.statusLabel == "Working"
+        }
+        #expect(working)
+
+        await viewModel.refresh()
+        #expect(homeSession(viewModel, id: "ses-1")?.statusLabel == "Working")
+        #expect(homeSession(viewModel, id: "ses-1")?.isReady == true)
+    }
+}
+
+@MainActor
+private func homeSession(_ viewModel: ProjectListHomeViewModel, id: String) -> SessionListItem? {
+    guard case let .loaded(sections, _, _, _) = viewModel.state else { return nil }
+    return sections.flatMap(\.allSessions).first { $0.id == id }
 }
 
 @MainActor
@@ -750,7 +830,10 @@ private func makeViewModel(
     connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
     eventStream: FakeForegroundEventStream? = nil,
     newSessionModelSelectionResolver: NewSessionModelSelectionResolver? = nil,
-    invalidationAckTimeoutMs: Int = LiveStoreRefreshPolicy.invalidationAckTimeoutMs
+    invalidationAckTimeoutMs: Int = LiveStoreRefreshPolicy.invalidationAckTimeoutMs,
+    sessionLiveStoreOverride: (any SessionLiveStore)? = nil,
+    sessionStatusLiveStoreOverride: (any SessionStatusLiveStore)? = nil,
+    sessionReadyStoreOverride: (any SessionReadyStore)? = nil
 ) -> ProjectListHomeViewModel {
     let eventStream = eventStream ?? FakeForegroundEventStream()
     // Mutations (createSession) require Connected; default fakes start Idle.
@@ -761,18 +844,18 @@ private func makeViewModel(
         activeConnectionManager: manager,
         connectionProfileStore: connectionProfileStore
     )
-    let sessionStatusLiveStore = DefaultSessionStatusLiveStore(
+    let sessionStatusLiveStore = sessionStatusLiveStoreOverride ?? DefaultSessionStatusLiveStore(
         sessionRepository: sessionRepository,
         eventStream: eventStream,
         invalidationAckTimeoutMs: invalidationAckTimeoutMs
     )
-    let sessionLiveStore = DefaultSessionLiveStore(
+    let sessionLiveStore = sessionLiveStoreOverride ?? DefaultSessionLiveStore(
         sessionRepository: sessionRepository,
         eventStream: eventStream,
         sessionCache: NoOpSessionCache.shared,
         invalidationAckTimeoutMs: invalidationAckTimeoutMs
     )
-    let sessionReadyStore = DefaultSessionReadyStore(
+    let sessionReadyStore = sessionReadyStoreOverride ?? DefaultSessionReadyStore(
         sessionStatusLiveStore: sessionStatusLiveStore,
         eventStream: eventStream
     )
@@ -1240,4 +1323,90 @@ private func waitUntil(
         try? await Task.sleep(for: .milliseconds(10))
     }
     return predicate()
+}
+
+@MainActor
+private final class ControllableSessionLiveStore: SessionLiveStore {
+    private var latest: [String: SessionListSnapshot] = [:]
+    private var continuations: [String: [UUID: AsyncStream<SessionListSnapshot>.Continuation]] = [:]
+
+    func emit(directory: String, sessions: [Session]) {
+        let snapshot = SessionListSnapshot(sessions: sessions)
+        latest[directory] = snapshot
+        continuations[directory]?.values.forEach { $0.yield(snapshot) }
+    }
+
+    func observeSessions(directory: String) -> AsyncStream<SessionListSnapshot> {
+        AsyncStream { continuation in
+            let id = UUID()
+            continuations[directory, default: [:]][id] = continuation
+            if let latest = latest[directory] {
+                continuation.yield(latest)
+            }
+            continuation.onTermination = { _ in
+                Task { @MainActor in
+                    self.continuations[directory]?.removeValue(forKey: id)
+                }
+            }
+        }
+    }
+
+    func clearCache() {}
+}
+
+@MainActor
+private final class ControllableStatusLiveStore: SessionStatusLiveStore {
+    private var latest: [String: [String: SessionStatus]] = [:]
+    private var continuations: [String: [UUID: AsyncStream<[String: SessionStatus]>.Continuation]] = [:]
+
+    func emit(directory: String, statuses: [String: SessionStatus]) {
+        latest[directory] = statuses
+        continuations[directory]?.values.forEach { $0.yield(statuses) }
+    }
+
+    func observeStatuses(directory: String) -> AsyncStream<[String: SessionStatus]> {
+        AsyncStream { continuation in
+            let id = UUID()
+            continuations[directory, default: [:]][id] = continuation
+            if let latest = latest[directory] {
+                continuation.yield(latest)
+            }
+            continuation.onTermination = { _ in
+                Task { @MainActor in
+                    self.continuations[directory]?.removeValue(forKey: id)
+                }
+            }
+        }
+    }
+
+    func clearCache() {}
+}
+
+@MainActor
+private final class ControllableReadyStore: SessionReadyStore {
+    private var latest: [String: Set<String>] = [:]
+    private var continuations: [String: [UUID: AsyncStream<Set<String>>.Continuation]] = [:]
+
+    func emit(directory: String, ids: Set<String>) {
+        latest[directory] = ids
+        continuations[directory]?.values.forEach { $0.yield(ids) }
+    }
+
+    func observeReadyIds(directory: String) -> AsyncStream<Set<String>> {
+        AsyncStream { continuation in
+            let id = UUID()
+            continuations[directory, default: [:]][id] = continuation
+            continuation.yield(latest[directory] ?? [])
+            continuation.onTermination = { _ in
+                Task { @MainActor in
+                    self.continuations[directory]?.removeValue(forKey: id)
+                }
+            }
+        }
+    }
+
+    func notifyPromptSent(sessionID: String, directory: String) {}
+    func setFocusedSession(sessionID: String?, directory: String?) {}
+    func bindProfile(profileID: String?) {}
+    func clearCache() {}
 }
