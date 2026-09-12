@@ -511,6 +511,25 @@ struct MessageListTimelineHostDeclaredIDTests {
         controller.updateTopOverlayInset(0)
         #expect(abs(controller.additionalSafeAreaInsets.top) < 0.5)
     }
+
+    @Test func updateBottomOverlayInset_setsAdditionalSafeAreaBottom() {
+        let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
+            itemContent: { Text($0.label) },
+            horizontalContentPadding: 0,
+            topContentPadding: 0,
+            bottomContentPadding: 0,
+            bottomOverlayInset: 0,
+            interItemSpacing: 0
+        )
+        controller.loadViewIfNeeded()
+        controller.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+
+        controller.updateBottomOverlayInset(168)
+        #expect(abs(controller.additionalSafeAreaInsets.bottom - 168) < 0.5)
+
+        controller.updateBottomOverlayInset(468)
+        #expect(abs(controller.additionalSafeAreaInsets.bottom - 468) < 0.5)
+    }
 }
 
 /// Identifiable test row that counts Equatable calls — host must not use them.
