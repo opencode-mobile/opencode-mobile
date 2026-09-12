@@ -162,6 +162,8 @@ struct SessionChatView: View {
                         messages: viewModel.uiState.messages,
                         timelineFrame: viewModel.uiState.timelineFrame,
                         isRefreshing: viewModel.uiState.isRefreshing,
+                        hasOlder: viewModel.uiState.hasOlder,
+                        isLoadingOlder: viewModel.uiState.isLoadingOlder,
                         errorMessage: viewModel.uiState.errorMessage,
                         reviewChangesSummary: viewModel.uiState.reviewChangesSummary,
                         syncingIndicatorLabel: viewModel.uiState.syncingIndicatorLabel,
@@ -178,6 +180,7 @@ struct SessionChatView: View {
                             + composerHomeIndicatorLift
                             + keyboardOverlap,
                         onRefresh: { await viewModel.refreshMessages() },
+                        onLoadOlder: { Task { await viewModel.loadOlderMessages() } },
                         onReviewChangesTap: {
                             logChatAction(ProductAnalytics.Action.chatOpenChanges)
                             changesTarget = viewModel.uiState.reviewChangesNavigationTarget(worktree: session.worktree)

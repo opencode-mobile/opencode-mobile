@@ -13,6 +13,8 @@ where Item.ID == String {
     /// Composer sits outside this collection view; `keyboardDismissMode` alone
     /// does not reliably resign that first responder, so callers resign on drag.
     var onUserScrollDismissKeyboard: (() -> Void)? = nil
+    var canLoadOlder: Bool = false
+    var onNearOldestVisible: (() -> Void)? = nil
     var horizontalContentPadding: CGFloat = MessageListTimelineDefaults.horizontalContentPadding
     var topContentPadding: CGFloat = MessageListTimelineDefaults.topContentPadding
     var bottomContentPadding: CGFloat = MessageListTimelineDefaults.bottomContentPadding
@@ -41,6 +43,8 @@ where Item.ID == String {
         viewController.scrollController = scrollController
         viewController.onRefresh = onRefresh
         viewController.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
+        viewController.canLoadOlder = canLoadOlder
+        viewController.onNearOldestVisible = onNearOldestVisible
         scrollController.attach(viewController)
         viewController.loadViewIfNeeded()
         viewController.updateRefreshControlAvailability()
@@ -59,6 +63,8 @@ where Item.ID == String {
         viewController.scrollController = scrollController
         viewController.onRefresh = onRefresh
         viewController.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
+        viewController.canLoadOlder = canLoadOlder
+        viewController.onNearOldestVisible = onNearOldestVisible
         viewController.itemContent = itemContent
         viewController.updateBottomOverlayInset(bottomOverlayInset)
         viewController.updateTopOverlayInset(topOverlayInset)
@@ -84,6 +90,8 @@ where Item.ID == String {
     var scrollController: TimelineScrollController?
     var onRefresh: (() async -> Void)?
     var onUserScrollDismissKeyboard: (() -> Void)?
+    var canLoadOlder = false
+    var onNearOldestVisible: (() -> Void)?
     var itemContent: (Item) -> ItemContent
 
     private let horizontalContentPadding: CGFloat
@@ -102,6 +110,7 @@ where Item.ID == String {
     private var lastContentHeight: CGFloat = 0
     private var lastViewportHeight: CGFloat = 0
     private var hasCompletedInitialScroll = false
+    private var isRestoringOlderPrepend = false
     private var isSettlingInitialLoad = true
     private var initialLoadSettlingTask: Task<Void, Never>?
     /// Extra top inset so short threads (new session, first message) sit on the
@@ -392,13 +401,24 @@ where Item.ID == String {
             !layoutAffecting.isEmpty
             && structureAffecting.isEmpty
             && resolvedPacket.grewBottomRowIDs.isEmpty
+        let isOlderPrepend =
+            !previousOrderedIDs.isEmpty
+            && newOrderedIDs.count > previousCount
+            && previousIDSet.isSubset(of: Set(newOrderedIDs))
+            && newOrderedIDs.first != previousOrderedIDs.first
         let shouldCaptureUnarmedAnchor =
-            hasCompletedInitialScroll
-            && !isSettlingInitialLoad
-            && scrollController?.isPinnedToEnd != true
-            && scrollController?.isProgrammaticScrolling != true
-            && !layoutAffecting.isEmpty
+            isOlderPrepend
+            || (
+                hasCompletedInitialScroll
+                && !isSettlingInitialLoad
+                && scrollController?.isPinnedToEnd != true
+                && scrollController?.isProgrammaticScrolling != true
+                && !layoutAffecting.isEmpty
+            )
         let visibleAnchor = shouldCaptureUnarmedAnchor ? captureVisibleAnchor() : nil
+        if isOlderPrepend {
+            isRestoringOlderPrepend = true
+        }
 
         itemsByID = Dictionary(uniqueKeysWithValues: uniqueItems.map { ($0.id, $0) })
         orderedIDs = newOrderedIDs
@@ -450,7 +470,9 @@ where Item.ID == String {
                     self.isSettlingInitialLoad
                     && self.hasCompletedInitialScroll
                     && self.orderedIDs.count == previousCount
-                if shouldStayPinned, visibleAnchor == nil, !isReconfigureOnly, !skipPinDuringSettle,
+                if isOlderPrepend {
+                    self.scrollController?.noteObservedMessageCount(self.orderedIDs.count)
+                } else if shouldStayPinned, visibleAnchor == nil, !isReconfigureOnly, !skipPinDuringSettle,
                    !isDecorateOnly
                 {
                     self.pinToBottomWithoutAnimation()
@@ -462,7 +484,7 @@ where Item.ID == String {
                     self.reportGeometry()
                 }
 
-                if !self.hasCompletedInitialScroll, !self.orderedIDs.isEmpty {
+                if !self.hasCompletedInitialScroll, !self.orderedIDs.isEmpty, !isOlderPrepend {
                     self.hasCompletedInitialScroll = true
                     self.beginInitialLoadSettling()
                     self.scrollController?.reset(messageCount: self.orderedIDs.count)
@@ -470,12 +492,17 @@ where Item.ID == String {
                     return
                 }
 
-                if self.orderedIDs.count != previousCount {
+                if isOlderPrepend {
+                    self.hasCompletedInitialScroll = true
+                    self.scrollController?.noteObservedMessageCount(self.orderedIDs.count)
+                    self.isRestoringOlderPrepend = false
+                } else if self.orderedIDs.count != previousCount {
                     self.scrollController?.updateMessageCount(self.orderedIDs.count)
                 } else if !structureAffecting.isEmpty {
                     // Declared structure growth with stable count — not decorate-only.
                     self.scrollController?.notifyContentGrew()
                 }
+                self.notifyNearOldestIfNeeded()
             }
         }
         diffableSnapshotApplyCount += 1
@@ -493,13 +520,21 @@ where Item.ID == String {
     }
 
     private func captureVisibleAnchor() -> VisibleAnchor? {
-        guard let collectionView else { return nil }
+        guard let collectionView, !orderedIDs.isEmpty else { return nil }
         let visible = collectionView.indexPathsForVisibleItems.sorted {
             $0.item < $1.item
         }
-        guard let first = visible.first, first.item < orderedIDs.count else { return nil }
-        let itemID = orderedIDs[first.item]
-        guard let attributes = collectionView.layoutAttributesForItem(at: first) else { return nil }
+        let probe = CGPoint(
+            x: collectionView.bounds.midX,
+            y: collectionView.contentOffset.y + collectionView.adjustedContentInset.top + 1
+        )
+        let indexPath =
+            visible.first
+            ?? collectionView.indexPathForItem(at: probe)
+            ?? IndexPath(item: 0, section: 0)
+        guard indexPath.item < orderedIDs.count else { return nil }
+        let itemID = orderedIDs[indexPath.item]
+        guard let attributes = collectionView.layoutAttributesForItem(at: indexPath) else { return nil }
         let offsetFromViewportTop = attributes.frame.minY - collectionView.contentOffset.y
         return VisibleAnchor(itemID: itemID, offsetFromViewportTop: offsetFromViewportTop)
     }
@@ -605,9 +640,25 @@ where Item.ID == String {
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         reportGeometry()
+        notifyNearOldestIfNeeded()
         guard scrollView.isDragging || scrollView.isTracking else { return }
         scrollController?.beginUserScrolling()
         scheduleUserScrollEnd()
+    }
+
+    func testNotifyNearOldestIfNeeded() {
+        notifyNearOldestIfNeeded()
+    }
+
+    private func notifyNearOldestIfNeeded() {
+        guard canLoadOlder, !orderedIDs.isEmpty, let collectionView else { return }
+        let visible = collectionView.indexPathsForVisibleItems.sorted { $0.item < $1.item }
+        let oldestVisible = visible.first?.item == 0
+        let nearTop =
+            collectionView.contentOffset.y
+            <= -collectionView.adjustedContentInset.top + MessageListTimelineDefaults.autoFollowTolerance
+        guard oldestVisible || nearTop else { return }
+        onNearOldestVisible?()
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
@@ -753,6 +804,10 @@ where Item.ID == String {
         let previousHeight = lastContentHeight
         lastContentHeight = newHeight
         let grewBy = newHeight - max(previousHeight, oldHeight)
+        if isRestoringOlderPrepend {
+            reportGeometry()
+            return
+        }
         updateBottomAlignmentInset()
         if grewBy > 0.5 {
             // Anchor as soon as we have items, including before the first
@@ -819,6 +874,7 @@ where Item.ID == String {
 
         let keepPinned =
             preservedOffsetY == nil
+            && !isRestoringOlderPrepend
             && (
                 !hasCompletedInitialScroll
                 || scrollController?.isPinnedToEnd == true

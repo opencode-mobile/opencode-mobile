@@ -43,36 +43,12 @@ final class SessionChatReviewChanges {
         guard eligibleMessageID != candidateMessageID else { return }
 
         requestTask?.cancel()
+        requestTask = nil
         candidateMessageID = eligibleMessageID
-        state = SessionChatReviewChangesRegionState()
-        guard let eligibleMessageID else { return }
-
-        requestTask = Task { [weak self] in
-            guard let self else { return }
-            let startedAt = Date()
-            do {
-                let files = try await sessionRepository.getSessionDiff(
-                    id: sessionID,
-                    messageID: eligibleMessageID,
-                    directory: worktree
-                )
-                guard !Task.isCancelled, candidateMessageID == eligibleMessageID else { return }
-                let summary = ReviewChangesSummary(files: files)
-                state = SessionChatReviewChangesRegionState(
-                    messageID: eligibleMessageID,
-                    summary: summary
-                )
-                logRequest(summary: summary, result: "success", startedAt: startedAt)
-                notifyChange()
-            } catch is CancellationError {
-                return
-            } catch {
-                guard candidateMessageID == eligibleMessageID else { return }
-                state = SessionChatReviewChangesRegionState()
-                logRequest(summary: nil, result: "failure:\(failureCategory(error))", startedAt: startedAt)
-                notifyChange()
-            }
-        }
+        // Bind does not fetch last-turn diff. The Changes screen owns that GET.
+        // Without a loaded summary the pill stays hidden.
+        state = SessionChatReviewChangesRegionState(messageID: eligibleMessageID, summary: nil)
+        notifyChange()
     }
 
     func stop() {
@@ -80,22 +56,6 @@ final class SessionChatReviewChanges {
         requestTask = nil
         candidateMessageID = nil
         state = SessionChatReviewChangesRegionState()
-    }
-
-    private func failureCategory(_ error: Error) -> String {
-        switch error as? SessionError {
-        case .transport: "transport"
-        case .http(let statusCode, _): "http-\(statusCode)"
-        case .decoding: "decoding"
-        case nil: "unexpected"
-        }
-    }
-
-    private func logRequest(summary: ReviewChangesSummary?, result: String, startedAt: Date) {
-        let duration = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
-        OpenCodeLog.sessionChat.info(
-            "pill-summary source=last-turn session=\(self.sessionID) directory=\(self.worktree) files=\(summary?.fileCount ?? 0) additions=\(summary?.additions ?? 0) deletions=\(summary?.deletions ?? 0) result=\(result) durationMs=\(duration)"
-        )
     }
 
     private func notifyChange() {

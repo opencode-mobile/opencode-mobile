@@ -11,6 +11,10 @@ protocol MessageRepository: Sendable {
     func prepareOptimisticUserMessage(id: String, text: String) async -> DisplayMessage
     func clearMessageCache()
     func listMessages(sessionID: String, directory: String?) async throws -> [Message]
+    func listMessagePage(sessionID: String, directory: String?, query: MessageHistoryQuery) async throws -> MessageHistoryPage
+    func loadOlderMessages(sessionID: String, directory: String?) async throws -> [Message]
+    func loadOlderDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage]
+    func hasOlderMessages(sessionID: String, directory: String?) -> Bool
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message
     func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws
@@ -30,6 +34,24 @@ extension MessageRepository {
     }
 
     func peekWarmDisplayMessages(sessionID: String, directory: String?) -> [DisplayMessage]? { nil }
+
+    func listMessagePage(
+        sessionID: String,
+        directory: String?,
+        query _: MessageHistoryQuery
+    ) async throws -> MessageHistoryPage {
+        .complete(try await listMessages(sessionID: sessionID, directory: directory))
+    }
+
+    func loadOlderMessages(sessionID: String, directory: String?) async throws -> [Message] {
+        try await listMessages(sessionID: sessionID, directory: directory)
+    }
+
+    func loadOlderDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage] {
+        try await loadOlderMessages(sessionID: sessionID, directory: directory).map { DisplayMessage(message: $0) }
+    }
+
+    func hasOlderMessages(sessionID _: String, directory _: String?) -> Bool { false }
 
     func sendPromptAsync(sessionID: String, text: String, directory: String?) async throws {
         try await sendPromptAsync(sessionID: sessionID, options: PromptSendOptions(text: text, model: nil, variant: nil, mode: nil), directory: directory)
@@ -100,6 +122,29 @@ final class DefaultMessageRepository: MessageRepository {
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
         try await run { try await messageRemote.listMessages(sessionID: sessionID, directory: directory) }
+    }
+
+    func listMessagePage(
+        sessionID: String,
+        directory: String?,
+        query: MessageHistoryQuery
+    ) async throws -> MessageHistoryPage {
+        try await run {
+            try await messageRemote.listMessagePage(sessionID: sessionID, directory: directory, query: query)
+        }
+    }
+
+    func loadOlderMessages(sessionID: String, directory: String?) async throws -> [Message] {
+        try await run { try await messageSync.loadOlderMessages(sessionID: sessionID, directory: directory) }
+    }
+
+    func loadOlderDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage] {
+        let messages = try await loadOlderMessages(sessionID: sessionID, directory: directory)
+        return await contentPreparer.prepareMessages(messages)
+    }
+
+    func hasOlderMessages(sessionID: String, directory: String?) -> Bool {
+        messageSync.hasOlderMessages(sessionID: sessionID, directory: directory)
     }
 
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {

@@ -18,6 +18,58 @@ struct MessageProtocolRepositoryTests {
         let url = try #require(MessageProtocolURLProtocol.requests.first?.url)
         #expect(url.path.hasSuffix("/session/ses_1/message"))
         #expect(queryValue(url, "directory") == "/repo")
+        #expect(queryValue(url, "limit") == nil)
+        #expect(queryValue(url, "before") == nil)
+    }
+
+    @Test func v1TailUsesLimitWithoutBefore() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            MessageStubResponse(
+                statusCode: 200,
+                body: #"[{"info":{"id":"msg_20","role":"user"},"parts":[{"type":"text","text":"Tail"}]}]"#,
+                headers: ["X-Next-Cursor": "cursor-19"]
+            )
+        ])
+        let router = makeRouter(serverProtocol: .v1)
+
+        let page = try await router.listMessagePage(
+            sessionID: "ses_1",
+            directory: "/repo",
+            query: .newest(limit: 20)
+        )
+
+        #expect(page.messages.map(\.id) == ["msg_20"])
+        #expect(page.olderCursor == "cursor-19")
+        #expect(page.hasOlder)
+        let url = try #require(MessageProtocolURLProtocol.requests.first?.url)
+        #expect(queryValue(url, "limit") == "20")
+        #expect(queryValue(url, "before") == nil)
+    }
+
+    @Test func v1OlderUsesLimitAndBeforeFromNextCursor() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            MessageStubResponse(
+                statusCode: 200,
+                body: #"[{"info":{"id":"msg_1","role":"user"},"parts":[{"type":"text","text":"Old"}]}]"#,
+                headers: [
+                    "Link": "</session/ses_1/message?limit=200&before=prev>; rel=\"next\""
+                ]
+            )
+        ])
+        let router = makeRouter(serverProtocol: .v1)
+
+        let page = try await router.listMessagePage(
+            sessionID: "ses_1",
+            directory: "/repo",
+            query: .older(cursor: "cursor-19", limit: 200)
+        )
+
+        #expect(page.messages.map(\.id) == ["msg_1"])
+        #expect(page.olderCursor == "prev")
+        #expect(page.hasOlder)
+        let url = try #require(MessageProtocolURLProtocol.requests.first?.url)
+        #expect(queryValue(url, "limit") == "200")
+        #expect(queryValue(url, "before") == "cursor-19")
     }
 
     @Test func v2ListMessagesUnwrapsEnvelopeAndProjectsDomainMessages() async throws {
@@ -73,6 +125,63 @@ struct MessageProtocolRepositoryTests {
         #expect(queryValue(firstURL, "cursor") == nil)
         #expect(queryValue(secondURL, "cursor") == "page-2")
         #expect(queryValue(secondURL, "order") == nil)
+    }
+
+    @Test func v2TailUsesLimitAndDescThenReturnsChronological() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            .json(#"""
+            {
+              "data": [
+                {"id":"msg_new","type":"user","text":"New","time":{"created":2}},
+                {"id":"msg_old","type":"user","text":"Old","time":{"created":1}}
+              ],
+              "cursor": {"next":"older-cursor"}
+            }
+            """#)
+        ])
+        let router = makeRouter(serverProtocol: .v2)
+
+        let page = try await router.listMessagePage(
+            sessionID: "ses_2",
+            directory: "/repo",
+            query: .newest(limit: 20)
+        )
+
+        #expect(page.messages.map(\.id) == ["msg_old", "msg_new"])
+        #expect(page.olderCursor == "older-cursor")
+        #expect(page.hasOlder)
+        let url = try #require(MessageProtocolURLProtocol.requests.first?.url)
+        #expect(queryValue(url, "limit") == "20")
+        #expect(queryValue(url, "order") == "desc")
+        #expect(queryValue(url, "cursor") == nil)
+    }
+
+    @Test func v2OlderSendsCursorWithoutOrder() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            .json(#"""
+            {
+              "data": [
+                {"id":"msg_b","type":"user","text":"B","time":{"created":2}},
+                {"id":"msg_a","type":"user","text":"A","time":{"created":1}}
+              ],
+              "cursor": {"next":null}
+            }
+            """#)
+        ])
+        let router = makeRouter(serverProtocol: .v2)
+
+        let page = try await router.listMessagePage(
+            sessionID: "ses_2",
+            directory: "/repo",
+            query: .older(cursor: "older-cursor", limit: 200)
+        )
+
+        #expect(page.messages.map(\.id) == ["msg_a", "msg_b"])
+        #expect(page.hasOlder == false)
+        let url = try #require(MessageProtocolURLProtocol.requests.first?.url)
+        #expect(queryValue(url, "cursor") == "older-cursor")
+        #expect(queryValue(url, "order") == nil)
+        #expect(queryValue(url, "limit") == "200")
     }
 
     @Test func unknownProtocolProbesBeforeRoutingToV2() async throws {
@@ -183,6 +292,13 @@ struct MessageProtocolRepositoryTests {
 private struct MessageStubResponse {
     let statusCode: Int
     let body: String
+    let headers: [String: String]
+
+    init(statusCode: Int, body: String, headers: [String: String] = [:]) {
+        self.statusCode = statusCode
+        self.body = body
+        self.headers = headers
+    }
 
     static func json(_ body: String) -> MessageStubResponse {
         MessageStubResponse(statusCode: 200, body: body)
@@ -205,11 +321,13 @@ private final class MessageProtocolURLProtocol: URLProtocol {
     override func startLoading() {
         Self.requests.append(request)
         let stub = Self.responses.isEmpty ? MessageStubResponse.json("{}") : Self.responses.removeFirst()
+        var headers = ["Content-Type": "application/json"]
+        stub.headers.forEach { headers[$0.key] = $0.value }
         let response = HTTPURLResponse(
             url: request.url!,
             statusCode: stub.statusCode,
             httpVersion: nil,
-            headerFields: ["Content-Type": "application/json"]
+            headerFields: headers
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         if !stub.body.isEmpty {

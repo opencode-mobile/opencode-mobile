@@ -431,7 +431,7 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.sessionTitle == "Title")
     }
 
-    @Test func completedLatestTurnLoadsReviewChangesSummaryWithWorktree() async {
+    @Test func completedLatestTurnDoesNotFetchReviewChangesDiffOnBind() async {
         let sessionRepository = FakeChatSessionRepository(
             sessionDiffs: [
                 FileDiff(path: "one.swift", patch: nil, additions: 1, deletions: 2, status: .modified),
@@ -448,10 +448,10 @@ struct SessionChatViewModelTests {
         defer { viewModel.stopObserving() }
 
         await viewModel.loadMessages()
-        await waitUntil { viewModel.uiState.reviewChangesSummary != nil }
+        try? await Task.sleep(for: .milliseconds(50))
 
-        #expect(viewModel.uiState.reviewChangesSummary == ReviewChangesSummary(fileCount: 2, additions: 4, deletions: 2))
-        #expect(sessionRepository.diffRequest == .init(sessionID: "ses-1", messageID: "user-1", directory: "/repo"))
+        #expect(viewModel.uiState.reviewChangesSummary == nil)
+        #expect(sessionRepository.diffRequest == nil)
     }
 
     @Test func v2DoesNotLoadLastTurnReviewChangesSummary() async {
@@ -507,9 +507,10 @@ struct SessionChatViewModelTests {
             isTurnActive: false,
             isSending: false
         )
-        await waitUntil { region.state.messageID == "user-2" }
 
-        #expect(region.state.summary == ReviewChangesSummary(fileCount: 1, additions: 5, deletions: 3))
+        #expect(region.state.messageID == "user-2")
+        #expect(region.state.summary == nil)
+        #expect(sessionRepository.diffRequest == nil)
     }
 
     @Test func failedReviewChangesCountStaysHidden() async {
@@ -524,8 +525,9 @@ struct SessionChatViewModelTests {
         defer { viewModel.stopObserving() }
 
         await viewModel.loadMessages()
-        await waitUntil { sessionRepository.diffRequest != nil }
+        try? await Task.sleep(for: .milliseconds(50))
 
+        #expect(sessionRepository.diffRequest == nil)
         #expect(viewModel.uiState.reviewChangesSummary == nil)
     }
 

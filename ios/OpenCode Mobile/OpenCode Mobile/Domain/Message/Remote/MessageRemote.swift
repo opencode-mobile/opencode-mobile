@@ -2,7 +2,18 @@ import Foundation
 
 protocol MessageRemote: Sendable {
     func listMessages(sessionID: String, directory: String?) async throws -> [Message]
+    func listMessagePage(sessionID: String, directory: String?, query: MessageHistoryQuery) async throws -> MessageHistoryPage
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws
+}
+
+extension MessageRemote {
+    func listMessagePage(
+        sessionID: String,
+        directory: String?,
+        query _: MessageHistoryQuery
+    ) async throws -> MessageHistoryPage {
+        .complete(try await listMessages(sessionID: sessionID, directory: directory))
+    }
 }
 
 struct V1MessageRemote: MessageRemote, Sendable {
@@ -16,6 +27,24 @@ struct V1MessageRemote: MessageRemote, Sendable {
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
         try await api.listMessages(sessionID: sessionID, directory: directory).map(adapter.message)
+    }
+
+    func listMessagePage(
+        sessionID: String,
+        directory: String?,
+        query: MessageHistoryQuery
+    ) async throws -> MessageHistoryPage {
+        let (dtos, nextCursor) = try await api.listMessagesPage(
+            sessionID: sessionID,
+            directory: directory,
+            limit: query.limit,
+            before: query.olderCursor
+        )
+        return MessageHistoryPage(
+            messages: dtos.map(adapter.message),
+            olderCursor: nextCursor,
+            hasOlder: nextCursor != nil
+        )
     }
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {
@@ -39,6 +68,35 @@ struct V2MessageRemote: MessageRemote, Sendable {
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
         adapter.messages(fromV2: try await api.listMessagesV2(sessionID: sessionID, directory: directory))
+    }
+
+    func listMessagePage(
+        sessionID: String,
+        directory: String?,
+        query: MessageHistoryQuery
+    ) async throws -> MessageHistoryPage {
+        let order: String?
+        let cursor: String?
+        switch query {
+        case .newest:
+            order = "desc"
+            cursor = nil
+        case .older(let olderCursor, _):
+            order = nil
+            cursor = olderCursor
+        }
+        let (dtos, nextCursor) = try await api.listMessagesV2Page(
+            sessionID: sessionID,
+            directory: directory,
+            limit: query.limit,
+            order: order,
+            cursor: cursor
+        )
+        return MessageHistoryPage(
+            messages: adapter.messages(fromV2: dtos).chronological(),
+            olderCursor: nextCursor,
+            hasOlder: nextCursor != nil
+        )
     }
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {
@@ -81,6 +139,14 @@ struct ProtocolSelectedMessageRemote: MessageRemote, Sendable {
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
         try await selected().listMessages(sessionID: sessionID, directory: directory)
+    }
+
+    func listMessagePage(
+        sessionID: String,
+        directory: String?,
+        query: MessageHistoryQuery
+    ) async throws -> MessageHistoryPage {
+        try await selected().listMessagePage(sessionID: sessionID, directory: directory, query: query)
     }
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {

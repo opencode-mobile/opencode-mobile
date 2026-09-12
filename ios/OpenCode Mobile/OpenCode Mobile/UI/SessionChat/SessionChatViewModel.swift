@@ -179,6 +179,10 @@ final class SessionChatViewModel {
         composer.loadMentionableAgents(force: true)
     }
 
+    func loadOlderMessages() async {
+        await timeline.loadOlderMessages()
+    }
+
     func archiveSession() {
         guard hasCreatedSession else { return }
         sessionInfo.archiveSession()
@@ -930,6 +934,8 @@ final class SessionChatViewModel {
             }(),
             isSending: composerState.isSending,
             isRefreshing: timelineState.isRefreshing,
+            hasOlder: timelineState.hasOlder,
+            isLoadingOlder: timelineState.isLoadingOlder,
             isAborting: composerState.isAborting,
             sessionStatusLabel: sessionStatusLabel,
             workingIndicatorLabel: workingIndicatorLabel,

@@ -210,6 +210,8 @@ struct SessionChatUiState: Equatable {
     var composer: SessionChatComposerState
     var isSending: Bool = false
     var isRefreshing: Bool = false
+    var hasOlder: Bool = false
+    var isLoadingOlder: Bool = false
     var isAborting: Bool = false
     var sessionStatusLabel: String?
     /// In-chat Working/Thinking/Retrying label for an active turn.
@@ -426,6 +428,8 @@ struct SessionChatTimelineRegionState: Equatable {
     var isRefreshing: Bool = false
     var messagesFromCache: Bool = false
     var isSyncingMessages: Bool = false
+    var hasOlder: Bool = false
+    var isLoadingOlder: Bool = false
     var errorMessage: String?
 
     var knownChildSessionIDs: Set<String> {

@@ -187,6 +187,17 @@ extension Container {
                         throw adapter.mapError(error)
                     }
                 },
+                listMessagePage: { sessionID, directory, query in
+                    do {
+                        return try await router.listMessagePage(
+                            sessionID: sessionID,
+                            directory: directory,
+                            query: query
+                        )
+                    } catch {
+                        throw adapter.mapError(error)
+                    }
+                },
                 store: self.sessionMessageEngine(),
                 eventStream: self.foregroundEventStream(),
                 worldSignals: self.worldSignals(),
