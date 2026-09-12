@@ -475,7 +475,27 @@ class MainScreenViewModelTest {
             assertEquals(0, viewModel.revealNewestToken.value)
         }
 
+    @Test
+    fun refreshWhileLive_doesNotClobberLoadedSessionsWithEmptyCache() =
+        runTest(testDispatcher) {
+            val sessions =
+                listOf(
+                    Session(id = "ses-1", title = "Alpha", directory = "/repo", updatedAtEpochMs = 1L),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to sessions)),
+                )
+            advanceUntilIdle()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(listOf("ses-1"), loaded.sections.flatMap { it.allSessions }.map { it.id })
 
+            viewModel.refresh()
+            advanceUntilIdle()
+            val reloaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(listOf("ses-1"), reloaded.sections.flatMap { it.allSessions }.map { it.id })
+        }
 
     @Test
     fun pullToRefresh_keepsLoadedContentWithoutFullScreenLoading() =

@@ -136,6 +136,7 @@ final class ProjectListHomeViewModel {
         activeConnectionManager.connection?.baseURL.absoluteString ?? ""
     }
     private var liveObservationTasks: [Task<Void, Never>] = []
+    private var observedWorktrees: [String] = []
     private var liveSessionsByWorktree: [String: SessionListSnapshot] = [:]
     private var liveStatusesByWorktree: [String: [String: SessionStatus]] = [:]
     private var liveReadyIdsByWorktree: [String: Set<String>] = [:]
@@ -719,6 +720,9 @@ final class ProjectListHomeViewModel {
         // Disk-first home: local worktrees + Session Cache paint .loaded
         // without .probing/.loading. Live store then SWR-refreshes.
         if !preserveContent, !worktrees.isEmpty {
+            if case .loaded = state, liveObservationsRunning(for: worktrees) {
+                return
+            }
             let sections = await loadSectionsFromCache(worktrees: worktrees)
             state = .loaded(
                 sections: sections,
@@ -1014,7 +1018,9 @@ final class ProjectListHomeViewModel {
     }
 
     private func startLiveObservations(worktrees: [String]) {
+        if liveObservationsRunning(for: worktrees) { return }
         stopLiveObservations()
+        observedWorktrees = worktrees
         liveObservationTasks =
             worktrees.map { worktree in
                 Task {
@@ -1026,9 +1032,14 @@ final class ProjectListHomeViewModel {
     private func stopLiveObservations() {
         liveObservationTasks.forEach { $0.cancel() }
         liveObservationTasks = []
+        observedWorktrees = []
         liveSessionsByWorktree = [:]
         liveStatusesByWorktree = [:]
         liveReadyIdsByWorktree = [:]
+    }
+
+    private func liveObservationsRunning(for worktrees: [String]) -> Bool {
+        !liveObservationTasks.isEmpty && observedWorktrees == worktrees
     }
 
     private func observeWorktree(_ worktree: String) async {
@@ -1056,8 +1067,8 @@ final class ProjectListHomeViewModel {
 
     private func applyLiveUpdate(worktree: String) {
         guard let snapshot = liveSessionsByWorktree[worktree] else { return }
-        let statuses = liveStatusesByWorktree[worktree] ?? [:]
-        let readyIds = liveReadyIdsByWorktree[worktree] ?? []
+        guard let statuses = liveStatusesByWorktree[worktree] else { return }
+        guard let readyIds = liveReadyIdsByWorktree[worktree] else { return }
         updateSectionFromLiveData(
             worktree: worktree,
             sessions: snapshot.sessions,
