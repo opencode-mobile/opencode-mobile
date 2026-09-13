@@ -4,20 +4,14 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
-import dev.opencode.mobile.domain.event.GapAuthority
 import dev.opencode.mobile.domain.event.OpencodeEvent
-import dev.opencode.mobile.domain.event.SilentWorldSignals
-import dev.opencode.mobile.domain.event.StoreRefreshReason
 import dev.opencode.mobile.domain.event.WorldSignal
 import dev.opencode.mobile.domain.event.WorldSignals
-import dev.opencode.mobile.domain.event.asLiveConnection
-import dev.opencode.mobile.domain.event.canCatchUp
-import dev.opencode.mobile.domain.event.catchUpReason
-import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
+import dev.opencode.mobile.domain.sync.ProjectionKey
+import dev.opencode.mobile.domain.sync.SyncCoordinator
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -31,6 +25,7 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -44,10 +39,10 @@ class DefaultSessionStatusLiveStore
         private val eventStream: ForegroundEventStream,
         private val liveStoreScope: LiveStoreScope,
         private val eventDomainAdapter: EventDomainAdapter,
-        private val worldSignals: WorldSignals = SilentWorldSignals,
+        private val worldSignals: WorldSignals,
+        private val syncCoordinator: SyncCoordinator,
     ) : SessionStatusLiveStore {
         private val cache = LiveStoreFlowCache<Map<String, SessionStatus>>(liveStoreScope)
-        private val invalidationBus = StoreInvalidationBus()
         private val activeDirectories = ConcurrentHashMap.newKeySet<String>()
         private val pendingBusy = ConcurrentHashMap<String, MutableSet<String>>()
         private val mutationBus = MutableSharedFlow<StatusMutation>(extraBufferCapacity = 32)
@@ -92,8 +87,15 @@ class DefaultSessionStatusLiveStore
             coroutineScope {
                 keys
                     .map { key ->
-                        async { invalidationBus.invalidateAndWait(key, StoreRefreshReason.PULL_TO_REFRESH) }
-                    }.awaitAll()
+                        async {
+                            val projection = ProjectionKey.SessionStatuses(key)
+                            syncCoordinator.invalidate(projection)
+                            withTimeoutOrNull(LiveStoreRefreshPolicy.INVALIDATION_ACK_TIMEOUT_MS) {
+                                syncCoordinator.ensureFresh(projection)
+                            }
+                        }
+                    }
+                    .awaitAll()
             }
         }
 
@@ -117,71 +119,42 @@ class DefaultSessionStatusLiveStore
             channelFlow {
                 var server = emptyMap<String, SessionStatus>()
                 var current = emptyMap<String, SessionStatus>()
-                var reconnectRefresh: Job? = null
-                val liveConnection = eventStream.asLiveConnection()
-                val authority = GapAuthority()
+                var snapshotRefresh: Job? = null
+                val key = ProjectionKey.SessionStatuses(directory)
                 val gate = LiveStoreRefreshGate()
                 var dropUnconfirmedPendingAfterBackgroundCatchUp = false
-                try {
-                    suspend fun emitOverlay(base: Map<String, SessionStatus>) {
-                        val next = overlayPending(directory, base, confirmFrom = emptyMap())
-                        if (next != current) {
-                            current = next
-                            send(current)
-                        }
-                    }
-
-                    suspend fun commitLoaded(
-                        loaded: Map<String, SessionStatus>,
-                        emptyActiveGuard: Boolean = false,
-                        dropUnconfirmedPending: Boolean = false,
-                    ) {
-                        // Empty active maps are a between-step gap on v2, not idle.
-                        // True idle is session.idle / execution.*. Overlay pending
-                        // onto the kept server map; do not skip overlay because
-                        // pending is set.
-                        if (emptyActiveGuard && loaded.isEmpty() && server.isNotEmpty()) {
-                            emitOverlay(server)
-                            return
-                        }
-                        server = loaded
-                        current =
-                            overlayPending(
-                                directory,
-                                loaded,
-                                dropUnconfirmedPending = dropUnconfirmedPending,
-                            )
-                        if (dropUnconfirmedPending) {
-                            dropUnconfirmedPendingAfterBackgroundCatchUp = false
-                        }
+                suspend fun emitOverlay(base: Map<String, SessionStatus>) {
+                    val next = overlayPending(directory, base, confirmFrom = emptyMap())
+                    if (next != current) {
+                        current = next
                         send(current)
                     }
+                }
 
-                    suspend fun reloadFromServer(
-                        reason: String,
-                        force: Boolean,
-                        emptyActiveGuard: Boolean = false,
-                    ): LiveStoreRefreshOutcome {
-                        val snapshot = liveConnection.snapshot.value
-                        if (!force && !canCatchUp(worldSignals.occupancy.value, snapshot)) {
-                            DiagnosticLog.info(
-                                DiagnosticLogArea.Session,
-                                "statusLiveStore skip directory=$directory reason=$reason",
-                            )
-                            return LiveStoreRefreshOutcome.FAILED
-                        }
-                        val generation =
-                            if (force) {
-                                authority.captureBegin(snapshot)
-                            } else {
-                                authority.tryBegin(snapshot) ?: run {
-                                    DiagnosticLog.info(
-                                        DiagnosticLogArea.Session,
-                                        "statusLiveStore skip directory=$directory reason=$reason",
-                                    )
-                                    return LiveStoreRefreshOutcome.FAILED
-                                }
-                            }
+                suspend fun commitLoaded(
+                    loaded: Map<String, SessionStatus>,
+                    emptyActiveGuard: Boolean = false,
+                    dropUnconfirmedPending: Boolean = false,
+                ) {
+                    if (emptyActiveGuard && loaded.isEmpty() && server.isNotEmpty()) {
+                        emitOverlay(server)
+                        return
+                    }
+                    server = loaded
+                    current =
+                        overlayPending(
+                            directory,
+                            loaded,
+                            dropUnconfirmedPending = dropUnconfirmedPending,
+                        )
+                    if (dropUnconfirmedPending) {
+                        dropUnconfirmedPendingAfterBackgroundCatchUp = false
+                    }
+                    send(current)
+                }
+
+                val registration =
+                    syncCoordinator.register(key) {
                         val outcome =
                             gate.refresh(
                                 load = {
@@ -194,36 +167,24 @@ class DefaultSessionStatusLiveStore
                                 commit = { loaded ->
                                     DiagnosticLog.info(
                                         DiagnosticLogArea.Session,
-                                        "statusLiveStore refresh directory=$directory reason=$reason",
+                                        "statusLiveStore refresh directory=$directory",
                                     )
                                     commitLoaded(
                                         loaded,
-                                        emptyActiveGuard,
+                                        emptyActiveGuard = false,
                                         dropUnconfirmedPending = dropUnconfirmedPendingAfterBackgroundCatchUp,
                                     )
                                 },
                             )
-                        when (outcome) {
-                            LiveStoreRefreshOutcome.COMMITTED -> {
-                                authority.acknowledge(generation)
-                                if (authority.needsReconcile(liveConnection.snapshot.value)) {
-                                    reloadFromServer(StoreRefreshReason.STREAM_RECONNECTED, force = false)
-                                }
+                            if (outcome == LiveStoreRefreshOutcome.FAILED) {
+                                error("status refresh failed directory=$directory")
                             }
-                            LiveStoreRefreshOutcome.FAILED,
-                            LiveStoreRefreshOutcome.DISCARDED,
-                            -> authority.fail(generation)
-                        }
-                        if (outcome == LiveStoreRefreshOutcome.DISCARDED) {
-                            DiagnosticLog.info(
-                                DiagnosticLogArea.Session,
-                                "statusLiveStore discard directory=$directory reason=$reason " +
-                                    "cause=superseded-by-live-patch",
-                            )
-                        }
-                        return outcome
+                            if (outcome == LiveStoreRefreshOutcome.DISCARDED) {
+                                syncCoordinator.invalidate(key)
+                            }
                     }
-
+                syncCoordinator.visible(key, true)
+                try {
                     launch {
                         mutationBus
                             .filter { it.directory == directory }
@@ -235,9 +196,7 @@ class DefaultSessionStatusLiveStore
                                         }
                                         emitOverlay(server)
                                     }
-                                    is StatusMutation.ClearLocalBusy -> {
-                                        emitOverlay(server)
-                                    }
+                                    is StatusMutation.ClearLocalBusy -> emitOverlay(server)
                                     is StatusMutation.MarkIdle -> {
                                         server = server - mutation.sessionId
                                         gate.bump()
@@ -247,63 +206,47 @@ class DefaultSessionStatusLiveStore
                             }
                     }
                     yield()
-
-                    launch(start = CoroutineStart.UNDISPATCHED) {
-                        invalidationBus.events
-                            .filter { it.key == null || it.key == directory }
-                            .collect { invalidation ->
-                                try {
-                                    authority.invalidate(liveConnection.snapshot.value)
-                                    reloadFromServer(invalidation.reason, force = false)
-                                } finally {
-                                    invalidation.ack?.complete(Unit)
-                                }
-                            }
-                    }
                     activeDirectories.add(directory)
-
-                    reloadFromServer(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)
-
                     launch {
                         worldSignals.signals.collect { signal ->
-                            if (signal.marksStale()) {
-                                authority.invalidate(liveConnection.snapshot.value)
-                                if (signal == WorldSignal.BackgroundStop) {
-                                    dropUnconfirmedPendingAfterBackgroundCatchUp = true
-                                }
-                                return@collect
+                            if (signal == WorldSignal.BackgroundStop) {
+                                dropUnconfirmedPendingAfterBackgroundCatchUp = true
                             }
-                            val reason = signal.catchUpReason() ?: return@collect
-                            reloadFromServer(reason, force = false)
                         }
                     }
-                    launch {
-                        liveConnection.snapshot.collect {
-                            reloadFromServer(StoreRefreshReason.STREAM_RECONNECTED, force = false)
-                        }
-                    }
-
+                    syncCoordinator.ensureFresh(key)
                     try {
                         eventStream.events.collect { event ->
                             when {
-                                event.type == "stream.reconnected" || event.type == "server.connected" -> {
-                                    reconnectRefresh?.cancel()
-                                    reconnectRefresh =
-                                        launch {
-                                            delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
-                                            reloadFromServer(event.type, force = false)
-                                        }
-                                }
                                 event.type == "session.active.snapshot" -> {
-                                    reconnectRefresh?.cancel()
-                                    reconnectRefresh =
+                                    snapshotRefresh?.cancel()
+                                    snapshotRefresh =
                                         launch {
                                             delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
-                                            reloadFromServer(
-                                                event.type,
-                                                force = true,
-                                                emptyActiveGuard = true,
-                                            )
+                                            val outcome =
+                                                gate.refresh(
+                                                    load = {
+                                                        runCatching {
+                                                            sessionRepository
+                                                                .getAllSessionStatuses(directory = directory)
+                                                                .associateBy(SessionStatus::sessionId)
+                                                        }.getOrNull()
+                                                    },
+                                                    commit = { loaded ->
+                                                        commitLoaded(
+                                                            loaded,
+                                                            emptyActiveGuard = true,
+                                                            dropUnconfirmedPending =
+                                                                dropUnconfirmedPendingAfterBackgroundCatchUp,
+                                                        )
+                                                    },
+                                                )
+                                            if (outcome == LiveStoreRefreshOutcome.COMMITTED) {
+                                                DiagnosticLog.info(
+                                                    DiagnosticLogArea.Session,
+                                                    "statusLiveStore snapshot directory=$directory",
+                                                )
+                                            }
                                         }
                                 }
                                 event.triggersStatusRefresh -> {
@@ -316,9 +259,11 @@ class DefaultSessionStatusLiveStore
                             }
                         }
                     } finally {
-                        reconnectRefresh?.cancel()
+                        snapshotRefresh?.cancel()
                     }
                 } finally {
+                    syncCoordinator.visible(key, false)
+                    syncCoordinator.unregister(registration)
                     activeDirectories.remove(directory)
                 }
             }
@@ -350,7 +295,8 @@ class DefaultSessionStatusLiveStore
             }
         }
 
-        private fun pendingIds(directory: String): MutableSet<String> = pendingBusy.getOrPut(directory) { ConcurrentHashMap.newKeySet() }
+        private fun pendingIds(directory: String): MutableSet<String> =
+            pendingBusy.getOrPut(directory) { ConcurrentHashMap.newKeySet() }
 
         private fun overlayPending(
             directory: String,

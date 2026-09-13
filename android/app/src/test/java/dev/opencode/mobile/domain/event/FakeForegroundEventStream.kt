@@ -19,7 +19,7 @@ class FakeForegroundEventStream : LiveConnection {
     val hasEventSubscriber: Boolean
         get() = _events.subscriptionCount.value > 0
 
-    private val gapClock = AtomicLong(0)
+    private val generationClock = AtomicLong(0)
     private val republishClock = AtomicLong(0)
     private val _snapshot = MutableStateFlow(LiveConnectionSnapshot())
     override val snapshot: StateFlow<LiveConnectionSnapshot> = _snapshot.asStateFlow()
@@ -49,7 +49,7 @@ class FakeForegroundEventStream : LiveConnection {
         }
     }
 
-    /** Same generation and gap, but a distinct StateFlow value so collectors wake. */
+    /** Same generation, but a distinct StateFlow value so collectors wake. */
     fun setLiveTargets(targets: List<String>) {
         _snapshot.update { it.copy(liveTargets = targets) }
     }
@@ -89,51 +89,32 @@ class FakeForegroundEventStream : LiveConnection {
         }
     }
 
-    fun openGap(reason: LiveGapReason = LiveGapReason.Reconnect) {
-        val generation = gapClock.incrementAndGet()
+    fun bumpGeneration() {
+        val generation = generationClock.incrementAndGet()
         _snapshot.update {
             it.copy(
                 generation = generation,
-                gap = LiveGapRevision(generation, reason),
                 connectionState = _connectionState.value,
             )
         }
     }
 
-    fun openNewerThan(generation: Long, reason: LiveGapReason = LiveGapReason.Reconnect) {
-        do {
-            openGap(reason)
-        } while ((_snapshot.value.gap?.generation ?: 0L) <= generation)
+    fun openGap() {
+        bumpGeneration()
+        emit(OpencodeEvent(type = "sse.parse.failed"))
     }
 
     fun setConnectionState(state: EventStreamConnectionState) {
-        val previous = _connectionState.value
         _connectionState.value = state
         occupying =
             state != EventStreamConnectionState.Idle &&
-                state != EventStreamConnectionState.Disconnected
-        if (wasConnected &&
-            (
-                state == EventStreamConnectionState.Idle ||
-                    state == EventStreamConnectionState.Disconnected ||
-                    state == EventStreamConnectionState.Reconnecting
-            )
-        ) {
-            openGap(LiveGapReason.Reconnect)
-        }
+            state != EventStreamConnectionState.Disconnected
         applyLeaseOccupancy(state)
         if (state == EventStreamConnectionState.Connected) {
             wasConnected = true
         }
         if (state == EventStreamConnectionState.Idle) {
             wasConnected = false
-        }
-        if (previous == state &&
-            state != EventStreamConnectionState.Idle &&
-            state != EventStreamConnectionState.Disconnected &&
-            state != EventStreamConnectionState.Reconnecting
-        ) {
-            return
         }
     }
 
@@ -177,7 +158,7 @@ class FakeForegroundEventStream : LiveConnection {
             return
         }
         occupying = true
-        openGap(LiveGapReason.OccupancyStart)
+        bumpGeneration()
         wasConnected = false
         setConnectionState(EventStreamConnectionState.Connected)
     }
@@ -186,7 +167,7 @@ class FakeForegroundEventStream : LiveConnection {
         occupying = false
         wasConnected = false
         _connectionState.value = EventStreamConnectionState.Idle
-        openGap(LiveGapReason.Stopped)
+        bumpGeneration()
         applyLeaseOccupancy(EventStreamConnectionState.Idle)
     }
 }

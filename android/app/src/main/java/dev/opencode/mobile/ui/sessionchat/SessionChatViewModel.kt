@@ -41,6 +41,9 @@ import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionTodoList
+import dev.opencode.mobile.domain.sync.NoOpSyncCoordinator
+import dev.opencode.mobile.domain.sync.ProjectionKey
+import dev.opencode.mobile.domain.sync.SyncCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
@@ -87,6 +90,7 @@ class SessionChatViewModel
         private val activeConnectionManager: ActiveConnectionManager,
         lastTurnReviewChangesStore: LastTurnReviewChangesStore = LastTurnReviewChangesStore(),
         liveUpdates: LiveUpdates = FixedLiveUpdates(),
+        private val syncCoordinator: SyncCoordinator = NoOpSyncCoordinator,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -249,6 +253,7 @@ class SessionChatViewModel
                 // Peers may have changed while the screen was away; re-resolve smart label.
                 scheduleProjectIdentityRefine(worktree)
                 timeline.restartLiveObservation()
+                syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
                 return
             }
             boundSessionId = sessionId
@@ -274,6 +279,7 @@ class SessionChatViewModel
             reviewChanges.bind(sessionId, worktree)
             commands.bind(sessionId, worktree)
             inbox.bind(sessionId, worktree)
+            syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
             viewModelScope.launch {
                 composer.loadCatalog()
             }
@@ -357,6 +363,7 @@ class SessionChatViewModel
             reviewChanges.bind(sessionId, worktree)
             commands.bind(sessionId, worktree)
             inbox.bind(sessionId, worktree)
+            syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
             viewModelScope.launch {
                 composer.loadCatalog()
             }
@@ -1151,6 +1158,7 @@ class SessionChatViewModel
             composer.flushDraft()
             inbox.stop()
             clearSessionReadyFocus()
+            syncCoordinator.markFocused(null)
             super.onCleared()
         }
 

@@ -43,8 +43,6 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private var pendingStartConfig: LiveConnectionConfig?
     private var inFlightStartApplies = 0
     private var overall = LiveOverallFlags()
-    private var currentGap: LiveGapRevision?
-    private var gapClock: UInt64 = 0
     private var lastDirectoriesByIdentity: [LiveConnectionConfig.Identity: [String]] = [:]
     private var configEpoch: UInt64 = 0
     private var leases: [String: Lease] = [:]
@@ -163,7 +161,6 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         let serial = occupancySerial
         streamGeneration += 1
         let generation = streamGeneration
-        openGapLocked(.occupancyStart)
         occupancyTask = Task(priority: .userInitiated) { [weak self] in
             await self?.beginOccupancy(generation: generation, serial: serial)
             while !Task.isCancelled {
@@ -178,9 +175,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         lock.lock()
         let hadTask = occupancyTask != nil
         let state = _connectionState
-        let pendingResume = overall.pendingResumeBarrier
-            || overall.wasFullyConnected
-            || overall.occupyingConnected
+        let wasFullyConnected = overall.wasFullyConnected
         occupancySerial += 1
         inFlightStartApplies = 0
         streamGeneration += 1
@@ -197,8 +192,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         cancelAllLeasesLocked()
         eventIngress.reset()
         appliedConfig = nil
-        overall = LiveOverallFlags(pendingResumeBarrier: pendingResume)
-        openGapLocked(.stopped)
+        overall = LiveOverallFlags(wasFullyConnected: wasFullyConnected)
         lock.unlock()
         if hadTask || state != .idle {
             DiagnosticLog.info(.sse, "foreground SSE stream stopping")
@@ -246,7 +240,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             reconcileLeases(config, generation: generation)
         case let .retarget(generation, config):
             guard stillCurrent(generation) else { return }
-            retargetIdentity(config, reason: .configChanged)
+                retargetIdentity(config)
         }
     }
 
@@ -294,7 +288,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         let latest = pending ?? appliedConfig ?? merged
         let generationAfterWait = streamGeneration
         let appliedNow = appliedConfig
-        let resumeChrome = overall.wasFullyConnected || overall.pendingResumeBarrier
+        let resumeChrome = overall.wasFullyConnected
         lock.unlock()
         applyConnectionState(
             resumeChrome ? .reconnecting : .connecting,
@@ -305,7 +299,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         if stillCurrent(generationAfterWait) {
             if let appliedNow,
                LiveConnectionApply.change(applied: appliedNow, requested: resolvedConfig) == .identity {
-                retargetIdentity(resolvedConfig, reason: .configChanged)
+                retargetIdentity(resolvedConfig)
             } else {
                 reconcileLeases(resolvedConfig, generation: generationAfterWait)
             }
@@ -364,8 +358,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                 connectionIdentity: applied.connectionIdentity,
                 serverProtocol: resolved,
                 directories: applied.directories
-            ),
-            reason: .configChanged
+            )
         )
     }
 
@@ -421,7 +414,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         }
         switch LiveConnectionApply.change(applied: applied, requested: effective) {
         case .identity:
-            retargetIdentity(effective, reason: .configChanged)
+            retargetIdentity(effective)
         case .directories:
             reconcileLeases(effective, generation: currentGeneration())
         case .none:
@@ -429,17 +422,13 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         }
     }
 
-    private func retargetIdentity(_ config: LiveConnectionConfig, reason: LiveGapReason) {
+    private func retargetIdentity(_ config: LiveConnectionConfig) {
         guard isOccupying() else { return }
         lock.lock()
         streamGeneration += 1
         let generation = streamGeneration
-        openGapLocked(reason)
         appliedConfig = config
         eventIngress.reset()
-        overall.occupyingConnected = false
-        overall.emittedReconnectForCurrentGap = false
-        overall.suppressReconnectForRequiredGrowth = false
         cancelAllLeasesLocked()
         lock.unlock()
         _ = connectionEpoch.bump()
@@ -687,9 +676,6 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         if result.parsed.isEmpty {
             DiagnosticLog.warning(.sse, SseDiagnosticLogging.parseFailedMessage(dataLine))
             if result.parseFailed {
-                lock.lock()
-                openGapLocked(.parseFailed)
-                lock.unlock()
                 publishSnapshot()
                 for event in result.toEmit {
                     _ = publishIfCurrent(event, generation: generation)
@@ -725,9 +711,6 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private func markLeaseDead(_ lease: Lease, generation: UInt64) {
         guard stillCurrent(generation) else { return }
         lease.setLive(false)
-        lock.lock()
-        overall.occupyingConnected = false
-        lock.unlock()
         refreshOverallState(generation: generation)
     }
 
@@ -754,9 +737,6 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                 pathLost: deviceNetworkPath.status == .unavailable
             )
         )
-        if let reason = decided.openGap {
-            recordGapLocked(reason)
-        }
         overall = decided.flags
         let nextState = decided.connectionState
         let publishReconnect = decided.publishReconnect
@@ -816,7 +796,6 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             config: config,
             generation: streamGeneration,
             connectionState: _connectionState,
-            gap: currentGap,
             requiredTargets: required,
             liveTargets: live
         )
@@ -893,16 +872,6 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         lock.lock()
         defer { lock.unlock() }
         return occupancyTask != nil && streamGeneration == generation
-    }
-
-    private func recordGapLocked(_ reason: LiveGapReason) {
-        gapClock += 1
-        currentGap = LiveGapRevision(generation: gapClock, reason: reason)
-    }
-
-    private func openGapLocked(_ reason: LiveGapReason) {
-        recordGapLocked(reason)
-        overall.emittedReconnectForCurrentGap = false
     }
 
     private func currentGeneration() -> UInt64 {

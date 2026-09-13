@@ -62,19 +62,6 @@ fun WorldSignal.marksStale(): Boolean =
         this == WorldSignal.PathLost ||
         this == WorldSignal.ProfileSwitched
 
-fun WorldSignal.catchUpReason(): String? =
-    when (this) {
-        WorldSignal.Foreground -> StoreRefreshReason.BACKGROUND_RETURN
-        WorldSignal.PathReady -> StoreRefreshReason.PATH_READY
-        else -> null
-    }
-
 object StoreRefreshReason {
-    const val BACKGROUND_RETURN = "background-return"
-    const val PATH_READY = "path-ready"
     const val PULL_TO_REFRESH = "pull-to-refresh"
-    const val INITIAL_SUBSCRIBE = "initial-subscribe"
-    const val STREAM_RECONNECTED = "stream.reconnected"
-    const val SERVER_CONNECTED = "server.connected"
-    const val CONNECTION_SNAPSHOT = "connection-snapshot"
 }

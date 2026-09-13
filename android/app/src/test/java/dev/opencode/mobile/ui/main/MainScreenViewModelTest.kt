@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.event.SilentWorldSignals
 import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
 import dev.opencode.mobile.domain.live.DefaultSessionReadyStore
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
@@ -43,6 +44,7 @@ import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
+import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -669,6 +671,7 @@ class MainScreenViewModelTest {
     fun refreshOnSessionCreatedEvent() =
         runTest(testDispatcher) {
             val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
             val sessionsByWorktree =
                 mutableMapOf(
                     "/repo" to listOf(Session(id = "1", title = "Session 1", updatedAtEpochMs = 1L)),
@@ -975,8 +978,31 @@ class MainScreenViewModelTest {
                 eventStream = eventStream,
             )
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
-        val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope, EventDomainAdapter(json))
-        val sessionLiveStore = DefaultSessionLiveStore(sessionRepository, eventStream, liveStoreScope, NoOpSessionCache)
+        val coordinatorSync =
+            testSyncCoordinator(
+                eventStream = eventStream,
+                worldSignals = SilentWorldSignals,
+                scope = liveStoreScope.coroutineScope,
+                nowMs = { testDispatcher.scheduler.currentTime },
+                wait = { kotlinx.coroutines.delay(it) },
+            )
+        val sessionStatusLiveStore =
+            DefaultSessionStatusLiveStore(
+                sessionRepository,
+                eventStream,
+                liveStoreScope,
+                EventDomainAdapter(json),
+                SilentWorldSignals,
+                coordinatorSync,
+            )
+        val sessionLiveStore =
+            DefaultSessionLiveStore(
+                sessionRepository,
+                eventStream,
+                liveStoreScope,
+                NoOpSessionCache,
+                coordinatorSync,
+            )
         val sessionReadyStore =
             DefaultSessionReadyStore(
                 sessionStatusLiveStore,

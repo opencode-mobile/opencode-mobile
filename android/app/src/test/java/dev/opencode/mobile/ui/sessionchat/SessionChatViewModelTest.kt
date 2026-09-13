@@ -14,12 +14,14 @@ import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdatesLabel
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.event.SilentWorldSignals
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
+import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
@@ -3961,7 +3963,25 @@ class SessionChatViewModelTest {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
         val json = Json { ignoreUnknownKeys = true }
-        val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope, EventDomainAdapter(json))
+        val sessionStatusLiveStore =
+            DefaultSessionStatusLiveStore(
+                sessionRepository,
+                eventStream,
+                liveStoreScope,
+                EventDomainAdapter(json),
+                SilentWorldSignals,
+                testSyncCoordinator(
+                    eventStream = eventStream,
+                    scope = liveStoreScope.coroutineScope,
+                    nowMs = { testDispatcher.scheduler.currentTime },
+                    wait = {
+                        // Failed REST retries under canCatchUp would never idle the
+                        // test scheduler (500ms, 1s, 2s… forever). Chat tests only
+                        // need a single loader attempt.
+                        throw kotlinx.coroutines.CancellationException("test-no-retry")
+                    },
+                ),
+            )
         val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
         runBlocking {
             val profile =

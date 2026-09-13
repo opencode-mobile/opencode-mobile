@@ -9,17 +9,17 @@ import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.message.DefaultMessageRepository
 import dev.opencode.mobile.domain.message.DisplayMessagePipeline
-import dev.opencode.mobile.domain.message.InMemoryMessageStore
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageDomainAdapter
-import dev.opencode.mobile.domain.message.MessageRemote
-import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageHistoryQuery
 import dev.opencode.mobile.domain.message.MessageHistoryWindow
+import dev.opencode.mobile.domain.message.MessageRemote
+import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageSync
 import dev.opencode.mobile.domain.message.ProtocolSelectedMessageRemote
 import dev.opencode.mobile.domain.message.SessionMessageEngine
 import dev.opencode.mobile.domain.sessioncache.SessionCache
+import dev.opencode.mobile.domain.sync.SyncCoordinator
 import javax.inject.Singleton
 
 @Module
@@ -57,9 +57,9 @@ abstract class MessageModule {
             engine: SessionMessageEngine,
             eventStream: ForegroundEventStream,
             liveStoreScope: LiveStoreScope,
+            syncCoordinator: SyncCoordinator,
             activeConnectionManager: dev.opencode.mobile.network.ActiveConnectionManager,
             sessionCache: SessionCache,
-            worldSignals: dev.opencode.mobile.domain.event.WorldSignals,
         ): MessageSync =
             MessageSync(
                 listMessages = { sessionId, directory ->
@@ -92,7 +92,7 @@ abstract class MessageModule {
                 engine = engine,
                 eventStream = eventStream,
                 liveStoreScope = liveStoreScope,
-                worldSignals = worldSignals,
+                syncCoordinator = syncCoordinator,
                 connectionProfileIdProvider = {
                     val profile = activeConnectionManager.currentProfile()
                     val profileId = profile?.id?.ifBlank { null }

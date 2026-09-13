@@ -109,8 +109,6 @@ class DefaultForegroundEventStream
         private val lastDirectoriesByIdentity = mutableMapOf<LiveConnectionConfig.Identity, List<String>>()
         private val eventIngress = SseEventIngress(eventDomainAdapter)
         private var overall = LiveOverallFlags()
-        private var currentGap: LiveGapRevision? = null
-        private val gapClock = AtomicLong(0)
         private val configEpoch = AtomicLong(0)
         private val authTerminal = AtomicBoolean(false)
         private val protocolConfirmed = AtomicBoolean(false)
@@ -220,7 +218,7 @@ class DefaultForegroundEventStream
                 }
                 is LiveConnectionApply.StartDecision.Retarget -> {
                     if (!stillCurrent(decision.generation)) return
-                    retargetIdentity(decision.config, LiveGapReason.ConfigChanged)
+                    retargetIdentity(decision.config)
                 }
             }
         }
@@ -238,10 +236,7 @@ class DefaultForegroundEventStream
             authTerminal.set(false)
             protocolConfirmed.set(false)
             synchronized(stateLock) {
-                val pendingResume =
-                    overall.pendingResumeBarrier ||
-                        overall.wasFullyConnected ||
-                        overall.occupyingConnected
+                val wasFullyConnected = overall.wasFullyConnected
                 occupancySerial += 1
                 inFlightStartApplies = 0
                 generation = streamGeneration.incrementAndGet()
@@ -251,8 +246,7 @@ class DefaultForegroundEventStream
                 cancelAllLeases()
                 eventIngress.reset()
                 appliedConfig = null
-                overall = LiveOverallFlags(pendingResumeBarrier = pendingResume)
-                openGapLocked(LiveGapReason.Stopped)
+                overall = LiveOverallFlags(wasFullyConnected = wasFullyConnected)
                 snapshot = buildSnapshotLocked(EventStreamConnectionState.Idle)
             }
             toCancel?.cancel()
@@ -299,7 +293,7 @@ class DefaultForegroundEventStream
                     pendingStartConfig = null
                     (pending ?: config).also { appliedConfig = it }
                 }
-            val generation = beginGeneration(LiveGapReason.OccupancyStart)
+            val generation = beginGeneration()
             if (!stillCurrent(generation)) return
             publishSnapshot()
             deviceNetworkPath.waitUntilReady()
@@ -314,7 +308,7 @@ class DefaultForegroundEventStream
                 latest = pending ?: appliedConfig ?: merged
                 appliedNow = appliedConfig
                 generationAfterWait = streamGeneration.get()
-                resumeChrome = overall.wasFullyConnected || overall.pendingResumeBarrier
+                resumeChrome = overall.wasFullyConnected
             }
             setConnectionState(
                 if (resumeChrome) {
@@ -334,7 +328,7 @@ class DefaultForegroundEventStream
                 if (appliedNow != null &&
                     LiveConnectionApply.change(appliedNow, resolvedConfig) == LiveConnectionApply.Change.Identity
                 ) {
-                    retargetIdentity(resolvedConfig, LiveGapReason.ConfigChanged)
+                    retargetIdentity(resolvedConfig)
                 } else {
                     reconcileLeases(resolvedConfig)
                 }
@@ -377,7 +371,7 @@ class DefaultForegroundEventStream
                     "SSE protocol resolved ${applied.protocol.wireValue} -> ${resolved.wireValue}; reconnecting",
                 )
                 protocolConfirmed.set(true)
-                retargetIdentity(applied.copy(protocol = resolved), LiveGapReason.ConfigChanged)
+                retargetIdentity(applied.copy(protocol = resolved))
             }
         }
 
@@ -422,58 +416,32 @@ class DefaultForegroundEventStream
             }
             when (LiveConnectionApply.change(applied, effective)) {
                 LiveConnectionApply.Change.Identity ->
-                    retargetIdentity(effective, LiveGapReason.ConfigChanged)
+                    retargetIdentity(effective)
                 LiveConnectionApply.Change.Directories -> reconcileLeases(effective)
                 LiveConnectionApply.Change.None -> Unit
             }
         }
 
-        private fun retargetIdentity(
-            config: LiveConnectionConfig,
-            reason: LiveGapReason,
-        ) {
+        private fun retargetIdentity(config: LiveConnectionConfig) {
             if (!isOccupying()) return
-            val generation = beginGeneration(reason)
+            val generation = beginGeneration()
             if (!stillCurrent(generation)) return
             synchronized(stateLock) {
                 if (generation != streamGeneration.get()) return
                 appliedConfig = config
                 eventIngress.reset()
-                overall =
-                    overall.copy(
-                        occupyingConnected = false,
-                        emittedReconnectForCurrentGap = false,
-                        suppressReconnectForRequiredGrowth = false,
-                    )
                 cancelAllLeases()
             }
             if (!stillCurrent(generation)) return
             reconcileLeases(config)
         }
 
-        private fun beginGeneration(reason: LiveGapReason): Long =
+        private fun beginGeneration(): Long =
             synchronized(stateLock) {
                 val generation = streamGeneration.incrementAndGet()
                 connectionEpoch.bump()
-                openGapLocked(reason)
                 generation
             }
-
-        private fun openGap(reason: LiveGapReason) {
-            synchronized(stateLock) {
-                openGapLocked(reason)
-            }
-        }
-
-        private fun recordGapLocked(reason: LiveGapReason) {
-            val revision = gapClock.incrementAndGet()
-            currentGap = LiveGapRevision(revision, reason)
-        }
-
-        private fun openGapLocked(reason: LiveGapReason) {
-            recordGapLocked(reason)
-            overall = overall.copy(emittedReconnectForCurrentGap = false)
-        }
 
         private fun reconcileLeases(config: LiveConnectionConfig) {
             val generation = streamGeneration.get()
@@ -771,7 +739,6 @@ class DefaultForegroundEventStream
                     SseDiagnosticLogging.parseFailedMessage(dataLine),
                 )
                 if (result.parseFailed) {
-                    openGap(LiveGapReason.ParseFailed)
                     publishSnapshot()
                     for (event in result.toEmit) {
                         emitIfCurrent(event, generation)
@@ -818,10 +785,6 @@ class DefaultForegroundEventStream
         ) {
             if (generation != streamGeneration.get()) return
             lease.live.set(false)
-            synchronized(stateLock) {
-                if (generation != streamGeneration.get()) return
-                overall = overall.copy(occupyingConnected = false)
-            }
             refreshOverallState(generation)
         }
 
@@ -868,16 +831,17 @@ class DefaultForegroundEventStream
                 synchronized(leaseLock) {
                     leases.filterValues { it.live.get() }.keys.toSet()
                 }
+            val currentlyConnected =
+                _connectionState.value == EventStreamConnectionState.Connected
             val decided =
                 LiveOverallPolicy.decide(
                     overall,
                     LiveOverallInput(
                         required = required,
                         live = live,
-                        pathLost = deviceNetworkPath.status.value == DeviceNetworkPathStatus.Unavailable,
                     ),
+                    currentlyConnected = currentlyConnected,
                 )
-            decided.openGap?.let { recordGapLocked(it) }
             overall = decided.flags
             return OverallDecision(
                 generation = generation,
@@ -922,7 +886,6 @@ class DefaultForegroundEventStream
                 config = config,
                 generation = streamGeneration.get(),
                 connectionState = connectionState,
-                gap = currentGap,
                 requiredTargets = required,
                 liveTargets = live,
             )

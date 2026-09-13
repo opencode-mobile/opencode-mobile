@@ -83,6 +83,12 @@ abstract class EventStreamModule {
 
     @Binds
     @Singleton
+    abstract fun bindSyncCoordinator(
+        impl: dev.opencode.mobile.domain.sync.DefaultSyncCoordinator,
+    ): dev.opencode.mobile.domain.sync.SyncCoordinator
+
+    @Binds
+    @Singleton
     abstract fun bindDeviceNetworkPath(impl: ConnectivityDeviceNetworkPath): DeviceNetworkPath
 
     companion object {

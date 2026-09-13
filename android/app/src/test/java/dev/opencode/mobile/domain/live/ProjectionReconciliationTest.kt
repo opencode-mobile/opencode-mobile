@@ -12,8 +12,8 @@ import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageSync
 import dev.opencode.mobile.domain.message.MessageSyncHealth
-import dev.opencode.mobile.domain.message.MessageSyncRecoveryReason
 import dev.opencode.mobile.domain.message.SessionMessageEngine
+import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,6 +22,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -113,7 +114,8 @@ class ProjectionReconciliationTest {
             repository.nextLoadGate = gate
             eventStream.openGap()
             eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
-            advanceTimeBy(1)
+            runCurrent()
+            advanceTimeBy(5)
             world.emit(WorldSignal.BackgroundStop)
             eventStream.setConnectionState(EventStreamConnectionState.Idle)
             repository.shouldFail = true
@@ -122,10 +124,6 @@ class ProjectionReconciliationTest {
             job.cancel()
             val health = sync.syncHealth("ses-1", "/repo")
             assertTrue(health is MessageSyncHealth.Stale)
-            assertEquals(
-                MessageSyncRecoveryReason.TransportUnavailable,
-                (health as MessageSyncHealth.Stale).reason,
-            )
             assertEquals(afterInitial + 1, repository.listMessagesCallCount)
         }
 
@@ -169,9 +167,7 @@ class ProjectionReconciliationTest {
             advanceTimeBy(1)
             sync.clearCache()
             repository.messages = listOf(Message(id = "msg-old", role = MessageRole.User, text = "Old profile"))
-            eventStream.openGap()
-            eventStream.setConnectionState(EventStreamConnectionState.Connected)
-            eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
+            eventStream.bumpGeneration()
             advanceTimeBy(50)
             job.cancel()
             assertEquals("Hello", emissions.last().single().text)
@@ -286,17 +282,27 @@ class ProjectionReconciliationTest {
         eventStream: FakeForegroundEventStream,
         world: FakeWorldSignals = FakeWorldSignals(),
         pollIntervalMs: Long = 60_000L,
-    ): MessageSync =
-        MessageSync(
+    ): MessageSync {
+        if (eventStream.connectionState.value == EventStreamConnectionState.Idle) {
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+        }
+        val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
+        return MessageSync(
             listMessages = { sessionId, directory -> repository.listMessages(sessionId, directory) },
             engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
             eventStream = eventStream,
-            liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
-            worldSignals = world,
-            pollIntervalMs = pollIntervalMs,
-            recoveryDelay = { delay(1) },
+            liveStoreScope = scope,
+            syncCoordinator =
+                testSyncCoordinator(
+                    eventStream = eventStream,
+                    worldSignals = world,
+                    scope = scope.coroutineScope,
+                    nowMs = { testDispatcher.scheduler.currentTime },
+                    wait = { delay(1) },
+                ),
             nowMs = { testDispatcher.scheduler.currentTime },
         )
+    }
 }
 
 private class RecordingMessageRepository {

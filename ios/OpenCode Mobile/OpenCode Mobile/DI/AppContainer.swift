@@ -174,6 +174,16 @@ extension Container {
         self { SessionMessageEngine(store: self.messageStore()) }.singleton
     }
 
+    var syncCoordinator: Factory<DefaultSyncCoordinator> {
+        self { @MainActor in
+            DefaultSyncCoordinator(
+                connection: self.foregroundEventStream(),
+                worldSignals: self.worldSignals(),
+                eventStream: self.foregroundEventStream()
+            )
+        }.singleton
+    }
+
     var messageSync: Factory<MessageSync> {
         self { @MainActor in
             let router = self.messageRemote()
@@ -211,7 +221,8 @@ extension Container {
                         username: connection.username
                     )
                 },
-                sessionCache: self.sessionCache()
+                sessionCache: self.sessionCache(),
+                syncCoordinator: self.syncCoordinator()
             )
         }.singleton
     }
@@ -412,7 +423,8 @@ extension Container {
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
                 eventAdapter: self.eventDomainAdapter(),
-                worldSignals: self.worldSignals()
+                worldSignals: self.worldSignals(),
+                syncCoordinator: self.syncCoordinator()
             )
         }.singleton
     }
@@ -422,7 +434,8 @@ extension Container {
             DefaultPermissionLiveStore(
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
-                worldSignals: self.worldSignals()
+                worldSignals: self.worldSignals(),
+                syncCoordinator: self.syncCoordinator()
             )
         }.singleton
     }
@@ -432,7 +445,8 @@ extension Container {
             DefaultQuestionLiveStore(
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
-                worldSignals: self.worldSignals()
+                worldSignals: self.worldSignals(),
+                syncCoordinator: self.syncCoordinator()
             )
         }.singleton
     }
@@ -442,7 +456,8 @@ extension Container {
             DefaultSessionTodoLiveStore(
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
-                worldSignals: self.worldSignals()
+                worldSignals: self.worldSignals(),
+                syncCoordinator: self.syncCoordinator()
             )
         }.singleton
     }
@@ -463,7 +478,8 @@ extension Container {
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
                 sessionCache: self.sessionCache(),
-                worldSignals: self.worldSignals()
+                worldSignals: self.worldSignals(),
+                syncCoordinator: self.syncCoordinator()
             )
         }.singleton
     }
@@ -556,7 +572,8 @@ extension Container {
                     modelRepository: self.modelRepository()
                 ),
                 liveUpdates: self.liveUpdates(),
-                lastTurnReviewChangesStore: self.lastTurnReviewChangesStore()
+                lastTurnReviewChangesStore: self.lastTurnReviewChangesStore(),
+                syncCoordinator: self.syncCoordinator()
             )
         }
     }

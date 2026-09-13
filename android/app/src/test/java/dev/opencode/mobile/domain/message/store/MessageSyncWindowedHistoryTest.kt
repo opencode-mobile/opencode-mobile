@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.live.LiveStoreScope
+import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
@@ -109,19 +110,17 @@ class MessageSyncWindowedHistoryTest {
                 )
 
             val updates = mutableListOf<MessageListUpdate>()
-            sync.observeMessages("ses-1", "/repo")
-                .onEach { updates += it }
-                .first { update ->
-                    update is MessageListUpdate.Messages &&
-                        (update as MessageListUpdate.Messages).messages.firstOrNull()?.role ==
-                        MessageRole.User
+            val job =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { updates += it }
                 }
             advanceUntilIdle()
+            job.cancel()
 
             val published =
                 updates.filterIsInstance<MessageListUpdate.Messages>().map { it.messages.map { message -> message.id } }
-            assertEquals(listOf("a20"), published.first())
-            assertEquals(listOf("u1", "a20"), published.last())
+            assertEquals(listOf("a20"), published.first { it.isNotEmpty() })
+            assertEquals(listOf("u1", "a20"), published.last { it.isNotEmpty() })
             assertEquals(listOf("c1"), olderCalls)
         }
 
@@ -148,7 +147,10 @@ class MessageSyncWindowedHistoryTest {
                     },
                 )
 
+            val job = launch { sync.observeMessages("ses-1", "/repo").collect { } }
+            advanceUntilIdle()
             val refreshed = sync.refreshMessages("ses-1", "/repo")
+            job.cancel()
 
             assertEquals(listOf("u1", "a20"), refreshed.map { it.id })
             assertEquals(listOf("c1"), olderCalls)
@@ -279,8 +281,12 @@ class MessageSyncWindowedHistoryTest {
                     engine = engine,
                     eventStream = FakeForegroundEventStream(),
                     liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
-                    pollIntervalMs = 60_000L,
-                    recoveryDelay = { },
+                    syncCoordinator = testSyncCoordinator(
+                        eventStream = FakeForegroundEventStream(),
+                        scope = CoroutineScope(SupervisorJob() + testDispatcher),
+                        nowMs = { testDispatcher.scheduler.currentTime },
+                        wait = { kotlinx.coroutines.delay(it) },
+                    ),
                     nowMs = { testDispatcher.scheduler.currentTime },
                 )
 
@@ -363,7 +369,7 @@ class MessageSyncWindowedHistoryTest {
                     },
                 )
 
-            sync.observeMessages("ses-1", "/repo").first()
+            val job = launch { sync.observeMessages("ses-1", "/repo").collect { } }
             advanceUntilIdle()
             sync.loadOlderMessages("ses-1", "/repo")
             assertEquals(listOf("c-tail"), olderCalls)
@@ -376,6 +382,7 @@ class MessageSyncWindowedHistoryTest {
                 )
             sync.refreshMessages("ses-1", "/repo")
             val result = sync.loadOlderMessages("ses-1", "/repo")
+            job.cancel()
 
             assertEquals(listOf("c-tail", "c-reset"), olderCalls)
             assertEquals(listOf("n0", "n1", "n2"), result.messages.map { it.id })
@@ -388,6 +395,9 @@ class MessageSyncWindowedHistoryTest {
         runTest(testDispatcher) {
             var fullCalls = 0
             var tailCalls = 0
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(dev.opencode.mobile.domain.event.EventStreamConnectionState.Connected)
+            val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
             val sync =
                 MessageSync(
                     listMessages = { _, _ ->
@@ -399,16 +409,22 @@ class MessageSyncWindowedHistoryTest {
                         MessagePage(listOf(user("tail")), olderCursor = null, hasOlder = false)
                     },
                     engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
-                    eventStream = FakeForegroundEventStream(),
-                    liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
-                    pollIntervalMs = 60_000L,
-                    recoveryDelay = { },
+                    eventStream = eventStream,
+                    liveStoreScope = scope,
+                    syncCoordinator =
+                        testSyncCoordinator(
+                            eventStream = eventStream,
+                            scope = scope.coroutineScope,
+                            nowMs = { testDispatcher.scheduler.currentTime },
+                            wait = { kotlinx.coroutines.delay(1) },
+                        ),
                     nowMs = { testDispatcher.scheduler.currentTime },
                 )
 
-            sync.observeMessages("ses-1", "/repo").first()
+            val collectJob = launch { sync.observeMessages("ses-1", "/repo").collect { } }
             advanceUntilIdle()
             sync.refreshMessages("ses-1", "/repo")
+            collectJob.cancel()
 
             assertEquals(0, fullCalls)
             assertTrue(tailCalls >= 2)
@@ -421,18 +437,27 @@ class MessageSyncWindowedHistoryTest {
         },
         sessionCache: dev.opencode.mobile.domain.sessioncache.SessionCache =
             dev.opencode.mobile.domain.sessioncache.NoOpSessionCache,
-    ): MessageSync =
-        MessageSync(
+    ): MessageSync {
+        val eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(dev.opencode.mobile.domain.event.EventStreamConnectionState.Connected)
+        val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
+        return MessageSync(
             listMessageTail = listMessageTail,
             listOlderMessages = listOlderMessages,
             engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
-            eventStream = FakeForegroundEventStream(),
-            liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
-            pollIntervalMs = 60_000L,
-            recoveryDelay = { },
+            eventStream = eventStream,
+            liveStoreScope = scope,
+            syncCoordinator =
+                testSyncCoordinator(
+                    eventStream = eventStream,
+                    scope = scope.coroutineScope,
+                    nowMs = { testDispatcher.scheduler.currentTime },
+                    wait = { kotlinx.coroutines.delay(1) },
+                ),
             nowMs = { testDispatcher.scheduler.currentTime },
             sessionCache = sessionCache,
         )
+    }
 
     private fun user(id: String) = Message(id = id, role = MessageRole.User, text = id)
 

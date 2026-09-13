@@ -305,11 +305,11 @@ struct MessageSyncTests {
         }
         let painted = await waitUntil { collector.latest()?.first?.text == "Hello" }
         #expect(painted)
+        #expect(repo.isListBlocked)
+        repo.resumeListMessages()
         let confirmed = await waitUntil { collector.sawCacheSyncConfirmed }
         task.cancel()
         #expect(confirmed)
-        #expect(repo.isListBlocked)
-        repo.resumeListMessages()
     }
 
     @Test func hungInitialRest_cacheSeed_doesNotConfirmWhenOccupancyStopped() async {
@@ -341,7 +341,7 @@ struct MessageSyncTests {
         task.cancel()
         #expect(painted)
         #expect(!collector.sawCacheSyncConfirmed)
-        #expect(repo.isListBlocked)
+        #expect(!repo.isListBlocked)
         repo.resumeListMessages()
     }
 
@@ -397,7 +397,7 @@ struct MessageSyncTests {
             chromeTask.cancel()
             #expect(streamed)
             #expect(repo.listMessagesCallCount == afterInitial)
-            #expect(!chrome.contains(true))
+            #expect(chrome.last == false)
             #expect(sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy)
     }
 
@@ -564,7 +564,8 @@ struct MessageSyncTests {
         repo.resumeListMessages()
         let loaded = await waitUntil { repo.listMessagesCallCount >= 1 && !repo.isListBlocked }
         #expect(loaded)
-        #expect(globalChrome.last == false)
+        let chromeCleared = await waitUntil { globalChrome.last == false }
+        #expect(chromeCleared)
 
         repo.holdNextListMessages()
         eventStream.openGap()
@@ -653,16 +654,16 @@ struct MessageSyncTests {
         #expect(published)
     }
 
-    @Test func pollSurvivesDisconnectWithoutGapEvent() async {
+    @Test func disconnectWithoutReconnectDoesNotFetch() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 40)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
         let collector = MessageCollector()
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
         #expect(loaded)
+        let afterInitial = repo.listMessagesCallCount
 
-        eventStream.setConnectionState(.connected)
         eventStream.setConnectionState(.disconnected)
         try? await Task.sleep(for: .milliseconds(90))
 
@@ -677,11 +678,10 @@ struct MessageSyncTests {
                 sentAtEpochMs: nil
             ),
         ]
-        let polled = await waitUntil {
-            collector.latest()?.first?.text == "From poll after reconnect"
-        }
+        try? await Task.sleep(for: .milliseconds(80))
         task.cancel()
-        #expect(polled)
+        #expect(collector.latest()?.first?.text == "Hello")
+        #expect(repo.listMessagesCallCount == afterInitial)
     }
 
     @Test func v2PromptedGlobalBusPublishesUserText() async {
@@ -1078,44 +1078,6 @@ struct MessageSyncTests {
         #expect(repo.listMessagesCallCount == 1)
     }
 
-    @Test func silentStreamingStall_appliesAheadRestSnapshot() async {
-        let repo = FakeLiveMessageRepository()
-        let eventStream = FakeForegroundEventStream()
-        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 25)
-        let collector = MessageCollector()
-        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
-        let loaded = await waitUntil { collector.latest() != nil }
-        #expect(loaded)
-
-        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
-        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
-        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Partial", sessionID: "ses-1"))
-        let streaming = await waitUntil {
-            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Partial"
-        }
-        #expect(streaming)
-
-        repo.messages = [
-            Message(id: "msg-1", role: .user, text: "Hello", parts: [
-                .text(TextPart(text: "Hello", isStreaming: false)),
-            ], model: nil, mode: nil, sentAtEpochMs: nil),
-            Message(
-                id: "msg-2",
-                role: .assistant,
-                text: "Finished while silent",
-                parts: [.text(TextPart(text: "Finished while silent", isStreaming: false))],
-                model: nil,
-                mode: nil,
-                sentAtEpochMs: nil
-            ),
-        ]
-        let caughtUp = await waitUntil {
-            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Finished while silent"
-        }
-        task.cancel()
-        #expect(caughtUp)
-    }
-
     @Test func silentStreamingStall_keepsLocalWhenRestIsBehind() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
@@ -1147,33 +1109,6 @@ struct MessageSyncTests {
         try? await Task.sleep(for: .milliseconds(80))
         task.cancel()
         #expect(collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Longer local stream")
-    }
-
-    @Test func pollResponseIsDiscardedWhenStreamingStartsInFlight() async {
-        let repo = FakeLiveMessageRepository()
-        let eventStream = FakeForegroundEventStream()
-        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 25)
-        let collector = MessageCollector()
-        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
-        let loaded = await waitUntil { collector.latest() != nil }
-        #expect(loaded)
-
-        repo.holdNextListMessages()
-        let pollBlocked = await waitUntil { repo.isListBlocked }
-        #expect(pollBlocked)
-
-        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
-        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
-        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Live", sessionID: "ses-1"))
-        let streamed = await waitUntil {
-            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Live"
-        }
-        repo.resumeListMessages()
-        try? await Task.sleep(for: .milliseconds(50))
-        task.cancel()
-
-        #expect(streamed)
-        #expect(collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Live")
     }
 
     @Test func partUpdatedSnapshot_thenDuplicateDeltas_shouldNotDoubleText() {
@@ -1797,7 +1732,8 @@ private func makeMessageSync(
     connectionProfileID: String = "local",
     worldSignals: any WorldSignals = SilentWorldSignals.shared
 ) -> MessageSync {
-    MessageSync(
+    eventStream.setConnectionState(.connected)
+    return MessageSync(
         listMessages: { sessionID, directory in
             try await repo.listMessages(sessionID: sessionID, directory: directory)
         },

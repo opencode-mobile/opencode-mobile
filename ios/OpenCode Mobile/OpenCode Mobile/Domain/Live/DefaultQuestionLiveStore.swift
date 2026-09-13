@@ -5,17 +5,24 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
     private let sessionRepository: any SessionRepository
     private let eventStream: any ForegroundEventStream
     private let worldSignals: any WorldSignals
-    private let invalidationBus = StoreInvalidationBus()
+    private let syncCoordinator: any SyncCoordinator
+    private let activeDirectories = ActiveDirectorySet()
     private var cache: [String: SharedLiveObservation<[QuestionRequest]>] = [:]
 
     init(
         sessionRepository: any SessionRepository,
         eventStream: any ForegroundEventStream,
-        worldSignals: any WorldSignals = SilentWorldSignals.shared
+        worldSignals: any WorldSignals = SilentWorldSignals.shared,
+        syncCoordinator: (any SyncCoordinator)? = nil
     ) {
         self.sessionRepository = sessionRepository
         self.eventStream = eventStream
         self.worldSignals = worldSignals
+        self.syncCoordinator = syncCoordinator ?? DefaultSyncCoordinator(
+            connection: eventStream.asLiveConnection(),
+            worldSignals: worldSignals,
+            eventStream: eventStream
+        )
     }
 
     func observeQuestions(directory: String) -> AsyncStream<[QuestionRequest]> {
@@ -26,7 +33,19 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
     }
 
     func invalidate(directory: String?) {
-        invalidationBus.invalidate(key: directory, reason: StoreRefreshReason.pullToRefresh)
+        let keys: [ProjectionKey]
+        if let directory {
+            keys = activeDirectories.contains(directory) ? [.questions(directory: directory)] : []
+        } else {
+            keys = activeDirectories.snapshot().map { .questions(directory: $0) }
+        }
+        let coordinator = syncCoordinator
+        for key in keys {
+            coordinator.invalidate(key)
+            Task {
+                await coordinator.ensureFresh(key)
+            }
+        }
     }
 
     func clearCache() {
@@ -41,16 +60,16 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
         }
         let sessionRepository = sessionRepository
         let eventStream = eventStream
-        let worldSignals = worldSignals
-        let invalidationBus = invalidationBus
+        let syncCoordinator = syncCoordinator
+        let activeDirectories = activeDirectories
         let observation = SharedLiveObservation<[QuestionRequest]> { yield in
             Task.detached {
                 await Self.runLoop(
                     directory: directory,
                     sessionRepository: sessionRepository,
                     eventStream: eventStream,
-                    worldSignals: worldSignals,
-                    invalidationBus: invalidationBus,
+                    syncCoordinator: syncCoordinator,
+                    activeDirectories: activeDirectories,
                     yield: yield
                 )
             }
@@ -63,201 +82,58 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
         directory: String,
         sessionRepository: any SessionRepository,
         eventStream: any ForegroundEventStream,
-        worldSignals: any WorldSignals,
-        invalidationBus: StoreInvalidationBus,
+        syncCoordinator: any SyncCoordinator,
+        activeDirectories: ActiveDirectorySet,
         yield: @escaping @Sendable ([QuestionRequest]) -> Void
     ) async {
-        let liveConnection = eventStream.asLiveConnection()
-        let authority = GapAuthority()
+        activeDirectories.insert(directory)
+        defer { activeDirectories.remove(directory) }
+        let key = ProjectionKey.questions(directory: directory)
         let gate = LiveStoreRefreshGate()
         let lastEmitted = QuestionEmitCache()
-        await refresh(
-            directory: directory,
-            reason: StoreRefreshReason.initialSubscribe,
-            force: true,
-            occupancy: worldSignals.occupancy,
-            liveConnection: liveConnection,
-            authority: authority,
-            gate: gate,
-            lastEmitted: lastEmitted,
-            sessionRepository: sessionRepository,
-            yield: yield
-        )
+
+        @Sendable func loadAndCommit() async throws {
+            let outcome = await gate.refresh(
+                load: { () async -> [QuestionRequest]? in
+                    try? await sessionRepository.listPendingQuestions(directory: directory)
+                },
+                commit: { requests in
+                    DiagnosticLog.info(.question, "question refresh count=\(requests.count)")
+                    guard lastEmitted.shouldEmit(requests) else {
+                        DiagnosticLog.info(.question, "question emit skip cause=unchanged")
+                        return
+                    }
+                    yield(requests)
+                }
+            )
+            if outcome == .failed {
+                DiagnosticLog.warning(.question, "question refresh failed")
+                throw URLError(.cannotConnectToHost)
+            }
+        }
+
+        let registration = syncCoordinator.register(key: key, loader: loadAndCommit)
+        syncCoordinator.visible(key, true)
+        defer {
+            syncCoordinator.visible(key, false)
+            syncCoordinator.unregister(registration)
+        }
+        await syncCoordinator.ensureFresh(key)
+
         await withTaskGroup(of: Void.self) { group in
             group.addTask {
-                for await signal in worldSignals.signals() {
-                    if signal.marksStale {
-                        authority.invalidate(liveConnection.snapshot)
-                        continue
-                    }
-                    guard let reason = signal.catchUpReason else { continue }
-                    await refresh(
-                        directory: directory,
-                        reason: reason,
-                        force: false,
-                        occupancy: worldSignals.occupancy,
-                        liveConnection: liveConnection,
-                        authority: authority,
-                        gate: gate,
-                        lastEmitted: lastEmitted,
-                        sessionRepository: sessionRepository,
-                        yield: yield
-                    )
-                }
-            }
-            group.addTask {
-                for await _ in liveConnection.snapshotUpdates() {
-                    await refresh(
-                        directory: directory,
-                        reason: StoreRefreshReason.streamReconnected,
-                        force: false,
-                        occupancy: worldSignals.occupancy,
-                        liveConnection: liveConnection,
-                        authority: authority,
-                        gate: gate,
-                        lastEmitted: lastEmitted,
-                        sessionRepository: sessionRepository,
-                        yield: yield
-                    )
-                }
-            }
-            group.addTask {
-                for await invalidation in invalidationBus.events() {
-                    if let key = invalidation.key, key != directory { continue }
-                    authority.invalidate(liveConnection.snapshot)
-                    await refresh(
-                        directory: directory,
-                        reason: invalidation.reason,
-                        force: false,
-                        occupancy: worldSignals.occupancy,
-                        liveConnection: liveConnection,
-                        authority: authority,
-                        gate: gate,
-                        lastEmitted: lastEmitted,
-                        sessionRepository: sessionRepository,
-                        yield: yield
-                    )
-                }
-            }
-            group.addTask {
-                var reconnectTask: Task<Void, Never>?
-                defer { reconnectTask?.cancel() }
                 for await event in eventStream.events() {
-                    if event.type == "stream.reconnected" || event.type == "server.connected" {
-                        reconnectTask?.cancel()
-                        let reason = event.type
-                        reconnectTask = Task {
-                            try? await Task.sleep(
-                                for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs)
-                            )
-                            guard !Task.isCancelled else { return }
-                            await refresh(
-                                directory: directory,
-                                reason: reason,
-                                force: false,
-                                occupancy: worldSignals.occupancy,
-                                liveConnection: liveConnection,
-                                authority: authority,
-                                gate: gate,
-                                lastEmitted: lastEmitted,
-                                sessionRepository: sessionRepository,
-                                yield: yield
-                            )
-                        }
-                        continue
-                    }
-                    guard event.type == "question.asked" ||
-                        event.type == "question.replied" ||
-                        event.type == "question.rejected"
+                    guard event.type == "question.asked"
+                        || event.type == "question.replied"
+                        || event.type == "question.rejected"
                     else { continue }
                     Task {
-                        await refresh(
-                            directory: directory,
-                            reason: event.type,
-                            force: true,
-                            occupancy: worldSignals.occupancy,
-                            liveConnection: liveConnection,
-                            authority: authority,
-                            gate: gate,
-                            lastEmitted: lastEmitted,
-                            sessionRepository: sessionRepository,
-                            yield: yield
-                        )
+                        try? await loadAndCommit()
                     }
                 }
             }
             await group.next()
             group.cancelAll()
-        }
-    }
-
-    private nonisolated static func refresh(
-        directory: String,
-        reason: String,
-        force: Bool,
-        occupancy: StreamOccupancy,
-        liveConnection: any LiveConnection,
-        authority: GapAuthority,
-        gate: LiveStoreRefreshGate,
-        lastEmitted: QuestionEmitCache,
-        sessionRepository: any SessionRepository,
-        yield: @escaping @Sendable ([QuestionRequest]) -> Void
-    ) async {
-        let snapshot = liveConnection.snapshot
-        if !force {
-            guard canCatchUp(occupancy: occupancy, snapshot: snapshot) else {
-                DiagnosticLog.info(.question, "question skip reason=\(reason)")
-                return
-            }
-        }
-        let generation: UInt64
-        if force {
-            generation = authority.captureBegin(snapshot)
-        } else {
-            guard let started = authority.tryBegin(snapshot) else {
-                DiagnosticLog.info(.question, "question skip reason=\(reason)")
-                return
-            }
-            generation = started
-        }
-        let outcome = await gate.refresh(
-            load: { () async -> [QuestionRequest]? in
-                try? await sessionRepository.listPendingQuestions(directory: directory)
-            },
-            commit: { requests in
-                DiagnosticLog.info(.question, "question refresh reason=\(reason) count=\(requests.count)")
-                guard lastEmitted.shouldEmit(requests) else {
-                    DiagnosticLog.info(
-                        .question,
-                        "question emit skip reason=\(reason) cause=unchanged"
-                    )
-                    return
-                }
-                yield(requests)
-            }
-        )
-        switch outcome {
-        case .committed:
-            authority.acknowledge(generation)
-            if authority.needsReconcile(liveConnection.snapshot) {
-                await refresh(
-                    directory: directory,
-                    reason: StoreRefreshReason.streamReconnected,
-                    force: false,
-                    occupancy: occupancy,
-                    liveConnection: liveConnection,
-                    authority: authority,
-                    gate: gate,
-                    lastEmitted: lastEmitted,
-                    sessionRepository: sessionRepository,
-                    yield: yield
-                )
-            }
-        case .failed, .discarded:
-            authority.fail(generation)
-        }
-        if outcome == .failed {
-            DiagnosticLog.warning(.question, "question refresh failed reason=\(reason)")
         }
     }
 }

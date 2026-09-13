@@ -6,7 +6,8 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     private let eventStream: any ForegroundEventStream
     private let eventAdapter: EventDomainAdapter
     private let worldSignals: any WorldSignals
-    private let invalidationBus: StoreInvalidationBus
+    private let syncCoordinator: any SyncCoordinator
+    private let invalidationAckTimeoutMs: Int
     private let activeDirectories = ActiveDirectorySet()
     private let pendingBusy = PendingBusySet()
     private let mutationBus = StatusMutationBus()
@@ -17,13 +18,19 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         eventStream: any ForegroundEventStream,
         eventAdapter: EventDomainAdapter = EventDomainAdapter(),
         worldSignals: any WorldSignals = SilentWorldSignals.shared,
+        syncCoordinator: (any SyncCoordinator)? = nil,
         invalidationAckTimeoutMs: Int = LiveStoreRefreshPolicy.invalidationAckTimeoutMs
     ) {
         self.sessionRepository = sessionRepository
         self.eventStream = eventStream
         self.eventAdapter = eventAdapter
         self.worldSignals = worldSignals
-        invalidationBus = StoreInvalidationBus(ackTimeoutMs: invalidationAckTimeoutMs)
+        self.syncCoordinator = syncCoordinator ?? DefaultSyncCoordinator(
+            connection: eventStream.asLiveConnection(),
+            worldSignals: worldSignals,
+            eventStream: eventStream
+        )
+        self.invalidationAckTimeoutMs = invalidationAckTimeoutMs
     }
 
     func observeStatuses(directory: String) -> AsyncStream<[String: SessionStatus]> {
@@ -34,20 +41,21 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     }
 
     func invalidate(directory: String?) async {
-        let keys: [String]
+        let keys: [ProjectionKey]
         if let directory {
-            keys = activeDirectories.contains(directory) ? [directory] : []
+            keys = activeDirectories.contains(directory) ? [.sessionStatuses(directory: directory)] : []
         } else {
-            keys = activeDirectories.snapshot()
+            keys = activeDirectories.snapshot().map { .sessionStatuses(directory: $0) }
         }
-        let bus = invalidationBus
+        let coordinator = syncCoordinator
+        let timeoutMs = invalidationAckTimeoutMs
         await withTaskGroup(of: Void.self) { group in
             for key in keys {
                 group.addTask {
-                    await bus.invalidateAndWait(
-                        key: key,
-                        reason: StoreRefreshReason.pullToRefresh
-                    )
+                    coordinator.invalidate(key)
+                    await awaitWithTimeout(milliseconds: timeoutMs) {
+                        await coordinator.ensureFresh(key)
+                    }
                 }
             }
         }
@@ -83,7 +91,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         let eventStream = eventStream
         let eventAdapter = eventAdapter
         let worldSignals = worldSignals
-        let invalidationBus = invalidationBus
+        let syncCoordinator = syncCoordinator
         let activeDirectories = activeDirectories
         let pendingBusy = pendingBusy
         let mutationBus = mutationBus
@@ -95,7 +103,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                     eventStream: eventStream,
                     eventAdapter: eventAdapter,
                     worldSignals: worldSignals,
-                    invalidationBus: invalidationBus,
+                    syncCoordinator: syncCoordinator,
                     activeDirectories: activeDirectories,
                     pendingBusy: pendingBusy,
                     mutationBus: mutationBus,
@@ -113,21 +121,19 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         eventStream: any ForegroundEventStream,
         eventAdapter: EventDomainAdapter,
         worldSignals: any WorldSignals,
-        invalidationBus: StoreInvalidationBus,
+        syncCoordinator: any SyncCoordinator,
         activeDirectories: ActiveDirectorySet,
         pendingBusy: PendingBusySet,
         mutationBus: StatusMutationBus,
         yield: @escaping @Sendable ([String: SessionStatus]) -> Void
     ) async {
-        let invalidations = invalidationBus.events()
         activeDirectories.insert(directory)
         defer { activeDirectories.remove(directory) }
         let serverBox = StatusBox()
         let currentBox = StatusBox()
-        let liveConnection = eventStream.asLiveConnection()
-        let authority = GapAuthority()
         let gate = LiveStoreRefreshGate()
         let dropUnconfirmedPendingAfterBackgroundCatchUp = DropPendingFlag()
+        let key = ProjectionKey.sessionStatuses(directory: directory)
 
         @Sendable func overlayPending(
             _ base: [String: SessionStatus],
@@ -161,10 +167,6 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             emptyActiveGuard: Bool = false,
             dropUnconfirmedPending: Bool = false
         ) {
-            // Empty active maps are a between-step gap on v2, not idle.
-            // True idle is session.idle / execution.*. Overlay pending
-            // onto the kept server map; do not skip overlay because
-            // pending is set.
             if emptyActiveGuard, loaded.isEmpty {
                 let server = serverBox.snapshot()
                 if !server.isEmpty {
@@ -181,35 +183,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             yield(next)
         }
 
-        @discardableResult
-        @Sendable func reloadFromServer(
-            reason: String,
-            force: Bool,
-            emptyActiveGuard: Bool = false
-        ) async -> LiveStoreRefreshOutcome {
-            let snapshot = liveConnection.snapshot
-            if !force {
-                guard canCatchUp(occupancy: worldSignals.occupancy, snapshot: snapshot) else {
-                    DiagnosticLog.info(
-                        .session,
-                        "statusLiveStore skip directory=\(directory) reason=\(reason)"
-                    )
-                    return .failed
-                }
-            }
-            let generation: UInt64
-            if force {
-                generation = authority.captureBegin(snapshot)
-            } else {
-                guard let started = authority.tryBegin(snapshot) else {
-                    DiagnosticLog.info(
-                        .session,
-                        "statusLiveStore skip directory=\(directory) reason=\(reason)"
-                    )
-                    return .failed
-                }
-                generation = started
-            }
+        @Sendable func loadAndCommit(emptyActiveGuard: Bool = false) async throws {
             let outcome = await gate.refresh(
                 load: { () async -> [String: SessionStatus]? in
                     await Self.loadStatuses(
@@ -218,10 +192,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                     )
                 },
                 commit: { loaded in
-                    DiagnosticLog.info(
-                        .session,
-                        "statusLiveStore refresh directory=\(directory) reason=\(reason)"
-                    )
+                    DiagnosticLog.info(.session, "statusLiveStore refresh directory=\(directory)")
                     commitLoaded(
                         loaded,
                         emptyActiveGuard: emptyActiveGuard,
@@ -229,23 +200,22 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                     )
                 }
             )
-            switch outcome {
-            case .committed:
-                authority.acknowledge(generation)
-                if authority.needsReconcile(liveConnection.snapshot) {
-                    _ = await reloadFromServer(reason: StoreRefreshReason.streamReconnected, force: false)
-                }
-            case .failed, .discarded:
-                authority.fail(generation)
-            }
             if outcome == .discarded {
                 DiagnosticLog.info(
                     .session,
-                    "statusLiveStore discard directory=\(directory) reason=\(reason) "
-                        + "cause=superseded-by-live-patch"
+                    "statusLiveStore discard directory=\(directory) cause=superseded-by-live-patch"
                 )
             }
-            return outcome
+            if outcome == .failed {
+                throw URLError(.cannotConnectToHost)
+            }
+        }
+
+        let registration = syncCoordinator.register(key: key, loader: { try await loadAndCommit() })
+        syncCoordinator.visible(key, true)
+        defer {
+            syncCoordinator.visible(key, false)
+            syncCoordinator.unregister(registration)
         }
 
         let mutationTask = Task {
@@ -270,61 +240,33 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         }
         defer { mutationTask.cancel() }
 
-        await reloadFromServer(reason: StoreRefreshReason.initialSubscribe, force: true)
+        await syncCoordinator.ensureFresh(key)
 
         await withTaskGroup(of: Void.self) { group in
             group.addTask {
+                for await occupancy in worldSignals.occupancyUpdates() {
+                    if occupancy == .stopped {
+                        dropUnconfirmedPendingAfterBackgroundCatchUp.arm()
+                    }
+                }
+            }
+            group.addTask {
                 for await signal in worldSignals.signals() {
-                    if signal.marksStale {
-                        authority.invalidate(liveConnection.snapshot)
-                        if signal == .backgroundStop {
-                            dropUnconfirmedPendingAfterBackgroundCatchUp.arm()
-                        }
-                        continue
+                    if signal == .backgroundStop {
+                        dropUnconfirmedPendingAfterBackgroundCatchUp.arm()
                     }
-                    guard let reason = signal.catchUpReason else { continue }
-                    await reloadFromServer(reason: reason, force: false)
                 }
             }
             group.addTask {
-                for await _ in liveConnection.snapshotUpdates() {
-                    await reloadFromServer(reason: StoreRefreshReason.streamReconnected, force: false)
-                }
-            }
-            group.addTask {
-                for await invalidation in invalidations {
-                    if let key = invalidation.key, key != directory { continue }
-                    let ack = invalidation.ack
-                    defer { ack?() }
-                    authority.invalidate(liveConnection.snapshot)
-                    await reloadFromServer(reason: invalidation.reason, force: false)
-                }
-            }
-            group.addTask {
-                var reconnectTask: Task<Void, Never>?
-                defer { reconnectTask?.cancel() }
+                var snapshotTask: Task<Void, Never>?
+                defer { snapshotTask?.cancel() }
                 for await event in eventStream.events() {
-                    if event.type == "stream.reconnected" || event.type == "server.connected" {
-                        reconnectTask?.cancel()
-                        let reason = event.type
-                        reconnectTask = Task {
-                            try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs))
-                            guard !Task.isCancelled else { return }
-                            await reloadFromServer(reason: reason, force: false)
-                        }
-                        continue
-                    }
                     if event.type == "session.active.snapshot" {
-                        reconnectTask?.cancel()
-                        let reason = event.type
-                        reconnectTask = Task {
+                        snapshotTask?.cancel()
+                        snapshotTask = Task {
                             try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs))
                             guard !Task.isCancelled else { return }
-                            await reloadFromServer(
-                                reason: reason,
-                                force: true,
-                                emptyActiveGuard: true
-                            )
+                            try? await loadAndCommit(emptyActiveGuard: true)
                         }
                         continue
                     }

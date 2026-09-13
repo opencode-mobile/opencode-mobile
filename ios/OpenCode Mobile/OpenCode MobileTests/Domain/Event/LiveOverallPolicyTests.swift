@@ -13,37 +13,49 @@ struct LiveOverallPolicyTests {
         )
         #expect(decision.connectionState == .connected)
         #expect(decision.publishReconnect == false)
-        #expect(decision.openGap == nil)
         #expect(decision.flags.wasFullyConnected)
-        #expect(decision.flags.occupyingConnected)
         #expect(decision.flags.lastAllLive)
     }
 
     @Test func allLiveAfterFullConnection_publishesReconnectOnce() {
-        let first = LiveOverallPolicy.decide(
-            flags: LiveOverallFlags(wasFullyConnected: true),
+        let dropped = LiveOverallPolicy.decide(
+            flags: LiveOverallFlags(
+                lastAllLive: true,
+                lastRequiredTargets: ["global/event"],
+                lastLiveTargets: ["global/event"],
+                wasFullyConnected: true
+            ),
+            input: LiveOverallInput(
+                required: ["global/event"],
+                live: [],
+                pathLost: false
+            )
+        )
+        #expect(dropped.connectionState == .reconnecting)
+        #expect(dropped.publishReconnect == false)
+        let recovered = LiveOverallPolicy.decide(
+            flags: dropped.flags,
             input: LiveOverallInput(
                 required: ["global/event"],
                 live: ["global/event"],
                 pathLost: false
             )
         )
-        #expect(first.publishReconnect)
-        #expect(first.flags.emittedReconnectForCurrentGap)
-        let second = LiveOverallPolicy.decide(
-            flags: first.flags,
+        #expect(recovered.publishReconnect)
+        let stillLive = LiveOverallPolicy.decide(
+            flags: recovered.flags,
             input: LiveOverallInput(
                 required: ["global/event"],
                 live: ["global/event"],
                 pathLost: false
             )
         )
-        #expect(second.publishReconnect == false)
+        #expect(stillLive.publishReconnect == false)
     }
 
-    @Test func coldResumeBarrier_publishesReconnectEvenIfNeverFullyConnected() {
+    @Test func occupancyResume_publishesReconnectWhenWasFullyConnected() {
         let decision = LiveOverallPolicy.decide(
-            flags: LiveOverallFlags(pendingResumeBarrier: true),
+            flags: LiveOverallFlags(wasFullyConnected: true),
             input: LiveOverallInput(
                 required: ["api/event"],
                 live: ["api/event"],
@@ -51,10 +63,10 @@ struct LiveOverallPolicyTests {
             )
         )
         #expect(decision.publishReconnect)
-        #expect(decision.flags.pendingResumeBarrier == false)
+        #expect(decision.connectionState == .connected)
     }
 
-    @Test func requiredGrowth_doesNotOpenGapOrReconnect() {
+    @Test func requiredGrowth_goesReconnectingThenReconnects() {
         let dropped = LiveOverallPolicy.decide(
             flags: LiveOverallFlags(
                 lastAllLive: true,
@@ -69,8 +81,6 @@ struct LiveOverallPolicyTests {
             )
         )
         #expect(dropped.connectionState == .reconnecting)
-        #expect(dropped.openGap == nil)
-        #expect(dropped.flags.suppressReconnectForRequiredGrowth)
         let recovered = LiveOverallPolicy.decide(
             flags: dropped.flags,
             input: LiveOverallInput(
@@ -80,11 +90,10 @@ struct LiveOverallPolicyTests {
             )
         )
         #expect(recovered.connectionState == .connected)
-        #expect(recovered.publishReconnect == false)
-        #expect(recovered.flags.suppressReconnectForRequiredGrowth == false)
+        #expect(recovered.publishReconnect)
     }
 
-    @Test func incumbentLeaseLost_opensLeaseLostGap() {
+    @Test func incumbentLeaseLost_isReconnectingWithoutReconnectEvent() {
         let decision = LiveOverallPolicy.decide(
             flags: LiveOverallFlags(
                 lastAllLive: true,
@@ -98,25 +107,8 @@ struct LiveOverallPolicyTests {
                 pathLost: false
             )
         )
-        #expect(decision.openGap == .leaseLost)
         #expect(decision.connectionState == .reconnecting)
         #expect(decision.publishReconnect == false)
-    }
-
-    @Test func incumbentLostWhilePathUnavailable_opensPathLostGap() {
-        let decision = LiveOverallPolicy.decide(
-            flags: LiveOverallFlags(
-                lastRequiredTargets: ["api/event"],
-                lastLiveTargets: ["api/event"],
-                wasFullyConnected: true
-            ),
-            input: LiveOverallInput(
-                required: ["api/event"],
-                live: [],
-                pathLost: true
-            )
-        )
-        #expect(decision.openGap == .pathLost)
     }
 
     @Test func notYetConnected_staysConnecting() {
@@ -129,7 +121,6 @@ struct LiveOverallPolicyTests {
             )
         )
         #expect(decision.connectionState == .connecting)
-        #expect(decision.openGap == nil)
         #expect(decision.publishReconnect == false)
     }
 }

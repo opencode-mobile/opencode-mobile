@@ -3,18 +3,10 @@ package dev.opencode.mobile.domain.live
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.event.ForegroundEventStream
-import dev.opencode.mobile.domain.event.GapAuthority
-import dev.opencode.mobile.domain.event.SilentWorldSignals
-import dev.opencode.mobile.domain.event.StoreRefreshReason
-import dev.opencode.mobile.domain.event.WorldSignals
-import dev.opencode.mobile.domain.event.asLiveConnection
-import dev.opencode.mobile.domain.event.canCatchUp
-import dev.opencode.mobile.domain.event.catchUpReason
-import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.SessionRepository
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import dev.opencode.mobile.domain.sync.ProjectionKey
+import dev.opencode.mobile.domain.sync.SyncCoordinator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.channelFlow
@@ -32,132 +24,65 @@ class DefaultQuestionLiveStore
         private val eventStream: ForegroundEventStream,
         private val liveStoreScope: LiveStoreScope,
         private val diagnosticLogger: DiagnosticLogger,
-        private val worldSignals: WorldSignals = SilentWorldSignals,
+        private val syncCoordinator: SyncCoordinator,
     ) : QuestionLiveStore {
         private val cache = LiveStoreFlowCache<List<QuestionRequest>>(liveStoreScope)
-        private val invalidationBus = StoreInvalidationBus()
 
         override fun observeQuestions(directory: String): Flow<List<QuestionRequest>> =
             cache.observe(directory) { sharingScope ->
                 channelFlow {
-                    val liveConnection = eventStream.asLiveConnection()
-                    val authority = GapAuthority()
-                    var reconnectRefresh: Job? = null
+                    val key = ProjectionKey.Questions(directory)
                     var lastEmitted: List<QuestionRequest>? = null
                     val gate = LiveStoreRefreshGate()
-
-                    suspend fun refresh(
-                        reason: String,
-                        force: Boolean,
-                    ) {
-                        val snapshot = liveConnection.snapshot.value
-                        if (!force && !canCatchUp(worldSignals.occupancy.value, snapshot)) {
-                            diagnosticLogger.info(
-                                DiagnosticLogArea.Question,
-                                "question skip reason=$reason",
-                            )
-                            return
-                        }
-                        val generation =
-                            if (force) {
-                                authority.captureBegin(snapshot)
-                            } else {
-                                authority.tryBegin(snapshot) ?: run {
-                                    diagnosticLogger.info(
-                                        DiagnosticLogArea.Question,
-                                        "question skip reason=$reason",
-                                    )
-                                    return
-                                }
-                            }
-                        var failure: Throwable? = null
-                        val outcome =
-                            gate.refresh(
-                                load = {
-                                    runCatching { sessionRepository.listPendingQuestions(directory) }
-                                        .onFailure { failure = it }
-                                        .getOrNull()
-                                },
-                                commit = { requests ->
-                                    diagnosticLogger.info(
-                                        DiagnosticLogArea.Question,
-                                        "question refresh reason=$reason count=${requests.size}",
-                                    )
-                                    if (requests == lastEmitted) {
+                    val registration =
+                        syncCoordinator.register(key) {
+                            var failure: Throwable? = null
+                            val outcome =
+                                gate.refresh(
+                                    load = {
+                                        runCatching { sessionRepository.listPendingQuestions(directory) }
+                                            .onFailure { failure = it }
+                                            .getOrNull()
+                                    },
+                                    commit = { requests ->
                                         diagnosticLogger.info(
                                             DiagnosticLogArea.Question,
-                                            "question emit skipped reason=$reason cause=unchanged",
+                                            "question refresh count=${requests.size}",
                                         )
-                                    } else {
-                                        lastEmitted = requests
-                                        send(requests)
-                                    }
-                                },
-                            )
-                        when (outcome) {
-                            LiveStoreRefreshOutcome.COMMITTED -> {
-                                authority.acknowledge(generation)
-                                if (authority.needsReconcile(liveConnection.snapshot.value)) {
-                                    refresh(StoreRefreshReason.STREAM_RECONNECTED, force = false)
-                                }
+                                        if (requests != lastEmitted) {
+                                            lastEmitted = requests
+                                            send(requests)
+                                        }
+                                    },
+                                )
+                            failure?.let {
+                                diagnosticLogger.warning(
+                                    DiagnosticLogArea.Question,
+                                    "question refresh failed",
+                                    it,
+                                )
                             }
-                            LiveStoreRefreshOutcome.FAILED,
-                            LiveStoreRefreshOutcome.DISCARDED,
-                            -> authority.fail(generation)
-                        }
-                        failure?.let {
-                            diagnosticLogger.warning(
-                                DiagnosticLogArea.Question,
-                                "question refresh failed reason=$reason",
-                                it,
-                            )
-                        }
-                    }
-                    refresh(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)
-                    launch {
-                        worldSignals.signals.collect { signal ->
-                            if (signal.marksStale()) {
-                                authority.invalidate(liveConnection.snapshot.value)
-                                return@collect
+                            if (outcome == LiveStoreRefreshOutcome.FAILED) {
+                                throw failure ?: IllegalStateException("question refresh failed")
                             }
-                            signal.catchUpReason()?.let { refresh(it, force = false) }
                         }
-                    }
-                    launch {
-                        liveConnection.snapshot.collect {
-                            refresh(StoreRefreshReason.STREAM_RECONNECTED, force = false)
-                        }
-                    }
-                    launch {
-                        invalidationBus.events
-                            .filter { it.key == null || it.key == directory }
-                            .collect {
-                                authority.invalidate(liveConnection.snapshot.value)
-                                refresh(it.reason, force = false)
-                            }
-                    }
+                    syncCoordinator.visible(key, true)
                     try {
+                        syncCoordinator.ensureFresh(key)
                         eventStream.events
                             .filter {
                                 it.type == "question.asked" ||
                                     it.type == "question.replied" ||
-                                    it.type == "question.rejected" ||
-                                    it.type == "stream.reconnected" ||
-                                    it.type == "server.connected"
-                            }.collect { event ->
-                                if (event.type == "stream.reconnected" || event.type == "server.connected") {
-                                    reconnectRefresh?.cancel()
-                                    reconnectRefresh =
-                                        launch {
-                                            delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
-                                            refresh(event.type, force = false)
-                                        }
-                                } else {
-                                    launch { refresh(event.type, force = true) }
+                                    it.type == "question.rejected"
+                            }.collect {
+                                launch {
+                                    syncCoordinator.invalidate(key)
+                                    syncCoordinator.ensureFresh(key)
                                 }
                             }
                     } finally {
-                        reconnectRefresh?.cancel()
+                        syncCoordinator.visible(key, false)
+                        syncCoordinator.unregister(registration)
                     }
                 }.shareIn(
                     sharingScope,
@@ -167,7 +92,12 @@ class DefaultQuestionLiveStore
             }
 
         override fun invalidate(directory: String?) {
-            invalidationBus.invalidate(directory, StoreRefreshReason.PULL_TO_REFRESH)
+            if (directory == null) return
+            val key = ProjectionKey.Questions(directory)
+            liveStoreScope.coroutineScope.launch {
+                syncCoordinator.invalidate(key)
+                syncCoordinator.ensureFresh(key)
+            }
         }
 
         override fun clearCache() {

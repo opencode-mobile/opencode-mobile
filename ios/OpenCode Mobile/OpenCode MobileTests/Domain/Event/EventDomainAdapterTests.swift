@@ -617,10 +617,16 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
     private let lock = NSLock()
     private var _connectionState: EventStreamConnectionState = .idle
     private var _snapshot = LiveConnectionSnapshot()
-    private var gapClock: UInt64 = 0
+    private var generationClock: UInt64 = 0
     private var wasConnected = false
     private var occupying = false
     private var explicitLeaseModeling = false
+
+    init(connected: Bool = true) {
+        if connected {
+            setConnectionState(.connected)
+        }
+    }
     var connectionState: EventStreamConnectionState {
         lock.lock()
         defer { lock.unlock() }
@@ -700,7 +706,7 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
             return
         }
         occupying = true
-        openGapLocked(.occupancyStart)
+        bumpGenerationLocked()
         wasConnected = false
         lock.unlock()
         setConnectionState(.connected)
@@ -711,7 +717,7 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
         occupying = false
         wasConnected = false
         _connectionState = .idle
-        openGapLocked(.stopped)
+        bumpGenerationLocked()
         applyLeaseOccupancyLocked(.idle)
         let stateConts = Array(connectionStateContinuations.values)
         let snapshotConts = Array(snapshotContinuations.values)
@@ -725,22 +731,31 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
         }
     }
 
-    func openGap(_ reason: LiveGapReason = .reconnect) {
+    func openGap(_ reason: String? = nil) {
         lock.lock()
-        openGapLocked(reason)
+        bumpGenerationLocked()
         _snapshot.connectionState = _connectionState
         let snapshotConts = Array(snapshotContinuations.values)
         let snapshot = _snapshot
+        let previous = _connectionState
         lock.unlock()
         for continuation in snapshotConts {
             continuation.yield(snapshot)
         }
+        if previous == .connected {
+            setConnectionState(.reconnecting)
+            Task.detached { [weak self] in
+                await Task.yield()
+                self?.setConnectionState(.connected)
+            }
+        }
+        _ = reason
     }
 
-    func openNewerThan(_ generation: UInt64, reason: LiveGapReason = .reconnect) {
+    func openNewerThan(_ generation: UInt64) {
         repeat {
-            openGap(reason)
-        } while (snapshot.gap?.generation ?? 0) <= generation
+            openGap()
+        } while snapshot.generation <= generation
     }
 
     /// Traces that emit `target.open` / `target.close` own live-target occupancy.
@@ -794,7 +809,7 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
         occupying = state != .idle && state != .disconnected
         _connectionState = state
         if dropFromConnected {
-            openGapLocked(.reconnect)
+            bumpGenerationLocked()
         }
         applyLeaseOccupancyLocked(state)
         if state == .connected {
@@ -881,9 +896,8 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
         }
     }
 
-    private func openGapLocked(_ reason: LiveGapReason) {
-        gapClock += 1
-        _snapshot.generation = gapClock
-        _snapshot.gap = LiveGapRevision(generation: gapClock, reason: reason)
+    private func bumpGenerationLocked() {
+        generationClock += 1
+        _snapshot.generation = generationClock
     }
 }

@@ -17,33 +17,16 @@ nonisolated struct LiveConnectionConfig: Equatable, Sendable {
     }
 }
 
-nonisolated enum LiveGapReason: Equatable, Sendable {
-    case occupancyStart
-    case reconnect
-    case configChanged
-    case stopped
-    case pathLost
-    case leaseLost
-    case parseFailed
-}
-
-nonisolated struct LiveGapRevision: Equatable, Sendable {
-    let generation: UInt64
-    let reason: LiveGapReason
-}
-
 nonisolated struct LiveConnectionSnapshot: Equatable, Sendable {
     var config: LiveConnectionConfig? = nil
     var generation: UInt64 = 0
     var connectionState: EventStreamConnectionState = .idle
-    var gap: LiveGapRevision? = nil
     var requiredTargets: [String] = []
     var liveTargets: [String] = []
 }
 
 /// Transport authority for foreground SSE. `ForegroundEventStream` stays the
-/// caller-facing occupancy seam; this snapshot/gap surface is what later
-/// phases query instead of inventing another clock.
+/// caller-facing occupancy seam; this snapshot is what later phases query.
 nonisolated protocol LiveConnection: ForegroundEventStream {
     var snapshot: LiveConnectionSnapshot { get }
     func snapshotUpdates() -> AsyncStream<LiveConnectionSnapshot>

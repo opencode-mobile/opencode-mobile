@@ -227,7 +227,7 @@ struct MessageSyncWindowTests {
             ]
         )
         let events = FakeForegroundEventStream()
-        events.setConnectionState(.disconnected)
+        events.setConnectionState(.connected)
         let sync = MessageSync(
             listMessages: { _, _ in [] },
             listMessagePage: { _, _, query in
@@ -235,7 +235,6 @@ struct MessageSyncWindowTests {
             },
             store: InMemoryMessageStore(),
             eventStream: events,
-            pollIntervalMs: 20,
             recoveryDelay: { _ in }
         )
         let collector = WindowMessageCollector()
@@ -245,7 +244,6 @@ struct MessageSyncWindowTests {
         _ = try await sync.loadOlderMessages(sessionID: "ses-1", directory: "/repo")
         #expect(pages.olderCursors == ["c-tail"])
 
-        _ = await waitUntil { pages.newestCount >= 2 }
         _ = try await sync.refreshMessages(sessionID: "ses-1", directory: "/repo")
         _ = try await sync.loadOlderMessages(sessionID: "ses-1", directory: "/repo")
         task.cancel()
@@ -322,12 +320,12 @@ struct MessageSyncWindowTests {
         #expect(sync.hasOlderMessages(sessionID: "ses-1", directory: "/repo"))
     }
 
-    @Test func pollUsesBoundedTailQuery() async {
+    @Test func observeUsesBoundedTailQuery() async {
         let pages = WindowPageRepository(pages: [
             MessageHistoryPage(messages: [windowMessage("m1", role: .user)], olderCursor: nil, hasOlder: false),
         ])
         let events = FakeForegroundEventStream()
-        events.setConnectionState(.disconnected)
+        events.setConnectionState(.connected)
         let sync = MessageSync(
             listMessages: { _, _ in [] },
             listMessagePage: { _, _, query in
@@ -335,14 +333,14 @@ struct MessageSyncWindowTests {
             },
             store: InMemoryMessageStore(),
             eventStream: events,
-            pollIntervalMs: 20,
             recoveryDelay: { _ in }
         )
         let collector = WindowMessageCollector()
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         _ = await waitUntil { collector.latest() != nil }
-        _ = await waitUntil { pages.queries.filter { $0 == .newest(limit: 20) }.count >= 2 }
+        try? await Task.sleep(for: .milliseconds(40))
         task.cancel()
+        #expect(pages.queries == [.newest(limit: 20)])
         #expect(pages.queries.allSatisfy { query in
             if case .newest(let limit) = query { return limit == 20 }
             return true

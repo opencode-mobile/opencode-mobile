@@ -46,6 +46,11 @@ enum SseFaultOracleDriver {
             protocol: serverProtocol,
             directories: directories.value
         )
+        let coordinator = DefaultSyncCoordinator(
+            connection: stream,
+            worldSignals: world,
+            eventStream: stream
+        )
         let sync = MessageSync(
             listMessages: { _, _ in
                 restInFlight.mutate { $0 += 1 }
@@ -63,7 +68,8 @@ enum SseFaultOracleDriver {
             pollIntervalMs: 60_000,
             connectionProfileIDProvider: { profileID.value },
             recoveryDelay: { _ in await clock.wait(ms: 25) },
-            nowMs: { clock.current }
+            nowMs: { clock.current },
+            syncCoordinator: coordinator
         )
 
         applyConnectionState(stream, trace.seed.connectionState)
@@ -86,6 +92,7 @@ enum SseFaultOracleDriver {
             case "observe":
                 let observedSession = sessionID.value
                 let observedDirectory = directory.value
+                coordinator.markFocused(.transcript(directory: observedDirectory, sessionID: observedSession))
                 observeTasks.append(Task {
                     for await update in sync.observeMessages(sessionID: observedSession, directory: observedDirectory) {
                         if case .messages(let next, _) = update {
@@ -100,6 +107,7 @@ enum SseFaultOracleDriver {
                 })
                 _ = await waitUntil(timeoutMs: 1_000) { !transcript.value.isEmpty || !sync.recordedRestAttempts().isEmpty }
             case "unobserve":
+                coordinator.markFocused(nil)
                 observeTasks.forEach { $0.cancel() }
                 observeTasks.removeAll()
             case "world.foreground":
@@ -115,6 +123,9 @@ enum SseFaultOracleDriver {
             case "world.profileSwitched":
                 emitWorld(world, .profileSwitched)
             case "stream.start":
+                if let fake = world as? FakeWorldSignals {
+                    fake.setOccupancy(.active)
+                }
                 stream.start()
             case "stream.stop":
                 stream.stop()
@@ -122,7 +133,10 @@ enum SseFaultOracleDriver {
                 let state = try unwrap(step.state, "connectionState step needs state")
                 applyConnectionState(stream, state)
             case "epoch.bump", "openGap":
-                stream.fake.openGap(gapReason(step.state))
+                coordinator.invalidate(nil)
+                Task {
+                    await coordinator.bootstrap(.manual)
+                }
             case "cache.clear":
                 sync.clearCache()
             case "protocol.set":
@@ -343,16 +357,6 @@ enum SseFaultOracleDriver {
             properties = nil
         }
         return OpencodeEvent(type: event.type, sessionID: sessionID, rawProperties: properties)
-    }
-
-    static func gapReason(_ state: String?) -> LiveGapReason {
-        switch state {
-        case "parseFailed": .parseFailed
-        case "leaseLost": .leaseLost
-        case "pathLost": .pathLost
-        case "configChanged": .configChanged
-        default: .reconnect
-        }
     }
 
     private static func unwrap<T>(_ value: T?, _ message: String) throws -> T {

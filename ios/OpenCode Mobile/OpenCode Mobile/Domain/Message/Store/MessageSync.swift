@@ -11,13 +11,12 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private let eventStream: any ForegroundEventStream
     private var liveConnection: any LiveConnection { eventStream.asLiveConnection() }
     private let worldSignals: any WorldSignals
-    private let pollIntervalMs: Int
     private let eventStagingCapacity: Int
     private let eventStagingByteCapacity: Int
     private let connectionProfileIDProvider: @Sendable () -> String
-    private let recoveryDelay: @Sendable (Int) async -> Void
     private let nowMs: @Sendable () -> Int64
     private let sessionCache: any SessionCache
+    private let syncCoordinator: any SyncCoordinator
     private let lock = NSLock()
 
     private var observationCache: [MessageSessionKey: SharedLiveObservation<MessageListUpdate>] = [:]
@@ -37,8 +36,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private var lastMessageEventAtMs: [String: Int64] = [:]
     private var lastPublishedProfileID: String?
     private var restAttempts: [String] = []
-    private var authorities: [MessageSessionKey: GapAuthority] = [:]
-    private let invalidationBus = StoreInvalidationBus()
+    private var lastLoadErrorBySlot: [String: Error] = [:]
     private var olderCursorBySlot: [String: String] = [:]
     private var hasOlderBySlot: [String: Bool] = [:]
     private var olderLoadInFlight: Set<String> = []
@@ -49,17 +47,18 @@ nonisolated final class MessageSync: @unchecked Sendable {
         store: SessionMessageEngine,
         eventStream: any ForegroundEventStream,
         worldSignals: any WorldSignals = SilentWorldSignals.shared,
-        pollIntervalMs: Int = LiveStoreRefreshPolicy.workingPollIntervalMs,
+        pollIntervalMs _: Int = LiveStoreRefreshPolicy.workingPollIntervalMs,
         eventStagingCapacity: Int = messageEventStagingCapacity,
         eventStagingByteCapacity: Int = messageEventStagingByteCapacity,
         connectionProfileIDProvider: @escaping @Sendable () -> String = { "local" },
-        recoveryDelay: @escaping @Sendable (Int) async -> Void = { ms in
+        recoveryDelay _: @escaping @Sendable (Int) async -> Void = { ms in
             try? await Task.sleep(for: .milliseconds(ms))
         },
         nowMs: @escaping @Sendable () -> Int64 = {
             Int64(Date().timeIntervalSince1970 * 1000)
         },
-        sessionCache: any SessionCache = NoOpSessionCache.shared
+        sessionCache: any SessionCache = NoOpSessionCache.shared,
+        syncCoordinator: (any SyncCoordinator)? = nil
     ) {
         self.listMessages = listMessages
         self.listMessagePage = listMessagePage ?? { sessionID, directory, query in
@@ -73,13 +72,16 @@ nonisolated final class MessageSync: @unchecked Sendable {
         self.store = store
         self.eventStream = eventStream
         self.worldSignals = worldSignals
-        self.pollIntervalMs = pollIntervalMs
         self.eventStagingCapacity = eventStagingCapacity
         self.eventStagingByteCapacity = eventStagingByteCapacity
         self.connectionProfileIDProvider = connectionProfileIDProvider
-        self.recoveryDelay = recoveryDelay
         self.nowMs = nowMs
         self.sessionCache = sessionCache
+        self.syncCoordinator = syncCoordinator ?? DefaultSyncCoordinator(
+            connection: eventStream.asLiveConnection(),
+            worldSignals: worldSignals,
+            eventStream: eventStream
+        )
     }
 
     /// Convenience for call sites that still construct an in-memory store.
@@ -99,7 +101,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
         nowMs: @escaping @Sendable () -> Int64 = {
             Int64(Date().timeIntervalSince1970 * 1000)
         },
-        sessionCache: any SessionCache = NoOpSessionCache.shared
+        sessionCache: any SessionCache = NoOpSessionCache.shared,
+        syncCoordinator: (any SyncCoordinator)? = nil
     ) {
         self.init(
             listMessages: listMessages,
@@ -113,7 +116,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
             connectionProfileIDProvider: connectionProfileIDProvider,
             recoveryDelay: recoveryDelay,
             nowMs: nowMs,
-            sessionCache: sessionCache
+            sessionCache: sessionCache,
+            syncCoordinator: syncCoordinator
         )
     }
 
@@ -141,39 +145,30 @@ nonisolated final class MessageSync: @unchecked Sendable {
         reason: String = StoreRefreshReason.pullToRefresh
     ) async throws -> [Message] {
         let key = sessionKey(sessionID: sessionID, directory: directory)
-        let authority = gapAuthority(for: key)
-        authority.invalidate(liveConnection.snapshot)
-        var begun = authority.captureBegin(liveConnection.snapshot)
-        while true {
+        let projection = transcriptKey(key)
+        lock.lock()
+        let observing = observationCache[key] != nil
+        lock.unlock()
+        if observing {
+            syncCoordinator.invalidate(projection)
+            await syncCoordinator.ensureFresh(projection)
+            lock.lock()
+            let error = lastLoadErrorBySlot[key.storeSlot]
+            lock.unlock()
+            if let error { throw error }
+        } else {
             switch await fullReloadResult(key: key, reason: reason) {
-            case .accepted(let messages):
-                let newerUnpaid = acknowledgeExactGeneration(
-                    authority,
-                    begun: begun,
-                    snapshot: liveConnection.snapshot
-                )
-                if !newerUnpaid {
-                    setHealth(.healthy, for: key)
-                    await backfillSplitTurnIfNeeded(key: key, publishMessages: { _ in })
-                    return store.messages(sessionID: key.storeSlot)
-                }
-                guard let next = authority.tryBegin(liveConnection.snapshot) else {
-                    return messages
-                }
-                begun = next
-            case .discarded(let messages):
-                authority.fail(begun)
-                return messages
+            case .accepted, .discarded:
+                await backfillSplitTurnIfNeeded(key: key, publishMessages: { _ in })
             case .failure(let error):
-                authority.fail(begun)
-                if worldSignals.occupancy != .active, publishedFrame(for: key.storeSlot) != nil {
-                    setHealth(.stale(.transportUnavailable), for: key)
-                } else {
-                    setHealth(.recovering(.reloadFailed), for: key)
-                }
                 throw error
             }
         }
+        if worldSignals.occupancy != .active, publishedFrame(for: key.storeSlot) != nil,
+           !canCatchUp(occupancy: worldSignals.occupancy, snapshot: liveConnection.snapshot) {
+            setHealth(.stale(.transportUnavailable), for: key)
+        }
+        return store.messages(sessionID: key.storeSlot)
     }
 
     /// Production REST attempt reasons, recorded before the fetch succeeds or throws.
@@ -188,10 +183,9 @@ nonisolated final class MessageSync: @unchecked Sendable {
         directory: String?,
         reason: String = StoreRefreshReason.pullToRefresh
     ) {
-        invalidationBus.invalidate(
-            key: sessionKey(sessionID: sessionID, directory: directory).storeSlot,
-            reason: reason
-        )
+        let key = sessionKey(sessionID: sessionID, directory: directory)
+        _ = reason
+        syncCoordinator.invalidate(transcriptKey(key))
     }
 
     func clearCache() {
@@ -207,13 +201,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
         catchUpSlots.removeAll()
         awaitingCacheSyncConfirm.removeAll()
         lastPublishedProfileID = nil
-        authorities.removeAll()
         olderCursorBySlot.removeAll()
         hasOlderBySlot.removeAll()
         olderLoadInFlight.removeAll()
         lock.unlock()
         stale.forEach { $0.finish() }
         store.clear()
+        syncCoordinator.invalidate(nil)
         publishCatchUpChrome()
     }
 
@@ -402,6 +396,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
         )
     }
 
+    private func transcriptKey(_ key: MessageSessionKey) -> ProjectionKey {
+        .transcript(directory: key.directory, sessionID: key.sessionID)
+    }
+
     private func nextObservationGeneration() -> Int {
         lock.lock()
         defer { lock.unlock() }
@@ -440,88 +438,33 @@ nonisolated final class MessageSync: @unchecked Sendable {
         lock.unlock()
     }
 
-    private func isStreamingStalled(storeSlot: String) -> Bool {
-        lock.lock()
-        let last = lastMessageEventAtMs[storeSlot]
-        lock.unlock()
-        guard let last else { return true }
-        return nowMs() - last >= Int64(pollIntervalMs)
-    }
-
     private func runMessageLoop(
         key: MessageSessionKey,
-        yield: @escaping (MessageListUpdate) -> Void
+        yield: @escaping @Sendable (MessageListUpdate) -> Void
     ) async {
         let startedGeneration = nextObservationGeneration()
         registerObservation(key: key, generation: startedGeneration)
         noteMessageActivity(for: key.storeSlot)
-        // Register before the initial REST request. Bounded staging closes the
-        // part-shell/delta loss window without an unbounded observation buffer.
         let staging = MessageEventStaging(
             capacity: eventStagingCapacity,
             byteCapacity: eventStagingByteCapacity
         )
         let cacheHandle = openMessageCacheHandle(for: key)
-        let gapState = ObservationGapState(
-            liveConnection: liveConnection,
-            authority: gapAuthority(for: key)
-        )
-        let authority = gapState.authority
-        let liveConnection = liveConnection
+        let projection = transcriptKey(key)
         defer { clearCatchUp(for: key, startedGeneration: startedGeneration) }
+
         func confirmCacheSyncIfAwaiting() {
             guard isAwaitingCacheSyncConfirm(for: key.storeSlot) else { return }
             setAwaitingCacheSyncConfirm(false, for: key.storeSlot)
             yield(.cacheSyncConfirmed)
         }
-        func wakeGapEvaluation(reason: String) {
-            staging.requestEvaluate(reason: reason)
-        }
-        // Subscribe before seed/REST so events that arrive during those awaits
-        // are buffered. Lazy AsyncStream builders only register on first
-        // `for await`, which can lose the producer race against fetchMessages.
+
         let liveEvents = eventStream.events()
         let producer = Task {
             for await event in liveEvents {
                 staging.enqueue(event, sessionID: key.sessionID)
             }
             staging.finish()
-        }
-        var snapshotWatcher: Task<Void, Never>?
-        let worldWatcher = Task { [worldSignals, weak self] in
-            guard let self else { return }
-            for await signal in worldSignals.signals() {
-                if signal.marksStale {
-                    authority.invalidate(liveConnection.snapshot)
-                    guard self.publishedFrame(for: key.storeSlot) != nil else { continue }
-                    let current = self.syncHealth(
-                        sessionID: key.sessionID,
-                        directory: key.directory.isEmpty ? nil : key.directory
-                    )
-                    guard current.isHealthy else { continue }
-                    staging.enterStale(.transportUnavailable)
-                    self.setHealth(.stale(.transportUnavailable), for: key)
-                } else if let reason = signal.catchUpReason {
-                    wakeGapEvaluation(reason: reason)
-                }
-            }
-        }
-        let invalidationWatcher = Task { [invalidationBus] in
-            for await invalidation in invalidationBus.events() {
-                if let slot = invalidation.key, slot != key.storeSlot { continue }
-                authority.invalidate(liveConnection.snapshot)
-                wakeGapEvaluation(reason: invalidation.reason)
-            }
-        }
-        defer {
-            producer.cancel()
-            snapshotWatcher?.cancel()
-            worldWatcher.cancel()
-            invalidationWatcher.cancel()
-            staging.finish()
-            if observationStillCurrent(key: key, startedGeneration: startedGeneration) {
-                closeMessageCacheHandle(for: key)
-            }
         }
 
         let publishMessages: @Sendable ([Message], Bool) -> Void = { [weak self] messages, isFromCache in
@@ -534,6 +477,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             )
             if isFromCache {
                 self.setAwaitingCacheSyncConfirm(true, for: key.storeSlot)
+                self.setHealth(.recovering(.reconnect), for: key)
             } else {
                 self.setAwaitingCacheSyncConfirm(false, for: key.storeSlot)
                 cacheHandle.note(messages: messages)
@@ -542,14 +486,123 @@ nonisolated final class MessageSync: @unchecked Sendable {
             self.lastPublishedProfileID = key.connectionProfileID
             self.lock.unlock()
             yield(.messages(messages, isFromCache: isFromCache))
-            // Fingerprint remains the poll / REST authority comparison only.
             self.setFingerprint(self.messageFingerprint(messages), for: key.storeSlot)
             MessagePipelineProbe.emit(.displayFramePublished)
         }
 
-        snapshotWatcher = Task { [liveConnection] in
-            for await _ in liveConnection.snapshotUpdates() {
-                wakeGapEvaluation(reason: StoreRefreshReason.connectionSnapshot)
+        @Sendable func loadTail() async throws {
+            staging.beginAuthorityWindow()
+            do {
+                let fingerprintBeforeReload = fingerprint(for: key.storeSlot)
+                let expectedRevision = store.revision(sessionID: key.storeSlot)
+                let started = Date()
+                SessionPerformanceProbe.emit("history_request_started")
+                let page = try await fetchTailPage(
+                    sessionID: key.sessionID,
+                    directory: key.directory.isEmpty ? nil : key.directory,
+                    reason: StoreRefreshReason.initialSubscribe
+                )
+                rememberTailWindow(page, for: key.storeSlot)
+                SessionPerformanceProbe.emit("history_request_finished")
+                await applyQueuedIncrementalEvents(
+                    staging.takeQueuedIncrementalEvents(),
+                    key: key,
+                    publishMessages: { publishMessages($0, false) }
+                )
+                let overflowed = staging.needsAuthoritativeRecovery
+                if overflowed {
+                    OpenCodeLog.messageContent.info(
+                        "eventStagingRejectStaleAuthority session=\(key.sessionID) highWater=\(staging.highWater)"
+                    )
+                    for _ in 0..<8 {
+                        if applyTailMessages(
+                            sessionID: key.storeSlot,
+                            tail: page.messages,
+                            expectedRevision: store.revision(sessionID: key.storeSlot),
+                            mergeExisting: false
+                        ) {
+                            break
+                        }
+                    }
+                } else {
+                    _ = store.revision(sessionID: key.storeSlot) == expectedRevision &&
+                        applyTailMessages(
+                            sessionID: key.storeSlot,
+                            tail: page.messages,
+                            expectedRevision: expectedRevision,
+                            mergeExisting: fingerprintBeforeReload != nil
+                        )
+                }
+                let merged = store.messages(sessionID: key.storeSlot)
+                let nextFingerprint = messageFingerprint(merged)
+                setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
+                setFingerprint(nextFingerprint, for: key.storeSlot)
+                DiagnosticLog.info(
+                    .chat,
+                    "fullReload session=\(key.sessionID) reason=\(StoreRefreshReason.initialSubscribe) count=\(merged.count) ms=\(elapsedMs(since: started))"
+                )
+                if fingerprintBeforeReload != nextFingerprint {
+                    publishMessages(merged, false)
+                } else {
+                    cacheHandle.note(messages: merged)
+                    setAwaitingCacheSyncConfirm(false, for: key.storeSlot)
+                    yield(.cacheSyncConfirmed)
+                    setHealth(.healthy, for: key)
+                }
+                await backfillSplitTurnIfNeeded(key: key, publishMessages: { publishMessages($0, false) })
+                _ = staging.completeAuthorityWindow(.accepted)
+                lock.lock()
+                lastLoadErrorBySlot.removeValue(forKey: key.storeSlot)
+                lock.unlock()
+            } catch {
+                _ = staging.completeAuthorityWindow(.failed)
+                lock.lock()
+                lastLoadErrorBySlot[key.storeSlot] = error
+                lock.unlock()
+                yield(.loadFailed(error))
+                throw error
+            }
+        }
+
+        let registration = syncCoordinator.register(key: projection, loader: loadTail)
+        syncCoordinator.visible(projection, true)
+        syncCoordinator.invalidate(projection)
+        let chromeTask = Task { [weak self] in
+            guard let self else { return }
+            for await state in self.syncCoordinator.observe(projection) {
+                guard self.observationStillCurrent(key: key, startedGeneration: startedGeneration) else { return }
+                let catchingUp = canCatchUp(
+                    occupancy: self.worldSignals.occupancy,
+                    snapshot: self.liveConnection.snapshot
+                )
+                switch state {
+                case .fresh:
+                    if self.isAwaitingCacheSyncConfirm(for: key.storeSlot) {
+                        self.setHealth(.recovering(.reconnect), for: key)
+                    } else {
+                        self.setHealth(.healthy, for: key)
+                    }
+                case .syncing:
+                    self.setHealth(.recovering(.reconnect), for: key)
+                case .stale:
+                    if catchingUp {
+                        self.setHealth(.recovering(.reconnect), for: key)
+                    } else if self.publishedFrame(for: key.storeSlot) != nil {
+                        self.setHealth(.stale(.transportUnavailable), for: key)
+                    } else {
+                        self.setHealth(.recovering(.reconnect), for: key)
+                    }
+                }
+            }
+        }
+        defer {
+            producer.cancel()
+            chromeTask.cancel()
+            staging.finish()
+            syncCoordinator.visible(projection, false)
+            syncCoordinator.unregister(registration)
+            if observationStillCurrent(key: key, startedGeneration: startedGeneration) {
+                closeMessageCacheHandle(for: key)
             }
         }
 
@@ -564,133 +617,24 @@ nonisolated final class MessageSync: @unchecked Sendable {
             publishMessages(seededMerged, true)
         }
 
-        // Poll in parallel with the initial REST so a hung first request cannot
-        // leave Syncing stuck after the network returns (Android merge parity).
-        async let pollLoop: Void = runTimelinePollLoop(
-            key: key,
-            staging: staging,
-            publishMessages: { publishMessages($0, false) },
-            confirmCacheSync: {
-                self.setAwaitingCacheSyncConfirm(false, for: key.storeSlot)
-                yield(.cacheSyncConfirmed)
-            }
-        )
-
-        // Skip an identical REST republish after cache seed or warm replay so
-        // DisplayMessagePipeline does not cancel in-flight enrich / plain-first.
-        let fingerprintBeforeReload = fingerprint(for: key.storeSlot)
-        let expectedRevision = store.revision(sessionID: key.storeSlot)
-        let begun = authority.captureBegin(liveConnection.snapshot)
-        let initialStarted = Date()
-        do {
-            SessionPerformanceProbe.emit("history_request_started")
-            let page = try await fetchTailPage(
-                sessionID: key.sessionID,
-                directory: key.directory.isEmpty ? nil : key.directory,
-                reason: StoreRefreshReason.initialSubscribe
-            )
-            rememberTailWindow(page, for: key.storeSlot)
-            SessionPerformanceProbe.emit("history_request_finished")
-            await applyQueuedIncrementalEvents(
-                staging.takeQueuedIncrementalEvents(),
-                key: key,
-                publishMessages: { publishMessages($0, false) }
-            )
-            if staging.needsAuthoritativeRecovery {
-                authority.fail(begun)
-                OpenCodeLog.messageContent.info(
-                    "eventStagingRejectStaleAuthority session=\(key.sessionID) highWater=\(staging.highWater)"
-                )
-                await performClosedLoopRecovery(
-                    key: key,
-                    staging: staging,
-                    reason: .overflow,
-                    publishMessages: { publishMessages($0, false) },
-                    gapState: gapState
-                )
-            } else {
-                let applied =
-                    store.revision(sessionID: key.storeSlot) == expectedRevision &&
-                    applyTailMessages(
-                        sessionID: key.storeSlot,
-                        tail: page.messages,
-                        expectedRevision: expectedRevision,
-                        mergeExisting: false
-                    )
-                let merged = store.messages(sessionID: key.storeSlot)
-                let fingerprint = messageFingerprint(merged)
-                setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
-                setFingerprint(fingerprint, for: key.storeSlot)
-                if applied {
-                    authority.acknowledge(begun)
-                } else {
-                    authority.fail(begun)
+        await syncCoordinator.ensureFresh(projection)
+        if fingerprint(for: key.storeSlot) == nil, publishedFrame(for: key.storeSlot) == nil {
+            do {
+                try await loadTail()
+            } catch {
+                if !canCatchUp(occupancy: worldSignals.occupancy, snapshot: liveConnection.snapshot) {
+                    yield(.loadFailed(error))
                 }
-                DiagnosticLog.info(
-                    .chat,
-                    "fullReload session=\(key.sessionID) reason=\(StoreRefreshReason.initialSubscribe) count=\(merged.count) ms=\(elapsedMs(since: initialStarted))"
-                )
-                if fingerprintBeforeReload != fingerprint {
-                    publishMessages(merged, false)
-                } else {
-                    // Confirm disk without a second UI paint. Also clears the
-                    // Syncing indicator on warm in-memory reopens where no disk
-                    // seed ran this loop but REST agrees with the store.
-                    cacheHandle.note(messages: merged)
-                    setAwaitingCacheSyncConfirm(false, for: key.storeSlot)
-                    yield(.cacheSyncConfirmed)
-                }
-                await backfillSplitTurnIfNeeded(key: key, publishMessages: { publishMessages($0, false) })
-                if authority.needsReconcile(liveConnection.snapshot) || !applied {
-                    await reconcileGap(
-                        key: key,
-                        reason: StoreRefreshReason.streamReconnected,
-                        staging: staging,
-                        publishMessages: { publishMessages($0, false) },
-                        confirmCacheSync: confirmCacheSyncIfAwaiting,
-                        gapState: gapState
-                    )
-                } else {
-                    setHealth(.healthy, for: key)
-                }
-            }
-        } catch {
-            authority.fail(begun)
-            SessionPerformanceProbe.emit("history_request_finished")
-            if staging.needsAuthoritativeRecovery {
-                await performClosedLoopRecovery(
-                    key: key,
-                    staging: staging,
-                    reason: .overflow,
-                    publishMessages: { publishMessages($0, false) },
-                    gapState: gapState
-                )
-            } else if fingerprint(for: key.storeSlot) != nil {
-                setHealth(.recovering(.reloadFailed), for: key)
-                await performClosedLoopRecovery(
-                    key: key,
-                    staging: staging,
-                    reason: .reloadFailed,
-                    publishMessages: { publishMessages($0, false) },
-                    gapState: gapState
-                )
-            } else {
-                yield(.loadFailed(error))
-                DiagnosticLog.warning(
-                    .chat,
-                    "fullReload failed session=\(key.sessionID) reason=\(StoreRefreshReason.initialSubscribe) ms=\(elapsedMs(since: initialStarted))"
-                )
             }
         }
 
-        async let eventLoop: Void = runEventRefreshLoop(
+        await runEventRefreshLoop(
             key: key,
             staging: staging,
             publishMessages: { publishMessages($0, false) },
             confirmCacheSync: confirmCacheSyncIfAwaiting,
-            gapState: gapState
+            projection: projection
         )
-        _ = await (eventLoop, pollLoop)
     }
 
     private func openMessageCacheHandle(for key: MessageSessionKey) -> any SessionMessageCacheHandle {
@@ -709,128 +653,6 @@ nonisolated final class MessageSync: @unchecked Sendable {
         let handle = messageCacheHandles.removeValue(forKey: key)
         lock.unlock()
         handle?.close()
-    }
-
-    private func performClosedLoopRecovery(
-        key: MessageSessionKey,
-        staging: MessageEventStaging,
-        reason: MessageSyncRecoveryReason,
-        fetchReason: String = "overflow-recovery",
-        publishMessages: @escaping @Sendable ([Message]) -> Void,
-        confirmCacheSync: @escaping @Sendable () -> Void = {},
-        gapState: ObservationGapState
-    ) async {
-        guard observationStillCurrent(key: key) else {
-            gapState.authority.fail(gapState.recoveryGeneration)
-            return
-        }
-        if !staging.needsAuthoritativeRecovery {
-            staging.enterRecovering(reason)
-        }
-        setHealth(staging.currentHealth, for: key)
-        var backoffMs = MessageSyncRecoveryPolicy.initialBackoffMs
-
-        while !Task.isCancelled, observationStillCurrent(key: key) {
-            await applyQueuedIncrementalEvents(
-                staging.takeQueuedIncrementalEvents(),
-                key: key,
-                publishMessages: publishMessages
-            )
-            if reason != .overflow,
-               !canCatchUp(occupancy: worldSignals.occupancy, snapshot: gapState.liveConnection.snapshot) {
-                if publishedFrame(for: key.storeSlot) != nil {
-                    staging.enterStale(.transportUnavailable)
-                    setHealth(.stale(.transportUnavailable), for: key)
-                }
-                await recoveryDelay(backoffMs)
-                backoffMs = min(backoffMs * 2, MessageSyncRecoveryPolicy.maxBackoffMs)
-                continue
-            }
-            staging.beginAuthorityWindow()
-            let fingerprintBefore = fingerprint(for: key.storeSlot)
-            let result = await fullReloadResult(
-                key: key,
-                reason: fetchReason,
-                mergeExisting: true,
-                beforeCommit: {
-                    await self.applyQueuedIncrementalEvents(
-                        staging.takeQueuedIncrementalEvents(),
-                        key: key,
-                        publishMessages: publishMessages
-                    )
-                }
-            )
-            switch result {
-            case .accepted(let messages):
-                let becameHealthy = staging.completeAuthorityWindow(.accepted)
-                setHealth(staging.currentHealth, for: key)
-                let published = observationStillCurrent(key: key)
-                if published {
-                    if fingerprintBefore != messageFingerprint(messages) {
-                        publishMessages(messages)
-                    } else {
-                        confirmCacheSync()
-                    }
-                    await backfillSplitTurnIfNeeded(key: key, publishMessages: publishMessages)
-                }
-                let newerUnpaid = acknowledgeExactGeneration(
-                    gapState.authority,
-                    begun: gapState.recoveryGeneration,
-                    snapshot: gapState.liveConnection.snapshot
-                )
-                if !newerUnpaid {
-                    if !becameHealthy {
-                        setHealth(.healthy, for: key)
-                    }
-                    staging.clearRecoveringLatch()
-                    if published {
-                        OpenCodeLog.messageContent.info(
-                            "eventStagingRecovery session=\(key.sessionID) highWater=\(staging.highWater)"
-                        )
-                    }
-                    return
-                }
-                if let next = gapState.authority.tryBegin(gapState.liveConnection.snapshot) {
-                    gapState.recoveryGeneration = next
-                    continue
-                }
-            case .discarded:
-                _ = staging.completeAuthorityWindow(.discarded)
-                setHealth(staging.currentHealth, for: key)
-            case .failure(let error):
-                _ = staging.completeAuthorityWindow(.failed)
-                if reason != .overflow,
-                   !canCatchUp(
-                    occupancy: worldSignals.occupancy,
-                    snapshot: gapState.liveConnection.snapshot
-                   ),
-                   publishedFrame(for: key.storeSlot) != nil {
-                    staging.enterStale(.transportUnavailable)
-                    setHealth(.stale(.transportUnavailable), for: key)
-                } else {
-                    setHealth(staging.currentHealth, for: key)
-                }
-                if isMissingSessionError(error) {
-                    markTerminal(key: key)
-                    staging.clearRecoveringLatch()
-                    setHealth(.healthy, for: key)
-                    OpenCodeLog.messageContent.error(
-                        "fullReload missing session=\(key.sessionID) stopping recovery"
-                    )
-                    return
-                }
-                // Keep last published frame; do not emit LoadFailed.
-            }
-
-            MessagePipelineProbe.emit(.recoveryRetry)
-            await recoveryDelay(backoffMs)
-            if Task.isCancelled {
-                gapState.authority.fail(gapState.recoveryGeneration)
-                return
-            }
-            backoffMs = min(backoffMs * 2, MessageSyncRecoveryPolicy.maxBackoffMs)
-        }
-        gapState.authority.fail(gapState.recoveryGeneration)
     }
 
     private enum ReloadResult {
@@ -973,33 +795,6 @@ nonisolated final class MessageSync: @unchecked Sendable {
         )
     }
 
-    func gapAuthority(sessionID: String, directory: String?) -> GapAuthority {
-        gapAuthority(for: sessionKey(sessionID: sessionID, directory: directory))
-    }
-
-    /// Pays only the generation this REST began. A newer gap that opened
-    /// during the GET stays unpaid so `needsReconcile` can start a sequential
-    /// follow-up instead of pinning inFlight to the old revision.
-    private func acknowledgeExactGeneration(
-        _ authority: GapAuthority,
-        begun: UInt64,
-        snapshot: LiveConnectionSnapshot
-    ) -> Bool {
-        authority.acknowledge(begun)
-        return authority.needsReconcile(snapshot)
-    }
-
-    private func gapAuthority(for key: MessageSessionKey) -> GapAuthority {
-        lock.lock()
-        defer { lock.unlock() }
-        if let existing = authorities[key] {
-            return existing
-        }
-        let created = GapAuthority()
-        authorities[key] = created
-        return created
-    }
-
     private func fullReloadResult(
         key: MessageSessionKey,
         reason: String,
@@ -1046,12 +841,17 @@ nonisolated final class MessageSync: @unchecked Sendable {
         }
     }
 
+    private func resyncTranscript(_ key: MessageSessionKey) async {
+        let projection = transcriptKey(key)
+        syncCoordinator.invalidate(projection)
+        await syncCoordinator.ensureFresh(projection)
+    }
+
     private func fullReloadSilent(
         key: MessageSessionKey,
         reason: String,
         staging: MessageEventStaging?,
-        publishMessages: @escaping @Sendable ([Message]) -> Void,
-        gapState: ObservationGapState
+        publishMessages: @escaping @Sendable ([Message]) -> Void
     ) async {
         if let staging {
             staging.beginAuthorityWindow()
@@ -1059,112 +859,20 @@ nonisolated final class MessageSync: @unchecked Sendable {
         switch await fullReloadResult(key: key, reason: reason) {
         case .accepted(let messages):
             if let staging {
-                let healthy = staging.completeAuthorityWindow(.accepted)
-                setHealth(staging.currentHealth, for: key)
-                publishMessages(messages)
-                await backfillSplitTurnIfNeeded(key: key, publishMessages: publishMessages)
-                if !healthy {
-                    await performClosedLoopRecovery(
-                        key: key,
-                        staging: staging,
-                        reason: .racedAuthority,
-                        publishMessages: publishMessages,
-                        gapState: gapState
-                    )
-                }
-            } else {
-                publishMessages(messages)
-                await backfillSplitTurnIfNeeded(key: key, publishMessages: publishMessages)
-                setHealth(.healthy, for: key)
+                _ = staging.completeAuthorityWindow(.accepted)
             }
+            publishMessages(messages)
+            await backfillSplitTurnIfNeeded(key: key, publishMessages: publishMessages)
         case .discarded(let messages):
             if let staging {
                 _ = staging.completeAuthorityWindow(.discarded)
-                setHealth(staging.currentHealth, for: key)
-                publishMessages(messages)
-                await performClosedLoopRecovery(
-                    key: key,
-                    staging: staging,
-                    reason: .racedAuthority,
-                    publishMessages: publishMessages,
-                    gapState: gapState
-                )
             }
+            publishMessages(messages)
         case .failure:
             if let staging {
                 _ = staging.completeAuthorityWindow(.failed)
-                setHealth(staging.currentHealth, for: key)
-                await performClosedLoopRecovery(
-                    key: key,
-                    staging: staging,
-                    reason: .reloadFailed,
-                    publishMessages: publishMessages,
-                    gapState: gapState
-                )
             }
-            // else: retain last good; no LoadFailed
         }
-    }
-
-    private func reconcileGap(
-        key: MessageSessionKey,
-        reason: String,
-        staging: MessageEventStaging,
-        publishMessages: @escaping @Sendable ([Message]) -> Void,
-        confirmCacheSync: @escaping @Sendable () -> Void,
-        gapState: ObservationGapState
-    ) async {
-        guard observationStillCurrent(key: key) else { return }
-        guard gapState.shouldEvaluate(
-            lastAssistantNeedsAuthority: SessionTranscriptAuthority.lastAssistantNeedsAuthority(
-                store.messages(sessionID: key.storeSlot)
-            )
-        ) else {
-            if gapState.authority.isInFlight() {
-                return
-            }
-            if staging.needsAuthoritativeRecovery {
-                return
-            }
-            if case .recovering(.reconnect) = staging.currentHealth {
-                staging.clearCatchUpLatch()
-                setHealth(.healthy, for: key)
-            }
-            DiagnosticLog.info(.chat, "fullReload skip session=\(key.sessionID) reason=\(reason)")
-            confirmCacheSync()
-            return
-        }
-        let snapshot = gapState.liveConnection.snapshot
-        guard canCatchUp(occupancy: worldSignals.occupancy, snapshot: snapshot) else {
-            if !snapshot.isReachable {
-                guard publishedFrame(for: key.storeSlot) != nil else { return }
-                store.finishStreamingText(sessionID: key.storeSlot)
-                let current = syncHealth(
-                    sessionID: key.sessionID,
-                    directory: key.directory.isEmpty ? nil : key.directory
-                )
-                guard current.isHealthy else { return }
-                staging.enterStale(.transportUnavailable)
-                setHealth(.stale(.transportUnavailable), for: key)
-            }
-            return
-        }
-        guard gapState.begin(
-            lastAssistantNeedsAuthority: SessionTranscriptAuthority.lastAssistantNeedsAuthority(
-                store.messages(sessionID: key.storeSlot)
-            )
-        ) != nil else { return }
-        staging.enterRecovering(.reconnect, wakeConsumer: false)
-        setHealth(staging.currentHealth, for: key)
-        await performClosedLoopRecovery(
-            key: key,
-            staging: staging,
-            reason: .reconnect,
-            fetchReason: reason,
-            publishMessages: publishMessages,
-            confirmCacheSync: confirmCacheSync,
-            gapState: gapState
-        )
     }
 
     private func runEventRefreshLoop(
@@ -1172,47 +880,19 @@ nonisolated final class MessageSync: @unchecked Sendable {
         staging: MessageEventStaging,
         publishMessages: @escaping @Sendable ([Message]) -> Void,
         confirmCacheSync: @escaping @Sendable () -> Void,
-        gapState: ObservationGapState
+        projection: ProjectionKey
     ) async {
         while let item = await staging.dequeue() {
             guard observationStillCurrent(key: key) else { return }
             switch item {
             case .overflow, .recoveryRequired:
-                await performClosedLoopRecovery(
-                    key: key,
-                    staging: staging,
-                    reason: {
-                        if case .recovering(let reason) = staging.currentHealth { return reason }
-                        return .overflow
-                    }(),
-                    publishMessages: publishMessages,
-                    confirmCacheSync: confirmCacheSync,
-                    gapState: gapState
-                )
+                await resyncTranscript(key)
                 continue
-            case .evaluate(let reason):
-                await reconcileGap(
-                    key: key,
-                    reason: reason,
-                    staging: staging,
-                    publishMessages: publishMessages,
-                    confirmCacheSync: confirmCacheSync,
-                    gapState: gapState
-                )
+            case .evaluate:
                 continue
             case .event(let event, _):
                 if staging.needsAuthoritativeRecovery {
-                    await performClosedLoopRecovery(
-                        key: key,
-                        staging: staging,
-                        reason: {
-                            if case .recovering(let reason) = staging.currentHealth { return reason }
-                            return .overflow
-                        }(),
-                        publishMessages: publishMessages,
-                        confirmCacheSync: confirmCacheSync,
-                        gapState: gapState
-                    )
+                    await resyncTranscript(key)
                     continue
                 }
                 MessagePipelineProbe.emit(.eventAccepted)
@@ -1221,11 +901,12 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     key: key,
                     staging: staging,
                     publishMessages: publishMessages,
-                    confirmCacheSync: confirmCacheSync,
-                    gapState: gapState
+                    confirmCacheSync: confirmCacheSync
                 )
             }
         }
+        _ = projection
+        _ = confirmCacheSync
     }
 
     private func handleStagedEvent(
@@ -1233,49 +914,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
         key: MessageSessionKey,
         staging: MessageEventStaging,
         publishMessages: @escaping @Sendable ([Message]) -> Void,
-        confirmCacheSync: @escaping @Sendable () -> Void,
-        gapState: ObservationGapState
+        confirmCacheSync: @escaping @Sendable () -> Void
     ) async {
-        if event.type == "sse.parse.failed" {
-            guard publishedFrame(for: key.storeSlot) != nil else { return }
-            if staging.needsAuthoritativeRecovery {
-                staging.noteRelevantEventWhileRecovering()
-                return
-            }
-            gapState.authority.invalidate(gapState.liveConnection.snapshot)
-            await reconcileGap(
-                key: key,
-                reason: StoreRefreshReason.streamReconnected,
-                staging: staging,
-                publishMessages: publishMessages,
-                confirmCacheSync: confirmCacheSync,
-                gapState: gapState
-            )
+        switch event.type {
+        case "sse.parse.failed", "stream.reconnected", "server.connected":
             return
-        }
-
-        if event.type == "stream.reconnected" {
-            await reconcileGap(
-                key: key,
-                reason: StoreRefreshReason.streamReconnected,
-                staging: staging,
-                publishMessages: publishMessages,
-                confirmCacheSync: confirmCacheSync,
-                gapState: gapState
-            )
-            return
-        }
-
-        if event.type == "server.connected" {
-            await reconcileGap(
-                key: key,
-                reason: StoreRefreshReason.serverConnected,
-                staging: staging,
-                publishMessages: publishMessages,
-                confirmCacheSync: confirmCacheSync,
-                gapState: gapState
-            )
-            return
+        default:
+            break
         }
 
         guard event.sessionID == key.sessionID else { return }
@@ -1297,8 +942,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     key: key,
                     reason: "message.part.updated-rest-seeded",
                     staging: staging,
-                    publishMessages: publishMessages,
-                    gapState: gapState
+                    publishMessages: publishMessages
                 )
                 return
             }
@@ -1313,15 +957,12 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     key: key,
                     reason: "message.part.removed-rest-seeded",
                     staging: staging,
-                    publishMessages: publishMessages,
-                    gapState: gapState
+                    publishMessages: publishMessages
                 )
                 return
             }
             handleMessagePartRemoved(event: event, key: key, publishMessages: publishMessages)
         case "session.idle":
-            // TUI v2 only flips footer idle on execution.* — it does not
-            // REST-reload the transcript. Finalize local streaming parts.
             store.finishStreamingText(sessionID: key.storeSlot)
             let recovered = store.messages(sessionID: key.storeSlot)
             if markChanged(key: key, messages: recovered) {
@@ -1331,15 +972,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 setHealth(.healthy, for: key)
                 return
             }
-            gapState.invalidateIfCurrentObligationPaid()
-            await reconcileGap(
-                key: key,
-                reason: "session.idle",
-                staging: staging,
-                publishMessages: publishMessages,
-                confirmCacheSync: confirmCacheSync,
-                gapState: gapState
-            )
+            await resyncTranscript(key)
+            confirmCacheSync()
         default:
             return
         }
@@ -1478,79 +1112,6 @@ nonisolated final class MessageSync: @unchecked Sendable {
         publishMessages(frame)
     }
 
-    private func runTimelinePollLoop(
-        key: MessageSessionKey,
-        staging: MessageEventStaging,
-        publishMessages: @escaping @Sendable ([Message]) -> Void,
-        confirmCacheSync: @escaping @Sendable () -> Void
-    ) async {
-        while !Task.isCancelled {
-            try? await Task.sleep(for: .milliseconds(pollIntervalMs))
-            guard !Task.isCancelled else { return }
-            guard observationStillCurrent(key: key) else { return }
-            if staging.needsAuthoritativeRecovery { continue }
-            // Polling REST mid-stream publishes a behind snapshot and looks like the
-            // assistant message clearing then reprinting from the start.
-            let streaming = store.hasStreamingText(sessionID: key.storeSlot)
-            let stalled = streaming && isStreamingStalled(storeSlot: key.storeSlot)
-            if streaming && !stalled { continue }
-            // Hung initial REST must not leave Syncing on a painted cache while SSE
-            // is already live. Confirm without another GET — poll GET also hangs
-            // on the same dead URLSession.
-            if worldSignals.occupancy != .active { continue }
-            if isAwaitingCacheSyncConfirm(for: key.storeSlot),
-               fingerprint(for: key.storeSlot) != nil,
-               eventStream.connectionState == .connected {
-                confirmCacheSync()
-            }
-            // TUI does not poll GET …/message while the event iterator is live.
-            // Keep the watchdog for transport drop and stalled streaming only.
-            if eventStream.connectionState == .connected && !stalled { continue }
-            let expectedRevision = store.revision(sessionID: key.storeSlot)
-            let directory = key.directory.isEmpty ? nil : key.directory
-            do {
-                let page = try await fetchTailPage(
-                    sessionID: key.sessionID,
-                    directory: directory,
-                    reason: "poll"
-                )
-                rememberTailWindow(page, for: key.storeSlot)
-                let local = store.messages(sessionID: key.storeSlot)
-                if streaming {
-                    guard MessageHistoryMerge.shouldAcceptTail(remote: page.messages, local: local) else {
-                        continue
-                    }
-                    DiagnosticLog.info(.chat, "streaming stall catch-up session=\(key.sessionID)")
-                }
-                let merged = MessageHistoryMerge.applyTail(local: local, tail: page.messages)
-                let fp = messageFingerprint(merged)
-                if fp != fingerprint(for: key.storeSlot) {
-                    guard applyTailMessages(
-                        sessionID: key.storeSlot,
-                        tail: page.messages,
-                        expectedRevision: expectedRevision,
-                        mergeExisting: false
-                    ) else { continue }
-                    let applied = store.messages(sessionID: key.storeSlot)
-                    noteMessageActivity(for: key.storeSlot)
-                    publishMessages(applied)
-                    continue
-                }
-                guard isAwaitingCacheSyncConfirm(for: key.storeSlot) else { continue }
-                // Initial REST may still be hung after reconnect; poll already
-                // agrees with the cache — clear Syncing without a second paint.
-                openMessageCacheHandle(for: key).note(messages: merged)
-                confirmCacheSync()
-            } catch {
-                if isMissingSessionError(error) {
-                    markTerminal(key: key)
-                    return
-                }
-                continue
-            }
-        }
-    }
-
     private func messageFingerprint(_ messages: [Message]) -> String {
         messages.map { message in
             let parts = message.parts.map(partFingerprint).joined(separator: ",")
@@ -1588,47 +1149,5 @@ nonisolated final class MessageSync: @unchecked Sendable {
 
     private func elapsedMs(since start: Date) -> Int {
         Int((Date().timeIntervalSince(start) * 1000).rounded())
-    }
-}
-private nonisolated final class ObservationGapState: @unchecked Sendable {
-    let authority: GapAuthority
-    let liveConnection: any LiveConnection
-    private let lock = NSLock()
-    private var _recoveryGeneration: UInt64 = 0
-
-    init(liveConnection: any LiveConnection, authority: GapAuthority) {
-        self.liveConnection = liveConnection
-        self.authority = authority
-    }
-
-    var recoveryGeneration: UInt64 {
-        get {
-            lock.lock()
-            defer { lock.unlock() }
-            return _recoveryGeneration
-        }
-        set {
-            lock.lock()
-            _recoveryGeneration = newValue
-            lock.unlock()
-        }
-    }
-
-    func shouldEvaluate(lastAssistantNeedsAuthority _: Bool) -> Bool {
-        authority.needsReconcile(liveConnection.snapshot)
-    }
-
-    func begin(lastAssistantNeedsAuthority _: Bool) -> UInt64? {
-        guard liveConnection.snapshot.isReachable else { return nil }
-        guard let generation = authority.tryBegin(liveConnection.snapshot) else { return nil }
-        recoveryGeneration = generation
-        return generation
-    }
-
-    func invalidateIfCurrentObligationPaid() {
-        let snapshot = liveConnection.snapshot
-        if authority.obligation(snapshot) <= authority.acknowledgedGeneration() {
-            authority.invalidate(snapshot)
-        }
     }
 }

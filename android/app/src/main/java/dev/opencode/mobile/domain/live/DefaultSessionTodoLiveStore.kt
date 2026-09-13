@@ -1,20 +1,14 @@
 package dev.opencode.mobile.domain.live
 
 import dev.opencode.mobile.domain.event.ForegroundEventStream
-import dev.opencode.mobile.domain.event.GapAuthority
-import dev.opencode.mobile.domain.event.SilentWorldSignals
-import dev.opencode.mobile.domain.event.StoreRefreshReason
-import dev.opencode.mobile.domain.event.WorldSignals
-import dev.opencode.mobile.domain.event.asLiveConnection
-import dev.opencode.mobile.domain.event.canCatchUp
-import dev.opencode.mobile.domain.event.catchUpReason
-import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
+import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionTodo
+import dev.opencode.mobile.domain.sync.ProjectionKey
+import dev.opencode.mobile.domain.sync.SyncCoordinator
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -32,7 +26,7 @@ class DefaultSessionTodoLiveStore
         private val sessionRepository: SessionRepository,
         private val eventStream: ForegroundEventStream,
         private val liveStoreScope: LiveStoreScope,
-        private val worldSignals: WorldSignals = SilentWorldSignals,
+        private val syncCoordinator: SyncCoordinator,
     ) : SessionTodoLiveStore {
         private val adapter = SessionDomainAdapter()
 
@@ -52,7 +46,7 @@ class DefaultSessionTodoLiveStore
                     onBufferOverflow = BufferOverflow.DROP_OLDEST,
                 ),
             var eventJob: Job? = null,
-            val authority: GapAuthority = GapAuthority(),
+            var registration: dev.opencode.mobile.domain.sync.SyncRegistration? = null,
         )
 
         private val sessions = ConcurrentHashMap<SessionKey, SessionState>()
@@ -63,20 +57,21 @@ class DefaultSessionTodoLiveStore
         ): Flow<List<SessionTodo>> {
             val key = SessionKey(sessionId, directory.orEmpty())
             val state = sessions.getOrPut(key) { SessionState() }
-            return state.updates
-                .onStart {
+            return state.updates.onStart {
                     state.observerCount += 1
                     ensureEventLoop(key, state)
                     emit(state.todos)
-                }
-                .onCompletion {
+                }.onCompletion {
                     state.observerCount = (state.observerCount - 1).coerceAtLeast(0)
                     if (state.observerCount == 0) {
                         state.eventJob?.cancel()
                         state.eventJob = null
+                        val projection = projection(key)
+                        syncCoordinator.visible(projection, false)
+                        state.registration?.let { syncCoordinator.unregister(it) }
+                        state.registration = null
                     }
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
         }
 
         override fun setLive(
@@ -90,12 +85,17 @@ class DefaultSessionTodoLiveStore
             state.isLive = isLive
             if (wasLive == isLive || !isLive) return
             liveStoreScope.coroutineScope.launch {
-                fetch(key, state, force = true)
+                val projection = projection(key)
+                syncCoordinator.invalidate(projection)
+                syncCoordinator.ensureFresh(projection)
             }
         }
 
         override fun clearCache() {
-            sessions.values.forEach { it.eventJob?.cancel() }
+            sessions.values.forEach { state ->
+                state.eventJob?.cancel()
+                state.registration?.let { syncCoordinator.unregister(it) }
+            }
             sessions.clear()
         }
 
@@ -104,100 +104,53 @@ class DefaultSessionTodoLiveStore
             directory: String?,
         ) {
             val key = SessionKey(sessionId, directory.orEmpty())
-            val state = sessions[key] ?: return
+            if (sessions[key] == null) return
             liveStoreScope.coroutineScope.launch {
-                state.authority.invalidate(eventStream.asLiveConnection().snapshot.value)
-                fetch(key, state, force = false, reason = StoreRefreshReason.PULL_TO_REFRESH)
+                val projection = projection(key)
+                syncCoordinator.invalidate(projection)
+                syncCoordinator.ensureFresh(projection)
             }
         }
+
+        private fun projection(key: SessionKey) = ProjectionKey.Todos(key.directory, key.sessionId)
 
         private fun ensureEventLoop(
             key: SessionKey,
             state: SessionState,
         ) {
             if (state.eventJob?.isActive == true) return
+            val projection = projection(key)
+            val registration =
+                syncCoordinator.register(projection) {
+                    val directory = key.directory.ifEmpty { null }
+                    val todos =
+                        runCatching {
+                            sessionRepository.listSessionTodos(key.sessionId, directory)
+                        }.getOrElse { error ->
+                            if (error is SessionError.Http && error.statusCode == 404) {
+                                emptyList()
+                            } else {
+                                throw error
+                            }
+                        }
+                    replace(state, todos, markCache = true)
+                }
+            state.registration = registration
+            syncCoordinator.visible(projection, true)
             state.eventJob =
                 liveStoreScope.coroutineScope.launch {
-                    val liveConnection = eventStream.asLiveConnection()
                     if (!state.hasCache) {
-                        fetch(key, state, force = true, reason = StoreRefreshReason.INITIAL_SUBSCRIBE)
+                        syncCoordinator.ensureFresh(projection)
                     }
-                    launch {
-                        worldSignals.signals.collect { signal ->
-                            if (state.observerCount <= 0) return@collect
-                            if (signal.marksStale()) {
-                                state.authority.invalidate(liveConnection.snapshot.value)
-                                return@collect
-                            }
-                            val reason = signal.catchUpReason() ?: return@collect
-                            fetch(key, state, force = false, reason = reason)
-                        }
-                    }
-                    launch {
-                        liveConnection.snapshot.collect {
-                            if (state.observerCount <= 0) return@collect
-                            fetch(key, state, force = false, reason = StoreRefreshReason.STREAM_RECONNECTED)
-                        }
-                    }
-                    var reconnectRefresh: Job? = null
-                    try {
-                        eventStream.events.collect { event ->
-                            if (state.observerCount <= 0) return@collect
-                            when {
-                                event.type == "todo.updated" && event.sessionId == key.sessionId -> {
-                                    adapter.toTodosFromEventProperties(event.rawProperties)?.let { todos ->
-                                        replace(state, todos, markCache = true)
-                                    }
-                                }
-                                event.type == "stream.reconnected" || event.type == "server.connected" -> {
-                                    reconnectRefresh?.cancel()
-                                    reconnectRefresh =
-                                        launch {
-                                            delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
-                                            if (state.observerCount <= 0) return@launch
-                                            fetch(key, state, force = false, reason = event.type)
-                                        }
-                                }
+                    eventStream.events.collect { event ->
+                        if (state.observerCount <= 0) return@collect
+                        if (event.type == "todo.updated" && event.sessionId == key.sessionId) {
+                            adapter.toTodosFromEventProperties(event.rawProperties)?.let { todos ->
+                                replace(state, todos, markCache = true)
                             }
                         }
-                    } finally {
-                        reconnectRefresh?.cancel()
                     }
                 }
-        }
-
-        private suspend fun fetch(
-            key: SessionKey,
-            state: SessionState,
-            force: Boolean,
-            reason: String? = null,
-        ): Boolean {
-            val liveConnection = eventStream.asLiveConnection()
-            val snapshot = liveConnection.snapshot.value
-            if (!force && !canCatchUp(worldSignals.occupancy.value, snapshot)) {
-                return state.hasCache
-            }
-            val generation =
-                if (force) {
-                    state.authority.captureBegin(snapshot)
-                } else {
-                    state.authority.tryBegin(snapshot) ?: return state.hasCache
-                }
-            val directory = key.directory.ifEmpty { null }
-            val todos =
-                runCatching {
-                    sessionRepository.listSessionTodos(key.sessionId, directory)
-                }.getOrNull()
-            if (todos == null) {
-                state.authority.fail(generation)
-                return false
-            }
-            replace(state, todos, markCache = true)
-            state.authority.acknowledge(generation)
-            if (state.authority.needsReconcile(liveConnection.snapshot.value)) {
-                fetch(key, state, force = false, reason = StoreRefreshReason.STREAM_RECONNECTED)
-            }
-            return true
         }
 
         private suspend fun replace(

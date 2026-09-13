@@ -19,9 +19,6 @@ object MessageEventRouter {
             "message.removed",
             "message.part.removed",
             "session.idle",
-            "stream.reconnected",
-            "server.connected",
-            "sse.parse.failed",
         )
 
     fun shouldStageForMessageSync(event: OpencodeEvent): Boolean = event.type in messageIntakeTypes

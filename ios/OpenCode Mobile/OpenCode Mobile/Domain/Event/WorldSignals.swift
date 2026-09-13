@@ -163,25 +163,9 @@ extension WorldSignal {
     nonisolated var marksStale: Bool {
         self == .backgroundStop || self == .pathLost || self == .profileSwitched
     }
-
-    nonisolated var catchUpReason: String? {
-        switch self {
-        case .foreground:
-            StoreRefreshReason.backgroundReturn
-        case .pathReady:
-            StoreRefreshReason.pathReady
-        default:
-            nil
-        }
-    }
 }
 
 nonisolated enum StoreRefreshReason {
-    static let backgroundReturn = "background-return"
-    static let pathReady = "path-ready"
     static let pullToRefresh = "pull-to-refresh"
     static let initialSubscribe = "initial-subscribe"
-    static let streamReconnected = "stream.reconnected"
-    static let serverConnected = "server.connected"
-    static let connectionSnapshot = "connection-snapshot"
 }

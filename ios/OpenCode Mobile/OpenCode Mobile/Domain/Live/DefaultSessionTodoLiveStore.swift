@@ -13,25 +13,34 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
         var isLive = false
         var continuations: [UUID: AsyncStream<[SessionTodo]>.Continuation] = [:]
         var eventTask: Task<Void, Never>?
-        let authority = GapAuthority()
+        var registration: SyncRegistration?
     }
 
     private let sessionRepository: any SessionRepository
     private let eventStream: any ForegroundEventStream
     private let worldSignals: any WorldSignals
     private let adapter: SessionDomainAdapter
+    private let syncCoordinator: any SyncCoordinator
     private var handles: [SessionKey: SessionHandle] = [:]
+    private let observedSessions = DirectorySessionSet()
+    private var directoryRegistrations: [String: (registration: SyncRegistration, count: Int)] = [:]
 
     init(
         sessionRepository: any SessionRepository,
         eventStream: any ForegroundEventStream,
         adapter: SessionDomainAdapter = SessionDomainAdapter(),
-        worldSignals: any WorldSignals = SilentWorldSignals.shared
+        worldSignals: any WorldSignals = SilentWorldSignals.shared,
+        syncCoordinator: (any SyncCoordinator)? = nil
     ) {
         self.sessionRepository = sessionRepository
         self.eventStream = eventStream
         self.worldSignals = worldSignals
         self.adapter = adapter
+        self.syncCoordinator = syncCoordinator ?? DefaultSyncCoordinator(
+            connection: eventStream.asLiveConnection(),
+            worldSignals: worldSignals,
+            eventStream: eventStream
+        )
     }
 
     func observeTodos(sessionID: String, directory: String?) -> AsyncStream<[SessionTodo]> {
@@ -45,6 +54,7 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
         let key = SessionKey(sessionID: sessionID, directory: directory ?? "")
         let handle = handles[key] ?? SessionHandle()
         handles[key] = handle
+        let projection = ProjectionKey.todos(directory: key.directory)
 
         return AsyncStream { [weak self] continuation in
             guard let self else {
@@ -55,93 +65,37 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
             handle.continuations[id] = continuation
             continuation.yield(handle.todos)
             if handle.eventTask == nil {
+                observedSessions.insert(sessionID, directory: key.directory)
                 let sessionRepository = self.sessionRepository
                 let eventStream = self.eventStream
-                let worldSignals = self.worldSignals
                 let adapter = self.adapter
-                let authority = handle.authority
-                handle.eventTask = Task.detached { [weak self] in
-                    let store = self
-                    let liveConnection = eventStream.asLiveConnection()
-                    let needsBootstrap = await MainActor.run {
-                        store?.handles[key]?.hasCache != true
-                    }
-                    if needsBootstrap {
-                        _ = await store?.fetch(
-                            key: key,
-                            force: true,
-                            reason: StoreRefreshReason.initialSubscribe,
-                            liveConnection: liveConnection,
-                            authority: authority
+                let coordinator = self.syncCoordinator
+                let observedSessions = self.observedSessions
+                if directoryRegistrations[key.directory] == nil {
+                    let registration = coordinator.register(key: projection) { [weak self] in
+                        try await Self.loadDirectory(
+                            directory: key.directory,
+                            sessionRepository: sessionRepository,
+                            observedSessions: observedSessions,
+                            store: self
                         )
                     }
+                    coordinator.visible(projection, true)
+                    directoryRegistrations[key.directory] = (registration, 1)
+                } else {
+                    directoryRegistrations[key.directory]?.count += 1
+                }
+                handle.registration = directoryRegistrations[key.directory]?.registration
+                handle.eventTask = Task.detached { [weak self] in
+                    await coordinator.ensureFresh(projection)
                     await withTaskGroup(of: Void.self) { group in
                         group.addTask {
-                            for await signal in worldSignals.signals() {
-                                let isObserved = await MainActor.run {
-                                    store?.handles[key]?.continuations.isEmpty == false
-                                }
-                                guard isObserved else { continue }
-                                if signal.marksStale {
-                                    authority.invalidate(liveConnection.snapshot)
-                                    continue
-                                }
-                                guard let reason = signal.catchUpReason else { continue }
-                                _ = await store?.fetch(
-                                    key: key,
-                                    force: false,
-                                    reason: reason,
-                                    liveConnection: liveConnection,
-                                    authority: authority
-                                )
-                            }
-                        }
-                        group.addTask {
-                            for await _ in liveConnection.snapshotUpdates() {
-                                let isObserved = await MainActor.run {
-                                    store?.handles[key]?.continuations.isEmpty == false
-                                }
-                                guard isObserved else { continue }
-                                _ = await store?.fetch(
-                                    key: key,
-                                    force: false,
-                                    reason: StoreRefreshReason.streamReconnected,
-                                    liveConnection: liveConnection,
-                                    authority: authority
-                                )
-                            }
-                        }
-                        group.addTask {
-                            var reconnectTask: Task<Void, Never>?
-                            defer { reconnectTask?.cancel() }
                             for await event in eventStream.events() {
                                 if event.type == "todo.updated", event.sessionID == key.sessionID {
                                     if let todos = adapter.todos(fromEventProperties: event.rawProperties) {
                                         await MainActor.run {
-                                            store?.replace(todos: todos, key: key, markCache: true)
+                                            self?.replace(todos: todos, key: key, markCache: true)
                                         }
-                                    }
-                                    continue
-                                }
-                                if event.type == "stream.reconnected" || event.type == "server.connected" {
-                                    reconnectTask?.cancel()
-                                    let reason = event.type
-                                    reconnectTask = Task {
-                                        try? await Task.sleep(
-                                            for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs)
-                                        )
-                                        guard !Task.isCancelled else { return }
-                                        let isObserved = await MainActor.run {
-                                            store?.handles[key]?.continuations.isEmpty == false
-                                        }
-                                        guard isObserved else { return }
-                                        _ = await store?.fetch(
-                                            key: key,
-                                            force: false,
-                                            reason: reason,
-                                            liveConnection: liveConnection,
-                                            authority: authority
-                                        )
                                     }
                                 }
                             }
@@ -149,7 +103,6 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
                         await group.next()
                         group.cancelAll()
                     }
-                    _ = sessionRepository
                 }
             }
             continuation.onTermination = { @Sendable _ in
@@ -168,24 +121,38 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
         handle.isLive = isLive
         guard wasLive != isLive else { return }
         guard isLive else { return }
+        let projection = ProjectionKey.todos(directory: key.directory)
+        let coordinator = syncCoordinator
+        coordinator.invalidate(projection)
         Task {
-            await self.fetch(key: key, force: true)
+            await coordinator.ensureFresh(projection)
         }
     }
 
     func invalidate(sessionID: String, directory: String?) {
         let key = SessionKey(sessionID: sessionID, directory: directory ?? "")
         guard handles[key] != nil else { return }
+        let projection = ProjectionKey.todos(directory: key.directory)
+        let coordinator = syncCoordinator
+        coordinator.invalidate(projection)
         Task {
-            await self.fetch(key: key, force: true, reason: StoreRefreshReason.pullToRefresh)
+            await coordinator.ensureFresh(projection)
         }
     }
 
     func clearCache() {
         let stale = Array(handles.values)
         handles.removeAll()
+        observedSessions.removeAll()
+        let registrations = Array(directoryRegistrations.values)
+        directoryRegistrations.removeAll()
+        for entry in registrations {
+            syncCoordinator.visible(entry.registration.key, false)
+            syncCoordinator.unregister(entry.registration)
+        }
         for handle in stale {
             handle.eventTask?.cancel()
+            handle.registration = nil
             handle.continuations.values.forEach { $0.finish() }
             handle.continuations.removeAll()
         }
@@ -197,58 +164,49 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
         if handle.continuations.isEmpty {
             handle.eventTask?.cancel()
             handle.eventTask = nil
+            observedSessions.remove(key.sessionID, directory: key.directory)
+            if var entry = directoryRegistrations[key.directory] {
+                entry.count -= 1
+                if entry.count <= 0 {
+                    syncCoordinator.visible(entry.registration.key, false)
+                    syncCoordinator.unregister(entry.registration)
+                    directoryRegistrations.removeValue(forKey: key.directory)
+                } else {
+                    directoryRegistrations[key.directory] = entry
+                }
+            }
+            handle.registration = nil
         }
     }
 
-    private func fetch(
-        key: SessionKey,
-        force: Bool,
-        reason: String? = nil,
-        liveConnection: (any LiveConnection)? = nil,
-        authority: GapAuthority? = nil
-    ) async -> Bool {
-        guard let handle = handles[key] else { return false }
-        let connection = liveConnection ?? eventStream.asLiveConnection()
-        let gap = authority ?? handle.authority
-        let snapshot = connection.snapshot
-        if !force {
-            guard canCatchUp(occupancy: worldSignals.occupancy, snapshot: snapshot) else {
-                return handle.hasCache
+    private nonisolated static func loadDirectory(
+        directory: String,
+        sessionRepository: any SessionRepository,
+        observedSessions: DirectorySessionSet,
+        store: DefaultSessionTodoLiveStore?
+    ) async throws {
+        let sessionIDs = observedSessions.sessions(in: directory)
+        var failed = false
+        for sessionID in sessionIDs {
+            let resolvedDirectory = directory.isEmpty ? nil : directory
+            guard let todos = try? await sessionRepository.listSessionTodos(
+                id: sessionID,
+                directory: resolvedDirectory
+            ) else {
+                failed = true
+                continue
+            }
+            await MainActor.run {
+                store?.replace(
+                    todos: todos,
+                    key: SessionKey(sessionID: sessionID, directory: directory),
+                    markCache: true
+                )
             }
         }
-        let generation: UInt64
-        if force {
-            generation = gap.captureBegin(snapshot)
-        } else {
-            guard let started = gap.tryBegin(snapshot) else { return handle.hasCache }
-            generation = started
+        if failed {
+            throw URLError(.cannotConnectToHost)
         }
-        let directory = key.directory.isEmpty ? nil : key.directory
-        guard let todos = try? await sessionRepository.listSessionTodos(
-            id: key.sessionID,
-            directory: directory
-        ) else {
-            gap.fail(generation)
-            return false
-        }
-        if let reason {
-            DiagnosticLog.info(
-                .session,
-                "sessionTodoLiveStore fetch session=\(key.sessionID) reason=\(reason)"
-            )
-        }
-        replace(todos: todos, key: key, markCache: true)
-        gap.acknowledge(generation)
-        if gap.needsReconcile(connection.snapshot) {
-            return await fetch(
-                key: key,
-                force: false,
-                reason: StoreRefreshReason.streamReconnected,
-                liveConnection: connection,
-                authority: gap
-            )
-        }
-        return true
     }
 
     private func replace(todos: [SessionTodo], key: SessionKey, markCache: Bool) {
@@ -259,5 +217,39 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
         for continuation in handle.continuations.values {
             continuation.yield(todos)
         }
+    }
+}
+
+private nonisolated final class DirectorySessionSet: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [String: Set<String>] = [:]
+
+    func insert(_ sessionID: String, directory: String) {
+        lock.lock()
+        var bucket = values[directory] ?? []
+        bucket.insert(sessionID)
+        values[directory] = bucket
+        lock.unlock()
+    }
+
+    func remove(_ sessionID: String, directory: String) {
+        lock.lock()
+        if var bucket = values[directory] {
+            bucket.remove(sessionID)
+            values[directory] = bucket.isEmpty ? nil : bucket
+        }
+        lock.unlock()
+    }
+
+    func sessions(in directory: String) -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return Array(values[directory] ?? [])
+    }
+
+    func removeAll() {
+        lock.lock()
+        values.removeAll()
+        lock.unlock()
     }
 }

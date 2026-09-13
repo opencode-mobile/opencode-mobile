@@ -3,19 +3,15 @@ package dev.opencode.mobile.domain.live
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.ForegroundEventStream
-import dev.opencode.mobile.domain.event.GapAuthority
-import dev.opencode.mobile.domain.event.SilentWorldSignals
-import dev.opencode.mobile.domain.event.StoreRefreshReason
-import dev.opencode.mobile.domain.event.WorldSignals
-import dev.opencode.mobile.domain.event.asLiveConnection
-import dev.opencode.mobile.domain.event.canCatchUp
-import dev.opencode.mobile.domain.event.catchUpReason
-import dev.opencode.mobile.domain.event.marksStale
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.sessioncache.SessionCache
+import dev.opencode.mobile.domain.sync.ProjectionKey
+import dev.opencode.mobile.domain.sync.SyncCoordinator
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,12 +19,9 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,10 +35,9 @@ class DefaultSessionLiveStore
         private val eventStream: ForegroundEventStream,
         private val liveStoreScope: LiveStoreScope,
         private val sessionCache: SessionCache,
-        private val worldSignals: WorldSignals = SilentWorldSignals,
+        private val syncCoordinator: SyncCoordinator,
     ) : SessionLiveStore {
         private val cache = LiveStoreFlowCache<SessionListSnapshot>(liveStoreScope)
-        private val invalidationBus = StoreInvalidationBus()
         private val activeDirectories = ConcurrentHashMap.newKeySet<String>()
 
         override fun clearCache() {
@@ -61,9 +53,17 @@ class DefaultSessionLiveStore
                 }
             if (keys.isEmpty()) return
             coroutineScope {
-                keys.map { key ->
-                    async { invalidationBus.invalidateAndWait(key, StoreRefreshReason.PULL_TO_REFRESH) }
-                }.awaitAll()
+                keys
+                    .map { key ->
+                        async {
+                            val projection = ProjectionKey.SessionList(key)
+                            syncCoordinator.invalidate(projection)
+                            withTimeoutOrNull(LiveStoreRefreshPolicy.INVALIDATION_ACK_TIMEOUT_MS) {
+                                syncCoordinator.ensureFresh(projection)
+                            }
+                        }
+                    }
+                    .awaitAll()
             }
         }
 
@@ -83,34 +83,10 @@ class DefaultSessionLiveStore
 
         private fun buildSessionFlow(directory: String): Flow<SessionListSnapshot> =
             channelFlow {
-                val liveConnection = eventStream.asLiveConnection()
-                val authority = GapAuthority()
+                val key = ProjectionKey.SessionList(directory)
                 val gate = LiveStoreRefreshGate()
-                try {
-                    suspend fun refreshFromNetwork(
-                        reason: String,
-                        force: Boolean,
-                    ): Boolean {
-                        val snapshot = liveConnection.snapshot.value
-                        if (!force && !canCatchUp(worldSignals.occupancy.value, snapshot)) {
-                            DiagnosticLog.info(
-                                DiagnosticLogArea.Session,
-                                "sessionLiveStore skip directory=$directory reason=$reason",
-                            )
-                            return false
-                        }
-                        val generation =
-                            if (force) {
-                                authority.captureBegin(snapshot)
-                            } else {
-                                authority.tryBegin(snapshot) ?: run {
-                                    DiagnosticLog.info(
-                                        DiagnosticLogArea.Session,
-                                        "sessionLiveStore skip directory=$directory reason=$reason",
-                                    )
-                                    return false
-                                }
-                            }
+                val registration =
+                    syncCoordinator.register(key) {
                         val outcome =
                             gate.refresh(
                                 load = {
@@ -121,76 +97,36 @@ class DefaultSessionLiveStore
                                     send(SessionListSnapshot(sessions = sessions, isFromCache = false))
                                     DiagnosticLog.info(
                                         DiagnosticLogArea.Session,
-                                        "sessionLiveStore refresh directory=$directory reason=$reason " +
-                                            "count=${sessions.size}",
+                                        "sessionLiveStore refresh directory=$directory count=${sessions.size}",
                                     )
                                 },
                             )
-                        when (outcome) {
-                            LiveStoreRefreshOutcome.COMMITTED -> {
-                                authority.acknowledge(generation)
-                                if (authority.needsReconcile(liveConnection.snapshot.value)) {
-                                    refreshFromNetwork(StoreRefreshReason.STREAM_RECONNECTED, force = false)
-                                }
-                            }
-                            LiveStoreRefreshOutcome.FAILED,
-                            LiveStoreRefreshOutcome.DISCARDED,
-                            -> authority.fail(generation)
+                        if (outcome == LiveStoreRefreshOutcome.FAILED) {
+                            error("session list refresh failed directory=$directory")
                         }
-                        return outcome == LiveStoreRefreshOutcome.COMMITTED
                     }
-
-                    launch(start = CoroutineStart.UNDISPATCHED) {
-                        invalidationBus.events
-                            .filter { it.key == null || it.key == directory }
-                            .collect { invalidation ->
-                                try {
-                                    authority.invalidate(liveConnection.snapshot.value)
-                                    refreshFromNetwork(invalidation.reason, force = false)
-                                } finally {
-                                    invalidation.ack?.complete(Unit)
-                                }
-                            }
-                    }
+                syncCoordinator.visible(key, true)
+                try {
                     activeDirectories.add(directory)
-
                     sessionCache.seedSessions(directory)?.let { seeded ->
                         send(SessionListSnapshot(sessions = seeded, isFromCache = true))
                     }
-
-                    refreshFromNetwork(StoreRefreshReason.INITIAL_SUBSCRIBE, force = true)
-
-                    launch {
-                        worldSignals.signals.collect { signal ->
-                            if (signal.marksStale()) {
-                                authority.invalidate(liveConnection.snapshot.value)
-                                return@collect
-                            }
-                            signal.catchUpReason()?.let { reason ->
-                                refreshFromNetwork(reason, force = false)
-                            }
-                        }
-                    }
-                    launch {
-                        liveConnection.snapshot.collect {
-                            refreshFromNetwork(StoreRefreshReason.STREAM_RECONNECTED, force = false)
-                        }
-                    }
-
-                    merge(
-                        eventStream.events
-                            .filter {
-                                it.type == "stream.reconnected" || it.type == "server.connected"
-                            }.map { it.type },
-                        eventStream.events.filter { it.triggersHomeRefresh }.map { it.type },
-                    ).debounce(LiveStoreRefreshPolicy.SESSION_DEBOUNCE_MS)
+                    syncCoordinator.ensureFresh(key)
+                    eventStream.events
+                        .filter { it.triggersHomeRefresh }
+                        .map { it.type }
+                        .debounce(LiveStoreRefreshPolicy.SESSION_DEBOUNCE_MS)
                         .collect { reason ->
-                            val mutation = reason != "stream.reconnected" && reason != "server.connected"
-                            launch {
-                                refreshFromNetwork(reason, force = mutation)
-                            }
+                            DiagnosticLog.info(
+                                DiagnosticLogArea.Session,
+                                "sessionLiveStore mutation directory=$directory reason=$reason",
+                            )
+                            syncCoordinator.invalidate(key)
+                            launch { syncCoordinator.ensureFresh(key) }
                         }
                 } finally {
+                    syncCoordinator.visible(key, false)
+                    syncCoordinator.unregister(registration)
                     activeDirectories.remove(directory)
                 }
             }

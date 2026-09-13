@@ -2,7 +2,7 @@ import Foundation
 @testable import OpenCode_Mobile
 
 final class RecordingForegroundEventStream: LiveConnection, @unchecked Sendable {
-    let fake = FakeForegroundEventStream()
+    let fake = FakeForegroundEventStream(connected: false)
     private let lock = NSLock()
     private var _ops: [String] = []
 

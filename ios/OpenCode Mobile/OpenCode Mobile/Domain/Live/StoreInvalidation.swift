@@ -1,5 +1,64 @@
 import Foundation
 
+nonisolated func awaitWithTimeout(
+    milliseconds: Int,
+    operation: @escaping @Sendable () async -> Void
+) async {
+    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        let waiter = TimeoutOnceResume(continuation)
+        let op = Task {
+            await operation()
+            waiter.finish()
+        }
+        let timeout = Task {
+            try? await Task.sleep(for: .milliseconds(max(0, milliseconds)))
+            waiter.finish()
+            op.cancel()
+        }
+        waiter.onFinished {
+            timeout.cancel()
+        }
+    }
+}
+
+private final class TimeoutOnceResume: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var finished = false
+    private var onFinishedHandler: (@Sendable () -> Void)?
+
+    init(_ continuation: CheckedContinuation<Void, Never>) {
+        self.continuation = continuation
+    }
+
+    func onFinished(_ handler: @escaping @Sendable () -> Void) {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            handler()
+            return
+        }
+        onFinishedHandler = handler
+        lock.unlock()
+    }
+
+    func finish() {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            return
+        }
+        finished = true
+        let pending = continuation
+        continuation = nil
+        let handler = onFinishedHandler
+        onFinishedHandler = nil
+        lock.unlock()
+        handler?()
+        pending?.resume()
+    }
+}
+
 nonisolated struct StoreInvalidate: Sendable, Equatable {
     let key: String?
     let reason: String

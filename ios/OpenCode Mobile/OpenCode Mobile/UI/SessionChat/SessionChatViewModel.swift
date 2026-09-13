@@ -36,6 +36,7 @@ final class SessionChatViewModel {
     private let activeConnectionManager: ActiveConnectionManager
     private let connectionProfileStore: any ConnectionProfileStore
     private let liveUpdates: any LiveUpdates
+    private let syncCoordinator: (any SyncCoordinator)?
     private var projectLabel: String?
     private var projectLetter: Character?
     private var projectLetterAccent: LetterAccent?
@@ -62,7 +63,8 @@ final class SessionChatViewModel {
         connectionProfileStore: any ConnectionProfileStore,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         liveUpdates: any LiveUpdates = FixedLiveUpdates(),
-        lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil
+        lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil,
+        syncCoordinator: (any SyncCoordinator)? = nil
     ) {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
@@ -71,6 +73,7 @@ final class SessionChatViewModel {
         self.activeConnectionManager = activeConnectionManager
         self.connectionProfileStore = connectionProfileStore
         self.liveUpdates = liveUpdates
+        self.syncCoordinator = syncCoordinator
         self.uiState = .initial(
             sessionID: sessionID,
             sessionTitle: sessionTitle,
@@ -155,6 +158,7 @@ final class SessionChatViewModel {
         }
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID)")
         sessionReadyStore.setFocusedSession(sessionID: sessionID, directory: worktree)
+        syncCoordinator?.markFocused(.transcript(directory: worktree, sessionID: sessionID))
         // Peers may have changed while the screen was away; re-resolve smart label.
         refreshProjectIdentity()
         composer.startCatalogLoads()
@@ -709,6 +713,7 @@ final class SessionChatViewModel {
         inbox.stop()
         collapsePreferenceGeneration += 1
         sessionReadyStore.setFocusedSession(sessionID: nil, directory: nil)
+        syncCoordinator?.markFocused(nil)
         reviewChanges.stop()
     }
 
