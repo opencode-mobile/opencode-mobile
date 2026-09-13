@@ -1,4 +1,4 @@
 interface:
   display_name: "Feature"
-  short_description: "Resolve and link feature anchors by request."
-  default_prompt: "Route the requested feature operation and link only the required Linear, branch, docs, merge, or pull-request anchors."
+  short_description: "Resolve and link Linear, branch, and pull request anchors."
+  default_prompt: "Route only the requested Feature operation, then verify every required Linear, branch, docs, merge, and pull request anchor."

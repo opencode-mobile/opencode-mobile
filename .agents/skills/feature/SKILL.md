@@ -1,110 +1,106 @@
 ---
 name: feature
-description: Link opencode-mobile feature anchors across Linear, branches, and pull requests. Use to resolve a feature from any anchor, start ticket-backed work, audit merge readiness, publish it, or handle an explicit documentation request.
+description: "Feature: use to resolve anchors, start ticket-backed work, handle requested docs, audit merge readiness, or publish."
 ---
 
 # Feature
 
-Keep a feature's issue key, branch, and pull request connected. Route only the
-work the user requested; do not advance the whole lifecycle by default.
+A feature is its Linear issue, git branch, and pull request. Keep those three
+pointing at each other. Run only the routes the user asked for.
 
-## Route The Request
+## 1. Route the request
 
-Choose one or more routes from the user's request:
+Pick every route the user asked for:
 
 | Route | Use when the user wants to | Required anchors |
 | --- | --- | --- |
-| Resolve | identify or connect existing feature state | the anchors explicitly requested |
+| Resolve | identify or connect existing feature state | the anchors they named |
 | Start | begin ticket-backed implementation | issue key, branch |
-| Docs | locate, create, or update documentation explicitly requested by the user | requested document |
-| Merge | assess whether existing work is merge-ready | branch, issue key when ticket-backed |
-| Publish | commit, push, or open a pull request | branch; issue key when ticket-backed |
+| Docs | locate, create, or update documentation they asked for | requested document |
+| Merge | check whether existing work is merge-ready | branch, plus issue key when ticket-backed |
+| Publish | commit, push, or open a pull request | branch; plus issue key when ticket-backed |
 
-If the request names multiple routes, execute them in dependency order:
-Resolve, Start, Docs, Merge, Publish. Do not run a later route merely because it
-is visible here.
+If they named more than one, run them in this order: Resolve, Start, Docs,
+Merge, Publish. A later route in the table is not implied.
 
-Completion criterion: every requested action maps to a route, and no
-unrequested mutation is included.
+**Completion criterion:** Every requested action maps to one route, route order
+is explicit, and no unrequested mutation is included.
 
 ## Ownership
 
-This skill resolves anchors and verifies their links. Use the owning skill for
-state changes:
+This skill resolves anchors, changes branches in Start, checks links, and uses
+the publication fallback when needed. Other state changes belong to the owning
+skill:
 
 - `linear-project-tracking` creates or updates Linear issues, statuses, and
   links.
 - `synced-native-feature` owns cross-platform feature implementation and parity.
 - `design-system-component` owns reusable UI, tokens, variants, previews, and
   galleries.
-- GitHub `yeet` owns staging, committing, pushing, and pull-request creation
-  when available; this skill's disclosed fallback applies only when it is not.
+- GitHub `yeet` stages, commits, pushes, and opens pull requests when it is
+  available. This skill's publication fallback applies only when `yeet` is not.
 
-Branch creation or switching remains part of this skill's Start route. After an
-owning skill mutates state, read the resulting state and verify the requested
-link.
+Branch create or switch stays in this skill's Start route. After an owning
+skill mutates state, read the result and verify the requested link.
 
-Completion criterion: each requested mutation is performed by its owner, and
-each resulting issue or publication link is verified from current state.
+## 2. Resolve
 
-## Resolve Route
+Start from the strongest supplied anchor: issue key (`OPE-<number>`), current
+branch, pull request, or feature name. Resolve only the extra anchors required
+by the selected routes. Read
+[branch resolution and naming](reference.md#branch-resolution-and-naming) when
+a branch must be parsed, inferred, selected, or created.
 
-1. Start from the strongest supplied anchor: issue key (`OPE-<number>`), current
-   branch, pull request, or feature name.
-2. Resolve only the additional anchors required by the selected route. When a
-   branch must be parsed or an anchor must be inferred, read
-   [branch and publication reference](reference.md#branch-resolution-and-naming).
-3. Prefer existing repository and Linear evidence over a newly inferred slug.
-   If required evidence remains ambiguous, report the candidates or ask for the
-   missing issue key before making ticket-linked changes.
+Prefer current repository and Linear evidence over an inferred slug. If
+evidence stays ambiguous, report the candidates or ask for the missing issue
+key before ticket-linked mutations.
 
-Completion criterion: every required anchor for the selected route has one
-explicit value, or its unresolved state and the evidence needed to resolve it
-are reported; no state is changed.
+**Completion criterion:** Every required anchor has one explicit value, or the
+result names each unresolved anchor and the evidence needed to settle it. Resolve
+changes no state.
 
-## Start Route
+## 3. Start
 
-1. Resolve the issue key and inspect the worktree for unrelated changes.
-2. Read
-   [branch resolution and naming](reference.md#branch-resolution-and-naming),
-   then switch to the existing issue branch or create the specified branch.
-3. Use `linear-project-tracking` for any requested Linear status or link update.
+Resolve the issue key and inspect the worktree for unrelated changes. Read
+[branch resolution and naming](reference.md#branch-resolution-and-naming), then
+switch to the existing issue branch or create the specified branch. Preserve
+unrelated worktree changes. Use `linear-project-tracking` for requested Linear
+status or link updates, then read Linear to verify them.
 
-Completion criterion: the current branch contains the normalized issue key, the
-unrelated worktree changes remain untouched, and each requested Linear mutation
-is confirmed from Linear.
+**Completion criterion:** The current branch contains the normalized issue key,
+all unrelated worktree changes remain untouched, and every requested Linear
+mutation is confirmed from Linear.
 
-## Docs Route
+## 4. Docs
 
-Run this route only when the user explicitly requests documentation.
+Run Docs only when the user asked for documentation. Resolve and read the
+requested document, then make only that change. Keep feature state in Linear
+and implementation behavior in code and tests. Do not create feature ledgers,
+progress logs, ticket plans, research dumps, generated reports, or checked-in
+prototypes.
 
-1. Resolve the requested document and read its current content.
-2. Make only the requested documentation change.
-3. Do not create feature ledgers, progress logs, ticket plans, research dumps,
-   generated reports, or checked-in prototypes.
+**Completion criterion:** The requested document contains the requested change,
+and no unrelated documentation was created or changed.
 
-Completion criterion: the requested document is updated and no unrelated
-documentation is created or changed.
+## 5. Merge
 
-## Merge Route
+Read [merge-readiness reference](reference.md#merge-readiness) and evaluate
+every applicable invariant against current repository and Linear state. Use the
+owning skill to repair Linear state only when the user asked for updates;
+otherwise report the mismatch.
 
-Read [merge-readiness reference](reference.md#merge-readiness) and evaluate every
-applicable invariant against current repository and Linear state. Use the owning
-skill to repair Linear state only when the user asked for updates; otherwise
-report the mismatch.
+**Completion criterion:** Every applicable merge invariant has current evidence
+and a `pass`, `fail`, or `not applicable` result. Every failure is named as a
+merge blocker or accepted risk.
 
-Completion criterion: every applicable merge invariant is marked pass, fail, or
-not applicable with concrete evidence, and every failure is listed as a
-merge-blocking item or accepted risk.
-
-## Publish Route
+## 6. Publish
 
 Publish only on an explicit commit, push, or pull-request request. Use GitHub
 `yeet` when available. If it is unavailable, read and execute
 [publication fallback](reference.md#publication-fallback). Use
 `linear-project-tracking` for the Linear backlink after a pull request exists.
 
-Completion criterion: each requested publication action is confirmed by commit
-identifier, remote branch, or pull-request URL; for ticket-backed work, the pull
-request, issue, and branch cross-reference one another, or the exact missing
-link is reported.
+**Completion criterion:** Every requested publication action has a commit
+identifier, remote branch, or pull-request URL. For ticket-backed work, the pull
+request, Linear issue, and branch cross-reference one another, or the exact
+missing link is reported.

@@ -1,8 +1,8 @@
-# Linear Conventions — opencode-mobile
+# Linear conventions
 
-Read this reference when the sync loop must create or classify an issue. Query
-Linear for current issue state; this file contains durable conventions, not a
-live inventory.
+Read this when creating an issue or classifying its labels, state, priority,
+milestone, or relationships. Query Linear for current issue state. This file
+holds durable conventions, not a live inventory.
 
 ## Workspace
 
@@ -12,8 +12,7 @@ live inventory.
 | Project | `opencode apps` |
 | Project URL | <https://linear.app/opencode-mobile/project/opencode-apps-f7d80fb00b5a> |
 
-Query Linear for current milestones instead of maintaining an inventory here.
-If none fits, leave the milestone unset rather than inventing a category.
+Query Linear for current milestones. If none fits, leave the milestone unset.
 
 ## Labels
 
@@ -26,9 +25,10 @@ If none fits, leave the milestone unset rather than inventing a category.
 | Android | Primary Android work |
 | Shared | Shared or cross-platform implementation |
 
-Create a label only when no existing label expresses a durable category.
+Reuse an existing durable label. Create one only when no existing label names
+the category.
 
-## Issue Shape
+## Issue shape
 
 Use a product title such as `Session Chat`, not a filesystem slug.
 
@@ -39,11 +39,11 @@ Use a product title such as `Session Chat`, not a filesystem slug.
 - [ ] Incomplete actionable item
 ```
 
-Keep one **Remaining** entry per incomplete item. A linked child issue may
-replace the entry when the item needs independent scheduling; do not keep both
-as separate work.
+Keep one Remaining entry per incomplete item. When an item needs independent
+scheduling, replace its Remaining entry with a linked child issue. Do not keep
+the same work in both places.
 
-## State Mapping
+## State mapping
 
 | Repo signal | Linear state |
 | --- | --- |
@@ -53,10 +53,10 @@ as separate work.
 | Intended scope complete and no actionable item remains | Done |
 | Explicitly superseded or abandoned scope | Canceled |
 
-Blocked work remains **In Progress** unless the workspace has a distinct blocked
-state or convention; record the blocker and dependency relationship.
+Blocked work stays In Progress unless the workspace has a distinct blocked
+state. Record the blocker and the dependency.
 
-## Priority and Relationships
+## Priority and relationships
 
 - High: active V1 blockers.
 - Medium: non-blocking V1 work and polish.
@@ -65,9 +65,9 @@ state or convention; record the blocker and dependency relationship.
   visible in Linear.
 - Split platform issues only when independent scheduling is intentional.
 
-## Connector Capabilities
+## Connector capabilities
 
-Select the available Linear operations by capability:
+Pick the available Linear operations by capability:
 
 | Need | Capability |
 | --- | --- |
@@ -77,4 +77,4 @@ Select the available Linear operations by capability:
 | Broadcast milestone change | Create a project status update |
 | Add a durable category | Create an issue label |
 
-Preserve real markdown line breaks in descriptions and updates.
+Send real markdown line breaks in descriptions and updates.

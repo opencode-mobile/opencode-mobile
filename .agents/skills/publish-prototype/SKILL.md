@@ -1,26 +1,42 @@
 ---
 name: publish-prototype
-description: Build a throwaway prototype to answer a design question, then publish it to the artifact server so it can be viewed remotely. Use when the user wants a prototype they can open in a browser over LAN / Tailscale.
+description: "Prototype publishing: use when a browser prototype must be built and shared over LAN or Tailscale."
 ---
 
-# publish-prototype
+# Publish prototype
 
-One skill, two steps: build the prototype, then publish it.
+## 1. Build the prototype
 
-## When to use
-The user wants a prototype (logic or UI) that ends up viewable in a browser remotely.
+Load the `prototype` skill from
+`~/.agents/skills/prototype/SKILL.md` and build the requested logic or UI.
 
-## How to do it
-1. Load the **prototype** skill and build the prototype per its rules (`~/.agents/skills/prototype/SKILL.md`).
-2. Load the **publish-artifact** skill and publish the built output per its rules (`~/.agents/skills/publish-artifact/SKILL.md`).
-3. Paste the LAN and Tailscale URLs the publish step prints so the user can open it.
+When the prototype has a phone bezel or device frame, apply
+`publish-artifact`'s **Phone mockup layout (exact-spec)** while building the
+HTML:
 
-## Mobile / phone mockups
-When the prototype shows a phone bezel or device frame, follow **publish-artifact → Phone mockup layout (exact-spec)** while building the HTML — not only at publish time:
+- Use one viewport with no page scroll. Set `overflow: hidden` on the outer page.
+- Put scenario controls beside the phone on wide screens. Stack them only on
+  narrow viewports.
+- Scale the whole device to fit height and preserve its aspect ratio.
+- Allow the inner screen to scroll while the page around the phone stays fixed.
 
-- One viewport, no page scroll (`overflow: hidden` on the outer page).
-- Scenario controls **beside** the phone on wide screens; stack only on narrow viewports.
-- Scale the whole device to fit height; keep aspect ratio.
-- Inner screen may scroll; the page around the phone must not.
+The full phone CSS pattern lives in
+`homelab/artifact-publisher/skill/`.
 
-Canonical skill source (with the full CSS pattern): `homelab/artifact-publisher/skill/`.
+**Completion criterion:** The prototype answers the requested design question,
+runs in a browser, and every phone mockup satisfies the exact layout rules.
+
+## 2. Publish the artifact
+
+Load the `publish-artifact` skill from
+`~/.agents/skills/publish-artifact/SKILL.md` and publish the built output.
+
+**Completion criterion:** Publication succeeds and returns both LAN and
+Tailscale URLs.
+
+## 3. Report access
+
+Paste the LAN and Tailscale URLs so the user can open the prototype.
+
+**Completion criterion:** The response contains both published URLs exactly as
+returned by the publication step.

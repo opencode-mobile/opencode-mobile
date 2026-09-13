@@ -1,84 +1,70 @@
 ---
 name: publish-ui-snapshots
-description: >-
-  Create throwaway UI snapshot tests, generate PNGs (isolated component plus
-  in-session Session Chat), and publish an HTML report. Use when the user
-  asks to create ui snapshots to illustrate the changes and publish artifacts,
-  or mentions UI snapshots, snapshot evidence, or illustrate the changes with
-  published artifacts.
+description: "UI snapshots: use when the user asks to generate and publish isolated or in-session snapshot evidence."
 ---
 
-# Publish UI Snapshots
+# Publish UI snapshots
 
-Generate **throwaway** snapshot tests, run them to produce images, then publish
-an HTML sketch with the `publish-artifact` skill. Do not commit tests or PNGs.
-
-Trigger phrase (verbatim):
+Trigger phrase, verbatim:
 
 > create ui snapshots to illustrate the changes and publish artifacts
 
-## Steps
+## 1. Define the snapshot matrix
 
-1. Identify the **subject** (default: assistant message), platforms (both unless named), frames (`isolated` + `in-session`), appearance (light; add dark when cheap).
-2. Reuse committed mocks/hosts under `SnapshotEvidence/` (iOS) and `ui/snapshot/` (Android). If the subject has no mock, add a small committed mock or stop and name the gap. Never screenshot a live server.
-3. Write throwaway tests (names/paths below). Do not edit `project.pbxproj`.
-4. Generate images — do not verify goldens, do not run UITests, do not run `verifyPaparazziDebug`.
-5. Copy PNGs into `.snapshot-evidence/out/` using the filename convention, then run `scripts/write-report.sh`.
-6. Load `~/.agents/skills/publish-artifact/SKILL.md` and publish `.snapshot-evidence/out/` as a **sketch** (`--type plan`). Paste the URLs.
-7. Do not `git add` throwaway tests, PNGs, HTML, or Paparazzi goldens under `src/test/snapshots/`. Durable mock/host/skill changes may be committed when the user asks.
+Default subject: assistant message. Default platforms: iOS and Android. Default
+frames: `isolated` and `in-session`. Default appearance: light. Add dark when it
+is cheap.
 
-This step is complete when isolated and in-session PNGs exist for every requested platform that could run, the HTML report labels them, artifact URLs are in the reply, and `git status` does not present throwaway files as intended commits.
+**Completion criterion:** Every requested subject has an explicit platform,
+frame, and appearance matrix, including every default the user did not
+override.
 
-## Paths
+## 2. Establish deterministic render hosts
 
-| Kind | Path |
-| --- | --- |
-| iOS throwaway tests | `ios/OpenCode Mobile/OpenCode MobileTests/GeneratedSnapshotEvidence/*SnapshotEvidence.swift` |
-| Android throwaway tests | `android/screenshot/src/test/java/dev/opencode/mobile/ui/snapshot/GeneratedSnapshotEvidence/*SnapshotEvidence.kt` |
-| Android Paparazzi goldens | `android/screenshot/src/test/snapshots/images/` |
-| Output | `.snapshot-evidence/out/` |
-| iOS helper | `OpenCode MobileTests/SnapshotEvidenceRenderer.swift` |
-| Hosts/mocks | iOS `OpenCode Mobile/SnapshotEvidence/`, Android `ui/snapshot/` |
+Reuse committed mocks and hosts under `SnapshotEvidence/` on iOS and
+`ui/snapshot/` on Android. If the subject has no mock, add a small committed
+mock or stop and name the gap. Use deterministic mock data. Never screenshot a
+live server.
 
-Filename convention: `{platform}-{frame}-{appearance}.png`  
+For the default subject, isolated frames render `OpenCodeTextInput` or
+`OpenCodeAssistantMessage` as available on `:screenshot`. In-session frames
+render the subject in screen chrome with `OpenCodeTopBar` plus fields, or
+`SessionChatSnapshotHost` when that host compiles on `:screenshot`.
+
+**Completion criterion:** Every frame in the matrix has a deterministic,
+platform-native render host and mock data, or a named missing-host blocker.
+
+## 3. Write throwaway tests
+
+Read only the matching platform section in
+[snapshot recipes and templates](reference.md). Write tests in the gitignored
+generated paths named there. Keep Xcode project membership unchanged. Do not
+edit `project.pbxproj`.
+
+**Completion criterion:** Every runnable platform has one throwaway test that
+generates every requested frame and appearance with the required filename.
+
+## 4. Generate PNGs
+
+Run the matching generation recipe from
+[reference.md](reference.md#ios-generation) or
+[reference.md](reference.md#android-generation). Record snapshots only. Do not
+verify goldens, run UITests, or run `verifyPaparazziDebug`.
+
+**Completion criterion:** A PNG exists for every runnable matrix entry, and
+each unavailable platform has a concrete environment or compilation blocker.
+
+## 5. Build the report
+
+Copy every PNG to `.snapshot-evidence/out/` with this filename convention:
+
+```text
+{platform}-{frame}-{appearance}.png
+```
+
 Examples: `ios-isolated-light.png`, `android-in-session-dark.png`.
 
-## Generate commands
-
-iOS (from `ios/OpenCode Mobile`, after writing the throwaway test):
-
-```bash
-OUT="$REPO/.snapshot-evidence/out"
-mkdir -p "$OUT"
-xcodebuild test \
-  -project "OpenCode Mobile.xcodeproj" \
-  -scheme "OpenCode Mobile" \
-  -destination "platform=iOS Simulator,name=iPhone 16" \
-  -only-testing:"OpenCode MobileTests/AssistantMessageSnapshotEvidence" \
-  SNAPSHOT_EVIDENCE_OUT="$OUT" \
-  CODE_SIGNING_ALLOWED=NO
-```
-
-If the simulator name is wrong, use `.github/scripts/select-ios-simulator.sh` / `xcrun simctl list`. Skip iOS on Linux.
-
-Android (from `android/`, after writing the throwaway test):
-
-```bash
-OUT="$REPO/.snapshot-evidence/out"
-mkdir -p "$OUT"
-./gradlew :screenshot:recordPaparazziDebug \
-  --tests 'dev.opencode.mobile.ui.snapshot.GeneratedSnapshotEvidence.*'
-SNAP_DIR="$REPO/android/screenshot/src/test/snapshots/images"
-for png in "$SNAP_DIR"/*.png; do
-  name="$(basename "$png" | sed -n 's/.*_\(android-[^.]*\)\.png$/\1/p')"
-  [ -n "$name" ] || continue
-  cp "$png" "$OUT/${name}.png"
-done
-```
-
-Paparazzi lives on `:screenshot`, not `:app`. Applying it to `:app` breaks AGP 9 + Hilt artifact transforms. Paparazzi 2 needs a Java 21 Gradle JVM, so `:screenshot` is left out of the default project graph on JDK 17. Never add `verifyPaparazzi*` or `:screenshot:testDebugUnitTest` to Android Checks.
-
-Then:
+Then run:
 
 ```bash
 bash "$REPO/.agents/skills/publish-ui-snapshots/scripts/write-report.sh" \
@@ -86,10 +72,27 @@ bash "$REPO/.agents/skills/publish-ui-snapshots/scripts/write-report.sh" \
   "UI snapshots"
 ```
 
-## Throwaway test shape
+The script emits the required sketch layout: centered column,
+`max-width: 72rem`, image grid, and viewport metadata.
 
-See [reference.md](reference.md) for copy-paste iOS and Android templates (assistant message). Isolated renders `OpenCodeTextInput` / `OpenCodeAssistantMessage` as available on `:screenshot`. In-session renders the subject in screen chrome (`OpenCodeTopBar` + fields, or `SessionChatSnapshotHost` when that host compiles on `:screenshot`).
+**Completion criterion:** `.snapshot-evidence/out/` contains every generated
+PNG under the exact filename convention, and `index.html` labels every image.
 
-## Report
+## 6. Publish the sketch
 
-Follow publish-artifact **sketch** rules: centered column, `max-width: 72rem`, image grid, viewport meta. `write-report.sh` emits that HTML.
+Load `~/.agents/skills/publish-artifact/SKILL.md`. Publish
+`.snapshot-evidence/out/` as a sketch with `--type plan`, then paste the
+returned URLs.
+
+**Completion criterion:** The artifact is published, and the response contains
+every returned access URL.
+
+## 7. Keep evidence throwaway
+
+Keep throwaway tests, PNGs, HTML, and Paparazzi goldens under
+`src/test/snapshots/` out of commits. Do not `git add` them. Durable mock, host,
+or skill changes may be committed only when the user asks.
+
+**Completion criterion:** `git status` distinguishes every throwaway artifact
+from durable requested changes, and no throwaway file is staged or presented as
+an intended commit.
