@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.onboarding
 
+import dev.opencode.mobile.ui.components.OpenCodeSkeletonIllustrationTopic
+
 internal data class AppOnboardingFeatureRow(
     val id: String,
     val title: String,
@@ -13,11 +15,11 @@ internal data class AppOnboardingPage(
     val badge: String? = null,
     val setupLink: String? = null,
     val features: List<AppOnboardingFeatureRow> = emptyList(),
+    val illustration: OpenCodeSkeletonIllustrationTopic,
 )
 
 internal object AppOnboardingCopy {
     const val SERVER_DOCS_URL = "https://opencode.ai/docs/server/"
-    const val ILLUSTRATION_PLACEHOLDER = "Illustration placeholder"
 
     val pages: List<AppOnboardingPage> =
         listOf(
@@ -28,6 +30,7 @@ internal object AppOnboardingCopy {
                     "OpenCode Mobile is a native client for opencode sessions — work in progress. " +
                         "It is not an official OpenCode product.",
                 badge = "Unofficial",
+                illustration = OpenCodeSkeletonIllustrationTopic.Unofficial,
             ),
             AppOnboardingPage(
                 id = "connect",
@@ -36,11 +39,13 @@ internal object AppOnboardingCopy {
                     "Point the app at an opencode server on your machine. We recommend Tailscale " +
                         "so your phone can reach it securely from anywhere.",
                 setupLink = "Need the server first?",
+                illustration = OpenCodeSkeletonIllustrationTopic.ConnectForm,
             ),
             AppOnboardingPage(
                 id = "features",
                 title = "What you can\ndo from here",
                 body = null,
+                illustration = OpenCodeSkeletonIllustrationTopic.SessionsLive,
                 features =
                     listOf(
                         AppOnboardingFeatureRow(

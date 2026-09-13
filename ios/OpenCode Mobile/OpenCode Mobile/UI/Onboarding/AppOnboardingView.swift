@@ -132,7 +132,10 @@ private struct AppOnboardingPageView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Spacer(minLength: 12)
-                AppOnboardingIllustrationPlaceholder()
+                OpenCodeSkeletonIllustration(topic: page.illustration)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 176)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
 
                 if let badge = page.badge {
                     Text(badge)
@@ -179,32 +182,6 @@ private struct AppOnboardingPageView: View {
                 Spacer(minLength: 24)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-}
-
-private struct AppOnboardingIllustrationPlaceholder: View {
-    var body: some View {
-        VStack(spacing: 10) {
-            OpenCodeIconImage(icon: .architecture, size: 36)
-                .foregroundStyle(OpenCodeColors.iconWeakBase)
-            Text(AppOnboardingCopy.illustrationPlaceholder)
-                .font(OpenCodeTypography.body)
-                .fontWeight(.semibold)
-                .foregroundStyle(OpenCodeColors.textWeak)
-            Text("Final artwork TBD")
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textWeaker)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 168)
-        .background(OpenCodeColors.surfaceRaisedBase.opacity(0.7), in: RoundedRectangle(cornerRadius: 20))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20)
-                .strokeBorder(
-                    style: StrokeStyle(lineWidth: 1.5, dash: [10, 7])
-                )
-                .foregroundStyle(OpenCodeColors.borderWeakBase)
         }
     }
 }

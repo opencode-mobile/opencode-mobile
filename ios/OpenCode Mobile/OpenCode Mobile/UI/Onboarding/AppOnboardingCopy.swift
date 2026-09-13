@@ -2,7 +2,6 @@ import Foundation
 
 enum AppOnboardingCopy {
     static let serverDocsURL = URL(string: "https://opencode.ai/docs/server/")!
-    static let illustrationPlaceholder = "Illustration placeholder"
 
     struct FeatureRow: Identifiable, Hashable {
         let id: String
@@ -17,6 +16,7 @@ enum AppOnboardingCopy {
         let badge: String?
         let setupLink: String?
         let features: [FeatureRow]
+        let illustration: OpenCodeSkeletonIllustrationTopic
     }
 
     static let pages: [Page] = [
@@ -26,7 +26,8 @@ enum AppOnboardingCopy {
             body: "OpenCode Mobile is a native client for opencode sessions — work in progress. It is not an official OpenCode product.",
             badge: "Unofficial",
             setupLink: nil,
-            features: []
+            features: [],
+            illustration: .unofficial
         ),
         Page(
             id: "connect",
@@ -34,7 +35,8 @@ enum AppOnboardingCopy {
             body: "Point the app at an opencode server on your machine. We recommend Tailscale so your phone can reach it securely from anywhere.",
             badge: nil,
             setupLink: "Need the server first?",
-            features: []
+            features: [],
+            illustration: .connectForm
         ),
         Page(
             id: "features",
@@ -48,7 +50,8 @@ enum AppOnboardingCopy {
                 FeatureRow(id: "permissions", title: "Permissions", detail: "Approve or deny requests (no lasting remember)"),
                 FeatureRow(id: "changes", title: "Changes", detail: "Inspect session diffs"),
                 FeatureRow(id: "live", title: "Live while open", detail: "Foreground event stream; refresh after reconnect"),
-            ]
+            ],
+            illustration: .sessionsLive
         ),
     ]
 

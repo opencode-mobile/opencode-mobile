@@ -14,6 +14,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case colors
     case typography
     case icons
+    case skeletonIllustration
     case attachment
     case outgoingMessage
     case assistantMessage
@@ -68,6 +69,12 @@ let componentGalleryEntries = [
         id: .icons,
         title: "Icons",
         description: "Lucide catalog synced from icons/manifest.yaml.",
+        category: .foundations
+    ),
+    ComponentGalleryEntry(
+        id: .skeletonIllustration,
+        title: "Skeleton Illustration",
+        description: "Wireframe hero with one spotlit element for onboarding, tutorials, and hints.",
         category: .foundations
     ),
     ComponentGalleryEntry(
