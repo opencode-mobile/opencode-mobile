@@ -113,7 +113,8 @@ struct SceneWorldSignalsTests {
         #expect(graced)
         let stopped = await waitUntil { signals.occupancy == .stopped }
         #expect(stopped)
-        #expect(stream.connectionState == .idle)
+        let idle = await waitUntil { stream.connectionState == .idle }
+        #expect(idle)
     }
 
     @Test func activeBeforeInactiveGraceCancelsBackground() async {
