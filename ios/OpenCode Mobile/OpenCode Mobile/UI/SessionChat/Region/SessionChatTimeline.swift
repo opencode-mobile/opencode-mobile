@@ -31,6 +31,8 @@ final class SessionChatTimeline {
     private(set) var serverCommands: [ServerCommand] = []
     /// Collapse-consecutive-tool-calls preference (OPE-144); widens grouping.
     private(set) var collapseConsecutiveToolCalls = false
+    /// Test-only: runs after a frame revision is taken, before off-main build.
+    static var applyTestGate: (@MainActor () async -> Void)?
 
     init(
         sessionID: String,
@@ -454,6 +456,8 @@ final class SessionChatTimeline {
         expirePendingPromptPatches: Bool = true,
         onPublished: (() -> Void)? = nil
     ) async {
+        let publish = onPublished
+        defer { publish?() }
         let displayMessages = applyPendingPromptOverlay(
             displayMessages,
             expireAgainstAuthoritative: expirePendingPromptPatches
@@ -469,6 +473,9 @@ final class SessionChatTimeline {
 
         displayFrameRevision &+= 1
         let frameRevision = displayFrameRevision
+        if let gate = Self.applyTestGate {
+            await gate()
+        }
         let sessionKey = sessionID
         let commands = serverCommands
         let collapse = collapseConsecutiveToolCalls
@@ -592,7 +599,6 @@ final class SessionChatTimeline {
         notifyChange()
         SessionPerformanceProbe.emit("styled_timeline_published")
         MessagePipelineProbe.emit(.styledPaintCompleted)
-        onPublished?()
     }
 
     private func clearOptimisticIfReconciled(rows: [TimelineRow]) {
