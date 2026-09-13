@@ -658,6 +658,8 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
         return _snapshot
     }
     private var continuations: [UUID: AsyncStream<OpencodeEvent>.Continuation] = [:]
+    private var eventBuffer: [OpencodeEvent] = []
+    private let eventBufferLimit = 64
     private var connectionStateContinuations: [UUID: AsyncStream<EventStreamConnectionState>.Continuation] = [:]
     private var snapshotContinuations: [UUID: AsyncStream<LiveConnectionSnapshot>.Continuation] = [:]
 
@@ -703,12 +705,33 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
 
     var hasEventSubscriber: Bool { eventSubscriberCount > 0 }
 
+    var hasConnectionStateSubscriber: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return !connectionStateContinuations.isEmpty
+    }
+
+    var hasSnapshotSubscriber: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return !snapshotContinuations.isEmpty
+    }
+
+    var hasCoordinatorSubscribers: Bool {
+        hasEventSubscriber && hasConnectionStateSubscriber && hasSnapshotSubscriber
+    }
+
     func events() -> AsyncStream<OpencodeEvent> {
         let id = UUID()
         let (stream, continuation) = AsyncStream.makeStream(of: OpencodeEvent.self)
         lock.lock()
         continuations[id] = continuation
+        let pending = eventBuffer
+        eventBuffer.removeAll()
         lock.unlock()
+        for event in pending {
+            continuation.yield(event)
+        }
         continuation.onTermination = { [weak self] _ in
             guard let self else { return }
             self.lock.lock()
@@ -875,6 +898,14 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
     func emit(_ event: OpencodeEvent) {
         lock.lock()
         let conts = Array(continuations.values)
+        if conts.isEmpty {
+            eventBuffer.append(event)
+            if eventBuffer.count > eventBufferLimit {
+                eventBuffer.removeFirst()
+            }
+            lock.unlock()
+            return
+        }
         lock.unlock()
         for continuation in conts {
             continuation.yield(event)

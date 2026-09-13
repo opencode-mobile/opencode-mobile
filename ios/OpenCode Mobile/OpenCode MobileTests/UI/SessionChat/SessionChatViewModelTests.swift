@@ -646,12 +646,16 @@ struct SessionChatViewModelTests {
         let repository = FakeMessageRepository()
         let viewModel = makeViewModel(messageRepository: repository)
         await viewModel.loadMessages()
+        let loaded = await waitUntil { viewModel.uiState.timeline == .ready }
+        #expect(loaded)
         viewModel.updateComposerText("New prompt")
         await viewModel.sendPrompt()
-        guard viewModel.uiState.timeline == .ready else {
-            Issue.record("Expected ready timeline")
-            return
+        let ready = await waitUntil {
+            viewModel.uiState.timeline == .ready
+                && viewModel.uiState.isSending == false
+                && viewModel.uiState.messages.contains { $0.text == "New prompt" && $0.isPending }
         }
+        #expect(ready)
         let messages = viewModel.uiState.messages
         #expect(viewModel.uiState.isSending == false)
         #expect(repository.sendPromptAsyncCalled)
@@ -1734,12 +1738,14 @@ struct SessionChatViewModelTests {
     @Test func sendPrompt_failure() async {
         let viewModel = makeViewModel(messageRepository: FakeMessageRepository(shouldFailSend: true))
         await viewModel.loadMessages()
+        let loaded = await waitUntil { viewModel.uiState.timeline == .ready }
+        #expect(loaded)
         viewModel.updateComposerText("Fail me")
         await viewModel.sendPrompt()
-        guard viewModel.uiState.timeline == .ready else {
-            Issue.record("Expected ready timeline with error message")
-            return
+        let ready = await waitUntil {
+            viewModel.uiState.timeline == .ready && viewModel.uiState.isSending == false
         }
+        #expect(ready)
         let messages = viewModel.uiState.messages
         #expect(viewModel.uiState.isSending == false)
         #expect(!messages.contains { $0.text == "Fail me" })
@@ -1752,12 +1758,16 @@ struct SessionChatViewModelTests {
         let repository = FakeMessageRepository(failListMessagesAfterSend: true)
         let viewModel = makeViewModel(messageRepository: repository)
         await viewModel.loadMessages()
+        let loaded = await waitUntil { viewModel.uiState.timeline == .ready }
+        #expect(loaded)
         viewModel.updateComposerText("Pending prompt")
         await viewModel.sendPrompt()
-        guard viewModel.uiState.timeline == .ready else {
-            Issue.record("Expected ready timeline")
-            return
+        let ready = await waitUntil {
+            viewModel.uiState.timeline == .ready
+                && viewModel.uiState.isSending == false
+                && viewModel.uiState.messages.contains { $0.text == "Pending prompt" && $0.isPending }
         }
+        #expect(ready)
         let messages = viewModel.uiState.messages
         #expect(repository.sendPromptAsyncCalled)
         #expect(viewModel.uiState.isSending == false)
@@ -2972,7 +2982,7 @@ struct SessionChatViewModelTests {
     }
 
     private func waitUntil(
-        timeoutMs: Int = 2_000,
+        timeoutMs: Int = 5_000,
         predicate: @MainActor () -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(TimeInterval(timeoutMs) / 1_000)
@@ -3273,7 +3283,7 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
         if shouldFailLoad {
             throw MessageError.transport("load failed")
         }
-        if failListMessagesAfterSend, listMessagesCallCount > 1 {
+        if failListMessagesAfterSend, sendPromptAsyncCalled {
             throw MessageError.transport("reload failed")
         }
         return messages

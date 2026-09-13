@@ -6,27 +6,32 @@ import Testing
 struct SceneWorldSignalsTests {
     @Test func briefBackgroundDoesNotStopStreamWhenForegroundCancelsGrace() async {
         let stream = FakeForegroundEventStream()
-        let signals = sceneWorldSignals(stream: stream, stopGrace: .milliseconds(100))
+        let signals = sceneWorldSignals(stream: stream, stopGrace: .milliseconds(400))
         let collected = SignalCollector()
         let job = Task {
             for await signal in signals.signals() {
                 collected.append(signal)
             }
         }
-        try? await Task.sleep(for: .milliseconds(20))
 
         signals.onForeground()
-        try? await Task.sleep(for: .milliseconds(20))
-        #expect(stream.connectionState == .connected)
-        #expect(collected.snapshot() == [.foreground])
+        let foregrounded = await waitUntil {
+            stream.connectionState == .connected && collected.snapshot() == [.foreground]
+        }
+        #expect(foregrounded)
 
         signals.onBackground()
-        try? await Task.sleep(for: .milliseconds(40))
+        let backed = await waitUntil { collected.snapshot() == [.foreground, .background] }
+        #expect(backed)
         #expect(stream.connectionState == .connected)
-        #expect(collected.snapshot() == [.foreground, .background])
 
         signals.onForeground()
-        try? await Task.sleep(for: .milliseconds(200))
+        let resumed = await waitUntil {
+            stream.connectionState == .connected
+                && collected.snapshot() == [.foreground, .background, .foreground]
+        }
+        #expect(resumed)
+        try? await Task.sleep(for: .milliseconds(450))
         #expect(stream.connectionState == .connected)
         #expect(collected.snapshot() == [.foreground, .background, .foreground])
         job.cancel()
@@ -34,20 +39,18 @@ struct SceneWorldSignalsTests {
 
     @Test func sustainedBackgroundStopsStreamAfterGrace() async {
         let stream = FakeForegroundEventStream()
-        let signals = sceneWorldSignals(stream: stream, stopGrace: .milliseconds(100))
+        let signals = sceneWorldSignals(stream: stream, stopGrace: .milliseconds(150))
         let collected = SignalCollector()
         let job = Task {
             for await signal in signals.signals() {
                 collected.append(signal)
             }
         }
-        try? await Task.sleep(for: .milliseconds(20))
 
         signals.onForeground()
         signals.onBackground()
-        try? await Task.sleep(for: .milliseconds(20))
-        #expect(collected.snapshot() == [.foreground, .background])
-        try? await Task.sleep(for: .milliseconds(60))
+        let backed = await waitUntil { collected.snapshot() == [.foreground, .background] }
+        #expect(backed)
         #expect(stream.connectionState == .connected)
 
         let stopped = await waitUntil {
@@ -67,24 +70,23 @@ struct SceneWorldSignalsTests {
             stopGrace: .milliseconds(50)
         )
         signals.onForeground()
-        try? await Task.sleep(for: .milliseconds(20))
-        #expect(stream.connectionState == .connected)
+        let started = await waitUntil { stream.connectionState == .connected }
+        #expect(started)
 
         signals.onProfileSwitched()
-        try? await Task.sleep(for: .milliseconds(20))
+        let switched = await waitUntil { stream.ops == ["wake", "start"] }
+        #expect(switched)
         #expect(stream.connectionState == .connected)
-        #expect(stream.ops == ["wake", "start"])
 
         let before = stream.ops
         signals.onProfileCleared()
-        try? await Task.sleep(for: .milliseconds(20))
-        #expect(stream.ops == before)
-        #expect(stream.connectionState == .connected)
+        let settled = await waitUntil { stream.ops == before && stream.connectionState == .connected }
+        #expect(settled)
     }
 
     @Test func occupancyTracksForegroundGraceAndStop() async {
         let stream = FakeForegroundEventStream()
-        let signals = sceneWorldSignals(stream: stream, stopGrace: .milliseconds(50))
+        let signals = sceneWorldSignals(stream: stream, stopGrace: .milliseconds(150))
         #expect(signals.occupancy == .active)
 
         signals.onBackground()
@@ -102,12 +104,11 @@ struct SceneWorldSignalsTests {
         let stream = FakeForegroundEventStream()
         let signals = sceneWorldSignals(
             stream: stream,
-            stopGrace: .milliseconds(80),
-            inactiveGrace: .milliseconds(40)
+            stopGrace: .milliseconds(150),
+            inactiveGrace: .milliseconds(150)
         )
         signals.onForeground()
         signals.onInactive()
-        try? await Task.sleep(for: .milliseconds(20))
         #expect(signals.occupancy == .active)
         let graced = await waitUntil { signals.occupancy == .grace }
         #expect(graced)
@@ -121,14 +122,14 @@ struct SceneWorldSignalsTests {
         let stream = FakeForegroundEventStream()
         let signals = sceneWorldSignals(
             stream: stream,
-            stopGrace: .milliseconds(80),
-            inactiveGrace: .milliseconds(80)
+            stopGrace: .milliseconds(400),
+            inactiveGrace: .milliseconds(400)
         )
         signals.onForeground()
         signals.onInactive()
-        try? await Task.sleep(for: .milliseconds(20))
+        #expect(signals.occupancy == .active)
         signals.onForeground()
-        try? await Task.sleep(for: .milliseconds(120))
+        try? await Task.sleep(for: .milliseconds(450))
         #expect(signals.occupancy == .active)
         #expect(stream.connectionState == .connected)
     }
@@ -143,8 +144,8 @@ struct SceneWorldSignalsTests {
         )
         signals.onForeground()
         signals.onPathReady()
-        try? await Task.sleep(for: .milliseconds(20))
-        #expect(stream.ops.filter { $0 == "wake" }.count == 2)
+        let woke = await waitUntil { stream.ops.filter { $0 == "wake" }.count == 2 }
+        #expect(woke)
     }
 
     private func sceneWorldSignals(
@@ -162,7 +163,7 @@ struct SceneWorldSignalsTests {
     }
 
     private func waitUntil(
-        timeoutMs: Int = 2_000,
+        timeoutMs: Int = 5_000,
         predicate: () -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(TimeInterval(timeoutMs) / 1_000)

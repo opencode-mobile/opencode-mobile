@@ -40,7 +40,8 @@ struct SyncCoordinatorTests {
         env.coordinator.visible(key, true)
 
         let first = Task.detached { await env.coordinator.ensureFresh(key) }
-        try? await Task.sleep(for: .milliseconds(10))
+        let started = await coordinatorWaitUntil { loads.value == 1 }
+        #expect(started)
         let second = Task.detached { await env.coordinator.ensureFresh(key) }
         _ = await first.value
         _ = await second.value
@@ -180,13 +181,14 @@ struct SyncCoordinatorTests {
 
         clock.now = 19_000
         env.world.emit(.foreground)
-        try? await Task.sleep(for: .milliseconds(30))
+        let held = await coordinatorWaitUntil(timeoutMs: 200) { loads.value == 2 }
+        #expect(!held)
         #expect(loads.value == 1)
 
         clock.now = 21_000
         env.world.emit(.foreground)
-        _ = await coordinatorWaitUntil { loads.value == 2 }
-        #expect(loads.value == 2)
+        let quietReloaded = await coordinatorWaitUntil { loads.value == 2 }
+        #expect(quietReloaded)
     }
 
     @Test func serverConnectedAndStreamReconnectedCoalesceIntoOneBootstrap() async {
@@ -202,14 +204,16 @@ struct SyncCoordinatorTests {
         await env.coordinator.ensureFresh(key)
         #expect(loads.value == 1)
 
+        let listening = await coordinatorWaitUntil { env.stream.hasEventSubscriber }
+        #expect(listening)
         env.coordinator.invalidate(key)
         env.stream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
         env.stream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: nil))
-        _ = await coordinatorWaitUntil { clock.waitersCount > 0 }
+        let coalescing = await coordinatorWaitUntil { clock.waitersCount > 0 }
+        #expect(coalescing)
         clock.releaseNextSleep()
-        _ = await coordinatorWaitUntil { loads.value == 2 }
-        try? await Task.sleep(for: .milliseconds(20))
-        #expect(loads.value == 2)
+        let reloaded = await coordinatorWaitUntil { loads.value == 2 }
+        #expect(reloaded)
     }
 
     @Test func ensureFreshDoesNotLoadWhenCannotCatchUp() async {
@@ -363,7 +367,7 @@ private final class FakeSyncClock: SyncClock, @unchecked Sendable {
 }
 
 private func coordinatorWaitUntil(
-    timeoutMs: Int = 2_000,
+    timeoutMs: Int = 5_000,
     _ predicate: @escaping @Sendable () -> Bool
 ) async -> Bool {
     await Task.detached {

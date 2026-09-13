@@ -180,6 +180,8 @@ struct MessageSyncTests {
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
         #expect(loaded)
+        let listening = await waitUntil { eventStream.hasCoordinatorSubscribers }
+        #expect(listening)
 
         repo.shouldFailList = true
         eventStream.setConnectionState(.connected)
@@ -696,6 +698,8 @@ struct MessageSyncTests {
                     sentAtEpochMs: 2
                 ),
             ]
+            let listening = await waitUntil { eventStream.hasCoordinatorSubscribers }
+            #expect(listening)
             repo.holdNextListMessages()
             eventStream.openGap()
             let recovering = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 2 }
@@ -828,6 +832,8 @@ struct MessageSyncTests {
         let chromeCleared = await waitUntil { globalChrome.last == false }
         #expect(chromeCleared)
 
+        let listening = await waitUntil { eventStream.hasCoordinatorSubscribers }
+        #expect(listening)
         repo.holdNextListMessages()
         eventStream.openGap()
         let recovering = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 2 }
@@ -1297,6 +1303,8 @@ struct MessageSyncTests {
         let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
         #expect(loaded)
         #expect(collector.emissions.count == 1)
+        let listening = await waitUntil { eventStream.hasCoordinatorSubscribers }
+        #expect(listening)
 
         eventStream.setConnectionState(.connected)
         eventStream.openGap()
