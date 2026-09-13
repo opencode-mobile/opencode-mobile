@@ -86,6 +86,46 @@ class MessageSyncWindowedHistoryTest {
         }
 
     @Test
+    fun initialSubscribe_publishesTailBeforeSplitTurnBackfill() =
+        runTest(testDispatcher) {
+            val olderCalls = mutableListOf<String>()
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages = listOf(assistant("a20")),
+                            olderCursor = "c1",
+                            hasOlder = true,
+                        )
+                    },
+                    listOlderMessages = { _, _, cursor ->
+                        olderCalls += cursor
+                        MessagePage(
+                            messages = listOf(user("u1"), assistant("a20")),
+                            olderCursor = "c0",
+                            hasOlder = true,
+                        )
+                    },
+                )
+
+            val updates = mutableListOf<MessageListUpdate>()
+            sync.observeMessages("ses-1", "/repo")
+                .onEach { updates += it }
+                .first { update ->
+                    update is MessageListUpdate.Messages &&
+                        (update as MessageListUpdate.Messages).messages.firstOrNull()?.role ==
+                        MessageRole.User
+                }
+            advanceUntilIdle()
+
+            val published =
+                updates.filterIsInstance<MessageListUpdate.Messages>().map { it.messages.map { message -> message.id } }
+            assertEquals(listOf("a20"), published.first())
+            assertEquals(listOf("u1", "a20"), published.last())
+            assertEquals(listOf("c1"), olderCalls)
+        }
+
+    @Test
     fun loadOlder_prependsAndStopsAtHistoryEnd() =
         runTest(testDispatcher) {
             val olderCalls = mutableListOf<String>()
@@ -366,6 +406,8 @@ class MessageSyncWindowedHistoryTest {
         )
 
     private fun user(id: String) = Message(id = id, role = MessageRole.User, text = id)
+
+    private fun assistant(id: String) = Message(id = id, role = MessageRole.Assistant, text = id)
 }
 
 private class SeededSessionCache(

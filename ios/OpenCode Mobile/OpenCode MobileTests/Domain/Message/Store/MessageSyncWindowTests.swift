@@ -155,7 +155,7 @@ struct MessageSyncWindowTests {
         ])
     }
 
-    @Test func splitTurnBackfillFetchesOlderTwentyMessagePages() async {
+    @Test func splitTurnPublishesTailBeforeBackfill() async {
         let pages = WindowPageRepository(pages: [
             MessageHistoryPage(
                 messages: [windowMessage("a20", role: .assistant)],
@@ -171,10 +171,12 @@ struct MessageSyncWindowTests {
         let sync = makeWindowSync(pages: pages, store: InMemoryMessageStore())
         let collector = WindowMessageCollector()
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
-        let loaded = await waitUntil { collector.latest()?.first?.role == .user }
+        let paintedTail = await waitUntil { collector.first()?.map(\.id) == ["a20"] }
+        let loaded = await waitUntil { collector.latest()?.map(\.id) == ["u1", "a20"] }
         task.cancel()
+        #expect(paintedTail)
         #expect(loaded)
-        #expect(collector.latest()?.map(\.id) == ["u1", "a20"])
+        #expect(collector.first()?.map(\.id) == ["a20"])
         #expect(pages.queries == [
             .newest(limit: 20),
             .older(cursor: "c1", limit: 20),
@@ -409,6 +411,12 @@ private final class WindowMessageCollector: @unchecked Sendable {
             }
             lock.unlock()
         }
+    }
+
+    func first() -> [Message]? {
+        lock.lock()
+        defer { lock.unlock() }
+        return emissions.first
     }
 
     func latest() -> [Message]? {

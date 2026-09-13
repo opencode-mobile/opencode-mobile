@@ -639,6 +639,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     setAwaitingCacheSyncConfirm(false, for: key.storeSlot)
                     yield(.cacheSyncConfirmed)
                 }
+                await backfillSplitTurnIfNeeded(key: key, publishMessages: { publishMessages($0, false) })
                 if authority.needsReconcile(liveConnection.snapshot) || !applied {
                     await reconcileGap(
                         key: key,
@@ -861,32 +862,59 @@ nonisolated final class MessageSync: @unchecked Sendable {
         directory: String?,
         reason: String
     ) async throws -> MessageHistoryPage {
-        var page = try await fetchHistoryPage(
+        try await fetchHistoryPage(
             sessionID: sessionID,
             directory: directory,
             query: .newest(limit: MessageHistoryPaging.tailLimit),
             reason: reason
         )
-        var backfills = 0
-        while MessageHistoryMerge.beginsMidTurn(page.messages),
-              page.hasOlder,
-              let cursor = page.olderCursor,
-              backfills < MessageHistoryPaging.maxSplitTurnBackfillPages
-        {
-            let older = try await fetchHistoryPage(
-                sessionID: sessionID,
-                directory: directory,
-                query: .older(cursor: cursor, limit: MessageHistoryPaging.splitTurnPageLimit),
-                reason: "\(reason)-split-turn"
-            )
-            page = MessageHistoryPage(
-                messages: MessageHistoryMerge.applyOlder(local: page.messages, older: older.messages),
-                olderCursor: older.olderCursor,
-                hasOlder: older.hasOlder
-            )
-            backfills += 1
+    }
+
+    private func backfillSplitTurnIfNeeded(
+        key: MessageSessionKey,
+        publishMessages: @escaping @Sendable ([Message]) -> Void
+    ) async {
+        let directory = key.directory.isEmpty ? nil : key.directory
+        var extra = 0
+        while extra < MessageHistoryPaging.maxSplitTurnBackfillPages {
+            let local = store.messages(sessionID: key.storeSlot)
+            guard MessageHistoryMerge.beginsMidTurn(local) else { return }
+            lock.lock()
+            let hasOlder = hasOlderBySlot[key.storeSlot] ?? false
+            let cursor = olderCursorBySlot[key.storeSlot]
+            lock.unlock()
+            guard hasOlder, let cursor else { return }
+            do {
+                let older = try await fetchHistoryPage(
+                    sessionID: key.sessionID,
+                    directory: directory,
+                    query: .older(cursor: cursor, limit: MessageHistoryPaging.splitTurnPageLimit),
+                    reason: "split-turn"
+                )
+                if older.messages.isEmpty { return }
+                var applied = false
+                while !applied {
+                    applied = store.prependOlderIfRevision(
+                        sessionID: key.storeSlot,
+                        older: older.messages,
+                        expectedRevision: store.revision(sessionID: key.storeSlot)
+                    )
+                }
+                rememberWindow(older, for: key.storeSlot, update: .replace)
+                let merged = store.messages(sessionID: key.storeSlot)
+                setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
+                setFingerprint(messageFingerprint(merged), for: key.storeSlot)
+                DiagnosticLog.info(
+                    .chat,
+                    "splitTurnBackfill session=\(key.sessionID) extra=\(extra + 1) count=\(merged.count)"
+                )
+                publishMessages(merged)
+                extra += 1
+            } catch {
+                DiagnosticLog.warning(.chat, "splitTurnBackfill failed session=\(key.sessionID)")
+                return
+            }
         }
-        return page
     }
 
     private enum HistoryWindowUpdate {
@@ -1032,6 +1060,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 let healthy = staging.completeAuthorityWindow(.accepted)
                 setHealth(staging.currentHealth, for: key)
                 publishMessages(messages)
+                await backfillSplitTurnIfNeeded(key: key, publishMessages: publishMessages)
                 if !healthy {
                     await performClosedLoopRecovery(
                         key: key,
@@ -1043,6 +1072,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 }
             } else {
                 publishMessages(messages)
+                await backfillSplitTurnIfNeeded(key: key, publishMessages: publishMessages)
                 setHealth(.healthy, for: key)
             }
         case .discarded(let messages):

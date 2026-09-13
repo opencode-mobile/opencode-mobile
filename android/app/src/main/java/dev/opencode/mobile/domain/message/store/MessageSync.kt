@@ -62,6 +62,7 @@ class MessageSync(
     listMessages: MessageListFetcher? = null,
     listMessageTail: MessageTailFetcher? = null,
     listOlderMessages: MessageOlderFetcher? = null,
+    listSplitTurnMessages: MessageOlderFetcher? = null,
     private val engine: SessionMessageEngine,
     private val eventStream: ForegroundEventStream,
     private val liveStoreScope: LiveStoreScope,
@@ -87,6 +88,7 @@ class MessageSync(
     private val listOlder: MessageOlderFetcher =
         listOlderMessages
             ?: { _, _, _ -> MessagePage(messages = emptyList(), olderCursor = null, hasOlder = false) }
+    private val listSplitTurn: MessageOlderFetcher = listSplitTurnMessages ?: listOlder
 
     private val liveConnection = eventStream.asLiveConnection()
     private val observationCache = ConcurrentHashMap<MessageSessionKey, SharedFlow<MessageListUpdate>>()
@@ -1019,6 +1021,13 @@ class MessageSync(
                             )
                             send(MessageListUpdate.CacheSyncConfirmed(hasOlder = historyWindow(storeSlot).hasOlder))
                         }
+                        backfillSplitTurnIfNeeded(
+                            key,
+                            stillCurrent = { observationStillCurrent() },
+                            emitMessages = { frame ->
+                                emitMessages(frame, isFromCache = false)
+                            },
+                        )
                         if (applied) {
                             authority.acknowledge(begun)
                         } else {
@@ -1207,6 +1216,41 @@ class MessageSync(
     ): MessagePage {
         restAttempts += reason
         return listTail(sessionId, directory)
+    }
+
+    private suspend fun backfillSplitTurnIfNeeded(
+        key: MessageSessionKey,
+        stillCurrent: () -> Boolean = { true },
+        emitMessages: suspend (List<Message>) -> Unit,
+    ) {
+        val storeSlot = key.storeSlot
+        val directory = key.directory.ifEmpty { null }
+        var extra = 0
+        while (extra < MessageHistoryWindow.SPLIT_TURN_MAX_PAGES) {
+            if (!stillCurrent()) return
+            val local = engine.messages(storeSlot)
+            if (!beginsMidTurn(local)) return
+            val window = historyWindow(storeSlot)
+            if (!window.hasOlder || window.olderCursor.isNullOrBlank()) return
+            restAttempts += "split-turn"
+            val older =
+                runCatching { listSplitTurn(key.sessionId, directory, window.olderCursor) }
+                    .getOrElse {
+                        logW("splitTurnBackfill failed session=${key.sessionId}")
+                        return
+                    }
+            if (older.messages.isEmpty()) return
+            var applied = false
+            while (!applied) {
+                applied = engine.prependOlderIfRevision(storeSlot, older.messages, engine.revision(storeSlot))
+            }
+            rememberHistoryWindow(storeSlot, older)
+            val merged = engine.messages(storeSlot)
+            rememberPublishedFrame(storeSlot, merged)
+            logI("splitTurnBackfill session=${key.sessionId} extra=${extra + 1} count=${merged.size}")
+            emitMessages(merged)
+            extra += 1
+        }
     }
 
     /**
