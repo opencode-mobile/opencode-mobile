@@ -31,6 +31,14 @@ final class SessionListStatusMappingTests: XCTestCase {
         )
     }
 
+    func testStaleToneUsesMutedChip() {
+        let stale = SessionListStatus.running.listItemStatus(isStale: true)
+        XCTAssertEqual(stale.text, "Running")
+        XCTAssertEqual(stale.tone, .stale)
+        let live = SessionListStatus.running.listItemStatus(isStale: false)
+        XCTAssertEqual(live.tone, .interactive)
+    }
+
     /// Mirrors `SessionListItem.sessionListStatus` in ProjectListHomeView.
     private func sessionListStatus(statusLabel: String?, isReady: Bool) -> SessionListStatus {
         switch statusLabel {

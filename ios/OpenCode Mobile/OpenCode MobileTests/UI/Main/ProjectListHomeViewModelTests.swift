@@ -853,6 +853,52 @@ struct ProjectListHomeViewModelTests {
         #expect(retrying)
         #expect(homeSession(viewModel, id: "ses-1")?.isReady == true)
     }
+
+    @Test func liveStatus_cachedRunningMapsStaleUntilServer() async {
+        let sessions = [
+            Session(id: "ses-1", title: "Alpha", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
+        ]
+        let sessionLive = ControllableSessionLiveStore()
+        let statusLive = ControllableStatusLiveStore()
+        let readyLive = ControllableReadyStore()
+        sessionLive.emit(directory: "/repo", sessions: sessions)
+        readyLive.emit(directory: "/repo", ids: [])
+        statusLive.emit(
+            directory: "/repo",
+            snapshot: SessionActivitySnapshot(
+                entries: [
+                    "ses-1": SessionActivityEntry(activity: .running, source: .cached, observedAtMs: 1),
+                ],
+                seeded: false,
+                fromCache: true
+            )
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: FakeSessionRepository(sessions: sessions),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            sessionLiveStoreOverride: sessionLive,
+            sessionStatusLiveStoreOverride: statusLive,
+            sessionReadyStoreOverride: readyLive
+        )
+        await viewModel.refresh()
+        let cached = await waitUntil {
+            homeSession(viewModel, id: "ses-1")?.statusLabel == "Working"
+                && homeSession(viewModel, id: "ses-1")?.statusIsStale == true
+        }
+        #expect(cached)
+        #expect(homeSession(viewModel, id: "ses-1")?.isReady == false)
+
+        statusLive.emit(
+            directory: "/repo",
+            statuses: ["ses-1": SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
+        )
+        let live = await waitUntil {
+            homeSession(viewModel, id: "ses-1")?.statusLabel == "Working"
+                && homeSession(viewModel, id: "ses-1")?.statusIsStale == false
+        }
+        #expect(live)
+    }
 }
 
 @MainActor

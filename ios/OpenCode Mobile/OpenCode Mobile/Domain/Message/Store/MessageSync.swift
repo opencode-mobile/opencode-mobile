@@ -20,7 +20,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private let lock = NSLock()
 
     private var observationCache: [MessageSessionKey: SharedLiveObservation<MessageListUpdate>] = [:]
-    private var lastFingerprint: [String: String] = [:]
+    private var lastIdentity: [String: MessageFrameIdentity] = [:]
     private var lastPublishedFrame: [String: [Message]] = [:]
     private var lastPublishedRevision: [String: UInt64] = [:]
     private var healthByKey: [MessageSessionKey: MessageSyncHealth] = [:]
@@ -194,7 +194,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         startedGenerationByKey.removeAll()
         let stale = Array(observationCache.values)
         observationCache.removeAll()
-        lastFingerprint.removeAll()
+        lastIdentity.removeAll()
         lastPublishedFrame.removeAll()
         lastPublishedRevision.removeAll()
         healthByKey.removeAll()
@@ -266,7 +266,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
         rememberWindow(page, for: key.storeSlot, update: .replace)
         let result = store.messages(sessionID: key.storeSlot)
         setPublishedFrame(result, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
-        setFingerprint(messageFingerprint(result), for: key.storeSlot)
+        setIdentity(
+            MessageFrameIdentity.of(messages: result, engineRevision: store.revision(sessionID: key.storeSlot)),
+            for: key.storeSlot
+        )
         return result
     }
 
@@ -347,15 +350,15 @@ nonisolated final class MessageSync: @unchecked Sendable {
         }
     }
 
-    private func fingerprint(for storeSlot: String) -> String? {
+    private func frameIdentity(for storeSlot: String) -> MessageFrameIdentity? {
         lock.lock()
         defer { lock.unlock() }
-        return lastFingerprint[storeSlot]
+        return lastIdentity[storeSlot]
     }
 
-    private func setFingerprint(_ value: String, for storeSlot: String) {
+    private func setIdentity(_ value: MessageFrameIdentity, for storeSlot: String) {
         lock.lock()
-        lastFingerprint[storeSlot] = value
+        lastIdentity[storeSlot] = value
         lock.unlock()
     }
 
@@ -486,7 +489,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
             self.lastPublishedProfileID = key.connectionProfileID
             self.lock.unlock()
             yield(.messages(messages, isFromCache: isFromCache))
-            self.setFingerprint(self.messageFingerprint(messages), for: key.storeSlot)
+            self.setIdentity(
+                MessageFrameIdentity.of(
+                    messages: messages,
+                    engineRevision: self.store.revision(sessionID: key.storeSlot)
+                ),
+                for: key.storeSlot
+            )
             MessagePipelineProbe.emit(.displayFramePublished)
         }
 
@@ -494,7 +503,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             let generation = syncCoordinator.profileGeneration
             staging.beginAuthorityWindow()
             do {
-                let fingerprintBeforeReload = fingerprint(for: key.storeSlot)
+                let identityBeforeReload = frameIdentity(for: key.storeSlot)
                 let expectedRevision = store.revision(sessionID: key.storeSlot)
                 let started = Date()
                 SessionPerformanceProbe.emit("history_request_started")
@@ -509,6 +518,34 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 }
                 rememberTailWindow(page, for: key.storeSlot)
                 SessionPerformanceProbe.emit("history_request_finished")
+
+                let awaitingCache = isAwaitingCacheSyncConfirm(for: key.storeSlot)
+                if awaitingCache, !staging.needsAuthoritativeRecovery {
+                    let cached = store.messages(sessionID: key.storeSlot)
+                    let cachedTail = Array(cached.suffix(page.messages.count))
+                    if MessageTailIdentity.of(page.messages) == MessageTailIdentity.of(cachedTail) {
+                        await applyQueuedIncrementalEvents(
+                            staging.takeQueuedIncrementalEvents(),
+                            key: key,
+                            publishMessages: { publishMessages($0, false) }
+                        )
+                        cacheHandle.note(messages: store.messages(sessionID: key.storeSlot))
+                        setAwaitingCacheSyncConfirm(false, for: key.storeSlot)
+                        yield(.cacheSyncConfirmed)
+                        setHealth(.healthy, for: key)
+                        DiagnosticLog.info(
+                            .chat,
+                            "fullReload session=\(key.sessionID) reason=\(StoreRefreshReason.initialSubscribe) count=\(cached.count) ms=\(elapsedMs(since: started)) confirm=tail-identity"
+                        )
+                        await backfillSplitTurnIfNeeded(key: key, publishMessages: { publishMessages($0, false) })
+                        _ = staging.completeAuthorityWindow(.accepted)
+                        lock.lock()
+                        lastLoadErrorBySlot.removeValue(forKey: key.storeSlot)
+                        lock.unlock()
+                        return
+                    }
+                }
+
                 await applyQueuedIncrementalEvents(
                     staging.takeQueuedIncrementalEvents(),
                     key: key,
@@ -539,24 +576,28 @@ nonisolated final class MessageSync: @unchecked Sendable {
                             sessionID: key.storeSlot,
                             tail: page.messages,
                             expectedRevision: expectedRevision,
-                            mergeExisting: fingerprintBeforeReload != nil
+                            mergeExisting: identityBeforeReload != nil
                         )
                 }
                 let merged = store.messages(sessionID: key.storeSlot)
-                let nextFingerprint = messageFingerprint(merged)
-                setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
-                setFingerprint(nextFingerprint, for: key.storeSlot)
+                let nextIdentity = MessageFrameIdentity.of(
+                    messages: merged,
+                    engineRevision: store.revision(sessionID: key.storeSlot)
+                )
+                setIdentity(nextIdentity, for: key.storeSlot)
                 DiagnosticLog.info(
                     .chat,
                     "fullReload session=\(key.sessionID) reason=\(StoreRefreshReason.initialSubscribe) count=\(merged.count) ms=\(elapsedMs(since: started))"
                 )
-                if fingerprintBeforeReload != nextFingerprint {
-                    publishMessages(merged, false)
-                } else {
+                let previous = publishedFrame(for: key.storeSlot)
+                if let previous, previous == merged, !awaitingCache {
+                    setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
                     cacheHandle.note(messages: merged)
                     setAwaitingCacheSyncConfirm(false, for: key.storeSlot)
                     yield(.cacheSyncConfirmed)
                     setHealth(.healthy, for: key)
+                } else {
+                    publishMessages(merged, false)
                 }
                 await backfillSplitTurnIfNeeded(key: key, publishMessages: { publishMessages($0, false) })
                 _ = staging.completeAuthorityWindow(.accepted)
@@ -623,11 +664,12 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 expectedRevision: seedRevision
             )
             let seededMerged = store.messages(sessionID: key.storeSlot)
+            ResumeTiming.shared.markCachePainted()
             publishMessages(seededMerged, true)
         }
 
         await syncCoordinator.ensureFresh(projection)
-        if fingerprint(for: key.storeSlot) == nil, publishedFrame(for: key.storeSlot) == nil {
+        if frameIdentity(for: key.storeSlot) == nil, publishedFrame(for: key.storeSlot) == nil {
             do {
                 try await loadTail()
             } catch {
@@ -736,7 +778,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 rememberWindow(older, for: key.storeSlot, update: .replace)
                 let merged = store.messages(sessionID: key.storeSlot)
                 setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
-                setFingerprint(messageFingerprint(merged), for: key.storeSlot)
+                setIdentity(
+                    MessageFrameIdentity.of(
+                        messages: merged,
+                        engineRevision: store.revision(sessionID: key.storeSlot)
+                    ),
+                    for: key.storeSlot
+                )
                 DiagnosticLog.info(
                     .chat,
                     "splitTurnBackfill session=\(key.sessionID) extra=\(extra + 1) count=\(merged.count)"
@@ -832,7 +880,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 )
             let merged = store.messages(sessionID: key.storeSlot)
             setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
-            setFingerprint(messageFingerprint(merged), for: key.storeSlot)
+            setIdentity(
+                MessageFrameIdentity.of(
+                    messages: merged,
+                    engineRevision: store.revision(sessionID: key.storeSlot)
+                ),
+                for: key.storeSlot
+            )
             SessionPerformanceProbe.emit("history_request_finished")
             MessagePipelineProbe.emit(.reducerCommitted)
             DiagnosticLog.info(
@@ -1117,36 +1171,17 @@ nonisolated final class MessageSync: @unchecked Sendable {
             changeSet: changeSet,
             previous: previous
         )
-        // No whole-history fingerprint gate on the live SSE path.
+        // No whole-history identity gate on the live SSE path.
         publishMessages(frame)
     }
 
-    private func messageFingerprint(_ messages: [Message]) -> String {
-        messages.map { message in
-            let parts = message.parts.map(partFingerprint).joined(separator: ",")
-            return "\(message.id):\(message.text.count):\(message.text.hashValue):\(parts)"
-        }.joined(separator: "|")
-    }
-
-    private func partFingerprint(_ part: MessagePart) -> String {
-        switch part {
-        case .text(let text):
-            "text:\(text.text.count):\(text.text.hashValue):\(text.isStreaming)"
-        case .file(let file):
-            "file:\(file.id):\(file.mime):\(file.filename):\(file.dataURL.count):\(file.dataURL.hashValue)"
-        case .tool(let tool):
-            "tool:\(tool.toolName):\(tool.status.rawValue):\(tool.title ?? ""):\(tool.error ?? "")"
-        case .compaction(let part):
-            "compaction:\(part.id ?? ""):\(part.auto):\(part.completed)"
-        case .reasoning(let part):
-            "reasoning:\(part.text.count):\(part.text.hashValue):\(part.isStreaming)"
-        }
-    }
-
     private func markChanged(key: MessageSessionKey, messages: [Message]) -> Bool {
-        let fp = messageFingerprint(messages)
-        if fp == fingerprint(for: key.storeSlot) { return false }
-        setFingerprint(fp, for: key.storeSlot)
+        let identity = MessageFrameIdentity.of(
+            messages: messages,
+            engineRevision: store.revision(sessionID: key.storeSlot)
+        )
+        if identity == frameIdentity(for: key.storeSlot) { return false }
+        setIdentity(identity, for: key.storeSlot)
         return true
     }
 

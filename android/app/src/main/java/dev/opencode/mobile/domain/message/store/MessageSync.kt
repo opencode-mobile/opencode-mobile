@@ -6,6 +6,7 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.event.ResumeTiming
 import dev.opencode.mobile.domain.event.StoreRefreshReason
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.LiveStoreScope
@@ -76,12 +77,12 @@ class MessageSync(
     private val listSplitTurn: MessageOlderFetcher = listSplitTurnMessages ?: listOlder
 
     private val observationCache = ConcurrentHashMap<MessageSessionKey, SharedFlow<MessageListUpdate>>()
-    private val lastFingerprints = ConcurrentHashMap<String, String>()
+    private val lastIdentities = ConcurrentHashMap<String, MessageFrameIdentity>()
     private val lastPublishedFrames = ConcurrentHashMap<String, List<Message>>()
-    private val lastPublishedRevisions = ConcurrentHashMap<String, Long>()
     private val healthByKey = ConcurrentHashMap<MessageSessionKey, MessageSyncHealth>()
     private val catchUpSlots = MutableStateFlow<Set<String>>(emptySet())
     private val messageCacheHandles = ConcurrentHashMap<MessageSessionKey, SessionMessageCacheHandle>()
+
     /** Store slots that painted from cache and still need network confirmation. */
     private val awaitingCacheSyncConfirm = ConcurrentHashMap.newKeySet<String>()
 
@@ -167,9 +168,8 @@ class MessageSync(
     fun clearCache() {
         observationGeneration.incrementAndGet()
         observationCache.clear()
-        lastFingerprints.clear()
+        lastIdentities.clear()
         lastPublishedFrames.clear()
-        lastPublishedRevisions.clear()
         healthByKey.clear()
         catchUpSlots.value = emptySet()
         awaitingCacheSyncConfirm.clear()
@@ -307,6 +307,7 @@ class MessageSync(
                 if (isFromCache) {
                     awaitingCacheSyncConfirm.add(storeSlot)
                     setCatchUpSlot(key, true)
+                    ResumeTiming.markCachePainted(nowMs())
                 } else {
                     awaitingCacheSyncConfirm.remove(storeSlot)
                     cacheHandle.note(messages)
@@ -377,7 +378,8 @@ class MessageSync(
                 syncCoordinator.register(projection) {
                     val generation = syncCoordinator.profileGeneration
                     applyQueuedIncrementalEvents()
-                    val previous = lastFingerprints[storeSlot]
+                    val previous = lastIdentities[storeSlot]
+                    val previousFrame = lastPublishedFrames[storeSlot]
                     when (
                         val result =
                             fullReloadResult(
@@ -405,7 +407,14 @@ class MessageSync(
                                     is ReloadResult.Discarded -> result.messages
                                     is ReloadResult.Failure -> error("unreachable")
                                 }
-                            if (previous != messageFingerprint(messages)) {
+                            if (result is ReloadResult.Accepted && result.confirmedWithoutPublish) {
+                                confirmCacheSyncIfAwaiting()
+                            } else if (
+                                previous != frameIdentity(storeSlot, messages) &&
+                                messages != previousFrame
+                            ) {
+                                // Merge bumps the engine revision even when the tail is byte-identical;
+                                // only repaint when the frame itself changed (matches iOS).
                                 emitMessages(messages)
                             } else {
                                 confirmCacheSyncIfAwaiting()
@@ -640,6 +649,7 @@ class MessageSync(
     private sealed interface ReloadResult {
         data class Accepted(
             val messages: List<Message>,
+            val confirmedWithoutPublish: Boolean = false,
         ) : ReloadResult
 
         data class Discarded(
@@ -734,6 +744,16 @@ class MessageSync(
             preserveOlderThanTail = engine.messages(storeSlot).isNotEmpty(),
         )
         val local = engine.messages(storeSlot)
+        if (
+            awaitingCacheSyncConfirm.contains(storeSlot) &&
+            local.matchesTailIdentity(loaded.messages)
+        ) {
+            logI(
+                "fullReload session=${key.sessionId} reason=$reason count=${local.size} ms=$elapsedMs tailIdentity=match",
+            )
+            MessagePipelineProbe.emit(MessagePipelineProbe.Marker.ReducerCommitted)
+            return ReloadResult.Accepted(local, confirmedWithoutPublish = true)
+        }
         val acceptRemote =
             engine.revision(storeSlot) == expectedRevision &&
                 MessageWindowMerge.isTailAcceptable(remote = loaded.messages, local = local)
@@ -780,24 +800,11 @@ class MessageSync(
         return engine.isRestSeededMessage(storeSlot, messageId)
     }
 
-    private fun messageFingerprint(messages: List<Message>): String =
-        messages.joinToString("|") { message ->
-            val parts =
-                message.parts.joinToString(",") { part ->
-                    when (part) {
-                        is MessagePart.Text -> "text:${part.text.length}:${part.text.hashCode()}:${part.isStreaming}"
-                        is MessagePart.Tool ->
-                            "tool:${part.callId}:${part.status}:${part.output?.hashCode()}:${part.error?.hashCode()}"
-                        is MessagePart.File ->
-                            "file:${part.id}:${part.filename}:${part.mime}:" +
-                                "${part.dataUrl.length}:${part.dataUrl.hashCode()}"
-                        is MessagePart.Compaction -> "compaction:${part.id}:${part.auto}:${part.completed}"
-                        is MessagePart.Reasoning ->
-                            "reasoning:${part.text.length}:${part.text.hashCode()}:${part.isStreaming}"
-                    }
-                }
-            "${message.id}:${message.text.length}:${message.text.hashCode()}:$parts"
-        }
+    private fun frameIdentity(
+        storeSlot: String,
+        messages: List<Message>,
+        revision: Long? = null,
+    ): MessageFrameIdentity = messages.frameIdentity(revision ?: engine.revision(storeSlot))
 
     private fun rememberPublishedFrame(
         storeSlot: String,
@@ -805,16 +812,15 @@ class MessageSync(
         revision: Long? = null,
     ) {
         lastPublishedFrames[storeSlot] = messages
-        lastPublishedRevisions[storeSlot] = revision ?: engine.revision(storeSlot)
-        lastFingerprints[storeSlot] = messageFingerprint(messages)
+        lastIdentities[storeSlot] = frameIdentity(storeSlot, messages, revision)
     }
 
     private fun markChanged(
         storeSlot: String,
         messages: List<Message>,
     ): Boolean {
-        val fp = messageFingerprint(messages)
-        if (fp == lastFingerprints[storeSlot]) return false
+        val identity = frameIdentity(storeSlot, messages)
+        if (identity == lastIdentities[storeSlot]) return false
         rememberPublishedFrame(storeSlot, messages)
         return true
     }

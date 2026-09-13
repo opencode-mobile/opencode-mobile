@@ -969,12 +969,13 @@ class MainScreenViewModel
                         sessionDomainAdapter.toSessionSummary(
                             session,
                             statusLabel =
-                                if (snapshot.seeded) {
+                                if (snapshot.seeded || snapshot.fromCache) {
                                     snapshot.entries[session.id]?.activity?.statusLabel()
                                 } else {
                                     null
                                 },
                             isReady = session.id in readyIds,
+                            statusStale = snapshot.fromCache && !snapshot.seeded,
                         )
                     }
             val updatedSection =

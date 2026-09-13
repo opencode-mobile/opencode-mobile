@@ -7,10 +7,10 @@ import Testing
 struct MessageSyncTests {
     private let decoder = JSONDecoder()
 
-    @Test func warmReopen_unchangedFingerprint_confirmsCacheSyncWithoutSeed() async {
+    @Test func warmReopen_unchangedIdentity_confirmsCacheSyncWithoutSeed() async {
         // Warm reopen: the in-memory store still holds the previous session's
         // rows, but no disk seed runs this loop (NoOpSessionCache) and REST
-        // returns an identical fingerprint. The Syncing indicator must clear
+        // returns an identical frame identity. The Syncing indicator must clear
         // via cacheSyncConfirmed even though the second loop did not seed.
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
@@ -36,7 +36,7 @@ struct MessageSyncTests {
             recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) }
         )
 
-        // First observation publishes and records the fingerprint.
+        // First observation publishes and records the frame identity.
         let first = MessageCollector()
         let firstTask = Task { await first.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         _ = await waitUntil { first.latest()?.first?.text == "Hello" }
@@ -44,7 +44,7 @@ struct MessageSyncTests {
         try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.subscriberStopTimeoutMs + 50))
 
         // Warm reopen: same store rows, REST unchanged, no disk seed. The
-        // unchanged fingerprint must still yield cacheSyncConfirmed.
+        // unchanged identity must still yield cacheSyncConfirmed.
         let second = CacheConfirmAwareCollector()
         let secondTask = Task { await second.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         let confirmed = await waitUntil { second.sawCacheSyncConfirmed }
@@ -343,6 +343,91 @@ struct MessageSyncTests {
         #expect(!collector.sawCacheSyncConfirmed)
         #expect(!repo.isListBlocked)
         repo.resumeListMessages()
+    }
+
+    @Test func identicalTailConfirmsCacheWithoutRepublish() async {
+        let repo = FakeLiveMessageRepository()
+        repo.holdNextListMessages()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let cached = repo.messages
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            sessionCache: SeedingSessionCache(messages: cached)
+        )
+        let collector = CacheConfirmAwareCollector()
+        let task = Task {
+            await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        let painted = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(painted)
+        #expect(collector.emissions.count == 1)
+        repo.resumeListMessages()
+        let confirmed = await waitUntil { collector.sawCacheSyncConfirmed }
+        try? await Task.sleep(for: .milliseconds(40))
+        task.cancel()
+        #expect(confirmed)
+        #expect(collector.emissions.count == 1)
+    }
+
+    @Test func differingTailMergesAndPublishesOnce() async {
+        let repo = FakeLiveMessageRepository()
+        repo.holdNextListMessages()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let cached = [
+            Message(
+                id: "msg-1",
+                role: .user,
+                text: "Hello",
+                parts: [.text(TextPart(text: "Hello", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 1
+            ),
+        ]
+        repo.messages = cached + [
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "Later",
+                parts: [.text(TextPart(text: "Later", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 2
+            ),
+        ]
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            sessionCache: SeedingSessionCache(messages: cached)
+        )
+        let collector = CacheConfirmAwareCollector()
+        let task = Task {
+            await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        let painted = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(painted)
+        #expect(collector.emissions.count == 1)
+        repo.resumeListMessages()
+        let merged = await waitUntil {
+            collector.latest()?.contains(where: { $0.id == "msg-2" }) == true
+        }
+        try? await Task.sleep(for: .milliseconds(40))
+        task.cancel()
+        #expect(merged)
+        #expect(collector.emissions.count == 2)
     }
 
     @Test func hiddenReasoningSnapshotUpdates_doNotRestOrShowCatchUp() async {
@@ -1027,7 +1112,7 @@ struct MessageSyncTests {
         #expect(repo.listMessagesCallCount > afterInitial)
     }
 
-    @Test func reconnectUnchangedFingerprintDoesNotRepaint() async {
+    @Test func reconnectUnchangedIdentityDoesNotRepaint() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
         let sync = makeMessageSync(repo: repo, eventStream: eventStream)

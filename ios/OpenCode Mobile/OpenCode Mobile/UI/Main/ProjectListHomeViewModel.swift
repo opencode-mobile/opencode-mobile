@@ -825,6 +825,8 @@ final class ProjectListHomeViewModel {
 
     private func sectionFromCache(worktree: String) async -> ProjectSectionItem {
         let seeded = await sessionCache.seedSessions(worktree: worktree)
+        let cachedActivity = await sessionCache.seedActivity(directory: worktree) ?? []
+        let activityByID = Dictionary(uniqueKeysWithValues: cachedActivity.map { ($0.sessionId, $0) })
         let sessions =
             (seeded ?? [])
                 .activeSessions()
@@ -832,7 +834,13 @@ final class ProjectListHomeViewModel {
                 .sorted { ($0.updatedAtEpochMs ?? 0) > ($1.updatedAtEpochMs ?? 0) }
         let items =
             sessions.map { session in
-                sessionAdapter.listItem(from: session, worktree: worktree, statusLabel: nil)
+                let cached = activityByID[session.id]
+                return sessionAdapter.listItem(
+                    from: session,
+                    worktree: worktree,
+                    statusLabel: cached?.activity.statusLabel,
+                    statusIsStale: cached != nil && cached?.activity.statusLabel != nil
+                )
             }
         let name = ProjectDomainAdapter.displayName(from: worktree)
         return ProjectSectionItem(
@@ -881,7 +889,8 @@ final class ProjectListHomeViewModel {
                             sessionID: session.id,
                             directory: worktree,
                             readyIds: liveReadyIdsByWorktree[worktree] ?? []
-                        )
+                        ),
+                        statusIsStale: statusIsStale(for: session.id, directory: worktree)
                     )
                 }
             let name = ProjectDomainAdapter.displayName(from: worktree)
@@ -1080,7 +1089,8 @@ final class ProjectListHomeViewModel {
                         from: session,
                         worktree: worktree,
                         statusLabel: statusLabel(for: session.id, directory: worktree),
-                        isReady: isReady(sessionID: session.id, directory: worktree, readyIds: readyIds)
+                        isReady: isReady(sessionID: session.id, directory: worktree, readyIds: readyIds),
+                        statusIsStale: statusIsStale(for: session.id, directory: worktree)
                     )
                 }
         let updatedSection = ProjectSectionItem(
@@ -1108,6 +1118,10 @@ final class ProjectListHomeViewModel {
 
     private func statusLabel(for sessionID: String, directory: String) -> String? {
         liveStatusesByWorktree[directory]?.statusLabel(for: sessionID)
+    }
+
+    private func statusIsStale(for sessionID: String, directory: String) -> Bool {
+        liveStatusesByWorktree[directory]?.statusIsStale(for: sessionID) == true
     }
 
     private func isReady(sessionID: String, directory: String, readyIds: Set<String>) -> Bool {

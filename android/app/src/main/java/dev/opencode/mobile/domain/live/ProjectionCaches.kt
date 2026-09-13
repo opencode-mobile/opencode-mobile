@@ -8,7 +8,10 @@ interface ProjectionCaches {
     /** Everything, including persisted Ready records and the message cache. */
     fun clearAll()
 
-    /** Profile switch: drop live projections but keep parked Ready records for [bindProfile]. */
+    /**
+     * Profile switch: drop live projections but keep parked Ready records for [bindProfile]
+     * and persisted session lists / activity.
+     */
     fun clearLiveProjections()
 
     fun bindProfile(profileId: String?)

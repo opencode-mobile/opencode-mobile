@@ -67,6 +67,8 @@ data class SessionListSession(
     val updatedAtEpochMs: Long? = null,
     /** Retry attempt shown with the Retrying chip, e.g. "Retrying · 2". */
     val retryAttempt: Int? = null,
+    /** Cached activity that has not been confirmed by REST yet. */
+    val statusStale: Boolean = false,
 )
 
 data class SessionListFilterTab(
@@ -420,7 +422,7 @@ private fun SessionListRow(
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
 ) {
-    val status = session.status.toListItemStatus(session.retryAttempt)
+    val status = session.status.toListItemStatus(session.retryAttempt, stale = session.statusStale)
     OpenCodeListItem(
         title = session.title,
         subtitle = compactHomePath(session.subtitle),
@@ -487,19 +489,32 @@ fun List<SessionListSession>.visibleForFilter(selectedFilterId: String): List<Se
         filter { it.worktree == selectedFilterId }
     }
 
-private fun SessionListStatus.toListItemStatus(retryAttempt: Int? = null): OpenCodeListItemStatus? =
-    when (this) {
+internal fun SessionListStatus.toListItemStatus(
+    retryAttempt: Int? = null,
+    stale: Boolean = false,
+): OpenCodeListItemStatus? {
+    val tone =
+        if (stale) {
+            OpenCodeListItemStatusTone.Stale
+        } else {
+            when (this) {
+                SessionListStatus.Idle -> return null
+                SessionListStatus.Running -> OpenCodeListItemStatusTone.Interactive
+                SessionListStatus.Retrying -> OpenCodeListItemStatusTone.Warning
+                SessionListStatus.Ready -> OpenCodeListItemStatusTone.Success
+            }
+        }
+    return when (this) {
         SessionListStatus.Idle -> null
-        SessionListStatus.Running ->
-            OpenCodeListItemStatus(text = "Running", tone = OpenCodeListItemStatusTone.Interactive)
+        SessionListStatus.Running -> OpenCodeListItemStatus(text = "Running", tone = tone)
         SessionListStatus.Retrying ->
             OpenCodeListItemStatus(
                 text = retryAttempt?.let { "Retrying · $it" } ?: "Retrying",
-                tone = OpenCodeListItemStatusTone.Warning,
+                tone = tone,
             )
-        SessionListStatus.Ready ->
-            OpenCodeListItemStatus(text = "Ready", tone = OpenCodeListItemStatusTone.Success)
+        SessionListStatus.Ready -> OpenCodeListItemStatus(text = "Ready", tone = tone)
     }
+}
 
 internal fun compactHomePath(path: String): String {
     val home = System.getProperty("user.home").orEmpty()

@@ -319,6 +319,7 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
     private func onEvent(_ event: OpencodeEvent) {
         switch event.type {
         case "server.connected", "stream.reconnected":
+            ResumeTiming.shared.markConnected(nowMs: clock.nowMs())
             scheduleCoalescedBootstrap()
         case "sse.parse.failed":
             invalidate(nil)
@@ -420,17 +421,17 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
         let directories = Set(visibleKeys.map(\.directory))
         let statuses = directories.map { ProjectionKey.sessionStatuses(directory: $0) }
             .filter { shouldLoad($0, forceFresh: forceFresh) }
-        await runParallel(statuses)
+        var firstWave = statuses
+        if let focusedKey, shouldLoad(focusedKey, forceFresh: forceFresh) {
+            firstWave.append(focusedKey)
+        }
+        await runParallel(firstWave)
 
         let lists = visibleKeys.filter {
             if case .sessionList = $0 { return shouldLoad($0, forceFresh: forceFresh) }
             return false
         }
         await runParallel(lists)
-
-        if let focusedKey, shouldLoad(focusedKey, forceFresh: forceFresh) {
-            await runLoader(focusedKey)
-        }
 
         let visibleTranscripts = visibleKeys.filter { key in
             if case .transcript = key, key != focusedKey {
@@ -450,6 +451,9 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
         }
         await runParallel(others)
         lastBootstrapOrActivityMs = clock.nowMs()
+        if reason == .serverConnected {
+            ResumeTiming.shared.markBootstrapDone(nowMs: lastBootstrapOrActivityMs)
+        }
     }
 
     private func shouldLoad(_ key: ProjectionKey, forceFresh: Bool) -> Bool {

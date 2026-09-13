@@ -31,12 +31,13 @@ struct OpenCodeListItemSubtitleSegment {
     let tone: OpenCodeListItemSubtitleTone
 }
 
-enum OpenCodeListItemStatusTone {
+enum OpenCodeListItemStatusTone: Equatable {
     case interactive
     case success
     case warning
     case error
     case info
+    case stale
 }
 
 struct OpenCodeListItemStatus {
@@ -273,6 +274,8 @@ struct OpenCodeListItem<Trailing: View>: View {
             return OpenCodeColors.error
         case .info:
             return OpenCodeColors.textBase
+        case .stale:
+            return OpenCodeColors.textWeaker
         }
     }
 
@@ -289,6 +292,8 @@ struct OpenCodeListItem<Trailing: View>: View {
             return OpenCodeColors.error.opacity(0.12)
         case .info:
             return OpenCodeColors.textStrong.opacity(0.10)
+        case .stale:
+            return OpenCodeColors.textStrong.opacity(0.06)
         }
     }
 
@@ -409,6 +414,13 @@ private struct OpenCodeListItemPressStyle: ButtonStyle {
             status: OpenCodeListItemStatus(text: "Idle", tone: .info),
             caption: "14m ago",
             startDecorator: .letter(Character("P"), .teal)
+        )
+        OpenCodeListItem(
+            title: "Cached running session",
+            subtitle: "~/Projects/opencode-mobile",
+            status: OpenCodeListItemStatus(text: "Running", tone: .stale),
+            caption: "14m ago",
+            startDecorator: .letter(Character("C"), .violet)
         )
         OpenCodeListItem(
             title: "All projects",

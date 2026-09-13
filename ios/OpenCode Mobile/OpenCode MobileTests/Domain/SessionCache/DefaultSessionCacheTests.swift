@@ -178,4 +178,95 @@ import Testing
         #expect(!encoded.contains("data:image/png"))
         #expect(encoded.contains("\"schemaVersion\":1"))
     }
+
+    @Test func activityRoundTripPerDirectory() async {
+        let cache = DefaultSessionCache(
+            store: InMemorySessionCacheStore(),
+            connectionIdProvider: { connectionId },
+            clock: { 1_000 },
+            activityDebounceMilliseconds: 0
+        )
+        let entries = [
+            SessionActivityCacheEntry(sessionId: "ses-1", activity: .running, observedAtMs: 1_000),
+            SessionActivityCacheEntry(
+                sessionId: "ses-2",
+                activity: .retrying(attempt: 2, nextAtMs: nil, message: nil),
+                observedAtMs: 1_000
+            ),
+        ]
+        await cache.rememberActivity(directory: "/repo", entries: entries)
+        let seeded = await cache.seedActivity(directory: "/repo")
+        #expect(seeded == entries)
+        #expect(await cache.seedActivity(directory: "/other") == nil)
+    }
+
+    @Test func activitySeedDropsEntriesOlderThanSixHours() async {
+        let now = SessionActivityPolicy.cachedActivityTtlMs + 5_000
+        let cache = DefaultSessionCache(
+            store: InMemorySessionCacheStore(),
+            connectionIdProvider: { connectionId },
+            clock: { now },
+            activityDebounceMilliseconds: 0
+        )
+        await cache.rememberActivity(
+            directory: "/repo",
+            entries: [
+                SessionActivityCacheEntry(sessionId: "fresh", activity: .running, observedAtMs: now - 1_000),
+                SessionActivityCacheEntry(sessionId: "stale", activity: .running, observedAtMs: 0),
+            ]
+        )
+        let seeded = await cache.seedActivity(directory: "/repo")
+        #expect(seeded?.map(\.sessionId) == ["fresh"])
+    }
+
+    @Test func activityClearAllAndPurgeWorktreeDropRows() async {
+        let cache = DefaultSessionCache(
+            store: InMemorySessionCacheStore(),
+            connectionIdProvider: { connectionId },
+            activityDebounceMilliseconds: 0
+        )
+        await cache.rememberActivity(
+            directory: "/repo",
+            entries: [SessionActivityCacheEntry(sessionId: "ses-1", activity: .running, observedAtMs: 1)]
+        )
+        await cache.purgeWorktree(serverBaseURL: "http://localhost:4096", worktree: "/repo")
+        #expect(await cache.seedActivity(directory: "/repo") == nil)
+
+        await cache.rememberActivity(
+            directory: "/repo",
+            entries: [SessionActivityCacheEntry(sessionId: "ses-1", activity: .running, observedAtMs: 1)]
+        )
+        await cache.clearAll()
+        #expect(await cache.seedActivity(directory: "/repo") == nil)
+    }
+
+    @Test func activityRememberDebouncesAndSkipsUnchanged() async throws {
+        let store = InMemorySessionCacheStore()
+        var now: Int64 = 1_000
+        let cache = DefaultSessionCache(
+            store: store,
+            connectionIdProvider: { connectionId },
+            clock: { now },
+            activityDebounceMilliseconds: 40
+        )
+        let entries = [SessionActivityCacheEntry(sessionId: "ses-1", activity: .running, observedAtMs: 1_000)]
+        await cache.rememberActivity(directory: "/repo", entries: entries)
+        #expect(await cache.seedActivity(directory: "/repo") == nil)
+
+        var seeded: [SessionActivityCacheEntry]?
+        for _ in 0..<40 {
+            try await Task.sleep(nanoseconds: 20_000_000)
+            seeded = await cache.seedActivity(directory: "/repo")
+            if seeded != nil { break }
+        }
+        #expect(seeded == entries)
+
+        let key = SessionCacheKey(connectionId: connectionId, worktree: "/repo", kind: .sessionActivity)
+        let first = await store.load(key: key)
+        now = 2_000
+        await cache.rememberActivity(directory: "/repo", entries: entries)
+        try await Task.sleep(nanoseconds: 80_000_000)
+        let second = await store.load(key: key)
+        #expect(first?.syncedAtEpochMs == second?.syncedAtEpochMs)
+    }
 }

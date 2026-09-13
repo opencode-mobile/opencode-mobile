@@ -26,7 +26,7 @@ enum class AuthorityWindowOutcome {
     Failed,
 }
 
-/** Complete ownership key for observation, fingerprints, and store slots. */
+/** Complete ownership key for observation, frame identity, and store slots. */
 data class MessageSessionKey(
     val connectionProfileId: String,
     val directory: String,

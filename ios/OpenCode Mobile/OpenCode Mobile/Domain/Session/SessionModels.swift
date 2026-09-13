@@ -94,6 +94,7 @@ enum SessionActivity: Sendable, Equatable {
 enum SessionActivitySource: Sendable, Equatable {
     case server
     case optimistic
+    case cached
 }
 
 struct SessionActivityEntry: Sendable, Equatable {
@@ -105,18 +106,37 @@ struct SessionActivityEntry: Sendable, Equatable {
 struct SessionActivitySnapshot: Sendable, Equatable {
     var entries: [String: SessionActivityEntry]
     var seeded: Bool
+    var fromCache: Bool
 
-    static let empty = SessionActivitySnapshot(entries: [:], seeded: false)
+    static let empty = SessionActivitySnapshot(entries: [:], seeded: false, fromCache: false)
+
+    init(entries: [String: SessionActivityEntry], seeded: Bool, fromCache: Bool = false) {
+        self.entries = entries
+        self.seeded = seeded
+        self.fromCache = fromCache
+    }
 
     func statusLabel(for sessionID: String) -> String? {
-        guard seeded else { return nil }
-        return entries[sessionID]?.activity.statusLabel
+        guard let entry = entries[sessionID] else { return nil }
+        guard seeded || entry.source == .cached else { return nil }
+        return entry.activity.statusLabel
     }
 
     func isBusy(for sessionID: String) -> Bool {
-        guard seeded else { return false }
-        return entries[sessionID]?.activity.isBusy == true
+        guard let entry = entries[sessionID] else { return false }
+        guard seeded || entry.source == .cached else { return false }
+        return entry.activity.isBusy
     }
+
+    func statusIsStale(for sessionID: String) -> Bool {
+        entries[sessionID]?.source == .cached
+    }
+}
+
+struct SessionActivityCacheEntry: Sendable, Equatable {
+    let sessionId: String
+    let activity: SessionActivity
+    let observedAtMs: Int64
 }
 
 enum SessionActivityPolicy {
@@ -124,6 +144,8 @@ enum SessionActivityPolicy {
     static let abortOptimisticTtlMs: Int64 = 3_000
     static let runningReconcileMs = 30_000
     static let pendingSendTimeoutMs: Int64 = 8_000
+    static let cachedActivityTtlMs: Int64 = 6 * 60 * 60 * 1_000
+    static let activityRememberDebounceMs: UInt64 = 1_000
 }
 
 enum SessionTodoStatus: Sendable, Equatable {

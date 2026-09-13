@@ -146,7 +146,7 @@ class DefaultSyncCoordinatorTest {
         }
 
     @Test
-    fun bootstrap_runsStatusesThenListsThenFocusedTranscriptThenOthers() =
+    fun bootstrap_runsStatusesAndFocusedTranscriptThenListsThenOthers() =
         runTest(dispatcher) {
             val env = env()
             val order = CopyOnWriteArrayList<String>()
@@ -157,6 +157,7 @@ class DefaultSyncCoordinatorTest {
                     delay(10)
                     order += "end:$name"
                 }
+
             val statuses = ProjectionKey.SessionStatuses("/repo")
             val list = ProjectionKey.SessionList("/repo")
             val transcript = ProjectionKey.Transcript("/repo", "ses-1")
@@ -177,10 +178,13 @@ class DefaultSyncCoordinatorTest {
             advanceTimeBy(100)
             runCurrent()
             val starts = order.filter { it.startsWith("start:") }
-            assertEquals("start:statuses", starts[0])
+            assertTrue("start:statuses" in starts)
+            assertTrue("start:transcript" in starts)
+            assertTrue(order.indexOf("start:transcript") < order.indexOf("end:statuses"))
+            assertTrue(order.indexOf("start:statuses") < order.indexOf("end:transcript"))
             assertTrue(order.indexOf("end:statuses") < order.indexOf("start:list"))
-            assertTrue(order.indexOf("end:list") < order.indexOf("start:transcript"))
-            assertTrue(order.indexOf("end:transcript") < order.indexOf("start:todos"))
+            assertTrue(order.indexOf("end:transcript") < order.indexOf("start:list"))
+            assertTrue(order.indexOf("end:list") < order.indexOf("start:todos"))
             assertTrue("start:permissions" in starts)
         }
 

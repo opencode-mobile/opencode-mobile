@@ -76,9 +76,13 @@ class ProcessWorldSignals(
     }
 
     fun onForeground() {
+        val fromStopped = _occupancy.value == StreamOccupancy.Stopped
         stopJob?.cancel()
         stopJob = null
         _occupancy.value = StreamOccupancy.Active
+        if (fromStopped) {
+            ResumeTiming.begin(System.currentTimeMillis())
+        }
         stream.onReconnectWake()
         emit(WorldSignal.Foreground)
         startIfConnected("foreground")

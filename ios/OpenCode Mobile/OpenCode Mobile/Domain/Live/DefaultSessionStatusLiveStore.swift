@@ -7,6 +7,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     private let eventAdapter: EventDomainAdapter
     private let worldSignals: any WorldSignals
     private let syncCoordinator: any SyncCoordinator
+    private let sessionCache: any SessionCache
     private let clock: any SyncClock
     private let connection: any LiveConnection
     private let invalidationAckTimeoutMs: Int
@@ -21,6 +22,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         eventAdapter: EventDomainAdapter = EventDomainAdapter(),
         worldSignals: any WorldSignals = SilentWorldSignals.shared,
         syncCoordinator: (any SyncCoordinator)? = nil,
+        sessionCache: any SessionCache = NoOpSessionCache.shared,
         clock: any SyncClock = SystemSyncClock(),
         invalidationAckTimeoutMs: Int = LiveStoreRefreshPolicy.invalidationAckTimeoutMs
     ) {
@@ -29,6 +31,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         self.eventAdapter = eventAdapter
         self.worldSignals = worldSignals
         self.clock = clock
+        self.sessionCache = sessionCache
         self.connection = eventStream.asLiveConnection()
         self.syncCoordinator = syncCoordinator ?? DefaultSyncCoordinator(
             connection: eventStream.asLiveConnection(),
@@ -106,6 +109,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         let eventAdapter = eventAdapter
         let worldSignals = worldSignals
         let syncCoordinator = syncCoordinator
+        let sessionCache = sessionCache
         let clock = clock
         let connection = connection
         let activeDirectories = activeDirectories
@@ -120,6 +124,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                     eventAdapter: eventAdapter,
                     worldSignals: worldSignals,
                     syncCoordinator: syncCoordinator,
+                    sessionCache: sessionCache,
                     clock: clock,
                     connection: connection,
                     activeDirectories: activeDirectories,
@@ -140,6 +145,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         eventAdapter: EventDomainAdapter,
         worldSignals: any WorldSignals,
         syncCoordinator: any SyncCoordinator,
+        sessionCache: any SessionCache,
         clock: any SyncClock,
         connection: any LiveConnection,
         activeDirectories: ActiveDirectorySet,
@@ -155,12 +161,26 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         let key = ProjectionKey.sessionStatuses(directory: directory)
         let expiryTasks = ExpiryTaskBag()
 
+        @Sendable func persistServer() {
+            let entries = serverBox.snapshot().map { sessionID, entry in
+                SessionActivityCacheEntry(
+                    sessionId: sessionID,
+                    activity: entry.activity,
+                    observedAtMs: entry.observedAtMs
+                )
+            }
+            Task {
+                await sessionCache.rememberActivity(directory: directory, entries: entries)
+            }
+        }
+
         @Sendable func publish() {
             optimistic.removeExpired(directory: directory, now: clock.nowMs())
             let next = overlay(
                 server: serverBox.snapshot(),
                 optimistic: optimistic.snapshot(directory: directory),
-                seeded: serverBox.seeded
+                seeded: serverBox.seeded,
+                fromCache: serverBox.fromCache
             )
             guard next != currentBox.snapshot() else { return }
             currentBox.replace(next)
@@ -179,7 +199,8 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                     observedAtMs: now
                 )
             }
-            serverBox.replace(server, seeded: true)
+            serverBox.replace(server, seeded: true, fromCache: false)
+            persistServer()
             publish()
         }
 
@@ -236,8 +257,21 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         }
         defer { mutationTask.cancel() }
 
+        if let cached = await sessionCache.seedActivity(directory: directory), !cached.isEmpty {
+            var server: [String: SessionActivityEntry] = [:]
+            for entry in cached where entry.activity != .idle {
+                server[entry.sessionId] = SessionActivityEntry(
+                    activity: entry.activity,
+                    source: .cached,
+                    observedAtMs: entry.observedAtMs
+                )
+            }
+            if !server.isEmpty {
+                serverBox.replace(server, seeded: false, fromCache: true)
+                ResumeTiming.shared.markCachePainted()
+            }
+        }
         publish()
-        await syncCoordinator.ensureFresh(key)
 
         await withTaskGroup(of: Void.self) { group in
             group.addTask {
@@ -266,10 +300,12 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         now: clock.nowMs()
                     ) {
                         await gate.bump()
+                        persistServer()
                         publish()
                     }
                 }
             }
+            await syncCoordinator.ensureFresh(key)
             await group.next()
             group.cancelAll()
         }
@@ -295,7 +331,8 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     private nonisolated static func overlay(
         server: [String: SessionActivityEntry],
         optimistic: [String: OptimisticActivityRecord],
-        seeded: Bool
+        seeded: Bool,
+        fromCache: Bool
     ) -> SessionActivitySnapshot {
         var entries = server
         for (sessionID, record) in optimistic {
@@ -305,7 +342,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                 observedAtMs: record.observedAtMs
             )
         }
-        return SessionActivitySnapshot(entries: entries, seeded: seeded)
+        return SessionActivitySnapshot(entries: entries, seeded: seeded, fromCache: fromCache)
     }
 
     private nonisolated static func applyActivityEvent(
@@ -332,7 +369,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                     observedAtMs: now
                 )
             }
-            serverBox.replace(server, seeded: serverBox.seeded)
+            serverBox.replace(server, seeded: serverBox.seeded, fromCache: serverBox.fromCache)
             return true
         case "session.idle":
             guard let sessionID = event.sessionID else { return false }
@@ -340,7 +377,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             var server = serverBox.snapshot()
             guard server[sessionID] != nil else { return true }
             server.removeValue(forKey: sessionID)
-            serverBox.replace(server, seeded: serverBox.seeded)
+            serverBox.replace(server, seeded: serverBox.seeded, fromCache: serverBox.fromCache)
             return true
         case "message.updated":
             guard let sessionID = event.sessionID ?? event.rawProperties?["info"]?.dictionaryValue?["sessionID"]?.stringValue
@@ -352,7 +389,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             var server = serverBox.snapshot()
             if server[sessionID] != nil {
                 server.removeValue(forKey: sessionID)
-                serverBox.replace(server, seeded: serverBox.seeded)
+                serverBox.replace(server, seeded: serverBox.seeded, fromCache: serverBox.fromCache)
             }
             return true
         default:
@@ -480,11 +517,18 @@ private nonisolated final class ActivityServerBox: @unchecked Sendable {
     private let lock = NSLock()
     private var value: [String: SessionActivityEntry] = [:]
     private var _seeded = false
+    private var _fromCache = false
 
     var seeded: Bool {
         lock.lock()
         defer { lock.unlock() }
         return _seeded
+    }
+
+    var fromCache: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _fromCache
     }
 
     func snapshot() -> [String: SessionActivityEntry] {
@@ -493,10 +537,11 @@ private nonisolated final class ActivityServerBox: @unchecked Sendable {
         return value
     }
 
-    func replace(_ next: [String: SessionActivityEntry], seeded: Bool) {
+    func replace(_ next: [String: SessionActivityEntry], seeded: Bool, fromCache: Bool) {
         lock.lock()
         value = next
         _seeded = seeded
+        _fromCache = fromCache
         lock.unlock()
     }
 }

@@ -19,6 +19,27 @@ enum SessionListStatus: Hashable {
         if case .ready = self { return true }
         return false
     }
+
+    func listItemStatus(isStale: Bool = false) -> OpenCodeListItemStatus {
+        let base: OpenCodeListItemStatus
+        switch self {
+        case .idle:
+            base = OpenCodeListItemStatus(text: "Idle", tone: .info)
+        case .running:
+            base = OpenCodeListItemStatus(text: "Running", tone: .interactive)
+        case let .retrying(attempt):
+            base = OpenCodeListItemStatus(
+                text: attempt.map { "Retrying · \($0)" } ?? "Retrying",
+                tone: .warning
+            )
+        case .ready:
+            base = OpenCodeListItemStatus(text: "Ready", tone: .success)
+        }
+        if isStale {
+            return OpenCodeListItemStatus(text: base.text, tone: .stale)
+        }
+        return base
+    }
 }
 
 struct SessionListSession: Identifiable, Hashable {
@@ -29,6 +50,7 @@ struct SessionListSession: Identifiable, Hashable {
     let letterAccent: LetterAccent
     let subtitle: String
     let status: SessionListStatus
+    let statusIsStale: Bool
     let caption: String
     let updatedAtEpochMs: Int64?
 
@@ -40,6 +62,7 @@ struct SessionListSession: Identifiable, Hashable {
         letterAccent: LetterAccent,
         subtitle: String,
         status: SessionListStatus,
+        statusIsStale: Bool = false,
         caption: String,
         updatedAtEpochMs: Int64? = nil
     ) {
@@ -50,6 +73,7 @@ struct SessionListSession: Identifiable, Hashable {
         self.letterAccent = letterAccent
         self.subtitle = subtitle
         self.status = status
+        self.statusIsStale = statusIsStale
         self.caption = caption
         self.updatedAtEpochMs = updatedAtEpochMs
     }
@@ -324,32 +348,20 @@ struct SessionList<EmptyContent: View>: View {
                 session.subtitle,
                 hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
             ),
-            status: listItemStatus(session.status),
+            status: listItemStatus(session.status, isStale: session.statusIsStale),
             caption: session.caption.isEmpty ? nil : session.caption,
             startDecorator: .letter(
                 session.letter,
                 session.letterAccent,
-                statusDot: showStatusDot ? listItemStatus(session.status).tone : nil
+                statusDot: showStatusDot ? listItemStatus(session.status, isStale: session.statusIsStale).tone : nil
             ),
             action: { onSessionSelected(session) },
             onLongPress: onSessionLongPress.map { handler in { handler(session) } }
         )
     }
 
-    private func listItemStatus(_ status: SessionListStatus) -> OpenCodeListItemStatus {
-        switch status {
-        case .idle:
-            OpenCodeListItemStatus(text: "Idle", tone: .info)
-        case .running:
-            OpenCodeListItemStatus(text: "Running", tone: .interactive)
-        case let .retrying(attempt):
-            OpenCodeListItemStatus(
-                text: attempt.map { "Retrying · \($0)" } ?? "Retrying",
-                tone: .warning
-            )
-        case .ready:
-            OpenCodeListItemStatus(text: "Ready", tone: .success)
-        }
+    private func listItemStatus(_ status: SessionListStatus, isStale: Bool) -> OpenCodeListItemStatus {
+        status.listItemStatus(isStale: isStale)
     }
 
     private func flattenList(to filterId: String) {

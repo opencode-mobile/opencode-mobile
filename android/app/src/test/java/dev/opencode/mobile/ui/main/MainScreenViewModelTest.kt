@@ -1014,6 +1014,39 @@ class MainScreenViewModelTest {
             assertNull(loaded.sections.single().allSessions.single().statusLabel)
         }
 
+    @Test
+    fun sessionStatusLabel_fromCacheShowsStaleUntilSeeded() =
+        runTest(testDispatcher) {
+            val sessions = listOf(Session(id = "ses-1", title = "Chat", updatedAtEpochMs = 1L))
+            val activity =
+                MutableStateFlow(
+                    SessionActivitySnapshot(
+                        entries =
+                            mapOf(
+                                "ses-1" to
+                                    SessionActivityEntry(
+                                        activity = SessionActivity.Running,
+                                        source = SessionActivitySource.Cached,
+                                        observedAtMs = 0L,
+                                    ),
+                            ),
+                        seeded = false,
+                        fromCache = true,
+                    ),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree = mapOf("/repo" to sessions),
+                    statusLiveStoreOverride = FakeHomeStatusLiveStore(activity),
+                )
+            advanceUntilIdle()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val summary = loaded.sections.single().allSessions.single()
+            assertEquals("Working", summary.statusLabel)
+            assertTrue(summary.statusStale)
+        }
+
     private fun createViewModel(
         shouldFailProbe: Boolean = false,
         connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),

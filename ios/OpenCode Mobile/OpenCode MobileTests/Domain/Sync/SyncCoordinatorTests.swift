@@ -106,11 +106,20 @@ struct SyncCoordinatorTests {
         #expect(states.latest == .fresh)
     }
 
-    @Test func bootstrapLoadsStatusesThenListsThenFocusedTranscriptThenOthers() async {
+    @Test func bootstrapLoadsStatusesAndFocusedTranscriptInParallelThenListsThenOthers() async {
         let env = CoordinatorHarness()
         let order = Locked([String]())
-        func register(_ key: ProjectionKey, label: String) -> SyncRegistration {
+        let firstWaveStarted = Locked(Set<String>())
+        let firstWaveGate = LoaderGate()
+        func register(_ key: ProjectionKey, label: String, firstWave: Bool = false) -> SyncRegistration {
             let registration = env.coordinator.register(key: key) {
+                if firstWave {
+                    firstWaveStarted.mutate { $0.insert(label) }
+                    if firstWaveStarted.value.count == 2 {
+                        firstWaveGate.release()
+                    }
+                    await firstWaveGate.wait()
+                }
                 order.mutate { $0.append(label) }
             }
             env.coordinator.visible(key, true)
@@ -120,15 +129,14 @@ struct SyncCoordinatorTests {
             register(.todos(directory: "/repo"), label: "todos"),
             register(.permissions(directory: "/repo"), label: "permissions"),
             register(.sessionList(directory: "/repo"), label: "list"),
-            register(.sessionStatuses(directory: "/repo"), label: "statuses"),
-            register(.transcript(directory: "/repo", sessionID: "ses-1"), label: "transcript"),
+            register(.sessionStatuses(directory: "/repo"), label: "statuses", firstWave: true),
+            register(.transcript(directory: "/repo", sessionID: "ses-1"), label: "transcript", firstWave: true),
         ]
         defer { registrations.forEach { env.coordinator.unregister($0) } }
         env.coordinator.markFocused(.transcript(directory: "/repo", sessionID: "ses-1"))
         await env.coordinator.bootstrap(.manual)
-        #expect(order.value.first == "statuses")
-        #expect(order.value.dropFirst().first == "list")
-        #expect(order.value.dropFirst(2).first == "transcript")
+        #expect(Set(order.value.prefix(2)) == ["statuses", "transcript"])
+        #expect(order.value.dropFirst(2).first == "list")
         #expect(Set(order.value.suffix(from: 3)) == ["todos", "permissions"])
         #expect(order.value.count == 5)
     }

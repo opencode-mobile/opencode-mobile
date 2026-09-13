@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.event.ResumeTiming
 import dev.opencode.mobile.domain.event.StreamOccupancy
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.event.asLiveConnection
@@ -16,6 +17,9 @@ import dev.opencode.mobile.domain.session.SessionActivitySource
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.toSessionActivity
+import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
+import dev.opencode.mobile.domain.sessioncache.SessionActivityCacheEntry
+import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.ProjectionKey
 import dev.opencode.mobile.domain.sync.SyncCoordinator
 import kotlinx.coroutines.CoroutineScope
@@ -49,6 +53,7 @@ class DefaultSessionStatusLiveStore
         private val eventDomainAdapter: EventDomainAdapter,
         private val worldSignals: WorldSignals,
         private val syncCoordinator: SyncCoordinator,
+        private val sessionCache: SessionCache = NoOpSessionCache,
         private val nowMs: () -> Long = { System.currentTimeMillis() },
         private val wait: suspend (Long) -> Unit = { delay(it) },
     ) : SessionStatusLiveStore {
@@ -60,6 +65,7 @@ class DefaultSessionStatusLiveStore
             eventDomainAdapter: EventDomainAdapter,
             worldSignals: WorldSignals,
             syncCoordinator: SyncCoordinator,
+            sessionCache: SessionCache,
         ) : this(
             sessionRepository = sessionRepository,
             eventStream = eventStream,
@@ -67,6 +73,7 @@ class DefaultSessionStatusLiveStore
             eventDomainAdapter = eventDomainAdapter,
             worldSignals = worldSignals,
             syncCoordinator = syncCoordinator,
+            sessionCache = sessionCache,
             nowMs = { System.currentTimeMillis() },
             wait = { delay(it) },
         )
@@ -160,12 +167,13 @@ class DefaultSessionStatusLiveStore
                 var server = emptyMap<String, SessionActivityEntry>()
                 var current = SessionActivitySnapshot()
                 var seeded = false
+                var fromCache = false
                 var reconcileJob: Job? = null
                 val key = ProjectionKey.SessionStatuses(directory)
                 val gate = LiveStoreRefreshGate()
 
                 suspend fun emitSnapshot() {
-                    val next = composeSnapshot(directory, server, seeded)
+                    val next = composeSnapshot(directory, server, seeded, fromCache)
                     if (next != current) {
                         current = next
                         send(current)
@@ -176,8 +184,22 @@ class DefaultSessionStatusLiveStore
                             key = key,
                             server = { server },
                             seeded = { seeded },
+                            fromCache = { fromCache },
                             existing = reconcileJob,
                         )
+                }
+
+                suspend fun persistServerActivity() {
+                    val entries =
+                        server.mapNotNull { (sessionId, entry) ->
+                            if (entry.source == SessionActivitySource.Optimistic) return@mapNotNull null
+                            SessionActivityCacheEntry(
+                                sessionId = sessionId,
+                                activity = entry.activity,
+                                observedAtMs = entry.observedAtMs,
+                            )
+                        }
+                    sessionCache.rememberActivity(directory, entries)
                 }
 
                 suspend fun commitLoaded(loaded: List<SessionStatus>) {
@@ -199,11 +221,13 @@ class DefaultSessionStatusLiveStore
                     }
                     server = nextServer
                     seeded = true
+                    fromCache = false
                     DiagnosticLog.info(
                         DiagnosticLogArea.Session,
                         "statusLiveStore refresh directory=$directory",
                     )
                     emitSnapshot()
+                    persistServerActivity()
                 }
 
                 val registration =
@@ -235,25 +259,45 @@ class DefaultSessionStatusLiveStore
                     }
                     yield()
                     activeDirectories.add(directory)
-                    syncCoordinator.ensureFresh(key)
-                    try {
-                        eventStream.events.collect { event ->
-                            when {
-                                event.triggersStatusRefresh -> {
-                                    applyStatusEvent(directory, server, event)?.let {
-                                        server = it
-                                        gate.bump()
-                                    }
-                                    emitSnapshot()
-                                }
-                                event.type == "message.updated" -> {
-                                    if (applyAssistantCompletedIdle(directory, server, event)) {
+                    sessionCache.seedActivity(directory)?.let { cached ->
+                        server =
+                            cached.associate { entry ->
+                                entry.sessionId to
+                                    SessionActivityEntry(
+                                        activity = entry.activity,
+                                        source = SessionActivitySource.Cached,
+                                        observedAtMs = entry.observedAtMs,
+                                    )
+                            }
+                        fromCache = true
+                        ResumeTiming.markCachePainted(nowMs())
+                        emitSnapshot()
+                    }
+                    val eventsJob =
+                        launch {
+                            eventStream.events.collect { event ->
+                                when {
+                                    event.triggersStatusRefresh -> {
+                                        applyStatusEvent(directory, server, event)?.let {
+                                            server = it
+                                            gate.bump()
+                                            persistServerActivity()
+                                        }
                                         emitSnapshot()
+                                    }
+                                    event.type == "message.updated" -> {
+                                        if (applyAssistantCompletedIdle(directory, server, event)) {
+                                            emitSnapshot()
+                                        }
                                     }
                                 }
                             }
                         }
+                    try {
+                        syncCoordinator.ensureFresh(key)
+                        eventsJob.join()
                     } finally {
+                        eventsJob.cancel()
                         reconcileJob?.cancel()
                     }
                 } finally {
@@ -267,6 +311,7 @@ class DefaultSessionStatusLiveStore
             directory: String,
             server: Map<String, SessionActivityEntry>,
             seeded: Boolean,
+            fromCache: Boolean,
         ): SessionActivitySnapshot {
             val now = nowMs()
             val pending = optimistic[directory]?.toMap().orEmpty()
@@ -281,7 +326,11 @@ class DefaultSessionStatusLiveStore
                         )
                 }
             }
-            return SessionActivitySnapshot(entries = entries, seeded = seeded)
+            return SessionActivitySnapshot(
+                entries = entries,
+                seeded = seeded,
+                fromCache = fromCache && !seeded,
+            )
         }
 
         private fun CoroutineScope.syncRunningReconcile(
@@ -289,9 +338,12 @@ class DefaultSessionStatusLiveStore
             key: ProjectionKey,
             server: () -> Map<String, SessionActivityEntry>,
             seeded: () -> Boolean,
+            fromCache: () -> Boolean,
             existing: Job?,
         ): Job? {
-            val needed = composeSnapshot(directory, server(), seeded()).entries.values.any { it.activity.isBusy() }
+            val needed =
+                seeded() &&
+                    composeSnapshot(directory, server(), seeded(), fromCache()).entries.values.any { it.activity.isBusy() }
             if (!needed) {
                 existing?.cancel()
                 return null
@@ -304,7 +356,7 @@ class DefaultSessionStatusLiveStore
                     if (nowMs() - started < LiveStoreRefreshPolicy.STATUS_RUNNING_RECONCILE_MS) {
                         return@launch
                     }
-                    val live = composeSnapshot(directory, server(), seeded())
+                    val live = composeSnapshot(directory, server(), seeded(), fromCache())
                     if (!live.entries.values.any { it.activity.isBusy() }) return@launch
                     if (worldSignals.occupancy.value != StreamOccupancy.Active) continue
                     if (!canCatchUp(worldSignals.occupancy.value, liveConnection.snapshot.value)) continue

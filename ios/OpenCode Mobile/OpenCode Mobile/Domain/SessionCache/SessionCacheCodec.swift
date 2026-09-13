@@ -18,7 +18,8 @@ nonisolated enum SessionCacheCodec {
         let envelope = CachedEnvelope(
             schemaVersion: schemaVersion,
             sessions: CachedSessionListPayload(sessions: sessions.map { $0.toCachePayload() }),
-            messages: nil
+            messages: nil,
+            activity: nil
         )
         let data = try encoder.encode(envelope)
         guard let string = String(data: data, encoding: .utf8) else {
@@ -50,7 +51,8 @@ nonisolated enum SessionCacheCodec {
         let envelope = CachedEnvelope(
             schemaVersion: schemaVersion,
             sessions: nil,
-            messages: CachedMessageListPayload(messages: messages.map { $0.toCachePayload() })
+            messages: CachedMessageListPayload(messages: messages.map { $0.toCachePayload() }),
+            activity: nil
         )
         let data = try encoder.encode(envelope)
         guard let string = String(data: data, encoding: .utf8) else {
@@ -77,6 +79,39 @@ nonisolated enum SessionCacheCodec {
             return nil
         }
     }
+
+    static func encodeActivity(_ entries: [SessionActivityCacheEntry]) throws -> String {
+        let envelope = CachedEnvelope(
+            schemaVersion: schemaVersion,
+            sessions: nil,
+            messages: nil,
+            activity: CachedActivityListPayload(entries: entries.map { $0.toCachePayload() })
+        )
+        let data = try encoder.encode(envelope)
+        guard let string = String(data: data, encoding: .utf8) else {
+            throw SessionCacheCodecError.utf8EncodingFailed
+        }
+        return string
+    }
+
+    static func decodeActivity(_ raw: String) -> [SessionActivityCacheEntry]? {
+        guard let data = raw.data(using: .utf8) else { return nil }
+        do {
+            let envelope = try decoder.decode(CachedEnvelope.self, from: data)
+            guard envelope.schemaVersion == schemaVersion else {
+                DiagnosticLog.warning(.session, "activity schema mismatch: \(envelope.schemaVersion)")
+                return nil
+            }
+            guard let entries = envelope.activity?.entries else {
+                DiagnosticLog.warning(.session, "activity decode failed: missing activity payload")
+                return nil
+            }
+            return entries.map { $0.toDomain() }
+        } catch {
+            DiagnosticLog.warning(.session, "activity decode failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
 }
 
 nonisolated enum SessionCacheCodecError: Error {
@@ -89,6 +124,7 @@ nonisolated private struct CachedEnvelope: Codable, Sendable {
     let schemaVersion: Int
     let sessions: CachedSessionListPayload?
     let messages: CachedMessageListPayload?
+    let activity: CachedActivityListPayload?
 }
 
 nonisolated private struct CachedSessionListPayload: Codable, Sendable {
@@ -117,6 +153,17 @@ nonisolated private struct CachedSessionRevertPayload: Codable, Sendable {
     let diff: String?
 }
 
+nonisolated private struct CachedActivityListPayload: Codable, Sendable {
+    let entries: [CachedActivityEntryPayload]
+}
+
+nonisolated private struct CachedActivityEntryPayload: Codable, Sendable {
+    let sessionId: String
+    let type: String
+    let attempt: Int?
+    let observedAtMs: Int64
+}
+
 nonisolated private struct CachedMessageListPayload: Codable, Sendable {
     let messages: [CachedMessagePayload]
 }
@@ -134,6 +181,7 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
     let variant: String?
     let mode: String?
     let sentAtEpochMs: Int64?
+    let completedAtEpochMs: Int64?
     let contextInputTokens: Int64?
     let contextEstimate: CachedMessageContextEstimatePayload
 
@@ -150,6 +198,7 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
         variant: String? = nil,
         mode: String? = nil,
         sentAtEpochMs: Int64? = nil,
+        completedAtEpochMs: Int64? = nil,
         contextInputTokens: Int64? = nil,
         contextEstimate: CachedMessageContextEstimatePayload = CachedMessageContextEstimatePayload()
     ) {
@@ -165,6 +214,7 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
         self.variant = variant
         self.mode = mode
         self.sentAtEpochMs = sentAtEpochMs
+        self.completedAtEpochMs = completedAtEpochMs
         self.contextInputTokens = contextInputTokens
         self.contextEstimate = contextEstimate
     }
@@ -183,6 +233,7 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
         variant = try container.decodeIfPresent(String.self, forKey: .variant)
         mode = try container.decodeIfPresent(String.self, forKey: .mode)
         sentAtEpochMs = try container.decodeIfPresent(Int64.self, forKey: .sentAtEpochMs)
+        completedAtEpochMs = try container.decodeIfPresent(Int64.self, forKey: .completedAtEpochMs)
         contextInputTokens = try container.decodeIfPresent(Int64.self, forKey: .contextInputTokens)
         contextEstimate = try container.decodeIfPresent(
             CachedMessageContextEstimatePayload.self,
@@ -379,6 +430,49 @@ private extension CachedSessionRevertPayload {
     }
 }
 
+private extension SessionActivityCacheEntry {
+    func toCachePayload() -> CachedActivityEntryPayload {
+        let type: String
+        let attempt: Int?
+        switch activity {
+        case .idle:
+            type = "idle"
+            attempt = nil
+        case .running:
+            type = "running"
+            attempt = nil
+        case let .retrying(value, _, _):
+            type = "retry"
+            attempt = value
+        }
+        return CachedActivityEntryPayload(
+            sessionId: sessionId,
+            type: type,
+            attempt: attempt,
+            observedAtMs: observedAtMs
+        )
+    }
+}
+
+private extension CachedActivityEntryPayload {
+    func toDomain() -> SessionActivityCacheEntry {
+        let activity: SessionActivity
+        switch type.lowercased() {
+        case "busy", "running":
+            activity = .running
+        case "retry":
+            activity = .retrying(attempt: attempt, nextAtMs: nil, message: nil)
+        default:
+            activity = .idle
+        }
+        return SessionActivityCacheEntry(
+            sessionId: sessionId,
+            activity: activity,
+            observedAtMs: observedAtMs
+        )
+    }
+}
+
 private extension Message {
     func toCachePayload() -> CachedMessagePayload {
         CachedMessagePayload(
@@ -394,6 +488,7 @@ private extension Message {
             variant: variant,
             mode: mode,
             sentAtEpochMs: sentAtEpochMs,
+            completedAtEpochMs: completedAtEpochMs,
             contextInputTokens: contextInputTokens,
             contextEstimate: contextEstimate.toCachePayload()
         )
@@ -415,6 +510,7 @@ private extension CachedMessagePayload {
             variant: variant,
             mode: mode,
             sentAtEpochMs: sentAtEpochMs,
+            completedAtEpochMs: completedAtEpochMs,
             contextInputTokens: contextInputTokens,
             contextEstimate: contextEstimate.toDomain()
         )

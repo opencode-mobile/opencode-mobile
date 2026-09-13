@@ -137,6 +137,7 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         }
 
         if let seeded = await sessionCache.seedSessions(worktree: directory) {
+            ResumeTiming.shared.markCachePainted()
             yield(SessionListSnapshot(sessions: seeded, isFromCache: true))
         }
         await syncCoordinator.ensureFresh(key)

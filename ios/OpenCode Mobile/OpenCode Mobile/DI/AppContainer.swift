@@ -444,7 +444,8 @@ extension Container {
                 eventStream: self.foregroundEventStream(),
                 eventAdapter: self.eventDomainAdapter(),
                 worldSignals: self.worldSignals(),
-                syncCoordinator: self.syncCoordinator()
+                syncCoordinator: self.syncCoordinator(),
+                sessionCache: self.sessionCache()
             )
         }.singleton
     }

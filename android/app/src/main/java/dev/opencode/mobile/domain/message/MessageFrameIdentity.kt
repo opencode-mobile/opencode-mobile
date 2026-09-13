@@ -1,0 +1,49 @@
+package dev.opencode.mobile.domain.message
+
+/** O(1) published-frame identity. Engine revision already changes on every applied mutation. */
+data class MessageFrameIdentity(
+    val count: Int,
+    val engineRevision: Long,
+    val lastMessageId: String?,
+    val lastUpdatedMs: Long?,
+)
+
+/** Cheap tail confirm: id + timestamp + part count for the fetched page. */
+data class MessageTailIdentity(
+    val items: List<Item>,
+) {
+    data class Item(
+        val messageId: String,
+        val updatedMs: Long?,
+        val partCount: Int,
+    )
+}
+
+fun Message.tailTimestampMs(): Long? = sentAtEpochMs
+
+fun List<Message>.frameIdentity(engineRevision: Long): MessageFrameIdentity {
+    val last = lastOrNull()
+    return MessageFrameIdentity(
+        count = size,
+        engineRevision = engineRevision,
+        lastMessageId = last?.id,
+        lastUpdatedMs = last?.tailTimestampMs(),
+    )
+}
+
+fun List<Message>.tailIdentity(): MessageTailIdentity =
+    MessageTailIdentity(
+        items =
+            map { message ->
+                MessageTailIdentity.Item(
+                    messageId = message.id,
+                    updatedMs = message.tailTimestampMs(),
+                    partCount = message.parts.size,
+                )
+            },
+    )
+
+fun List<Message>.matchesTailIdentity(tail: List<Message>): Boolean {
+    if (tail.isEmpty()) return isEmpty()
+    return takeLast(tail.size).tailIdentity() == tail.tailIdentity()
+}

@@ -140,6 +140,18 @@ private val sessionListGallerySamples: List<SessionListSession>
                 updatedAtEpochMs = now,
             ),
             SessionListSession(
+                id = "session-stale",
+                title = "Cached Working Session",
+                worktree = "/Users/demo/opencode-mobile",
+                letter = 'O',
+                letterAccent = LetterAccent.Violet,
+                subtitle = "/Users/demo/opencode-mobile",
+                status = SessionListStatus.Running,
+                statusStale = true,
+                caption = "now",
+                updatedAtEpochMs = now,
+            ),
+            SessionListSession(
                 id = "session-4",
                 title = "Review Session List",
                 worktree = "/Users/demo/api-client",
@@ -155,11 +167,11 @@ private val sessionListGallerySamples: List<SessionListSession>
 
 private val sessionListGalleryFilterTabs =
     listOf(
-        SessionListFilterTab.all(projectCount = 3, sessionCount = 5),
+        SessionListFilterTab.all(projectCount = 3, sessionCount = 6),
         SessionListFilterTab.project(
             worktree = "/Users/demo/opencode-mobile",
             title = "opencode-mobile",
-            count = 3,
+            count = 4,
         ),
         SessionListFilterTab.project(worktree = "/Users/demo/playground", title = "playground", count = 1),
         SessionListFilterTab.project(worktree = "/Users/demo/api-client", title = "api-client", count = 1),
@@ -170,6 +182,6 @@ private val sessionListGalleryOneProjectFilterTabs =
         SessionListFilterTab.project(
             worktree = "/Users/demo/opencode-mobile",
             title = "opencode-mobile",
-            count = 3,
+            count = 4,
         ),
     )

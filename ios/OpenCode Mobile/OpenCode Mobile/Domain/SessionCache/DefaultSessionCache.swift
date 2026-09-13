@@ -5,6 +5,11 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
     private let connectionIdProvider: @Sendable () -> String?
     private let clock: @Sendable () -> Int64
     private let debounceNanoseconds: UInt64
+    private let activityDebounceNanoseconds: UInt64
+    private let activityLock = NSLock()
+    private var pendingActivity: [String: [SessionActivityCacheEntry]] = [:]
+    private var lastActivity: [String: [SessionActivityCacheEntry]] = [:]
+    private var activityDebounceTasks: [String: Task<Void, Never>] = [:]
 
     init(
         store: any SessionCacheStore,
@@ -12,12 +17,14 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
         clock: @escaping @Sendable () -> Int64 = {
             Int64(Date().timeIntervalSince1970 * 1000)
         },
-        debounceMilliseconds: UInt64 = 3_000
+        debounceMilliseconds: UInt64 = 3_000,
+        activityDebounceMilliseconds: UInt64 = SessionActivityPolicy.activityRememberDebounceMs
     ) {
         self.store = store
         self.connectionIdProvider = connectionIdProvider
         self.clock = clock
         self.debounceNanoseconds = debounceMilliseconds * 1_000_000
+        self.activityDebounceNanoseconds = activityDebounceMilliseconds * 1_000_000
     }
 
     func seedSessions(worktree: String) async -> [Session]? {
@@ -39,6 +46,76 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
             )
         } catch {
             DiagnosticLog.warning(.session, "encode/commit sessions failed: \(error.localizedDescription)")
+        }
+    }
+
+    func seedActivity(directory: String) async -> [SessionActivityCacheEntry]? {
+        guard let connectionId = connectionIdProvider() else { return nil }
+        let key = SessionCacheKey(connectionId: connectionId, worktree: directory, kind: .sessionActivity)
+        guard let record = await store.load(key: key) else { return nil }
+        guard var entries = SessionCacheCodec.decodeActivity(record.value.payloadJSON) else { return nil }
+        let cutoff = clock() - SessionActivityPolicy.cachedActivityTtlMs
+        entries = entries.filter { $0.observedAtMs >= cutoff }
+        activityLock.lock()
+        lastActivity[directory] = entries
+        activityLock.unlock()
+        return entries
+    }
+
+    func rememberActivity(directory: String, entries: [SessionActivityCacheEntry]) async {
+        guard connectionIdProvider() != nil else { return }
+        let normalized = entries.sorted { $0.sessionId < $1.sessionId }
+        activityLock.lock()
+        if lastActivity[directory] == normalized, pendingActivity[directory] == nil {
+            activityLock.unlock()
+            return
+        }
+        if pendingActivity[directory] == normalized {
+            activityLock.unlock()
+            return
+        }
+        pendingActivity[directory] = normalized
+        activityDebounceTasks[directory]?.cancel()
+        let delay = activityDebounceNanoseconds
+        activityDebounceTasks[directory] = Task { [weak self] in
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: delay)
+            }
+            guard !Task.isCancelled else { return }
+            await self?.flushActivity(directory: directory)
+        }
+        activityLock.unlock()
+        if delay == 0 {
+            await flushActivity(directory: directory)
+        }
+    }
+
+    private func flushActivity(directory: String) async {
+        let entries: [SessionActivityCacheEntry]?
+        activityLock.lock()
+        activityDebounceTasks[directory] = nil
+        entries = pendingActivity.removeValue(forKey: directory)
+        activityLock.unlock()
+        guard let entries, let connectionId = connectionIdProvider() else { return }
+        activityLock.lock()
+        if lastActivity[directory] == entries {
+            activityLock.unlock()
+            return
+        }
+        activityLock.unlock()
+        let key = SessionCacheKey(connectionId: connectionId, worktree: directory, kind: .sessionActivity)
+        do {
+            let payload = try SessionCacheCodec.encodeActivity(entries)
+            await store.commit(
+                key: key,
+                value: SessionCacheValue(payloadJSON: payload, schemaVersion: SessionCacheCodec.schemaVersion),
+                meta: SessionCacheCommitMeta(syncedAtEpochMs: clock())
+            )
+            activityLock.lock()
+            lastActivity[directory] = entries
+            activityLock.unlock()
+        } catch {
+            DiagnosticLog.warning(.session, "encode/commit activity failed: \(error.localizedDescription)")
         }
     }
 

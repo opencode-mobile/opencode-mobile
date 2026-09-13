@@ -386,6 +386,120 @@ struct SessionStatusLiveStoreTests {
 
         #expect(snapshot.entries["ses-1"]?.source == .optimistic)
     }
+
+    @Test func observeActivity_cacheSeedIsFromCacheUntilServerLoader() async throws {
+        let cache = RecordingActivityCache()
+        cache.activity = [
+            SessionActivityCacheEntry(sessionId: "ses-1", activity: .running, observedAtMs: 1_000),
+        ]
+        let repository = StatusLiveStoreFakeSessionRepository(
+            statuses: [SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
+        )
+        repository.holdNextStatuses()
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionStatusLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream,
+            sessionCache: cache
+        )
+        let collector = ActivityCollector(store: store, directory: "/repo")
+        let cached = try await collector.awaitEmission {
+            $0.fromCache && !$0.seeded && $0.entries["ses-1"]?.source == .cached
+        }
+        #expect(cached.statusLabel(for: "ses-1") == "Working")
+        repository.resumeStatuses()
+        let server = try await collector.awaitEmission {
+            $0.seeded && $0.entries["ses-1"]?.source == .server
+        }
+        collector.cancel()
+        #expect(!server.fromCache)
+        let remembered = await awaitPredicate { !cache.rememberCalls.isEmpty }
+        #expect(remembered)
+    }
+
+    @Test func observeActivity_serverSnapshotDropsCachedSessionsAbsentFromServer() async throws {
+        let cache = RecordingActivityCache()
+        cache.activity = [
+            SessionActivityCacheEntry(sessionId: "ses-gone", activity: .running, observedAtMs: 1_000),
+            SessionActivityCacheEntry(sessionId: "ses-keep", activity: .running, observedAtMs: 1_000),
+        ]
+        let repository = StatusLiveStoreFakeSessionRepository(
+            statuses: [SessionStatus(sessionID: "ses-keep", raw: ["type": "retry", "attempt": "3"])]
+        )
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionStatusLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream,
+            sessionCache: cache
+        )
+        let collector = ActivityCollector(store: store, directory: "/repo")
+        let snapshot = try await collector.awaitEmission {
+            $0.seeded && $0.entries["ses-keep"] != nil
+        }
+        collector.cancel()
+        #expect(snapshot.entries["ses-gone"] == nil)
+        #expect(snapshot.entries["ses-keep"]?.source == .server)
+        if case let .retrying(attempt, _, _) = snapshot.entries["ses-keep"]?.activity {
+            #expect(attempt == 3)
+        } else {
+            Issue.record("expected retrying")
+        }
+    }
+
+    @Test func observeActivity_sseReplacesCachedEntryForThatSession() async throws {
+        let cache = RecordingActivityCache()
+        cache.activity = [
+            SessionActivityCacheEntry(sessionId: "ses-1", activity: .running, observedAtMs: 1_000),
+        ]
+        let repository = StatusLiveStoreFakeSessionRepository(statuses: [])
+        repository.holdNextStatuses()
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionStatusLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream,
+            sessionCache: cache
+        )
+        let collector = ActivityCollector(store: store, directory: "/repo")
+        _ = try await collector.awaitEmission { $0.entries["ses-1"]?.source == .cached }
+        eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1"))
+        let snapshot = try await collector.awaitEmission { $0.entries["ses-1"] == nil }
+        collector.cancel()
+        repository.resumeStatuses()
+        #expect(snapshot.entries["ses-1"] == nil)
+        let rememberedDrop = await awaitPredicate {
+            cache.rememberCalls.contains { entries in
+                entries.allSatisfy { $0.sessionId != "ses-1" }
+            }
+        }
+        #expect(rememberedDrop)
+    }
+
+    @Test func observeActivity_clearCacheReseedsPersistedActivity() async throws {
+        let cache = RecordingActivityCache()
+        cache.activity = [
+            SessionActivityCacheEntry(sessionId: "ses-1", activity: .running, observedAtMs: 1_000),
+        ]
+        let repository = StatusLiveStoreFakeSessionRepository(statuses: [])
+        repository.holdNextStatuses()
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionStatusLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream,
+            sessionCache: cache
+        )
+        let first = ActivityCollector(store: store, directory: "/repo")
+        _ = try await first.awaitEmission { $0.fromCache && $0.entries["ses-1"]?.source == .cached }
+        first.cancel()
+        store.clearCache()
+        repository.holdNextStatuses()
+        let second = ActivityCollector(store: store, directory: "/repo")
+        let reseeded = try await second.awaitEmission {
+            $0.fromCache && !$0.seeded && $0.entries["ses-1"]?.source == .cached
+        }
+        second.cancel()
+        repository.resumeStatuses()
+        #expect(reseeded.statusLabel(for: "ses-1") == "Working")
+    }
 }
 
 @MainActor
@@ -502,9 +616,30 @@ private final class StatusLiveStoreFakeSessionRepository: SessionRepository, @un
     var statuses: [SessionStatus]
     var statusFetchCount = 0
     var shouldFailStatuses = false
+    private let lock = NSLock()
+    private var holdContinuation: CheckedContinuation<Void, Never>?
+    private var holdNext = false
+    private var holdReleased = false
 
     init(statuses: [SessionStatus]) {
         self.statuses = statuses
+    }
+
+    func holdNextStatuses() {
+        lock.lock()
+        holdNext = true
+        holdReleased = false
+        lock.unlock()
+    }
+
+    func resumeStatuses() {
+        lock.lock()
+        holdNext = false
+        holdReleased = true
+        let continuation = holdContinuation
+        holdContinuation = nil
+        lock.unlock()
+        continuation?.resume()
     }
 
     func listSessions(directory: String?) async throws -> [Session] { [] }
@@ -512,6 +647,25 @@ private final class StatusLiveStoreFakeSessionRepository: SessionRepository, @un
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] {
         statusFetchCount += 1
         if shouldFailStatuses { throw SessionError.http(statusCode: 500, message: "status failed") }
+        let shouldHold: Bool
+        lock.lock()
+        shouldHold = holdNext
+        if shouldHold {
+            holdNext = false
+        }
+        lock.unlock()
+        if shouldHold {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                lock.lock()
+                if holdReleased {
+                    lock.unlock()
+                    continuation.resume()
+                    return
+                }
+                holdContinuation = continuation
+                lock.unlock()
+            }
+        }
         return statuses
     }
     func getSession(id: String, directory: String?) async throws -> Session { fatalError() }
@@ -535,4 +689,31 @@ private final class StatusLiveStoreFakeSessionRepository: SessionRepository, @un
         decision: PermissionDecision,
         directory: String?
     ) async throws -> Bool { fatalError() }
+}
+
+private final class RecordingActivityCache: SessionCache, @unchecked Sendable {
+    var activity: [SessionActivityCacheEntry]?
+    private let lock = NSLock()
+    private var _rememberCalls: [[SessionActivityCacheEntry]] = []
+
+    var rememberCalls: [[SessionActivityCacheEntry]] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _rememberCalls
+    }
+
+    func seedSessions(worktree: String) async -> [Session]? { nil }
+    func rememberSessions(worktree: String, sessions: [Session]) async {}
+    func seedActivity(directory: String) async -> [SessionActivityCacheEntry]? { activity }
+    func rememberActivity(directory: String, entries: [SessionActivityCacheEntry]) async {
+        lock.lock()
+        _rememberCalls.append(entries)
+        lock.unlock()
+    }
+    func openMessages(sessionID: String, worktree: String) -> any SessionMessageCacheHandle {
+        NoOpSessionCache.shared.openMessages(sessionID: sessionID, worktree: worktree)
+    }
+    func purgeWorktree(serverBaseURL: String, worktree: String) async {}
+    func clearAll() async {}
+    func estimatedSizeBytes() async -> Int64 { 0 }
 }

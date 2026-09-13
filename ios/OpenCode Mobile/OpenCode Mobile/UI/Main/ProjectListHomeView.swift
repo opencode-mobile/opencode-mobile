@@ -817,6 +817,7 @@ struct SessionListItem: Identifiable, Hashable {
     let updatedAtLabel: String?
     let updatedAtEpochMs: Int64?
     let isReady: Bool
+    let statusIsStale: Bool
     /// Unique per optimistic new-session navigation so back-stack entries do not reuse a promoted chat.
     let optimisticNavigationInstanceID: UUID?
     let parentID: String?
@@ -829,6 +830,7 @@ struct SessionListItem: Identifiable, Hashable {
         updatedAtLabel: String? = nil,
         updatedAtEpochMs: Int64? = nil,
         isReady: Bool = false,
+        statusIsStale: Bool = false,
         optimisticNavigationInstanceID: UUID? = nil,
         parentID: String? = nil
     ) {
@@ -839,6 +841,7 @@ struct SessionListItem: Identifiable, Hashable {
         self.updatedAtLabel = updatedAtLabel
         self.updatedAtEpochMs = updatedAtEpochMs
         self.isReady = isReady
+        self.statusIsStale = statusIsStale
         self.optimisticNavigationInstanceID = optimisticNavigationInstanceID
         self.parentID = parentID
     }
@@ -875,6 +878,7 @@ private extension Array where Element == ProjectSectionItem {
                         letterAccent: section.letterAccent,
                         subtitle: section.pathSubtitle,
                         status: session.sessionListStatus(),
+                        statusIsStale: session.statusIsStale,
                         caption: session.updatedAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? "",
                         updatedAtEpochMs: session.updatedAtEpochMs
                     )

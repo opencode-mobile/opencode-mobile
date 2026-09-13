@@ -43,7 +43,10 @@ import dev.opencode.mobile.domain.session.SessionActivitySource
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
+import dev.opencode.mobile.domain.sessioncache.DefaultSessionCache
+import dev.opencode.mobile.domain.sessioncache.InMemorySessionCacheStore
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
+import dev.opencode.mobile.domain.sessioncache.SessionActivityCacheEntry
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sessioncache.SessionMessageCacheHandle
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
@@ -726,7 +729,7 @@ class MessageSyncTest {
         }
 
     @Test
-    fun observeMessages_reconnectUnchangedFingerprintDoesNotRepaint() =
+    fun observeMessages_reconnectUnchangedIdentityDoesNotRepaint() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
@@ -745,6 +748,7 @@ class MessageSyncTest {
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
 
+            // The reconnect REST returns a byte-identical tail: no repaint.
             assertEquals(1, emissions.size)
             assertEquals("Hello", emissions.single().single().text)
         }
@@ -801,7 +805,7 @@ class MessageSyncTest {
         }
 
     @Test
-    fun observeMessages_pollsTimelineWhenFingerprintChanges() =
+    fun observeMessages_pollsTimelineWhenIdentityChanges() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
@@ -2241,6 +2245,138 @@ class SessionStatusLiveStoreTest {
             assertEquals(SessionActivitySource.Optimistic, snapshot.entries["ses-1"]?.source)
         }
 
+    @Test
+    fun observeActivity_seedsCachedBeforeLoader() =
+        runTest(testDispatcher) {
+            val cache =
+                rememberedActivityCache(
+                    observedAtMs = 1_000L,
+                )
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            repository.statusDelayMs = 10_000
+            val store = createStatusStore(repository, FakeForegroundEventStream(), sessionCache = cache)
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
+            runCurrent()
+            val cached = emissions.first { it.fromCache }
+            assertFalse(cached.seeded)
+            assertTrue(cached.fromCache)
+            assertEquals(SessionActivity.Running, cached.entries["ses-1"]?.activity)
+            assertEquals(SessionActivitySource.Cached, cached.entries["ses-1"]?.source)
+            advanceTimeBy(10_000)
+            advanceUntilIdle()
+            collectJob.cancel()
+            val loaded = emissions.last()
+            assertTrue(loaded.seeded)
+            assertFalse(loaded.fromCache)
+            assertEquals(SessionActivitySource.Server, loaded.entries["ses-1"]?.source)
+        }
+
+    @Test
+    fun observeActivity_absentFromServerDropsCached() =
+        runTest(testDispatcher) {
+            val cache =
+                rememberedActivityCache(
+                    observedAtMs = 1_000L,
+                )
+            val repository = FakeSessionRepository(statuses = emptyList())
+            val store = createStatusStore(repository, FakeForegroundEventStream(), sessionCache = cache)
+            val snapshot = store.observeActivity("/repo").first { it.seeded }
+            assertNull(snapshot.entries["ses-1"])
+            assertFalse(snapshot.fromCache)
+        }
+
+    @Test
+    fun observeActivity_sseReplacesCachedEntry() =
+        runTest(testDispatcher) {
+            val cache =
+                rememberedActivityCache(
+                    observedAtMs = 1_000L,
+                )
+            val repository = FakeSessionRepository(statuses = emptyList())
+            repository.statusDelayMs = 10_000
+            val eventStream = FakeForegroundEventStream()
+            val store = createStatusStore(repository, eventStream, sessionCache = cache)
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
+            runCurrent()
+            assertEquals(SessionActivitySource.Cached, emissions.last().entries["ses-1"]?.source)
+            eventStream.emit(busyStatusEvent("ses-1"))
+            runCurrent()
+            collectJob.cancel()
+            assertEquals(SessionActivitySource.Server, emissions.last().entries["ses-1"]?.source)
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-1"]?.activity)
+        }
+
+    @Test
+    fun clearCache_doesNotDropPersistedActivity() =
+        runTest(testDispatcher) {
+            val cache =
+                rememberedActivityCache(
+                    observedAtMs = 1_000L,
+                )
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            repository.statusDelayMs = 10_000
+            val store = createStatusStore(repository, FakeForegroundEventStream(), sessionCache = cache)
+            store.clearCache()
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
+            runCurrent()
+            assertEquals(SessionActivitySource.Cached, emissions.first().entries["ses-1"]?.source)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun observeActivity_remembersServerSnapshot() =
+        runTest(testDispatcher) {
+            val cache =
+                DefaultSessionCache(
+                    store = InMemorySessionCacheStore(),
+                    connectionIdProvider = { "profile-1" },
+                    scope = backgroundScope,
+                    json = Json { ignoreUnknownKeys = true },
+                    clock = { testDispatcher.scheduler.currentTime },
+                    activityDebounceMs = 1_000L,
+                )
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            val store = createStatusStore(repository, FakeForegroundEventStream(), sessionCache = cache)
+            val collectJob = launch { store.observeActivity("/repo").collect { } }
+            advanceUntilIdle()
+            advanceTimeBy(1_000)
+            runCurrent()
+            collectJob.cancel()
+            val seeded = cache.seedActivity("/repo")
+            assertEquals("ses-1", seeded?.single()?.sessionId)
+            assertEquals(SessionActivity.Running, seeded?.single()?.activity)
+        }
+
+    private suspend fun rememberedActivityCache(observedAtMs: Long): SessionCache {
+        val cache =
+            DefaultSessionCache(
+                store = InMemorySessionCacheStore(),
+                connectionIdProvider = { "profile-1" },
+                scope = CoroutineScope(SupervisorJob() + testDispatcher),
+                json = Json { ignoreUnknownKeys = true },
+                clock = { observedAtMs },
+                activityDebounceMs = 1_000L,
+            )
+        cache.rememberActivity(
+            "/repo",
+            listOf(SessionActivityCacheEntry("ses-1", SessionActivity.Running, observedAtMs)),
+        )
+        delay(1_000)
+        return cache
+    }
+
     private fun createStatusStore(
         repository: FakeSessionRepository,
         eventStream: FakeForegroundEventStream,
@@ -2248,6 +2384,7 @@ class SessionStatusLiveStoreTest {
         wait: suspend (Long) -> Unit = { ms ->
             if (ms < LiveStoreRefreshPolicy.STATUS_RUNNING_RECONCILE_MS) delay(ms)
         },
+        sessionCache: SessionCache = NoOpSessionCache,
     ): DefaultSessionStatusLiveStore {
         if (eventStream.connectionState.value == EventStreamConnectionState.Idle) {
             eventStream.setConnectionState(EventStreamConnectionState.Connected)
@@ -2266,6 +2403,7 @@ class SessionStatusLiveStoreTest {
                 nowMs = { testDispatcher.scheduler.currentTime },
                 wait = { delay(1) },
             ),
+            sessionCache = sessionCache,
             nowMs = { testDispatcher.scheduler.currentTime },
             wait = wait,
         )
@@ -3249,6 +3387,13 @@ private class GatedSessionCache : SessionCache {
             it.await()
         }
     }
+
+    override suspend fun seedActivity(directory: String): List<SessionActivityCacheEntry>? = null
+
+    override suspend fun rememberActivity(
+        directory: String,
+        entries: List<SessionActivityCacheEntry>,
+    ) = Unit
 
     override fun openMessages(
         sessionId: String,

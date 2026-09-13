@@ -98,6 +98,7 @@ enum class OpenCodeListItemStatusTone {
     Warning,
     Error,
     Info,
+    Stale,
 }
 
 data class OpenCodeListItemStatus(
@@ -353,6 +354,7 @@ private fun OpenCodeListItemStatusTone.foreground(): Color =
         OpenCodeListItemStatusTone.Warning -> openCodeColor("warning")
         OpenCodeListItemStatusTone.Error -> openCodeColor("error")
         OpenCodeListItemStatusTone.Info -> openCodeColor("text-base")
+        OpenCodeListItemStatusTone.Stale -> openCodeColor("text-weak")
     }
 
 @Composable
@@ -363,6 +365,7 @@ private fun OpenCodeListItemStatusTone.background(): Color =
         OpenCodeListItemStatusTone.Warning -> openCodeColor("warning").copy(alpha = 0.12f)
         OpenCodeListItemStatusTone.Error -> openCodeColor("error").copy(alpha = 0.12f)
         OpenCodeListItemStatusTone.Info -> openCodeColor("text-strong").copy(alpha = 0.10f)
+        OpenCodeListItemStatusTone.Stale -> openCodeColor("text-strong").copy(alpha = 0.08f)
     }
 
 @Composable
@@ -498,6 +501,13 @@ private fun OpenCodeListItemPreview() {
                 status = OpenCodeListItemStatus(text = "Idle", tone = OpenCodeListItemStatusTone.Info),
                 caption = "14m ago",
                 startDecorator = StartDecorator.Letter('P', LetterAccent.Teal),
+            )
+            OpenCodeListItem(
+                title = "Cached running session",
+                subtitle = "~/Projects/opencode-mobile",
+                status = OpenCodeListItemStatus(text = "Running", tone = OpenCodeListItemStatusTone.Stale),
+                caption = "now",
+                startDecorator = StartDecorator.Letter('O', LetterAccent.Violet),
             )
             OpenCodeListItem(
                 title = "All projects",

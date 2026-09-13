@@ -1,8 +1,11 @@
 package dev.opencode.mobile.ui.main
 
 import dev.opencode.mobile.domain.session.SessionSummary
+import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
 import dev.opencode.mobile.ui.components.SessionListStatus
+import dev.opencode.mobile.ui.components.toListItemStatus
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class SessionListStatusMappingTest {
@@ -64,6 +67,27 @@ class SessionListStatusMappingTest {
                 isReady = false,
             )
         assertEquals(SessionListStatus.Idle, summary.toSessionListStatusForTest())
+    }
+
+    @Test
+    fun cachedRunningUsesStaleTone() {
+        assertEquals(
+            OpenCodeListItemStatusTone.Stale,
+            SessionListStatus.Running.toListItemStatus(stale = true)?.tone,
+        )
+    }
+
+    @Test
+    fun serverRunningUsesInteractiveTone() {
+        assertEquals(
+            OpenCodeListItemStatusTone.Interactive,
+            SessionListStatus.Running.toListItemStatus(stale = false)?.tone,
+        )
+    }
+
+    @Test
+    fun idleHasNoChipEvenWhenStale() {
+        assertNull(SessionListStatus.Idle.toListItemStatus(stale = true))
     }
 }
 

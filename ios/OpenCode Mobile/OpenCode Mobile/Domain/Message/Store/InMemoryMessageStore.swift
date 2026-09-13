@@ -123,6 +123,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             variant: baseMessage.variant,
             mode: baseMessage.mode,
             sentAtEpochMs: baseMessage.sentAtEpochMs,
+            completedAtEpochMs: baseMessage.completedAtEpochMs,
             contextInputTokens: baseMessage.contextInputTokens,
             contextEstimate: baseMessage.contextEstimate
         )

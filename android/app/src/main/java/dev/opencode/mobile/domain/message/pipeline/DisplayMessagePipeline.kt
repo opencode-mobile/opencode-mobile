@@ -603,7 +603,7 @@ class DisplayMessagePipeline(
                                 ) {
                                     // Newest-first HistoryPlainFirst: format the open
                                     // viewport (last message) before older history.
-                                    // Skip null-markdown flash. REST fingerprint-unchanged
+                                    // Skip null-markdown flash. REST identity-unchanged
                                     // keeps TextMate enrich from being cancelled.
                                     schedulePlainFirstNewestFirst(
                                         generation = generation,

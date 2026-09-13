@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.live
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.ResumeTiming
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.ProjectionKey
@@ -111,6 +112,7 @@ class DefaultSessionLiveStore
                 try {
                     activeDirectories.add(directory)
                     sessionCache.seedSessions(directory)?.let { seeded ->
+                        ResumeTiming.markCachePainted(System.currentTimeMillis())
                         send(SessionListSnapshot(sessions = seeded, isFromCache = true))
                     }
                     syncCoordinator.ensureFresh(key)

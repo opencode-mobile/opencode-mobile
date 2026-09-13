@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.sync
 
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.LiveConnection
+import dev.opencode.mobile.domain.event.ResumeTiming
 import dev.opencode.mobile.domain.event.WorldSignal
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.event.canCatchUp
@@ -61,6 +62,9 @@ class DefaultSyncCoordinator(
                 liveConnection.connectionState.value == EventStreamConnectionState.Connected
             liveConnection.connectionState.collect { state ->
                 val connected = state == EventStreamConnectionState.Connected
+                if (connected) {
+                    ResumeTiming.markConnected(nowMs())
+                }
                 if (lastConnected && !connected) {
                     invalidate(null)
                 }
@@ -282,11 +286,16 @@ class DefaultSyncCoordinator(
         val snapshot = entries.values.toList()
         val visible = snapshot.filter { it.visible && it.loader != null }
         val directories = visible.map { it.key.directory }.distinct()
+        val focusedTranscript = focused
         coroutineScope {
-            directories
-                .map { directory ->
+            val step1 =
+                directories.map { directory ->
                     async { runVisibleLoader(ProjectionKey.SessionStatuses(directory)) }
-                }.forEach { it.await() }
+                } +
+                    listOfNotNull(
+                        focusedTranscript?.let { key -> async { runVisibleLoader(key) } },
+                    )
+            step1.forEach { it.await() }
         }
         coroutineScope {
             visible
@@ -296,18 +305,18 @@ class DefaultSyncCoordinator(
                 .map { key -> async { runVisibleLoader(key) } }
                 .forEach { it.await() }
         }
-        focused?.let { runVisibleLoader(it) }
         val others =
             visible.map { it.key }.filter { key ->
                 key !is ProjectionKey.SessionStatuses &&
                     key !is ProjectionKey.SessionList &&
-                    key != focused
+                    key != focusedTranscript
             }
         coroutineScope {
             others
                 .map { key -> async { runVisibleLoader(key) } }
                 .forEach { it.await() }
         }
+        ResumeTiming.markBootstrapDone(nowMs())
         maybeFinishBootstrap()
     }
 

@@ -38,6 +38,7 @@ data class SessionSummary(
     val updatedAtLabel: String? = null,
     val updatedAtEpochMs: Long? = null,
     val isReady: Boolean = false,
+    val statusStale: Boolean = false,
 )
 
 data class SessionStatus(
@@ -69,6 +70,7 @@ sealed class SessionActivity {
 enum class SessionActivitySource {
     Server,
     Optimistic,
+    Cached,
 }
 
 data class SessionActivityEntry(
@@ -80,6 +82,7 @@ data class SessionActivityEntry(
 data class SessionActivitySnapshot(
     val entries: Map<String, SessionActivityEntry> = emptyMap(),
     val seeded: Boolean = false,
+    val fromCache: Boolean = false,
 )
 
 fun SessionStatus.toSessionActivity(): SessionActivity =

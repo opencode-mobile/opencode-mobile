@@ -1014,6 +1014,7 @@ private fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Ses
                 caption = session.updatedAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty(),
                 updatedAtEpochMs = session.updatedAtEpochMs,
                 retryAttempt = session.retryAttempt(),
+                statusStale = session.statusStale,
             )
         }
 

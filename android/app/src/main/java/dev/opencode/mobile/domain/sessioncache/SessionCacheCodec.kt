@@ -11,6 +11,7 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageTokenUsage
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionRevert
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -29,6 +30,7 @@ object SessionCacheCodec {
                 schemaVersion = SCHEMA_VERSION,
                 sessions = CachedSessionListPayload(sessions.map { it.toCachePayload() }),
                 messages = null,
+                activity = null,
             ),
         )
 
@@ -57,6 +59,7 @@ object SessionCacheCodec {
                 schemaVersion = SCHEMA_VERSION,
                 sessions = null,
                 messages = CachedMessageListPayload(messages.map { it.toCachePayload() }),
+                activity = null,
             ),
         )
 
@@ -75,6 +78,35 @@ object SessionCacheCodec {
         }.onFailure { error ->
             DiagnosticLog.warning(DiagnosticLogArea.Session, "message decode failed", error)
         }.getOrNull()
+
+    fun encodeActivity(
+        entries: List<SessionActivityCacheEntry>,
+        json: Json,
+    ): String =
+        json.encodeToString(
+            CachedEnvelope(
+                schemaVersion = SCHEMA_VERSION,
+                sessions = null,
+                messages = null,
+                activity = CachedActivityListPayload(entries.map { it.toCachePayload() }),
+            ),
+        )
+
+    fun decodeActivity(
+        raw: String,
+        json: Json,
+    ): List<SessionActivityCacheEntry>? =
+        runCatching {
+            val envelope = json.decodeFromString<CachedEnvelope>(raw)
+            if (envelope.schemaVersion != SCHEMA_VERSION) {
+                DiagnosticLog.warning(DiagnosticLogArea.Session, "activity schema mismatch: ${envelope.schemaVersion}")
+                return null
+            }
+            envelope.activity?.entries?.map { it.toDomain() }
+                ?: error("missing activity payload")
+        }.onFailure { error ->
+            DiagnosticLog.warning(DiagnosticLogArea.Session, "activity decode failed", error)
+        }.getOrNull()
 }
 
 @Serializable
@@ -82,6 +114,7 @@ internal data class CachedEnvelope(
     val schemaVersion: Int,
     val sessions: CachedSessionListPayload? = null,
     val messages: CachedMessageListPayload? = null,
+    val activity: CachedActivityListPayload? = null,
 )
 
 @Serializable
@@ -116,6 +149,19 @@ internal data class CachedSessionRevertPayload(
 @Serializable
 internal data class CachedMessageListPayload(
     val messages: List<CachedMessagePayload>,
+)
+
+@Serializable
+internal data class CachedActivityListPayload(
+    val entries: List<CachedActivityPayload>,
+)
+
+@Serializable
+internal data class CachedActivityPayload(
+    val sessionId: String,
+    val type: String,
+    val attempt: Int? = null,
+    val observedAtMs: Long,
 )
 
 @Serializable
@@ -224,6 +270,36 @@ private fun CachedSessionRevertPayload.toDomain(): SessionRevert =
         snapshot = snapshot,
         diff = diff,
     )
+
+private fun SessionActivityCacheEntry.toCachePayload(): CachedActivityPayload {
+    val type =
+        when (activity) {
+            SessionActivity.Idle -> "idle"
+            SessionActivity.Running -> "running"
+            is SessionActivity.Retrying -> "retry"
+        }
+    val attempt = (activity as? SessionActivity.Retrying)?.attempt
+    return CachedActivityPayload(
+        sessionId = sessionId,
+        type = type,
+        attempt = attempt,
+        observedAtMs = observedAtMs,
+    )
+}
+
+private fun CachedActivityPayload.toDomain(): SessionActivityCacheEntry {
+    val activity =
+        when (type.lowercase()) {
+            "running", "busy" -> SessionActivity.Running
+            "retry", "retrying" -> SessionActivity.Retrying(attempt = attempt)
+            else -> SessionActivity.Idle
+        }
+    return SessionActivityCacheEntry(
+        sessionId = sessionId,
+        activity = activity,
+        observedAtMs = observedAtMs,
+    )
+}
 
 private fun Message.toCachePayload(): CachedMessagePayload =
     CachedMessagePayload(

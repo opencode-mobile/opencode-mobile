@@ -83,6 +83,7 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
             continuation.yield(.active)
         }
         wakeReconnect()
+        ResumeTiming.shared.begin()
         emit(.foreground)
         startIfConnected(reason: "foreground")
     }

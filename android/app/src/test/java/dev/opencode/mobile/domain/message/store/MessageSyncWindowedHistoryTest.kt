@@ -59,6 +59,7 @@ class MessageSyncWindowedHistoryTest {
             assertEquals(listOf("tail"), tailCalls)
             val confirmed = updates.filterIsInstance<MessageListUpdate.CacheSyncConfirmed>().lastOrNull()
             assertTrue(lastMessages.hasOlder || confirmed?.hasOlder == true)
+            assertEquals(1, updates.filterIsInstance<MessageListUpdate.Messages>().size)
         }
 
     @Test
@@ -84,6 +85,61 @@ class MessageSyncWindowedHistoryTest {
                     } as MessageListUpdate.Messages
 
             assertEquals(listOf("x", "y"), last.messages.map { it.id })
+        }
+
+    @Test
+    fun identicalTail_confirmsWithoutRepublish() =
+        runTest(testDispatcher) {
+            val cache = SeededSessionCache(listOf(user("m1"), user("m2")))
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages = listOf(user("m1"), user("m2")),
+                            olderCursor = null,
+                            hasOlder = false,
+                        )
+                    },
+                    sessionCache = cache,
+                )
+            val updates = mutableListOf<MessageListUpdate>()
+            val job =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { updates += it }
+                }
+            advanceUntilIdle()
+            job.cancel()
+            assertEquals(1, updates.filterIsInstance<MessageListUpdate.Messages>().size)
+            assertTrue(updates.any { it is MessageListUpdate.CacheSyncConfirmed })
+        }
+
+    @Test
+    fun differingTail_mergesAndPublishesOnceAfterCache() =
+        runTest(testDispatcher) {
+            val cache = SeededSessionCache(listOf(user("m1")))
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages = listOf(user("m1"), user("m2")),
+                            olderCursor = null,
+                            hasOlder = false,
+                        )
+                    },
+                    sessionCache = cache,
+                )
+            val updates = mutableListOf<MessageListUpdate>()
+            val job =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { updates += it }
+                }
+            advanceUntilIdle()
+            job.cancel()
+            val published = updates.filterIsInstance<MessageListUpdate.Messages>()
+            assertEquals(2, published.size)
+            assertTrue(published.first().isFromCache)
+            assertFalse(published.last().isFromCache)
+            assertEquals(listOf("m1", "m2"), published.last().messages.map { it.id })
         }
 
     @Test
@@ -472,6 +528,13 @@ private class SeededSessionCache(
     override suspend fun rememberSessions(
         worktree: String,
         sessions: List<dev.opencode.mobile.domain.session.Session>,
+    ) = Unit
+
+    override suspend fun seedActivity(directory: String) = null
+
+    override suspend fun rememberActivity(
+        directory: String,
+        entries: List<dev.opencode.mobile.domain.sessioncache.SessionActivityCacheEntry>,
     ) = Unit
 
     override fun openMessages(
