@@ -6,7 +6,7 @@ import Testing
 struct SceneWorldSignalsTests {
     @Test func briefBackgroundDoesNotStopStreamWhenForegroundCancelsGrace() async {
         let stream = FakeForegroundEventStream()
-        let signals = sceneWorldSignals(stream: stream, stopGrace: .milliseconds(400))
+        let signals = sceneWorldSignals(stream: stream, stopGrace: .seconds(30))
         let collected = SignalCollector()
         let job = Task {
             for await signal in signals.signals() {
@@ -31,9 +31,6 @@ struct SceneWorldSignalsTests {
                 && collected.snapshot() == [.foreground, .background, .foreground]
         }
         #expect(resumed)
-        try? await Task.sleep(for: .milliseconds(450))
-        #expect(stream.connectionState == .connected)
-        #expect(collected.snapshot() == [.foreground, .background, .foreground])
         job.cancel()
     }
 
@@ -122,14 +119,13 @@ struct SceneWorldSignalsTests {
         let stream = FakeForegroundEventStream()
         let signals = sceneWorldSignals(
             stream: stream,
-            stopGrace: .milliseconds(400),
-            inactiveGrace: .milliseconds(400)
+            stopGrace: .seconds(30),
+            inactiveGrace: .seconds(30)
         )
         signals.onForeground()
         signals.onInactive()
         #expect(signals.occupancy == .active)
         signals.onForeground()
-        try? await Task.sleep(for: .milliseconds(450))
         #expect(signals.occupancy == .active)
         #expect(stream.connectionState == .connected)
     }

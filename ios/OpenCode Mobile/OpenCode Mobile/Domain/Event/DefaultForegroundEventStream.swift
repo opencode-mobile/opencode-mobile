@@ -1157,23 +1157,40 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private final class ReconnectWakeGate: @unchecked Sendable {
         private let lock = NSLock()
         private var waiters: [UUID: CheckedContinuation<Bool, Never>] = [:]
+        private var pending = false
 
         func signal() {
             lock.lock()
-            let pending = waiters
+            let waiting = waiters
             waiters.removeAll()
+            if waiting.isEmpty {
+                pending = true
+            }
             lock.unlock()
-            for continuation in pending.values {
+            for continuation in waiting.values {
                 continuation.resume(returning: true)
             }
         }
 
         func wait(milliseconds: Int) async -> Bool {
             guard milliseconds > 0 else { return false }
+            lock.lock()
+            if pending {
+                pending = false
+                lock.unlock()
+                return true
+            }
+            lock.unlock()
             let id = UUID()
             return await withTaskCancellationHandler {
                 await withCheckedContinuation { continuation in
                     lock.lock()
+                    if pending {
+                        pending = false
+                        lock.unlock()
+                        continuation.resume(returning: true)
+                        return
+                    }
                     waiters[id] = continuation
                     lock.unlock()
                     Task {

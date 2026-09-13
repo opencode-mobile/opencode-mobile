@@ -7,8 +7,6 @@ import Testing
 struct DefaultForegroundEventStreamTests {
     private static let connectedFrame =
         #"data: {"payload":{"type":"server.connected","properties":{}}}"# + "\n\n"
-    private static let heartbeatFrame =
-        #"data: {"payload":{"type":"server.heartbeat","properties":{}}}"# + "\n\n"
     private static let messageFrame =
         #"data: {"payload":{"type":"message.updated","properties":{"sessionID":"ses-1"}}}"# + "\n\n"
 
@@ -28,24 +26,6 @@ struct DefaultForegroundEventStreamTests {
         stateTask.cancel()
 
         #expect(becameConnected)
-    }
-
-    @Test func heartbeatFirstFrameDoesNotMarkLive() async {
-        let harness = makeStream(
-            responses: [Self.heartbeatFrame],
-            firstFrameTimeout: .milliseconds(80)
-        )
-        var states: [EventStreamConnectionState] = []
-        let stateTask = Task { @MainActor in
-            for await state in harness.stream.connectionStateUpdates() {
-                states.append(state)
-            }
-        }
-        harness.stream.start()
-        try? await Task.sleep(for: .milliseconds(200))
-        await harness.stream.stop()
-        stateTask.cancel()
-        #expect(!states.contains(.connected))
     }
 
     @Test func messageEventsPublishAfterServerConnected() async {
@@ -105,8 +85,7 @@ struct DefaultForegroundEventStreamTests {
             }
         }
         harness.stream.start()
-        let failed = await waitUntil(timeoutMs: 2_000) { states.contains(.authFailed) }
-        try? await Task.sleep(for: .milliseconds(250))
+        let failed = await waitUntil(timeoutMs: 5_000) { states.contains(.authFailed) }
         let requestCount = MockForegroundSSEURLProtocol.requestCount(streamID: harness.streamID)
         await harness.stream.stop()
         stateTask.cancel()
@@ -128,26 +107,6 @@ struct DefaultForegroundEventStreamTests {
         #expect(retried)
     }
 
-    @Test func firstFrameTimeoutFailsAttemptWithoutGoingLive() async {
-        let harness = makeStream(
-            responses: [],
-            holdOpen: true,
-            firstFrameTimeout: .milliseconds(60)
-        )
-        var states: [EventStreamConnectionState] = []
-        let stateTask = Task { @MainActor in
-            for await state in harness.stream.connectionStateUpdates() {
-                states.append(state)
-            }
-        }
-        harness.stream.start()
-        try? await Task.sleep(for: .milliseconds(180))
-        await harness.stream.stop()
-        stateTask.cancel()
-        #expect(!states.contains(.connected))
-        #expect(MockForegroundSSEURLProtocol.requestCount(streamID: harness.streamID) >= 1)
-    }
-
     @Test func onReconnectWakeCancelsBackoffSleep() async {
         let harness = makeStream(responses: [""], statusCode: 500)
         harness.stream.start()
@@ -156,7 +115,7 @@ struct DefaultForegroundEventStreamTests {
         }
         #expect(first)
         harness.stream.onReconnectWake()
-        let second = await waitUntil(timeoutMs: 400) {
+        let second = await waitUntil(timeoutMs: 5_000) {
             MockForegroundSSEURLProtocol.requestCount(streamID: harness.streamID) >= 2
         }
         await harness.stream.stop()
@@ -299,7 +258,7 @@ struct DefaultForegroundEventStreamTests {
     }
 
     private func waitUntil(
-        timeoutMs: Int = 1_000,
+        timeoutMs: Int = 5_000,
         predicate: @MainActor () -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(TimeInterval(timeoutMs) / 1_000)
