@@ -47,7 +47,8 @@ class MessageSyncWindowedHistoryTest {
                 )
 
             val updates = mutableListOf<MessageListUpdate>()
-            sync.observeMessages("ses-1", "/repo")
+            sync
+                .observeMessages("ses-1", "/repo")
                 .onEach { updates += it }
                 .first { update ->
                     update is MessageListUpdate.CacheSyncConfirmed ||
@@ -79,7 +80,8 @@ class MessageSyncWindowedHistoryTest {
                 )
 
             val last =
-                sync.observeMessages("ses-1", "/repo")
+                sync
+                    .observeMessages("ses-1", "/repo")
                     .first { update ->
                         update is MessageListUpdate.Messages && !update.isFromCache
                     } as MessageListUpdate.Messages
@@ -140,6 +142,146 @@ class MessageSyncWindowedHistoryTest {
             assertTrue(published.first().isFromCache)
             assertFalse(published.last().isFromCache)
             assertEquals(listOf("m1", "m2"), published.last().messages.map { it.id })
+        }
+
+    @Test
+    fun streamingCachedTail_completedRestTail_publishesRestContent() =
+        runTest(testDispatcher) {
+            val cache =
+                SeededSessionCache(
+                    listOf(
+                        user("m1"),
+                        Message(
+                            id = "a1",
+                            role = MessageRole.Assistant,
+                            text = "partial",
+                            parts = listOf(MessagePart.Text(text = "partial", isStreaming = true)),
+                            sentAtEpochMs = 1_000L,
+                            completedAtEpochMs = null,
+                        ),
+                    ),
+                )
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages =
+                                listOf(
+                                    user("m1"),
+                                    Message(
+                                        id = "a1",
+                                        role = MessageRole.Assistant,
+                                        text = "partial and done",
+                                        parts = listOf(MessagePart.Text(text = "partial and done")),
+                                        sentAtEpochMs = 1_000L,
+                                        completedAtEpochMs = 2_000L,
+                                    ),
+                                ),
+                            olderCursor = null,
+                            hasOlder = false,
+                        )
+                    },
+                    sessionCache = cache,
+                )
+            val updates = mutableListOf<MessageListUpdate>()
+            val job =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { updates += it }
+                }
+            advanceUntilIdle()
+            job.cancel()
+            val published = updates.filterIsInstance<MessageListUpdate.Messages>()
+            assertEquals(2, published.size)
+            assertTrue(published.first().isFromCache)
+            assertFalse(published.last().isFromCache)
+            assertEquals(
+                "partial and done",
+                published
+                    .last()
+                    .messages
+                    .last()
+                    .text,
+            )
+        }
+
+    @Test
+    fun completedIdenticalAssistantTail_confirmsWithoutRepublish() =
+        runTest(testDispatcher) {
+            val completed =
+                Message(
+                    id = "a1",
+                    role = MessageRole.Assistant,
+                    text = "done",
+                    parts = listOf(MessagePart.Text(text = "done")),
+                    sentAtEpochMs = 1_000L,
+                    completedAtEpochMs = 2_000L,
+                )
+            val cache = SeededSessionCache(listOf(user("m1"), completed))
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages = listOf(user("m1"), completed),
+                            olderCursor = null,
+                            hasOlder = false,
+                        )
+                    },
+                    sessionCache = cache,
+                )
+            val updates = mutableListOf<MessageListUpdate>()
+            val job =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { updates += it }
+                }
+            advanceUntilIdle()
+            job.cancel()
+            assertEquals(1, updates.filterIsInstance<MessageListUpdate.Messages>().size)
+            assertTrue(updates.any { it is MessageListUpdate.CacheSyncConfirmed })
+        }
+
+    @Test
+    fun restTailStillStreaming_doesNotConfirm() =
+        runTest(testDispatcher) {
+            val streaming =
+                Message(
+                    id = "a1",
+                    role = MessageRole.Assistant,
+                    text = "partial",
+                    parts = listOf(MessagePart.Text(text = "partial", isStreaming = true)),
+                    sentAtEpochMs = 1_000L,
+                    completedAtEpochMs = null,
+                )
+            val cache = SeededSessionCache(listOf(user("m1"), streaming))
+            val restTail =
+                Message(
+                    id = "a1",
+                    role = MessageRole.Assistant,
+                    text = "still going",
+                    parts = listOf(MessagePart.Text(text = "still going", isStreaming = true)),
+                    sentAtEpochMs = 1_000L,
+                    completedAtEpochMs = null,
+                )
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages = listOf(user("m1"), restTail),
+                            olderCursor = null,
+                            hasOlder = false,
+                        )
+                    },
+                    sessionCache = cache,
+                )
+            val updates = mutableListOf<MessageListUpdate>()
+            val job =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { updates += it }
+                }
+            advanceUntilIdle()
+            job.cancel()
+            val published = updates.filterIsInstance<MessageListUpdate.Messages>()
+            assertEquals(2, published.size)
+            assertFalse(updates.any { it is MessageListUpdate.CacheSyncConfirmed })
         }
 
     @Test
@@ -337,12 +479,13 @@ class MessageSyncWindowedHistoryTest {
                     engine = engine,
                     eventStream = FakeForegroundEventStream(),
                     liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
-                    syncCoordinator = testSyncCoordinator(
-                        eventStream = FakeForegroundEventStream(),
-                        scope = CoroutineScope(SupervisorJob() + testDispatcher),
-                        nowMs = { testDispatcher.scheduler.currentTime },
-                        wait = { kotlinx.coroutines.delay(it) },
-                    ),
+                    syncCoordinator =
+                        testSyncCoordinator(
+                            eventStream = FakeForegroundEventStream(),
+                            scope = CoroutineScope(SupervisorJob() + testDispatcher),
+                            nowMs = { testDispatcher.scheduler.currentTime },
+                            wait = { kotlinx.coroutines.delay(it) },
+                        ),
                     nowMs = { testDispatcher.scheduler.currentTime },
                 )
 

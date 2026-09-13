@@ -294,7 +294,7 @@ struct MessageSyncWindowTests {
     @Test func cacheHitUnchangedFingerprintKeepsOlderWindow() async {
         let cached = [
             windowMessage("m2", role: .user, text: "cached"),
-            windowMessage("m3", role: .assistant, text: "tail"),
+            windowMessage("m3", role: .assistant, text: "tail", completedAtEpochMs: 2_000),
         ]
         let pages = QueryKeyedWindowPages(
             newest: MessageHistoryPage(messages: cached, olderCursor: "older", hasOlder: true),
@@ -384,8 +384,21 @@ struct MessageSyncWindowTests {
     }
 }
 
-private func windowMessage(_ id: String, role: MessageRole, text: String = "text") -> Message {
-    Message(id: id, role: role, text: text, model: nil, mode: nil, sentAtEpochMs: nil)
+private func windowMessage(
+    _ id: String,
+    role: MessageRole,
+    text: String = "text",
+    completedAtEpochMs: Int64? = nil
+) -> Message {
+    Message(
+        id: id,
+        role: role,
+        text: text,
+        model: nil,
+        mode: nil,
+        sentAtEpochMs: nil,
+        completedAtEpochMs: completedAtEpochMs
+    )
 }
 
 private final class WindowPageRepository: @unchecked Sendable {

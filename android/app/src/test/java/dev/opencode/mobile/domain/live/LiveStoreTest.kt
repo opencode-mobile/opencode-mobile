@@ -1,6 +1,5 @@
 package dev.opencode.mobile.domain.live
 
-import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.event.EventDomainAdapter
@@ -56,7 +55,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -2176,6 +2174,135 @@ class SessionStatusLiveStoreTest {
         }
 
     @Test
+    fun runningReconcile_emptyResultKeepsRunningUntilConfirmed() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            val store =
+                createStatusStore(
+                    repository,
+                    FakeForegroundEventStream(),
+                    wait = { delay(it) },
+                )
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
+            runCurrent()
+            val afterSeed = repository.statusFetchCount
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-1"]?.activity)
+
+            repository.statuses = emptyList()
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_RUNNING_RECONCILE_MS)
+            runCurrent()
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-1"]?.activity)
+
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_IDLE_CONFIRM_MS)
+            runCurrent()
+            collectJob.cancel()
+            runCurrent()
+            assertNull(emissions.last().entries["ses-1"])
+            assertEquals(afterSeed + 2, repository.statusFetchCount)
+        }
+
+    @Test
+    fun runningReconcile_sessionReappearsClearsUnconfirmed() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            val store =
+                createStatusStore(
+                    repository,
+                    FakeForegroundEventStream(),
+                    wait = { delay(it) },
+                )
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
+            runCurrent()
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-1"]?.activity)
+
+            repository.statuses = emptyList()
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_RUNNING_RECONCILE_MS)
+            runCurrent()
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-1"]?.activity)
+
+            repository.statuses =
+                listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy")))
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_IDLE_CONFIRM_MS)
+            runCurrent()
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-1"]?.activity)
+
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_RUNNING_RECONCILE_MS)
+            runCurrent()
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_IDLE_CONFIRM_MS)
+            runCurrent()
+            collectJob.cancel()
+            runCurrent()
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-1"]?.activity)
+        }
+
+    @Test
+    fun authoritativeRefresh_emptyResultClearsRunning() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            val store = createStatusStore(repository, FakeForegroundEventStream())
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
+            advanceUntilIdle()
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-1"]?.activity)
+
+            repository.statuses = emptyList()
+            store.invalidate("/repo")
+            advanceUntilIdle()
+            collectJob.cancel()
+            assertNull(emissions.last().entries["ses-1"])
+        }
+
+    @Test
+    fun statusEventDuringLoad_isNotOverwrittenAndDoesNotRefetch() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            repository.statusDelayMs = 1_000
+            val eventStream = FakeForegroundEventStream()
+            val store = createStatusStore(repository, eventStream)
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
+            runCurrent()
+            eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            advanceTimeBy(1_000)
+            advanceUntilIdle()
+            collectJob.cancel()
+            assertNull(emissions.last().entries["ses-1"])
+            assertEquals(1, repository.statusFetchCount)
+        }
+
+    @Test
+    fun statusEventDuringLoad_busyEventPreservedWhenRestEmpty() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(statuses = emptyList())
+            repository.statusDelayMs = 1_000
+            val eventStream = FakeForegroundEventStream()
+            val store = createStatusStore(repository, eventStream)
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
+            runCurrent()
+            eventStream.emit(busyStatusEvent("ses-2"))
+            advanceTimeBy(1_000)
+            advanceUntilIdle()
+            collectJob.cancel()
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-2"]?.activity)
+            assertEquals(1, repository.statusFetchCount)
+        }
+
+    @Test
     fun parsesRetryPayloadFromStatusEvent() =
         runTest(testDispatcher) {
             val repository = FakeSessionRepository(statuses = emptyList())
@@ -2440,13 +2567,14 @@ class SessionLiveStoreTest {
                     eventStream,
                     LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
                     sessionCache = NoOpSessionCache,
-                    syncCoordinator = testSyncCoordinator(
-                        eventStream = eventStream,
-                        worldSignals = SilentWorldSignals,
-                        scope = kotlinx.coroutines.CoroutineScope(SupervisorJob() + testDispatcher),
-                        nowMs = { testDispatcher.scheduler.currentTime },
-                        wait = { delay(1) },
-                    ),
+                    syncCoordinator =
+                        testSyncCoordinator(
+                            eventStream = eventStream,
+                            worldSignals = SilentWorldSignals,
+                            scope = kotlinx.coroutines.CoroutineScope(SupervisorJob() + testDispatcher),
+                            nowMs = { testDispatcher.scheduler.currentTime },
+                            wait = { delay(1) },
+                        ),
                 )
             val emissions = mutableListOf<List<Session>>()
             val collectJob =
@@ -2483,13 +2611,14 @@ class SessionLiveStoreTest {
                     eventStream,
                     LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
                     sessionCache = NoOpSessionCache,
-                    syncCoordinator = testSyncCoordinator(
-                        eventStream = eventStream,
-                        worldSignals = SilentWorldSignals,
-                        scope = kotlinx.coroutines.CoroutineScope(SupervisorJob() + testDispatcher),
-                        nowMs = { testDispatcher.scheduler.currentTime },
-                        wait = { delay(1) },
-                    ),
+                    syncCoordinator =
+                        testSyncCoordinator(
+                            eventStream = eventStream,
+                            worldSignals = SilentWorldSignals,
+                            scope = kotlinx.coroutines.CoroutineScope(SupervisorJob() + testDispatcher),
+                            nowMs = { testDispatcher.scheduler.currentTime },
+                            wait = { delay(1) },
+                        ),
                 )
             val emissions = mutableListOf<List<Session>>()
             val collectJob =
@@ -2672,13 +2801,14 @@ class InvalidationAckTest {
                     eventStream,
                     LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
                     sessionCache = sessionCache,
-                    syncCoordinator = testSyncCoordinator(
-                        eventStream = eventStream,
-                        worldSignals = SilentWorldSignals,
-                        scope = kotlinx.coroutines.CoroutineScope(SupervisorJob() + testDispatcher),
-                        nowMs = { testDispatcher.scheduler.currentTime },
-                        wait = { delay(1) },
-                    ),
+                    syncCoordinator =
+                        testSyncCoordinator(
+                            eventStream = eventStream,
+                            worldSignals = SilentWorldSignals,
+                            scope = kotlinx.coroutines.CoroutineScope(SupervisorJob() + testDispatcher),
+                            nowMs = { testDispatcher.scheduler.currentTime },
+                            wait = { delay(1) },
+                        ),
                 )
             val observer = launch { store.observeSessions("/repo").collect { } }
             advanceUntilIdle()
@@ -2821,7 +2951,7 @@ class LiveStoreRevisionGateTest {
             collectJob.cancel()
 
             assertTrue(
-                "a discarded reload must not clear stale, or force=false catch-up is skipped",
+                "invalidate after a raced status event must still refresh",
                 repository.statusFetchCount > fetchesAfterDiscard,
             )
         }
@@ -3303,9 +3433,9 @@ class DefaultQuestionLiveStoreTest {
             assertTrue(second.none { list -> list.any { it.id == "que-a" } })
         }
 
-        @Test
-        fun stoppedOccupancy_doesNotRestOnReconnectUntilForeground() =
-            runTest(testDispatcher) {
+    @Test
+    fun stoppedOccupancy_doesNotRestOnReconnectUntilForeground() =
+        runTest(testDispatcher) {
             val repository = FakeSessionRepository()
             val eventStream = FakeForegroundEventStream()
             val world = FakeWorldSignals()
@@ -3342,8 +3472,8 @@ class DefaultQuestionLiveStoreTest {
                 "Foreground catch-up must REST the unpaid gap",
                 repository.questionFetchCount > afterInitial,
             )
-            }
-    }
+        }
+}
 
 private fun testPermissionRequest(id: String) =
     PermissionRequest(
@@ -3363,11 +3493,11 @@ private fun testQuestionRequest(id: String) =
         sessionId = "ses-1",
         questions =
             listOf(
-            QuestionInfo(
-                question = "Which approach?",
-                header = "Approach",
-                options = listOf(QuestionOption(label = "A", description = "First")),
-            ),
+                QuestionInfo(
+                    question = "Which approach?",
+                    header = "Approach",
+                    options = listOf(QuestionOption(label = "A", description = "First")),
+                ),
             ),
         toolMessageId = null,
         toolCallId = null,

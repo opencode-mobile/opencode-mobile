@@ -19,7 +19,21 @@ data class MessageTailIdentity(
     )
 }
 
-fun Message.tailTimestampMs(): Long? = sentAtEpochMs
+fun Message.tailTimestampMs(): Long? = completedAtEpochMs ?: sentAtEpochMs
+
+fun Message.isSettled(): Boolean {
+    if (role == MessageRole.Assistant && completedAtEpochMs == null) return false
+    return parts.none { part ->
+        when (part) {
+            is MessagePart.Text -> part.isStreaming
+            is MessagePart.Reasoning -> part.isStreaming
+            is MessagePart.Tool -> part.status == ToolStatus.Pending || part.status == ToolStatus.Running
+            else -> false
+        }
+    }
+}
+
+fun List<Message>.isSettledTail(): Boolean = all { it.isSettled() }
 
 fun List<Message>.frameIdentity(engineRevision: Long): MessageFrameIdentity {
     val last = lastOrNull()
@@ -45,5 +59,8 @@ fun List<Message>.tailIdentity(): MessageTailIdentity =
 
 fun List<Message>.matchesTailIdentity(tail: List<Message>): Boolean {
     if (tail.isEmpty()) return isEmpty()
-    return takeLast(tail.size).tailIdentity() == tail.tailIdentity()
+    val localTail = takeLast(tail.size)
+    // A streaming tail can never be confirmed unchanged.
+    if (!localTail.isSettledTail() || !tail.isSettledTail()) return false
+    return localTail.tailIdentity() == tail.tailIdentity()
 }

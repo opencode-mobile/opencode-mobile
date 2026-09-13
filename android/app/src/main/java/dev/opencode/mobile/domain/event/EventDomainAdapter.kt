@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.session.toSessionActivity
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -446,9 +447,10 @@ class EventDomainAdapter(
                 ?: properties["content"]
                     ?.let { content ->
                         if (content is kotlinx.serialization.json.JsonArray) {
-                            content.mapNotNull { item ->
-                                item.jsonObject.string("text")
-                            }.joinToString("")
+                            content
+                                .mapNotNull { item ->
+                                    item.jsonObject.string("text")
+                                }.joinToString("")
                         } else {
                             null
                         }
@@ -841,6 +843,7 @@ class EventDomainAdapter(
         if (info.string("role") != "assistant") return false
         val time = info["time"] as? JsonObject ?: return false
         val completed = time["completed"] ?: return false
+        if (completed is JsonNull) return false
         val primitive = completed as? JsonPrimitive ?: return true
         return primitive.contentOrNull != "null"
     }
@@ -852,6 +855,7 @@ class EventDomainAdapter(
     fun sessionTitleUpdate(event: OpencodeEvent): SessionTitleUpdate? {
         if (event.type != "session.updated") return null
         val info = event.rawProperties?.get("info")?.jsonObject ?: return null
+
         fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
         val sessionId =
             event.sessionId

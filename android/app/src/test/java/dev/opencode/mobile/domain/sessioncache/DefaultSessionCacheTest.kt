@@ -178,6 +178,33 @@ class DefaultSessionCacheTest {
     }
 
     @Test
+    fun codecRoundTripsCompletedAtEpochMs() {
+        val messages =
+            listOf(
+                Message(
+                    id = "m1",
+                    role = MessageRole.Assistant,
+                    text = "done",
+                    sentAtEpochMs = 1_000L,
+                    completedAtEpochMs = 2_000L,
+                ),
+            )
+        val encoded = SessionCacheCodec.encodeMessages(messages, json)
+        val decoded = SessionCacheCodec.decodeMessages(encoded, json)
+        assertEquals(messages, decoded)
+        assertEquals(2_000L, decoded?.single()?.completedAtEpochMs)
+
+        val legacy =
+            SessionCacheCodec.encodeMessages(
+                listOf(Message(id = "m2", role = MessageRole.User, text = "hi", sentAtEpochMs = 1_000L)),
+                json,
+            )
+        assertTrue(!legacy.contains("completedAtEpochMs"))
+        val decodedLegacy = SessionCacheCodec.decodeMessages(legacy, json)
+        assertEquals(null, decodedLegacy?.single()?.completedAtEpochMs)
+    }
+
+    @Test
     fun activityRoundTripPerDirectory() =
         runTest {
             val cache = activityCache(clock = { 1_000L })

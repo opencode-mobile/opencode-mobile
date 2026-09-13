@@ -16,6 +16,7 @@ data class Message(
     val variant: String? = null,
     val mode: String? = null,
     val sentAtEpochMs: Long? = null,
+    val completedAtEpochMs: Long? = null,
     val contextInputTokens: Long? = null,
     val contextEstimate: MessageContextEstimate = MessageContextEstimate(),
     val followUpDelivery: FollowUpDelivery? = null,

@@ -299,6 +299,147 @@ struct SessionStatusLiveStoreTests {
         #expect(repository.statusFetchCount == fetchesWhileBackground)
     }
 
+    @Test func runningReconcile_emptyResultKeepsRunningUntilConfirmed() async throws {
+        let clock = ControllableSyncClock(now: 1_000)
+        let repository = StatusLiveStoreFakeSessionRepository(
+            statuses: [SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
+        )
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionStatusLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream,
+            clock: clock
+        )
+
+        let collector = ActivityCollector(store: store, directory: "/repo")
+        _ = try await collector.awaitEmission { $0.entries["ses-1"]?.activity == .running }
+        let fetchesAfterSeed = repository.statusFetchCount
+        repository.statuses = []
+
+        try await clock.awaitWaiter(milliseconds: SessionActivityPolicy.runningReconcileMs)
+        clock.release(milliseconds: SessionActivityPolicy.runningReconcileMs)
+        let firstStrike = await awaitPredicate {
+            repository.statusFetchCount == fetchesAfterSeed + 1
+        }
+        #expect(firstStrike)
+        #expect(collector.emissions.last?.entries["ses-1"]?.activity == .running)
+
+        try await clock.awaitWaiter(milliseconds: SessionActivityPolicy.idleConfirmMs)
+        clock.release(milliseconds: SessionActivityPolicy.idleConfirmMs)
+        let dropped = try await collector.awaitEmission { $0.entries["ses-1"] == nil }
+        collector.cancel()
+
+        #expect(dropped.entries["ses-1"] == nil)
+        #expect(repository.statusFetchCount == fetchesAfterSeed + 2)
+    }
+
+    @Test func runningReconcile_sessionReappearsClearsUnconfirmed() async throws {
+        let clock = ControllableSyncClock(now: 1_000)
+        let repository = StatusLiveStoreFakeSessionRepository(
+            statuses: [SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
+        )
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionStatusLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream,
+            clock: clock
+        )
+
+        let collector = ActivityCollector(store: store, directory: "/repo")
+        _ = try await collector.awaitEmission { $0.entries["ses-1"]?.activity == .running }
+        repository.statuses = []
+
+        try await clock.awaitWaiter(milliseconds: SessionActivityPolicy.runningReconcileMs)
+        clock.release(milliseconds: SessionActivityPolicy.runningReconcileMs)
+        let firstStrike = await awaitPredicate { repository.statusFetchCount >= 2 }
+        #expect(firstStrike)
+        #expect(collector.emissions.last?.entries["ses-1"]?.activity == .running)
+
+        repository.statuses = [SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
+        try await clock.awaitWaiter(milliseconds: SessionActivityPolicy.idleConfirmMs)
+        clock.release(milliseconds: SessionActivityPolicy.idleConfirmMs)
+        let confirmed = await awaitPredicate { repository.statusFetchCount >= 3 }
+        #expect(confirmed)
+        #expect(collector.emissions.last?.entries["ses-1"]?.activity == .running)
+
+        try await clock.awaitWaiter(milliseconds: SessionActivityPolicy.runningReconcileMs)
+        let fetchesBeforeNextReconcile = repository.statusFetchCount
+        clock.release(milliseconds: SessionActivityPolicy.runningReconcileMs)
+        let reloaded = await awaitPredicate {
+            repository.statusFetchCount > fetchesBeforeNextReconcile
+        }
+        collector.cancel()
+
+        #expect(reloaded)
+        #expect(collector.emissions.last?.entries["ses-1"]?.activity == .running)
+    }
+
+    @Test func authoritativeRefresh_emptyResultClearsRunning() async throws {
+        let repository = StatusLiveStoreFakeSessionRepository(
+            statuses: [SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
+        )
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionStatusLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream
+        )
+
+        let collector = ActivityCollector(store: store, directory: "/repo")
+        _ = try await collector.awaitEmission { $0.entries["ses-1"]?.activity == .running }
+        repository.statuses = []
+        await store.invalidate(directory: "/repo")
+        let snapshot = try await collector.awaitEmission { $0.entries["ses-1"] == nil }
+        collector.cancel()
+
+        #expect(snapshot.entries["ses-1"] == nil)
+    }
+
+    @Test func statusEventDuringLoad_isNotOverwrittenAndDoesNotRefetch() async throws {
+        let idleDuringBusyLoad = StatusLiveStoreFakeSessionRepository(
+            statuses: [SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
+        )
+        idleDuringBusyLoad.holdNextStatuses()
+        let idleEventStream = FakeForegroundEventStream()
+        let idleStore = DefaultSessionStatusLiveStore(
+            sessionRepository: idleDuringBusyLoad,
+            eventStream: idleEventStream
+        )
+        let idleCollector = ActivityCollector(store: idleStore, directory: "/repo")
+        let idleHeld = await awaitPredicate {
+            idleDuringBusyLoad.statusFetchCount == 1 && idleEventStream.eventSubscriberCount >= 2
+        }
+        #expect(idleHeld)
+        idleEventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1"))
+        try await Task.sleep(for: .milliseconds(80))
+        idleDuringBusyLoad.resumeStatuses()
+        let idleSnapshot = try await idleCollector.awaitEmission { $0.seeded }
+        idleCollector.cancel()
+        #expect(idleSnapshot.entries["ses-1"] == nil)
+        #expect(idleDuringBusyLoad.statusFetchCount == 1)
+
+        let busyDuringEmptyLoad = StatusLiveStoreFakeSessionRepository(statuses: [])
+        busyDuringEmptyLoad.holdNextStatuses()
+        let busyEventStream = FakeForegroundEventStream()
+        let busyStore = DefaultSessionStatusLiveStore(
+            sessionRepository: busyDuringEmptyLoad,
+            eventStream: busyEventStream
+        )
+        let busyCollector = ActivityCollector(store: busyStore, directory: "/repo")
+        let busyHeld = await awaitPredicate {
+            busyDuringEmptyLoad.statusFetchCount == 1 && busyEventStream.eventSubscriberCount >= 2
+        }
+        #expect(busyHeld)
+        busyEventStream.emit(busyStatusEvent("ses-2"))
+        _ = try await busyCollector.awaitEmission { $0.entries["ses-2"]?.activity == .running }
+        busyDuringEmptyLoad.resumeStatuses()
+        let busySnapshot = try await busyCollector.awaitEmission {
+            $0.seeded && $0.entries["ses-2"]?.activity == .running
+        }
+        busyCollector.cancel()
+        #expect(busySnapshot.entries["ses-2"]?.activity == .running)
+        #expect(busyDuringEmptyLoad.statusFetchCount == 1)
+    }
+
     @Test func parsesV1AndV2RetryPayloads() async throws {
         let repository = StatusLiveStoreFakeSessionRepository(statuses: [])
         let eventStream = FakeForegroundEventStream()

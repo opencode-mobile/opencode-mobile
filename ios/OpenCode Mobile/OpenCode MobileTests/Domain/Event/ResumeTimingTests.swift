@@ -50,4 +50,45 @@ struct MessageFrameIdentityTests {
         #expect(first == MessageFrameIdentity.of(messages: messages, engineRevision: 1))
         #expect(first.sameVisibleFrame(as: second))
     }
+
+    @Test func assistantWithRunningToolPart_isNotSettled() {
+        let message = Message(
+            id: "a1",
+            role: .assistant,
+            text: "",
+            parts: [.tool(ToolPart(toolName: "bash", status: .running))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: 1000,
+            completedAtEpochMs: 2000
+        )
+        #expect(!message.isSettled)
+    }
+
+    @Test func userMessageWithNilTimes_isSettled() {
+        let message = Message(
+            id: "m1",
+            role: .user,
+            text: "Hello",
+            parts: [.text(TextPart(text: "Hello", isStreaming: false))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        #expect(message.isSettled)
+    }
+
+    @Test func completedAssistantWithFinishedParts_isSettled() {
+        let message = Message(
+            id: "a1",
+            role: .assistant,
+            text: "done",
+            parts: [.text(TextPart(text: "done", isStreaming: false))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: 1000,
+            completedAtEpochMs: 2000
+        )
+        #expect(message.isSettled)
+    }
 }

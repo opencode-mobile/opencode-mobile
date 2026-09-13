@@ -143,6 +143,7 @@ enum SessionActivityPolicy {
     static let optimisticTtlMs: Int64 = 10_000
     static let abortOptimisticTtlMs: Int64 = 3_000
     static let runningReconcileMs = 30_000
+    static let idleConfirmMs = 3_000
     static let pendingSendTimeoutMs: Int64 = 8_000
     static let cachedActivityTtlMs: Int64 = 6 * 60 * 60 * 1_000
     static let activityRememberDebounceMs: UInt64 = 1_000

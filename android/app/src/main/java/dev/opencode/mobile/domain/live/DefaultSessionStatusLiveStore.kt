@@ -141,8 +141,7 @@ class DefaultSessionStatusLiveStore
                                 syncCoordinator.ensureFresh(projection)
                             }
                         }
-                    }
-                    .awaitAll()
+                    }.awaitAll()
             }
         }
 
@@ -169,8 +168,49 @@ class DefaultSessionStatusLiveStore
                 var seeded = false
                 var fromCache = false
                 var reconcileJob: Job? = null
+                var idleConfirmJob: Job? = null
+                var reconcileRefreshRequested = false
+                val idleUnconfirmed = mutableSetOf<String>()
+                val touchedSinceLoadStart = mutableSetOf<String>()
                 val key = ProjectionKey.SessionStatuses(directory)
                 val gate = LiveStoreRefreshGate()
+
+                fun cancelIdleConfirmIfEmpty() {
+                    if (idleUnconfirmed.isEmpty()) {
+                        idleConfirmJob?.cancel()
+                        idleConfirmJob = null
+                    }
+                }
+
+                fun markTouched(sessionId: String) {
+                    touchedSinceLoadStart.add(sessionId)
+                    idleUnconfirmed.remove(sessionId)
+                    cancelIdleConfirmIfEmpty()
+                }
+
+                fun scheduleIdleConfirmRefresh() {
+                    if (idleUnconfirmed.isEmpty()) {
+                        idleConfirmJob?.cancel()
+                        idleConfirmJob = null
+                        return
+                    }
+                    idleConfirmJob?.cancel()
+                    idleConfirmJob =
+                        launch {
+                            while (isActive) {
+                                wait(LiveStoreRefreshPolicy.STATUS_IDLE_CONFIRM_MS)
+                                if (idleUnconfirmed.isEmpty()) return@launch
+                                if (worldSignals.occupancy.value != StreamOccupancy.Active) continue
+                                if (!canCatchUp(worldSignals.occupancy.value, liveConnection.snapshot.value)) {
+                                    continue
+                                }
+                                reconcileRefreshRequested = true
+                                syncCoordinator.invalidate(key)
+                                syncCoordinator.ensureFresh(key)
+                                return@launch
+                            }
+                        }
+                }
 
                 suspend fun emitSnapshot() {
                     val next = composeSnapshot(directory, server, seeded, fromCache)
@@ -186,6 +226,7 @@ class DefaultSessionStatusLiveStore
                             seeded = { seeded },
                             fromCache = { fromCache },
                             existing = reconcileJob,
+                            markReconcile = { reconcileRefreshRequested = true },
                         )
                 }
 
@@ -202,16 +243,22 @@ class DefaultSessionStatusLiveStore
                     sessionCache.rememberActivity(directory, entries)
                 }
 
-                suspend fun commitLoaded(loaded: List<SessionStatus>) {
+                suspend fun commitLoaded(
+                    loaded: List<SessionStatus>,
+                    reconcile: Boolean,
+                ) {
                     val now = nowMs()
                     for (status in loaded) {
                         dropOptimistic(directory, status.sessionId)
                     }
+                    val loadedActivities =
+                        loaded.associate { status ->
+                            status.sessionId to status.toSessionActivity()
+                        }
                     val nextServer = mutableMapOf<String, SessionActivityEntry>()
-                    for (status in loaded) {
-                        val activity = status.toSessionActivity()
+                    for ((sessionId, activity) in loadedActivities) {
                         if (activity != SessionActivity.Idle) {
-                            nextServer[status.sessionId] =
+                            nextServer[sessionId] =
                                 SessionActivityEntry(
                                     activity = activity,
                                     source = SessionActivitySource.Server,
@@ -219,6 +266,49 @@ class DefaultSessionStatusLiveStore
                                 )
                         }
                     }
+                    if (reconcile) {
+                        for ((sessionId, entry) in server) {
+                            if (entry.source != SessionActivitySource.Server) continue
+                            if (!entry.activity.isBusy()) continue
+                            if (sessionId in touchedSinceLoadStart) continue
+                            val loadedActivity = loadedActivities[sessionId]
+                            if (loadedActivity != null && loadedActivity.isBusy()) {
+                                idleUnconfirmed.remove(sessionId)
+                                continue
+                            }
+                            if (sessionId !in idleUnconfirmed) {
+                                nextServer[sessionId] = entry
+                                idleUnconfirmed.add(sessionId)
+                                DiagnosticLog.info(
+                                    DiagnosticLogArea.Session,
+                                    "statusLiveStore idle unconfirmed session=$sessionId directory=$directory",
+                                )
+                            } else {
+                                nextServer.remove(sessionId)
+                                idleUnconfirmed.remove(sessionId)
+                                DiagnosticLog.info(
+                                    DiagnosticLogArea.Session,
+                                    "statusLiveStore idle confirmed drop session=$sessionId directory=$directory",
+                                )
+                            }
+                        }
+                        for ((sessionId, activity) in loadedActivities) {
+                            if (activity.isBusy()) {
+                                idleUnconfirmed.remove(sessionId)
+                            }
+                        }
+                    } else {
+                        idleUnconfirmed.clear()
+                    }
+                    for (sessionId in touchedSinceLoadStart) {
+                        val currentEntry = server[sessionId]
+                        if (currentEntry != null) {
+                            nextServer[sessionId] = currentEntry
+                        } else {
+                            nextServer.remove(sessionId)
+                        }
+                    }
+                    touchedSinceLoadStart.clear()
                     server = nextServer
                     seeded = true
                     fromCache = false
@@ -228,26 +318,33 @@ class DefaultSessionStatusLiveStore
                     )
                     emitSnapshot()
                     persistServerActivity()
+                    scheduleIdleConfirmRefresh()
                 }
 
                 val registration =
                     syncCoordinator.register(key) {
                         val generation = syncCoordinator.profileGeneration
+                        val reconcile = reconcileRefreshRequested
+                        reconcileRefreshRequested = false
                         val outcome =
                             gate.refresh(
                                 load = {
+                                    touchedSinceLoadStart.clear()
                                     runCatching {
                                         sessionRepository.getAllSessionStatuses(directory = directory)
                                     }.getOrNull()
                                 },
-                                commit = { loaded -> commitLoaded(loaded) },
+                                commit = { loaded -> commitLoaded(loaded, reconcile) },
                                 isCurrent = { syncCoordinator.profileGeneration == generation },
                             )
                         if (outcome == LiveStoreRefreshOutcome.FAILED) {
                             error("status refresh failed directory=$directory")
                         }
                         if (outcome == LiveStoreRefreshOutcome.DISCARDED) {
-                            syncCoordinator.invalidate(key)
+                            DiagnosticLog.info(
+                                DiagnosticLogArea.Session,
+                                "statusLiveStore discarded directory=$directory",
+                            )
                         }
                     }
                 syncCoordinator.visible(key, true)
@@ -280,13 +377,14 @@ class DefaultSessionStatusLiveStore
                                     event.triggersStatusRefresh -> {
                                         applyStatusEvent(directory, server, event)?.let {
                                             server = it
-                                            gate.bump()
                                             persistServerActivity()
                                         }
+                                        event.sessionId?.let { markTouched(it) }
                                         emitSnapshot()
                                     }
                                     event.type == "message.updated" -> {
                                         if (applyAssistantCompletedIdle(directory, server, event)) {
+                                            event.sessionId?.let { touchedSinceLoadStart.add(it) }
                                             emitSnapshot()
                                         }
                                     }
@@ -299,6 +397,7 @@ class DefaultSessionStatusLiveStore
                     } finally {
                         eventsJob.cancel()
                         reconcileJob?.cancel()
+                        idleConfirmJob?.cancel()
                     }
                 } finally {
                     syncCoordinator.visible(key, false)
@@ -340,6 +439,7 @@ class DefaultSessionStatusLiveStore
             seeded: () -> Boolean,
             fromCache: () -> Boolean,
             existing: Job?,
+            markReconcile: () -> Unit,
         ): Job? {
             val needed =
                 seeded() &&
@@ -360,6 +460,7 @@ class DefaultSessionStatusLiveStore
                     if (!live.entries.values.any { it.activity.isBusy() }) return@launch
                     if (worldSignals.occupancy.value != StreamOccupancy.Active) continue
                     if (!canCatchUp(worldSignals.occupancy.value, liveConnection.snapshot.value)) continue
+                    markReconcile()
                     syncCoordinator.invalidate(key)
                     syncCoordinator.ensureFresh(key)
                 }

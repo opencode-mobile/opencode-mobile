@@ -178,6 +178,7 @@ internal data class CachedMessagePayload(
     val variant: String? = null,
     val mode: String? = null,
     val sentAtEpochMs: Long? = null,
+    val completedAtEpochMs: Long? = null,
     val contextInputTokens: Long? = null,
     val contextEstimate: CachedMessageContextEstimatePayload = CachedMessageContextEstimatePayload(),
 )
@@ -315,6 +316,7 @@ private fun Message.toCachePayload(): CachedMessagePayload =
         variant = variant,
         mode = mode,
         sentAtEpochMs = sentAtEpochMs,
+        completedAtEpochMs = completedAtEpochMs,
         contextInputTokens = contextInputTokens,
         contextEstimate = contextEstimate.toCachePayload(),
     )
@@ -333,6 +335,7 @@ private fun CachedMessagePayload.toDomain(): Message =
         variant = variant,
         mode = mode,
         sentAtEpochMs = sentAtEpochMs,
+        completedAtEpochMs = completedAtEpochMs,
         contextInputTokens = contextInputTokens,
         contextEstimate = contextEstimate.toDomain(),
     )

@@ -523,7 +523,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 if awaitingCache, !staging.needsAuthoritativeRecovery {
                     let cached = store.messages(sessionID: key.storeSlot)
                     let cachedTail = Array(cached.suffix(page.messages.count))
-                    if MessageTailIdentity.of(page.messages) == MessageTailIdentity.of(cachedTail) {
+                    if MessageTailIdentity.matches(cached: cachedTail, fetched: page.messages) {
                         await applyQueuedIncrementalEvents(
                             staging.takeQueuedIncrementalEvents(),
                             key: key,

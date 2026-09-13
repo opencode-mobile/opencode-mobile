@@ -160,6 +160,10 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         let gate = LiveStoreRefreshGate()
         let key = ProjectionKey.sessionStatuses(directory: directory)
         let expiryTasks = ExpiryTaskBag()
+        let reconcileFlag = ReconcileFlagBox()
+        let idleUnconfirmed = IdleUnconfirmedBox()
+        let touched = TouchedSessionsBox()
+        let idleConfirmTask = IdleConfirmTaskBox()
 
         @Sendable func persistServer() {
             let entries = serverBox.snapshot().map { sessionID, entry in
@@ -187,9 +191,11 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             yield(next)
         }
 
-        @Sendable func commitLoaded(_ loaded: [String: SessionActivity]) {
+        @Sendable func commitLoaded(_ loaded: [String: SessionActivity], reconcile: Bool) {
             let now = clock.nowMs()
             optimistic.removeExpired(directory: directory, now: now)
+            let previous = serverBox.snapshot()
+            let touchedSessions = touched.takeAll()
             var server: [String: SessionActivityEntry] = [:]
             for (sessionID, activity) in loaded where activity != .idle {
                 optimistic.remove(directory: directory, sessionID: sessionID)
@@ -199,16 +205,67 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                     observedAtMs: now
                 )
             }
+            for sessionID in touchedSessions {
+                if let existing = previous[sessionID] {
+                    server[sessionID] = existing
+                } else {
+                    server.removeValue(forKey: sessionID)
+                }
+            }
+            if reconcile {
+                for (sessionID, entry) in previous {
+                    guard entry.source == .server, entry.activity.isBusy else { continue }
+                    guard !touchedSessions.contains(sessionID) else { continue }
+                    let restActivity = loaded[sessionID]
+                    let missingOrIdle = restActivity == nil || restActivity == .idle
+                    guard missingOrIdle else { continue }
+                    if idleUnconfirmed.contains(sessionID) {
+                        server.removeValue(forKey: sessionID)
+                        idleUnconfirmed.remove(sessionID)
+                        DiagnosticLog.info(
+                            .session,
+                            "statusLiveStore drop unconfirmed session=\(sessionID) directory=\(directory)"
+                        )
+                    } else {
+                        server[sessionID] = entry
+                        idleUnconfirmed.insert(sessionID)
+                        DiagnosticLog.info(
+                            .session,
+                            "statusLiveStore keep unconfirmed session=\(sessionID) directory=\(directory)"
+                        )
+                    }
+                }
+                for (sessionID, activity) in loaded where activity.isBusy {
+                    idleUnconfirmed.remove(sessionID)
+                }
+            } else {
+                idleUnconfirmed.removeAll()
+            }
             serverBox.replace(server, seeded: true, fromCache: false)
             persistServer()
             publish()
+            if !idleUnconfirmed.isEmpty {
+                idleConfirmTask.replace {
+                    await clock.sleep(milliseconds: SessionActivityPolicy.idleConfirmMs)
+                    guard !Task.isCancelled else { return }
+                    guard !idleUnconfirmed.isEmpty else { return }
+                    guard canCatchUp(occupancy: worldSignals.occupancy, snapshot: connection.snapshot) else {
+                        return
+                    }
+                    reconcileFlag.requestReconcile()
+                    syncCoordinator.invalidate(key)
+                    await syncCoordinator.ensureFresh(key)
+                }
+            }
         }
 
         @Sendable func loadAndCommit() async throws {
             let generation = syncCoordinator.profileGeneration
+            let reconcile = reconcileFlag.takeReconcile()
             let outcome = await gate.refresh(
                 load: { () async -> [String: SessionActivity]? in
-                    await Self.loadActivities(
+                    touched.clear()
+                    return await Self.loadActivities(
                         directory: directory,
                         sessionRepository: sessionRepository
                     )
@@ -216,13 +273,13 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                 commit: { loaded in
                     guard syncCoordinator.profileGeneration == generation else { return }
                     DiagnosticLog.info(.session, "statusLiveStore refresh directory=\(directory)")
-                    commitLoaded(loaded)
+                    commitLoaded(loaded, reconcile: reconcile)
                 }
             )
             if outcome == .discarded {
                 DiagnosticLog.info(
                     .session,
-                    "statusLiveStore discard directory=\(directory) cause=superseded-by-live-patch"
+                    "statusLiveStore discard directory=\(directory)"
                 )
             }
             if outcome == .failed {
@@ -236,6 +293,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             syncCoordinator.visible(key, false)
             syncCoordinator.unregister(registration)
             expiryTasks.cancelAll()
+            idleConfirmTask.cancel()
         }
 
         let mutationTask = Task {
@@ -284,6 +342,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                     guard canCatchUp(occupancy: worldSignals.occupancy, snapshot: connection.snapshot) else {
                         continue
                     }
+                    reconcileFlag.requestReconcile()
                     syncCoordinator.invalidate(key)
                     await syncCoordinator.ensureFresh(key)
                 }
@@ -297,9 +356,10 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                         serverBox: serverBox,
                         optimistic: optimistic,
                         current: currentBox.snapshot(),
-                        now: clock.nowMs()
+                        now: clock.nowMs(),
+                        idleUnconfirmed: idleUnconfirmed,
+                        touched: touched
                     ) {
-                        await gate.bump()
                         persistServer()
                         publish()
                     }
@@ -352,11 +412,15 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         serverBox: ActivityServerBox,
         optimistic: OptimisticActivityTable,
         current: SessionActivitySnapshot,
-        now: Int64
+        now: Int64,
+        idleUnconfirmed: IdleUnconfirmedBox,
+        touched: TouchedSessionsBox
     ) -> Bool {
         switch event.type {
         case "session.status":
             guard let parsed = eventAdapter.sessionActivity(from: event) else { return false }
+            touched.insert(parsed.sessionID)
+            idleUnconfirmed.remove(parsed.sessionID)
             optimistic.remove(directory: directory, sessionID: parsed.sessionID)
             var server = serverBox.snapshot()
             if parsed.activity == .idle {
@@ -373,6 +437,8 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             return true
         case "session.idle":
             guard let sessionID = event.sessionID else { return false }
+            touched.insert(sessionID)
+            idleUnconfirmed.remove(sessionID)
             optimistic.remove(directory: directory, sessionID: sessionID)
             var server = serverBox.snapshot()
             guard server[sessionID] != nil else { return true }
@@ -383,6 +449,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             guard let sessionID = event.sessionID ?? event.rawProperties?["info"]?.dictionaryValue?["sessionID"]?.stringValue
             else { return false }
             guard eventAdapter.isCompletedAssistantMessage(event) else { return false }
+            touched.insert(sessionID)
             let visible = current.entries[sessionID]
             guard visible?.source == .optimistic, visible?.activity == .running else { return false }
             optimistic.remove(directory: directory, sessionID: sessionID)
@@ -560,6 +627,106 @@ private nonisolated final class ActivitySnapshotBox: @unchecked Sendable {
         lock.lock()
         value = next
         lock.unlock()
+    }
+}
+
+private nonisolated final class IdleConfirmTaskBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var task: Task<Void, Never>?
+
+    func replace(_ body: @escaping @Sendable () async -> Void) {
+        lock.lock()
+        task?.cancel()
+        let next = Task { await body() }
+        task = next
+        lock.unlock()
+    }
+
+    func cancel() {
+        lock.lock()
+        let running = task
+        task = nil
+        lock.unlock()
+        running?.cancel()
+    }
+}
+
+private nonisolated final class ReconcileFlagBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var pending = false
+
+    func requestReconcile() {
+        lock.lock()
+        pending = true
+        lock.unlock()
+    }
+
+    func takeReconcile() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let value = pending
+        pending = false
+        return value
+    }
+}
+
+private nonisolated final class IdleUnconfirmedBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var sessions: Set<String> = []
+
+    func insert(_ sessionID: String) {
+        lock.lock()
+        sessions.insert(sessionID)
+        lock.unlock()
+    }
+
+    func remove(_ sessionID: String) {
+        lock.lock()
+        sessions.remove(sessionID)
+        lock.unlock()
+    }
+
+    func removeAll() {
+        lock.lock()
+        sessions.removeAll()
+        lock.unlock()
+    }
+
+    func contains(_ sessionID: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return sessions.contains(sessionID)
+    }
+
+    var isEmpty: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return sessions.isEmpty
+    }
+}
+
+private nonisolated final class TouchedSessionsBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var sessions: Set<String> = []
+
+    func insert(_ sessionID: String) {
+        lock.lock()
+        sessions.insert(sessionID)
+        lock.unlock()
+    }
+
+    func clear() {
+        lock.lock()
+        sessions.removeAll()
+        lock.unlock()
+    }
+
+    func takeAll() -> Set<String> {
+        lock.lock()
+        defer { lock.unlock() }
+        let snapshot = sessions
+        sessions.removeAll()
+        return snapshot
     }
 }
 
