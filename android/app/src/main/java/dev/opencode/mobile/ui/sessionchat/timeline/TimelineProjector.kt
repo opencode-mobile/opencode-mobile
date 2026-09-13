@@ -99,7 +99,7 @@ object TimelineProjector {
         val merged = mergeWithPending(authoritative, optimisticInputs)
         return diffFrame(
             frameRevision = frame.frameRevision,
-            rows = merged,
+            rows = merged.filterNot(::isHiddenQueuePending),
             previous = previous,
         )
     }
@@ -205,13 +205,6 @@ object TimelineProjector {
         previous: TimelineRow?,
     ): TimelineRow? {
         val message = body.message
-        if (
-            message.role == MessageRole.User &&
-            message.isWaitingForPickup &&
-            message.followUpDelivery == FollowUpDelivery.Queue
-        ) {
-            return null
-        }
         if (body.blocks.isEmpty()) return null
         val attachments =
             body.blocks.mapNotNull { (it as? SessionChatTimelineBlock.Attachment)?.attachment }
@@ -317,6 +310,16 @@ object TimelineProjector {
         val attachmentSignatures: List<String>,
         val blockLayoutFingerprints: List<String>,
     )
+
+    /**
+     * Queue-pending echoes stay in [mergeWithPending] so they can drop a matching
+     * optimistic row, then leave the displayed set. Optimistic [TimelineRow.isPending]
+     * rows are not hidden by this rule.
+     */
+    private fun isHiddenQueuePending(row: TimelineRow): Boolean =
+        !row.isPending &&
+            row.role == MessageRole.User &&
+            row.pendingDelivery == FollowUpDelivery.Queue
 
     private fun mergeWithPending(
         serverRows: List<TimelineRow>,

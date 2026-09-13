@@ -59,17 +59,11 @@ nonisolated enum SessionChatTimelineProjector {
         var serverRows: [TimelineRow] = []
         serverRows.reserveCapacity(frame.messages.count)
         for body in frame.messages {
-            if body.message.role == .user,
-               body.message.isWaitingForPickup,
-               body.message.followUpDelivery == .queue
-            {
-                continue
-            }
             let built = makeRow(from: body, previous: previousByID[body.id], metadataLabel: resolveLabel)
             serverRows.append(built)
         }
 
-        let rows: [TimelineRow] =
+        let merged: [TimelineRow] =
             if optimistic.mergePending {
                 mergeWithPending(
                     serverRows,
@@ -79,6 +73,7 @@ nonisolated enum SessionChatTimelineProjector {
             } else {
                 serverRows
             }
+        let rows = merged.filter { !isHiddenQueuePending($0) }
 
         let previousIDs = Set(previousByID.keys)
         let nextIDs = Set(rows.map(\.id))
@@ -231,6 +226,13 @@ nonisolated enum SessionChatTimelineProjector {
     }
 
     // MARK: - Optimistic merge (ported from SessionChatTimeline)
+
+    /// Queue-pending echoes stay in `mergeWithPending` so they can drop a matching
+    /// optimistic row, then leave the displayed set. Optimistic `isPending` rows
+    /// are not hidden by this rule.
+    private static func isHiddenQueuePending(_ row: TimelineRow) -> Bool {
+        !row.isPending && row.role == .user && row.pendingDelivery == .queue
+    }
 
     private static func mergeWithPending(
         _ serverRows: [TimelineRow],

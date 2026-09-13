@@ -43,6 +43,7 @@ import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionTodoList
@@ -84,6 +85,7 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPendingSteerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPendingSteerTarget
+import dev.opencode.mobile.ui.sessionchat.view.shouldDismissPendingSteerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatQueuedPromptsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
@@ -172,6 +174,24 @@ fun SessionChatScreen(
     LaunchedEffect(uiState.queuedPrompts.size) {
         if (uiState.queuedPrompts.isEmpty()) {
             showQueuedPromptsSheet = false
+        }
+    }
+
+    val pendingSteerTargetId = pendingSteerTarget?.id
+    val pendingSteerStillWaiting =
+        pendingSteerTargetId != null &&
+            uiState.messages.any {
+                it.id == pendingSteerTargetId && it.pendingDelivery == FollowUpDelivery.Steer
+            }
+    LaunchedEffect(pendingSteerTargetId, uiState.timeline, pendingSteerStillWaiting) {
+        if (
+            shouldDismissPendingSteerSheet(
+                targetId = pendingSteerTargetId,
+                timeline = uiState.timeline,
+                messages = uiState.messages,
+            )
+        ) {
+            pendingSteerTarget = null
         }
     }
 

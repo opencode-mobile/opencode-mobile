@@ -761,6 +761,59 @@ struct SessionChatTimelineProjectorTests {
         #expect(frame.rows[0].pendingDelivery == .steer)
     }
 
+    @Test func optimisticThenQueuePendingEcho_dropsOptimisticAndHidesEcho() {
+        let pending = TimelineRow(
+            id: "optimistic-1",
+            role: .user,
+            text: "Hello",
+            metadataLabel: "build · deepseek-v4-flash-free · high · 10:21 AM",
+            isPending: true,
+            blocks: [
+                .text(
+                    blockID: PresentationBlockId.messageFallback("optimistic-1"),
+                    text: "Hello",
+                    renderedMarkdown: nil
+                ),
+            ],
+            contentRevision: ContentRevision.of("Hello"),
+            layoutRevision: 1
+        )
+        let earlier = userMessage(id: "msg-user-0", text: "Earlier")
+        let signature = SessionChatTimelineProjector.optimisticSignature(pending)
+        let withOptimistic = project(
+            displayFrame(revision: 1, messages: [DisplayMessage(message: earlier)]),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: [signature: 0],
+                mergePending: true
+            )
+        )
+        #expect(withOptimistic.rows.map(\.id) == ["msg-user-0", "optimistic-1"])
+
+        let queuePending = userMessage(
+            id: "msg-user-1",
+            text: "Hello"
+        ).withPickupState(isWaitingForPickup: true, followUpDelivery: .queue)
+        let reconciled = project(
+            displayFrame(
+                revision: 2,
+                messages: [
+                    DisplayMessage(message: earlier),
+                    DisplayMessage(message: queuePending),
+                ]
+            ),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: [signature: 0],
+                mergePending: true
+            ),
+            previous: withOptimistic
+        )
+        #expect(reconciled.rows.map(\.id) == ["msg-user-0"])
+        #expect(!reconciled.rows.contains { $0.id == "optimistic-1" })
+        #expect(!reconciled.rows.contains { $0.id == "msg-user-1" })
+    }
+
     // MARK: - Helpers
 
     private func project(

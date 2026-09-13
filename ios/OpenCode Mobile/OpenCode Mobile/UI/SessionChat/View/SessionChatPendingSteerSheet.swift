@@ -6,6 +6,21 @@ struct SessionChatPendingSteerTarget: Equatable {
     let text: String
 }
 
+func shouldDismissPendingSteerSheet(
+    targetId: String?,
+    timeline: SessionChatTimelineState,
+    messages: [SessionChatRow]
+) -> Bool {
+    guard let targetId else { return false }
+    switch timeline {
+    case .ready, .empty:
+        break
+    case .creating, .loading, .error:
+        return false
+    }
+    return !messages.contains { $0.id == targetId && $0.pendingDelivery == .steer }
+}
+
 struct SessionChatPendingSteerSheetModifier: ViewModifier {
     @Binding var target: SessionChatPendingSteerTarget?
     let onMoveToQueue: (String) -> Void

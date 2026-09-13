@@ -379,6 +379,11 @@ struct SessionChatView: View {
                 showQueuedPromptsSheet = false
             }
         }
+        .onChange(of: shouldDismissPendingSteerTarget) { _, shouldDismiss in
+            if shouldDismiss {
+                pendingSteerTarget = nil
+            }
+        }
         .sessionChatToolDetailSheet(target: $toolDetailTarget)
         .sessionChatTodosSheet(
             isPresented: $showSessionTodosSheet,
@@ -659,6 +664,14 @@ struct SessionChatView: View {
 
     private var sessionTodosPillVisible: Bool {
         viewModel.uiState.sessionTodosVisible || holdingFinishedTodos
+    }
+
+    private var shouldDismissPendingSteerTarget: Bool {
+        shouldDismissPendingSteerSheet(
+            targetId: pendingSteerTarget?.id,
+            timeline: viewModel.uiState.timeline,
+            messages: viewModel.uiState.messages
+        )
     }
 
     private func dismissSessionTodosSheetIfBlocked() {
