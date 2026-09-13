@@ -146,4 +146,22 @@ interface SessionRepository {
         requestId: String,
         directory: String? = null,
     ): Boolean = rejectQuestion(requestId, directory)
+
+    suspend fun cancelPendingPrompt(
+        sessionId: String,
+        inboxId: String,
+        directory: String? = null,
+    ): Boolean = false
+
+    suspend fun steerPendingPrompt(
+        sessionId: String,
+        inboxId: String,
+        directory: String? = null,
+    ): Boolean = false
+
+    suspend fun queuePendingPrompt(
+        sessionId: String,
+        inboxId: String,
+        directory: String? = null,
+    ): Boolean = false
 }

@@ -507,6 +507,62 @@ final class SessionChatViewModel {
         composer.toggleFollowUp()
     }
 
+    func steerPendingPrompt(_ id: String) {
+        runPendingPromptAction(
+            actionId: ProductAnalytics.Action.chatSteerPendingPrompt,
+            inboxID: id,
+            optimistic: { self.timeline.applyOptimisticPendingPrompt(messageID: id, delivery: .steer) }
+        ) { sessionID in
+            try await self.sessionRepository.steerPendingPrompt(sessionID: sessionID, inboxID: id)
+        }
+    }
+
+    func queuePendingPrompt(_ id: String) {
+        runPendingPromptAction(
+            actionId: ProductAnalytics.Action.chatQueuePendingPrompt,
+            inboxID: id,
+            optimistic: { self.timeline.applyOptimisticPendingPrompt(messageID: id, delivery: .queue) }
+        ) { sessionID in
+            try await self.sessionRepository.queuePendingPrompt(sessionID: sessionID, inboxID: id)
+        }
+    }
+
+    func cancelPendingPrompt(_ id: String) {
+        runPendingPromptAction(
+            actionId: ProductAnalytics.Action.chatCancelPendingPrompt,
+            inboxID: id,
+            optimistic: { self.timeline.applyOptimisticPendingPrompt(messageID: id, removed: true) }
+        ) { sessionID in
+            try await self.sessionRepository.cancelPendingPrompt(sessionID: sessionID, inboxID: id)
+        }
+    }
+
+    private func runPendingPromptAction(
+        actionId: String,
+        inboxID _: String,
+        optimistic: @escaping () -> Void,
+        call: @escaping (String) async throws -> Bool
+    ) {
+        guard activeConnectionManager.capabilities.supportsFollowUpDelivery else { return }
+        logChatAction(actionId)
+        let sessionID = sessionID
+        Task {
+            do {
+                let ok = try await call(sessionID)
+                if ok {
+                    optimistic()
+                } else {
+                    commands.reportActionError(Self.pendingPromptFailure)
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                DiagnosticLog.warning(.chat, "pending prompt update failed session=\(sessionID) error=\(error.localizedDescription)")
+                commands.reportActionError(Self.pendingPromptFailure)
+            }
+        }
+    }
+
     func sendPrompt() async {
         guard hasCreatedSession else { return }
         let hasAttachments = !composer.state.composer.attachments.isEmpty
@@ -977,6 +1033,7 @@ final class SessionChatViewModel {
             projectLetterAccent: projectLetterAccent,
             timeline: timelineState.timeline,
             messages: timelineState.messages,
+            queuedPrompts: Self.queuedPrompts(from: timeline.loadedMessages()),
             timelineFrame: timelineFrame,
             composer: {
                 var next = composer.state.composer
@@ -1092,6 +1149,14 @@ final class SessionChatViewModel {
             isSessionBusy: sessionStatusLabel != nil
         )
     }
+
+    private static func queuedPrompts(from messages: [Message]) -> [QueuedPrompt] {
+        messages
+            .filter { $0.role == .user && $0.isWaitingForPickup && $0.followUpDelivery == .queue }
+            .map { QueuedPrompt(id: $0.id, text: $0.text) }
+    }
+
+    private static let pendingPromptFailure = "Couldn't update pending prompt"
 }
 
 private final class EmptyPermissionLiveStore: PermissionLiveStore {

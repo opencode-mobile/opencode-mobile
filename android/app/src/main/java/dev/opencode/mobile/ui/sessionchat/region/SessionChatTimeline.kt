@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.message.BlockDecorationCache
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
@@ -375,6 +376,37 @@ class SessionChatTimeline(
     fun latestModelHint(): LatestModelHint? = latestModelHintFromMessages(lastLoadedMessages)
 
     fun loadedMessages(): List<Message> = lastLoadedMessages
+
+    fun applyOptimisticPendingPrompt(
+        messageId: String,
+        delivery: FollowUpDelivery? = null,
+        removed: Boolean = false,
+    ) {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        val updated =
+            lastLoadedDisplayMessages.mapNotNull { display ->
+                if (display.message.id != messageId) {
+                    display
+                } else if (removed) {
+                    null
+                } else {
+                    display.copy(
+                        message =
+                            display.message.copy(
+                                isWaitingForPickup = delivery != null,
+                                followUpDelivery = delivery,
+                            ),
+                    )
+                }
+            }
+        applyLoadedDisplayMessages(
+            displayMessages = updated,
+            sourceSessionId = sessionId,
+            sourceWorktree = worktree,
+            source = "pending-prompt",
+        )
+    }
 
     fun modelSelectionHistoryHints(): dev.opencode.mobile.ui.sessionchat.ModelSelectionHistoryHints {
         val sorted =
@@ -868,7 +900,6 @@ class SessionChatTimeline(
         message: Message,
         soleText: String,
     ): Boolean = message.role == MessageRole.User && soleText != message.text
-
 
     private fun errorMessage(throwable: Throwable): String =
         when (throwable) {

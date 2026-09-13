@@ -24,6 +24,7 @@ struct SessionChatTimelineViewProps {
     let onReviewChangesTap: () -> Void
     let onSessionTodosTap: () -> Void
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
+    let onPendingSteerTap: (SessionChatPendingSteerTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
@@ -54,6 +55,7 @@ struct SessionChatTimelineViewProps {
         onReviewChangesTap: @escaping () -> Void,
         onSessionTodosTap: @escaping () -> Void = {},
         onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
+        onPendingSteerTap: @escaping (SessionChatPendingSteerTarget) -> Void = { _ in },
         onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in },
         onToolGroupTap: @escaping (SessionChatToolGroupTarget) -> Void = { _ in },
         onChildSessionTap: @escaping (String, String) -> Void = { _, _ in },
@@ -83,6 +85,7 @@ struct SessionChatTimelineViewProps {
         self.onReviewChangesTap = onReviewChangesTap
         self.onSessionTodosTap = onSessionTodosTap
         self.onMessageActionsTap = onMessageActionsTap
+        self.onPendingSteerTap = onPendingSteerTap
         self.onToolDetailTap = onToolDetailTap
         self.onToolGroupTap = onToolGroupTap
         self.onChildSessionTap = onChildSessionTap
@@ -209,6 +212,7 @@ private struct SessionChatTimelineReadyView: View {
                 SessionChatTimelineHostRow(
                     message: message,
                     onMessageActionsTap: props.onMessageActionsTap,
+                    onPendingSteerTap: props.onPendingSteerTap,
                     onToolDetailTap: props.onToolDetailTap,
                     onToolGroupTap: props.onToolGroupTap,
                     onChildSessionTap: props.onChildSessionTap,
@@ -348,6 +352,7 @@ private struct SessionChatTimelineReadyView: View {
 private struct SessionChatTimelineHostRow: View {
     let message: SessionChatRow
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
+    let onPendingSteerTap: (SessionChatPendingSteerTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
@@ -366,6 +371,7 @@ private struct SessionChatTimelineHostRow: View {
                     SessionChatMessageRow(
                         message: message,
                         onMessageActionsTap: onMessageActionsTap,
+                        onPendingSteerTap: onPendingSteerTap,
                         onToolDetailTap: onToolDetailTap,
                         onToolGroupTap: onToolGroupTap,
                         onChildSessionTap: onChildSessionTap,
@@ -378,6 +384,7 @@ private struct SessionChatTimelineHostRow: View {
                     SessionChatMessageRow(
                         message: message,
                         onMessageActionsTap: onMessageActionsTap,
+                        onPendingSteerTap: onPendingSteerTap,
                         onToolDetailTap: onToolDetailTap,
                         onToolGroupTap: onToolGroupTap,
                         onChildSessionTap: onChildSessionTap,
@@ -436,6 +443,7 @@ private struct SessionChatWorkingStatusDot: View {
 private struct SessionChatMessageRow: View {
     let message: SessionChatRow
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
+    let onPendingSteerTap: (SessionChatPendingSteerTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
@@ -460,14 +468,32 @@ private struct SessionChatMessageRow: View {
                     content: message.outgoingContent,
                     renderedMarkdown: message.renderedMarkdown,
                     metadataLabel: message.metadataLabel,
-                    waitingCaption: message.waitingCaption,
-                    waitingDelivery: message.waitingDelivery,
-                    onTap: message.renderedMarkdown == nil
-                        ? { openMessageActions(showsRevertMessage: true) }
-                        : nil,
-                    onLongPress: message.renderedMarkdown != nil
-                        ? { openMessageActions(showsRevertMessage: true) }
-                        : nil
+                    pendingDelivery: message.pendingDelivery,
+                    onTap: {
+                        if message.pendingDelivery == .steer {
+                            return {
+                                onPendingSteerTap(
+                                    SessionChatPendingSteerTarget(id: message.id, text: message.text)
+                                )
+                            }
+                        }
+                        if message.renderedMarkdown == nil {
+                            return { openMessageActions(showsRevertMessage: true) }
+                        }
+                        return nil
+                    }(),
+                    onLongPress: {
+                        guard message.renderedMarkdown != nil else { return nil }
+                        return {
+                            if message.pendingDelivery == .steer {
+                                onPendingSteerTap(
+                                    SessionChatPendingSteerTarget(id: message.id, text: message.text)
+                                )
+                            } else {
+                                openMessageActions(showsRevertMessage: true)
+                            }
+                        }
+                    }()
                 )
                 .frame(maxWidth: .infinity, alignment: .trailing)
             case .assistant:

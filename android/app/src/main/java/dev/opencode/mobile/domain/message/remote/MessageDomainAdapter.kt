@@ -12,6 +12,7 @@ import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
 import dev.opencode.mobile.data.remote.dto.SendPromptModelDto
 import dev.opencode.mobile.data.remote.dto.V2AssistantContentDto
 import dev.opencode.mobile.data.remote.dto.V2FileAttachmentDto
+import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
 import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
 import dev.opencode.mobile.data.remote.dto.V2PromptAgentDto
 import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
@@ -301,6 +302,44 @@ class MessageDomainAdapter {
             }
         }
         return messages
+    }
+
+    fun mergeInbox(
+        messages: List<Message>,
+        inbox: List<V2InboxItemDto>,
+    ): List<Message> {
+        if (inbox.isEmpty()) return messages
+        val userItems =
+            inbox
+                .filter { it.type == "user" }
+                .sortedBy { it.timeCreated }
+        if (userItems.isEmpty()) return messages
+        val existingIds = messages.map { it.id }.toSet()
+        val itemsById = userItems.associateBy { it.id }
+        val merged =
+            messages.map { message ->
+                val item = itemsById[message.id] ?: return@map message
+                message.copy(
+                    isWaitingForPickup = true,
+                    followUpDelivery = FollowUpDelivery.fromWire(item.delivery),
+                )
+            }
+        val materialized =
+            userItems
+                .filter { it.id !in existingIds }
+                .map { item ->
+                    val text = item.payload?.text.orEmpty()
+                    Message(
+                        id = item.id,
+                        role = MessageRole.User,
+                        text = text,
+                        parts = listOf(MessagePart.Text(text = text, id = "${item.id}:text:0")),
+                        sentAtEpochMs = item.timeCreated,
+                        followUpDelivery = FollowUpDelivery.fromWire(item.delivery),
+                        isWaitingForPickup = true,
+                    )
+                }
+        return if (materialized.isEmpty()) merged else merged + materialized
     }
 
     // MARK: Private

@@ -59,6 +59,12 @@ nonisolated enum SessionChatTimelineProjector {
         var serverRows: [TimelineRow] = []
         serverRows.reserveCapacity(frame.messages.count)
         for body in frame.messages {
+            if body.message.role == .user,
+               body.message.isWaitingForPickup,
+               body.message.followUpDelivery == .queue
+            {
+                continue
+            }
             let built = makeRow(from: body, previous: previousByID[body.id], metadataLabel: resolveLabel)
             serverRows.append(built)
         }
@@ -153,7 +159,8 @@ nonisolated enum SessionChatTimelineProjector {
            previous.renderedMarkdown?.sourceHash == bridgeMarkdown?.sourceHash,
            previous.renderedMarkdown?.renderTreeVersion == bridgeMarkdown?.renderTreeVersion,
            previous.renderedMarkdown?.blocks.count == bridgeMarkdown?.blocks.count,
-           previous.contentRevision == contentRevision
+           previous.contentRevision == contentRevision,
+           previous.pendingDelivery == (message.isWaitingForPickup ? message.followUpDelivery : nil)
         {
             return previous
         }
@@ -166,6 +173,7 @@ nonisolated enum SessionChatTimelineProjector {
                         role: message.role,
                         text: displayText,
                         metadataLabel: label,
+                        pendingDelivery: message.isWaitingForPickup ? message.followUpDelivery : nil,
                         isStreaming: body.isStreaming,
                         renderedMarkdown: bridgeMarkdown,
                         blocks: body.blocks,
@@ -184,8 +192,7 @@ nonisolated enum SessionChatTimelineProjector {
             role: message.role,
             text: displayText,
             metadataLabel: label,
-            waitingCaption: message.waitingCaption,
-            waitingDelivery: message.isWaitingForPickup ? message.followUpDelivery : nil,
+            pendingDelivery: message.isWaitingForPickup ? message.followUpDelivery : nil,
             isPending: false,
             isStreaming: body.isStreaming,
             renderedMarkdown: bridgeMarkdown,
@@ -421,7 +428,7 @@ nonisolated enum SessionChatTimelineProjector {
                 "n:\(id)"
             }
         }.joined(separator: "|")
-        return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(row.waitingCaption == nil ? "0" : "1"):\(blockKey)"
+        return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(row.pendingDelivery == nil ? "0" : "1"):\(blockKey)"
     }
 
     /// Layout bump caused only by markdown presence/sourceHash while streaming flag and
@@ -468,6 +475,7 @@ nonisolated enum SessionChatTimelineProjector {
         role: MessageRole,
         text: String,
         metadataLabel: String,
+        pendingDelivery: FollowUpDelivery?,
         isStreaming: Bool,
         renderedMarkdown: NativeMarkdownDocument?,
         blocks: [SessionChatTimelineBlock],
@@ -479,6 +487,7 @@ nonisolated enum SessionChatTimelineProjector {
             role: role,
             text: text,
             metadataLabel: metadataLabel,
+            pendingDelivery: pendingDelivery,
             isPending: false,
             isStreaming: isStreaming,
             renderedMarkdown: renderedMarkdown,

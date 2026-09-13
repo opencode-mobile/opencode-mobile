@@ -5,13 +5,10 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -35,7 +32,6 @@ import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private const val OUTGOING_MESSAGE_MAX_WIDTH_FRACTION = 0.80f
 private val OutgoingMessageShape = RoundedCornerShape(8.dp)
@@ -58,8 +54,7 @@ sealed interface OpenCodeOutgoingMessageContent {
 fun OpenCodeOutgoingMessage(
     text: String,
     metadataLabel: String,
-    waitingCaption: String? = null,
-    waitingDelivery: FollowUpDelivery? = null,
+    pendingDelivery: FollowUpDelivery? = null,
     modifier: Modifier = Modifier,
     renderedMarkdown: MarkdownDocument? = null,
     attachments: List<OpenCodeAttachmentPresentation> = emptyList(),
@@ -77,6 +72,19 @@ fun OpenCodeOutgoingMessage(
                 if (text.isNotBlank()) add(OpenCodeOutgoingMessageContent.Text(text, renderedMarkdown))
                 attachments.forEach { add(OpenCodeOutgoingMessageContent.Attachment(it)) }
             }
+        val isPending = pendingDelivery != null
+        val bubbleColor =
+            if (isPending) {
+                openCodeColor("surface-raised-base")
+            } else {
+                openCodeColor("surface-interactive-weak")
+            }
+        val bubbleTextColor =
+            if (isPending) {
+                openCodeColor("text-weak")
+            } else {
+                openCodeColor("text-strong")
+            }
 
         Column(
             modifier = Modifier.widthIn(max = maxBubbleWidth),
@@ -93,8 +101,8 @@ fun OpenCodeOutgoingMessage(
                                     .clip(OutgoingMessageShape)
                                     .then(outgoingMessageInteractionModifier(onClick, onLongClick)),
                             shape = OutgoingMessageShape,
-                            color = openCodeColor("surface-interactive-weak"),
-                            contentColor = openCodeColor("text-strong"),
+                            color = bubbleColor,
+                            contentColor = bubbleTextColor,
                         ) {
                             Column(
                                 modifier =
@@ -128,6 +136,7 @@ fun OpenCodeOutgoingMessage(
                                                 }
                                             },
                                         style = MaterialTheme.typography.bodyLarge,
+                                        color = bubbleTextColor,
                                         overflow = TextOverflow.Clip,
                                         modifier = Modifier.widthIn(max = maxBubbleWidth - OutgoingMessagePaddingHorizontal * 2),
                                     )
@@ -155,32 +164,6 @@ fun OpenCodeOutgoingMessage(
                         .widthIn(max = maxBubbleWidth)
                         .padding(top = if (resolvedContent.isEmpty()) 0.dp else OutgoingMessageFooterSpacing),
             )
-            if (waitingCaption != null) {
-                Row(
-                    modifier = Modifier.widthIn(max = maxBubbleWidth),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Icon(
-                        imageVector =
-                            if (waitingDelivery == FollowUpDelivery.Queue) {
-                                OpenCodeIcons.ArrowUpward
-                            } else {
-                                OpenCodeIcons.ArrowWarmUp
-                            },
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(13.dp),
-                    )
-                    Text(
-                        text = waitingCaption,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
         }
     }
 }
@@ -219,6 +202,18 @@ private fun OpenCodeOutgoingMessageShortPreview() {
         OpenCodeOutgoingMessage(
             text = "Based on the standard 2026 pricing for DHL in Germany, confirm the package class.",
             metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun OpenCodeOutgoingMessagePendingPreview() {
+    OpenCodeTheme(darkTheme = false) {
+        OpenCodeOutgoingMessage(
+            text = "Also check the compact path.",
+            metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
+            pendingDelivery = FollowUpDelivery.Steer,
         )
     }
 }

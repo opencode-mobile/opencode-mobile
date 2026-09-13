@@ -1,10 +1,10 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import dev.opencode.mobile.domain.command.ClientSlashActionCatalog
-import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
-import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.command.ClientSlashMessageRef
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
@@ -109,6 +109,10 @@ class SessionChatCommands(
         _state.update { it.copy(actionErrorMessage = null, actionSuccessMessage = null) }
     }
 
+    fun reportActionError(message: String) {
+        _state.update { it.copy(actionErrorMessage = message) }
+    }
+
     fun consumePendingSessionReplace() {
         _state.update { it.copy(pendingSessionReplace = null) }
     }
@@ -142,7 +146,10 @@ class SessionChatCommands(
                         sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
                         sessionTitle = "New Session",
                         worktree = worktree,
-                        optimisticNavigationInstanceId = java.util.UUID.randomUUID().toString(),
+                        optimisticNavigationInstanceId =
+                            java.util.UUID
+                                .randomUUID()
+                                .toString(),
                     ),
             )
         }
@@ -430,5 +437,4 @@ class SessionChatCommands(
     private fun logW(message: String) {
         DiagnosticLog.warning(DiagnosticLogArea.Chat, message)
     }
-
 }

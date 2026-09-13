@@ -15,8 +15,7 @@ data class TimelineRow(
     val role: MessageRole,
     val text: String,
     val metadataLabel: String,
-    val waitingCaption: String? = null,
-    val waitingDelivery: FollowUpDelivery? = null,
+    val pendingDelivery: FollowUpDelivery? = null,
     val isPending: Boolean = false,
     val isStreaming: Boolean = false,
     val blocks: List<SessionChatTimelineBlock> = emptyList(),
@@ -58,8 +57,7 @@ data class TimelineFrame(
      * Host auto-follow key for layout-affecting frames.
      * Content-only frames return `0` so the live path does not rediscover layout via scans.
      */
-    fun layoutAffectingRevision(): Long =
-        if (layoutAffectingRowIDs().isEmpty()) 0L else frameRevision
+    fun layoutAffectingRevision(): Long = if (layoutAffectingRowIDs().isEmpty()) 0L else frameRevision
 
     /**
      * Armed auto-follow key for inserts / non-decorate layout changes.
@@ -71,8 +69,7 @@ data class TimelineFrame(
     }
 
     /** Armed-only pin key for streaming bottom growth (not unarmed restore). */
-    fun growBottomRevision(): Long =
-        if (grewBottomRowIDs.isEmpty()) 0L else frameRevision
+    fun growBottomRevision(): Long = if (grewBottomRowIDs.isEmpty()) 0L else frameRevision
 
     fun withRequired(isRequired: Boolean): TimelineFrame = copy(isRequired = isRequired)
 }
@@ -118,8 +115,7 @@ object TimelineProjector {
                 role = item.role,
                 text = item.text,
                 metadataLabel = item.metadataLabel,
-                waitingCaption = item.waitingCaption,
-                waitingDelivery = item.waitingDelivery,
+                pendingDelivery = item.pendingDelivery,
                 isPending = item.isPending,
                 isStreaming = item.isStreaming,
                 blocks = item.blocks,
@@ -144,8 +140,7 @@ object TimelineProjector {
             role = row.role,
             text = row.text,
             metadataLabel = row.metadataLabel,
-            waitingCaption = row.waitingCaption,
-            waitingDelivery = row.waitingDelivery,
+            pendingDelivery = row.pendingDelivery,
             isPending = row.isPending,
             isStreaming = row.isStreaming,
             renderedMarkdown = soleDecoratedText,
@@ -190,8 +185,7 @@ object TimelineProjector {
         ).joinToString(" · ")
     }
 
-    fun isStreaming(message: Message): Boolean =
-        message.parts.any { part -> part is MessagePart.Text && part.isStreaming }
+    fun isStreaming(message: Message): Boolean = message.parts.any { part -> part is MessagePart.Text && part.isStreaming }
 
     fun reconciliationSignature(row: TimelineRow): String =
         buildString {
@@ -211,6 +205,13 @@ object TimelineProjector {
         previous: TimelineRow?,
     ): TimelineRow? {
         val message = body.message
+        if (
+            message.role == MessageRole.User &&
+            message.isWaitingForPickup &&
+            message.followUpDelivery == FollowUpDelivery.Queue
+        ) {
+            return null
+        }
         if (body.blocks.isEmpty()) return null
         val attachments =
             body.blocks.mapNotNull { (it as? SessionChatTimelineBlock.Attachment)?.attachment }
@@ -228,8 +229,7 @@ object TimelineProjector {
                 role = message.role,
                 text = displayText,
                 metadataLabel = metadataLabel(message),
-                waitingCaption = message.waitingCaption,
-                waitingDelivery = message.followUpDelivery.takeIf { message.isWaitingForPickup },
+                pendingDelivery = message.followUpDelivery.takeIf { message.isWaitingForPickup },
                 isPending = false,
                 isStreaming = isStreaming(message),
                 blocks = body.blocks,
@@ -267,8 +267,7 @@ object TimelineProjector {
             left.role == right.role &&
             left.text == right.text &&
             left.metadataLabel == right.metadataLabel &&
-            left.waitingCaption == right.waitingCaption &&
-            left.waitingDelivery == right.waitingDelivery &&
+            left.pendingDelivery == right.pendingDelivery &&
             left.isPending == right.isPending &&
             left.isStreaming == right.isStreaming &&
             left.blocks == right.blocks &&
@@ -287,7 +286,7 @@ object TimelineProjector {
                 },
             isStreaming = row.isStreaming,
             hasMetadata = row.metadataLabel.isNotEmpty(),
-            hasWaiting = row.waitingCaption != null,
+            hasWaiting = row.pendingDelivery != null,
             attachmentSignatures = row.attachments.map { "${it.id}\u0000${it.signature}" },
             blockLayoutFingerprints = row.blocks.map(::blockLayoutFingerprint),
         )

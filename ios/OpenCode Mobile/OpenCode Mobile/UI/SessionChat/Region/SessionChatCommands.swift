@@ -107,6 +107,12 @@ final class SessionChatCommands {
         notifyChange()
     }
 
+    func reportActionError(_ message: String) {
+        state.actionErrorMessage = message
+        state.actionSuccessMessage = nil
+        notifyChange()
+    }
+
     func consumePendingSessionReplace() {
         state.pendingSessionReplace = nil
         notifyChange()

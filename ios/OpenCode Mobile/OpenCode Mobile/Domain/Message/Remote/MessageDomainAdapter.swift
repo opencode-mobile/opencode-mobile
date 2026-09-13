@@ -256,6 +256,42 @@ nonisolated struct MessageDomainAdapter: Sendable {
         return messages
     }
 
+    func mergeInbox(messages: [Message], inbox: [V2InboxItemDTO]) -> [Message] {
+        if inbox.isEmpty { return messages }
+        let userItems = inbox
+            .filter { $0.type == "user" }
+            .sorted { $0.timeCreated < $1.timeCreated }
+        if userItems.isEmpty { return messages }
+        let existingIDs = Set(messages.map(\.id))
+        let itemsByID = Dictionary(uniqueKeysWithValues: userItems.map { ($0.id, $0) })
+        let merged = messages.map { message -> Message in
+            guard let item = itemsByID[message.id] else { return message }
+            return message.withPickupState(
+                isWaitingForPickup: true,
+                followUpDelivery: FollowUpDelivery.fromWire(item.delivery)
+            )
+        }
+        let materialized = userItems
+            .filter { !existingIDs.contains($0.id) }
+            .map { item -> Message in
+                let text = item.payload?.text ?? ""
+                return Message(
+                    id: item.id,
+                    role: .user,
+                    text: text,
+                    parts: text.isEmpty
+                        ? []
+                        : [.text(TextPart(id: "\(item.id):text:0", text: text, isStreaming: false))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: item.timeCreated,
+                    followUpDelivery: FollowUpDelivery.fromWire(item.delivery),
+                    isWaitingForPickup: true
+                )
+            }
+        return materialized.isEmpty ? merged : merged + materialized
+    }
+
     // MARK: Private
 
     private func projectV2User(_ dto: V2SessionMessageDTO, agent: String, model: V2ModelRefDTO?) -> Message {

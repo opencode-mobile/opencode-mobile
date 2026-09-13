@@ -122,6 +122,18 @@ nonisolated struct SessionsAPIClient: Sendable {
         try await postWithoutBody(path: "api/session/\(id)/interrupt")
     }
 
+    func cancelInboxV2(sessionID: String, inboxID: String) async throws -> Bool {
+        try await delete(path: "api/session/\(sessionID)/inbox/\(inboxID)")
+    }
+
+    func steerInboxV2(sessionID: String, inboxID: String) async throws -> Bool {
+        try await postWithoutBody(path: "api/session/\(sessionID)/inbox/\(inboxID)/steer")
+    }
+
+    func queueInboxV2(sessionID: String, inboxID: String) async throws -> Bool {
+        try await postWithoutBody(path: "api/session/\(sessionID)/inbox/\(inboxID)/queue")
+    }
+
     func shareSession(id: String, directory: String? = nil) async throws -> SessionDTO {
         try await post(path: "session/\(id)/share", body: EmptyBody(), directory: directory)
     }

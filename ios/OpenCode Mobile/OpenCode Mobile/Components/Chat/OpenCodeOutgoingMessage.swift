@@ -54,18 +54,18 @@ struct OpenCodeOutgoingMessage: View {
     let content: [OpenCodeOutgoingMessageContent]
     let renderedMarkdown: NativeMarkdownDocument?
     let metadataLabel: String
-    let waitingCaption: String?
-    let waitingDelivery: FollowUpDelivery?
+    let pendingDelivery: FollowUpDelivery?
     let onTap: (() -> Void)?
     let onLongPress: (() -> Void)?
+
+    private var isPending: Bool { pendingDelivery != nil }
 
     init(
         text: String,
         renderedMarkdown: NativeMarkdownDocument? = nil,
         attachments: [OpenCodeAttachmentPresentation] = [],
         metadataLabel: String,
-        waitingCaption: String? = nil,
-        waitingDelivery: FollowUpDelivery? = nil,
+        pendingDelivery: FollowUpDelivery? = nil,
         onTap: (() -> Void)? = nil,
         onLongPress: (() -> Void)? = nil
     ) {
@@ -74,8 +74,7 @@ struct OpenCodeOutgoingMessage: View {
         ]
         self.renderedMarkdown = renderedMarkdown
         self.metadataLabel = metadataLabel
-        self.waitingCaption = waitingCaption
-        self.waitingDelivery = waitingDelivery
+        self.pendingDelivery = pendingDelivery
         self.onTap = onTap
         self.onLongPress = onLongPress
     }
@@ -84,16 +83,14 @@ struct OpenCodeOutgoingMessage: View {
         content: [OpenCodeOutgoingMessageContent],
         renderedMarkdown: NativeMarkdownDocument? = nil,
         metadataLabel: String,
-        waitingCaption: String? = nil,
-        waitingDelivery: FollowUpDelivery? = nil,
+        pendingDelivery: FollowUpDelivery? = nil,
         onTap: (() -> Void)? = nil,
         onLongPress: (() -> Void)? = nil
     ) {
         self.content = content
         self.renderedMarkdown = renderedMarkdown
         self.metadataLabel = metadataLabel
-        self.waitingCaption = waitingCaption
-        self.waitingDelivery = waitingDelivery
+        self.pendingDelivery = pendingDelivery
         self.onTap = onTap
         self.onLongPress = onLongPress
     }
@@ -112,19 +109,6 @@ struct OpenCodeOutgoingMessage: View {
                     }
                 }
                 metadataFooter
-                if let waitingCaption {
-                    HStack(spacing: 5) {
-                        OpenCodeIconImage(
-                            icon: waitingDelivery == .queue ? .arrowUpward : .arrowWarmUp,
-                            size: 13
-                        )
-                        .foregroundStyle(OpenCodeColors.textWeak)
-                        Text(waitingCaption)
-                            .font(OpenCodeTypography.caption)
-                            .foregroundStyle(OpenCodeColors.textWeak)
-                            .lineLimit(1)
-                    }
-                }
             }
         }
     }
@@ -133,23 +117,33 @@ struct OpenCodeOutgoingMessage: View {
         pillContent(text: text)
             .padding(.horizontal, outgoingMessagePaddingHorizontal)
             .padding(.vertical, outgoingMessagePaddingVertical)
-            .background(OpenCodeColors.surfaceInteractiveWeak, in: RoundedRectangle(cornerRadius: 8))
+            .background(
+                isPending ? OpenCodeColors.surfaceRaisedBase : OpenCodeColors.surfaceInteractiveWeak,
+                in: RoundedRectangle(cornerRadius: 8)
+            )
             .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     @ViewBuilder
     private func interactiveTextPill(text: String) -> some View {
-        if let onLongPress {
+        switch (onTap, onLongPress) {
+        case (let onTap?, let onLongPress?):
+            textPill(text: text)
+                .onTapGesture(perform: onTap)
+                .onLongPressGesture(perform: onLongPress)
+                .accessibilityLabel("Outgoing message")
+                .accessibilityHint("Shows message actions")
+        case (nil, let onLongPress?):
             textPill(text: text)
                 .onLongPressGesture(perform: onLongPress)
                 .accessibilityLabel("Outgoing message")
                 .accessibilityHint("Long press to show message actions")
-        } else if let onTap {
+        case (let onTap?, nil):
             textPill(text: text)
                 .onTapGesture(perform: onTap)
                 .accessibilityLabel("Outgoing message")
                 .accessibilityHint("Shows message actions")
-        } else {
+        case (nil, nil):
             textPill(text: text)
         }
     }
@@ -173,20 +167,22 @@ struct OpenCodeOutgoingMessage: View {
                 document: renderedMarkdown,
                 variant: .outgoingMessage
             )
+            .foregroundStyle(isPending ? OpenCodeColors.textWeak : OpenCodeColors.textStrong)
         } else {
-            Text(attributedCommandDisplayText(text))
+            Text(attributedCommandDisplayText(text, isPending: isPending))
                 .font(OpenCodeTypography.body)
-                .foregroundStyle(OpenCodeColors.textStrong)
+                .foregroundStyle(isPending ? OpenCodeColors.textWeak : OpenCodeColors.textStrong)
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
 
-private func attributedCommandDisplayText(_ text: String) -> AttributedString {
+private func attributedCommandDisplayText(_ text: String, isPending: Bool) -> AttributedString {
     var attributed = AttributedString(text)
+    let bodyColor = isPending ? OpenCodeColors.textWeak : OpenCodeColors.textStrong
     guard text.hasPrefix("[/"), let end = text.firstIndex(of: "]") else {
-        attributed.foregroundColor = OpenCodeColors.textStrong
+        attributed.foregroundColor = bodyColor
         return attributed
     }
     let tokenEnd = text.distance(from: text.startIndex, to: end) + 1
@@ -194,7 +190,7 @@ private func attributedCommandDisplayText(_ text: String) -> AttributedString {
     attributed[tokenRange].foregroundColor = OpenCodeColors.syntaxType
     let remainderStart = attributed.index(attributed.startIndex, offsetByCharacters: tokenEnd)
     if remainderStart < attributed.endIndex {
-        attributed[remainderStart ..< attributed.endIndex].foregroundColor = OpenCodeColors.textStrong
+        attributed[remainderStart ..< attributed.endIndex].foregroundColor = bodyColor
     }
     return attributed
 }
@@ -203,6 +199,16 @@ private func attributedCommandDisplayText(_ text: String) -> AttributedString {
     OpenCodeOutgoingMessage(
         text: "Based on the standard 2026 pricing for DHL in Germany, confirm the package class.",
         metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM"
+    )
+        .padding()
+        .openCodeTheme()
+}
+
+#Preview("Pending") {
+    OpenCodeOutgoingMessage(
+        text: "Also check the compact path.",
+        metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM",
+        pendingDelivery: .steer
     )
         .padding()
         .openCodeTheme()

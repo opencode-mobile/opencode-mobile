@@ -741,6 +741,26 @@ struct SessionChatTimelineProjectorTests {
         #expect(second.rows[0].layoutRevision == first.rows[0].layoutRevision)
     }
 
+    @Test func project_excludesQueuePendingUserMessage() {
+        let message = userMessage(
+            id: "msg-user",
+            text: "Held until idle"
+        ).withPickupState(isWaitingForPickup: true, followUpDelivery: .queue)
+        let frame = project(displayFrame(messages: [DisplayMessage(message: message)]))
+        #expect(frame.rows.isEmpty)
+    }
+
+    @Test func project_includesSteerPendingUserMessage() {
+        let message = userMessage(
+            id: "msg-user",
+            text: "Waiting to steer"
+        ).withPickupState(isWaitingForPickup: true, followUpDelivery: .steer)
+        let frame = project(displayFrame(messages: [DisplayMessage(message: message)]))
+        #expect(frame.rows.count == 1)
+        #expect(frame.rows[0].text == "Waiting to steer")
+        #expect(frame.rows[0].pendingDelivery == .steer)
+    }
+
     // MARK: - Helpers
 
     private func project(

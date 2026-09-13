@@ -258,7 +258,12 @@ class SessionMessageEngineTest {
         engine.finishStreamingText("ses-1")
         assertFalse(engine.hasStreamingText("ses-1"))
         val reasoning =
-            engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Reasoning>().single()
+            engine
+                .messages("ses-1")
+                .single()
+                .parts
+                .filterIsInstance<MessagePart.Reasoning>()
+                .single()
         assertFalse(reasoning.isStreaming)
         assertEquals("hmm more", reasoning.text)
     }
@@ -317,7 +322,12 @@ class SessionMessageEngineTest {
             ),
         )
         val reasoning =
-            engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Reasoning>().single()
+            engine
+                .messages("ses-1")
+                .single()
+                .parts
+                .filterIsInstance<MessagePart.Reasoning>()
+                .single()
         assertEquals(1_000L, reasoning.timeStartEpochMs)
         assertEquals(2_000L, reasoning.timeEndEpochMs)
     }
@@ -335,7 +345,13 @@ class SessionMessageEngineTest {
                 ),
             ),
         )
-        val seeded = engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Tool>().single()
+        val seeded =
+            engine
+                .messages("ses-1")
+                .single()
+                .parts
+                .filterIsInstance<MessagePart.Tool>()
+                .single()
         assertTrue(seeded.timeStartEpochMs != null)
         val stamped = seeded.timeStartEpochMs
 
@@ -358,7 +374,13 @@ class SessionMessageEngineTest {
                 delta = null,
             ),
         )
-        val updated = engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Tool>().single()
+        val updated =
+            engine
+                .messages("ses-1")
+                .single()
+                .parts
+                .filterIsInstance<MessagePart.Tool>()
+                .single()
         assertEquals(stamped, updated.timeStartEpochMs)
 
         engine.replaceAll(
@@ -380,7 +402,13 @@ class SessionMessageEngineTest {
                 ),
             ),
         )
-        val reloaded = engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Tool>().single()
+        val reloaded =
+            engine
+                .messages("ses-1")
+                .single()
+                .parts
+                .filterIsInstance<MessagePart.Tool>()
+                .single()
         assertEquals(stamped, reloaded.timeStartEpochMs)
     }
 
@@ -436,9 +464,21 @@ class SessionMessageEngineTest {
                 revision,
             ),
         )
-        val tool = engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Tool>().single()
+        val tool =
+            engine
+                .messages("ses-1")
+                .single()
+                .parts
+                .filterIsInstance<MessagePart.Tool>()
+                .single()
         assertEquals(ToolStatus.Completed, tool.status)
-        assertEquals("general", tool.input?.get("agent")?.jsonPrimitive?.contentOrNull)
+        assertEquals(
+            "general",
+            tool.input
+                ?.get("agent")
+                ?.jsonPrimitive
+                ?.contentOrNull,
+        )
         assertEquals(stamped, tool.timeStartEpochMs)
     }
 
@@ -508,10 +548,22 @@ class SessionMessageEngineTest {
                 delta = null,
             ),
         )
-        val tool = engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Tool>().single()
+        val tool =
+            engine
+                .messages("ses-1")
+                .single()
+                .parts
+                .filterIsInstance<MessagePart.Tool>()
+                .single()
         assertEquals("websearch", tool.toolName)
         assertEquals(ToolStatus.Completed, tool.status)
-        assertEquals("opencode mobile", tool.input?.get("query")?.jsonPrimitive?.contentOrNull)
+        assertEquals(
+            "opencode mobile",
+            tool.input
+                ?.get("query")
+                ?.jsonPrimitive
+                ?.contentOrNull,
+        )
     }
 
     @Test
@@ -531,7 +583,13 @@ class SessionMessageEngineTest {
             ),
         )
         engine.apply("ses-1", MessagePatch.PartDelta("msg-1", "prt-1", " world"))
-        val text = engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Text>().single()
+        val text =
+            engine
+                .messages("ses-1")
+                .single()
+                .parts
+                .filterIsInstance<MessagePart.Text>()
+                .single()
         assertEquals("Hello world", text.text)
         assertTrue(text.isStreaming)
     }
@@ -554,7 +612,13 @@ class SessionMessageEngineTest {
                 revision,
             ),
         )
-        val text = engine.messages("ses-1").single().parts.filterIsInstance<MessagePart.Text>().single()
+        val text =
+            engine
+                .messages("ses-1")
+                .single()
+                .parts
+                .filterIsInstance<MessagePart.Text>()
+                .single()
         assertEquals("Hello", text.text)
         assertFalse(text.isStreaming)
     }
@@ -600,19 +664,6 @@ class SessionMessageEngineTest {
         val message = engine.messages("ses-1").single()
         assertEquals(FollowUpDelivery.Queue, message.followUpDelivery)
         assertTrue(message.isWaitingForPickup)
-        assertEquals("Held until idle", message.waitingCaption)
-    }
-
-    @Test
-    fun waitingCaption_usesSteerWhenWaitingWithoutDelivery() {
-        val message =
-            Message(
-                id = "msg-1",
-                role = MessageRole.User,
-                text = "Hello",
-                isWaitingForPickup = true,
-            )
-        assertEquals("Waiting to steer", message.waitingCaption)
     }
 
     @Test
@@ -659,7 +710,12 @@ class SessionMessageEngineTest {
             ),
         )
         val originalTool =
-            engine.messages("ses-1").last().parts.filterIsInstance<MessagePart.Tool>().single()
+            engine
+                .messages("ses-1")
+                .last()
+                .parts
+                .filterIsInstance<MessagePart.Tool>()
+                .single()
         val revision = engine.revision("ses-1")
 
         assertTrue(
@@ -685,7 +741,12 @@ class SessionMessageEngineTest {
         )
 
         val messages = engine.messages("ses-1")
-        val tool = messages.last().parts.filterIsInstance<MessagePart.Tool>().single()
+        val tool =
+            messages
+                .last()
+                .parts
+                .filterIsInstance<MessagePart.Tool>()
+                .single()
         assertEquals(listOf("old", "new"), messages.map { it.id })
         assertEquals(ToolStatus.Completed, tool.status)
         assertEquals("partial output", tool.output)

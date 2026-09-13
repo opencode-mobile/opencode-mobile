@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.message.DisplayMessage
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
@@ -73,14 +74,22 @@ class TimelineProjectorTest {
                 MessagePart.Tool(toolName = "grep", status = ToolStatus.Completed, id = "prt-b"),
             )
         val first = projectAssistant(groupedParts, frameRevision = 1L)
-        val firstGroup = first.rows.single().blocks.single() as SessionChatTimelineBlock.ToolGroup
+        val firstGroup =
+            first.rows
+                .single()
+                .blocks
+                .single() as SessionChatTimelineBlock.ToolGroup
         assertEquals(PresentationBlockId.toolGroup(listOf("prt-a", "prt-b")), firstGroup.blockID)
 
         val expandedParts =
             groupedParts +
                 MessagePart.Tool(toolName = "glob", status = ToolStatus.Completed, id = "prt-c")
         val second = projectAssistant(expandedParts, frameRevision = 2L, previous = first)
-        val secondGroup = second.rows.single().blocks.single() as SessionChatTimelineBlock.ToolGroup
+        val secondGroup =
+            second.rows
+                .single()
+                .blocks
+                .single() as SessionChatTimelineBlock.ToolGroup
 
         assertEquals(
             PresentationBlockId.toolGroup(listOf("prt-a", "prt-b", "prt-c")),
@@ -1291,6 +1300,66 @@ class TimelineProjectorTest {
         assertTrue(second.layoutAffectingRowIDs().isEmpty())
         assertEquals(0L, second.layoutAffectingRevision())
         assertEquals(first.rows.single().layoutRevision, second.rows.single().layoutRevision)
+    }
+
+    @Test
+    fun project_excludesQueuePendingUserMessage() {
+        val frame =
+            projectUser(
+                text = "Held until idle",
+                isWaitingForPickup = true,
+                followUpDelivery = FollowUpDelivery.Queue,
+            )
+        assertTrue(frame.rows.isEmpty())
+    }
+
+    @Test
+    fun project_includesSteerPendingUserMessage() {
+        val frame =
+            projectUser(
+                text = "Waiting to steer",
+                isWaitingForPickup = true,
+                followUpDelivery = FollowUpDelivery.Steer,
+            )
+        val row = frame.rows.single()
+        assertEquals("Waiting to steer", row.text)
+        assertEquals(FollowUpDelivery.Steer, row.pendingDelivery)
+    }
+
+    private fun projectUser(
+        text: String,
+        isWaitingForPickup: Boolean,
+        followUpDelivery: FollowUpDelivery,
+    ): TimelineFrame {
+        val parts = listOf(MessagePart.Text(text, id = "prt-user"))
+        val blocks =
+            when (val result = SessionChatTimelineBlocks.build(MessageRole.User, parts)) {
+                is SessionChatTimelineBlocksResult.Ok -> result.blocks
+                SessionChatTimelineBlocksResult.MissingPartIds -> error("expected Ok")
+            }
+        return TimelineProjector.project(
+            frame =
+                DisplayFrame(
+                    sessionKey = "session",
+                    frameRevision = 1L,
+                    sourceRevision = 0L,
+                    messages =
+                        listOf(
+                            DisplayMessageBody(
+                                message =
+                                    Message(
+                                        id = "msg-user",
+                                        role = MessageRole.User,
+                                        text = text,
+                                        parts = parts,
+                                        isWaitingForPickup = isWaitingForPickup,
+                                        followUpDelivery = followUpDelivery,
+                                    ),
+                                blocks = blocks,
+                            ),
+                        ),
+                ),
+        )
     }
 
     private fun projectAssistant(

@@ -174,4 +174,16 @@ struct V2SessionRemote: SessionRemote, Sendable {
         }
         return try await api.rejectQuestionV2(sessionID: sessionID ?? "", questionID: questionID)
     }
+
+    func cancelPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool {
+        try await api.cancelInboxV2(sessionID: sessionID, inboxID: inboxID)
+    }
+
+    func steerPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool {
+        try await api.steerInboxV2(sessionID: sessionID, inboxID: inboxID)
+    }
+
+    func queuePendingPrompt(sessionID: String, inboxID: String) async throws -> Bool {
+        try await api.queueInboxV2(sessionID: sessionID, inboxID: inboxID)
+    }
 }

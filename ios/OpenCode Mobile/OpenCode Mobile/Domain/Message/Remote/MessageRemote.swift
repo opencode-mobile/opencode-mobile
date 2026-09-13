@@ -67,7 +67,8 @@ struct V2MessageRemote: MessageRemote, Sendable {
     }
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
-        adapter.messages(fromV2: try await api.listMessagesV2(sessionID: sessionID, directory: directory))
+        let messages = adapter.messages(fromV2: try await api.listMessagesV2(sessionID: sessionID, directory: directory))
+        return await mergeInboxOrUnchanged(sessionID: sessionID, messages: messages)
     }
 
     func listMessagePage(
@@ -92,12 +93,22 @@ struct V2MessageRemote: MessageRemote, Sendable {
             order: order,
             cursor: cursor
         )
+        let messages = adapter.messages(fromV2: Array(dtos.reversed()))
         return MessageHistoryPage(
             // desc / cursor-desc pages are newest-first. Reverse exactly once.
-            messages: adapter.messages(fromV2: Array(dtos.reversed())),
+            messages: query.isTail ? await mergeInboxOrUnchanged(sessionID: sessionID, messages: messages) : messages,
             olderCursor: nextCursor,
             hasOlder: nextCursor != nil
         )
+    }
+
+    private func mergeInboxOrUnchanged(sessionID: String, messages: [Message]) async -> [Message] {
+        do {
+            return adapter.mergeInbox(messages: messages, inbox: try await api.listInboxV2(sessionID: sessionID))
+        } catch {
+            DiagnosticLog.warning(.chat, "inbox merge failed session=\(sessionID) error=\(error.localizedDescription)")
+            return messages
+        }
     }
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {

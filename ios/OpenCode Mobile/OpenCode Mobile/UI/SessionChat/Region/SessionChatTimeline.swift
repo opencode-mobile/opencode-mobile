@@ -346,6 +346,37 @@ final class SessionChatTimeline {
         lastLoadedMessages
     }
 
+    func applyOptimisticPendingPrompt(
+        messageID: String,
+        delivery: FollowUpDelivery? = nil,
+        removed: Bool = false
+    ) {
+        let updated = lastLoadedDisplayMessages.compactMap { display -> DisplayMessage? in
+            if display.message.id != messageID {
+                return display
+            }
+            if removed {
+                return nil
+            }
+            return DisplayMessage(
+                message: display.message.withPickupState(
+                    isWaitingForPickup: delivery != nil,
+                    followUpDelivery: delivery
+                ),
+                renderedMarkdown: display.renderedMarkdown,
+                awaitingTextMateUpgrade: display.awaitingTextMateUpgrade,
+                highlightEpoch: display.highlightEpoch
+            )
+        }
+        Task {
+            await applyLoadedDisplayMessagesTransform(
+                updated,
+                isRefreshing: false,
+                fromQuietRefresh: true
+            )
+        }
+    }
+
     func row(from message: Message, previous: SessionChatRow? = nil) -> SessionChatRow? {
         row(from: DisplayMessage(message: message), previous: previous)
     }

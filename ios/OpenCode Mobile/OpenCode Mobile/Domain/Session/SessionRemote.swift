@@ -162,4 +162,16 @@ struct ProtocolSelectedSessionRemote: SessionRemote, Sendable {
     func rejectQuestion(questionID: String, directory: String?, sessionID: String?) async throws -> Bool {
         try await selected().rejectQuestion(questionID: questionID, directory: directory, sessionID: sessionID)
     }
+
+    func cancelPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool {
+        try await selected().cancelPendingPrompt(sessionID: sessionID, inboxID: inboxID)
+    }
+
+    func steerPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool {
+        try await selected().steerPendingPrompt(sessionID: sessionID, inboxID: inboxID)
+    }
+
+    func queuePendingPrompt(sessionID: String, inboxID: String) async throws -> Bool {
+        try await selected().queuePendingPrompt(sessionID: sessionID, inboxID: inboxID)
+    }
 }

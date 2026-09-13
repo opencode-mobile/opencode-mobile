@@ -100,7 +100,8 @@ struct MessageProtocolRepositoryTests {
               ],
               "cursor": {"previous": null, "next": null}
             }
-            """#)
+            """#),
+            .json(#"{"data":[]}"#)
         ])
         let router = makeRouter(serverProtocol: .v2)
 
@@ -122,20 +123,76 @@ struct MessageProtocolRepositoryTests {
             """#),
             .json(#"""
             {"data":[{"id":"msg_b","type":"user","text":"B","time":{"created":2}}],"cursor":{"next":null}}
-            """#)
+            """#),
+            .json(#"{"data":[]}"#)
         ])
         let router = makeRouter(serverProtocol: .v2)
 
         let messages = try await router.listMessages(sessionID: "ses_2", directory: "/repo")
 
         #expect(messages.map(\.id) == ["msg_a", "msg_b"])
-        #expect(MessageProtocolURLProtocol.requests.count == 2)
+        #expect(MessageProtocolURLProtocol.requests.count == 3)
         let firstURL = try #require(MessageProtocolURLProtocol.requests[0].url)
         let secondURL = try #require(MessageProtocolURLProtocol.requests[1].url)
+        let inboxURL = try #require(MessageProtocolURLProtocol.requests[2].url)
         #expect(queryValue(firstURL, "order") == "asc")
         #expect(queryValue(firstURL, "cursor") == nil)
         #expect(queryValue(secondURL, "cursor") == "page-2")
         #expect(queryValue(secondURL, "order") == nil)
+        #expect(inboxURL.path.hasSuffix("/inbox"))
+    }
+
+    @Test func v2ListMessagesMergesInboxQueueDelivery() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            .json(#"""
+            {
+              "data": [
+                {"id":"msg_a","type":"user","text":"A","time":{"created":1}},
+                {"id":"msg_b","type":"user","text":"B","time":{"created":2}}
+              ],
+              "cursor": {"next": null}
+            }
+            """#),
+            .json(#"""
+            {
+              "data": [
+                {
+                  "id": "msg_b",
+                  "type": "user",
+                  "payload": {"text": "B"},
+                  "delivery": "queue",
+                  "timeCreated": 2
+                }
+              ]
+            }
+            """#)
+        ])
+        let router = makeRouter(serverProtocol: .v2)
+
+        let messages = try await router.listMessages(sessionID: "ses_2", directory: "/repo")
+
+        let msgB = try #require(messages.first { $0.id == "msg_b" })
+        #expect(msgB.isWaitingForPickup)
+        #expect(msgB.followUpDelivery == .queue)
+        #expect(MessageProtocolURLProtocol.requests.last?.url?.path.hasSuffix("/inbox") == true)
+    }
+
+    @Test func v2ListMessagesKeepsMessagesWhenInboxFails() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            .json(#"""
+            {"data":[{"id":"msg_a","type":"user","text":"A","time":{"created":1}}],"cursor":{"next":null}}
+            """#),
+            MessageStubResponse(statusCode: 500, body: "boom")
+        ])
+        let router = makeRouter(serverProtocol: .v2)
+
+        let messages = try await router.listMessages(sessionID: "ses_2", directory: "/repo")
+
+        #expect(messages.map(\.id) == ["msg_a"])
+        #expect(messages[0].isWaitingForPickup == false)
+        #expect(messages[0].followUpDelivery == nil)
+        #expect(MessageProtocolURLProtocol.requests.count == 2)
+        #expect(MessageProtocolURLProtocol.requests.last?.url?.path.hasSuffix("/inbox") == true)
     }
 
     @Test func v2TailUsesLimitAndDescThenReturnsChronological() async throws {
@@ -148,7 +205,8 @@ struct MessageProtocolRepositoryTests {
               ],
               "cursor": {"next":"older-cursor"}
             }
-            """#)
+            """#),
+            .json(#"{"data":[]}"#)
         ])
         let router = makeRouter(serverProtocol: .v2)
 
@@ -205,7 +263,8 @@ struct MessageProtocolRepositoryTests {
               ],
               "cursor": {"next":"older-cursor"}
             }
-            """#)
+            """#),
+            .json(#"{"data":[]}"#)
         ])
         let router = makeRouter(serverProtocol: .v2)
 
@@ -245,7 +304,8 @@ struct MessageProtocolRepositoryTests {
         MessageProtocolURLProtocol.reset(responses: [
             .json(#"""
             {"data":[{"id":"msg_v2","type":"user","text":"V2","time":{"created":1}}],"cursor":{"next":null}}
-            """#)
+            """#),
+            .json(#"{"data":[]}"#)
         ])
         let manager = makeManager(serverProtocol: nil, probing: StubV2Probe())
         let router = ProtocolSelectedMessageRemote(

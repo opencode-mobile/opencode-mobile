@@ -111,6 +111,7 @@ data class SessionChatUiState(
     val sessionTitle: String,
     val timeline: SessionChatTimelineState,
     val messages: List<SessionChatMessageItem> = emptyList(),
+    val queuedPrompts: List<QueuedPrompt> = emptyList(),
     /** Last projected timeline frame; reused when only non-timeline regions republish. */
     val timelineFrame: TimelineFrame? = null,
     val composer: SessionChatComposerState = SessionChatComposerState(),
@@ -525,13 +526,17 @@ enum class SessionChatTimelineState {
     Error,
 }
 
+data class QueuedPrompt(
+    val id: String,
+    val text: String,
+)
+
 data class SessionChatMessageItem(
     val id: String,
     val role: MessageRole,
     val text: String,
     val metadataLabel: String,
-    val waitingCaption: String? = null,
-    val waitingDelivery: FollowUpDelivery? = null,
+    val pendingDelivery: FollowUpDelivery? = null,
     val isPending: Boolean = false,
     val isStreaming: Boolean = false,
     val renderedMarkdown: MarkdownDocument? = null,

@@ -51,6 +51,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
@@ -115,6 +116,7 @@ internal data class SessionChatTimelineViewProps(
     val onReviewChangesClick: () -> Unit,
     val onSessionTodosClick: () -> Unit = {},
     val onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
+    val onPendingSteerTap: (SessionChatPendingSteerTarget) -> Unit = {},
     val onToolDetailTap: (SessionChatToolDetailTarget) -> Unit = {},
     val onToolGroupTap: (SessionChatToolGroupTarget) -> Unit = {},
     val onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit = { _, _ -> },
@@ -129,45 +131,51 @@ internal fun SessionChatTimelineView(
     modifier: Modifier = Modifier,
 ) {
     when (props.timeline) {
-        SessionChatTimelineState.Creating -> OpenCodeStatusStack(
-            title = "Starting session…",
-            subtitle = "Creating on server…",
-            testTag = "sessionChatCreating",
-            modifier = modifier.fillMaxSize(),
-        )
-
-        SessionChatTimelineState.Loading -> OpenCodeStatusStack(
-            title = "Loading messages",
-            subtitle = "Fetching timeline…",
-            testTag = "sessionChatLoading",
-            modifier = modifier.fillMaxSize(),
-        )
-
-        SessionChatTimelineState.Error -> Box(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = props.errorMessage ?: "Unable to load messages",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+        SessionChatTimelineState.Creating ->
+            OpenCodeStatusStack(
+                title = "Starting session…",
+                subtitle = "Creating on server…",
+                testTag = "sessionChatCreating",
+                modifier = modifier.fillMaxSize(),
             )
-        }
 
-        SessionChatTimelineState.Empty -> Box(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "No messages yet. Send a prompt to start.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        SessionChatTimelineState.Loading ->
+            OpenCodeStatusStack(
+                title = "Loading messages",
+                subtitle = "Fetching timeline…",
+                testTag = "sessionChatLoading",
+                modifier = modifier.fillMaxSize(),
             )
-        }
+
+        SessionChatTimelineState.Error ->
+            Box(
+                modifier =
+                    modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = props.errorMessage ?: "Unable to load messages",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+
+        SessionChatTimelineState.Empty ->
+            Box(
+                modifier =
+                    modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "No messages yet. Send a prompt to start.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
         SessionChatTimelineState.Ready -> {
             SessionChatTimelineReadyView(
@@ -191,6 +199,7 @@ internal fun SessionChatTimelineView(
                 onReviewChangesClick = props.onReviewChangesClick,
                 onSessionTodosClick = props.onSessionTodosClick,
                 onMessageActionsTap = props.onMessageActionsTap,
+                onPendingSteerTap = props.onPendingSteerTap,
                 onToolDetailTap = props.onToolDetailTap,
                 onToolGroupTap = props.onToolGroupTap,
                 onChildSessionTap = props.onChildSessionTap,
@@ -225,6 +234,7 @@ private fun SessionChatTimelineReadyView(
     onReviewChangesClick: () -> Unit,
     onSessionTodosClick: () -> Unit,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
+    onPendingSteerTap: (SessionChatPendingSteerTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
@@ -399,6 +409,7 @@ private fun SessionChatTimelineReadyView(
                 SessionChatMessageRow(
                     message = message,
                     onMessageActionsTap = onMessageActionsTap,
+                    onPendingSteerTap = onPendingSteerTap,
                     onToolDetailTap = onToolDetailTap,
                     onToolGroupTap = onToolGroupTap,
                     onChildSessionTap = onChildSessionTap,
@@ -493,6 +504,7 @@ private fun SessionChatTimelineReadyView(
 private fun SessionChatMessageRow(
     message: SessionChatMessageItem,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
+    onPendingSteerTap: (SessionChatPendingSteerTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
@@ -533,19 +545,26 @@ private fun SessionChatMessageRow(
                     text = message.text,
                     renderedMarkdown = message.renderedMarkdown,
                     metadataLabel = message.metadataLabel,
-                    waitingCaption = message.waitingCaption,
-                    waitingDelivery = message.waitingDelivery,
+                    pendingDelivery = message.pendingDelivery,
                     content = message.outgoingContent(),
                     modifier = Modifier.fillMaxWidth(),
                     onClick =
-                        if (message.renderedMarkdown == null) {
+                        if (message.pendingDelivery == FollowUpDelivery.Steer) {
+                            { onPendingSteerTap(message.toPendingSteerTarget()) }
+                        } else if (message.renderedMarkdown == null) {
                             { openMessageActions(showsRevertMessage = true) }
                         } else {
                             null
                         },
                     // Always long-pressable so plain and markdown bubbles match;
                     // markdown still uses tap only for links (parent onClick stays null).
-                    onLongClick = { openMessageActions(showsRevertMessage = true) },
+                    onLongClick = {
+                        if (message.pendingDelivery == FollowUpDelivery.Steer) {
+                            onPendingSteerTap(message.toPendingSteerTarget())
+                        } else {
+                            openMessageActions(showsRevertMessage = true)
+                        }
+                    },
                 )
 
             MessageRole.Assistant ->
@@ -595,14 +614,15 @@ private fun messageActionsModifier(
     messageDescription: String,
 ): Modifier =
     if (renderedMarkdown != null) {
-        Modifier.combinedClickable(
-            onClick = {},
-            onLongClick = onOpenMessageActions,
-            onLongClickLabel = "Show message actions",
-            role = Role.Button,
-        ).semantics {
-            contentDescription = "$messageDescription. Long press to show message actions"
-        }
+        Modifier
+            .combinedClickable(
+                onClick = {},
+                onLongClick = onOpenMessageActions,
+                onLongClickLabel = "Show message actions",
+                role = Role.Button,
+            ).semantics {
+                contentDescription = "$messageDescription. Long press to show message actions"
+            }
     } else {
         Modifier.clickable(onClick = onOpenMessageActions).semantics {
             role = Role.Button
@@ -922,3 +942,6 @@ private fun FallbackMessageBubble(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
+
+private fun SessionChatMessageItem.toPendingSteerTarget(): SessionChatPendingSteerTarget =
+    SessionChatPendingSteerTarget(id = id, text = text)

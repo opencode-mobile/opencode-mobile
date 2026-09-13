@@ -1,9 +1,9 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import dev.opencode.mobile.domain.agent.AgentRepository
-import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.agent.ComposerMentionRouting
 import dev.opencode.mobile.domain.agent.ComposerSuggestionMode
+import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.command.CommandError
 import dev.opencode.mobile.domain.command.CommandInvocationCollapser
 import dev.opencode.mobile.domain.command.CommandRepository
@@ -18,14 +18,13 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.PromptModelSelection
-import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.PromptSendProgress
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
-import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
@@ -33,6 +32,7 @@ import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
@@ -41,9 +41,9 @@ import dev.opencode.mobile.ui.sessionchat.LatestAgentHint
 import dev.opencode.mobile.ui.sessionchat.LatestModelHint
 import dev.opencode.mobile.ui.sessionchat.ModelSelectionHistoryHints
 import dev.opencode.mobile.ui.sessionchat.ModelSelectionHistorySource
+import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
 import dev.opencode.mobile.ui.sessionchat.SessionChatComposerRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatComposerState
-import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
@@ -344,7 +344,8 @@ class SessionChatComposer(
                 InitialSelectionState.Resolved
             }
         val droppedForModel =
-            _state.value.composer.attachments.filterNot { option.acceptsAttachmentKind(it.kind) }
+            _state.value.composer.attachments
+                .filterNot { option.acceptsAttachmentKind(it.kind) }
         droppedForModel.forEach { attachmentRevisions.remove(it.id) }
         _state.update { state ->
             val keptAttachments = state.composer.attachments.filter { option.acceptsAttachmentKind(it.kind) }
@@ -555,7 +556,9 @@ class SessionChatComposer(
 
     fun addAttachments(attachments: List<Attachment>) {
         if (attachments.isEmpty()) return
-        val option = _state.value.composer.selectedModel?.option
+        val option =
+            _state.value.composer.selectedModel
+                ?.option
         val accepted = attachments.filter { option?.acceptsAttachmentKind(it.kind) != false }
         val rejected = attachments.filter { option?.acceptsAttachmentKind(it.kind) == false }
         if (accepted.isNotEmpty()) {
@@ -592,7 +595,9 @@ class SessionChatComposer(
     }
 
     fun removeAttachment(id: String) {
-        val removed = _state.value.composer.attachments.filter { it.id == id }
+        val removed =
+            _state.value.composer.attachments
+                .filter { it.id == id }
         attachmentRevisions.remove(id)
         updateComposer { composer -> composer.copy(attachments = composer.attachments.filterNot { it.id == id }) }
         discardStoredAttachments(removed)
@@ -604,7 +609,9 @@ class SessionChatComposer(
     }
 
     fun selectModel(option: ModelSelectionOption) {
-        val dropped = _state.value.composer.attachments.filterNot { option.acceptsAttachmentKind(it.kind) }
+        val dropped =
+            _state.value.composer.attachments
+                .filterNot { option.acceptsAttachmentKind(it.kind) }
         dropped.forEach { attachmentRevisions.remove(it.id) }
         updateComposer { composer ->
             val previousVariant = composer.selectedVariant
@@ -623,7 +630,8 @@ class SessionChatComposer(
 
     fun selectMode(mode: String) {
         val match =
-            _state.value.composer.selectableAgents.firstOrNull { it.id.equals(mode, ignoreCase = true) }
+            _state.value.composer.selectableAgents
+                .firstOrNull { it.id.equals(mode, ignoreCase = true) }
                 ?: return
         updateComposer { it.copy(selectedMode = match.id) }
         persistCurrentSelection(updatePreference = false)
@@ -661,7 +669,9 @@ class SessionChatComposer(
     }
 
     fun toggleFollowUp(): FollowUpDelivery {
-        val next = _state.value.composer.followUpDelivery.toggled()
+        val next =
+            _state.value.composer.followUpDelivery
+                .toggled()
         updateComposer { it.copy(followUpDelivery = next) }
         _state.update { it.copy(followUpNotice = next.switchedSnackbar) }
         scope.launch {
@@ -695,9 +705,10 @@ class SessionChatComposer(
         val attachments = composer.attachments
         val submittedDraftRevision = draftRevision
         val submittedAttachmentRevisions =
-            attachments.mapNotNull { attachment ->
-                attachmentRevisions[attachment.id]?.let { attachment.id to it }
-            }.toMap()
+            attachments
+                .mapNotNull { attachment ->
+                    attachmentRevisions[attachment.id]?.let { attachment.id to it }
+                }.toMap()
         val selectedModel = composer.selectedModel ?: return
         if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
         if ((prompt.isEmpty() && attachments.isEmpty()) || _state.value.isSending || !composer.isModelSelectionReady) return
@@ -728,11 +739,7 @@ class SessionChatComposer(
                             role = dev.opencode.mobile.domain.message.MessageRole.User,
                             text = display.text,
                             metadataLabel = composerMetadataLabel(composer),
-                            waitingCaption =
-                                composer.followUpDelivery.waitingCaption.takeIf {
-                                    supportsFollowUp && isSessionBusy
-                                },
-                            waitingDelivery =
+                            pendingDelivery =
                                 composer.followUpDelivery.takeIf { supportsFollowUp && isSessionBusy },
                             isPending = true,
                             isStreaming = false,
@@ -789,7 +796,10 @@ class SessionChatComposer(
                 val intent =
                     ComposerSubmitRouting.resolve(
                         text = prompt,
-                        serverCommandNames = _state.value.serverCommands.map { it.name }.toSet(),
+                        serverCommandNames =
+                            _state.value.serverCommands
+                                .map { it.name }
+                                .toSet(),
                     )
                 val hasAttachments = attachments.isNotEmpty()
                 val progress =
@@ -918,7 +928,10 @@ class SessionChatComposer(
             val text = if (restoreText) submittedText else state.composer.text
             val mentions = if (restoreText) submittedMentions else state.composer.agentMentions
             val cursor = if (restoreText) submittedText.length else state.composer.cursor
-            val currentIds = state.composer.attachments.map { it.id }.toSet()
+            val currentIds =
+                state.composer.attachments
+                    .map { it.id }
+                    .toSet()
             val restoredAttachments =
                 submittedAttachments.filter { it.id !in currentIds } + state.composer.attachments
             state
@@ -1279,8 +1292,8 @@ class SessionChatComposer(
         text: String,
         cursor: Int,
         mentions: List<dev.opencode.mobile.domain.agent.AgentMention> = emptyList(),
-    ): SessionChatComposerRegionState {
-        return when (val mode = ComposerMentionRouting.suggestionMode(text, cursor, mentions)) {
+    ): SessionChatComposerRegionState =
+        when (val mode = ComposerMentionRouting.suggestionMode(text, cursor, mentions)) {
             is ComposerSuggestionMode.At ->
                 copy(
                     atSuggestionsVisible = true,
@@ -1309,7 +1322,6 @@ class SessionChatComposer(
                     atSuggestions = emptyList(),
                 )
         }
-    }
 
     private fun formatSentTime(epochMs: Long): String =
         Instant

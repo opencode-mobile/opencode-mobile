@@ -19,10 +19,6 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
     let followUpDelivery: FollowUpDelivery?
     let isWaitingForPickup: Bool
 
-    var waitingCaption: String? {
-        isWaitingForPickup ? (followUpDelivery ?? .steer).waitingCaption : nil
-    }
-
     init(
         id: String,
         role: MessageRole,
@@ -59,6 +55,31 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         self.contextEstimate = contextEstimate
         self.followUpDelivery = followUpDelivery
         self.isWaitingForPickup = isWaitingForPickup
+    }
+
+    func withPickupState(
+        isWaitingForPickup: Bool,
+        followUpDelivery: FollowUpDelivery?
+    ) -> Message {
+        Message(
+            id: id,
+            role: role,
+            text: text,
+            parts: parts,
+            cost: cost,
+            tokens: tokens,
+            model: model,
+            modelProviderID: modelProviderID,
+            modelID: modelID,
+            variant: variant,
+            mode: mode,
+            sentAtEpochMs: sentAtEpochMs,
+            completedAtEpochMs: completedAtEpochMs,
+            contextInputTokens: contextInputTokens,
+            contextEstimate: contextEstimate,
+            followUpDelivery: followUpDelivery,
+            isWaitingForPickup: isWaitingForPickup
+        )
     }
 }
 
