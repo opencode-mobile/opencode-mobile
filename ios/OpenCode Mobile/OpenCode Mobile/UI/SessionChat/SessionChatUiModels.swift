@@ -228,6 +228,8 @@ struct SessionChatUiState: Equatable {
     var sessionTodoTotalCount: Int = 0
     var connectionStatus: SessionConnectionStatus = .offline
     var canMutate = false
+    var composerEnabled = false
+    var pendingSend: PendingSend? = nil
     var messagesFromCache: Bool = false
     var contextUsageFraction: Double?
     var errorMessage: String?
@@ -531,6 +533,7 @@ struct SessionInfoRegionState: Equatable {
     var hasResolvedSessionStatus = false
     var connectionStatus: SessionConnectionStatus = .offline
     var canMutate = false
+    var composerEnabled = false
     var rename = SessionRenameUiState()
     var isLifecycleActionInFlight = false
     var lifecycleErrorMessage: String?
@@ -541,6 +544,10 @@ struct SessionInfoRegionState: Equatable {
         sessionStatusLabel = authoritative
         hasResolvedSessionStatus = hasResolved
     }
+}
+
+struct PendingSend: Equatable {
+    let queuedAtMs: Int64
 }
 
 struct SessionChatInboxRegionState: Equatable {

@@ -186,6 +186,7 @@ final class SessionChatInbox {
     }
 
     func submitQuestion(requestID: String, sessionID: String) async {
+        guard canMutate() else { return }
         guard let request = state.questionRequests.first(where: { $0.id == requestID && $0.sessionID == sessionID }),
               state.questionSubmittingID == nil,
               let answers = buildQuestionAnswers(questions: request.questions, drafts: state.questionDrafts)
@@ -208,6 +209,7 @@ final class SessionChatInbox {
     }
 
     func dismissQuestion(requestID: String, sessionID: String) async {
+        guard canMutate() else { return }
         guard let request = state.questionRequests.first(where: { $0.id == requestID && $0.sessionID == sessionID }),
               state.questionSubmittingID == nil else { return }
         state.questionSubmittingID = request.id

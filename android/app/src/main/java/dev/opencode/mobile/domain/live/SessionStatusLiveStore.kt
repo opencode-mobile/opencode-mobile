@@ -1,27 +1,25 @@
 package dev.opencode.mobile.domain.live
 
-import dev.opencode.mobile.domain.session.SessionStatus
+import dev.opencode.mobile.domain.session.SessionActivity
+import dev.opencode.mobile.domain.session.SessionActivitySnapshot
 import kotlinx.coroutines.flow.Flow
 
 interface SessionStatusLiveStore {
-    fun observeStatuses(directory: String): Flow<Map<String, SessionStatus>>
+    fun observeActivity(directory: String): Flow<SessionActivitySnapshot>
 
     fun clearCache()
 
     suspend fun invalidate(directory: String?) {}
 
-    fun markBusy(
+    fun setOptimistic(
         directory: String,
         sessionId: String,
+        activity: SessionActivity,
+        ttlMs: Long = DEFAULT_OPTIMISTIC_TTL_MS,
     ) {}
 
-    fun clearLocalBusy(
-        directory: String,
-        sessionId: String,
-    ) {}
-
-    fun markIdle(
-        directory: String,
-        sessionId: String,
-    ) {}
+    companion object {
+        const val DEFAULT_OPTIMISTIC_TTL_MS = 10_000L
+        const val ABORT_OPTIMISTIC_TTL_MS = 3_000L
+    }
 }

@@ -11,7 +11,8 @@ struct LiveUpdatesTests {
             hasConnection: true
         )
         #expect(chrome.label == .connecting)
-        #expect(chrome.canMutate)
+        #expect(!chrome.canMutate)
+        #expect(chrome.composerEnabled)
     }
 
     @Test func occupyingDisconnectedIsConnecting() {
@@ -22,7 +23,8 @@ struct LiveUpdatesTests {
             hasConnection: true
         )
         #expect(chrome.label == .connecting)
-        #expect(chrome.canMutate)
+        #expect(!chrome.canMutate)
+        #expect(chrome.composerEnabled)
     }
 
     @Test func connectedAndReadyIsLive() {
@@ -34,6 +36,7 @@ struct LiveUpdatesTests {
         )
         #expect(chrome.label == .live)
         #expect(chrome.canMutate)
+        #expect(chrome.composerEnabled)
     }
 
     @Test func graceKeepsLiveWhileSocketStillUp() {
@@ -45,6 +48,7 @@ struct LiveUpdatesTests {
         )
         #expect(chrome.label == .live)
         #expect(chrome.canMutate)
+        #expect(chrome.composerEnabled)
     }
 
     @Test func backgroundStopIsOfflineAndBlocksMutations() {
@@ -56,6 +60,7 @@ struct LiveUpdatesTests {
         )
         #expect(chrome.label == .offline)
         #expect(!chrome.canMutate)
+        #expect(!chrome.composerEnabled)
     }
 
     @Test func unavailablePathIsOfflineEvenIfSocketLooksConnected() {
@@ -67,6 +72,7 @@ struct LiveUpdatesTests {
         )
         #expect(chrome.label == .offline)
         #expect(!chrome.canMutate)
+        #expect(!chrome.composerEnabled)
     }
 
     @Test func missingConnectionProfileIsOffline() {
@@ -78,9 +84,10 @@ struct LiveUpdatesTests {
         )
         #expect(chrome.label == .offline)
         #expect(!chrome.canMutate)
+        #expect(!chrome.composerEnabled)
     }
 
-    @Test func connectingAllowsMutationsWhenPathIsReady() {
+    @Test func connectingEnablesComposerButNotMutate() {
         let chrome = composeLiveUpdates(
             connectionState: .connecting,
             path: .ready,
@@ -88,7 +95,8 @@ struct LiveUpdatesTests {
             hasConnection: true
         )
         #expect(chrome.label == .connecting)
-        #expect(chrome.canMutate)
+        #expect(!chrome.canMutate)
+        #expect(chrome.composerEnabled)
     }
 
     @Test func authFailedIsOwnChromeAndBlocksMutations() {
@@ -100,5 +108,6 @@ struct LiveUpdatesTests {
         )
         #expect(chrome.label == .authFailed)
         #expect(!chrome.canMutate)
+        #expect(!chrome.composerEnabled)
     }
 }

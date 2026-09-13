@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.event
 
+import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.booleanOrNull
@@ -383,16 +384,17 @@ class EventDomainAdapterTest {
     }
 
     @Test
-    fun parseEvents_projectsStepEndedIntoAssistantMessageAndActiveSnapshot() {
+    fun parseEvents_projectsStepEndedIntoAssistantMessageWithoutSnapshot() {
         val events =
             adapter.parseEvents(
                 """{"type":"session.next.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
             )
 
-        assertEquals(listOf("message.updated", "session.active.snapshot"), events.map { it.type })
+        assertEquals(listOf("message.updated"), events.map { it.type })
         assertEquals("ses-1", events[0].sessionId)
         assertEquals("assistant", events[0].rawProperties?.get("info")?.jsonObject?.get("role")?.jsonPrimitive?.content)
-        assertTrue(events[1].triggersStatusRefresh)
+        assertTrue(events.none { it.triggersStatusRefresh })
+        assertTrue(events.none { it.type == "session.active.snapshot" })
     }
 
     @Test
@@ -416,7 +418,7 @@ class EventDomainAdapterTest {
     fun parseEvents_stampsDistinctIdsOnProjectedSiblings() {
         val events =
             adapter.parseEvents(
-                """{"id":"evt_step","type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
+                """{"id":"evt_step","type":"session.shell.started","data":{"sessionID":"ses-1","callID":"sh-1","assistantMessageID":"msg-2"}}""",
             )
 
         assertEquals(listOf("evt_step:0", "evt_step:1"), events.map { it.id })
@@ -496,10 +498,11 @@ class EventDomainAdapterTest {
                 """{"type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
             )
 
-        assertEquals(listOf("message.updated", "session.active.snapshot"), events.map { it.type })
+        assertEquals(listOf("message.updated"), events.map { it.type })
         assertEquals("ses-1", events[0].sessionId)
         assertTrue(events.none { it.type == "session.idle" })
-        assertTrue(events[1].triggersStatusRefresh)
+        assertTrue(events.none { it.type == "session.active.snapshot" })
+        assertTrue(events.none { it.triggersStatusRefresh })
     }
 
     @Test
@@ -521,8 +524,9 @@ class EventDomainAdapterTest {
                 """{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c"}}""",
             )
 
-        assertEquals(listOf("message.part.updated", "session.active.snapshot"), events.map { it.type })
+        assertEquals(listOf("message.part.updated"), events.map { it.type })
         assertTrue(events.none { it.type == "session.idle" })
+        assertTrue(events.none { it.type == "session.active.snapshot" })
     }
 
     @Test
@@ -668,6 +672,22 @@ class EventDomainAdapterTest {
         assertEquals("ses-1", status?.sessionId)
         assertEquals("busy", status?.raw?.get("type"))
         assertEquals("Working", status?.let(adapter::statusLabel))
+        assertEquals(SessionActivity.Running, adapter.sessionActivityFromEvent(event)?.activity)
+    }
+
+    @Test
+    fun sessionActivityFromEvent_parsesRetryPayload() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.retry.scheduled","data":{"sessionID":"ses-1","attempt":2,"next":1234,"message":"backoff"}}""",
+            )
+
+        val parsed = adapter.sessionActivityFromEvent(events.single())
+        assertEquals("ses-1", parsed?.sessionId)
+        assertEquals(
+            SessionActivity.Retrying(attempt = 2, nextAtMs = 1234L, message = "backoff"),
+            parsed?.activity,
+        )
     }
 
     @Test

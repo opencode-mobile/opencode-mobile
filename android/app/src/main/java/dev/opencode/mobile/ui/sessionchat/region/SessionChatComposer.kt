@@ -685,6 +685,7 @@ class SessionChatComposer(
         onSendFailed: (optimisticId: String, error: String) -> Unit,
         isSessionBusy: Boolean,
         supportsFollowUp: Boolean,
+        holdUntil: suspend () -> Boolean = { true },
     ) {
         val composer = _state.value.composer
         val submittedText = composer.text
@@ -767,11 +768,24 @@ class SessionChatComposer(
             _state.update {
                 it.copy(
                     isSending = true,
+                    sendProgressPercent = 0,
                     errorMessage = null,
                 )
             }
             onOptimisticRows(enriched)
             try {
+                if (!holdUntil()) {
+                    restoreFailedSubmission(
+                        textRevision = submittedDraftRevision,
+                        submittedText = submittedText,
+                        submittedMentions = submittedMentions,
+                        submittedAttachments = attachments,
+                        submittedAttachmentRevisions = submittedAttachmentRevisions,
+                    )
+                    _state.update { it.copy(isSending = false, sendProgressPercent = null) }
+                    onSendFailed(display.id, PENDING_SEND_TIMEOUT_ERROR)
+                    return@launch
+                }
                 val intent =
                     ComposerSubmitRouting.resolve(
                         text = prompt,
@@ -1339,6 +1353,7 @@ class SessionChatComposer(
     companion object {
         private const val DRAFT_PERSIST_DEBOUNCE_MS = 300L
         const val ModelFilterThreshold = 10
+        const val PENDING_SEND_TIMEOUT_ERROR = "Couldn't send. Try again."
         private val SentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
     }
 

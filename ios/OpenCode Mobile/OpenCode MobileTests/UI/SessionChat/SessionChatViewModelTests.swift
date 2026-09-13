@@ -663,6 +663,66 @@ struct SessionChatViewModelTests {
         #expect(messages.contains { $0.text == "New prompt" && $0.isPending })
     }
 
+    @Test func sendPrompt_whileConnecting_isQueuedThenFlushedOnLive() async {
+        let repository = FakeMessageRepository()
+        let liveUpdates = FixedLiveUpdates(
+            chrome: LiveUpdatesChrome(label: .connecting, canMutate: false, composerEnabled: true)
+        )
+        let viewModel = makeViewModel(messageRepository: repository, liveUpdates: liveUpdates)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("Queued prompt")
+        let sendTask = Task { await viewModel.sendPrompt() }
+        let queued = await waitUntil {
+            viewModel.uiState.pendingSend != nil
+                && viewModel.uiState.messages.contains { $0.text == "Queued prompt" && $0.isPending }
+        }
+        #expect(queued)
+        #expect(!repository.sendPromptAsyncCalled)
+
+        liveUpdates.set(LiveUpdatesChrome(label: .live, canMutate: true, composerEnabled: true))
+        await sendTask.value
+        #expect(repository.sendPromptAsyncCalled)
+        #expect(viewModel.uiState.pendingSend == nil)
+    }
+
+    @Test func sendPrompt_whileConnecting_timesOutToFailedAfter8s() async {
+        let repository = FakeMessageRepository()
+        let liveUpdates = FixedLiveUpdates(
+            chrome: LiveUpdatesChrome(label: .connecting, canMutate: false, composerEnabled: true)
+        )
+        let clock = ChatTestSyncClock(now: 1_000)
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            liveUpdates: liveUpdates,
+            clock: clock
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("Queued prompt")
+        let sendTask = Task { await viewModel.sendPrompt() }
+        let queued = await waitUntil { viewModel.uiState.pendingSend != nil }
+        #expect(queued)
+        try? await clock.awaitWaiter(milliseconds: Int(SessionActivityPolicy.pendingSendTimeoutMs))
+        clock.release(milliseconds: Int(SessionActivityPolicy.pendingSendTimeoutMs))
+        await sendTask.value
+        #expect(!repository.sendPromptAsyncCalled)
+        #expect(viewModel.uiState.pendingSend == nil)
+        #expect(viewModel.uiState.snackbar?.message == "Couldn't send. Retry when the connection is live.")
+        #expect(viewModel.uiState.messages.allSatisfy { !$0.isPending })
+    }
+
+    @Test func abortSession_setsOptimisticIdle() async {
+        let sessionRepository = FakeChatSessionRepository(sessionStatusType: "busy")
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        await waitUntil { viewModel.uiState.sessionStatusLabel == "Working" }
+        await viewModel.abortSession()
+        await waitUntil { viewModel.uiState.sessionStatusLabel == nil }
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
+    }
+
     @Test func sendPrompt_postSendReloadMatchingUser_dropsOptimistic() async {
         let repository = FakeMessageRepository(echoSentPrompt: true)
         let viewModel = makeViewModel(messageRepository: repository)
@@ -2806,7 +2866,9 @@ struct SessionChatViewModelTests {
         questionLiveStore: (any QuestionLiveStore)? = nil,
         sessionID: String = "ses-1",
         sessionTitle: String = "Title",
-        serverProtocol: ServerProtocol = .v1
+        serverProtocol: ServerProtocol = .v1,
+        liveUpdates: any LiveUpdates = FixedLiveUpdates(),
+        clock: any SyncClock = SystemSyncClock()
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         // Mutations (send/rename/fork/new/permissions) require Connected; default fakes start Idle.
@@ -2855,7 +2917,9 @@ struct SessionChatViewModelTests {
             newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
                 store: selectionStore,
                 modelRepository: modelRepository
-            )
+            ),
+            liveUpdates: liveUpdates,
+            clock: clock
         )
         viewModel.startObserving()
         return viewModel
@@ -3847,6 +3911,61 @@ private func permissionRequest(
         toolMessageID: nil,
         toolCallID: nil
     )
+}
+
+private final class ChatTestSyncClock: SyncClock, @unchecked Sendable {
+    private let lock = NSLock()
+    var now: Int64
+    private var waiters: [Int: [CheckedContinuation<Void, Never>]] = [:]
+
+    init(now: Int64 = 1_000) {
+        self.now = now
+    }
+
+    func nowMs() -> Int64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return now
+    }
+
+    func sleep(milliseconds: Int) async {
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                lock.lock()
+                waiters[milliseconds, default: []].append(continuation)
+                lock.unlock()
+            }
+        } onCancel: {
+            lock.lock()
+            if var bucket = waiters[milliseconds], !bucket.isEmpty {
+                let continuation = bucket.removeFirst()
+                waiters[milliseconds] = bucket
+                lock.unlock()
+                continuation.resume()
+                return
+            }
+            lock.unlock()
+        }
+    }
+
+    func release(milliseconds: Int) {
+        lock.lock()
+        let pending = waiters.removeValue(forKey: milliseconds) ?? []
+        lock.unlock()
+        pending.forEach { $0.resume() }
+    }
+
+    func awaitWaiter(milliseconds: Int, timeout: Duration = .seconds(3)) async throws {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            lock.lock()
+            let count = waiters[milliseconds]?.count ?? 0
+            lock.unlock()
+            if count > 0 { return }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        throw NSError(domain: "ChatTestSyncClock", code: 1)
+    }
 }
 
 private final class AsyncGate: @unchecked Sendable {

@@ -103,7 +103,7 @@ private let sessionListGallerySamples: [SessionListSession] = {
             letter: "A",
             letterAccent: .amber,
             subtitle: "/Users/demo/api-client",
-            status: .running,
+            status: .retrying(attempt: 2),
             caption: "2d ago",
             updatedAtEpochMs: now - 2 * 86_400_000
         ),

@@ -41,11 +41,36 @@ class SessionListStatusMappingTest {
             )
         assertEquals(SessionListStatus.Idle, summary.toSessionListStatusForTest())
     }
+
+    @Test
+    fun retryingMapsToRetryingVariant() {
+        val summary =
+            SessionSummary(
+                id = "ses-1",
+                title = "Chat",
+                statusLabel = "Retrying · 2",
+                isReady = true,
+            )
+        assertEquals(SessionListStatus.Retrying, summary.toSessionListStatusForTest())
+    }
+
+    @Test
+    fun unseededShowsNoStatusChip() {
+        val summary =
+            SessionSummary(
+                id = "ses-1",
+                title = "Chat",
+                statusLabel = null,
+                isReady = false,
+            )
+        assertEquals(SessionListStatus.Idle, summary.toSessionListStatusForTest())
+    }
 }
 
 /** Mirrors MainScreen composite mapping for unit coverage. */
 private fun SessionSummary.toSessionListStatusForTest(): SessionListStatus =
-    when (statusLabel) {
-        "Working", "Retrying" -> SessionListStatus.Running
+    when {
+        statusLabel == "Working" -> SessionListStatus.Running
+        statusLabel?.startsWith("Retrying") == true -> SessionListStatus.Retrying
         else -> if (isReady) SessionListStatus.Ready else SessionListStatus.Idle
     }

@@ -848,8 +848,13 @@ private extension SessionListItem {
     func sessionListStatus(hasPendingPermission: Bool = false) -> SessionListStatus {
         _ = hasPendingPermission // Reserved for a future home Needs approval pill.
         switch statusLabel {
-        case "Working", "Retrying":
+        case "Working":
             return SessionListStatus.running
+        case "Retrying":
+            return SessionListStatus.retrying(attempt: nil)
+        case let label? where label.hasPrefix("Retrying · "):
+            let attempt = Int(label.dropFirst("Retrying · ".count))
+            return SessionListStatus.retrying(attempt: attempt)
         default:
             return isReady ? SessionListStatus.ready : SessionListStatus.idle
         }

@@ -382,10 +382,10 @@ struct EventDomainAdapterTests {
         let events = adapter.parseEvents(
             dataLine: #"{"type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
         )
-        #expect(events.map(\.type) == ["message.updated", "session.active.snapshot"])
+        #expect(events.map(\.type) == ["message.updated"])
         #expect(events[0].sessionID == "ses-1")
         #expect(!events.contains(where: { $0.type == "session.idle" }))
-        #expect(events[1].triggersStatusRefresh == true)
+        #expect(!events.contains(where: { $0.type == "session.active.snapshot" }))
     }
 
     @Test func parseEvents_projectsLiveShellStartedIntoBusyAndBashPart() {
@@ -403,8 +403,9 @@ struct EventDomainAdapterTests {
         let events = adapter.parseEvents(
             dataLine: #"{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c"}}"#
         )
-        #expect(events.map(\.type) == ["message.part.updated", "session.active.snapshot"])
+        #expect(events.map(\.type) == ["message.part.updated"])
         #expect(!events.contains(where: { $0.type == "session.idle" }))
+        #expect(!events.contains(where: { $0.type == "session.active.snapshot" }))
     }
 
     @Test func parseEvents_projectsLiveCompactionFailedIntoPartErrorAndIdle() {
@@ -421,10 +422,10 @@ struct EventDomainAdapterTests {
         let events = adapter.parseEvents(
             dataLine: #"{"type":"session.next.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
         )
-        #expect(events.map(\.type) == ["message.updated", "session.active.snapshot"])
+        #expect(events.map(\.type) == ["message.updated"])
         #expect(events[0].sessionID == "ses-1")
         #expect(events[0].rawProperties?["info"]?.dictionaryValue?["role"]?.stringValue == "assistant")
-        #expect(events[1].triggersStatusRefresh == true)
+        #expect(!events.contains(where: { $0.type == "session.active.snapshot" }))
     }
 
     @Test func parseEvents_promptedTextPartSurvivesDeduper() {
@@ -442,9 +443,9 @@ struct EventDomainAdapterTests {
     @Test func parseEvents_stampsDistinctIdsOnProjectedSiblings() {
         let adapter = EventDomainAdapter()
         let events = adapter.parseEvents(
-            dataLine: #"{"id":"evt_step","type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
+            dataLine: #"{"id":"evt_shell","type":"session.shell.started","data":{"sessionID":"ses-1","callID":"sh-1","assistantMessageID":"msg-2"}}"#
         )
-        #expect(events.map(\.id) == ["evt_step:0", "evt_step:1"])
+        #expect(events.map(\.id) == ["evt_shell:0", "evt_shell:1"])
         let deduper = SseEventDeduper()
         #expect(events.allSatisfy { deduper.accept($0.id) })
     }
@@ -592,6 +593,25 @@ struct EventDomainAdapterTests {
         #expect(status?.sessionID == "ses-1")
         #expect(status?.raw["type"] == "busy")
         #expect(adapter.statusLabel(from: status!) == "Working")
+        #expect(adapter.sessionActivity(from: event!)?.activity == .running)
+    }
+
+    @Test func parseEvents_projectsRetryScheduledIntoRetryingActivity() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.retry.scheduled","data":{"sessionID":"ses-1","attempt":3,"next":5000,"message":"rate limited"}}"#
+        )
+        #expect(event?.type == "session.status")
+        let parsed = adapter.sessionActivity(from: event!)
+        #expect(parsed?.sessionID == "ses-1")
+        if case let .retrying(attempt, nextAtMs, message) = parsed?.activity {
+            #expect(attempt == 3)
+            #expect(nextAtMs == 5_000)
+            #expect(message == "rate limited")
+        } else {
+            Issue.record("expected retrying")
+        }
+        #expect(adapter.statusLabel(from: adapter.sessionStatus(from: event!)!) == "Retrying · 3")
     }
 
     @Test func sessionTitleUpdate_readsInfoTitle() {

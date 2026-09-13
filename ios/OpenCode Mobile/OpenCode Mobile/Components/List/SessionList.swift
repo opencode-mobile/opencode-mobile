@@ -5,16 +5,20 @@ private let sessionListFallbackBottomSpacer: CGFloat = 168
 enum SessionListStatus: Hashable {
     case idle
     case running
+    case retrying(attempt: Int?)
     case ready
 
     var isAttention: Bool {
         switch self {
-        case .running, .ready: true
+        case .running, .retrying, .ready: true
         case .idle: false
         }
     }
 
-    var isReady: Bool { self == .ready }
+    var isReady: Bool {
+        if case .ready = self { return true }
+        return false
+    }
 }
 
 struct SessionListSession: Identifiable, Hashable {
@@ -338,6 +342,11 @@ struct SessionList<EmptyContent: View>: View {
             OpenCodeListItemStatus(text: "Idle", tone: .info)
         case .running:
             OpenCodeListItemStatus(text: "Running", tone: .interactive)
+        case let .retrying(attempt):
+            OpenCodeListItemStatus(
+                text: attempt.map { "Retrying · \($0)" } ?? "Retrying",
+                tone: .warning
+            )
         case .ready:
             OpenCodeListItemStatus(text: "Ready", tone: .success)
         }

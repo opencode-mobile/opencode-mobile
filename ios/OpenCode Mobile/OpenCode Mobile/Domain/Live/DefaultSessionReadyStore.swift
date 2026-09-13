@@ -223,8 +223,8 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         guard handle.statusTask == nil else { return }
         handle.statusTask = Task { [weak self] in
             guard let self else { return }
-            for await statuses in self.sessionStatusLiveStore.observeStatuses(directory: directory) {
-                self.onStatuses(directory: directory, statuses: statuses)
+            for await snapshot in self.sessionStatusLiveStore.observeActivity(directory: directory) {
+                self.onActivity(directory: directory, snapshot: snapshot)
             }
             guard !Task.isCancelled else { return }
             self.restartStatusObservation(directory: directory)
@@ -243,20 +243,20 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         ensureStatusObservation(directory: directory, handle: handle)
     }
 
-    private func onStatuses(directory: String, statuses: [String: SessionStatus]) {
+    private func onActivity(directory: String, snapshot: SessionActivitySnapshot) {
         let pruned = pruneExpired()
         for dir in pruned where dir != directory {
             publishReady(directory: dir, prune: false)
         }
         guard let handle = handles[directory] else { return }
         let watchedIDs = Set(watched.compactMap { id, record in record.directory == directory ? id : nil })
-        let sessionIDs = Set(handle.previousTypes.keys).union(statuses.keys).union(watchedIDs)
+        let sessionIDs = Set(handle.previousTypes.keys).union(snapshot.entries.keys).union(watchedIDs)
         var readyChanged = false
 
         for sessionID in sessionIDs {
-            let type = statuses[sessionID]?.raw["type"]
+            let isBusy = snapshot.entries[sessionID]?.activity.isBusy == true
+            let isIdle = snapshot.seeded && !isBusy
             let prev = handle.previousTypes[sessionID] ?? nil
-            let isBusy = type.isBusyOrRetry
             let wasBusy = prev.isBusyOrRetry
             let firstSighting = watched[sessionID]?.directory == directory &&
                 !handle.previousTypes.keys.contains(sessionID)
@@ -270,8 +270,8 @@ final class DefaultSessionReadyStore: SessionReadyStore {
 
             if watched[sessionID]?.directory == directory {
                 let watch = watched[sessionID]
-                let becameIdle = wasBusy && !isBusy
-                let restoredAlreadyIdle = firstSighting && !isBusy && (watch?.allowIdleCatchUp == true)
+                let becameIdle = wasBusy && isIdle
+                let restoredAlreadyIdle = firstSighting && isIdle && (watch?.allowIdleCatchUp == true)
                 if becameIdle || restoredAlreadyIdle {
                     if handleIdle(sessionID: sessionID, directory: directory, markPreviousIdle: false) {
                         readyChanged = true
@@ -279,9 +279,9 @@ final class DefaultSessionReadyStore: SessionReadyStore {
                 }
             }
 
-            if statuses[sessionID] != nil {
-                handle.previousTypes[sessionID] = type
-            } else if handle.previousTypes[sessionID] != nil {
+            if let activity = snapshot.entries[sessionID]?.activity, activity.isBusy {
+                handle.previousTypes[sessionID] = activity == .running ? "busy" : "retry"
+            } else if snapshot.seeded {
                 handle.previousTypes.removeValue(forKey: sessionID)
             }
         }

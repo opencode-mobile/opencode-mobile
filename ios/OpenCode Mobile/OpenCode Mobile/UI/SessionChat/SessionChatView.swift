@@ -862,7 +862,8 @@ struct SessionChatView: View {
                     customSelected: draft.questionCustomSelected,
                     backEnabled: index > 0 && !draft.questionSubmitting,
                     nextEnabled: isValid && index < questionCount - 1 && !draft.questionSubmitting,
-                    submitEnabled: isValid && index == questionCount - 1 && !draft.questionSubmitting,
+                    submitEnabled: isValid && index == questionCount - 1 && !draft.questionSubmitting &&
+                        viewModel.uiState.canMutate,
                     submitting: draft.questionSubmitting,
                     errorMessage: draft.questionErrorMessage
                 )
@@ -896,7 +897,8 @@ struct SessionChatView: View {
                         !isSending &&
                         !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
                         viewModel.uiState.timeline != .creating &&
-                        viewModel.uiState.canMutate,
+                        viewModel.uiState.composerEnabled &&
+                        viewModel.uiState.pendingSend == nil,
                     attachEnabled: composerAttachmentSources.isAttachEnabled &&
                         !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
                         composer.isModelSelectionReady,

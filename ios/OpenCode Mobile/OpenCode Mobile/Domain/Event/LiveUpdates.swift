@@ -10,6 +10,7 @@ nonisolated enum LiveUpdatesLabel: String, Sendable, Equatable {
 nonisolated struct LiveUpdatesChrome: Sendable, Equatable {
     var label: LiveUpdatesLabel
     var canMutate: Bool
+    var composerEnabled: Bool
 }
 
 nonisolated protocol LiveUpdates: AnyObject, Sendable {
@@ -23,7 +24,7 @@ nonisolated final class FixedLiveUpdates: LiveUpdates, @unchecked Sendable {
     private var continuations: [UUID: AsyncStream<LiveUpdatesChrome>.Continuation] = [:]
 
     init(
-        chrome: LiveUpdatesChrome = LiveUpdatesChrome(label: .live, canMutate: true)
+        chrome: LiveUpdatesChrome = LiveUpdatesChrome(label: .live, canMutate: true, composerEnabled: true)
     ) {
         _chrome = chrome
     }
@@ -69,9 +70,9 @@ nonisolated func composeLiveUpdates(
     hasConnection: Bool
 ) -> LiveUpdatesChrome {
     if connectionState == .authFailed {
-        return LiveUpdatesChrome(label: .authFailed, canMutate: false)
+        return LiveUpdatesChrome(label: .authFailed, canMutate: false, composerEnabled: false)
     }
-    let canMutate = hasConnection && path == .ready && occupancy != .stopped
+    let composerEnabled = hasConnection && path == .ready && occupancy != .stopped
     let label: LiveUpdatesLabel
     if !hasConnection {
         label = .offline
@@ -84,5 +85,9 @@ nonisolated func composeLiveUpdates(
     } else {
         label = .connecting
     }
-    return LiveUpdatesChrome(label: label, canMutate: canMutate)
+    return LiveUpdatesChrome(
+        label: label,
+        canMutate: label == .live,
+        composerEnabled: composerEnabled && label != .offline
+    )
 }

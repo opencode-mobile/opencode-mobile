@@ -700,7 +700,7 @@ fun SessionChatScreen(
                                             !uiState.isSending &&
                                             sessionCreated &&
                                             uiState.timeline != SessionChatTimelineState.Creating &&
-                                            uiState.canMutate,
+                                            uiState.composerEnabled,
                                     attachEnabled =
                                         attachmentSources.isAttachEnabled &&
                                             sessionCreated &&

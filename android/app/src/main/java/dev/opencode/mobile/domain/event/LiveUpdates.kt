@@ -17,6 +17,7 @@ enum class LiveUpdatesLabel(
 data class LiveUpdatesChrome(
     val label: LiveUpdatesLabel,
     val canMutate: Boolean,
+    val composerEnabled: Boolean = canMutate,
 )
 
 interface LiveUpdates {
@@ -28,6 +29,7 @@ class FixedLiveUpdates(
         LiveUpdatesChrome(
             label = LiveUpdatesLabel.Live,
             canMutate = true,
+            composerEnabled = true,
         ),
 ) : LiveUpdates {
     private val _chrome = MutableStateFlow(chrome)
@@ -44,10 +46,6 @@ fun composeLiveUpdates(
     occupancy: StreamOccupancy,
     hasConnection: Boolean,
 ): LiveUpdatesChrome {
-    val canMutate =
-        hasConnection &&
-            path == DeviceNetworkPathStatus.Ready &&
-            occupancy != StreamOccupancy.Stopped
     val label =
         when {
             connectionState == EventStreamConnectionState.AuthFailed -> LiveUpdatesLabel.AuthFailed
@@ -57,11 +55,11 @@ fun composeLiveUpdates(
             connectionState == EventStreamConnectionState.Connected -> LiveUpdatesLabel.Live
             else -> LiveUpdatesLabel.Connecting
         }
-    val effectiveCanMutate =
-        if (connectionState == EventStreamConnectionState.AuthFailed) {
-            false
-        } else {
-            canMutate
-        }
-    return LiveUpdatesChrome(label = label, canMutate = effectiveCanMutate)
+    val composerEnabled =
+        hasConnection &&
+            path == DeviceNetworkPathStatus.Ready &&
+            occupancy != StreamOccupancy.Stopped &&
+            connectionState != EventStreamConnectionState.AuthFailed
+    val canMutate = label == LiveUpdatesLabel.Live
+    return LiveUpdatesChrome(label = label, canMutate = canMutate, composerEnabled = composerEnabled)
 }

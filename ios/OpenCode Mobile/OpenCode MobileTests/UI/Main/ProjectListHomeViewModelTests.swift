@@ -813,6 +813,46 @@ struct ProjectListHomeViewModelTests {
         #expect(homeSession(viewModel, id: "ses-1")?.statusLabel == "Working")
         #expect(homeSession(viewModel, id: "ses-1")?.isReady == true)
     }
+
+    @Test func liveStatus_mapsRetryingAndHidesUntilSeeded() async {
+        let sessions = [
+            Session(id: "ses-1", title: "Alpha", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
+        ]
+        let sessionLive = ControllableSessionLiveStore()
+        let statusLive = ControllableStatusLiveStore()
+        let readyLive = ControllableReadyStore()
+        sessionLive.emit(directory: "/repo", sessions: sessions)
+        readyLive.emit(directory: "/repo", ids: ["ses-1"])
+        statusLive.emit(
+            directory: "/repo",
+            snapshot: SessionActivitySnapshot(entries: [:], seeded: false)
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: FakeSessionRepository(sessions: sessions),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            sessionLiveStoreOverride: sessionLive,
+            sessionStatusLiveStoreOverride: statusLive,
+            sessionReadyStoreOverride: readyLive
+        )
+        await viewModel.refresh()
+        let unseeded = await waitUntil {
+            homeSession(viewModel, id: "ses-1") != nil
+        }
+        #expect(unseeded)
+        #expect(homeSession(viewModel, id: "ses-1")?.statusLabel == nil)
+        #expect(homeSession(viewModel, id: "ses-1")?.isReady == false)
+
+        statusLive.emit(
+            directory: "/repo",
+            statuses: ["ses-1": SessionStatus(sessionID: "ses-1", raw: ["type": "retry", "attempt": "2"])]
+        )
+        let retrying = await waitUntil {
+            homeSession(viewModel, id: "ses-1")?.statusLabel == "Retrying · 2"
+        }
+        #expect(retrying)
+        #expect(homeSession(viewModel, id: "ses-1")?.isReady == true)
+    }
 }
 
 @MainActor
@@ -1356,15 +1396,25 @@ private final class ControllableSessionLiveStore: SessionLiveStore {
 
 @MainActor
 private final class ControllableStatusLiveStore: SessionStatusLiveStore {
-    private var latest: [String: [String: SessionStatus]] = [:]
-    private var continuations: [String: [UUID: AsyncStream<[String: SessionStatus]>.Continuation]] = [:]
+    private var latest: [String: SessionActivitySnapshot] = [:]
+    private var continuations: [String: [UUID: AsyncStream<SessionActivitySnapshot>.Continuation]] = [:]
 
-    func emit(directory: String, statuses: [String: SessionStatus]) {
-        latest[directory] = statuses
-        continuations[directory]?.values.forEach { $0.yield(statuses) }
+    func emit(directory: String, statuses: [String: SessionStatus], seeded: Bool = true) {
+        var entries: [String: SessionActivityEntry] = [:]
+        for (id, status) in statuses {
+            let activity = SessionActivity(raw: status.raw)
+            guard activity != .idle else { continue }
+            entries[id] = SessionActivityEntry(activity: activity, source: .server, observedAtMs: 0)
+        }
+        emit(directory: directory, snapshot: SessionActivitySnapshot(entries: entries, seeded: seeded))
     }
 
-    func observeStatuses(directory: String) -> AsyncStream<[String: SessionStatus]> {
+    func emit(directory: String, snapshot: SessionActivitySnapshot) {
+        latest[directory] = snapshot
+        continuations[directory]?.values.forEach { $0.yield(snapshot) }
+    }
+
+    func observeActivity(directory: String) -> AsyncStream<SessionActivitySnapshot> {
         AsyncStream { continuation in
             let id = UUID()
             continuations[directory, default: [:]][id] = continuation

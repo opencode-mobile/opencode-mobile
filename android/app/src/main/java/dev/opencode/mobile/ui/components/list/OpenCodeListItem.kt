@@ -486,6 +486,13 @@ private fun OpenCodeListItemPreview() {
                 startDecorator = StartDecorator.Letter('t', LetterAccent.Blue),
             )
             OpenCodeListItem(
+                title = "Retry provider error",
+                subtitle = "~/Projects/opencode-mobile",
+                status = OpenCodeListItemStatus(text = "Retrying", tone = OpenCodeListItemStatusTone.Warning),
+                caption = "now",
+                startDecorator = StartDecorator.Letter('O', LetterAccent.Violet),
+            )
+            OpenCodeListItem(
                 title = "Idle session",
                 subtitle = "~/Projects/playground",
                 status = OpenCodeListItemStatus(text = "Idle", tone = OpenCodeListItemStatusTone.Info),

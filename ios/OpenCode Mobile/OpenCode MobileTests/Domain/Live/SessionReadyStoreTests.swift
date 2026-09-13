@@ -423,25 +423,35 @@ private final class ReadyCollector {
 
 @MainActor
 private final class FakeReadyStatusStore: SessionStatusLiveStore {
-    private var continuations: [String: [UUID: AsyncStream<[String: SessionStatus]>.Continuation]] = [:]
-    private var latest: [String: [String: SessionStatus]] = [:]
+    private var continuations: [String: [UUID: AsyncStream<SessionActivitySnapshot>.Continuation]] = [:]
+    private var latest: [String: SessionActivitySnapshot] = [:]
 
-    func emit(directory: String, statuses: [String: SessionStatus]) {
-        latest[directory] = statuses
-        continuations[directory]?.values.forEach { $0.yield(statuses) }
+    func emit(directory: String, statuses: [String: SessionStatus], seeded: Bool = true) {
+        var entries: [String: SessionActivityEntry] = [:]
+        for (id, status) in statuses {
+            let activity = SessionActivity(raw: status.raw)
+            guard activity != .idle else { continue }
+            entries[id] = SessionActivityEntry(activity: activity, source: .server, observedAtMs: 0)
+        }
+        emit(directory: directory, snapshot: SessionActivitySnapshot(entries: entries, seeded: seeded))
+    }
+
+    func emit(directory: String, snapshot: SessionActivitySnapshot) {
+        latest[directory] = snapshot
+        continuations[directory]?.values.forEach { $0.yield(snapshot) }
     }
 
     func liveSubscriberCount(directory: String) -> Int {
         continuations[directory]?.count ?? 0
     }
 
-    func observeStatuses(directory: String) -> AsyncStream<[String: SessionStatus]> {
+    func observeActivity(directory: String) -> AsyncStream<SessionActivitySnapshot> {
         AsyncStream { continuation in
             let id = UUID()
             var bucket = continuations[directory] ?? [:]
             bucket[id] = continuation
             continuations[directory] = bucket
-            continuation.yield(latest[directory] ?? [:])
+            continuation.yield(latest[directory] ?? SessionActivitySnapshot.empty)
             continuation.onTermination = { @Sendable _ in
                 Task { @MainActor in
                     self.continuations[directory]?.removeValue(forKey: id)

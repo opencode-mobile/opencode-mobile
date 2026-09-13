@@ -37,6 +37,9 @@ import dev.opencode.mobile.domain.session.QuestionInfo
 import dev.opencode.mobile.domain.session.QuestionOption
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.SessionActivity
+import dev.opencode.mobile.domain.session.SessionActivitySnapshot
+import dev.opencode.mobile.domain.session.SessionActivitySource
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
@@ -69,6 +72,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicInteger
@@ -1857,21 +1861,41 @@ class SessionStatusLiveStoreTest {
     private val testDispatcher = StandardTestDispatcher()
 
     @Test
-    fun observeStatuses_emitsBulkMap() =
+    fun observeActivity_emitsRunningFromLoader() =
         runTest(testDispatcher) {
             val repository =
                 FakeSessionRepository(
                     statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
                 )
             val store = createStatusStore(repository, FakeForegroundEventStream())
-
-            val statuses = store.observeStatuses("/repo").first()
-
-            assertEquals("busy", statuses["ses-1"]?.raw?.get("type"))
+            val snapshot = store.observeActivity("/repo").first()
+            assertTrue(snapshot.seeded)
+            assertEquals(SessionActivity.Running, snapshot.entries["ses-1"]?.activity)
+            assertEquals(SessionActivitySource.Server, snapshot.entries["ses-1"]?.source)
         }
 
     @Test
-    fun observeStatuses_keepsPriorWhenStatusLoadFails() =
+    fun observeActivity_isUnseededUntilLoaderCompletes() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            repository.statusDelayMs = 10_000
+            val store = createStatusStore(repository, FakeForegroundEventStream())
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
+            runCurrent()
+            assertTrue(emissions.none { it.seeded })
+            advanceTimeBy(10_000)
+            advanceUntilIdle()
+            collectJob.cancel()
+            assertTrue(emissions.last().seeded)
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-1"]?.activity)
+        }
+
+    @Test
+    fun observeActivity_keepsPriorWhenStatusLoadFails() =
         runTest(testDispatcher) {
             val repository =
                 FakeSessionRepository(
@@ -1879,93 +1903,56 @@ class SessionStatusLiveStoreTest {
                 )
             val eventStream = FakeForegroundEventStream()
             val store = createStatusStore(repository, eventStream)
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
             advanceUntilIdle()
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-1"]?.activity)
             repository.shouldFailStatuses = true
             eventStream.emit(OpencodeEvent(type = "server.connected"))
             advanceTimeBy(350)
             runCurrent()
             collectJob.cancel()
-
-            assertEquals(1, emissions.size)
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-1"]?.activity)
         }
 
     @Test
-    fun observeStatuses_appliesStatusEventLocallyWithoutWaitingForGet() =
+    fun observeActivity_appliesStatusEventLocallyWithoutWaitingForGet() =
         runTest(testDispatcher) {
             val repository = FakeSessionRepository(statuses = emptyList())
             val eventStream = FakeForegroundEventStream()
             val store = createStatusStore(repository, eventStream)
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
             advanceUntilIdle()
             val fetchesAfterBootstrap = repository.statusFetchCount
-
-            eventStream.emit(
-                OpencodeEvent(
-                    type = "session.status",
-                    sessionId = "ses-1",
-                    rawProperties =
-                        buildJsonObject {
-                            put("sessionID", "ses-1")
-                            putJsonObject("status") { put("type", "busy") }
-                        },
-                ),
-            )
+            eventStream.emit(busyStatusEvent("ses-1"))
             advanceUntilIdle()
             collectJob.cancel()
-
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-1"]?.activity)
             assertEquals(fetchesAfterBootstrap, repository.statusFetchCount)
         }
 
     @Test
-    fun observeStatuses_emptyActiveSnapshotDoesNotClearSseBusy() =
+    fun stepShellCompactionEnded_doesNotTriggerStatusRest() =
         runTest(testDispatcher) {
             val repository = FakeSessionRepository(statuses = emptyList())
             val eventStream = FakeForegroundEventStream()
             val store = createStatusStore(repository, eventStream)
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
+            val collectJob = launch { store.observeActivity("/repo").collect { } }
             advanceUntilIdle()
-
-            eventStream.emit(
-                OpencodeEvent(
-                    type = "session.status",
-                    sessionId = "ses-1",
-                    rawProperties =
-                        buildJsonObject {
-                            put("sessionID", "ses-1")
-                            putJsonObject("status") { put("type", "busy") }
-                        },
-                ),
-            )
-            advanceUntilIdle()
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
+            val fetchesAfterBootstrap = repository.statusFetchCount
+            eventStream.emit(OpencodeEvent(type = "session.step.ended", sessionId = "ses-1"))
+            eventStream.emit(OpencodeEvent(type = "session.shell.ended", sessionId = "ses-1"))
+            eventStream.emit(OpencodeEvent(type = "session.compaction.ended", sessionId = "ses-1"))
             eventStream.emit(OpencodeEvent(type = "session.active.snapshot", sessionId = "ses-1"))
-            advanceTimeBy(350)
+            advanceTimeBy(1_000)
             advanceUntilIdle()
             collectJob.cancel()
-
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+            assertEquals(fetchesAfterBootstrap, repository.statusFetchCount)
         }
 
     @Test
-    fun observeStatuses_removesSessionOnIdleEvent() =
+    fun observeActivity_removesSessionOnIdleEvent() =
         runTest(testDispatcher) {
             val repository =
                 FakeSessionRepository(
@@ -1973,41 +1960,28 @@ class SessionStatusLiveStoreTest {
                 )
             val eventStream = FakeForegroundEventStream()
             val store = createStatusStore(repository, eventStream)
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
             advanceUntilIdle()
-
             eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
             advanceUntilIdle()
             collectJob.cancel()
-
-            assertEquals(2, emissions.size)
-            assertTrue(emissions.last().isEmpty())
+            assertTrue(emissions.last().entries.isEmpty())
+            assertTrue(emissions.last().seeded)
         }
 
     @Test
-    fun observeStatuses_refreshesOnServerConnectedAfterBackgroundResume() =
+    fun observeActivity_refreshesOnServerConnectedAfterBackgroundResume() =
         runTest(testDispatcher) {
-            // Background stop() clears wasConnected, so cold foreground start() does not
-            // emit stream.reconnected — only server.connected. Status must still reload
-            // so a session that finished while backgrounded does not stay "busy".
             val repository =
                 FakeSessionRepository(
                     statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
                 )
             val eventStream = FakeForegroundEventStream()
             val store = createStatusStore(repository, eventStream)
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
             advanceUntilIdle()
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
             repository.statuses = emptyList()
             eventStream.openGap()
             eventStream.setConnectionState(EventStreamConnectionState.Connected)
@@ -2015,238 +1989,197 @@ class SessionStatusLiveStoreTest {
             advanceTimeBy(350)
             advanceUntilIdle()
             collectJob.cancel()
-
-            assertEquals(2, emissions.size)
-            assertEquals(emptyMap<String, SessionStatus>(), emissions.last())
+            assertTrue(emissions.last().entries.isEmpty())
         }
 
     @Test
-    fun markBusy_whileObserving_emitsBusyWithoutRestFetch() =
+    fun setOptimistic_emitsWithoutRestFetch() =
         runTest(testDispatcher) {
             val repository = FakeSessionRepository(statuses = emptyList())
             val store = createStatusStore(repository, FakeForegroundEventStream())
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
             advanceUntilIdle()
             val fetchesAfterBootstrap = repository.statusFetchCount
-
-            store.markBusy("/repo", "ses-1")
-            advanceUntilIdle()
-            collectJob.cancel()
-
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-            assertEquals(fetchesAfterBootstrap, repository.statusFetchCount)
-        }
-
-    @Test
-    fun markBusy_thenRestIdle_keepsPendingBusy() =
-        runTest(testDispatcher) {
-            val repository = FakeSessionRepository(statuses = emptyList())
-            val eventStream = FakeForegroundEventStream()
-            val store = createStatusStore(repository, eventStream)
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
-            advanceUntilIdle()
-
-            store.markBusy("/repo", "ses-1")
-            advanceUntilIdle()
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
-            repository.statuses = emptyList()
-            eventStream.openGap()
-            eventStream.setConnectionState(EventStreamConnectionState.Connected)
-            eventStream.emit(OpencodeEvent(type = "server.connected"))
-            advanceTimeBy(350)
-            advanceUntilIdle()
-            collectJob.cancel()
-
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-        }
-
-    @Test
-    fun markBusy_thenBackgroundReturnRestIdle_dropsPendingBusy() =
-        runTest(testDispatcher) {
-            val repository = FakeSessionRepository(statuses = emptyList())
-            val eventStream = FakeForegroundEventStream()
-            eventStream.setConnectionState(EventStreamConnectionState.Connected)
-            val world = FakeWorldSignals()
-            val store = createStatusStore(repository, eventStream, world)
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
-            advanceUntilIdle()
-
-            store.markBusy("/repo", "ses-1")
-            advanceUntilIdle()
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
-            world.emit(WorldSignal.BackgroundStop)
-            world.emit(WorldSignal.Foreground)
-            advanceUntilIdle()
-            collectJob.cancel()
-
-            assertTrue(emissions.last()["ses-1"] == null)
-        }
-
-    @Test
-    fun markBusy_backgroundReturnWhileReconnecting_skipsUntilFullyLiveThenDropsPending() =
-        runTest(testDispatcher) {
-            val repository = FakeSessionRepository(statuses = emptyList())
-            val eventStream = FakeForegroundEventStream()
-            eventStream.setConnectionState(EventStreamConnectionState.Connected)
-            val world = FakeWorldSignals()
-            val store = createStatusStore(repository, eventStream, world)
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
-            advanceUntilIdle()
-            val fetchesAfterBootstrap = repository.statusFetchCount
-
-            store.markBusy("/repo", "ses-1")
-            advanceUntilIdle()
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
-            eventStream.setConnectionState(EventStreamConnectionState.Reconnecting)
-            world.emit(WorldSignal.BackgroundStop)
-            world.emit(WorldSignal.Foreground)
-            advanceUntilIdle()
-            assertEquals(fetchesAfterBootstrap, repository.statusFetchCount)
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
-            eventStream.setConnectionState(EventStreamConnectionState.Connected)
-            advanceUntilIdle()
-            collectJob.cancel()
-
-            assertTrue(repository.statusFetchCount > fetchesAfterBootstrap)
-            assertTrue(emissions.last()["ses-1"] == null)
-        }
-
-    @Test
-    fun markBusy_backgroundReturnFailedCatchUp_retainsPendingClearUntilAcceptedFetch() =
-        runTest(testDispatcher) {
-            val repository = FakeSessionRepository(statuses = emptyList())
-            val eventStream = FakeForegroundEventStream()
-            eventStream.setConnectionState(EventStreamConnectionState.Connected)
-            val world = FakeWorldSignals()
-            val store = createStatusStore(repository, eventStream, world)
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
-            advanceUntilIdle()
-            val fetchesAfterBootstrap = repository.statusFetchCount
-
-            store.markBusy("/repo", "ses-1")
-            advanceUntilIdle()
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
-            eventStream.setConnectionState(EventStreamConnectionState.Reconnecting)
-            world.emit(WorldSignal.BackgroundStop)
-            world.emit(WorldSignal.Foreground)
-            advanceUntilIdle()
-            assertEquals(fetchesAfterBootstrap, repository.statusFetchCount)
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
-            repository.shouldFailStatuses = true
-            eventStream.setConnectionState(EventStreamConnectionState.Connected)
-            advanceTimeBy(50)
-            runCurrent()
-            assertTrue(repository.statusFetchCount > fetchesAfterBootstrap)
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
-            repository.shouldFailStatuses = false
-            eventStream.openGap()
-            advanceTimeBy(50)
+            store.setOptimistic("/repo", "ses-1", SessionActivity.Running)
             runCurrent()
             collectJob.cancel()
-
-            assertTrue(emissions.last()["ses-1"] == null)
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-1"]?.activity)
+            assertEquals(SessionActivitySource.Optimistic, emissions.last().entries["ses-1"]?.source)
+            assertEquals(fetchesAfterBootstrap, repository.statusFetchCount)
         }
 
     @Test
-    fun markBusy_thenEmptyActiveSnapshot_keepsPendingBusy() =
+    fun setOptimistic_expiresToLastServerValue() =
         runTest(testDispatcher) {
-            val repository = FakeSessionRepository(statuses = emptyList())
-            val eventStream = FakeForegroundEventStream()
-            val store = createStatusStore(repository, eventStream)
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            val store = createStatusStore(repository, FakeForegroundEventStream())
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
             advanceUntilIdle()
-
-            store.markBusy("/repo", "ses-1")
-            advanceUntilIdle()
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
-            eventStream.emit(OpencodeEvent(type = "session.active.snapshot", sessionId = "ses-1"))
-            advanceTimeBy(350)
-            advanceUntilIdle()
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
-            repository.statuses = emptyList()
-            eventStream.openGap()
-            eventStream.setConnectionState(EventStreamConnectionState.Connected)
-            eventStream.emit(OpencodeEvent(type = "server.connected"))
-            advanceTimeBy(350)
-            advanceUntilIdle()
+            store.setOptimistic("/repo", "ses-1", SessionActivity.Idle, ttlMs = 3_000)
+            runCurrent()
+            assertEquals(SessionActivity.Idle, emissions.last().entries["ses-1"]?.activity)
+            assertEquals(SessionActivitySource.Optimistic, emissions.last().entries["ses-1"]?.source)
+            advanceTimeBy(3_000)
+            runCurrent()
             collectJob.cancel()
-
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-1"]?.activity)
+            assertEquals(SessionActivitySource.Server, emissions.last().entries["ses-1"]?.source)
         }
 
     @Test
-    fun markBusy_thenSseIdle_removesSession() =
+    fun setOptimistic_expiresRemovesWhenNoServerValue() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(statuses = emptyList())
+            val store = createStatusStore(repository, FakeForegroundEventStream())
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
+            advanceUntilIdle()
+            store.setOptimistic("/repo", "ses-1", SessionActivity.Running, ttlMs = 10_000)
+            runCurrent()
+            advanceTimeBy(10_000)
+            runCurrent()
+            collectJob.cancel()
+            assertNull(emissions.last().entries["ses-1"])
+        }
+
+    @Test
+    fun serverIdle_winsOverOptimistic() =
         runTest(testDispatcher) {
             val repository = FakeSessionRepository(statuses = emptyList())
             val eventStream = FakeForegroundEventStream()
             val store = createStatusStore(repository, eventStream)
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
             advanceUntilIdle()
-
-            store.markBusy("/repo", "ses-1")
-            advanceUntilIdle()
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
+            store.setOptimistic("/repo", "ses-1", SessionActivity.Running)
+            runCurrent()
             eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
-            advanceUntilIdle()
+            runCurrent()
             collectJob.cancel()
-
-            assertTrue(emissions.last().isEmpty())
+            assertTrue(emissions.last().entries.isEmpty())
         }
 
     @Test
-    fun markBusy_thenSseBusy_confirmsPending() =
+    fun loaderSnapshot_removesStaleServerKeepsYoungOptimistic() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-old", raw = mapOf("type" to "busy"))),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store = createStatusStore(repository, eventStream)
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
+            advanceUntilIdle()
+            store.setOptimistic("/repo", "ses-new", SessionActivity.Running)
+            runCurrent()
+            repository.statuses = emptyList()
+            eventStream.openGap()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            eventStream.emit(OpencodeEvent(type = "server.connected"))
+            advanceTimeBy(350)
+            runCurrent()
+            collectJob.cancel()
+            assertNull(emissions.last().entries["ses-old"])
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-new"]?.activity)
+            assertEquals(SessionActivitySource.Optimistic, emissions.last().entries["ses-new"]?.source)
+        }
+
+    @Test
+    fun runningReconcile_reloadsWhileBusyAndForegrounded() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store =
+                createStatusStore(
+                    repository,
+                    eventStream,
+                    wait = { delay(it) },
+                )
+            val collectJob = launch { store.observeActivity("/repo").collect { } }
+            runCurrent()
+            val afterSeed = repository.statusFetchCount
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_RUNNING_RECONCILE_MS)
+            runCurrent()
+            collectJob.cancel()
+            runCurrent()
+            assertTrue(repository.statusFetchCount > afterSeed)
+        }
+
+    @Test
+    fun runningReconcile_skipsWhenEverythingIdle() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(statuses = emptyList())
+            val store = createStatusStore(repository, FakeForegroundEventStream(), wait = { delay(it) })
+            val collectJob = launch { store.observeActivity("/repo").collect { } }
+            advanceUntilIdle()
+            val afterSeed = repository.statusFetchCount
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_RUNNING_RECONCILE_MS)
+            runCurrent()
+            collectJob.cancel()
+            assertEquals(afterSeed, repository.statusFetchCount)
+        }
+
+    @Test
+    fun runningReconcile_skipsWhenBackgrounded() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val world = FakeWorldSignals()
+            val store = createStatusStore(repository, eventStream, world, wait = { delay(it) })
+            val collectJob = launch { store.observeActivity("/repo").collect { } }
+            runCurrent()
+            val afterSeed = repository.statusFetchCount
+            world.emit(WorldSignal.BackgroundStop)
+            runCurrent()
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_RUNNING_RECONCILE_MS)
+            runCurrent()
+            collectJob.cancel()
+            runCurrent()
+            assertEquals(afterSeed, repository.statusFetchCount)
+        }
+
+    @Test
+    fun runningReconcile_skipsWhenCannotCatchUp() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store = createStatusStore(repository, eventStream, wait = { delay(it) })
+            val collectJob = launch { store.observeActivity("/repo").collect { } }
+            runCurrent()
+            val afterSeed = repository.statusFetchCount
+            eventStream.setConnectionState(EventStreamConnectionState.Connecting)
+            runCurrent()
+            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_RUNNING_RECONCILE_MS)
+            runCurrent()
+            collectJob.cancel()
+            runCurrent()
+            assertEquals(afterSeed, repository.statusFetchCount)
+        }
+
+    @Test
+    fun parsesRetryPayloadFromStatusEvent() =
         runTest(testDispatcher) {
             val repository = FakeSessionRepository(statuses = emptyList())
             val eventStream = FakeForegroundEventStream()
             val store = createStatusStore(repository, eventStream)
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
             advanceUntilIdle()
-
-            store.markBusy("/repo", "ses-1")
-            advanceUntilIdle()
-
             eventStream.emit(
                 OpencodeEvent(
                     type = "session.status",
@@ -2254,133 +2187,67 @@ class SessionStatusLiveStoreTest {
                     rawProperties =
                         buildJsonObject {
                             put("sessionID", "ses-1")
-                            putJsonObject("status") { put("type", "busy") }
+                            putJsonObject("status") {
+                                put("type", "retry")
+                                put("attempt", 2)
+                            }
                         },
                 ),
             )
             advanceUntilIdle()
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
-            repository.statuses = emptyList()
-            eventStream.openGap()
-            eventStream.setConnectionState(EventStreamConnectionState.Connected)
-            eventStream.emit(OpencodeEvent(type = "server.connected"))
-            advanceTimeBy(350)
-            advanceUntilIdle()
             collectJob.cancel()
-
-            assertTrue(emissions.last()["ses-1"] == null)
+            val activity = emissions.last().entries["ses-1"]?.activity as SessionActivity.Retrying
+            assertEquals(2, activity.attempt)
         }
 
     @Test
-    fun clearLocalBusy_keepsRestBusy() =
+    fun assistantCompleted_clearsOptimisticRunningOnly() =
         runTest(testDispatcher) {
-            val repository =
-                FakeSessionRepository(
-                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
-                )
-            val store = createStatusStore(repository, FakeForegroundEventStream())
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
+            val repository = FakeSessionRepository(statuses = emptyList())
+            val eventStream = FakeForegroundEventStream()
+            val store = createStatusStore(repository, eventStream)
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val collectJob = launch { store.observeActivity("/repo").collect { emissions.add(it) } }
             advanceUntilIdle()
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
-            store.clearLocalBusy("/repo", "ses-1")
+            store.setOptimistic("/repo", "ses-1", SessionActivity.Running)
+            runCurrent()
+            eventStream.emit(
+                OpencodeEvent(
+                    type = "message.updated",
+                    sessionId = "ses-1",
+                    rawProperties =
+                        buildJsonObject {
+                            putJsonObject("info") {
+                                put("id", "msg-2")
+                                put("role", "assistant")
+                                putJsonObject("time") { put("completed", 1L) }
+                            }
+                        },
+                ),
+            )
             advanceUntilIdle()
             collectJob.cancel()
-
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+            assertNull(emissions.last().entries["ses-1"])
         }
 
     @Test
-    fun clearLocalBusy_afterMarkBusyWhileRestBusy_keepsBusy() =
-        runTest(testDispatcher) {
-            val repository =
-                FakeSessionRepository(
-                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
-                )
-            val store = createStatusStore(repository, FakeForegroundEventStream())
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
-            advanceUntilIdle()
-
-            store.markBusy("/repo", "ses-1")
-            advanceUntilIdle()
-            store.clearLocalBusy("/repo", "ses-1")
-            advanceUntilIdle()
-            collectJob.cancel()
-
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-        }
-
-    @Test
-    fun clearLocalBusy_dropsUnconfirmedPending() =
+    fun setOptimistic_beforeObserve_appearsOnSubscribe() =
         runTest(testDispatcher) {
             val repository = FakeSessionRepository(statuses = emptyList())
             val store = createStatusStore(repository, FakeForegroundEventStream())
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
-            advanceUntilIdle()
-
-            store.markBusy("/repo", "ses-1")
-            advanceUntilIdle()
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
-            store.clearLocalBusy("/repo", "ses-1")
-            advanceUntilIdle()
-            collectJob.cancel()
-
-            assertTrue(emissions.last()["ses-1"] == null)
-        }
-
-    @Test
-    fun markIdle_removesRestBusy() =
-        runTest(testDispatcher) {
-            val repository =
-                FakeSessionRepository(
-                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
-                )
-            val store = createStatusStore(repository, FakeForegroundEventStream())
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
-            val collectJob =
-                launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
-                }
-            advanceUntilIdle()
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
-
-            store.markIdle("/repo", "ses-1")
-            advanceUntilIdle()
-            collectJob.cancel()
-
-            assertTrue(emissions.last()["ses-1"] == null)
-        }
-
-    @Test
-    fun markBusy_beforeObserve_appearsOnSubscribe() =
-        runTest(testDispatcher) {
-            val repository = FakeSessionRepository(statuses = emptyList())
-            val store = createStatusStore(repository, FakeForegroundEventStream())
-
-            store.markBusy("/repo", "ses-1")
-            val statuses = store.observeStatuses("/repo").first()
-
-            assertEquals("busy", statuses["ses-1"]?.raw?.get("type"))
+            store.setOptimistic("/repo", "ses-1", SessionActivity.Running)
+            val snapshot = store.observeActivity("/repo").first()
+            assertEquals(SessionActivity.Running, snapshot.entries["ses-1"]?.activity)
+            assertEquals(SessionActivitySource.Optimistic, snapshot.entries["ses-1"]?.source)
         }
 
     private fun createStatusStore(
         repository: FakeSessionRepository,
         eventStream: FakeForegroundEventStream,
         worldSignals: WorldSignals = SilentWorldSignals,
+        wait: suspend (Long) -> Unit = { ms ->
+            if (ms < LiveStoreRefreshPolicy.STATUS_RUNNING_RECONCILE_MS) delay(ms)
+        },
     ): DefaultSessionStatusLiveStore {
         if (eventStream.connectionState.value == EventStreamConnectionState.Idle) {
             eventStream.setConnectionState(EventStreamConnectionState.Connected)
@@ -2399,9 +2266,22 @@ class SessionStatusLiveStoreTest {
                 nowMs = { testDispatcher.scheduler.currentTime },
                 wait = { delay(1) },
             ),
+            nowMs = { testDispatcher.scheduler.currentTime },
+            wait = wait,
         )
     }
 }
+
+private fun busyStatusEvent(sessionId: String) =
+    OpencodeEvent(
+        type = "session.status",
+        sessionId = sessionId,
+        rawProperties =
+            buildJsonObject {
+                put("sessionID", sessionId)
+                putJsonObject("status") { put("type", "busy") }
+            },
+    )
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SessionLiveStoreTest {
@@ -2514,16 +2394,10 @@ class LiveObservationTeardownTest {
             advanceUntilIdle()
 
             readyStore.notifyPromptSent("ses-1", "/repo")
-            repository.statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy")))
-            eventStream.emit(OpencodeEvent(type = "server.connected"))
-            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
-            advanceUntilIdle()
-            repository.statuses = emptyList()
-            eventStream.openGap()
-            eventStream.setConnectionState(EventStreamConnectionState.Connected)
-            eventStream.emit(OpencodeEvent(type = "server.connected"))
-            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
-            advanceUntilIdle()
+            eventStream.emit(busyStatusEvent("ses-1"))
+            runCurrent()
+            eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            runCurrent()
             homeJob.cancel()
 
             assertTrue(readyEmissions.last().contains("ses-1"))
@@ -2577,7 +2451,7 @@ class LiveObservationTeardownTest {
         readyEmissions: MutableList<Set<String>>,
     ) = launch {
         combine(
-            statusStore.observeStatuses("/repo"),
+            statusStore.observeActivity("/repo"),
             readyStore.observeReadyIds("/repo"),
         ) { _, readyIds -> readyIds }
             .collect { readyEmissions.add(it) }
@@ -2728,13 +2602,13 @@ class LiveStoreRevisionGateTest {
                         wait = { delay(1) },
                     ),
                 )
-            val emissions = mutableListOf<Map<String, SessionStatus>>()
+            val emissions = mutableListOf<SessionActivitySnapshot>()
             val collectJob =
                 launch {
-                    store.observeStatuses("/repo").collect { emissions.add(it) }
+                    store.observeActivity("/repo").collect { emissions.add(it) }
                 }
             advanceUntilIdle()
-            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-1"]?.activity)
 
             repository.statusDelayMs = 10_000
             eventStream.openGap()
@@ -2755,7 +2629,7 @@ class LiveStoreRevisionGateTest {
                 "session.idle must outrank the status GET that was already in flight: the " +
                     "pre-idle REST snapshot put ses-1 back and the row is stuck busy " +
                     "(last emission: ${emissions.last()})",
-                emissions.last()["ses-1"] == null,
+                emissions.last().entries["ses-1"] == null,
             )
         }
 
@@ -2784,7 +2658,7 @@ class LiveStoreRevisionGateTest {
                         wait = { delay(1) },
                     ),
                 )
-            val collectJob = launch { store.observeStatuses("/repo").collect { } }
+            val collectJob = launch { store.observeActivity("/repo").collect { } }
             advanceUntilIdle()
             assertEquals(1, repository.statusFetchCount)
 

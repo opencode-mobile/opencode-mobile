@@ -7,11 +7,13 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     private let eventAdapter: EventDomainAdapter
     private let worldSignals: any WorldSignals
     private let syncCoordinator: any SyncCoordinator
+    private let clock: any SyncClock
+    private let connection: any LiveConnection
     private let invalidationAckTimeoutMs: Int
     private let activeDirectories = ActiveDirectorySet()
-    private let pendingBusy = PendingBusySet()
-    private let mutationBus = StatusMutationBus()
-    private var cache: [String: SharedLiveObservation<[String: SessionStatus]>] = [:]
+    private let optimistic = OptimisticActivityTable()
+    private let mutationBus = ActivityMutationBus()
+    private var cache: [String: SharedLiveObservation<SessionActivitySnapshot>] = [:]
 
     init(
         sessionRepository: any SessionRepository,
@@ -19,12 +21,15 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         eventAdapter: EventDomainAdapter = EventDomainAdapter(),
         worldSignals: any WorldSignals = SilentWorldSignals.shared,
         syncCoordinator: (any SyncCoordinator)? = nil,
+        clock: any SyncClock = SystemSyncClock(),
         invalidationAckTimeoutMs: Int = LiveStoreRefreshPolicy.invalidationAckTimeoutMs
     ) {
         self.sessionRepository = sessionRepository
         self.eventStream = eventStream
         self.eventAdapter = eventAdapter
         self.worldSignals = worldSignals
+        self.clock = clock
+        self.connection = eventStream.asLiveConnection()
         self.syncCoordinator = syncCoordinator ?? DefaultSyncCoordinator(
             connection: eventStream.asLiveConnection(),
             worldSignals: worldSignals,
@@ -33,7 +38,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         self.invalidationAckTimeoutMs = invalidationAckTimeoutMs
     }
 
-    func observeStatuses(directory: String) -> AsyncStream<[String: SessionStatus]> {
+    func observeActivity(directory: String) -> AsyncStream<SessionActivitySnapshot> {
         resubscribingLiveStream { [weak self] in
             guard let self else { return AsyncStream { $0.finish() } }
             return self.observation(for: directory).stream()
@@ -61,29 +66,38 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         }
     }
 
-    func markBusy(directory: String, sessionID: String) {
-        pendingBusy.insert(directory: directory, sessionID: sessionID)
-        mutationBus.yield(.markBusy(directory: directory, sessionID: sessionID))
-    }
-
-    func clearLocalBusy(directory: String, sessionID: String) {
-        pendingBusy.remove(directory: directory, sessionID: sessionID)
-        mutationBus.yield(.clearLocalBusy(directory: directory, sessionID: sessionID))
-    }
-
-    func markIdle(directory: String, sessionID: String) {
-        pendingBusy.remove(directory: directory, sessionID: sessionID)
-        mutationBus.yield(.markIdle(directory: directory, sessionID: sessionID))
+    func setOptimistic(
+        directory: String,
+        sessionID: String,
+        activity: SessionActivity,
+        ttlMs: Int64
+    ) {
+        let now = clock.nowMs()
+        optimistic.set(
+            directory: directory,
+            sessionID: sessionID,
+            activity: activity,
+            observedAtMs: now,
+            expiresAtMs: now + max(ttlMs, 0)
+        )
+        mutationBus.yield(
+            .setOptimistic(
+                directory: directory,
+                sessionID: sessionID,
+                ttlMs: max(ttlMs, 0),
+                observedAtMs: now
+            )
+        )
     }
 
     func clearCache() {
         let stale = Array(cache.values)
         cache.removeAll()
-        pendingBusy.removeAll()
+        optimistic.removeAll()
         stale.forEach { $0.finish() }
     }
 
-    private func observation(for directory: String) -> SharedLiveObservation<[String: SessionStatus]> {
+    private func observation(for directory: String) -> SharedLiveObservation<SessionActivitySnapshot> {
         if let existing = cache[directory], !existing.isTerminated {
             return existing
         }
@@ -92,20 +106,24 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         let eventAdapter = eventAdapter
         let worldSignals = worldSignals
         let syncCoordinator = syncCoordinator
+        let clock = clock
+        let connection = connection
         let activeDirectories = activeDirectories
-        let pendingBusy = pendingBusy
+        let optimistic = optimistic
         let mutationBus = mutationBus
-        let observation = SharedLiveObservation<[String: SessionStatus]> { yield in
+        let observation = SharedLiveObservation<SessionActivitySnapshot> { yield in
             Task.detached {
-                await Self.runStatusLoop(
+                await Self.runActivityLoop(
                     directory: directory,
                     sessionRepository: sessionRepository,
                     eventStream: eventStream,
                     eventAdapter: eventAdapter,
                     worldSignals: worldSignals,
                     syncCoordinator: syncCoordinator,
+                    clock: clock,
+                    connection: connection,
                     activeDirectories: activeDirectories,
-                    pendingBusy: pendingBusy,
+                    optimistic: optimistic,
                     mutationBus: mutationBus,
                     yield: yield
                 )
@@ -115,89 +133,67 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         return observation
     }
 
-    private nonisolated static func runStatusLoop(
+    private nonisolated static func runActivityLoop(
         directory: String,
         sessionRepository: any SessionRepository,
         eventStream: any ForegroundEventStream,
         eventAdapter: EventDomainAdapter,
         worldSignals: any WorldSignals,
         syncCoordinator: any SyncCoordinator,
+        clock: any SyncClock,
+        connection: any LiveConnection,
         activeDirectories: ActiveDirectorySet,
-        pendingBusy: PendingBusySet,
-        mutationBus: StatusMutationBus,
-        yield: @escaping @Sendable ([String: SessionStatus]) -> Void
+        optimistic: OptimisticActivityTable,
+        mutationBus: ActivityMutationBus,
+        yield: @escaping @Sendable (SessionActivitySnapshot) -> Void
     ) async {
         activeDirectories.insert(directory)
         defer { activeDirectories.remove(directory) }
-        let serverBox = StatusBox()
-        let currentBox = StatusBox()
+        let serverBox = ActivityServerBox()
+        let currentBox = ActivitySnapshotBox()
         let gate = LiveStoreRefreshGate()
-        let dropUnconfirmedPendingAfterBackgroundCatchUp = DropPendingFlag()
         let key = ProjectionKey.sessionStatuses(directory: directory)
+        let expiryTasks = ExpiryTaskBag()
 
-        @Sendable func overlayPending(
-            _ base: [String: SessionStatus],
-            confirmFrom: [String: SessionStatus]? = nil,
-            dropUnconfirmedPending: Bool = false
-        ) -> [String: SessionStatus] {
-            let confirm = confirmFrom ?? base
-            var result = base
-            for sessionID in pendingBusy.snapshot(directory: directory) {
-                let restType = confirm[sessionID]?.raw["type"]
-                if restType == "busy" || restType == "retry" {
-                    pendingBusy.remove(directory: directory, sessionID: sessionID)
-                } else if dropUnconfirmedPending {
-                    pendingBusy.remove(directory: directory, sessionID: sessionID)
-                } else {
-                    result[sessionID] = SessionStatus(sessionID: sessionID, raw: ["type": "busy"])
-                }
-            }
-            return result
-        }
-
-        @Sendable func emitOverlay(_ base: [String: SessionStatus]) {
-            let next = overlayPending(base, confirmFrom: [:])
+        @Sendable func publish() {
+            optimistic.removeExpired(directory: directory, now: clock.nowMs())
+            let next = overlay(
+                server: serverBox.snapshot(),
+                optimistic: optimistic.snapshot(directory: directory),
+                seeded: serverBox.seeded
+            )
             guard next != currentBox.snapshot() else { return }
             currentBox.replace(next)
             yield(next)
         }
 
-        @Sendable func commitLoaded(
-            _ loaded: [String: SessionStatus],
-            emptyActiveGuard: Bool = false,
-            dropUnconfirmedPending: Bool = false
-        ) {
-            if emptyActiveGuard, loaded.isEmpty {
-                let server = serverBox.snapshot()
-                if !server.isEmpty {
-                    emitOverlay(server)
-                    return
-                }
+        @Sendable func commitLoaded(_ loaded: [String: SessionActivity]) {
+            let now = clock.nowMs()
+            optimistic.removeExpired(directory: directory, now: now)
+            var server: [String: SessionActivityEntry] = [:]
+            for (sessionID, activity) in loaded where activity != .idle {
+                optimistic.remove(directory: directory, sessionID: sessionID)
+                server[sessionID] = SessionActivityEntry(
+                    activity: activity,
+                    source: .server,
+                    observedAtMs: now
+                )
             }
-            serverBox.replace(loaded)
-            let next = overlayPending(loaded, dropUnconfirmedPending: dropUnconfirmedPending)
-            if dropUnconfirmedPending {
-                dropUnconfirmedPendingAfterBackgroundCatchUp.clear()
-            }
-            currentBox.replace(next)
-            yield(next)
+            serverBox.replace(server, seeded: true)
+            publish()
         }
 
-        @Sendable func loadAndCommit(emptyActiveGuard: Bool = false) async throws {
+        @Sendable func loadAndCommit() async throws {
             let outcome = await gate.refresh(
-                load: { () async -> [String: SessionStatus]? in
-                    await Self.loadStatuses(
+                load: { () async -> [String: SessionActivity]? in
+                    await Self.loadActivities(
                         directory: directory,
                         sessionRepository: sessionRepository
                     )
                 },
                 commit: { loaded in
                     DiagnosticLog.info(.session, "statusLiveStore refresh directory=\(directory)")
-                    commitLoaded(
-                        loaded,
-                        emptyActiveGuard: emptyActiveGuard,
-                        dropUnconfirmedPending: dropUnconfirmedPendingAfterBackgroundCatchUp.isArmed
-                    )
+                    commitLoaded(loaded)
                 }
             )
             if outcome == .discarded {
@@ -216,73 +212,60 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         defer {
             syncCoordinator.visible(key, false)
             syncCoordinator.unregister(registration)
+            expiryTasks.cancelAll()
         }
 
         let mutationTask = Task {
             for await mutation in mutationBus.events() {
                 guard mutation.directory == directory else { continue }
                 switch mutation {
-                case let .markBusy(_, sessionID):
-                    guard pendingBusy.contains(directory: directory, sessionID: sessionID) else {
-                        continue
+                case let .setOptimistic(_, sessionID, ttlMs, observedAtMs):
+                    publish()
+                    expiryTasks.schedule(sessionID: sessionID) {
+                        await clock.sleep(milliseconds: Int(ttlMs))
+                        guard !Task.isCancelled else { return }
+                        let current = optimistic.snapshot(directory: directory)[sessionID]
+                        guard current?.observedAtMs == observedAtMs else { return }
+                        optimistic.remove(directory: directory, sessionID: sessionID)
+                        publish()
                     }
-                    emitOverlay(serverBox.snapshot())
-                case .clearLocalBusy:
-                    emitOverlay(serverBox.snapshot())
-                case let .markIdle(_, sessionID):
-                    var server = serverBox.snapshot()
-                    server.removeValue(forKey: sessionID)
-                    serverBox.replace(server)
-                    await gate.bump()
-                    emitOverlay(server)
                 }
             }
         }
         defer { mutationTask.cancel() }
 
+        publish()
         await syncCoordinator.ensureFresh(key)
 
         await withTaskGroup(of: Void.self) { group in
             group.addTask {
-                for await occupancy in worldSignals.occupancyUpdates() {
-                    if occupancy == .stopped {
-                        dropUnconfirmedPendingAfterBackgroundCatchUp.arm()
-                    }
-                }
-            }
-            group.addTask {
-                for await signal in worldSignals.signals() {
-                    if signal == .backgroundStop {
-                        dropUnconfirmedPendingAfterBackgroundCatchUp.arm()
-                    }
-                }
-            }
-            group.addTask {
-                var snapshotTask: Task<Void, Never>?
-                defer { snapshotTask?.cancel() }
-                for await event in eventStream.events() {
-                    if event.type == "session.active.snapshot" {
-                        snapshotTask?.cancel()
-                        snapshotTask = Task {
-                            try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs))
-                            guard !Task.isCancelled else { return }
-                            try? await loadAndCommit(emptyActiveGuard: true)
-                        }
+                while !Task.isCancelled {
+                    await clock.sleep(milliseconds: SessionActivityPolicy.runningReconcileMs)
+                    guard !Task.isCancelled else { return }
+                    let snapshot = currentBox.snapshot()
+                    let hasBusy = snapshot.entries.values.contains { $0.activity.isBusy }
+                    guard hasBusy else { continue }
+                    guard canCatchUp(occupancy: worldSignals.occupancy, snapshot: connection.snapshot) else {
                         continue
                     }
-                    guard event.triggersStatusRefresh else { continue }
-                    let server = serverBox.snapshot()
-                    if let nextServer = applyStatusEvent(
+                    syncCoordinator.invalidate(key)
+                    await syncCoordinator.ensureFresh(key)
+                }
+            }
+            group.addTask {
+                for await event in eventStream.events() {
+                    if applyActivityEvent(
                         directory: directory,
-                        current: server,
                         event: event,
                         eventAdapter: eventAdapter,
-                        pendingBusy: pendingBusy
+                        serverBox: serverBox,
+                        optimistic: optimistic,
+                        current: currentBox.snapshot(),
+                        now: clock.nowMs()
                     ) {
-                        serverBox.replace(nextServer)
                         await gate.bump()
+                        publish()
                     }
-                    emitOverlay(serverBox.snapshot())
                 }
             }
             await group.next()
@@ -290,69 +273,109 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         }
     }
 
-    private nonisolated static func loadStatuses(
+    private nonisolated static func loadActivities(
         directory: String,
         sessionRepository: any SessionRepository
-    ) async -> [String: SessionStatus]? {
+    ) async -> [String: SessionActivity]? {
         guard let statuses = try? await sessionRepository.getAllSessionStatuses(directory: directory) else {
             return nil
         }
-        return Dictionary(uniqueKeysWithValues: statuses.map { ($0.sessionID, $0) })
+        var activities: [String: SessionActivity] = [:]
+        for status in statuses {
+            let activity = SessionActivity(raw: status.raw)
+            if activity != .idle {
+                activities[status.sessionID] = activity
+            }
+        }
+        return activities
     }
 
-    private nonisolated static func applyStatusEvent(
+    private nonisolated static func overlay(
+        server: [String: SessionActivityEntry],
+        optimistic: [String: OptimisticActivityRecord],
+        seeded: Bool
+    ) -> SessionActivitySnapshot {
+        var entries = server
+        for (sessionID, record) in optimistic {
+            entries[sessionID] = SessionActivityEntry(
+                activity: record.activity,
+                source: .optimistic,
+                observedAtMs: record.observedAtMs
+            )
+        }
+        return SessionActivitySnapshot(entries: entries, seeded: seeded)
+    }
+
+    private nonisolated static func applyActivityEvent(
         directory: String,
-        current: [String: SessionStatus],
         event: OpencodeEvent,
         eventAdapter: EventDomainAdapter,
-        pendingBusy: PendingBusySet
-    ) -> [String: SessionStatus]? {
+        serverBox: ActivityServerBox,
+        optimistic: OptimisticActivityTable,
+        current: SessionActivitySnapshot,
+        now: Int64
+    ) -> Bool {
         switch event.type {
         case "session.status":
-            guard let status = eventAdapter.sessionStatus(from: event) else { return nil }
-            if status.raw["type"] == "idle" {
-                pendingBusy.remove(directory: directory, sessionID: status.sessionID)
-                guard current[status.sessionID] != nil else { return nil }
-                var next = current
-                next.removeValue(forKey: status.sessionID)
-                return next
+            guard let parsed = eventAdapter.sessionActivity(from: event) else { return false }
+            optimistic.remove(directory: directory, sessionID: parsed.sessionID)
+            var server = serverBox.snapshot()
+            if parsed.activity == .idle {
+                guard server[parsed.sessionID] != nil else { return true }
+                server.removeValue(forKey: parsed.sessionID)
+            } else {
+                server[parsed.sessionID] = SessionActivityEntry(
+                    activity: parsed.activity,
+                    source: .server,
+                    observedAtMs: now
+                )
             }
-            pendingBusy.remove(directory: directory, sessionID: status.sessionID)
-            var next = current
-            next[status.sessionID] = status
-            return next
+            serverBox.replace(server, seeded: serverBox.seeded)
+            return true
         case "session.idle":
-            guard let sessionID = event.sessionID else { return nil }
-            pendingBusy.remove(directory: directory, sessionID: sessionID)
-            guard current[sessionID] != nil else { return nil }
-            var next = current
-            next.removeValue(forKey: sessionID)
-            return next
+            guard let sessionID = event.sessionID else { return false }
+            optimistic.remove(directory: directory, sessionID: sessionID)
+            var server = serverBox.snapshot()
+            guard server[sessionID] != nil else { return true }
+            server.removeValue(forKey: sessionID)
+            serverBox.replace(server, seeded: serverBox.seeded)
+            return true
+        case "message.updated":
+            guard let sessionID = event.sessionID ?? event.rawProperties?["info"]?.dictionaryValue?["sessionID"]?.stringValue
+            else { return false }
+            guard eventAdapter.isCompletedAssistantMessage(event) else { return false }
+            let visible = current.entries[sessionID]
+            guard visible?.source == .optimistic, visible?.activity == .running else { return false }
+            optimistic.remove(directory: directory, sessionID: sessionID)
+            var server = serverBox.snapshot()
+            if server[sessionID] != nil {
+                server.removeValue(forKey: sessionID)
+                serverBox.replace(server, seeded: serverBox.seeded)
+            }
+            return true
         default:
-            return nil
+            return false
         }
     }
 }
 
-private nonisolated enum StatusMutation: Sendable {
-    case markBusy(directory: String, sessionID: String)
-    case clearLocalBusy(directory: String, sessionID: String)
-    case markIdle(directory: String, sessionID: String)
+private enum ActivityMutation: Sendable {
+    case setOptimistic(directory: String, sessionID: String, ttlMs: Int64, observedAtMs: Int64)
 
     var directory: String {
         switch self {
-        case let .markBusy(directory, _), let .clearLocalBusy(directory, _), let .markIdle(directory, _):
+        case let .setOptimistic(directory, _, _, _):
             directory
         }
     }
 }
 
-private nonisolated final class StatusMutationBus: @unchecked Sendable {
+private nonisolated final class ActivityMutationBus: @unchecked Sendable {
     private let lock = NSLock()
-    private var continuations: [UUID: AsyncStream<StatusMutation>.Continuation] = [:]
-    private var buffer: [StatusMutation] = []
+    private var continuations: [UUID: AsyncStream<ActivityMutation>.Continuation] = [:]
+    private var buffer: [ActivityMutation] = []
 
-    func events() -> AsyncStream<StatusMutation> {
+    func events() -> AsyncStream<ActivityMutation> {
         let id = UUID()
         return AsyncStream { continuation in
             continuation.onTermination = { [weak self] _ in
@@ -372,7 +395,7 @@ private nonisolated final class StatusMutationBus: @unchecked Sendable {
         }
     }
 
-    func yield(_ mutation: StatusMutation) {
+    func yield(_ mutation: ActivityMutation) {
         lock.lock()
         let subscribers = Array(continuations.values)
         if subscribers.isEmpty {
@@ -390,14 +413,30 @@ private nonisolated final class StatusMutationBus: @unchecked Sendable {
     }
 }
 
-private nonisolated final class PendingBusySet: @unchecked Sendable {
-    private let lock = NSLock()
-    private var values: [String: Set<String>] = [:]
+private struct OptimisticActivityRecord: Sendable {
+    var activity: SessionActivity
+    var observedAtMs: Int64
+    var expiresAtMs: Int64
+}
 
-    func insert(directory: String, sessionID: String) {
+private nonisolated final class OptimisticActivityTable: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [String: [String: OptimisticActivityRecord]] = [:]
+
+    func set(
+        directory: String,
+        sessionID: String,
+        activity: SessionActivity,
+        observedAtMs: Int64,
+        expiresAtMs: Int64
+    ) {
         lock.lock()
-        var bucket = values[directory] ?? []
-        bucket.insert(sessionID)
+        var bucket = values[directory] ?? [:]
+        bucket[sessionID] = OptimisticActivityRecord(
+            activity: activity,
+            observedAtMs: observedAtMs,
+            expiresAtMs: expiresAtMs
+        )
         values[directory] = bucket
         lock.unlock()
     }
@@ -405,22 +444,27 @@ private nonisolated final class PendingBusySet: @unchecked Sendable {
     func remove(directory: String, sessionID: String) {
         lock.lock()
         if var bucket = values[directory] {
-            bucket.remove(sessionID)
+            bucket.removeValue(forKey: sessionID)
             values[directory] = bucket
         }
         lock.unlock()
     }
 
-    func contains(directory: String, sessionID: String) -> Bool {
+    func snapshot(directory: String) -> [String: OptimisticActivityRecord] {
         lock.lock()
         defer { lock.unlock() }
-        return values[directory]?.contains(sessionID) ?? false
+        return values[directory] ?? [:]
     }
 
-    func snapshot(directory: String) -> Set<String> {
+    func removeExpired(directory: String, now: Int64) {
         lock.lock()
-        defer { lock.unlock() }
-        return values[directory] ?? []
+        guard var bucket = values[directory] else {
+            lock.unlock()
+            return
+        }
+        bucket = bucket.filter { $0.value.expiresAtMs > now }
+        values[directory] = bucket
+        lock.unlock()
     }
 
     func removeAll() {
@@ -430,42 +474,65 @@ private nonisolated final class PendingBusySet: @unchecked Sendable {
     }
 }
 
-private nonisolated final class DropPendingFlag: @unchecked Sendable {
+private nonisolated final class ActivityServerBox: @unchecked Sendable {
     private let lock = NSLock()
-    private var armed = false
+    private var value: [String: SessionActivityEntry] = [:]
+    private var _seeded = false
 
-    var isArmed: Bool {
+    var seeded: Bool {
         lock.lock()
         defer { lock.unlock() }
-        return armed
+        return _seeded
     }
 
-    func arm() {
-        lock.lock()
-        armed = true
-        lock.unlock()
-    }
-
-    func clear() {
-        lock.lock()
-        armed = false
-        lock.unlock()
-    }
-}
-
-private nonisolated final class StatusBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var value: [String: SessionStatus] = [:]
-
-    func snapshot() -> [String: SessionStatus] {
+    func snapshot() -> [String: SessionActivityEntry] {
         lock.lock()
         defer { lock.unlock() }
         return value
     }
 
-    func replace(_ next: [String: SessionStatus]) {
+    func replace(_ next: [String: SessionActivityEntry], seeded: Bool) {
+        lock.lock()
+        value = next
+        _seeded = seeded
+        lock.unlock()
+    }
+}
+
+private nonisolated final class ActivitySnapshotBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = SessionActivitySnapshot.empty
+
+    func snapshot() -> SessionActivitySnapshot {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+
+    func replace(_ next: SessionActivitySnapshot) {
         lock.lock()
         value = next
         lock.unlock()
+    }
+}
+
+private nonisolated final class ExpiryTaskBag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var tasks: [String: Task<Void, Never>] = [:]
+
+    func schedule(sessionID: String, body: @escaping @Sendable () async -> Void) {
+        lock.lock()
+        tasks[sessionID]?.cancel()
+        let task = Task { await body() }
+        tasks[sessionID] = task
+        lock.unlock()
+    }
+
+    func cancelAll() {
+        lock.lock()
+        let running = Array(tasks.values)
+        tasks.removeAll()
+        lock.unlock()
+        running.forEach { $0.cancel() }
     }
 }

@@ -5,10 +5,17 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
-import dev.opencode.mobile.domain.event.WorldSignal
+import dev.opencode.mobile.domain.event.StreamOccupancy
 import dev.opencode.mobile.domain.event.WorldSignals
+import dev.opencode.mobile.domain.event.asLiveConnection
+import dev.opencode.mobile.domain.event.canCatchUp
+import dev.opencode.mobile.domain.session.SessionActivity
+import dev.opencode.mobile.domain.session.SessionActivityEntry
+import dev.opencode.mobile.domain.session.SessionActivitySnapshot
+import dev.opencode.mobile.domain.session.SessionActivitySource
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
+import dev.opencode.mobile.domain.session.toSessionActivity
 import dev.opencode.mobile.domain.sync.ProjectionKey
 import dev.opencode.mobile.domain.sync.SyncCoordinator
 import kotlinx.coroutines.CoroutineScope
@@ -24,16 +31,17 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class DefaultSessionStatusLiveStore
-    @Inject
     constructor(
         private val sessionRepository: SessionRepository,
         private val eventStream: ForegroundEventStream,
@@ -41,39 +49,71 @@ class DefaultSessionStatusLiveStore
         private val eventDomainAdapter: EventDomainAdapter,
         private val worldSignals: WorldSignals,
         private val syncCoordinator: SyncCoordinator,
+        private val nowMs: () -> Long = { System.currentTimeMillis() },
+        private val wait: suspend (Long) -> Unit = { delay(it) },
     ) : SessionStatusLiveStore {
-        private val cache = LiveStoreFlowCache<Map<String, SessionStatus>>(liveStoreScope)
+        @Inject
+        constructor(
+            sessionRepository: SessionRepository,
+            eventStream: ForegroundEventStream,
+            liveStoreScope: LiveStoreScope,
+            eventDomainAdapter: EventDomainAdapter,
+            worldSignals: WorldSignals,
+            syncCoordinator: SyncCoordinator,
+        ) : this(
+            sessionRepository = sessionRepository,
+            eventStream = eventStream,
+            liveStoreScope = liveStoreScope,
+            eventDomainAdapter = eventDomainAdapter,
+            worldSignals = worldSignals,
+            syncCoordinator = syncCoordinator,
+            nowMs = { System.currentTimeMillis() },
+            wait = { delay(it) },
+        )
+
+        private val cache = LiveStoreFlowCache<SessionActivitySnapshot>(liveStoreScope)
         private val activeDirectories = ConcurrentHashMap.newKeySet<String>()
-        private val pendingBusy = ConcurrentHashMap<String, MutableSet<String>>()
+        private val optimistic = ConcurrentHashMap<String, ConcurrentHashMap<String, OptimisticRecord>>()
+        private val expiryJobs = ConcurrentHashMap<OptimisticKey, Job>()
         private val mutationBus = MutableSharedFlow<StatusMutation>(extraBufferCapacity = 32)
+        private val optimisticSerial = AtomicLong(0)
+        private val liveConnection = eventStream.asLiveConnection()
 
         override fun clearCache() {
             cache.clear()
-            pendingBusy.clear()
+            optimistic.clear()
+            expiryJobs.values.forEach { it.cancel() }
+            expiryJobs.clear()
         }
 
-        override fun markBusy(
+        override fun setOptimistic(
             directory: String,
             sessionId: String,
+            activity: SessionActivity,
+            ttlMs: Long,
         ) {
-            pendingIds(directory).add(sessionId)
-            mutationBus.tryEmit(StatusMutation.MarkBusy(directory, sessionId))
-        }
-
-        override fun clearLocalBusy(
-            directory: String,
-            sessionId: String,
-        ) {
-            pendingBusy[directory]?.remove(sessionId)
-            mutationBus.tryEmit(StatusMutation.ClearLocalBusy(directory, sessionId))
-        }
-
-        override fun markIdle(
-            directory: String,
-            sessionId: String,
-        ) {
-            pendingBusy[directory]?.remove(sessionId)
-            mutationBus.tryEmit(StatusMutation.MarkIdle(directory, sessionId))
+            val observedAt = nowMs()
+            val record =
+                OptimisticRecord(
+                    activity = activity,
+                    observedAtMs = observedAt,
+                    expiresAtMs = observedAt + ttlMs,
+                    serial = optimisticSerial.incrementAndGet(),
+                )
+            directoryOptimistic(directory)[sessionId] = record
+            val key = OptimisticKey(directory, sessionId)
+            expiryJobs.remove(key)?.cancel()
+            expiryJobs[key] =
+                liveStoreScope.coroutineScope.launch {
+                    wait(ttlMs)
+                    val current = optimistic[directory]?.get(sessionId)
+                    if (current?.serial == record.serial) {
+                        optimistic[directory]?.remove(sessionId, record)
+                        expiryJobs.remove(key)
+                        mutationBus.tryEmit(StatusMutation.OptimisticChanged(directory, sessionId))
+                    }
+                }
+            mutationBus.tryEmit(StatusMutation.OptimisticChanged(directory, sessionId))
         }
 
         override suspend fun invalidate(directory: String?) {
@@ -99,7 +139,7 @@ class DefaultSessionStatusLiveStore
             }
         }
 
-        override fun observeStatuses(directory: String): Flow<Map<String, SessionStatus>> =
+        override fun observeActivity(directory: String): Flow<SessionActivitySnapshot> =
             cache.observe(directory) { scope -> buildSharedFlow(directory, scope) }
 
         internal fun activeUpstreamCount(): Int = cache.activeEntryCount()
@@ -107,7 +147,7 @@ class DefaultSessionStatusLiveStore
         private fun buildSharedFlow(
             directory: String,
             sharingScope: CoroutineScope,
-        ): SharedFlow<Map<String, SessionStatus>> =
+        ): SharedFlow<SessionActivitySnapshot> =
             buildStatusFlow(directory)
                 .shareIn(
                     scope = sharingScope,
@@ -115,42 +155,55 @@ class DefaultSessionStatusLiveStore
                     replay = 1,
                 )
 
-        private fun buildStatusFlow(directory: String): Flow<Map<String, SessionStatus>> =
+        private fun buildStatusFlow(directory: String): Flow<SessionActivitySnapshot> =
             channelFlow {
-                var server = emptyMap<String, SessionStatus>()
-                var current = emptyMap<String, SessionStatus>()
-                var snapshotRefresh: Job? = null
+                var server = emptyMap<String, SessionActivityEntry>()
+                var current = SessionActivitySnapshot()
+                var seeded = false
+                var reconcileJob: Job? = null
                 val key = ProjectionKey.SessionStatuses(directory)
                 val gate = LiveStoreRefreshGate()
-                var dropUnconfirmedPendingAfterBackgroundCatchUp = false
-                suspend fun emitOverlay(base: Map<String, SessionStatus>) {
-                    val next = overlayPending(directory, base, confirmFrom = emptyMap())
+
+                suspend fun emitSnapshot() {
+                    val next = composeSnapshot(directory, server, seeded)
                     if (next != current) {
                         current = next
                         send(current)
                     }
+                    reconcileJob =
+                        syncRunningReconcile(
+                            directory = directory,
+                            key = key,
+                            server = { server },
+                            seeded = { seeded },
+                            existing = reconcileJob,
+                        )
                 }
 
-                suspend fun commitLoaded(
-                    loaded: Map<String, SessionStatus>,
-                    emptyActiveGuard: Boolean = false,
-                    dropUnconfirmedPending: Boolean = false,
-                ) {
-                    if (emptyActiveGuard && loaded.isEmpty() && server.isNotEmpty()) {
-                        emitOverlay(server)
-                        return
+                suspend fun commitLoaded(loaded: List<SessionStatus>) {
+                    val now = nowMs()
+                    for (status in loaded) {
+                        dropOptimistic(directory, status.sessionId)
                     }
-                    server = loaded
-                    current =
-                        overlayPending(
-                            directory,
-                            loaded,
-                            dropUnconfirmedPending = dropUnconfirmedPending,
-                        )
-                    if (dropUnconfirmedPending) {
-                        dropUnconfirmedPendingAfterBackgroundCatchUp = false
+                    val nextServer = mutableMapOf<String, SessionActivityEntry>()
+                    for (status in loaded) {
+                        val activity = status.toSessionActivity()
+                        if (activity != SessionActivity.Idle) {
+                            nextServer[status.sessionId] =
+                                SessionActivityEntry(
+                                    activity = activity,
+                                    source = SessionActivitySource.Server,
+                                    observedAtMs = now,
+                                )
+                        }
                     }
-                    send(current)
+                    server = nextServer
+                    seeded = true
+                    DiagnosticLog.info(
+                        DiagnosticLogArea.Session,
+                        "statusLiveStore refresh directory=$directory",
+                    )
+                    emitSnapshot()
                 }
 
                 val registration =
@@ -159,107 +212,47 @@ class DefaultSessionStatusLiveStore
                             gate.refresh(
                                 load = {
                                     runCatching {
-                                        sessionRepository
-                                            .getAllSessionStatuses(directory = directory)
-                                            .associateBy(SessionStatus::sessionId)
+                                        sessionRepository.getAllSessionStatuses(directory = directory)
                                     }.getOrNull()
                                 },
-                                commit = { loaded ->
-                                    DiagnosticLog.info(
-                                        DiagnosticLogArea.Session,
-                                        "statusLiveStore refresh directory=$directory",
-                                    )
-                                    commitLoaded(
-                                        loaded,
-                                        emptyActiveGuard = false,
-                                        dropUnconfirmedPending = dropUnconfirmedPendingAfterBackgroundCatchUp,
-                                    )
-                                },
+                                commit = { loaded -> commitLoaded(loaded) },
                             )
-                            if (outcome == LiveStoreRefreshOutcome.FAILED) {
-                                error("status refresh failed directory=$directory")
-                            }
-                            if (outcome == LiveStoreRefreshOutcome.DISCARDED) {
-                                syncCoordinator.invalidate(key)
-                            }
+                        if (outcome == LiveStoreRefreshOutcome.FAILED) {
+                            error("status refresh failed directory=$directory")
+                        }
+                        if (outcome == LiveStoreRefreshOutcome.DISCARDED) {
+                            syncCoordinator.invalidate(key)
+                        }
                     }
                 syncCoordinator.visible(key, true)
                 try {
                     launch {
                         mutationBus
                             .filter { it.directory == directory }
-                            .collect { mutation ->
-                                when (mutation) {
-                                    is StatusMutation.MarkBusy -> {
-                                        if (pendingBusy[directory]?.contains(mutation.sessionId) != true) {
-                                            return@collect
-                                        }
-                                        emitOverlay(server)
-                                    }
-                                    is StatusMutation.ClearLocalBusy -> emitOverlay(server)
-                                    is StatusMutation.MarkIdle -> {
-                                        server = server - mutation.sessionId
-                                        gate.bump()
-                                        emitOverlay(server)
-                                    }
-                                }
-                            }
+                            .collect { emitSnapshot() }
                     }
                     yield()
                     activeDirectories.add(directory)
-                    launch {
-                        worldSignals.signals.collect { signal ->
-                            if (signal == WorldSignal.BackgroundStop) {
-                                dropUnconfirmedPendingAfterBackgroundCatchUp = true
-                            }
-                        }
-                    }
                     syncCoordinator.ensureFresh(key)
                     try {
                         eventStream.events.collect { event ->
                             when {
-                                event.type == "session.active.snapshot" -> {
-                                    snapshotRefresh?.cancel()
-                                    snapshotRefresh =
-                                        launch {
-                                            delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
-                                            val outcome =
-                                                gate.refresh(
-                                                    load = {
-                                                        runCatching {
-                                                            sessionRepository
-                                                                .getAllSessionStatuses(directory = directory)
-                                                                .associateBy(SessionStatus::sessionId)
-                                                        }.getOrNull()
-                                                    },
-                                                    commit = { loaded ->
-                                                        commitLoaded(
-                                                            loaded,
-                                                            emptyActiveGuard = true,
-                                                            dropUnconfirmedPending =
-                                                                dropUnconfirmedPendingAfterBackgroundCatchUp,
-                                                        )
-                                                    },
-                                                )
-                                            if (outcome == LiveStoreRefreshOutcome.COMMITTED) {
-                                                DiagnosticLog.info(
-                                                    DiagnosticLogArea.Session,
-                                                    "statusLiveStore snapshot directory=$directory",
-                                                )
-                                            }
-                                        }
-                                }
                                 event.triggersStatusRefresh -> {
                                     applyStatusEvent(directory, server, event)?.let {
                                         server = it
                                         gate.bump()
                                     }
-                                    emitOverlay(server)
+                                    emitSnapshot()
+                                }
+                                event.type == "message.updated" -> {
+                                    if (applyAssistantCompletedIdle(directory, server, event)) {
+                                        emitSnapshot()
+                                    }
                                 }
                             }
                         }
                     } finally {
-                        snapshotRefresh?.cancel()
+                        reconcileJob?.cancel()
                     }
                 } finally {
                     syncCoordinator.visible(key, false)
@@ -268,26 +261,85 @@ class DefaultSessionStatusLiveStore
                 }
             }
 
+        private fun composeSnapshot(
+            directory: String,
+            server: Map<String, SessionActivityEntry>,
+            seeded: Boolean,
+        ): SessionActivitySnapshot {
+            val now = nowMs()
+            val pending = optimistic[directory]?.toMap().orEmpty()
+            val entries = server.toMutableMap()
+            for ((sessionId, record) in pending) {
+                if (now < record.expiresAtMs) {
+                    entries[sessionId] =
+                        SessionActivityEntry(
+                            activity = record.activity,
+                            source = SessionActivitySource.Optimistic,
+                            observedAtMs = record.observedAtMs,
+                        )
+                }
+            }
+            return SessionActivitySnapshot(entries = entries, seeded = seeded)
+        }
+
+        private fun CoroutineScope.syncRunningReconcile(
+            directory: String,
+            key: ProjectionKey,
+            server: () -> Map<String, SessionActivityEntry>,
+            seeded: () -> Boolean,
+            existing: Job?,
+        ): Job? {
+            val needed = composeSnapshot(directory, server(), seeded()).entries.values.any { it.activity.isBusy() }
+            if (!needed) {
+                existing?.cancel()
+                return null
+            }
+            if (existing?.isActive == true) return existing
+            return launch {
+                while (isActive) {
+                    val started = nowMs()
+                    wait(LiveStoreRefreshPolicy.STATUS_RUNNING_RECONCILE_MS)
+                    if (nowMs() - started < LiveStoreRefreshPolicy.STATUS_RUNNING_RECONCILE_MS) {
+                        return@launch
+                    }
+                    val live = composeSnapshot(directory, server(), seeded())
+                    if (!live.entries.values.any { it.activity.isBusy() }) return@launch
+                    if (worldSignals.occupancy.value != StreamOccupancy.Active) continue
+                    if (!canCatchUp(worldSignals.occupancy.value, liveConnection.snapshot.value)) continue
+                    syncCoordinator.invalidate(key)
+                    syncCoordinator.ensureFresh(key)
+                }
+            }
+        }
+
         private fun applyStatusEvent(
             directory: String,
-            current: Map<String, SessionStatus>,
+            current: Map<String, SessionActivityEntry>,
             event: OpencodeEvent,
-        ): Map<String, SessionStatus>? {
+        ): Map<String, SessionActivityEntry>? {
+            val now = nowMs()
             return when (event.type) {
                 "session.status" -> {
-                    val status = eventDomainAdapter.sessionStatusFromEvent(event) ?: return null
-                    if (status.raw["type"] == "idle") {
-                        pendingBusy[directory]?.remove(status.sessionId)
-                        if (status.sessionId !in current) return null
-                        current - status.sessionId
+                    val parsed = eventDomainAdapter.sessionActivityFromEvent(event) ?: return null
+                    dropOptimistic(directory, parsed.sessionId)
+                    if (parsed.activity == SessionActivity.Idle) {
+                        if (parsed.sessionId !in current) return null
+                        current - parsed.sessionId
                     } else {
-                        pendingBusy[directory]?.remove(status.sessionId)
-                        current + (status.sessionId to status)
+                        current +
+                            (
+                                parsed.sessionId to
+                                    SessionActivityEntry(
+                                        activity = parsed.activity,
+                                        source = SessionActivitySource.Server,
+                                        observedAtMs = now,
+                                    )
+                            )
                     }
                 }
                 "session.idle" -> {
                     val sessionId = event.sessionId ?: return null
-                    pendingBusy[directory]?.remove(sessionId)
+                    dropOptimistic(directory, sessionId)
                     if (sessionId !in current) return null
                     current - sessionId
                 }
@@ -295,50 +347,52 @@ class DefaultSessionStatusLiveStore
             }
         }
 
-        private fun pendingIds(directory: String): MutableSet<String> =
-            pendingBusy.getOrPut(directory) { ConcurrentHashMap.newKeySet() }
-
-        private fun overlayPending(
+        private fun applyAssistantCompletedIdle(
             directory: String,
-            base: Map<String, SessionStatus>,
-            confirmFrom: Map<String, SessionStatus> = base,
-            dropUnconfirmedPending: Boolean = false,
-        ): Map<String, SessionStatus> {
-            val pending = pendingBusy[directory]?.toSet().orEmpty()
-            if (pending.isEmpty()) return base
-            var result = base
-            for (sessionId in pending) {
-                val restType = confirmFrom[sessionId]?.raw?.get("type")
-                if (restType == "busy" || restType == "retry") {
-                    pendingBusy[directory]?.remove(sessionId)
-                } else if (dropUnconfirmedPending) {
-                    pendingBusy[directory]?.remove(sessionId)
-                } else {
-                    result = result + (sessionId to localBusy(sessionId))
-                }
-            }
-            return result
+            server: Map<String, SessionActivityEntry>,
+            event: OpencodeEvent,
+        ): Boolean {
+            val sessionId = event.sessionId ?: return false
+            if (!eventDomainAdapter.assistantMessageCompleted(event)) return false
+            val overlay = optimistic[directory]?.get(sessionId) ?: return false
+            if (nowMs() >= overlay.expiresAtMs) return false
+            if (overlay.activity != SessionActivity.Running) return false
+            val serverActivity = server[sessionId]?.activity
+            if (serverActivity != null && serverActivity.isBusy()) return false
+            dropOptimistic(directory, sessionId)
+            return true
+        }
+
+        private fun dropOptimistic(
+            directory: String,
+            sessionId: String,
+        ) {
+            optimistic[directory]?.remove(sessionId)
+            expiryJobs.remove(OptimisticKey(directory, sessionId))?.cancel()
+        }
+
+        private fun directoryOptimistic(directory: String): ConcurrentHashMap<String, OptimisticRecord> =
+            optimistic.getOrPut(directory) { ConcurrentHashMap() }
+
+        private data class OptimisticRecord(
+            val activity: SessionActivity,
+            val observedAtMs: Long,
+            val expiresAtMs: Long,
+            val serial: Long,
+        )
+
+        private data class OptimisticKey(
+            val directory: String,
+            val sessionId: String,
+        )
+
+        private sealed class StatusMutation {
+            abstract val directory: String
+            abstract val sessionId: String
+
+            data class OptimisticChanged(
+                override val directory: String,
+                override val sessionId: String,
+            ) : StatusMutation()
         }
     }
-
-private fun localBusy(sessionId: String) = SessionStatus(sessionId = sessionId, raw = mapOf("type" to "busy"))
-
-private sealed class StatusMutation {
-    abstract val directory: String
-    abstract val sessionId: String
-
-    data class MarkBusy(
-        override val directory: String,
-        override val sessionId: String,
-    ) : StatusMutation()
-
-    data class ClearLocalBusy(
-        override val directory: String,
-        override val sessionId: String,
-    ) : StatusMutation()
-
-    data class MarkIdle(
-        override val directory: String,
-        override val sessionId: String,
-    ) : StatusMutation()
-}

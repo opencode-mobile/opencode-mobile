@@ -66,9 +66,10 @@ struct SyncCoordinatorTests {
         let load = Task.detached { await env.coordinator.ensureFresh(key) }
         _ = await coordinatorWaitUntil { attempts.value == 1 }
         #expect(states.latest == .stale)
-        #expect(clock.waitersCount > 0)
+        _ = await coordinatorWaitUntil { clock.waitersCount > 0 }
         clock.releaseNextSleep()
         _ = await coordinatorWaitUntil { attempts.value == 2 }
+        _ = await coordinatorWaitUntil { clock.waitersCount > 0 }
         clock.releaseNextSleep()
         _ = await coordinatorWaitUntil { attempts.value == 3 && states.latest == .fresh }
         _ = await load.value

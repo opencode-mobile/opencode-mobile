@@ -144,10 +144,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         case "session.execution.started":
             [statusEvent(properties, statusType: "busy")]
         case "session.next.step.ended", "session.step.ended":
-            [
-                assistantMessageUpdated(properties),
-                event(type: "session.active.snapshot", properties: properties),
-            ].compactMap { $0 }
+            [assistantMessageUpdated(properties)].compactMap { $0 }
         case "session.execution.succeeded",
              "session.execution.interrupted":
             [event(type: "session.idle", properties: properties)]
@@ -178,10 +175,7 @@ nonisolated struct EventDomainAdapter: Sendable {
                 shellPartUpdated(properties, status: "running"),
             ]
         case "session.next.shell.ended", "session.shell.ended":
-            [
-                shellPartUpdated(properties, status: "completed"),
-                event(type: "session.active.snapshot", properties: properties),
-            ]
+            [shellPartUpdated(properties, status: "completed")]
         case "session.next.compaction.started", "session.compaction.started":
             [
                 statusEvent(properties, statusType: "busy"),
@@ -190,10 +184,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         case "session.next.compaction.delta", "session.compaction.delta":
             [compactionTextDelta(properties)]
         case "session.next.compaction.ended", "session.compaction.ended":
-            [
-                compactionPartUpdated(properties, completed: true),
-                event(type: "session.active.snapshot", properties: properties),
-            ]
+            [compactionPartUpdated(properties, completed: true)]
         case "session.next.compaction.failed", "session.compaction.failed":
             [
                 compactionPartUpdated(properties, completed: true),
@@ -655,7 +646,28 @@ nonisolated struct EventDomainAdapter: Sendable {
     }
 
     private func statusEvent(_ properties: [String: Any], statusType: String) -> OpencodeEvent {
-        var projected: [String: Any] = ["status": ["type": statusType]]
+        var status: [String: Any] = ["type": statusType]
+        let nested = properties["status"] as? [String: Any]
+        if let attempt = int64(in: properties, key: "attempt")
+            ?? nested.flatMap({ int64(in: $0, key: "attempt") })
+        {
+            status["attempt"] = attempt
+        }
+        if let nextAt = int64(in: properties, key: "nextAtMs")
+            ?? int64(in: properties, key: "nextAt")
+            ?? int64(in: properties, key: "next")
+            ?? nested.flatMap({ int64(in: $0, key: "nextAtMs") })
+            ?? nested.flatMap({ int64(in: $0, key: "nextAt") })
+            ?? nested.flatMap({ int64(in: $0, key: "next") })
+        {
+            status["nextAtMs"] = nextAt
+        }
+        if let message = string(in: properties, key: "message")
+            ?? nested.flatMap({ string(in: $0, key: "message") })
+        {
+            status["message"] = message
+        }
+        var projected: [String: Any] = ["status": status]
         if let sessionID = sessionID(from: properties) {
             projected["sessionID"] = sessionID
         }
@@ -761,7 +773,17 @@ nonisolated struct EventDomainAdapter: Sendable {
     }
 
     func statusLabel(from status: SessionStatus) -> String? {
-        statusLabel(fromRawType: status.raw["type"])
+        SessionActivity(raw: status.raw).statusLabel
+    }
+
+    func sessionActivity(from status: SessionStatus) -> SessionActivity {
+        SessionActivity(raw: status.raw)
+    }
+
+    /// Activity carried by a `session.status` SSE payload.
+    func sessionActivity(from event: OpencodeEvent) -> (sessionID: String, activity: SessionActivity)? {
+        guard let status = sessionStatus(from: event) else { return nil }
+        return (status.sessionID, SessionActivity(raw: status.raw))
     }
 
     /// Status carried by a `session.status` SSE payload.
@@ -777,6 +799,14 @@ nonisolated struct EventDomainAdapter: Sendable {
             }
         }
         return SessionStatus(sessionID: sessionID, raw: raw)
+    }
+
+    func isCompletedAssistantMessage(_ event: OpencodeEvent) -> Bool {
+        guard event.type == "message.updated" else { return false }
+        let info = event.rawProperties?["info"]?.dictionaryValue
+        guard info?["role"]?.stringValue == "assistant" else { return false }
+        guard let completed = info?["time"]?.dictionaryValue?["completed"] else { return false }
+        return completed != .null
     }
 
     private static func string(from value: AnySendable) -> String? {
@@ -803,17 +833,6 @@ nonisolated struct EventDomainAdapter: Sendable {
         guard let sessionID else { return nil }
         guard let title = info?["title"]?.stringValue else { return nil }
         return SessionTitleUpdate(sessionID: sessionID, title: title)
-    }
-
-    private func statusLabel(fromRawType rawType: String?) -> String? {
-        switch rawType {
-        case "busy":
-            "Working"
-        case "retry":
-            "Retrying"
-        default:
-            nil
-        }
     }
 
     private static let wrapperKeys: Set<String> = [

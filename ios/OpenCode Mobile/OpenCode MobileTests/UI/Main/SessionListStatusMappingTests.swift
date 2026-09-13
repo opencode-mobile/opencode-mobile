@@ -9,7 +9,11 @@ final class SessionListStatusMappingTests: XCTestCase {
         )
         XCTAssertEqual(
             sessionListStatus(statusLabel: "Retrying", isReady: true),
-            .running
+            .retrying(attempt: nil)
+        )
+        XCTAssertEqual(
+            sessionListStatus(statusLabel: "Retrying · 2", isReady: true),
+            .retrying(attempt: 2)
         )
     }
 
@@ -30,8 +34,12 @@ final class SessionListStatusMappingTests: XCTestCase {
     /// Mirrors `SessionListItem.sessionListStatus` in ProjectListHomeView.
     private func sessionListStatus(statusLabel: String?, isReady: Bool) -> SessionListStatus {
         switch statusLabel {
-        case "Working", "Retrying":
+        case "Working":
             return .running
+        case "Retrying":
+            return .retrying(attempt: nil)
+        case let label? where label.hasPrefix("Retrying · "):
+            return .retrying(attempt: Int(label.dropFirst("Retrying · ".count)))
         default:
             return isReady ? .ready : .idle
         }

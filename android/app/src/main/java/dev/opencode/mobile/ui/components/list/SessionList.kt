@@ -51,6 +51,7 @@ private val SessionListFallbackBottomSpacer = 168.dp
 enum class SessionListStatus {
     Idle,
     Running,
+    Retrying,
     Ready,
 }
 
@@ -64,6 +65,8 @@ data class SessionListSession(
     val status: SessionListStatus,
     val caption: String,
     val updatedAtEpochMs: Long? = null,
+    /** Retry attempt shown with the Retrying chip, e.g. "Retrying · 2". */
+    val retryAttempt: Int? = null,
 )
 
 data class SessionListFilterTab(
@@ -238,7 +241,11 @@ private fun SessionListFeedPage(
             HomeSessionLadder.group(
                 sessions = visibleSessions,
                 updatedAtEpochMs = { it.updatedAtEpochMs },
-                isAttention = { it.status == SessionListStatus.Running || it.status == SessionListStatus.Ready },
+                isAttention = {
+                    it.status == SessionListStatus.Running ||
+                        it.status == SessionListStatus.Retrying ||
+                        it.status == SessionListStatus.Ready
+                },
                 recentWindowHours = recentWindowHours,
                 nowEpochMs = System.currentTimeMillis(),
             )
@@ -413,7 +420,7 @@ private fun SessionListRow(
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
 ) {
-    val status = session.status.toListItemStatus()
+    val status = session.status.toListItemStatus(session.retryAttempt)
     OpenCodeListItem(
         title = session.title,
         subtitle = compactHomePath(session.subtitle),
@@ -423,7 +430,7 @@ private fun SessionListRow(
             StartDecorator.Letter(
                 character = session.letter,
                 accent = session.letterAccent,
-                statusDot = if (showStatusDot) status.tone else null,
+                statusDot = if (showStatusDot) status?.tone else null,
             ),
         onClick = { onSessionSelected(session) },
         onLongPress = onSessionLongPress?.let { handler -> { handler(session) } },
@@ -456,7 +463,7 @@ private fun rememberStabilizedLadder(
                     previousLastAppliedAtEpochMs = hold.lastAppliedAtEpochMs,
                     desired = desired,
                     itemId = SessionListSession::id,
-                    isAttention = { it.status == SessionListStatus.Running || it.status == SessionListStatus.Ready },
+                    isAttention = { it.status == SessionListStatus.Running || it.status == SessionListStatus.Retrying || it.status == SessionListStatus.Ready },
                     isReady = { it.status == SessionListStatus.Ready },
                     nowEpochMs = System.currentTimeMillis(),
                 )
@@ -480,12 +487,16 @@ fun List<SessionListSession>.visibleForFilter(selectedFilterId: String): List<Se
         filter { it.worktree == selectedFilterId }
     }
 
-private fun SessionListStatus.toListItemStatus(): OpenCodeListItemStatus =
+private fun SessionListStatus.toListItemStatus(retryAttempt: Int? = null): OpenCodeListItemStatus? =
     when (this) {
-        SessionListStatus.Idle ->
-            OpenCodeListItemStatus(text = "Idle", tone = OpenCodeListItemStatusTone.Info)
+        SessionListStatus.Idle -> null
         SessionListStatus.Running ->
             OpenCodeListItemStatus(text = "Running", tone = OpenCodeListItemStatusTone.Interactive)
+        SessionListStatus.Retrying ->
+            OpenCodeListItemStatus(
+                text = retryAttempt?.let { "Retrying · $it" } ?: "Retrying",
+                tone = OpenCodeListItemStatusTone.Warning,
+            )
         SessionListStatus.Ready ->
             OpenCodeListItemStatus(text = "Ready", tone = OpenCodeListItemStatusTone.Success)
     }

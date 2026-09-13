@@ -21,7 +21,6 @@ object SseDiagnosticLogging {
             "file.edited",
             "session.diff",
             "session.updated",
-            "session.active.snapshot",
             -> null
             "session.status" -> {
                 val status = event.rawProperties.statusType() ?: "-"

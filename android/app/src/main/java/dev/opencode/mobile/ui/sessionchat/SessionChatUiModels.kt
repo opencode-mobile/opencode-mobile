@@ -134,6 +134,8 @@ data class SessionChatUiState(
     val sessionTodoTotalCount: Int = 0,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val canMutate: Boolean = false,
+    val composerEnabled: Boolean = false,
+    val pendingSend: PendingSend? = null,
     val messagesFromCache: Boolean = false,
     val contextUsageFraction: Float? = null,
     val errorMessage: String? = null,
@@ -403,6 +405,10 @@ fun MentionableAgent.toAtSuggestion(): SessionChatAtSuggestion =
         agentName = name,
     )
 
+data class PendingSend(
+    val queuedAtMs: Long,
+)
+
 data class SessionInfoRegionState(
     val sessionId: String = "",
     val sessionTitle: String = "",
@@ -410,6 +416,7 @@ data class SessionInfoRegionState(
     val hasResolvedSessionStatus: Boolean = false,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val canMutate: Boolean = false,
+    val composerEnabled: Boolean = false,
     val rename: SessionRenameUiState = SessionRenameUiState(),
     val isLifecycleActionInFlight: Boolean = false,
     val lifecycleErrorMessage: String? = null,

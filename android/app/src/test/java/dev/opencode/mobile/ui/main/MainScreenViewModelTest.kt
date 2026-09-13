@@ -18,6 +18,7 @@ import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyClock
+import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.Message
@@ -39,10 +40,15 @@ import dev.opencode.mobile.domain.filesystem.ServerPaths
 import dev.opencode.mobile.domain.project.Project
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
-import dev.opencode.mobile.domain.session.Session
-import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.SessionActivity
+import dev.opencode.mobile.domain.session.SessionActivityEntry
+import dev.opencode.mobile.domain.session.SessionActivitySnapshot
+import dev.opencode.mobile.domain.session.SessionActivitySource
+import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -941,6 +947,73 @@ class MainScreenViewModelTest {
         assertEquals("Forked session", suggestedHomeForkTitle("   "))
     }
 
+    @Test
+    fun sessionStatusLabel_mapsWorkingAndRetryingFromLoader() =
+        runTest(testDispatcher) {
+            val sessions = listOf(Session(id = "ses-1", title = "Chat", updatedAtEpochMs = 1L))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree = mapOf("/repo" to sessions),
+                    sessionStatuses =
+                        listOf(
+                            SessionStatus(
+                                sessionId = "ses-1",
+                                raw = mapOf("type" to "retry", "attempt" to "2"),
+                            ),
+                        ),
+                )
+            advanceUntilIdle()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals("Retrying · 2", loaded.sections.single().allSessions.single().statusLabel)
+        }
+
+    @Test
+    fun sessionStatusLabel_mapsWorkingFromBusyStatus() =
+        runTest(testDispatcher) {
+            val sessions = listOf(Session(id = "ses-1", title = "Chat", updatedAtEpochMs = 1L))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree = mapOf("/repo" to sessions),
+                    sessionStatuses =
+                        listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            advanceUntilIdle()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals("Working", loaded.sections.single().allSessions.single().statusLabel)
+        }
+
+    @Test
+    fun sessionStatusLabel_isHiddenUntilSeeded() =
+        runTest(testDispatcher) {
+            val sessions = listOf(Session(id = "ses-1", title = "Chat", updatedAtEpochMs = 1L))
+            val activity =
+                MutableStateFlow(
+                    SessionActivitySnapshot(
+                        entries =
+                            mapOf(
+                                "ses-1" to
+                                    SessionActivityEntry(
+                                        activity = SessionActivity.Running,
+                                        source = SessionActivitySource.Server,
+                                        observedAtMs = 0L,
+                                    ),
+                            ),
+                        seeded = false,
+                    ),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree = mapOf("/repo" to sessions),
+                    statusLiveStoreOverride = FakeHomeStatusLiveStore(activity),
+                )
+            advanceUntilIdle()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertNull(loaded.sections.single().allSessions.single().statusLabel)
+        }
+
     private fun createViewModel(
         shouldFailProbe: Boolean = false,
         connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
@@ -955,6 +1028,8 @@ class MainScreenViewModelTest {
         selectionStore: FakeSessionModelSelectionStore = FakeSessionModelSelectionStore(),
         projectRepository: FakeProjectRepository = FakeProjectRepository(shouldFailProbe, bootWorktree),
         filesystemRepository: FilesystemRepository = FakeFilesystemRepository(),
+        sessionStatuses: List<SessionStatus> = emptyList(),
+        statusLiveStoreOverride: SessionStatusLiveStore? = null,
         modelRepository: ModelRepository =
             object : ModelRepository {
                 override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog = ModelSelectionCatalog(emptyList(), null)
@@ -977,6 +1052,9 @@ class MainScreenViewModelTest {
                 sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
                 eventStream = eventStream,
             )
+        if (sessionStatuses.isNotEmpty()) {
+            sessionRepository.statuses = sessionStatuses
+        }
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
         val coordinatorSync =
             testSyncCoordinator(
@@ -987,14 +1065,15 @@ class MainScreenViewModelTest {
                 wait = { kotlinx.coroutines.delay(it) },
             )
         val sessionStatusLiveStore =
-            DefaultSessionStatusLiveStore(
-                sessionRepository,
-                eventStream,
-                liveStoreScope,
-                EventDomainAdapter(json),
-                SilentWorldSignals,
-                coordinatorSync,
-            )
+            statusLiveStoreOverride
+                ?: DefaultSessionStatusLiveStore(
+                    sessionRepository,
+                    eventStream,
+                    liveStoreScope,
+                    EventDomainAdapter(json),
+                    SilentWorldSignals,
+                    coordinatorSync,
+                )
         val sessionLiveStore =
             DefaultSessionLiveStore(
                 sessionRepository,
@@ -1114,7 +1193,9 @@ private class FakeSessionRepository(
         return Session(id = "created", title = "New Session", directory = directory, parentId = parentId, updatedAtEpochMs = 10L)
     }
 
-    override suspend fun getAllSessionStatuses(directory: String?) = emptyList<dev.opencode.mobile.domain.session.SessionStatus>()
+    override suspend fun getAllSessionStatuses(directory: String?) = statuses
+
+    var statuses: List<dev.opencode.mobile.domain.session.SessionStatus> = emptyList()
 
     override suspend fun getSession(
         id: String,
@@ -1429,4 +1510,12 @@ private class FakeSessionModelSelectionStore : SessionModelSelectionStore {
     ) {
         preferences["${connectionIdentity.serverBaseUrl}|${connectionIdentity.username}|$worktree"] = selection
     }
+}
+
+private class FakeHomeStatusLiveStore(
+    private val snapshots: MutableStateFlow<SessionActivitySnapshot>,
+) : SessionStatusLiveStore {
+    override fun observeActivity(directory: String): Flow<SessionActivitySnapshot> = snapshots
+
+    override fun clearCache() = Unit
 }

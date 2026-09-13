@@ -46,6 +46,86 @@ struct SessionStatus: Sendable, Equatable {
     let raw: [String: String]
 }
 
+enum SessionActivity: Sendable, Equatable {
+    case idle
+    case running
+    case retrying(attempt: Int?, nextAtMs: Int64?, message: String?)
+
+    var isBusy: Bool {
+        switch self {
+        case .running, .retrying: true
+        case .idle: false
+        }
+    }
+
+    var statusLabel: String? {
+        switch self {
+        case .idle:
+            nil
+        case .running:
+            "Working"
+        case let .retrying(attempt, _, _):
+            if let attempt {
+                "Retrying · \(attempt)"
+            } else {
+                "Retrying"
+            }
+        }
+    }
+
+    init(raw: [String: String]) {
+        switch raw["type"]?.lowercased() {
+        case "busy", "running":
+            self = .running
+        case "retry":
+            self = .retrying(
+                attempt: raw["attempt"].flatMap(Int.init),
+                nextAtMs: raw["nextAtMs"].flatMap(Int64.init)
+                    ?? raw["nextAt"].flatMap(Int64.init)
+                    ?? raw["next"].flatMap(Int64.init),
+                message: raw["message"]
+            )
+        default:
+            self = .idle
+        }
+    }
+}
+
+enum SessionActivitySource: Sendable, Equatable {
+    case server
+    case optimistic
+}
+
+struct SessionActivityEntry: Sendable, Equatable {
+    let activity: SessionActivity
+    let source: SessionActivitySource
+    let observedAtMs: Int64
+}
+
+struct SessionActivitySnapshot: Sendable, Equatable {
+    var entries: [String: SessionActivityEntry]
+    var seeded: Bool
+
+    static let empty = SessionActivitySnapshot(entries: [:], seeded: false)
+
+    func statusLabel(for sessionID: String) -> String? {
+        guard seeded else { return nil }
+        return entries[sessionID]?.activity.statusLabel
+    }
+
+    func isBusy(for sessionID: String) -> Bool {
+        guard seeded else { return false }
+        return entries[sessionID]?.activity.isBusy == true
+    }
+}
+
+enum SessionActivityPolicy {
+    static let optimisticTtlMs: Int64 = 10_000
+    static let abortOptimisticTtlMs: Int64 = 3_000
+    static let runningReconcileMs = 30_000
+    static let pendingSendTimeoutMs: Int64 = 8_000
+}
+
 enum SessionTodoStatus: Sendable, Equatable {
     case pending
     case inProgress

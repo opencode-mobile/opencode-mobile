@@ -1013,6 +1013,7 @@ private fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Ses
                 status = session.toSessionListStatus(),
                 caption = session.updatedAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty(),
                 updatedAtEpochMs = session.updatedAtEpochMs,
+                retryAttempt = session.retryAttempt(),
             )
         }
 
@@ -1027,10 +1028,17 @@ private fun List<ProjectSectionUi>.toHomeChromeProjects(): List<SessionListHomeC
 
 @Suppress("UNUSED_PARAMETER")
 private fun SessionSummary.toSessionListStatus(hasPendingPermission: Boolean = false): SessionListStatus =
-    when (statusLabel) {
-        "Working", "Retrying" -> SessionListStatus.Running
+    when {
+        statusLabel == "Working" -> SessionListStatus.Running
+        statusLabel?.startsWith("Retrying") == true -> SessionListStatus.Retrying
         else -> if (isReady) SessionListStatus.Ready else SessionListStatus.Idle
     }
+
+private fun SessionSummary.retryAttempt(): Int? =
+    statusLabel
+        ?.removePrefix("Retrying · ")
+        ?.takeIf { it != statusLabel }
+        ?.toIntOrNull()
 
 private fun showsLiveUpdatesStatus(uiState: MainScreenUiState): Boolean =
     when (uiState) {

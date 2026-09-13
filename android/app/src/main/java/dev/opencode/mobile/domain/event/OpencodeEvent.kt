@@ -44,7 +44,6 @@ data class OpencodeEvent(
             setOf(
                 "session.status",
                 "session.idle",
-                "session.active.snapshot",
             )
     }
 }

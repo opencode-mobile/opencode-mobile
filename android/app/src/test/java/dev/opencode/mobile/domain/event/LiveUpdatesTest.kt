@@ -17,7 +17,8 @@ class LiveUpdatesTest {
                 hasConnection = true,
             )
         assertEquals(LiveUpdatesLabel.Connecting, chrome.label)
-        assertTrue(chrome.canMutate)
+        assertFalse(chrome.canMutate)
+        assertTrue(chrome.composerEnabled)
     }
 
     @Test
@@ -30,7 +31,8 @@ class LiveUpdatesTest {
                 hasConnection = true,
             )
         assertEquals(LiveUpdatesLabel.Connecting, chrome.label)
-        assertTrue(chrome.canMutate)
+        assertFalse(chrome.canMutate)
+        assertTrue(chrome.composerEnabled)
     }
 
     @Test
@@ -44,6 +46,7 @@ class LiveUpdatesTest {
             )
         assertEquals(LiveUpdatesLabel.Live, chrome.label)
         assertTrue(chrome.canMutate)
+        assertTrue(chrome.composerEnabled)
     }
 
     @Test
@@ -57,6 +60,7 @@ class LiveUpdatesTest {
             )
         assertEquals(LiveUpdatesLabel.Live, chrome.label)
         assertTrue(chrome.canMutate)
+        assertTrue(chrome.composerEnabled)
     }
 
     @Test
@@ -70,6 +74,7 @@ class LiveUpdatesTest {
             )
         assertEquals(LiveUpdatesLabel.Offline, chrome.label)
         assertFalse(chrome.canMutate)
+        assertFalse(chrome.composerEnabled)
     }
 
     @Test
@@ -83,6 +88,7 @@ class LiveUpdatesTest {
             )
         assertEquals(LiveUpdatesLabel.Offline, chrome.label)
         assertFalse(chrome.canMutate)
+        assertFalse(chrome.composerEnabled)
     }
 
     @Test
@@ -96,6 +102,7 @@ class LiveUpdatesTest {
             )
         assertEquals(LiveUpdatesLabel.Offline, chrome.label)
         assertFalse(chrome.canMutate)
+        assertFalse(chrome.composerEnabled)
     }
 
     @Test
@@ -110,10 +117,11 @@ class LiveUpdatesTest {
         assertEquals(LiveUpdatesLabel.AuthFailed, chrome.label)
         assertEquals("Authentication failed", chrome.label.label)
         assertFalse(chrome.canMutate)
+        assertFalse(chrome.composerEnabled)
     }
 
     @Test
-    fun connectingAllowsMutationsWhenPathIsReady() {
+    fun connectingEnablesComposerNotMutations() {
         val chrome =
             composeLiveUpdates(
                 connectionState = EventStreamConnectionState.Connecting,
@@ -122,6 +130,7 @@ class LiveUpdatesTest {
                 hasConnection = true,
             )
         assertEquals(LiveUpdatesLabel.Connecting, chrome.label)
-        assertTrue(chrome.canMutate)
+        assertFalse(chrome.canMutate)
+        assertTrue(chrome.composerEnabled)
     }
 }

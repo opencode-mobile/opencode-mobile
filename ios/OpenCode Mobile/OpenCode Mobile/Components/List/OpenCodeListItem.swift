@@ -397,6 +397,13 @@ private struct OpenCodeListItemPressStyle: ButtonStyle {
             startDecorator: .letter(Character("t"), .blue)
         )
         OpenCodeListItem(
+            title: "Retrying session",
+            subtitle: "~/Projects/opencode-mobile",
+            status: OpenCodeListItemStatus(text: "Retrying · 2", tone: .warning),
+            caption: "now",
+            startDecorator: .letter(Character("R"), .amber)
+        )
+        OpenCodeListItem(
             title: "Idle session",
             subtitle: "~/Projects/playground",
             status: OpenCodeListItemStatus(text: "Idle", tone: .info),

@@ -129,6 +129,17 @@ private val sessionListGallerySamples: List<SessionListSession>
                 updatedAtEpochMs = now - 3 * 3_600_000L,
             ),
             SessionListSession(
+                id = "session-retry",
+                title = "Retry Provider Error",
+                worktree = "/Users/demo/opencode-mobile",
+                letter = 'O',
+                letterAccent = LetterAccent.Violet,
+                subtitle = "/Users/demo/opencode-mobile",
+                status = SessionListStatus.Retrying,
+                caption = "now",
+                updatedAtEpochMs = now,
+            ),
+            SessionListSession(
                 id = "session-4",
                 title = "Review Session List",
                 worktree = "/Users/demo/api-client",
@@ -144,11 +155,11 @@ private val sessionListGallerySamples: List<SessionListSession>
 
 private val sessionListGalleryFilterTabs =
     listOf(
-        SessionListFilterTab.all(projectCount = 3, sessionCount = 4),
+        SessionListFilterTab.all(projectCount = 3, sessionCount = 5),
         SessionListFilterTab.project(
             worktree = "/Users/demo/opencode-mobile",
             title = "opencode-mobile",
-            count = 2,
+            count = 3,
         ),
         SessionListFilterTab.project(worktree = "/Users/demo/playground", title = "playground", count = 1),
         SessionListFilterTab.project(worktree = "/Users/demo/api-client", title = "api-client", count = 1),
@@ -159,6 +170,6 @@ private val sessionListGalleryOneProjectFilterTabs =
         SessionListFilterTab.project(
             worktree = "/Users/demo/opencode-mobile",
             title = "opencode-mobile",
-            count = 2,
+            count = 3,
         ),
     )
