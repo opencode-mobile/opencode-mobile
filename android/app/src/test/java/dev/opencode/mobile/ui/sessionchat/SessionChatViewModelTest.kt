@@ -618,7 +618,7 @@ class SessionChatViewModelTest {
         }
 
     @Test
-    fun completedLatestTurnLoadsReviewChangesSummaryWithWorktree() =
+    fun bindDoesNotFetchLastTurnReviewChangesDiff() =
         runTest(testDispatcher) {
             val sessionRepository =
                 FakeSessionRepository(
@@ -656,8 +656,8 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
 
-            assertEquals(ReviewChangesSummary(2, 4, 2), viewModel.uiState.value.reviewChangesSummary)
-            assertEquals(FakeSessionRepository.DiffRequest("ses-1", "user-1", "/repo"), sessionRepository.diffRequest)
+            assertEquals(null, viewModel.uiState.value.reviewChangesSummary)
+            assertEquals(null, sessionRepository.diffRequest)
         }
 
     @Test
@@ -701,14 +701,7 @@ class SessionChatViewModelTest {
     @Test
     fun newerLatestTurnCancelsStaleReviewChangesSummary() =
         runTest(testDispatcher) {
-            val staleDiff = FileDiff("stale.kt", null, 99, 99, FileDiffStatus.Modified)
-            val latestDiff = FileDiff("latest.kt", null, 5, 3, FileDiffStatus.Modified)
-            val repository =
-                FakeSessionRepository(
-                    sessionDiffsByMessageId = mapOf("user-1" to listOf(staleDiff), "user-2" to listOf(latestDiff)),
-                    sessionDiffDelayMsByMessageId = mapOf("user-1" to 1_000L),
-                )
-            val region = SessionChatReviewChanges(repository, backgroundScope).apply { ioDispatcher = testDispatcher }
+            val region = SessionChatReviewChanges(backgroundScope).apply { ioDispatcher = testDispatcher }
             region.bind("ses-1", "/repo")
 
             region.updateCandidate(
@@ -727,7 +720,39 @@ class SessionChatViewModelTest {
             runCurrent()
 
             assertEquals("user-2", region.state.value.messageId)
-            assertEquals(ReviewChangesSummary(1, 5, 3), region.state.value.summary)
+            assertEquals(null, region.state.value.summary)
+        }
+
+    @Test
+    fun publishedLastTurnSummaryShowsPillWithoutBindFetch() =
+        runTest(testDispatcher) {
+            val store = LastTurnReviewChangesStore()
+            val region =
+                SessionChatReviewChanges(
+                    backgroundScope,
+                    lastTurnReviewChangesStore = store,
+                ).apply { ioDispatcher = testDispatcher }
+            region.bind("ses-1", "/repo")
+            region.updateCandidate(
+                messages = listOf(reviewChangesMessage("user-1")),
+                hasResolvedSessionStatus = true,
+                isTurnActive = false,
+                isSending = false,
+            )
+            runCurrent()
+
+            assertEquals(null, region.state.value.summary)
+
+            store.publish(
+                sessionId = "ses-1",
+                messageId = "user-1",
+                summary = ReviewChangesSummary(2, 4, 1, "user-1"),
+            )
+            runCurrent()
+
+            assertEquals(ReviewChangesSummary(2, 4, 1, "user-1"), region.state.value.summary)
+            assertEquals("user-1", region.state.value.messageId)
+            assertTrue(ReviewChangesPillVisibility.shouldShow(region.state.value.summary))
         }
 
     @Test
@@ -754,7 +779,7 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(null, viewModel.uiState.value.reviewChangesSummary)
-            assertEquals(FakeSessionRepository.DiffRequest("ses-1", "user-1", "/repo"), sessionRepository.diffRequest)
+            assertEquals(null, sessionRepository.diffRequest)
         }
 
     @Test
@@ -4293,7 +4318,8 @@ private class FakeMessageRepository(
             observeMessages(sessionId, directory).collect { update ->
                 when (update) {
                     is MessageListUpdate.LoadFailed -> emit(DisplayMessageListUpdate.LoadFailed(update.error))
-                    is MessageListUpdate.CacheSyncConfirmed -> emit(DisplayMessageListUpdate.CacheSyncConfirmed)
+                    is MessageListUpdate.CacheSyncConfirmed ->
+                        emit(DisplayMessageListUpdate.CacheSyncConfirmed(hasOlder = update.hasOlder))
                     is MessageListUpdate.Messages -> {
                         val prepared = contentPreparer.prepareMessages(update.messages, previousById)
                         previousById = prepared.associateBy { it.id }

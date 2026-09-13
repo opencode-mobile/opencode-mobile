@@ -6,6 +6,12 @@ interface MessageRemote {
         directory: String?,
     ): List<Message>
 
+    suspend fun listMessagePage(
+        sessionId: String,
+        directory: String?,
+        query: MessageHistoryQuery,
+    ): MessagePage
+
     suspend fun sendPromptAsync(
         sessionId: String,
         options: PromptSendOptions,

@@ -851,6 +851,79 @@ import Testing
         #expect(message?.waitingCaption == "Held until idle")
     }
 
+    @Test func prependOlder_doesNotOverwriteNewerLiveText() {
+        let engine = makeEngine()
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(id: "new", role: .user, text: "Live", model: nil, mode: nil, sentAtEpochMs: nil),
+            ]
+        )
+        let revision = engine.revision(sessionID: "ses-1")
+        #expect(
+            engine.prependOlderIfRevision(
+                sessionID: "ses-1",
+                older: [
+                    Message(id: "old", role: .user, text: "Older", model: nil, mode: nil, sentAtEpochMs: nil),
+                    Message(id: "new", role: .user, text: "Stale", model: nil, mode: nil, sentAtEpochMs: nil),
+                ],
+                expectedRevision: revision
+            )
+        )
+        let messages = engine.messages(sessionID: "ses-1")
+        #expect(messages.map(\.id) == ["old", "new"])
+        #expect(messages.last?.text == "Live")
+    }
+
+    @Test func prependOlder_staleRevisionIsNoOpAndPreservesSse() {
+        let engine = makeEngine()
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "live",
+                    role: .assistant,
+                    text: "Hello",
+                    parts: [.text(TextPart(id: "prt-1", text: "Hello", isStreaming: true))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+        )
+        let stale = engine.revision(sessionID: "ses-1")
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .partDelta(messageID: "live", partID: "prt-1", delta: " world")
+        )
+        #expect(
+            engine.prependOlderIfRevision(
+                sessionID: "ses-1",
+                older: [
+                    Message(id: "old", role: .user, text: "Older", model: nil, mode: nil, sentAtEpochMs: nil),
+                    Message(id: "live", role: .assistant, text: "Stale", model: nil, mode: nil, sentAtEpochMs: nil),
+                ],
+                expectedRevision: stale
+            ) == false
+        )
+        #expect(engine.messages(sessionID: "ses-1").map(\.id) == ["live"])
+        #expect(engine.messages(sessionID: "ses-1").first?.text == "Hello world")
+
+        #expect(
+            engine.prependOlderIfRevision(
+                sessionID: "ses-1",
+                older: [
+                    Message(id: "old", role: .user, text: "Older", model: nil, mode: nil, sentAtEpochMs: nil),
+                    Message(id: "live", role: .assistant, text: "Stale", model: nil, mode: nil, sentAtEpochMs: nil),
+                ],
+                expectedRevision: engine.revision(sessionID: "ses-1")
+            )
+        )
+        let messages = engine.messages(sessionID: "ses-1")
+        #expect(messages.map(\.id) == ["old", "live"])
+        #expect(messages.last?.text == "Hello world")
+    }
+
     @Test func waitingCaption_usesSteerWhenWaitingWithoutDelivery() {
         let message = Message(
             id: "msg-1",

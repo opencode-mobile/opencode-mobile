@@ -187,6 +187,17 @@ extension Container {
                         throw adapter.mapError(error)
                     }
                 },
+                listMessagePage: { sessionID, directory, query in
+                    do {
+                        return try await router.listMessagePage(
+                            sessionID: sessionID,
+                            directory: directory,
+                            query: query
+                        )
+                    } catch {
+                        throw adapter.mapError(error)
+                    }
+                },
                 store: self.sessionMessageEngine(),
                 eventStream: self.foregroundEventStream(),
                 worldSignals: self.worldSignals(),
@@ -515,6 +526,10 @@ extension Container {
         }
     }
 
+    var lastTurnReviewChangesStore: Factory<LastTurnReviewChangesStore> {
+        self { @MainActor in LastTurnReviewChangesStore() }.singleton
+    }
+
     var sessionChatViewModel: ParameterFactory<(sessionID: String, sessionTitle: String, worktree: String), SessionChatViewModel> {
         self { @MainActor in
             SessionChatViewModel(
@@ -540,7 +555,8 @@ extension Container {
                     store: self.sessionModelSelectionStore(),
                     modelRepository: self.modelRepository()
                 ),
-                liveUpdates: self.liveUpdates()
+                liveUpdates: self.liveUpdates(),
+                lastTurnReviewChangesStore: self.lastTurnReviewChangesStore()
             )
         }
     }

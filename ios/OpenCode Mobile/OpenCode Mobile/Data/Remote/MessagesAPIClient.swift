@@ -8,7 +8,20 @@ nonisolated enum MessagesAPIError: Error {
 
 protocol MessagesAPI: Sendable {
     func listMessages(sessionID: String, directory: String?) async throws -> [MessageDTO]
+    func listMessagesPage(
+        sessionID: String,
+        directory: String?,
+        limit: Int,
+        before: String?
+    ) async throws -> (messages: [MessageDTO], nextCursor: String?)
     func listMessagesV2(sessionID: String, directory: String?) async throws -> [V2SessionMessageDTO]
+    func listMessagesV2Page(
+        sessionID: String,
+        directory: String?,
+        limit: Int,
+        order: String?,
+        cursor: String?
+    ) async throws -> (messages: [V2SessionMessageDTO], nextCursor: String?)
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> MessageDTO
     func sendMessage(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws -> MessageDTO
     func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws
@@ -20,8 +33,27 @@ protocol MessagesAPI: Sendable {
 }
 
 extension MessagesAPI {
+    func listMessagesPage(
+        sessionID: String,
+        directory: String?,
+        limit _: Int,
+        before _: String?
+    ) async throws -> (messages: [MessageDTO], nextCursor: String?) {
+        (try await listMessages(sessionID: sessionID, directory: directory), nil)
+    }
+
     func listMessagesV2(sessionID: String, directory: String?) async throws -> [V2SessionMessageDTO] {
         []
+    }
+
+    func listMessagesV2Page(
+        sessionID: String,
+        directory: String?,
+        limit _: Int,
+        order _: String?,
+        cursor _: String?
+    ) async throws -> (messages: [V2SessionMessageDTO], nextCursor: String?) {
+        (try await listMessagesV2(sessionID: sessionID, directory: directory), nil)
     }
 
     func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, attachments: [Attachment], directory: String?) async throws {
@@ -67,6 +99,24 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         try await get(path: "session/\(sessionID)/message", directory: directory)
     }
 
+    func listMessagesPage(
+        sessionID: String,
+        directory: String? = nil,
+        limit: Int,
+        before: String?
+    ) async throws -> (messages: [MessageDTO], nextCursor: String?) {
+        var query = ["limit": String(limit)]
+        if let before, !before.isEmpty {
+            query["before"] = before
+        }
+        let (messages, headers): ([MessageDTO], [AnyHashable: Any]) = try await getWithHeaders(
+            path: "session/\(sessionID)/message",
+            directory: directory,
+            query: query
+        )
+        return (messages, MessageListCursor.nextCursor(headers: headers))
+    }
+
     func listMessagesV2(sessionID: String, directory: String? = nil) async throws -> [V2SessionMessageDTO] {
         var messages: [V2SessionMessageDTO] = []
         var cursor: String?
@@ -92,6 +142,28 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
             pages += 1
         } while cursor != nil && pages < Self.maxV2MessageListPages
         return messages
+    }
+
+    func listMessagesV2Page(
+        sessionID: String,
+        directory: String? = nil,
+        limit: Int,
+        order: String?,
+        cursor: String?
+    ) async throws -> (messages: [V2SessionMessageDTO], nextCursor: String?) {
+        var query: [String: String] = ["limit": String(limit)]
+        if let cursor, !cursor.isEmpty {
+            query["cursor"] = cursor
+        } else if let order, !order.isEmpty {
+            query["order"] = order
+        }
+        let envelope: APIListEnvelope<V2SessionMessageDTO> = try await get(
+            path: "api/session/\(sessionID)/message",
+            directory: nil,
+            query: query
+        )
+        let next = envelope.cursor?.next.flatMap { $0.isEmpty ? nil : $0 }
+        return (envelope.data, next)
     }
 
     func getMessage(sessionID: String, messageID: String, directory: String? = nil) async throws -> MessageDTO {
@@ -244,6 +316,14 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         directory: String? = nil,
         query: [String: String] = [:]
     ) async throws -> T {
+        try await getWithHeaders(path: path, directory: directory, query: query).0
+    }
+
+    private func getWithHeaders<T: Decodable>(
+        path: String,
+        directory: String? = nil,
+        query: [String: String] = [:]
+    ) async throws -> (T, [AnyHashable: Any]) {
         var request = try requireConnection().authorizedRequest(path: path, directory: directory)
         if !query.isEmpty, let url = request.url,
            var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
@@ -254,8 +334,8 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
             components.queryItems = items
             request.url = components.url
         }
-        let data = try await data(for: request)
-        return try decoder.decode(T.self, from: data)
+        let (data, headers) = try await dataAndHeaders(for: request)
+        return (try decoder.decode(T.self, from: data), headers)
     }
 
     private func post<T: Decodable, B: Encodable>(path: String, body: B, directory: String? = nil) async throws -> T {
@@ -271,6 +351,10 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
     }
 
     private func data(for request: URLRequest) async throws -> Data {
+        try await dataAndHeaders(for: request).0
+    }
+
+    private func dataAndHeaders(for request: URLRequest) async throws -> (Data, [AnyHashable: Any]) {
         let startedAt = OpenCodeAPITrace.start(request)
         let data: Data
         let response: URLResponse
@@ -289,7 +373,7 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
             let message = String(data: data, encoding: .utf8)
             throw MessagesAPIError.httpStatus(http.statusCode, message)
         }
-        return data
+        return (data, http.allHeaderFields)
     }
 
     private static let maxV2MessageListPages = 500

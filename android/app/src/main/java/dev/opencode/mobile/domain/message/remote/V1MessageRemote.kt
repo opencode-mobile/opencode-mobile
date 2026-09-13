@@ -11,6 +11,25 @@ internal class V1MessageRemote(
         directory: String?,
     ): List<Message> = api.listMessages(sessionId, directory).map(adapter::toMessage)
 
+    override suspend fun listMessagePage(
+        sessionId: String,
+        directory: String?,
+        query: MessageHistoryQuery,
+    ): MessagePage {
+        val page =
+            api.listMessagesPage(
+                sessionId = sessionId,
+                directory = directory,
+                limit = query.limit,
+                before = query.olderCursor,
+            )
+        return MessagePage(
+            messages = page.messages.map(adapter::toMessage),
+            olderCursor = page.olderCursor,
+            hasOlder = !page.olderCursor.isNullOrBlank(),
+        )
+    }
+
     override suspend fun sendPromptAsync(
         sessionId: String,
         options: PromptSendOptions,

@@ -250,6 +250,29 @@ final class SessionChatTimeline {
         }
     }
 
+    func loadOlderMessages() async {
+        guard state.hasOlder, !state.isLoadingOlder else { return }
+        state.isLoadingOlder = true
+        notifyChange()
+        do {
+            let displayMessages = try await messageRepository.loadOlderDisplayMessages(
+                sessionID: sessionID,
+                directory: worktree
+            )
+            await applyLoadedDisplayMessagesTransform(
+                displayMessages,
+                isRefreshing: false,
+                fromQuietRefresh: true
+            )
+            state.hasOlder = messageRepository.hasOlderMessages(sessionID: sessionID, directory: worktree)
+            state.isLoadingOlder = false
+            notifyChange()
+        } catch {
+            state.isLoadingOlder = false
+            notifyChange()
+        }
+    }
+
     func beginOptimisticSend(_ rows: [SessionChatRow]) {
         mergePendingWhileSending = true
         pendingOptimisticRows = rows
@@ -506,6 +529,7 @@ final class SessionChatTimeline {
         let fromCache = messagesFromCache && !networkCacheSyncConfirmed
         state.messagesFromCache = fromCache
         state.isSyncingMessages = fromCache || catchUpSyncing
+        state.hasOlder = messageRepository.hasOlderMessages(sessionID: sessionID, directory: worktree)
         state.errorMessage = resolvedErrorMessage
         clearOptimisticIfReconciled(rows: stamped.rows)
         notifyChange()
@@ -533,6 +557,7 @@ final class SessionChatTimeline {
         networkCacheSyncConfirmed = true
         state.messagesFromCache = false
         state.isSyncingMessages = catchUpSyncing
+        state.hasOlder = messageRepository.hasOlderMessages(sessionID: sessionID, directory: worktree)
         notifyChange()
     }
 

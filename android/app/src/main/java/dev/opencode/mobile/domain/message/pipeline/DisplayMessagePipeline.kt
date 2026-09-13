@@ -67,11 +67,14 @@ class DisplayMessagePipeline(
             var sourceIsFromCache = false
             val decorationBacklog = DecorationBacklog()
 
+            var sourceHasOlder = false
+
             suspend fun emitDisplayMessages(messages: List<DisplayMessage>) {
                 send(
                     DisplayMessageListUpdate.Messages(
                         messages = messages,
                         isFromCache = sourceIsFromCache,
+                        hasOlder = sourceHasOlder,
                     ),
                 )
             }
@@ -551,10 +554,12 @@ class DisplayMessagePipeline(
                             // Network agreed with the cache. Clear the flag so in-flight
                             // plain-first / enrichment publishes cannot re-raise Syncing.
                             sourceIsFromCache = false
-                            send(DisplayMessageListUpdate.CacheSyncConfirmed)
+                            sourceHasOlder = update.hasOlder
+                            send(DisplayMessageListUpdate.CacheSyncConfirmed(hasOlder = update.hasOlder))
                         }
                         is MessageListUpdate.Messages -> {
                             sourceIsFromCache = update.isFromCache
+                            sourceHasOlder = update.hasOlder
                             if (hasStreamingDelta(update.messages)) {
                                 // Coalesce streaming tokens into pendingMessages. Do not bump
                                 // generation on every delta — decoration stays generation-gated
@@ -632,6 +637,33 @@ class DisplayMessagePipeline(
                 ?: error("refreshDisplayMessages requires a MessageSync-backed pipeline")
         val messages = sync.refreshMessages(sessionId, directory)
         return contentPreparer.prepareMessages(messages, mode = MessagePreparationMode.Final)
+    }
+
+    suspend fun loadOlderDisplayMessages(
+        sessionId: String,
+        directory: String?,
+    ): OlderDisplayLoadResult {
+        val sync =
+            messageSync
+                ?: error("loadOlderDisplayMessages requires a MessageSync-backed pipeline")
+        val result = sync.loadOlderMessages(sessionId, directory)
+        if (result.addedCount == 0) {
+            return OlderDisplayLoadResult(
+                messages = emptyList(),
+                hasOlder = result.hasOlder,
+                addedCount = 0,
+            )
+        }
+        val prepared =
+            contentPreparer.prepareMessages(
+                result.messages,
+                mode = MessagePreparationMode.Final,
+            )
+        return OlderDisplayLoadResult(
+            messages = prepared,
+            hasOlder = result.hasOlder,
+            addedCount = result.addedCount,
+        )
     }
 
     private fun hasStreamingDelta(messages: List<Message>): Boolean =

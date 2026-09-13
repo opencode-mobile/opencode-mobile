@@ -116,6 +116,8 @@ data class SessionChatUiState(
     val composer: SessionChatComposerState = SessionChatComposerState(),
     val isSending: Boolean = false,
     val isRefreshing: Boolean = false,
+    val hasOlder: Boolean = false,
+    val isLoadingOlder: Boolean = false,
     val isAborting: Boolean = false,
     val sessionStatusLabel: String? = null,
     /** In-chat Working/Thinking/Retrying label for an active turn. */
@@ -282,14 +284,19 @@ data class ReviewChangesSummary(
     val fileCount: Int,
     val additions: Int,
     val deletions: Int,
+    val messageId: String? = null,
 ) {
     companion object {
-        fun from(files: List<FileDiff>): ReviewChangesSummary? =
+        fun from(
+            files: List<FileDiff>,
+            messageId: String? = null,
+        ): ReviewChangesSummary? =
             files.takeIf { it.isNotEmpty() }?.let {
                 ReviewChangesSummary(
                     fileCount = it.size,
                     additions = it.sumOf(FileDiff::additions),
                     deletions = it.sumOf(FileDiff::deletions),
+                    messageId = messageId,
                 )
             }
     }
@@ -322,6 +329,8 @@ data class SessionChatTimelineRegionState(
     val isRefreshing: Boolean = false,
     val messagesFromCache: Boolean = false,
     val isSyncingMessages: Boolean = false,
+    val hasOlder: Boolean = false,
+    val isLoadingOlder: Boolean = false,
     val errorMessage: String? = null,
 )
 

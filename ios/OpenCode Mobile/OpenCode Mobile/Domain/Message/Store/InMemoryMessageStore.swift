@@ -181,6 +181,18 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         return true
     }
 
+    func prependOlderIfRevision(
+        sessionID: String,
+        older: [Message],
+        expectedRevision: UInt64
+    ) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard (revisions[sessionID] ?? 0) == expectedRevision else { return false }
+        prependOlderLocked(sessionID: sessionID, older: older)
+        return true
+    }
+
     func finishStreamingText(sessionID: String) {
         lock.lock()
         defer { lock.unlock() }
@@ -822,6 +834,23 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             }
         }
         return starts
+    }
+
+    private func prependOlderLocked(sessionID: String, older: [Message]) {
+        ensureCaches(sessionID: sessionID)
+        let order = messageOrder[sessionID] ?? []
+        let existing = Set(order)
+        let prepended = older.filter { !existing.contains($0.id) }
+        guard !prepended.isEmpty else { return }
+        let previousStarts = toolStartTimesLocked(sessionID: sessionID)
+        messageOrder[sessionID] = prepended.map(\.id) + order
+        var byID = Dictionary(uniqueKeysWithValues: (baseMessages[sessionID] ?? []).map { ($0.id, $0) })
+        for message in prepended {
+            byID[message.id] = message
+        }
+        baseMessages[sessionID] = (messageOrder[sessionID] ?? []).compactMap { byID[$0] }
+        seedPartIdentities(sessionID: sessionID, messages: prepended, previousStarts: previousStarts)
+        bumpRevision(sessionID: sessionID)
     }
 
     private func mergeAuthoritativeLocked(sessionID: String, messages: [Message]) {

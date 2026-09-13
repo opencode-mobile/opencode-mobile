@@ -12,6 +12,9 @@ protocol MessageStore: AnyObject {
     /// Reconnect REST overlay: patch existing parts in place. Does not rematerialize
     /// unchanged tools. No-op when `expectedRevision` is stale.
     func mergeAuthoritativeIfRevision(sessionID: String, messages: [Message], expectedRevision: UInt64) -> Bool
+    /// Prepends unseen older rows from the current store snapshot. No-op when
+    /// `expectedRevision` is stale so a live SSE revision cannot be overwritten.
+    func prependOlderIfRevision(sessionID: String, older: [Message], expectedRevision: UInt64) -> Bool
     func finishStreamingText(sessionID: String)
     func clear()
 }

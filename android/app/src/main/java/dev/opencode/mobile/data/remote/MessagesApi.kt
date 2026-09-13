@@ -45,6 +45,31 @@ class MessagesApi private constructor(
                 applyDirectory(directory)
             }.body()
 
+    suspend fun listMessagesPage(
+        sessionId: String,
+        directory: String? = null,
+        limit: Int,
+        before: String? = null,
+    ): V1MessageListHttpPage {
+        val response =
+            httpClient
+                .get()
+                .get("session/$sessionId/message") {
+                    applyDirectory(directory)
+                    parameter("limit", limit)
+                    if (!before.isNullOrBlank()) {
+                        parameter("before", before)
+                    }
+                }
+        val messages = response.body<List<MessageDto>>()
+        val olderCursor =
+            MessageListLinkCursor.fromHeaders(
+                nextCursor = response.headers["X-Next-Cursor"] ?: response.headers["x-next-cursor"],
+                link = response.headers["Link"] ?: response.headers["link"],
+            )
+        return V1MessageListHttpPage(messages = messages, olderCursor = olderCursor)
+    }
+
     suspend fun listMessagesV2(
         sessionId: String,
         directory: String? = null,
@@ -53,18 +78,7 @@ class MessagesApi private constructor(
         var cursor: String? = null
         var pages = 0
         do {
-            val envelope =
-                httpClient
-                    .get()
-                    .get("api/session/$sessionId/message") {
-                        // Cursor tokens already encode order. Sending `order` with
-                        // `cursor` returns InvalidCursorError 400 on live v2.
-                        if (cursor == null) {
-                            parameter("order", "asc")
-                        } else {
-                            parameter("cursor", cursor)
-                        }
-                    }.body<ApiListEnvelope<V2SessionMessageDto>>()
+            val envelope = listMessagesV2Page(sessionId, directory, limit = null, newestFirst = false, cursor = cursor)
             messages += envelope.data
             val next = envelope.cursor?.next?.takeIf { it.isNotBlank() }
             if (next == cursor) break
@@ -73,6 +87,28 @@ class MessagesApi private constructor(
         } while (cursor != null && pages < MAX_V2_MESSAGE_LIST_PAGES)
         return messages
     }
+
+    suspend fun listMessagesV2Page(
+        sessionId: String,
+        directory: String? = null,
+        limit: Int? = null,
+        newestFirst: Boolean = false,
+        cursor: String? = null,
+    ): ApiListEnvelope<V2SessionMessageDto> =
+        httpClient
+            .get()
+            .get("api/session/$sessionId/message") {
+                if (limit != null) {
+                    parameter("limit", limit)
+                }
+                // Cursor tokens already encode order. Sending `order` with
+                // `cursor` returns InvalidCursorError 400 on live v2.
+                if (cursor == null) {
+                    parameter("order", if (newestFirst) "desc" else "asc")
+                } else {
+                    parameter("cursor", cursor)
+                }
+            }.body()
 
     suspend fun getMessage(
         sessionId: String,
@@ -188,3 +224,8 @@ class MessagesApi private constructor(
         const val MAX_V2_MESSAGE_LIST_PAGES = 500
     }
 }
+
+data class V1MessageListHttpPage(
+    val messages: List<MessageDto>,
+    val olderCursor: String?,
+)

@@ -1,14 +1,9 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
-import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
-import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.message.MessageRole
-import dev.opencode.mobile.domain.session.SessionError
-import dev.opencode.mobile.domain.session.SessionRepository
-import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
+import dev.opencode.mobile.ui.sessionchat.LastTurnReviewChangesStore
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatReviewChangesRegionState
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,12 +12,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class SessionChatReviewChanges(
-    private val sessionRepository: SessionRepository,
     private val scope: CoroutineScope,
     private val supportsSessionMessageDiff: () -> Boolean = { true },
+    private val lastTurnReviewChangesStore: LastTurnReviewChangesStore = LastTurnReviewChangesStore(),
 ) {
     var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
@@ -31,16 +25,22 @@ class SessionChatReviewChanges(
 
     private var boundSessionId: String? = null
     private var boundWorktree: String? = null
-    private var requestJob: Job? = null
     private var candidateMessageId: String? = null
+    private var observeJob: Job? = null
 
     fun bind(sessionId: String, worktree: String) {
         if (boundSessionId == sessionId && boundWorktree == worktree) return
-        requestJob?.cancel()
         boundSessionId = sessionId
         boundWorktree = worktree
         candidateMessageId = null
         _state.value = SessionChatReviewChangesRegionState()
+        observeJob?.cancel()
+        observeJob =
+            scope.launch {
+                lastTurnReviewChangesStore.observe(sessionId).collect { snapshot ->
+                    applyPublishedSnapshot(snapshot)
+                }
+            }
     }
 
     fun updateCandidate(
@@ -52,62 +52,27 @@ class SessionChatReviewChanges(
         val messageId =
             messages.lastOrNull { it.role == MessageRole.User && !it.isPending && !it.isStreaming }?.id
                 .takeIf { supportsSessionMessageDiff() && hasResolvedSessionStatus && !isTurnActive && !isSending }
-        if (messageId == candidateMessageId) return
-
-        requestJob?.cancel()
-        candidateMessageId = messageId
-        _state.value = SessionChatReviewChangesRegionState()
-        val sessionId = boundSessionId ?: return
-        val worktree = boundWorktree ?: return
-        if (messageId == null) return
-
-        requestJob =
-            scope.launch {
-                val startedAt = System.currentTimeMillis()
-                try {
-                    val files = withContext(ioDispatcher) {
-                        sessionRepository.getSessionDiff(sessionId, messageId, worktree)
-                    }
-                    if (candidateMessageId != messageId) return@launch
-                    val summary = ReviewChangesSummary.from(files)
-                    _state.value =
-                        SessionChatReviewChangesRegionState(
-                            messageId = messageId,
-                            summary = summary,
-                        )
-                    logRequest(sessionId, worktree, summary, "success", startedAt)
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (error: Throwable) {
-                    if (candidateMessageId != messageId) return@launch
-                    _state.value = SessionChatReviewChangesRegionState()
-                    logRequest(sessionId, worktree, null, "failure:${failureCategory(error)}", startedAt)
-                }
-            }
-    }
-
-    private fun failureCategory(error: Throwable): String =
-        when (error) {
-            is SessionError.Transport -> "transport"
-            is SessionError.Http -> "http-${error.statusCode}"
-            is SessionError.Decoding -> "decoding"
-            else -> "unexpected"
+        if (messageId != candidateMessageId) {
+            candidateMessageId = messageId
+            // Bind must not fetch last-turn diff. The Changes screen owns GET …/diff.
+            // Without a loaded summary the Review Changes pill stays hidden.
+            _state.value = SessionChatReviewChangesRegionState(messageId = messageId)
         }
-
-    private fun logRequest(
-        sessionId: String,
-        worktree: String,
-        summary: ReviewChangesSummary?,
-        result: String,
-        startedAt: Long,
-    ) {
-        DiagnosticLog.info(
-            DiagnosticLogArea.Chat,
-            "pill-summary source=last-turn session=$sessionId directory=$worktree " +
-                "files=${summary?.fileCount ?: 0} additions=${summary?.additions ?: 0} " +
-                "deletions=${summary?.deletions ?: 0} result=$result " +
-                "durationMs=${System.currentTimeMillis() - startedAt}",
-        )
+        applyPublishedSnapshot()
     }
 
+    private fun applyPublishedSnapshot(
+        snapshot: LastTurnReviewChangesStore.Snapshot? =
+            boundSessionId?.let { lastTurnReviewChangesStore.snapshot(it) },
+    ) {
+        val sessionId = boundSessionId ?: return
+        val published = snapshot ?: return
+        if (published.sessionId != sessionId) return
+        if (published.messageId != candidateMessageId) return
+        _state.value =
+            SessionChatReviewChangesRegionState(
+                messageId = published.messageId,
+                summary = published.summary,
+            )
+    }
 }

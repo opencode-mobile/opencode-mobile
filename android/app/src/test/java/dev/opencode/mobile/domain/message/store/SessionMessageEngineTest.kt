@@ -615,6 +615,148 @@ class SessionMessageEngineTest {
         assertEquals("Waiting to steer", message.waitingCaption)
     }
 
+    @Test
+    fun applyTail_preservesOlderLocalRows() {
+        engine.replaceAll(
+            "ses-1",
+            listOf(
+                Message(id = "old", role = MessageRole.User, text = "Old"),
+                Message(id = "new", role = MessageRole.User, text = "New"),
+            ),
+        )
+        val revision = engine.revision("ses-1")
+        assertTrue(
+            engine.applyTailIfRevision(
+                "ses-1",
+                listOf(Message(id = "new", role = MessageRole.User, text = "New")),
+                revision,
+            ),
+        )
+        assertEquals(listOf("old", "new"), engine.messages("ses-1").map { it.id })
+    }
+
+    @Test
+    fun mergeTailAuthoritative_preservesExistingPartState() {
+        engine.replaceAll(
+            "ses-1",
+            listOf(
+                Message(id = "old", role = MessageRole.User, text = "Old"),
+                Message(
+                    id = "new",
+                    role = MessageRole.Assistant,
+                    text = "",
+                    parts =
+                        listOf(
+                            MessagePart.Tool(
+                                toolName = "bash",
+                                status = ToolStatus.Running,
+                                output = "partial output",
+                                id = "tool-1",
+                                timeStartEpochMs = 42L,
+                            ),
+                        ),
+                ),
+            ),
+        )
+        val originalTool =
+            engine.messages("ses-1").last().parts.filterIsInstance<MessagePart.Tool>().single()
+        val revision = engine.revision("ses-1")
+
+        assertTrue(
+            engine.mergeTailAuthoritativeIfRevision(
+                "ses-1",
+                listOf(
+                    Message(
+                        id = "new",
+                        role = MessageRole.Assistant,
+                        text = "",
+                        parts =
+                            listOf(
+                                MessagePart.Tool(
+                                    toolName = "bash",
+                                    status = ToolStatus.Completed,
+                                    id = "tool-1",
+                                ),
+                            ),
+                    ),
+                ),
+                revision,
+            ),
+        )
+
+        val messages = engine.messages("ses-1")
+        val tool = messages.last().parts.filterIsInstance<MessagePart.Tool>().single()
+        assertEquals(listOf("old", "new"), messages.map { it.id })
+        assertEquals(ToolStatus.Completed, tool.status)
+        assertEquals("partial output", tool.output)
+        assertEquals(originalTool.timeStartEpochMs, tool.timeStartEpochMs)
+    }
+
+    @Test
+    fun prependOlder_doesNotOverwriteNewerLiveText() {
+        engine.replaceAll(
+            "ses-1",
+            listOf(Message(id = "new", role = MessageRole.User, text = "Live")),
+        )
+        val revision = engine.revision("ses-1")
+        assertTrue(
+            engine.prependOlderIfRevision(
+                "ses-1",
+                listOf(
+                    Message(id = "old", role = MessageRole.User, text = "Older"),
+                    Message(id = "new", role = MessageRole.User, text = "Stale"),
+                ),
+                revision,
+            ),
+        )
+        val messages = engine.messages("ses-1")
+        assertEquals(listOf("old", "new"), messages.map { it.id })
+        assertEquals("Live", messages.last().text)
+    }
+
+    @Test
+    fun prependOlder_staleRevisionIsNoOpAndPreservesSse() {
+        engine.replaceAll(
+            "ses-1",
+            listOf(
+                Message(
+                    id = "live",
+                    role = MessageRole.Assistant,
+                    text = "Hello",
+                    parts = listOf(MessagePart.Text(text = "Hello", isStreaming = true, id = "prt-1")),
+                ),
+            ),
+        )
+        val stale = engine.revision("ses-1")
+        engine.apply("ses-1", MessagePatch.PartDelta(messageId = "live", partId = "prt-1", delta = " world"))
+        assertFalse(
+            engine.prependOlderIfRevision(
+                "ses-1",
+                listOf(
+                    Message(id = "old", role = MessageRole.User, text = "Older"),
+                    Message(id = "live", role = MessageRole.Assistant, text = "Stale"),
+                ),
+                stale,
+            ),
+        )
+        assertEquals(listOf("live"), engine.messages("ses-1").map { it.id })
+        assertEquals("Hello world", engine.messages("ses-1").first().text)
+
+        assertTrue(
+            engine.prependOlderIfRevision(
+                "ses-1",
+                listOf(
+                    Message(id = "old", role = MessageRole.User, text = "Older"),
+                    Message(id = "live", role = MessageRole.Assistant, text = "Stale"),
+                ),
+                engine.revision("ses-1"),
+            ),
+        )
+        val messages = engine.messages("ses-1")
+        assertEquals(listOf("old", "live"), messages.map { it.id })
+        assertEquals("Hello world", messages.last().text)
+    }
+
     private fun seedStreamingAssistant() {
         engine.replaceAll(
             "ses-1",

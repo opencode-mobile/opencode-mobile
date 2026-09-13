@@ -85,6 +85,7 @@ class SessionChatViewModel
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         private val connectionProfileStore: ConnectionProfileStore,
         private val activeConnectionManager: ActiveConnectionManager,
+        lastTurnReviewChangesStore: LastTurnReviewChangesStore = LastTurnReviewChangesStore(),
         liveUpdates: LiveUpdates = FixedLiveUpdates(),
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -125,11 +126,11 @@ class SessionChatViewModel
             )
         private val reviewChanges =
             SessionChatReviewChanges(
-                sessionRepository = sessionRepository,
                 scope = viewModelScope,
                 supportsSessionMessageDiff = {
                     activeConnectionManager.currentCapabilities().supportsSessionMessageDiff
                 },
+                lastTurnReviewChangesStore = lastTurnReviewChangesStore,
             )
         private val commands =
             SessionChatCommands(
@@ -383,6 +384,10 @@ class SessionChatViewModel
             timeline.refreshMessages()
             composer.loadServerCommands(force = true)
             composer.loadMentionableAgents(force = true)
+        }
+
+        fun loadOlderMessages() {
+            timeline.loadOlder()
         }
 
         fun archiveSession() {
@@ -1020,6 +1025,8 @@ class SessionChatViewModel
                     ),
                 isSending = composerState.isSending,
                 isRefreshing = timelineState.isRefreshing,
+                hasOlder = timelineState.hasOlder,
+                isLoadingOlder = timelineState.isLoadingOlder,
                 isAborting = composerState.isAborting,
                 sessionStatusLabel = sessionStatusLabel,
                 workingIndicatorLabel = workingIndicatorLabel,

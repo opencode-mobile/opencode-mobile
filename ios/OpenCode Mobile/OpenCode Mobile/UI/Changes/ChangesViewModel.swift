@@ -111,6 +111,7 @@ final class ChangesViewModel {
     private let messageID: String?
     private let repository: SessionRepository
     private let capabilitiesProvider: () -> ServerCapabilities
+    private let lastTurnReviewChangesStore: LastTurnReviewChangesStore
     private var availableSources: [ChangeSource]
     private var capabilities: ServerCapabilities { capabilitiesProvider() }
     private var filter = ""
@@ -130,7 +131,8 @@ final class ChangesViewModel {
         initialSource: ChangeSource = .lastTurn,
         repository: SessionRepository,
         capabilities: ServerCapabilities = .forProtocol(.v1),
-        capabilitiesProvider: (() -> ServerCapabilities)? = nil
+        capabilitiesProvider: (() -> ServerCapabilities)? = nil,
+        lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil
     ) {
         self.sessionID = sessionID
         self.worktree = worktree
@@ -138,6 +140,7 @@ final class ChangesViewModel {
         self.repository = repository
         let provider = capabilitiesProvider ?? { capabilities }
         self.capabilitiesProvider = provider
+        self.lastTurnReviewChangesStore = lastTurnReviewChangesStore ?? LastTurnReviewChangesStore()
         let sources = Self.capabilitySources(provider())
         self.availableSources = sources
         state = ChangesState(
@@ -153,6 +156,7 @@ final class ChangesViewModel {
         self.messageID = messageID
         repository = PreviewChangesRepository(files: files)
         capabilitiesProvider = { .forProtocol(.v1) }
+        lastTurnReviewChangesStore = LastTurnReviewChangesStore()
         let sources = Self.capabilitySources(.forProtocol(.v1))
         availableSources = sources
         state = ChangesState(selectedSource: initialSource, availableSources: sources)
@@ -232,6 +236,7 @@ final class ChangesViewModel {
             guard revision == loadRevision else { return }
             guard !files.isEmpty else {
                 log(source: selectedSource, fileCount: 0, startedAt: startedAt, result: "empty")
+                publishLastTurnSummary(source: selectedSource, files: [], failed: false)
                 state = ChangesState(
                     phase: selectedSource == .lastTurn && messageID == nil ? .noTurn : .noChanges,
                     selectedSource: selectedSource,
@@ -240,6 +245,7 @@ final class ChangesViewModel {
                 return
             }
             log(source: selectedSource, fileCount: files.count, startedAt: startedAt, result: "success")
+            publishLastTurnSummary(source: selectedSource, files: files, failed: false)
             state = ChangesState(
                 phase: .content(ChangesContentState(files: files, filter: filter)),
                 selectedSource: selectedSource,
@@ -250,6 +256,9 @@ final class ChangesViewModel {
         } catch {
             guard revision == loadRevision else { return }
             log(source: activeSource, fileCount: 0, startedAt: startedAt, result: "failure")
+            if activeSource == .lastTurn {
+                publishLastTurnSummary(source: .lastTurn, files: [], failed: true)
+            }
             if let preservedPhase {
                 var restoredPhase = preservedPhase
                 if case var .content(content) = restoredPhase {
@@ -305,6 +314,15 @@ final class ChangesViewModel {
             return .workingTree
         }
         return requested
+    }
+
+    private func publishLastTurnSummary(source: ChangeSource, files: [FileDiff], failed: Bool) {
+        guard source == .lastTurn, let messageID else { return }
+        lastTurnReviewChangesStore.publish(
+            sessionID: sessionID,
+            messageID: messageID,
+            summary: failed ? nil : ReviewChangesSummary(files: files, messageID: messageID)
+        )
     }
 
     private func loadFiles(source: ChangeSource) async throws -> [FileDiff] {

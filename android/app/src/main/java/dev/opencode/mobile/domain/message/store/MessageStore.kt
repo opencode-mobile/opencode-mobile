@@ -41,6 +41,25 @@ interface MessageStore {
         expectedRevision: Long,
     ): Boolean
 
+    fun applyTailIfRevision(
+        sessionId: String,
+        tail: List<Message>,
+        expectedRevision: Long,
+    ): Boolean
+
+    /** Reconnect tail overlay that preserves existing part state while updating the window. */
+    fun mergeTailAuthoritativeIfRevision(
+        sessionId: String,
+        tail: List<Message>,
+        expectedRevision: Long,
+    ): Boolean
+
+    fun prependOlderIfRevision(
+        sessionId: String,
+        older: List<Message>,
+        expectedRevision: Long,
+    ): Boolean
+
     /** Ends cached streaming state after an idle reload failure so polling can recover. */
     fun finishStreamingText(sessionId: String)
 

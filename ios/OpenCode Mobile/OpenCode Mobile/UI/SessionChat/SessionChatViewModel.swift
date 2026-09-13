@@ -61,7 +61,8 @@ final class SessionChatViewModel {
         activeConnectionManager: ActiveConnectionManager,
         connectionProfileStore: any ConnectionProfileStore,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
-        liveUpdates: any LiveUpdates = FixedLiveUpdates()
+        liveUpdates: any LiveUpdates = FixedLiveUpdates(),
+        lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil
     ) {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
@@ -105,8 +106,8 @@ final class SessionChatViewModel {
         self.reviewChanges = SessionChatReviewChanges(
             sessionID: sessionID,
             worktree: worktree,
-            sessionRepository: sessionRepository,
-            supportsSessionMessageDiff: { activeConnectionManager.capabilities.supportsSessionMessageDiff }
+            supportsSessionMessageDiff: { activeConnectionManager.capabilities.supportsSessionMessageDiff },
+            lastTurnReviewChangesStore: lastTurnReviewChangesStore ?? LastTurnReviewChangesStore()
         )
         self.commands = SessionChatCommands(
             sessionID: sessionID,
@@ -177,6 +178,10 @@ final class SessionChatViewModel {
         await timeline.refreshMessages()
         composer.loadServerCommands(force: true)
         composer.loadMentionableAgents(force: true)
+    }
+
+    func loadOlderMessages() async {
+        await timeline.loadOlderMessages()
     }
 
     func archiveSession() {
@@ -838,8 +843,12 @@ final class SessionChatViewModel {
         inbox.refilterOrphans()
         let inboxState = inbox.state
         let timelineState = timeline.state
-        let composerState = composer.state
         let infoState = sessionInfo.state
+        composer.tryApplyInitialSelection(
+            timelineState: timelineState,
+            historyHints: timeline.modelSelectionHistoryHints()
+        )
+        let composerState = composer.state
         commands.updateVisibility(
             messages: timelineState.messages,
             hasSelectedComposerModel: composerState.composer.selectedModel != nil
@@ -856,10 +865,6 @@ final class SessionChatViewModel {
             || !inboxState.permissionRequests.isEmpty
             || !inboxState.questionRequests.isEmpty
         inbox.setLive(isLive)
-        composer.tryApplyInitialSelection(
-            timelineState: timelineState,
-            historyHints: timeline.modelSelectionHistoryHints()
-        )
         reviewChanges.updateCandidate(
             messages: timelineState.messages,
             hasResolvedSessionStatus: infoState.hasResolvedSessionStatus,
@@ -930,6 +935,8 @@ final class SessionChatViewModel {
             }(),
             isSending: composerState.isSending,
             isRefreshing: timelineState.isRefreshing,
+            hasOlder: timelineState.hasOlder,
+            isLoadingOlder: timelineState.isLoadingOlder,
             isAborting: composerState.isAborting,
             sessionStatusLabel: sessionStatusLabel,
             workingIndicatorLabel: workingIndicatorLabel,
