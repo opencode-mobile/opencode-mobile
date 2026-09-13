@@ -21,10 +21,7 @@ data class Message(
     val contextEstimate: MessageContextEstimate = MessageContextEstimate(),
     val followUpDelivery: FollowUpDelivery? = null,
     val isWaitingForPickup: Boolean = false,
-) {
-    val waitingCaption: String?
-        get() = if (isWaitingForPickup) (followUpDelivery ?: FollowUpDelivery.Steer).waitingCaption else null
-}
+)
 
 data class MessageTokenUsage(
     val input: Long,

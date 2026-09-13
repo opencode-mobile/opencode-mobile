@@ -3,6 +3,8 @@ package dev.opencode.mobile.domain.message
 import dev.opencode.mobile.data.remote.dto.MessageDto
 import dev.opencode.mobile.data.remote.dto.MessageInfoDto
 import dev.opencode.mobile.data.remote.dto.MessagePartDto
+import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
+import dev.opencode.mobile.data.remote.dto.V2InboxUserPayloadDto
 import dev.opencode.mobile.domain.agent.AgentMention
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -283,7 +285,13 @@ class MessageDomainAdapterTest {
         assertEquals("notes.txt", body.files?.single()?.name)
         assertEquals("text/plain", body.files?.single()?.mime)
         assertEquals("explore", body.agents?.single()?.name)
-        assertEquals("@explore", body.agents?.single()?.mention?.text)
+        assertEquals(
+            "@explore",
+            body.agents
+                ?.single()
+                ?.mention
+                ?.text,
+        )
     }
 
     @Test
@@ -1115,8 +1123,20 @@ class MessageDomainAdapterTest {
         assertEquals("subagent", tool.toolName)
         assertEquals(ToolStatus.Completed, tool.status)
         assertNull(tool.title)
-        assertEquals("explore", tool.input?.get("agent")?.jsonPrimitive?.content)
-        assertEquals("ses_child", tool.metadata?.get("sessionID")?.jsonPrimitive?.content)
+        assertEquals(
+            "explore",
+            tool.input
+                ?.get("agent")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "ses_child",
+            tool.metadata
+                ?.get("sessionID")
+                ?.jsonPrimitive
+                ?.content,
+        )
         assertEquals(10L, tool.timeStartEpochMs)
     }
 
@@ -1209,5 +1229,80 @@ class MessageDomainAdapterTest {
                 .filterIsInstance<MessagePart.Tool>()
                 .single()
         assertEquals("/repo", tool.output)
+    }
+
+    @Test
+    fun mergeInbox_marksExistingUserMessageWaiting() {
+        val messages =
+            listOf(
+                Message(id = "msg-1", role = MessageRole.User, text = "Hello"),
+                Message(id = "msg-2", role = MessageRole.Assistant, text = "Hi"),
+            )
+        val merged =
+            adapter.mergeInbox(
+                messages,
+                listOf(
+                    V2InboxItemDto(
+                        id = "msg-1",
+                        timeCreated = 10,
+                        type = "user",
+                        payload = V2InboxUserPayloadDto("Hello"),
+                        delivery = "steer",
+                    ),
+                ),
+            )
+
+        assertEquals(2, merged.size)
+        assertTrue(merged[0].isWaitingForPickup)
+        assertEquals(FollowUpDelivery.Steer, merged[0].followUpDelivery)
+        assertFalse(merged[1].isWaitingForPickup)
+    }
+
+    @Test
+    fun mergeInbox_materialisesMissingUserItem() {
+        val messages = listOf(Message(id = "msg-1", role = MessageRole.User, text = "Hello"))
+        val merged =
+            adapter.mergeInbox(
+                messages,
+                listOf(
+                    V2InboxItemDto(
+                        id = "inbox-2",
+                        timeCreated = 20,
+                        type = "user",
+                        payload = V2InboxUserPayloadDto("Held prompt"),
+                        delivery = "queue",
+                    ),
+                ),
+            )
+
+        assertEquals(2, merged.size)
+        assertEquals("inbox-2", merged[1].id)
+        assertEquals("Held prompt", merged[1].text)
+        assertEquals(MessageRole.User, merged[1].role)
+        assertTrue(merged[1].isWaitingForPickup)
+        assertEquals(FollowUpDelivery.Queue, merged[1].followUpDelivery)
+        assertEquals(20L, merged[1].sentAtEpochMs)
+    }
+
+    @Test
+    fun mergeInbox_ignoresNonUserItems() {
+        val messages = listOf(Message(id = "msg-1", role = MessageRole.User, text = "Hello"))
+        val merged =
+            adapter.mergeInbox(
+                messages,
+                listOf(
+                    V2InboxItemDto(id = "syn-1", type = "synthetic", timeCreated = 1),
+                    V2InboxItemDto(id = "cmp-1", type = "compaction", timeCreated = 2),
+                    V2InboxItemDto(id = "mov-1", type = "move", timeCreated = 3),
+                ),
+            )
+
+        assertEquals(messages, merged)
+    }
+
+    @Test
+    fun mergeInbox_emptyInboxIsNoOp() {
+        val messages = listOf(Message(id = "msg-1", role = MessageRole.User, text = "Hello"))
+        assertEquals(messages, adapter.mergeInbox(messages, emptyList()))
     }
 }

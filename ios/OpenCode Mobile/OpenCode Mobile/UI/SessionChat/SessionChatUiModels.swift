@@ -5,8 +5,7 @@ struct SessionChatRow: Identifiable, Equatable {
     let role: MessageRole
     let text: String
     let metadataLabel: String
-    let waitingCaption: String?
-    let waitingDelivery: FollowUpDelivery?
+    let pendingDelivery: FollowUpDelivery?
     let isPending: Bool
     let isStreaming: Bool
     let renderedMarkdown: NativeMarkdownDocument?
@@ -22,8 +21,7 @@ struct SessionChatRow: Identifiable, Equatable {
         role: MessageRole,
         text: String,
         metadataLabel: String,
-        waitingCaption: String? = nil,
-        waitingDelivery: FollowUpDelivery? = nil,
+        pendingDelivery: FollowUpDelivery? = nil,
         isPending: Bool = false,
         isStreaming: Bool = false,
         renderedMarkdown: NativeMarkdownDocument? = nil,
@@ -37,8 +35,7 @@ struct SessionChatRow: Identifiable, Equatable {
         self.role = role
         self.text = text
         self.metadataLabel = metadataLabel
-        self.waitingCaption = waitingCaption
-        self.waitingDelivery = waitingDelivery
+        self.pendingDelivery = pendingDelivery
         self.isPending = isPending
         self.isStreaming = isStreaming
         self.renderedMarkdown = renderedMarkdown
@@ -62,8 +59,7 @@ struct SessionChatRow: Identifiable, Equatable {
               lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count,
               lhs.text.count == rhs.text.count,
               lhs.metadataLabel == rhs.metadataLabel,
-              lhs.waitingCaption == rhs.waitingCaption,
-              lhs.waitingDelivery == rhs.waitingDelivery,
+              lhs.pendingDelivery == rhs.pendingDelivery,
               lhs.isLayoutCollapsed == rhs.isLayoutCollapsed,
               lhs.blocks.count == rhs.blocks.count
         else { return false }
@@ -204,6 +200,7 @@ struct SessionChatUiState: Equatable {
     var projectLetterAccent: LetterAccent? = nil
     var timeline: SessionChatTimelineState
     var messages: [SessionChatRow]
+    var queuedPrompts: [QueuedPrompt] = []
     /// Projected timeline frame with declared ID sets. Reused when only
     /// composer / session-info / review / command republish.
     var timelineFrame: TimelineFrame = .empty
@@ -661,6 +658,11 @@ enum SessionChatPickers {
     static let modelFilterThreshold = 10
 }
 
+struct QueuedPrompt: Equatable, Identifiable, Sendable {
+    let id: String
+    let text: String
+}
+
 extension SessionChatRow {
     func withRenderedMarkdown(_ document: NativeMarkdownDocument?) -> SessionChatRow {
         SessionChatRow(
@@ -668,6 +670,7 @@ extension SessionChatRow {
             role: role,
             text: text,
             metadataLabel: metadataLabel,
+            pendingDelivery: pendingDelivery,
             isPending: isPending,
             isStreaming: isStreaming,
             renderedMarkdown: document,

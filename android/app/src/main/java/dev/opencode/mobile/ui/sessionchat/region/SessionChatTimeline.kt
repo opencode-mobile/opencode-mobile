@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.message.BlockDecorationCache
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
@@ -100,6 +101,7 @@ class SessionChatTimeline(
     private var pendingBaselineSignatures: Map<String, String> = emptyMap()
     private var lastLoadedMessages: List<Message> = emptyList()
     private var lastLoadedDisplayMessages: List<DisplayMessage> = emptyList()
+    private val pendingPromptPatches = mutableMapOf<String, PendingPromptPatch>()
     private var lastTimelineFrame: TimelineFrame? = null
     private var nextFrameRevision: Long = 1L
 
@@ -119,6 +121,7 @@ class SessionChatTimeline(
         pendingBaselineSignatures = emptyMap()
         lastLoadedMessages = emptyList()
         lastLoadedDisplayMessages = emptyList()
+        pendingPromptPatches.clear()
         lastTimelineFrame = null
         nextFrameRevision = 1L
         networkCacheSyncConfirmed = false
@@ -154,6 +157,7 @@ class SessionChatTimeline(
         pendingBaselineSignatures = emptyMap()
         lastLoadedMessages = emptyList()
         lastLoadedDisplayMessages = emptyList()
+        pendingPromptPatches.clear()
         lastTimelineFrame = null
         nextFrameRevision = 1L
         networkCacheSyncConfirmed = false
@@ -376,6 +380,31 @@ class SessionChatTimeline(
 
     fun loadedMessages(): List<Message> = lastLoadedMessages
 
+    internal fun pendingPromptPatchCount(): Int = pendingPromptPatches.size
+
+    fun applyOptimisticPendingPrompt(
+        messageId: String,
+        delivery: FollowUpDelivery? = null,
+        removed: Boolean = false,
+    ) {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        pendingPromptPatches[messageId] = PendingPromptPatch(delivery = delivery, removed = removed)
+        val overlaid =
+            applyPendingPromptOverlay(
+                lastLoadedDisplayMessages,
+                expireAgainstAuthoritative = false,
+            )
+        lastLoadedDisplayMessages = overlaid
+        lastLoadedMessages = overlaid.map { it.message }
+        applyLoadedDisplayMessages(
+            displayMessages = overlaid,
+            sourceSessionId = sessionId,
+            sourceWorktree = worktree,
+            source = "pending-prompt",
+        )
+    }
+
     fun modelSelectionHistoryHints(): dev.opencode.mobile.ui.sessionchat.ModelSelectionHistoryHints {
         val sorted =
             lastLoadedMessages.sortedWith(
@@ -550,7 +579,11 @@ class SessionChatTimeline(
             // transitions or callbacks that must never be discarded.
             // A live snapshot already waiting here was submitted before this
             // required apply and must not repaint older state afterward.
-            pendingLiveDisplayApply = null
+            // Pending-prompt overlay re-applies must not drop a newer live
+            // snapshot; the overlay is applied onto that list at publish.
+            if (source != SOURCE_PENDING_PROMPT) {
+                pendingLiveDisplayApply = null
+            }
             pendingRequiredDisplayApplies.addLast(pending)
         }
         if (transformJob?.isActive == true) return
@@ -585,7 +618,11 @@ class SessionChatTimeline(
     )
 
     private suspend fun publishDisplayMessages(pending: PendingDisplayApply) {
-        val displayMessages = pending.displayMessages
+        val displayMessages =
+            applyPendingPromptOverlay(
+                pending.displayMessages,
+                expireAgainstAuthoritative = shouldExpirePendingPromptPatches(pending.source),
+            )
         val sourceSessionId = pending.sourceSessionId
         val sourceWorktree = pending.sourceWorktree
         val isRefreshing = pending.isRefreshing
@@ -753,6 +790,63 @@ class SessionChatTimeline(
         pendingBaselineSignatures = emptyMap()
     }
 
+    private data class PendingPromptPatch(
+        val delivery: FollowUpDelivery?,
+        val removed: Boolean,
+    )
+
+    private fun shouldExpirePendingPromptPatches(source: String): Boolean =
+        source != SOURCE_PENDING_PROMPT &&
+            source != "commands-ready" &&
+            source != "collapse-pref"
+
+    private fun applyPendingPromptOverlay(
+        incoming: List<DisplayMessage>,
+        expireAgainstAuthoritative: Boolean,
+    ): List<DisplayMessage> {
+        if (pendingPromptPatches.isEmpty()) return incoming
+        if (expireAgainstAuthoritative) {
+            expirePendingPromptPatches(incoming)
+        }
+        if (pendingPromptPatches.isEmpty()) return incoming
+        return incoming.mapNotNull { display ->
+            val patch = pendingPromptPatches[display.message.id] ?: return@mapNotNull display
+            if (patch.removed) {
+                null
+            } else {
+                display.copy(
+                    message =
+                        display.message.copy(
+                            isWaitingForPickup = patch.delivery != null,
+                            followUpDelivery = patch.delivery,
+                        ),
+                )
+            }
+        }
+    }
+
+    private fun expirePendingPromptPatches(authoritative: List<DisplayMessage>) {
+        if (pendingPromptPatches.isEmpty()) return
+        val byId = authoritative.associateBy { it.message.id }
+        val iterator = pendingPromptPatches.iterator()
+        while (iterator.hasNext()) {
+            val (id, patch) = iterator.next()
+            val incoming = byId[id]?.message
+            if (patch.removed) {
+                if (incoming == null) {
+                    iterator.remove()
+                }
+            } else if (incoming == null || !incoming.isWaitingForPickup) {
+                iterator.remove()
+            } else if (
+                incoming.followUpDelivery == patch.delivery &&
+                incoming.isWaitingForPickup == (patch.delivery != null)
+            ) {
+                iterator.remove()
+            }
+        }
+    }
+
     private fun isCurrentBinding(
         sessionId: String,
         worktree: String,
@@ -869,7 +963,6 @@ class SessionChatTimeline(
         soleText: String,
     ): Boolean = message.role == MessageRole.User && soleText != message.text
 
-
     private fun errorMessage(throwable: Throwable): String =
         when (throwable) {
             is MessageError.Http -> throwable.message ?: "Request failed"
@@ -895,5 +988,6 @@ class SessionChatTimeline(
 
     companion object {
         private const val TAG = "SessionChatTimeline"
+        private const val SOURCE_PENDING_PROMPT = "pending-prompt"
     }
 }

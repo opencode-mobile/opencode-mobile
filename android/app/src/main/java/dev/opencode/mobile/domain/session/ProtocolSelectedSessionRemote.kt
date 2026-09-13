@@ -8,14 +8,11 @@ internal class ProtocolSelectedSessionRemote(
     private val v2: SessionRemote,
     private val activeConnectionManager: ActiveConnectionManager?,
 ) : SessionRemote {
-    private suspend fun selected(): SessionRemote =
-        if (activeConnectionManager?.currentProtocolOrProbe() == ServerProtocol.V2) v2 else v1
+    private suspend fun selected(): SessionRemote = if (activeConnectionManager?.currentProtocolOrProbe() == ServerProtocol.V2) v2 else v1
 
-    override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> =
-        selected().listPendingPermissions(directory)
+    override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> = selected().listPendingPermissions(directory)
 
-    override suspend fun listPendingQuestions(directory: String?): List<QuestionRequest> =
-        selected().listPendingQuestions(directory)
+    override suspend fun listPendingQuestions(directory: String?): List<QuestionRequest> = selected().listPendingQuestions(directory)
 
     override suspend fun listSessions(directory: String?): List<Session> = selected().listSessions(directory)
 
@@ -25,8 +22,7 @@ internal class ProtocolSelectedSessionRemote(
         directory: String?,
     ): Session = selected().createSession(parentId, title, directory)
 
-    override suspend fun getAllSessionStatuses(directory: String?): List<SessionStatus> =
-        selected().getAllSessionStatuses(directory)
+    override suspend fun getAllSessionStatuses(directory: String?): List<SessionStatus> = selected().getAllSessionStatuses(directory)
 
     override suspend fun getSession(
         id: String,
@@ -159,4 +155,22 @@ internal class ProtocolSelectedSessionRemote(
         requestId: String,
         directory: String?,
     ): Boolean = selected().rejectQuestion(sessionId, requestId, directory)
+
+    override suspend fun cancelPendingPrompt(
+        sessionId: String,
+        inboxId: String,
+        directory: String?,
+    ): Boolean = selected().cancelPendingPrompt(sessionId, inboxId, directory)
+
+    override suspend fun steerPendingPrompt(
+        sessionId: String,
+        inboxId: String,
+        directory: String?,
+    ): Boolean = selected().steerPendingPrompt(sessionId, inboxId, directory)
+
+    override suspend fun queuePendingPrompt(
+        sessionId: String,
+        inboxId: String,
+        directory: String?,
+    ): Boolean = selected().queuePendingPrompt(sessionId, inboxId, directory)
 }

@@ -1032,6 +1032,78 @@ struct MessageDomainAdapterTests {
         #expect(shellTool.output == "/repo")
     }
 
+    @Test func mergeInbox_marksExistingUserMessageWaiting() {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "Hello", model: nil, mode: nil, sentAtEpochMs: nil),
+            Message(id: "msg-2", role: .assistant, text: "Hi", model: nil, mode: nil, sentAtEpochMs: nil),
+        ]
+        let merged = adapter.mergeInbox(
+            messages: messages,
+            inbox: [
+                V2InboxItemDTO(
+                    id: "msg-1",
+                    timeCreated: 10,
+                    type: "user",
+                    payload: V2InboxUserPayloadDTO(text: "Hello"),
+                    delivery: "steer"
+                ),
+            ]
+        )
+
+        #expect(merged.count == 2)
+        #expect(merged[0].isWaitingForPickup)
+        #expect(merged[0].followUpDelivery == .steer)
+        #expect(!merged[1].isWaitingForPickup)
+    }
+
+    @Test func mergeInbox_materialisesMissingUserItem() {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "Hello", model: nil, mode: nil, sentAtEpochMs: nil),
+        ]
+        let merged = adapter.mergeInbox(
+            messages: messages,
+            inbox: [
+                V2InboxItemDTO(
+                    id: "inbox-2",
+                    timeCreated: 20,
+                    type: "user",
+                    payload: V2InboxUserPayloadDTO(text: "Held prompt"),
+                    delivery: "queue"
+                ),
+            ]
+        )
+
+        #expect(merged.count == 2)
+        #expect(merged[1].id == "inbox-2")
+        #expect(merged[1].text == "Held prompt")
+        #expect(merged[1].role == .user)
+        #expect(merged[1].isWaitingForPickup)
+        #expect(merged[1].followUpDelivery == .queue)
+        #expect(merged[1].sentAtEpochMs == 20)
+    }
+
+    @Test func mergeInbox_ignoresNonUserItems() {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "Hello", model: nil, mode: nil, sentAtEpochMs: nil),
+        ]
+        let merged = adapter.mergeInbox(
+            messages: messages,
+            inbox: [
+                V2InboxItemDTO(id: "syn-1", timeCreated: 1, type: "synthetic"),
+                V2InboxItemDTO(id: "cmp-1", timeCreated: 2, type: "compaction"),
+                V2InboxItemDTO(id: "mov-1", timeCreated: 3, type: "move"),
+            ]
+        )
+        #expect(merged == messages)
+    }
+
+    @Test func mergeInbox_emptyInboxIsNoOp() {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "Hello", model: nil, mode: nil, sentAtEpochMs: nil),
+        ]
+        #expect(adapter.mergeInbox(messages: messages, inbox: []) == messages)
+    }
+
     private func decodeMessage(_ json: String) throws -> MessageDTO {
         try decoder.decode(MessageDTO.self, from: Data(json.utf8))
     }

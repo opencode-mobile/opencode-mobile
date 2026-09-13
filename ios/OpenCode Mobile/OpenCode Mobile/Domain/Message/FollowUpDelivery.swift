@@ -6,13 +6,6 @@ nonisolated enum FollowUpDelivery: String, Sendable, Equatable, Hashable, CaseIt
 
     var wireValue: String { rawValue }
 
-    var waitingCaption: String {
-        switch self {
-        case .steer: "Waiting to steer"
-        case .queue: "Held until idle"
-        }
-    }
-
     var switchedSnackbar: String {
         switch self {
         case .steer: "Switched to Steer"

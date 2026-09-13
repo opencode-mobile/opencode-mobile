@@ -30,6 +30,15 @@ nonisolated enum MessageHistoryQuery: Equatable, Sendable {
             cursor
         }
     }
+
+    var isTail: Bool {
+        switch self {
+        case .newest:
+            true
+        case .older:
+            false
+        }
+    }
 }
 
 nonisolated struct MessageHistoryPage: Equatable, Sendable {

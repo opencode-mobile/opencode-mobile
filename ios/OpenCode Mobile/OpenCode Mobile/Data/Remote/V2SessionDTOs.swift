@@ -194,3 +194,64 @@ nonisolated struct V2VcsBranchDTO: Decodable, Sendable {
     let current: String?
     let `default`: String?
 }
+
+nonisolated struct V2InboxItemDTO: Decodable, Sendable, Equatable {
+    let id: String
+    let sessionID: String?
+    let timeCreated: Int64
+    let type: String
+    let payload: V2InboxUserPayloadDTO?
+    let delivery: String?
+
+    init(
+        id: String,
+        sessionID: String? = nil,
+        timeCreated: Int64 = 0,
+        type: String = "",
+        payload: V2InboxUserPayloadDTO? = nil,
+        delivery: String? = nil
+    ) {
+        self.id = id
+        self.sessionID = sessionID
+        self.timeCreated = timeCreated
+        self.type = type
+        self.payload = payload
+        self.delivery = delivery
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case sessionID
+        case timeCreated
+        case type
+        case payload
+        case delivery
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        sessionID = try container.decodeIfPresent(String.self, forKey: .sessionID)
+        timeCreated = try container.decodeIfPresent(Int64.self, forKey: .timeCreated) ?? 0
+        type = try container.decodeIfPresent(String.self, forKey: .type) ?? ""
+        payload = try? container.decodeIfPresent(V2InboxUserPayloadDTO.self, forKey: .payload) ?? nil
+        delivery = try container.decodeIfPresent(String.self, forKey: .delivery)
+    }
+}
+
+nonisolated struct V2InboxUserPayloadDTO: Decodable, Sendable, Equatable {
+    let text: String
+
+    init(text: String = "") {
+        self.text = text
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case text
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decodeIfPresent(String.self, forKey: .text) ?? ""
+    }
+}

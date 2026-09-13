@@ -1,6 +1,8 @@
 package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.data.remote.MessagesApi
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 
 internal class V2MessageRemote(
     private val api: MessagesApi,
@@ -9,7 +11,10 @@ internal class V2MessageRemote(
     override suspend fun listMessages(
         sessionId: String,
         directory: String?,
-    ): List<Message> = adapter.projectV2(api.listMessagesV2(sessionId, directory))
+    ): List<Message> {
+        val messages = adapter.projectV2(api.listMessagesV2(sessionId, directory))
+        return mergeInboxOrUnchanged(sessionId, messages)
+    }
 
     override suspend fun listMessagePage(
         sessionId: String,
@@ -27,8 +32,9 @@ internal class V2MessageRemote(
         // desc / cursor-desc pages are newest-first. Reverse exactly once.
         val chronological = envelope.data.asReversed()
         val olderCursor = envelope.cursor?.next?.takeIf { it.isNotBlank() }
+        val messages = adapter.projectV2(chronological)
         return MessagePage(
-            messages = adapter.projectV2(chronological),
+            messages = if (query.isTail) mergeInboxOrUnchanged(sessionId, messages) else messages,
             olderCursor = olderCursor,
             hasOlder = olderCursor != null,
         )
@@ -47,4 +53,13 @@ internal class V2MessageRemote(
         }
         api.sendPromptV2(sessionId, adapter.toV2PromptRequest(options), directory, options.attachments)
     }
+
+    private suspend fun mergeInboxOrUnchanged(
+        sessionId: String,
+        messages: List<Message>,
+    ): List<Message> =
+        runCatching { adapter.mergeInbox(messages, api.listInboxV2(sessionId)) }
+            .onFailure { error ->
+                DiagnosticLog.warning(DiagnosticLogArea.Chat, "inbox merge failed session=$sessionId", error)
+            }.getOrDefault(messages)
 }

@@ -96,3 +96,18 @@ data class V2VcsBranchDto(
     val current: String? = null,
     val default: String? = null,
 )
+
+@Serializable
+data class V2InboxItemDto(
+    val id: String,
+    @SerialName("sessionID") val sessionId: String? = null,
+    val timeCreated: Long = 0,
+    val type: String = "",
+    val payload: V2InboxUserPayloadDto? = null,
+    val delivery: String? = null,
+)
+
+@Serializable
+data class V2InboxUserPayloadDto(
+    val text: String = "",
+)

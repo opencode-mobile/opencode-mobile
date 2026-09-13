@@ -29,6 +29,9 @@ protocol SessionRepository: Sendable {
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?, sessionID: String?, questions: [QuestionInfo]) async throws -> Bool
     func rejectQuestion(questionID: String, directory: String?) async throws -> Bool
     func rejectQuestion(questionID: String, directory: String?, sessionID: String?) async throws -> Bool
+    func cancelPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool
+    func steerPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool
+    func queuePendingPrompt(sessionID: String, inboxID: String) async throws -> Bool
 }
 
 extension SessionRepository {
@@ -45,6 +48,10 @@ extension SessionRepository {
     func rejectQuestion(questionID: String, directory: String?, sessionID: String?) async throws -> Bool {
         try await rejectQuestion(questionID: questionID, directory: directory)
     }
+
+    func cancelPendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
+    func steerPendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
+    func queuePendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
 
     func getSession(id: String) async throws -> Session {
         try await getSession(id: id, directory: nil)
@@ -269,6 +276,18 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         try await run {
             try await remote.rejectQuestion(questionID: questionID, directory: directory, sessionID: sessionID)
         }
+    }
+
+    func cancelPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool {
+        try await run { try await remote.cancelPendingPrompt(sessionID: sessionID, inboxID: inboxID) }
+    }
+
+    func steerPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool {
+        try await run { try await remote.steerPendingPrompt(sessionID: sessionID, inboxID: inboxID) }
+    }
+
+    func queuePendingPrompt(sessionID: String, inboxID: String) async throws -> Bool {
+        try await run { try await remote.queuePendingPrompt(sessionID: sessionID, inboxID: inboxID) }
     }
 
     private func run<T>(_ work: () async throws -> T) async throws -> T {

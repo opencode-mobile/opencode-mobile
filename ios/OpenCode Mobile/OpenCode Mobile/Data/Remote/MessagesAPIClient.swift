@@ -30,6 +30,7 @@ protocol MessagesAPI: Sendable {
     func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, attachments: [Attachment], directory: String?) async throws
     func switchSessionAgent(sessionID: String, agent: String, directory: String?) async throws
     func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String?) async throws
+    func listInboxV2(sessionID: String) async throws -> [V2InboxItemDTO]
 }
 
 extension MessagesAPI {
@@ -69,6 +70,8 @@ extension MessagesAPI {
     func switchSessionAgent(sessionID: String, agent: String, directory: String?) async throws {}
 
     func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String?) async throws {}
+
+    func listInboxV2(sessionID _: String) async throws -> [V2InboxItemDTO] { [] }
 }
 
 nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
@@ -164,6 +167,14 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         )
         let next = envelope.cursor?.next.flatMap { $0.isEmpty ? nil : $0 }
         return (envelope.data, next)
+    }
+
+    func listInboxV2(sessionID: String) async throws -> [V2InboxItemDTO] {
+        let envelope: APIListEnvelope<V2InboxItemDTO> = try await get(
+            path: "api/session/\(sessionID)/inbox",
+            directory: nil
+        )
+        return envelope.data
     }
 
     func getMessage(sessionID: String, messageID: String, directory: String? = nil) async throws -> MessageDTO {

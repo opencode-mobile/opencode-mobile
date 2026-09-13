@@ -141,4 +141,10 @@ struct V1SessionRemote: SessionRemote, Sendable {
     func rejectQuestion(questionID: String, directory: String?, sessionID _: String?) async throws -> Bool {
         try await api.rejectQuestion(questionID: questionID, directory: directory)
     }
+
+    func cancelPendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
+
+    func steerPendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
+
+    func queuePendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
 }

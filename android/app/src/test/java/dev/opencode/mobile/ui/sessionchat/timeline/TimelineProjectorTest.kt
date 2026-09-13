@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.message.DisplayMessage
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
@@ -73,14 +74,22 @@ class TimelineProjectorTest {
                 MessagePart.Tool(toolName = "grep", status = ToolStatus.Completed, id = "prt-b"),
             )
         val first = projectAssistant(groupedParts, frameRevision = 1L)
-        val firstGroup = first.rows.single().blocks.single() as SessionChatTimelineBlock.ToolGroup
+        val firstGroup =
+            first.rows
+                .single()
+                .blocks
+                .single() as SessionChatTimelineBlock.ToolGroup
         assertEquals(PresentationBlockId.toolGroup(listOf("prt-a", "prt-b")), firstGroup.blockID)
 
         val expandedParts =
             groupedParts +
                 MessagePart.Tool(toolName = "glob", status = ToolStatus.Completed, id = "prt-c")
         val second = projectAssistant(expandedParts, frameRevision = 2L, previous = first)
-        val secondGroup = second.rows.single().blocks.single() as SessionChatTimelineBlock.ToolGroup
+        val secondGroup =
+            second.rows
+                .single()
+                .blocks
+                .single() as SessionChatTimelineBlock.ToolGroup
 
         assertEquals(
             PresentationBlockId.toolGroup(listOf("prt-a", "prt-b", "prt-c")),
@@ -1291,6 +1300,201 @@ class TimelineProjectorTest {
         assertTrue(second.layoutAffectingRowIDs().isEmpty())
         assertEquals(0L, second.layoutAffectingRevision())
         assertEquals(first.rows.single().layoutRevision, second.rows.single().layoutRevision)
+    }
+
+    @Test
+    fun project_excludesQueuePendingUserMessage() {
+        val frame =
+            projectUser(
+                text = "Held until idle",
+                isWaitingForPickup = true,
+                followUpDelivery = FollowUpDelivery.Queue,
+            )
+        assertTrue(frame.rows.isEmpty())
+    }
+
+    @Test
+    fun project_includesSteerPendingUserMessage() {
+        val frame =
+            projectUser(
+                text = "Waiting to steer",
+                isWaitingForPickup = true,
+                followUpDelivery = FollowUpDelivery.Steer,
+            )
+        val row = frame.rows.single()
+        assertEquals("Waiting to steer", row.text)
+        assertEquals(FollowUpDelivery.Steer, row.pendingDelivery)
+    }
+
+    @Test
+    fun project_optimisticThenQueuePendingEcho_dropsOptimisticAndHidesEcho() {
+        val pending =
+            TimelineProjector.rowFromMessageItem(
+                SessionChatMessageItem(
+                    id = "optimistic-1",
+                    role = MessageRole.User,
+                    text = "Hello",
+                    metadataLabel = "build · deepseek-v4-flash-free · high · 10:21 AM",
+                    isPending = true,
+                    blocks =
+                        listOf(
+                            SessionChatTimelineBlock.Text(
+                                blockID = PresentationBlockId.messageFallback("optimistic-1"),
+                                text = "Hello",
+                            ),
+                        ),
+                ),
+            )
+        val baselineOther =
+            TimelineProjector.rowFromMessageItem(
+                SessionChatMessageItem(
+                    id = "msg-user-0",
+                    role = MessageRole.User,
+                    text = "Earlier",
+                    metadataLabel = "",
+                    blocks =
+                        listOf(
+                            SessionChatTimelineBlock.Text(
+                                blockID = PresentationBlockId.direct("prt-0"),
+                                text = "Earlier",
+                            ),
+                        ),
+                ),
+            )
+        val emptyAuthoritative =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages =
+                            listOf(
+                                DisplayMessageBody(
+                                    message =
+                                        Message(
+                                            id = "msg-user-0",
+                                            role = MessageRole.User,
+                                            text = "Earlier",
+                                            parts = listOf(MessagePart.Text("Earlier", id = "prt-0")),
+                                        ),
+                                    blocks =
+                                        listOf(
+                                            SessionChatTimelineBlock.Text(
+                                                blockID = PresentationBlockId.direct("prt-0"),
+                                                text = "Earlier",
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+                optimisticInputs =
+                    OptimisticInputs(
+                        pendingRows = listOf(pending),
+                        baselineSignatures =
+                            mapOf(
+                                baselineOther.id to TimelineProjector.reconciliationSignature(baselineOther),
+                            ),
+                    ),
+            )
+        assertEquals(listOf("msg-user-0", "optimistic-1"), emptyAuthoritative.rows.map { it.id })
+
+        val queuePendingUser =
+            Message(
+                id = "msg-user-1",
+                role = MessageRole.User,
+                text = "Hello",
+                parts = listOf(MessagePart.Text("Hello", id = "prt-user-1")),
+                isWaitingForPickup = true,
+                followUpDelivery = FollowUpDelivery.Queue,
+            )
+        val reconciled =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 2L,
+                        sourceRevision = 0L,
+                        messages =
+                            listOf(
+                                DisplayMessageBody(
+                                    message =
+                                        Message(
+                                            id = "msg-user-0",
+                                            role = MessageRole.User,
+                                            text = "Earlier",
+                                            parts = listOf(MessagePart.Text("Earlier", id = "prt-0")),
+                                        ),
+                                    blocks =
+                                        listOf(
+                                            SessionChatTimelineBlock.Text(
+                                                blockID = PresentationBlockId.direct("prt-0"),
+                                                text = "Earlier",
+                                            ),
+                                        ),
+                                ),
+                                DisplayMessageBody(
+                                    message = queuePendingUser,
+                                    blocks =
+                                        listOf(
+                                            SessionChatTimelineBlock.Text(
+                                                blockID = PresentationBlockId.direct("prt-user-1"),
+                                                text = "Hello",
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+                optimisticInputs =
+                    OptimisticInputs(
+                        pendingRows = listOf(pending),
+                        baselineSignatures =
+                            mapOf(
+                                baselineOther.id to TimelineProjector.reconciliationSignature(baselineOther),
+                            ),
+                    ),
+                previous = emptyAuthoritative,
+            )
+
+        assertEquals(listOf("msg-user-0"), reconciled.rows.map { it.id })
+        assertFalse(reconciled.rows.any { it.id == "optimistic-1" })
+        assertFalse(reconciled.rows.any { it.id == "msg-user-1" })
+    }
+
+    private fun projectUser(
+        text: String,
+        isWaitingForPickup: Boolean,
+        followUpDelivery: FollowUpDelivery,
+    ): TimelineFrame {
+        val parts = listOf(MessagePart.Text(text, id = "prt-user"))
+        val blocks =
+            when (val result = SessionChatTimelineBlocks.build(MessageRole.User, parts)) {
+                is SessionChatTimelineBlocksResult.Ok -> result.blocks
+                SessionChatTimelineBlocksResult.MissingPartIds -> error("expected Ok")
+            }
+        return TimelineProjector.project(
+            frame =
+                DisplayFrame(
+                    sessionKey = "session",
+                    frameRevision = 1L,
+                    sourceRevision = 0L,
+                    messages =
+                        listOf(
+                            DisplayMessageBody(
+                                message =
+                                    Message(
+                                        id = "msg-user",
+                                        role = MessageRole.User,
+                                        text = text,
+                                        parts = parts,
+                                        isWaitingForPickup = isWaitingForPickup,
+                                        followUpDelivery = followUpDelivery,
+                                    ),
+                                blocks = blocks,
+                            ),
+                        ),
+                ),
+        )
     }
 
     private fun projectAssistant(

@@ -7,13 +7,6 @@ enum class FollowUpDelivery(
     Queue("queue"),
     ;
 
-    val waitingCaption: String
-        get() =
-            when (this) {
-                Steer -> "Waiting to steer"
-                Queue -> "Held until idle"
-            }
-
     val switchedSnackbar: String
         get() =
             when (this) {
@@ -28,7 +21,6 @@ enum class FollowUpDelivery(
         }
 
     companion object {
-        fun fromWire(value: String?): FollowUpDelivery? =
-            entries.firstOrNull { it.wireValue.equals(value, ignoreCase = true) }
+        fun fromWire(value: String?): FollowUpDelivery? = entries.firstOrNull { it.wireValue.equals(value, ignoreCase = true) }
     }
 }

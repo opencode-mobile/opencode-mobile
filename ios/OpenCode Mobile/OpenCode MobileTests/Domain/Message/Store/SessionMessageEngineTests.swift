@@ -848,7 +848,6 @@ import Testing
         let message = engine.messages(sessionID: "ses-1").first
         #expect(message?.followUpDelivery == .queue)
         #expect(message?.isWaitingForPickup == true)
-        #expect(message?.waitingCaption == "Held until idle")
     }
 
     @Test func prependOlder_doesNotOverwriteNewerLiveText() {
@@ -924,7 +923,7 @@ import Testing
         #expect(messages.last?.text == "Hello world")
     }
 
-    @Test func waitingCaption_usesSteerWhenWaitingWithoutDelivery() {
+    @Test func waitingWithoutDelivery_keepsPickupFlag() {
         let message = Message(
             id: "msg-1",
             role: .user,
@@ -934,7 +933,8 @@ import Testing
             sentAtEpochMs: nil,
             isWaitingForPickup: true
         )
-        #expect(message.waitingCaption == "Waiting to steer")
+        #expect(message.isWaitingForPickup)
+        #expect(message.followUpDelivery == nil)
     }
 
     private func makeEngine() -> SessionMessageEngine {

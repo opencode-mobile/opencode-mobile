@@ -20,6 +20,9 @@ final class SessionChatTimeline {
     private var pendingBaselineSignatureCounts: [String: Int] = [:]
     private var lastLoadedMessages: [Message] = []
     private var lastLoadedDisplayMessages: [DisplayMessage] = []
+    private var pendingPromptPatches: [String: PendingPromptPatch] = [:]
+    private var pendingRequiredDisplayApplies: [PendingRequiredDisplayApply] = []
+    private var pendingLiveDisplayUpdate: DisplayMessageListUpdate?
     private var displayFrameRevision: UInt64 = 0
     /// After network confirms the cache, ignore late isFromCache publishes for Syncing.
     private var networkCacheSyncConfirmed = false
@@ -51,7 +54,8 @@ final class SessionChatTimeline {
                 snapshot,
                 isRefreshing: false,
                 fromQuietRefresh: true,
-                messagesFromCache: fromCache
+                messagesFromCache: fromCache,
+                expirePendingPromptPatches: false
             )
         }
     }
@@ -67,7 +71,8 @@ final class SessionChatTimeline {
                 snapshot,
                 isRefreshing: false,
                 fromQuietRefresh: true,
-                messagesFromCache: fromCache
+                messagesFromCache: fromCache,
+                expirePendingPromptPatches: false
             )
         }
     }
@@ -79,6 +84,9 @@ final class SessionChatTimeline {
         pendingBaselineSignatureCounts = [:]
         lastLoadedMessages = []
         lastLoadedDisplayMessages = []
+        pendingPromptPatches = [:]
+        pendingRequiredDisplayApplies = []
+        pendingLiveDisplayUpdate = nil
         timelineFrame = .empty
         displayFrameRevision = 0
         networkCacheSyncConfirmed = false
@@ -141,41 +149,6 @@ final class SessionChatTimeline {
     }
 
     private func runObservationLoop(generation: Int) async {
-        var pendingUpdate: DisplayMessageListUpdate?
-
-        @MainActor
-        func kickApply() {
-            guard displayApplyTask == nil else { return }
-            displayApplyTask = Task { @MainActor [weak self] in
-                guard let self else { return }
-                while let current = pendingUpdate {
-                    guard self.observationGeneration == generation, !Task.isCancelled else { return }
-                    pendingUpdate = nil
-                    switch current {
-                    case .loadFailed(let error):
-                        applyError(error)
-                    case .cacheSyncConfirmed:
-                        confirmCacheSync()
-                    case .messages(let displayMessages, let isFromCache):
-                        await applyLoadedDisplayMessagesTransform(
-                            displayMessages,
-                            isRefreshing: false,
-                            fromQuietRefresh: true,
-                            messagesFromCache: isFromCache
-                        )
-                    }
-                    // Yield so the observation task can land a newer snapshot while we apply;
-                    // without this, MainActor serialize makes coalesce-latest a no-op.
-                    await Task.yield()
-                }
-                guard self.observationGeneration == generation else { return }
-                self.displayApplyTask = nil
-                if pendingUpdate != nil, !Task.isCancelled {
-                    kickApply()
-                }
-            }
-        }
-
         for await update in messageRepository.observeDisplayMessages(sessionID: sessionID, directory: worktree) {
             guard observationGeneration == generation, !Task.isCancelled else { return }
             // Confirm must not sit behind coalesce-latest: a later cache-generation
@@ -184,8 +157,58 @@ final class SessionChatTimeline {
                 confirmCacheSync()
                 continue
             }
-            pendingUpdate = update
-            kickApply()
+            pendingLiveDisplayUpdate = update
+            kickDisplayApply()
+        }
+    }
+
+    private func kickDisplayApply() {
+        let generation = observationGeneration
+        guard displayApplyTask == nil else { return }
+        displayApplyTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            while true {
+                guard self.observationGeneration == generation, !Task.isCancelled else { return }
+                if !self.pendingRequiredDisplayApplies.isEmpty {
+                    let pending = self.pendingRequiredDisplayApplies.removeFirst()
+                    await self.applyLoadedDisplayMessagesTransform(
+                        pending.displayMessages,
+                        isRefreshing: pending.isRefreshing,
+                        fromQuietRefresh: pending.fromQuietRefresh,
+                        messagesFromCache: pending.messagesFromCache,
+                        expirePendingPromptPatches: pending.expirePendingPromptPatches,
+                        onPublished: pending.onPublished
+                    )
+                } else if let current = self.pendingLiveDisplayUpdate {
+                    self.pendingLiveDisplayUpdate = nil
+                    switch current {
+                    case .loadFailed(let error):
+                        self.applyError(error)
+                    case .cacheSyncConfirmed:
+                        self.confirmCacheSync()
+                    case .messages(let displayMessages, let isFromCache):
+                        await self.applyLoadedDisplayMessagesTransform(
+                            displayMessages,
+                            isRefreshing: false,
+                            fromQuietRefresh: true,
+                            messagesFromCache: isFromCache,
+                            expirePendingPromptPatches: true
+                        )
+                    }
+                } else {
+                    break
+                }
+                // Yield so the observation task can land a newer snapshot while we apply;
+                // without this, MainActor serialize makes coalesce-latest a no-op.
+                await Task.yield()
+            }
+            guard self.observationGeneration == generation else { return }
+            self.displayApplyTask = nil
+            if (!self.pendingRequiredDisplayApplies.isEmpty || self.pendingLiveDisplayUpdate != nil),
+               !Task.isCancelled
+            {
+                self.kickDisplayApply()
+            }
         }
     }
 
@@ -201,6 +224,8 @@ final class SessionChatTimeline {
         catchUpChromeTask = nil
         displayApplyTask?.cancel()
         displayApplyTask = nil
+        pendingRequiredDisplayApplies = []
+        pendingLiveDisplayUpdate = nil
     }
 
     private func consumeCatchUpChrome(generation: Int) async {
@@ -346,6 +371,33 @@ final class SessionChatTimeline {
         lastLoadedMessages
     }
 
+    var pendingPromptPatchCount: Int { pendingPromptPatches.count }
+
+    func applyOptimisticPendingPrompt(
+        messageID: String,
+        delivery: FollowUpDelivery? = nil,
+        removed: Bool = false
+    ) {
+        pendingPromptPatches[messageID] = PendingPromptPatch(delivery: delivery, removed: removed)
+        let overlaid = applyPendingPromptOverlay(
+            lastLoadedDisplayMessages,
+            expireAgainstAuthoritative: false
+        )
+        lastLoadedDisplayMessages = overlaid
+        lastLoadedMessages = overlaid.map(\.message)
+        pendingRequiredDisplayApplies.append(
+            PendingRequiredDisplayApply(
+                displayMessages: overlaid,
+                isRefreshing: false,
+                fromQuietRefresh: false,
+                messagesFromCache: state.messagesFromCache,
+                expirePendingPromptPatches: false,
+                onPublished: nil
+            )
+        )
+        kickDisplayApply()
+    }
+
     func row(from message: Message, previous: SessionChatRow? = nil) -> SessionChatRow? {
         row(from: DisplayMessage(message: message), previous: previous)
     }
@@ -399,8 +451,13 @@ final class SessionChatTimeline {
         isRefreshing: Bool,
         fromQuietRefresh: Bool = false,
         messagesFromCache: Bool = false,
+        expirePendingPromptPatches: Bool = true,
         onPublished: (() -> Void)? = nil
     ) async {
+        let displayMessages = applyPendingPromptOverlay(
+            displayMessages,
+            expireAgainstAuthoritative: expirePendingPromptPatches
+        )
         lastLoadedDisplayMessages = displayMessages
         lastLoadedMessages = displayMessages.map(\.message)
         guard !Task.isCancelled else { return }
@@ -660,7 +717,64 @@ final class SessionChatTimeline {
         return error.localizedDescription
     }
 
+    private func applyPendingPromptOverlay(
+        _ incoming: [DisplayMessage],
+        expireAgainstAuthoritative: Bool
+    ) -> [DisplayMessage] {
+        guard !pendingPromptPatches.isEmpty else { return incoming }
+        if expireAgainstAuthoritative {
+            expirePendingPromptPatches(against: incoming)
+        }
+        guard !pendingPromptPatches.isEmpty else { return incoming }
+        return incoming.compactMap { display in
+            guard let patch = pendingPromptPatches[display.message.id] else { return display }
+            if patch.removed { return nil }
+            return DisplayMessage(
+                message: display.message.withPickupState(
+                    isWaitingForPickup: patch.delivery != nil,
+                    followUpDelivery: patch.delivery
+                ),
+                renderedMarkdown: display.renderedMarkdown,
+                awaitingTextMateUpgrade: display.awaitingTextMateUpgrade,
+                highlightEpoch: display.highlightEpoch
+            )
+        }
+    }
+
+    private func expirePendingPromptPatches(against authoritative: [DisplayMessage]) {
+        guard !pendingPromptPatches.isEmpty else { return }
+        let byID = Dictionary(uniqueKeysWithValues: authoritative.map { ($0.message.id, $0.message) })
+        for (id, patch) in pendingPromptPatches {
+            let incoming = byID[id]
+            if patch.removed {
+                if incoming == nil {
+                    pendingPromptPatches.removeValue(forKey: id)
+                }
+            } else if incoming == nil || incoming?.isWaitingForPickup == false {
+                pendingPromptPatches.removeValue(forKey: id)
+            } else if incoming?.followUpDelivery == patch.delivery,
+                      incoming?.isWaitingForPickup == (patch.delivery != nil)
+            {
+                pendingPromptPatches.removeValue(forKey: id)
+            }
+        }
+    }
+
     private func notifyChange() {
         onChange?()
     }
+}
+
+private struct PendingPromptPatch: Equatable {
+    var delivery: FollowUpDelivery?
+    var removed: Bool
+}
+
+private struct PendingRequiredDisplayApply {
+    let displayMessages: [DisplayMessage]
+    let isRefreshing: Bool
+    let fromQuietRefresh: Bool
+    let messagesFromCache: Bool
+    let expirePendingPromptPatches: Bool
+    let onPublished: (() -> Void)?
 }

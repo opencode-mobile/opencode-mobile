@@ -25,8 +25,10 @@ import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.live.SessionTodoLiveStore
 import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
+import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
@@ -34,11 +36,11 @@ import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.smartProjectLabel
-import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionTodoList
@@ -681,6 +683,69 @@ class SessionChatViewModel
             composer.toggleFollowUp()
         }
 
+        fun steerPendingPrompt(id: String) {
+            runPendingPromptAction(
+                actionId = ProductAnalytics.Action.CHAT_STEER_PENDING_PROMPT,
+                inboxId = id,
+                optimistic = { timeline.applyOptimisticPendingPrompt(id, FollowUpDelivery.Steer) },
+            ) { sessionId, worktree ->
+                sessionRepository.steerPendingPrompt(sessionId, id, worktree)
+            }
+        }
+
+        fun queuePendingPrompt(id: String) {
+            runPendingPromptAction(
+                actionId = ProductAnalytics.Action.CHAT_QUEUE_PENDING_PROMPT,
+                inboxId = id,
+                optimistic = { timeline.applyOptimisticPendingPrompt(id, FollowUpDelivery.Queue) },
+            ) { sessionId, worktree ->
+                sessionRepository.queuePendingPrompt(sessionId, id, worktree)
+            }
+        }
+
+        fun cancelPendingPrompt(id: String) {
+            runPendingPromptAction(
+                actionId = ProductAnalytics.Action.CHAT_CANCEL_PENDING_PROMPT,
+                inboxId = id,
+                optimistic = {
+                    timeline.applyOptimisticPendingPrompt(id, removed = true)
+                },
+            ) { sessionId, worktree ->
+                sessionRepository.cancelPendingPrompt(sessionId, id, worktree)
+            }
+        }
+
+        private fun runPendingPromptAction(
+            actionId: String,
+            inboxId: String,
+            optimistic: () -> Unit,
+            call: suspend (sessionId: String, worktree: String) -> Boolean,
+        ) {
+            if (!activeConnectionManager.currentCapabilities().supportsFollowUpDelivery) return
+            logAction(actionId)
+            val sessionId = boundSessionId ?: return
+            val worktree = boundWorktree ?: return
+            viewModelScope.launch {
+                runCatching {
+                    withContext(ioDispatcher) { call(sessionId, worktree) }
+                }.onSuccess { ok ->
+                    if (ok) {
+                        optimistic()
+                    } else {
+                        commands.reportActionError(PENDING_PROMPT_FAILURE)
+                    }
+                }.onFailure { error ->
+                    if (error is CancellationException) throw error
+                    DiagnosticLog.warning(
+                        DiagnosticLogArea.Chat,
+                        "pending prompt $actionId failed id=$inboxId",
+                        error,
+                    )
+                    commands.reportActionError(PENDING_PROMPT_FAILURE)
+                }
+            }
+        }
+
         fun sendPrompt() {
             if (!hasCreatedSession()) return
             val composerState = composer.state.value.composer
@@ -694,8 +759,10 @@ class SessionChatViewModel
             )
             if (!sessionInfo.state.value.composerEnabled) return
             if (pendingSend != null || composer.state.value.isSending) return
-            if (inbox.state.value.permissionRequests.isNotEmpty() ||
-                inbox.state.value.questionRequests.isNotEmpty()
+            if (inbox.state.value.permissionRequests
+                    .isNotEmpty() ||
+                inbox.state.value.questionRequests
+                    .isNotEmpty()
             ) {
                 return
             }
@@ -828,7 +895,9 @@ class SessionChatViewModel
                 parameters =
                     mapOf(
                         ProductAnalytics.Param.QUESTION_RESPONSE to
-                            if (inbox.state.value.questionDrafts.values.any { it.customSelected }) {
+                            if (inbox.state.value.questionDrafts.values
+                                    .any { it.customSelected }
+                            ) {
                                 "custom"
                             } else {
                                 "options"
@@ -1053,6 +1122,7 @@ class SessionChatViewModel
                 sessionTitle = infoState.sessionTitle,
                 timeline = timelineState.timeline,
                 messages = messages,
+                queuedPrompts = queuedPromptsFrom(timeline.loadedMessages()),
                 timelineFrame = timelineFrame,
                 composer =
                     composerState.composer.copy(
@@ -1212,8 +1282,17 @@ class SessionChatViewModel
         companion object {
             const val ModelFilterThreshold: Int = SessionChatComposer.ModelFilterThreshold
             const val PENDING_SEND_TIMEOUT_MS = 8_000L
+            const val PENDING_PROMPT_FAILURE = "Couldn't update pending prompt"
         }
     }
+
+private fun queuedPromptsFrom(messages: List<Message>): List<QueuedPrompt> =
+    messages
+        .filter {
+            it.role == MessageRole.User &&
+                it.isWaitingForPickup &&
+                it.followUpDelivery == FollowUpDelivery.Queue
+        }.map { QueuedPrompt(id = it.id, text = it.text) }
 
 private val ClientSlashAction.productActionId: String
     get() =

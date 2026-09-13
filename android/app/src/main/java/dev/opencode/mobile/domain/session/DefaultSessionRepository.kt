@@ -1,9 +1,9 @@
 package dev.opencode.mobile.domain.session
 
 import dev.opencode.mobile.data.remote.SessionsApi
+import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
-import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -232,5 +232,29 @@ class DefaultSessionRepository
             directory: String?,
         ): Boolean =
             runCatching { remote.rejectQuestion(sessionId, requestId, directory) }
+                .getOrElse { throw adapter.mapError(it) }
+
+        override suspend fun cancelPendingPrompt(
+            sessionId: String,
+            inboxId: String,
+            directory: String?,
+        ): Boolean =
+            runCatching { remote.cancelPendingPrompt(sessionId, inboxId, directory) }
+                .getOrElse { throw adapter.mapError(it) }
+
+        override suspend fun steerPendingPrompt(
+            sessionId: String,
+            inboxId: String,
+            directory: String?,
+        ): Boolean =
+            runCatching { remote.steerPendingPrompt(sessionId, inboxId, directory) }
+                .getOrElse { throw adapter.mapError(it) }
+
+        override suspend fun queuePendingPrompt(
+            sessionId: String,
+            inboxId: String,
+            directory: String?,
+        ): Boolean =
+            runCatching { remote.queuePendingPrompt(sessionId, inboxId, directory) }
                 .getOrElse { throw adapter.mapError(it) }
     }

@@ -7,8 +7,7 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
     let role: MessageRole
     let text: String
     let metadataLabel: String
-    let waitingCaption: String?
-    let waitingDelivery: FollowUpDelivery?
+    let pendingDelivery: FollowUpDelivery?
     let isPending: Bool
     let isStreaming: Bool
     let renderedMarkdown: NativeMarkdownDocument?
@@ -26,8 +25,7 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
         role: MessageRole,
         text: String,
         metadataLabel: String,
-        waitingCaption: String? = nil,
-        waitingDelivery: FollowUpDelivery? = nil,
+        pendingDelivery: FollowUpDelivery? = nil,
         isPending: Bool = false,
         isStreaming: Bool = false,
         renderedMarkdown: NativeMarkdownDocument? = nil,
@@ -42,8 +40,7 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
         self.role = role
         self.text = text
         self.metadataLabel = metadataLabel
-        self.waitingCaption = waitingCaption
-        self.waitingDelivery = waitingDelivery
+        self.pendingDelivery = pendingDelivery
         self.isPending = isPending
         self.isStreaming = isStreaming
         self.renderedMarkdown = renderedMarkdown
@@ -65,6 +62,7 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
             role: role,
             text: text,
             metadataLabel: metadataLabel,
+            pendingDelivery: pendingDelivery,
             isPending: isPending,
             isStreaming: isStreaming,
             renderedMarkdown: renderedMarkdown,
@@ -90,6 +88,7 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
             role: role,
             text: text,
             metadataLabel: metadataLabel,
+            pendingDelivery: pendingDelivery,
             isPending: isPending,
             isStreaming: isStreaming,
             renderedMarkdown: renderedMarkdown,
@@ -117,8 +116,7 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
               lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count,
               lhs.text.count == rhs.text.count,
               lhs.metadataLabel == rhs.metadataLabel,
-              lhs.waitingCaption == rhs.waitingCaption,
-              lhs.waitingDelivery == rhs.waitingDelivery,
+              lhs.pendingDelivery == rhs.pendingDelivery,
               lhs.blocks.count == rhs.blocks.count
         else { return false }
         return lhs.text == rhs.text && lhs.blocks == rhs.blocks
@@ -386,8 +384,7 @@ extension TimelineRow {
             role: role,
             text: text,
             metadataLabel: metadataLabel,
-            waitingCaption: waitingCaption,
-            waitingDelivery: waitingDelivery,
+            pendingDelivery: pendingDelivery,
             isPending: isPending,
             isStreaming: isStreaming,
             renderedMarkdown: renderedMarkdown,
@@ -404,8 +401,7 @@ extension TimelineRow {
             role: row.role,
             text: row.text,
             metadataLabel: row.metadataLabel,
-            waitingCaption: row.waitingCaption,
-            waitingDelivery: row.waitingDelivery,
+            pendingDelivery: row.pendingDelivery,
             isPending: row.isPending,
             isStreaming: row.isStreaming,
             renderedMarkdown: row.renderedMarkdown,

@@ -183,4 +183,22 @@ internal class V1SessionRemote(
         requestId: String,
         directory: String?,
     ): Boolean = api.rejectQuestion(requestId, directory)
+
+    override suspend fun cancelPendingPrompt(
+        sessionId: String,
+        inboxId: String,
+        directory: String?,
+    ): Boolean = false
+
+    override suspend fun steerPendingPrompt(
+        sessionId: String,
+        inboxId: String,
+        directory: String?,
+    ): Boolean = false
+
+    override suspend fun queuePendingPrompt(
+        sessionId: String,
+        inboxId: String,
+        directory: String?,
+    ): Boolean = false
 }

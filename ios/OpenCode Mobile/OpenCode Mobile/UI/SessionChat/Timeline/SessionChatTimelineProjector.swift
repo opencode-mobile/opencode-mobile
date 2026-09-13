@@ -63,7 +63,7 @@ nonisolated enum SessionChatTimelineProjector {
             serverRows.append(built)
         }
 
-        let rows: [TimelineRow] =
+        let merged: [TimelineRow] =
             if optimistic.mergePending {
                 mergeWithPending(
                     serverRows,
@@ -73,6 +73,7 @@ nonisolated enum SessionChatTimelineProjector {
             } else {
                 serverRows
             }
+        let rows = merged.filter { !isHiddenQueuePending($0) }
 
         let previousIDs = Set(previousByID.keys)
         let nextIDs = Set(rows.map(\.id))
@@ -153,7 +154,8 @@ nonisolated enum SessionChatTimelineProjector {
            previous.renderedMarkdown?.sourceHash == bridgeMarkdown?.sourceHash,
            previous.renderedMarkdown?.renderTreeVersion == bridgeMarkdown?.renderTreeVersion,
            previous.renderedMarkdown?.blocks.count == bridgeMarkdown?.blocks.count,
-           previous.contentRevision == contentRevision
+           previous.contentRevision == contentRevision,
+           previous.pendingDelivery == (message.isWaitingForPickup ? message.followUpDelivery : nil)
         {
             return previous
         }
@@ -166,6 +168,7 @@ nonisolated enum SessionChatTimelineProjector {
                         role: message.role,
                         text: displayText,
                         metadataLabel: label,
+                        pendingDelivery: message.isWaitingForPickup ? message.followUpDelivery : nil,
                         isStreaming: body.isStreaming,
                         renderedMarkdown: bridgeMarkdown,
                         blocks: body.blocks,
@@ -184,8 +187,7 @@ nonisolated enum SessionChatTimelineProjector {
             role: message.role,
             text: displayText,
             metadataLabel: label,
-            waitingCaption: message.waitingCaption,
-            waitingDelivery: message.isWaitingForPickup ? message.followUpDelivery : nil,
+            pendingDelivery: message.isWaitingForPickup ? message.followUpDelivery : nil,
             isPending: false,
             isStreaming: body.isStreaming,
             renderedMarkdown: bridgeMarkdown,
@@ -224,6 +226,13 @@ nonisolated enum SessionChatTimelineProjector {
     }
 
     // MARK: - Optimistic merge (ported from SessionChatTimeline)
+
+    /// Queue-pending echoes stay in `mergeWithPending` so they can drop a matching
+    /// optimistic row, then leave the displayed set. Optimistic `isPending` rows
+    /// are not hidden by this rule.
+    private static func isHiddenQueuePending(_ row: TimelineRow) -> Bool {
+        !row.isPending && row.role == .user && row.pendingDelivery == .queue
+    }
 
     private static func mergeWithPending(
         _ serverRows: [TimelineRow],
@@ -421,7 +430,7 @@ nonisolated enum SessionChatTimelineProjector {
                 "n:\(id)"
             }
         }.joined(separator: "|")
-        return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(row.waitingCaption == nil ? "0" : "1"):\(blockKey)"
+        return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(row.pendingDelivery == nil ? "0" : "1"):\(blockKey)"
     }
 
     /// Layout bump caused only by markdown presence/sourceHash while streaming flag and
@@ -468,6 +477,7 @@ nonisolated enum SessionChatTimelineProjector {
         role: MessageRole,
         text: String,
         metadataLabel: String,
+        pendingDelivery: FollowUpDelivery?,
         isStreaming: Bool,
         renderedMarkdown: NativeMarkdownDocument?,
         blocks: [SessionChatTimelineBlock],
@@ -479,6 +489,7 @@ nonisolated enum SessionChatTimelineProjector {
             role: role,
             text: text,
             metadataLabel: metadataLabel,
+            pendingDelivery: pendingDelivery,
             isPending: false,
             isStreaming: isStreaming,
             renderedMarkdown: renderedMarkdown,

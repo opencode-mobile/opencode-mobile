@@ -23,6 +23,7 @@ import dev.opencode.mobile.data.remote.dto.V2ForkBoundaryDto
 import dev.opencode.mobile.data.remote.dto.V2ForkSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2FormInfoDto
 import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
+import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
 import dev.opencode.mobile.data.remote.dto.V2LocationDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
@@ -192,6 +193,40 @@ class SessionsApi private constructor(
         httpClient
             .get()
             .post("api/session/$id/interrupt")
+            .ensureSuccess()
+
+    suspend fun listInboxV2(sessionId: String): List<V2InboxItemDto> =
+        httpClient
+            .get()
+            .get("api/session/$sessionId/inbox")
+            .body<ApiListEnvelope<V2InboxItemDto>>()
+            .data
+
+    suspend fun cancelInboxV2(
+        sessionId: String,
+        inboxId: String,
+    ): Boolean =
+        httpClient
+            .get()
+            .delete("api/session/$sessionId/inbox/$inboxId")
+            .ensureSuccess()
+
+    suspend fun steerInboxV2(
+        sessionId: String,
+        inboxId: String,
+    ): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$sessionId/inbox/$inboxId/steer")
+            .ensureSuccess()
+
+    suspend fun queueInboxV2(
+        sessionId: String,
+        inboxId: String,
+    ): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$sessionId/inbox/$inboxId/queue")
             .ensureSuccess()
 
     suspend fun shareSession(

@@ -43,7 +43,12 @@ class MessageProtocolRepositoryTest {
             assertEquals("msg_1", messages.single().id)
             assertEquals("Hi", messages.single().text)
             assertEquals("/repo", requests.single().url.parameters["directory"])
-            assertTrue(requests.single().url.encodedPath.endsWith("/session/ses_1/message"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .endsWith("/session/ses_1/message"),
+            )
         }
 
     @Test
@@ -53,7 +58,8 @@ class MessageProtocolRepositoryTest {
             val client =
                 testClient { request ->
                     requests += request
-                    respondJson(
+                    respondMessagesOrEmptyInbox(
+                        request,
                         """
                         {
                           "data":[
@@ -79,9 +85,10 @@ class MessageProtocolRepositoryTest {
             assertEquals(listOf("msg_user", "msg_asst"), messages.map { it.id })
             assertEquals("Hello", messages[0].text)
             assertEquals("Hi", messages[1].text)
-            assertEquals(null, requests.single().url.parameters["directory"])
-            assertEquals("asc", requests.single().url.parameters["order"])
-            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_2/message"))
+            val messageRequest = requests.messageRequests().single()
+            assertEquals(null, messageRequest.url.parameters["directory"])
+            assertEquals("asc", messageRequest.url.parameters["order"])
+            assertTrue(messageRequest.url.encodedPath.contains("/api/session/ses_2/message"))
         }
 
     @Test
@@ -101,7 +108,12 @@ class MessageProtocolRepositoryTest {
                 "/repo",
             )
 
-            assertTrue(requests.single().url.encodedPath.endsWith("/session/ses_1/prompt_async"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .endsWith("/session/ses_1/prompt_async"),
+            )
             val body = (requests.single().body as io.ktor.http.content.TextContent).text
             assertTrue(body.contains("\"parts\""))
             assertTrue(body.contains("Hello"))
@@ -160,15 +172,19 @@ class MessageProtocolRepositoryTest {
             val client =
                 testClient { request ->
                     requests += request
-                    val cursor = request.url.parameters["cursor"]
-                    if (cursor == null) {
-                        respondJson(
-                            """{"data":[{"id":"msg_a","type":"user","text":"A","time":{"created":1}}],"cursor":{"next":"page-2"}}""",
-                        )
+                    if (request.url.encodedPath.contains("/inbox")) {
+                        respondJson("""{"data":[]}""")
                     } else {
-                        respondJson(
-                            """{"data":[{"id":"msg_b","type":"user","text":"B","time":{"created":2}}],"cursor":{"next":null}}""",
-                        )
+                        val cursor = request.url.parameters["cursor"]
+                        if (cursor == null) {
+                            respondJson(
+                                """{"data":[{"id":"msg_a","type":"user","text":"A","time":{"created":1}}],"cursor":{"next":"page-2"}}""",
+                            )
+                        } else {
+                            respondJson(
+                                """{"data":[{"id":"msg_b","type":"user","text":"B","time":{"created":2}}],"cursor":{"next":null}}""",
+                            )
+                        }
                     }
                 }
             val router = router(client, ServerProtocol.V2)
@@ -176,11 +192,12 @@ class MessageProtocolRepositoryTest {
             val messages = router.listMessages("ses_2", "/repo")
 
             assertEquals(listOf("msg_a", "msg_b"), messages.map { it.id })
-            assertEquals(2, requests.size)
-            assertEquals("asc", requests[0].url.parameters["order"])
-            assertEquals(null, requests[0].url.parameters["cursor"])
-            assertEquals("page-2", requests[1].url.parameters["cursor"])
-            assertEquals(null, requests[1].url.parameters["order"])
+            val messageRequests = requests.messageRequests()
+            assertEquals(2, messageRequests.size)
+            assertEquals("asc", messageRequests[0].url.parameters["order"])
+            assertEquals(null, messageRequests[0].url.parameters["cursor"])
+            assertEquals("page-2", messageRequests[1].url.parameters["cursor"])
+            assertEquals(null, messageRequests[1].url.parameters["order"])
         }
 
     @Test
@@ -245,7 +262,8 @@ class MessageProtocolRepositoryTest {
             val client =
                 testClient { request ->
                     requests += request
-                    respondJson(
+                    respondMessagesOrEmptyInbox(
+                        request,
                         """
                         {
                           "data":[
@@ -263,9 +281,10 @@ class MessageProtocolRepositoryTest {
 
             assertEquals(listOf("msg_old", "msg_new"), page.messages.map { it.id })
             assertEquals("older", page.olderCursor)
-            assertEquals("20", requests.single().url.parameters["limit"])
-            assertEquals("desc", requests.single().url.parameters["order"])
-            assertEquals(null, requests.single().url.parameters["cursor"])
+            val messageRequest = requests.messageRequests().single()
+            assertEquals("20", messageRequest.url.parameters["limit"])
+            assertEquals("desc", messageRequest.url.parameters["order"])
+            assertEquals(null, messageRequest.url.parameters["cursor"])
         }
 
     @Test
@@ -303,8 +322,9 @@ class MessageProtocolRepositoryTest {
     fun v2ListMessageTail_reversesDescPageOnceIgnoringTimestamps() =
         runTest {
             val client =
-                testClient { _ ->
-                    respondJson(
+                testClient { request ->
+                    respondMessagesOrEmptyInbox(
+                        request,
                         """
                         {
                           "data":[
@@ -354,7 +374,8 @@ class MessageProtocolRepositoryTest {
             val client =
                 testClient { request ->
                     requests += request
-                    respondJson(
+                    respondMessagesOrEmptyInbox(
+                        request,
                         """{"data":[{"id":"msg_v2","type":"user","text":"V2","time":{"created":1}}],"cursor":{"next":null}}""",
                     )
                 }
@@ -369,7 +390,13 @@ class MessageProtocolRepositoryTest {
             val messages = router.listMessages("ses_2", "/repo")
 
             assertEquals("msg_v2", messages.single().id)
-            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_2/message"))
+            assertTrue(
+                requests
+                    .messageRequests()
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/session/ses_2/message"),
+            )
         }
 
     private suspend fun router(
@@ -410,6 +437,17 @@ private fun MockRequestHandleScope.respondJson(content: String) =
         status = HttpStatusCode.OK,
         headers = headersOf(HttpHeaders.ContentType, "application/json"),
     )
+
+private fun MockRequestHandleScope.respondMessagesOrEmptyInbox(
+    request: HttpRequestData,
+    messagesJson: String,
+) = if (request.url.encodedPath.contains("/inbox")) {
+    respondJson("""{"data":[]}""")
+} else {
+    respondJson(messagesJson)
+}
+
+private fun List<HttpRequestData>.messageRequests(): List<HttpRequestData> = filter { !it.url.encodedPath.contains("/inbox") }
 
 private class FakeProfileStore : ConnectionProfileStore {
     private var profile: ConnectionProfile? = null

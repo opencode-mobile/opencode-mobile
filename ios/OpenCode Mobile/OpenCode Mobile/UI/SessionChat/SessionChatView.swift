@@ -15,6 +15,8 @@ struct SessionChatView: View {
     @State private var menuExpanded = false
     @State private var showDeleteConfirmation = false
     @State private var messageActionsTarget: SessionChatMessageActionsTarget?
+    @State private var pendingSteerTarget: SessionChatPendingSteerTarget?
+    @State private var showQueuedPromptsSheet = false
     @State private var toolDetailTarget: SessionChatToolDetailTarget?
     @State private var toolGroupTarget: SessionChatToolGroupTarget?
     @State private var childSessionTarget: ChildSessionNavigationTarget?
@@ -204,6 +206,14 @@ struct SessionChatView: View {
                             )
                             messageActionsTarget = target
                         },
+                        onPendingSteerTap: { target in
+                            ProductAnalytics.logScreenView(
+                                screenId: ProductAnalytics.Screen.sessionPendingSteer,
+                                presentation: ProductAnalytics.Presentation.sheet,
+                                trigger: ProductAnalytics.Trigger.present
+                            )
+                            pendingSteerTarget = target
+                        },
                         onToolDetailTap: { target in
                             logChatAction(ProductAnalytics.Action.chatOpenToolDetail)
                             ProductAnalytics.logScreenView(
@@ -301,6 +311,21 @@ struct SessionChatView: View {
                             )
                             .padding(.horizontal, 12)
                             .padding(.bottom, 4)
+                        } else if !viewModel.uiState.queuedPrompts.isEmpty {
+                            OpenCodeQueuedPromptsDock(
+                                count: viewModel.uiState.queuedPrompts.count,
+                                preview: viewModel.uiState.queuedPrompts.first?.text,
+                                onTap: {
+                                    ProductAnalytics.logScreenView(
+                                        screenId: ProductAnalytics.Screen.sessionQueuedPrompts,
+                                        presentation: ProductAnalytics.Presentation.sheet,
+                                        trigger: ProductAnalytics.Trigger.present
+                                    )
+                                    showQueuedPromptsSheet = true
+                                }
+                            )
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 4)
                         }
                     }
                     composer
@@ -338,6 +363,27 @@ struct SessionChatView: View {
             target: $messageActionsTarget,
             onRevertMessage: { viewModel.revertMessage($0) }
         )
+        .sessionChatPendingSteerSheet(
+            target: $pendingSteerTarget,
+            onMoveToQueue: { viewModel.queuePendingPrompt($0) },
+            onDelete: { viewModel.cancelPendingPrompt($0) }
+        )
+        .sessionChatQueuedPromptsSheet(
+            isPresented: $showQueuedPromptsSheet,
+            prompts: viewModel.uiState.queuedPrompts,
+            onSteer: { viewModel.steerPendingPrompt($0) },
+            onDelete: { viewModel.cancelPendingPrompt($0) }
+        )
+        .onChange(of: viewModel.uiState.queuedPrompts.count) { _, count in
+            if count == 0 {
+                showQueuedPromptsSheet = false
+            }
+        }
+        .onChange(of: shouldDismissPendingSteerTarget) { _, shouldDismiss in
+            if shouldDismiss {
+                pendingSteerTarget = nil
+            }
+        }
         .sessionChatToolDetailSheet(target: $toolDetailTarget)
         .sessionChatTodosSheet(
             isPresented: $showSessionTodosSheet,
@@ -618,6 +664,14 @@ struct SessionChatView: View {
 
     private var sessionTodosPillVisible: Bool {
         viewModel.uiState.sessionTodosVisible || holdingFinishedTodos
+    }
+
+    private var shouldDismissPendingSteerTarget: Bool {
+        shouldDismissPendingSteerSheet(
+            targetId: pendingSteerTarget?.id,
+            timeline: viewModel.uiState.timeline,
+            messages: viewModel.uiState.messages
+        )
     }
 
     private func dismissSessionTodosSheetIfBlocked() {
