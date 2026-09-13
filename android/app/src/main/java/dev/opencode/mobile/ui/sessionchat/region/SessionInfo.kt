@@ -13,6 +13,7 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
@@ -91,6 +92,7 @@ class SessionInfo(
                     liveUpdates.chrome.value.label
                         .toSessionConnectionStatus(),
                 canMutate = liveUpdates.chrome.value.canMutate,
+                composerEnabled = liveUpdates.chrome.value.composerEnabled,
             )
         logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
         startObserving(sessionId, worktree)
@@ -194,22 +196,13 @@ class SessionInfo(
             }
     }
 
-    fun markOptimisticBusy() {
+    fun setOptimistic(
+        activity: SessionActivity,
+        ttlMs: Long = SessionStatusLiveStore.DEFAULT_OPTIMISTIC_TTL_MS,
+    ) {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
-        sessionStatusLiveStore.markBusy(worktree, sessionId)
-    }
-
-    fun clearOptimisticBusy() {
-        val sessionId = boundSessionId ?: return
-        val worktree = boundWorktree ?: return
-        sessionStatusLiveStore.clearLocalBusy(worktree, sessionId)
-    }
-
-    fun markIdle() {
-        val sessionId = boundSessionId ?: return
-        val worktree = boundWorktree ?: return
-        sessionStatusLiveStore.markIdle(worktree, sessionId)
+        sessionStatusLiveStore.setOptimistic(worktree, sessionId, activity, ttlMs)
     }
 
     fun archiveSession() {
@@ -311,22 +304,26 @@ class SessionInfo(
             scope.launch {
                 coroutineScope {
                     launch {
-                        sessionStatusLiveStore.observeStatuses(worktree).collect { statuses ->
+                        sessionStatusLiveStore.observeActivity(worktree).collect { snapshot ->
                             if (!isCurrentBinding(sessionId, worktree)) return@collect
-                            val status = statuses[sessionId]
+                            val entry = snapshot.entries[sessionId]
+                            val label =
+                                if (snapshot.seeded) {
+                                    entry?.activity?.statusLabel()
+                                } else {
+                                    null
+                                }
                             logD(
-                                "live status session=$sessionId type=${status?.raw?.get("type") ?: "-"}",
+                                "live status session=$sessionId activity=${entry?.activity ?: "-"} seeded=${snapshot.seeded}",
                             )
                             DiagnosticLog.debug(
                                 DiagnosticLogArea.Session,
-                                "live status session=$sessionId type=${status?.raw?.get("type") ?: "-"}",
+                                "live status session=$sessionId activity=${entry?.activity ?: "-"} seeded=${snapshot.seeded}",
                             )
                             _state.update {
                                 it.withStatus(
-                                    authoritative = status?.let(eventDomainAdapter::statusLabel),
-                                    // Every LiveStore emission is an authoritative snapshot
-                                    // (including idle / missing session).
-                                    hasResolved = true,
+                                    authoritative = label,
+                                    hasResolved = snapshot.seeded,
                                 )
                             }
                         }
@@ -336,17 +333,18 @@ class SessionInfo(
                             if (!isCurrentBinding(sessionId, worktree)) return@collect
                             logD(
                                 "live connection session=$sessionId " +
-                                    "label=${chrome.label} canMutate=${chrome.canMutate}",
+                                    "label=${chrome.label} canMutate=${chrome.canMutate} composerEnabled=${chrome.composerEnabled}",
                             )
                             DiagnosticLog.debug(
                                 DiagnosticLogArea.Session,
                                 "live connection session=$sessionId " +
-                                    "label=${chrome.label} canMutate=${chrome.canMutate}",
+                                    "label=${chrome.label} canMutate=${chrome.canMutate} composerEnabled=${chrome.composerEnabled}",
                             )
                             _state.update {
                                 it.copy(
                                     connectionStatus = chrome.label.toSessionConnectionStatus(),
                                     canMutate = chrome.canMutate,
+                                    composerEnabled = chrome.composerEnabled,
                                 )
                             }
                         }

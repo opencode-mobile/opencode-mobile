@@ -75,6 +75,18 @@ private let sessionListGallerySamples: [SessionListSession] = {
             updatedAtEpochMs: now
         ),
         SessionListSession(
+            id: "session-stale",
+            title: "Resume Cached Chat",
+            worktree: "/Users/demo/opencode-mobile",
+            letter: "O",
+            letterAccent: .violet,
+            subtitle: "/Users/demo/opencode-mobile",
+            status: .running,
+            statusIsStale: true,
+            caption: "14m ago",
+            updatedAtEpochMs: now - 14 * 60_000
+        ),
+        SessionListSession(
             id: "session-2",
             title: "Bug: Header Clipping",
             worktree: "/Users/demo/playground",
@@ -103,7 +115,7 @@ private let sessionListGallerySamples: [SessionListSession] = {
             letter: "A",
             letterAccent: .amber,
             subtitle: "/Users/demo/api-client",
-            status: .running,
+            status: .retrying(attempt: 2),
             caption: "2d ago",
             updatedAtEpochMs: now - 2 * 86_400_000
         ),
@@ -111,14 +123,14 @@ private let sessionListGallerySamples: [SessionListSession] = {
 }()
 
 private let sessionListGalleryFilterTabs: [SessionListFilterTab] = [
-    .all(projectCount: 3, sessionCount: 4),
-    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 2),
+    .all(projectCount: 3, sessionCount: 5),
+    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 3),
     .project(worktree: "/Users/demo/playground", title: "playground", count: 1),
     .project(worktree: "/Users/demo/api-client", title: "api-client", count: 1),
 ]
 
 private let sessionListGalleryOneProjectFilterTabs: [SessionListFilterTab] = [
-    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 2),
+    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 3),
 ]
 
 #Preview {

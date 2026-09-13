@@ -2,7 +2,7 @@ import Foundation
 @testable import OpenCode_Mobile
 
 final class RecordingForegroundEventStream: LiveConnection, @unchecked Sendable {
-    let fake = FakeForegroundEventStream()
+    let fake = FakeForegroundEventStream(connected: false)
     private let lock = NSLock()
     private var _ops: [String] = []
 
@@ -34,10 +34,17 @@ final class RecordingForegroundEventStream: LiveConnection, @unchecked Sendable 
         fake.start()
     }
 
-    func stop() {
+    func onReconnectWake() {
+        lock.lock()
+        _ops.append("wake")
+        lock.unlock()
+        fake.onReconnectWake()
+    }
+
+    func stop() async {
         lock.lock()
         _ops.append("stop")
         lock.unlock()
-        fake.stop()
+        await fake.stop()
     }
 }

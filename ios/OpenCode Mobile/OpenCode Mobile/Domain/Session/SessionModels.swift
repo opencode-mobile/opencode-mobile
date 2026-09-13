@@ -46,6 +46,109 @@ struct SessionStatus: Sendable, Equatable {
     let raw: [String: String]
 }
 
+enum SessionActivity: Sendable, Equatable {
+    case idle
+    case running
+    case retrying(attempt: Int?, nextAtMs: Int64?, message: String?)
+
+    var isBusy: Bool {
+        switch self {
+        case .running, .retrying: true
+        case .idle: false
+        }
+    }
+
+    var statusLabel: String? {
+        switch self {
+        case .idle:
+            nil
+        case .running:
+            "Working"
+        case let .retrying(attempt, _, _):
+            if let attempt {
+                "Retrying · \(attempt)"
+            } else {
+                "Retrying"
+            }
+        }
+    }
+
+    init(raw: [String: String]) {
+        switch raw["type"]?.lowercased() {
+        case "busy", "running":
+            self = .running
+        case "retry":
+            self = .retrying(
+                attempt: raw["attempt"].flatMap(Int.init),
+                nextAtMs: raw["nextAtMs"].flatMap(Int64.init)
+                    ?? raw["nextAt"].flatMap(Int64.init)
+                    ?? raw["next"].flatMap(Int64.init),
+                message: raw["message"]
+            )
+        default:
+            self = .idle
+        }
+    }
+}
+
+enum SessionActivitySource: Sendable, Equatable {
+    case server
+    case optimistic
+    case cached
+}
+
+struct SessionActivityEntry: Sendable, Equatable {
+    let activity: SessionActivity
+    let source: SessionActivitySource
+    let observedAtMs: Int64
+}
+
+struct SessionActivitySnapshot: Sendable, Equatable {
+    var entries: [String: SessionActivityEntry]
+    var seeded: Bool
+    var fromCache: Bool
+
+    static let empty = SessionActivitySnapshot(entries: [:], seeded: false, fromCache: false)
+
+    init(entries: [String: SessionActivityEntry], seeded: Bool, fromCache: Bool = false) {
+        self.entries = entries
+        self.seeded = seeded
+        self.fromCache = fromCache
+    }
+
+    func statusLabel(for sessionID: String) -> String? {
+        guard let entry = entries[sessionID] else { return nil }
+        guard seeded || entry.source == .cached else { return nil }
+        return entry.activity.statusLabel
+    }
+
+    func isBusy(for sessionID: String) -> Bool {
+        guard let entry = entries[sessionID] else { return false }
+        guard seeded || entry.source == .cached else { return false }
+        return entry.activity.isBusy
+    }
+
+    func statusIsStale(for sessionID: String) -> Bool {
+        entries[sessionID]?.source == .cached
+    }
+}
+
+struct SessionActivityCacheEntry: Sendable, Equatable {
+    let sessionId: String
+    let activity: SessionActivity
+    let observedAtMs: Int64
+}
+
+enum SessionActivityPolicy {
+    static let optimisticTtlMs: Int64 = 10_000
+    static let abortOptimisticTtlMs: Int64 = 3_000
+    static let runningReconcileMs = 30_000
+    static let idleConfirmMs = 3_000
+    static let pendingSendTimeoutMs: Int64 = 8_000
+    static let cachedActivityTtlMs: Int64 = 6 * 60 * 60 * 1_000
+    static let activityRememberDebounceMs: UInt64 = 1_000
+}
+
 enum SessionTodoStatus: Sendable, Equatable {
     case pending
     case inProgress

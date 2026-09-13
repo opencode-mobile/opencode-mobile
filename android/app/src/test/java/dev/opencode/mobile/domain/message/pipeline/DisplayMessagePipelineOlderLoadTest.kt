@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.live.LiveStoreScope
+import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import dev.opencode.mobile.markdown.MarkdownDocument
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -49,8 +50,12 @@ class DisplayMessagePipelineOlderLoadTest {
                     engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
                     eventStream = FakeForegroundEventStream(),
                     liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
-                    pollIntervalMs = 60_000L,
-                    recoveryDelay = { },
+                    syncCoordinator = testSyncCoordinator(
+                        eventStream = FakeForegroundEventStream(),
+                        scope = CoroutineScope(SupervisorJob() + testDispatcher),
+                        nowMs = { testDispatcher.scheduler.currentTime },
+                        wait = { kotlinx.coroutines.delay(it) },
+                    ),
                     nowMs = { testDispatcher.scheduler.currentTime },
                 )
             val pipeline =

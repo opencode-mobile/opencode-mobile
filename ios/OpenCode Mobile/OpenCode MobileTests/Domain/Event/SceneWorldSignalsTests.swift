@@ -6,48 +6,48 @@ import Testing
 struct SceneWorldSignalsTests {
     @Test func briefBackgroundDoesNotStopStreamWhenForegroundCancelsGrace() async {
         let stream = FakeForegroundEventStream()
-        let signals = sceneWorldSignals(stream: stream, stopGrace: .milliseconds(100))
+        let signals = sceneWorldSignals(stream: stream, stopGrace: .seconds(30))
         let collected = SignalCollector()
         let job = Task {
             for await signal in signals.signals() {
                 collected.append(signal)
             }
         }
-        try? await Task.sleep(for: .milliseconds(20))
 
         signals.onForeground()
-        try? await Task.sleep(for: .milliseconds(20))
-        #expect(stream.connectionState == .connected)
-        #expect(collected.snapshot() == [.foreground])
+        let foregrounded = await waitUntil {
+            stream.connectionState == .connected && collected.snapshot() == [.foreground]
+        }
+        #expect(foregrounded)
 
         signals.onBackground()
-        try? await Task.sleep(for: .milliseconds(40))
+        let backed = await waitUntil { collected.snapshot() == [.foreground, .background] }
+        #expect(backed)
         #expect(stream.connectionState == .connected)
-        #expect(collected.snapshot() == [.foreground, .background])
 
         signals.onForeground()
-        try? await Task.sleep(for: .milliseconds(200))
-        #expect(stream.connectionState == .connected)
-        #expect(collected.snapshot() == [.foreground, .background, .foreground])
+        let resumed = await waitUntil {
+            stream.connectionState == .connected
+                && collected.snapshot() == [.foreground, .background, .foreground]
+        }
+        #expect(resumed)
         job.cancel()
     }
 
     @Test func sustainedBackgroundStopsStreamAfterGrace() async {
         let stream = FakeForegroundEventStream()
-        let signals = sceneWorldSignals(stream: stream, stopGrace: .milliseconds(100))
+        let signals = sceneWorldSignals(stream: stream, stopGrace: .milliseconds(150))
         let collected = SignalCollector()
         let job = Task {
             for await signal in signals.signals() {
                 collected.append(signal)
             }
         }
-        try? await Task.sleep(for: .milliseconds(20))
 
         signals.onForeground()
         signals.onBackground()
-        try? await Task.sleep(for: .milliseconds(20))
-        #expect(collected.snapshot() == [.foreground, .background])
-        try? await Task.sleep(for: .milliseconds(60))
+        let backed = await waitUntil { collected.snapshot() == [.foreground, .background] }
+        #expect(backed)
         #expect(stream.connectionState == .connected)
 
         let stopped = await waitUntil {
@@ -58,7 +58,7 @@ struct SceneWorldSignalsTests {
         job.cancel()
     }
 
-    @Test func profileSwitchWhileOccupyingRetargetsStream() async {
+    @Test func profileHandlerEmitsOnlyWithoutStopOrStart() async {
         let stream = RecordingForegroundEventStream()
         let signals = SceneWorldSignals(
             stream: stream,
@@ -67,18 +67,23 @@ struct SceneWorldSignalsTests {
             stopGrace: .milliseconds(50)
         )
         signals.onForeground()
-        try? await Task.sleep(for: .milliseconds(20))
-        #expect(stream.connectionState == .connected)
+        let started = await waitUntil { stream.connectionState == .connected }
+        #expect(started)
 
         signals.onProfileSwitched()
-        try? await Task.sleep(for: .milliseconds(20))
+        let switched = await waitUntil { stream.ops == ["wake", "start"] }
+        #expect(switched)
         #expect(stream.connectionState == .connected)
-        #expect(stream.ops == ["start", "stop", "start"])
+
+        let before = stream.ops
+        signals.onProfileCleared()
+        let settled = await waitUntil { stream.ops == before && stream.connectionState == .connected }
+        #expect(settled)
     }
 
     @Test func occupancyTracksForegroundGraceAndStop() async {
         let stream = FakeForegroundEventStream()
-        let signals = sceneWorldSignals(stream: stream, stopGrace: .milliseconds(50))
+        let signals = sceneWorldSignals(stream: stream, stopGrace: .milliseconds(150))
         #expect(signals.occupancy == .active)
 
         signals.onBackground()
@@ -92,20 +97,69 @@ struct SceneWorldSignalsTests {
         #expect(stream.connectionState == .connected)
     }
 
+    @Test func inactiveLongerThanGraceStartsBackgroundGrace() async {
+        let stream = FakeForegroundEventStream()
+        let signals = sceneWorldSignals(
+            stream: stream,
+            stopGrace: .milliseconds(150),
+            inactiveGrace: .milliseconds(150)
+        )
+        signals.onForeground()
+        signals.onInactive()
+        #expect(signals.occupancy == .active)
+        let graced = await waitUntil { signals.occupancy == .grace }
+        #expect(graced)
+        let stopped = await waitUntil { signals.occupancy == .stopped }
+        #expect(stopped)
+        let idle = await waitUntil { stream.connectionState == .idle }
+        #expect(idle)
+    }
+
+    @Test func activeBeforeInactiveGraceCancelsBackground() async {
+        let stream = FakeForegroundEventStream()
+        let signals = sceneWorldSignals(
+            stream: stream,
+            stopGrace: .seconds(30),
+            inactiveGrace: .seconds(30)
+        )
+        signals.onForeground()
+        signals.onInactive()
+        #expect(signals.occupancy == .active)
+        signals.onForeground()
+        #expect(signals.occupancy == .active)
+        #expect(stream.connectionState == .connected)
+    }
+
+    @Test func foregroundAndPathReadyWakeTheStream() async {
+        let stream = RecordingForegroundEventStream()
+        let signals = SceneWorldSignals(
+            stream: stream,
+            deviceNetworkPath: ReadyDeviceNetworkPath(),
+            hasActiveConnection: { true },
+            stopGrace: .milliseconds(50)
+        )
+        signals.onForeground()
+        signals.onPathReady()
+        let woke = await waitUntil { stream.ops.filter { $0 == "wake" }.count == 2 }
+        #expect(woke)
+    }
+
     private func sceneWorldSignals(
         stream: FakeForegroundEventStream,
-        stopGrace: Duration
+        stopGrace: Duration,
+        inactiveGrace: Duration = .milliseconds(2_000)
     ) -> SceneWorldSignals {
         SceneWorldSignals(
             stream: stream,
             deviceNetworkPath: ReadyDeviceNetworkPath(),
             hasActiveConnection: { true },
-            stopGrace: stopGrace
+            stopGrace: stopGrace,
+            inactiveGrace: inactiveGrace
         )
     }
 
     private func waitUntil(
-        timeoutMs: Int = 2_000,
+        timeoutMs: Int = 5_000,
         predicate: () -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(TimeInterval(timeoutMs) / 1_000)

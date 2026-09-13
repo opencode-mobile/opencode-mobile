@@ -18,6 +18,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             variant: info.variant,
             mode: info.mode ?? info.agent,
             sentAtEpochMs: info.time?.created,
+            completedAtEpochMs: info.time?.completed,
             contextInputTokens: info.tokens?.input,
             contextEstimate: contextEstimate(role: info.role, parts: dto.parts),
             followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
@@ -43,6 +44,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             variant: info.variant,
             mode: info.mode ?? info.agent,
             sentAtEpochMs: info.time?.created,
+            completedAtEpochMs: info.time?.completed,
             contextInputTokens: info.tokens?.input,
             contextEstimate: MessageContextEstimate(),
             followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
@@ -274,6 +276,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             mode: dto.agent ?? (agent.isEmpty ? nil : agent),
             model: dto.model ?? model,
             sentAtEpochMs: dto.time?.created,
+            completedAtEpochMs: dto.time?.completed,
             contextEstimate: MessageContextEstimate(
                 userCharacters: text.count
                     + dto.files.reduce(0) { $0 + ($1.mention?.text?.count ?? $1.source?.text?.count ?? 0) }
@@ -293,6 +296,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             mode: agent.isEmpty ? nil : agent,
             model: model,
             sentAtEpochMs: dto.time?.created,
+            completedAtEpochMs: dto.time?.completed,
             contextEstimate: MessageContextEstimate(userCharacters: text.count)
         )
     }
@@ -306,6 +310,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             mode: dto.name ?? (agent.isEmpty ? nil : agent),
             model: model,
             sentAtEpochMs: dto.time?.created,
+            completedAtEpochMs: dto.time?.completed,
             contextEstimate: MessageContextEstimate(userCharacters: text.count)
         )
     }
@@ -320,6 +325,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             mode: agent.isEmpty ? nil : agent,
             model: model,
             sentAtEpochMs: dto.time?.created,
+            completedAtEpochMs: dto.time?.completed,
             contextEstimate: MessageContextEstimate(userCharacters: command.count)
         )
         let assistant = messageFromV2(
@@ -339,7 +345,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             ],
             mode: agent.isEmpty ? nil : agent,
             model: model,
-            sentAtEpochMs: dto.time?.created
+            sentAtEpochMs: dto.time?.created,
+            completedAtEpochMs: dto.time?.completed
         )
         return [user, assistant]
     }
@@ -358,6 +365,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             mode: dto.agent ?? (agent.isEmpty ? nil : agent),
             model: dto.model ?? model,
             sentAtEpochMs: dto.time?.created,
+            completedAtEpochMs: dto.time?.completed,
             contextInputTokens: dto.tokens?.input,
             contextEstimate: v2AssistantContextEstimate(dto.content)
         )
@@ -383,6 +391,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             parts: parts,
             mode: "compaction",
             sentAtEpochMs: dto.time?.created,
+            completedAtEpochMs: dto.time?.completed,
             contextEstimate: MessageContextEstimate(assistantCharacters: summary.count)
         )
     }
@@ -397,6 +406,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
         mode: String? = nil,
         model: V2ModelRefDTO? = nil,
         sentAtEpochMs: Int64? = nil,
+        completedAtEpochMs: Int64? = nil,
         contextInputTokens: Int64? = nil,
         contextEstimate: MessageContextEstimate = MessageContextEstimate()
     ) -> Message {
@@ -414,6 +424,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             variant: model?.variant,
             mode: mode,
             sentAtEpochMs: sentAtEpochMs,
+            completedAtEpochMs: completedAtEpochMs,
             contextInputTokens: contextInputTokens,
             contextEstimate: contextEstimate
         )

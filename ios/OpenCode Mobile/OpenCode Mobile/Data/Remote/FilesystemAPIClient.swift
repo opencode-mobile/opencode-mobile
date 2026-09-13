@@ -7,13 +7,13 @@ nonisolated struct FilesystemAPIClient: Sendable {
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession = .shared
+        urlSession: URLSession = OpenCodeURLSessions.rest
     ) {
         self.connectionProvider = connectionProvider
         self.urlSession = urlSession
     }
 
-    init(fixedConnection: ServerConnection, urlSession: URLSession = .shared) {
+    init(fixedConnection: ServerConnection, urlSession: URLSession = OpenCodeURLSessions.rest) {
         self.connectionProvider = { fixedConnection }
         self.urlSession = urlSession
     }

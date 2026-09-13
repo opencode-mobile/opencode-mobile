@@ -12,6 +12,13 @@ object NoOpSessionCache : SessionCache {
         sessions: List<Session>,
     ) = Unit
 
+    override suspend fun seedActivity(directory: String): List<SessionActivityCacheEntry>? = null
+
+    override suspend fun rememberActivity(
+        directory: String,
+        entries: List<SessionActivityCacheEntry>,
+    ) = Unit
+
     override fun openMessages(
         sessionId: String,
         worktree: String,

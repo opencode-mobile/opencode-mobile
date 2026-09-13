@@ -7,7 +7,6 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.recovery.RecordingForegroundEventStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +16,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -94,7 +94,7 @@ class ProcessWorldSignalsTest {
         }
 
     @Test
-    fun profileSwitchWhileOccupyingRetargetsStream() =
+    fun profileSwitchWhileOccupyingEmitsOnly() =
         runTest(testDispatcher) {
             val stream = RecordingForegroundEventStream()
             val signals =
@@ -103,11 +103,12 @@ class ProcessWorldSignalsTest {
                     deviceNetworkPath = ReadyPath,
                     diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
                     hasActiveConnection = { true },
-                    profileSaved = MutableSharedFlow(),
-                    profileCleared = MutableSharedFlow(),
                     scope = this,
                     stopGraceMs = 5_000L,
                 )
+            val collected = mutableListOf<WorldSignal>()
+            val job = launch { signals.signals.collect { collected.add(it) } }
+            runCurrent()
             signals.onForeground()
             runCurrent()
             assertEquals(EventStreamConnectionState.Connected, stream.connectionState.value)
@@ -115,7 +116,9 @@ class ProcessWorldSignalsTest {
             signals.onProfileSwitched()
             runCurrent()
             assertEquals(EventStreamConnectionState.Connected, stream.connectionState.value)
-            assertEquals(listOf("start", "stop", "start"), stream.ops.toList())
+            assertEquals(listOf("start"), stream.ops.toList())
+            assertEquals(listOf(WorldSignal.Foreground, WorldSignal.ProfileSwitched), collected)
+            job.cancel()
         }
 
     @Test
@@ -149,8 +152,6 @@ class ProcessWorldSignalsTest {
                     deviceNetworkPath = ReadyPath,
                     diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
                     hasActiveConnection = { true },
-                    profileSaved = MutableSharedFlow(),
-                    profileCleared = MutableSharedFlow(),
                     scope = this,
                     stopGraceMs = 5_000L,
                 )
@@ -180,8 +181,6 @@ class ProcessWorldSignalsTest {
                     deviceNetworkPath = ReadyPath,
                     diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
                     hasActiveConnection = { connected },
-                    profileSaved = MutableSharedFlow(),
-                    profileCleared = MutableSharedFlow(),
                     scope = this,
                     stopGraceMs = 5_000L,
                 )
@@ -201,6 +200,29 @@ class ProcessWorldSignalsTest {
             assertEquals(EventStreamConnectionState.Connected, stream.connectionState.value)
         }
 
+    @Test
+    fun foregroundAfterBackgroundStop_beginsResumeTiming() =
+        runTest(testDispatcher) {
+            ResumeTiming.reset()
+            val stream = FakeForegroundEventStream()
+            val signals = processWorldSignals(stream, this)
+            signals.onForeground()
+            runCurrent()
+            signals.onBackgroundStop()
+            runCurrent()
+            signals.onForeground()
+            runCurrent()
+            ResumeTiming.markCachePainted(System.currentTimeMillis())
+            ResumeTiming.markConnected(System.currentTimeMillis())
+            ResumeTiming.markBootstrapDone(System.currentTimeMillis())
+            val line =
+                DiagnosticLogBuffer.shared.snapshot().entries
+                    .map { it.message }
+                    .lastOrNull { it.startsWith("resume:") }
+            assertTrue(line != null && line.startsWith("resume: cache painted +"))
+            ResumeTiming.reset()
+        }
+
     private fun processWorldSignals(
         stream: FakeForegroundEventStream,
         scope: CoroutineScope,
@@ -210,8 +232,6 @@ class ProcessWorldSignalsTest {
             deviceNetworkPath = ReadyPath,
             diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
             hasActiveConnection = { true },
-            profileSaved = MutableSharedFlow(),
-            profileCleared = MutableSharedFlow(),
             scope = scope,
             stopGraceMs = 5_000L,
         )

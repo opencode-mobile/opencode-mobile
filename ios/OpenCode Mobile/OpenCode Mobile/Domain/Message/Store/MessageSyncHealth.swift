@@ -62,8 +62,3 @@ nonisolated struct MessageSessionKey: Hashable, Sendable {
         "\(connectionProfileID)\u{1f}\(directory)\u{1f}\(sessionID)"
     }
 }
-
-nonisolated enum MessageSyncRecoveryPolicy {
-    static let initialBackoffMs = 250
-    static let maxBackoffMs = 5_000
-}

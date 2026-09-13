@@ -12,6 +12,7 @@ nonisolated protocol SessionCacheStore: Sendable {
 
 nonisolated enum SessionCacheKind: String, Sendable {
     case sessionList = "SessionList"
+    case sessionActivity = "SessionActivity"
     case messageTimeline = "MessageTimeline"
 }
 
@@ -37,6 +38,8 @@ nonisolated struct SessionCacheKey: Sendable, Hashable {
         switch kind {
         case .sessionList:
             "\(connectionId)|\(worktree)|list"
+        case .sessionActivity:
+            "\(connectionId)|\(worktree)|activity"
         case .messageTimeline:
             "\(connectionId)|\(worktree)|msg|\(entryId)"
         }

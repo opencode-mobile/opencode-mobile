@@ -68,16 +68,27 @@ struct LiveConnectionApplyTests {
         )
     }
 
+    @Test func change_credentialFingerprint_isIdentity() {
+        #expect(
+            LiveConnectionApply.change(
+                applied: sample(),
+                requested: sample(credentialFingerprint: "abcd1234abcd1234")
+            ) == .identity
+        )
+    }
+
     private func sample(
         serverProtocol: ServerProtocol = .v1,
         directories: [String] = ["/a"],
-        connectionIdentity: String = "http://host|opencode"
+        connectionIdentity: String = "http://host|opencode",
+        credentialFingerprint: String = ""
     ) -> LiveConnectionConfig {
         LiveConnectionConfig(
             profileID: "p1",
             connectionIdentity: connectionIdentity,
             serverProtocol: serverProtocol,
-            directories: directories
+            directories: directories,
+            credentialFingerprint: credentialFingerprint
         )
     }
 }

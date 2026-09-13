@@ -9,5 +9,7 @@ interface ForegroundEventStream {
 
     fun start()
 
-    fun stop()
+    suspend fun stop()
+
+    fun onReconnectWake() {}
 }

@@ -6,15 +6,17 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dev.opencode.mobile.data.local.SharedPreferencesSessionReadyPersistence
-import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
-import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.DefaultPermissionLiveStore
+import dev.opencode.mobile.domain.live.DefaultProjectionCaches
 import dev.opencode.mobile.domain.live.DefaultQuestionLiveStore
+import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
 import dev.opencode.mobile.domain.live.DefaultSessionReadyStore
+import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.DefaultSessionTodoLiveStore
-import dev.opencode.mobile.domain.live.PermissionLiveStore
-import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.LiveStoreScope
+import dev.opencode.mobile.domain.live.PermissionLiveStore
+import dev.opencode.mobile.domain.live.ProjectionCaches
+import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyClock
 import dev.opencode.mobile.domain.live.SessionReadyPersistence
@@ -56,6 +58,10 @@ abstract class LiveStoreModule {
     abstract fun bindSessionReadyPersistence(
         impl: SharedPreferencesSessionReadyPersistence,
     ): SessionReadyPersistence
+
+    @Binds
+    @Singleton
+    abstract fun bindProjectionCaches(impl: DefaultProjectionCaches): ProjectionCaches
 
     companion object {
         @Provides

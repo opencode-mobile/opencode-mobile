@@ -17,7 +17,7 @@ enum SseFaultOracleTransportDriver {
             case "stream.start":
                 host.stream.start()
             case "stream.stop":
-                host.stream.stop()
+                await host.stream.stop()
             case "target.open":
                 try await host.awaitOpen(try unwrap(step.target, "target.open needs target"))
             case "protocol.set":
@@ -37,7 +37,7 @@ enum SseFaultOracleTransportDriver {
             case "directories.set":
                 host.setDirectories(step.directories ?? [])
             case "profile.switch":
-                host.switchProfile(
+                await host.switchProfile(
                     profileId: try unwrap(step.profileId, "profile.switch needs profileId"),
                     directories: step.directories ?? step.directory.map { [$0] } ?? []
                 )
@@ -107,7 +107,14 @@ private final class TransportHost: @unchecked Sendable {
             configurationRevisions: { revisions.stream() },
             profileID: { profileID.value },
             connectionIdentity: { connectionIdentity.value },
+            credentialFingerprint: {
+                ConnectionProfileIdentity.credentialFingerprint(
+                    username: connectionBox.value.username,
+                    password: connectionBox.value.password ?? ""
+                )
+            },
             protocolHint: { connectionBox.value.serverProtocol ?? .v1 },
+            cachedProtocol: { connectionBox.value.serverProtocol },
             protocolProbe: { connectionBox.value.serverProtocol ?? .v1 }
         )
         self.revisions = revisions
@@ -170,7 +177,7 @@ private final class TransportHost: @unchecked Sendable {
         revisions.yield()
     }
 
-    func switchProfile(profileId: String, directories: [String]) {
+    func switchProfile(profileId: String, directories: [String]) async {
         let url = Self.baseURL(for: profileId, streamID: streamID, seedProfileId: seedProfileId)
         profileID.value = profileId
         connectionIdentity.value = Self.identity(for: url)
@@ -183,7 +190,7 @@ private final class TransportHost: @unchecked Sendable {
         self.directories.value = directories
         worktrees.value = directories
         OracleSseURLProtocol.resetLiveClients(streamID: streamID)
-        stream.stop()
+        await stream.stop()
         stream.start()
     }
 
@@ -265,7 +272,7 @@ private final class TransportHost: @unchecked Sendable {
 
     func close() {
         collectTask?.cancel()
-        stream.stop()
+        Task { await stream.stop() }
         session.invalidateAndCancel()
         OracleSseURLProtocol.unregister(streamID: streamID)
     }
@@ -459,5 +466,6 @@ private final class OracleSseURLProtocol: URLProtocol, @unchecked Sendable {
             Self.streams[streamID]?.clients.removeValue(forKey: target)
         }
         Self.lock.unlock()
+        client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
     }
 }

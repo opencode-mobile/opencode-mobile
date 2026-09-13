@@ -2,18 +2,21 @@ package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.domain.message.AttachmentDataUrl
 import dev.opencode.mobile.domain.message.ToolPartIdentity
+import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionStatus
+import dev.opencode.mobile.domain.session.toSessionActivity
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
 class EventDomainAdapter(
@@ -151,11 +154,7 @@ class EventDomainAdapter(
             "session.execution.started" -> listOf(statusEvent(properties, "busy"))
             "session.next.step.ended",
             "session.step.ended",
-            ->
-                listOfNotNull(
-                    assistantMessageUpdated(properties),
-                    event("session.active.snapshot", properties),
-                )
+            -> listOfNotNull(assistantMessageUpdated(properties))
             "session.execution.succeeded",
             "session.execution.interrupted",
             -> listOf(event("session.idle", properties))
@@ -199,11 +198,7 @@ class EventDomainAdapter(
                 )
             "session.next.shell.ended",
             "session.shell.ended",
-            ->
-                listOf(
-                    shellPartUpdated(properties, status = "completed"),
-                    event("session.active.snapshot", properties),
-                )
+            -> listOf(shellPartUpdated(properties, status = "completed"))
             "session.next.compaction.started",
             "session.compaction.started",
             ->
@@ -216,11 +211,7 @@ class EventDomainAdapter(
             -> listOf(compactionTextDelta(properties))
             "session.next.compaction.ended",
             "session.compaction.ended",
-            ->
-                listOf(
-                    compactionPartUpdated(properties, completed = true),
-                    event("session.active.snapshot", properties),
-                )
+            -> listOf(compactionPartUpdated(properties, completed = true))
             "session.next.compaction.failed",
             "session.compaction.failed",
             ->
@@ -456,9 +447,10 @@ class EventDomainAdapter(
                 ?: properties["content"]
                     ?.let { content ->
                         if (content is kotlinx.serialization.json.JsonArray) {
-                            content.mapNotNull { item ->
-                                item.jsonObject.string("text")
-                            }.joinToString("")
+                            content
+                                .mapNotNull { item ->
+                                    item.jsonObject.string("text")
+                                }.joinToString("")
                         } else {
                             null
                         }
@@ -691,7 +683,17 @@ class EventDomainAdapter(
         val projected =
             buildJsonObject {
                 sessionId?.let { put("sessionID", it) }
-                put("status", buildJsonObject { put("type", statusType) })
+                put(
+                    "status",
+                    buildJsonObject {
+                        put("type", statusType)
+                        if (statusType == "retry") {
+                            retryAttempt(properties)?.let { put("attempt", it) }
+                            retryNextAt(properties)?.let { put("next", it) }
+                            retryMessage(properties)?.let { put("message", it) }
+                        }
+                    },
+                )
             }
         return event("session.status", projected)
     }
@@ -742,9 +744,34 @@ class EventDomainAdapter(
 
     private fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
 
+    private fun JsonObject.int(key: String): Int? {
+        val primitive = this[key] as? JsonPrimitive ?: return null
+        return primitive.intOrNull ?: primitive.contentOrNull?.toIntOrNull()
+    }
+
     private fun JsonObject.long(key: String): Long? {
         val primitive = this[key] as? JsonPrimitive ?: return null
         return primitive.longOrNull ?: primitive.contentOrNull?.toLongOrNull()
+    }
+
+    private fun retryAttempt(properties: JsonObject): Int? {
+        val status = properties["status"] as? JsonObject
+        return status?.int("attempt") ?: properties.int("attempt") ?: properties.int("attemptNumber")
+    }
+
+    private fun retryNextAt(properties: JsonObject): Long? {
+        val status = properties["status"] as? JsonObject
+        return status?.long("next")
+            ?: status?.long("nextAt")
+            ?: status?.long("nextAtMs")
+            ?: properties.long("next")
+            ?: properties.long("nextAt")
+            ?: properties.long("nextAtMs")
+    }
+
+    private fun retryMessage(properties: JsonObject): String? {
+        val status = properties["status"] as? JsonObject
+        return status?.string("message") ?: properties.string("message")
     }
 
     private fun stringIn(
@@ -752,22 +779,73 @@ class EventDomainAdapter(
         key: String,
     ): String? = obj?.string(key)
 
-    fun statusLabel(sessionStatus: SessionStatus): String? = statusLabelFromRawKeys(sessionStatus.raw)
+    fun statusLabel(sessionStatus: SessionStatus): String? = sessionStatus.toSessionActivity().statusLabel()
+
+    fun statusLabel(activity: SessionActivity): String? = activity.statusLabel()
 
     /**
      * Status carried by a `session.status` SSE payload.
      * Returns null when the event is not a usable status update.
      */
     fun sessionStatusFromEvent(event: OpencodeEvent): SessionStatus? {
+        val parsed = sessionActivityFromEvent(event) ?: return null
+        val raw =
+            when (val activity = parsed.activity) {
+                SessionActivity.Idle -> mapOf("type" to "idle")
+                SessionActivity.Running -> mapOf("type" to "busy")
+                is SessionActivity.Retrying ->
+                    buildMap {
+                        put("type", "retry")
+                        activity.attempt?.let { put("attempt", it.toString()) }
+                        activity.nextAtMs?.let { put("next", it.toString()) }
+                        activity.message?.let { put("message", it) }
+                    }
+            }
+        return SessionStatus(sessionId = parsed.sessionId, raw = raw)
+    }
+
+    fun sessionActivityFromEvent(event: OpencodeEvent): ParsedSessionActivity? {
         if (event.type != "session.status") return null
         val sessionId = event.sessionId ?: return null
-        val status = event.rawProperties?.get("status")?.jsonObject ?: return null
-        val raw =
-            status.mapValues { (_, value) ->
-                val primitive = value as? JsonPrimitive
-                primitive?.contentOrNull ?: primitive?.content ?: value.toString()
+        val properties = event.rawProperties ?: JsonObject(emptyMap())
+        val status = properties["status"] as? JsonObject
+        val type =
+            status?.string("type")
+                ?: properties.string("type")
+                ?: return null
+        val activity =
+            when (type.lowercase()) {
+                "busy", "running" -> SessionActivity.Running
+                "idle" -> SessionActivity.Idle
+                "retry" ->
+                    SessionActivity.Retrying(
+                        attempt =
+                            status?.int("attempt")
+                                ?: properties.int("attempt")
+                                ?: properties.int("attemptNumber"),
+                        nextAtMs =
+                            status?.long("next")
+                                ?: status?.long("nextAt")
+                                ?: status?.long("nextAtMs")
+                                ?: properties.long("next")
+                                ?: properties.long("nextAt")
+                                ?: properties.long("nextAtMs"),
+                        message = status?.string("message") ?: properties.string("message"),
+                    )
+                else -> return null
             }
-        return SessionStatus(sessionId = sessionId, raw = raw)
+        return ParsedSessionActivity(sessionId = sessionId, activity = activity)
+    }
+
+    fun assistantMessageCompleted(event: OpencodeEvent): Boolean {
+        if (event.type != "message.updated") return false
+        val info = event.rawProperties?.get("info") as? JsonObject ?: return false
+        if (info.string("role") != "assistant") return false
+        val time = info["time"] as? JsonObject ?: return false
+        val completed = time["completed"] ?: return false
+        if (completed is JsonNull) return false
+        val primitive = completed as? JsonPrimitive ?: return true
+        return primitive.contentOrNull != "null"
     }
 
     /**
@@ -777,6 +855,7 @@ class EventDomainAdapter(
     fun sessionTitleUpdate(event: OpencodeEvent): SessionTitleUpdate? {
         if (event.type != "session.updated") return null
         val info = event.rawProperties?.get("info")?.jsonObject ?: return null
+
         fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
         val sessionId =
             event.sessionId
@@ -787,13 +866,6 @@ class EventDomainAdapter(
         val title = info.string("title") ?: return null
         return SessionTitleUpdate(sessionId = sessionId, title = title)
     }
-
-    private fun statusLabelFromRawKeys(raw: Map<String, String>): String? =
-        when (raw["type"]) {
-            "busy" -> "Working"
-            "retry" -> "Retrying"
-            else -> null
-        }
 
     companion object {
         private val WRAPPER_KEYS =
@@ -813,6 +885,11 @@ class EventDomainAdapter(
             )
     }
 }
+
+data class ParsedSessionActivity(
+    val sessionId: String,
+    val activity: SessionActivity,
+)
 
 data class SessionTitleUpdate(
     val sessionId: String,

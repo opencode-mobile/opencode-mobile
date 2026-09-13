@@ -30,9 +30,9 @@ import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.SessionActivitySnapshot
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionRepository
-import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.session.activeSessions
 import dev.opencode.mobile.domain.session.rootSessions
@@ -132,31 +132,16 @@ class MainScreenViewModel
         private var forkDraftEditReported = false
 
         init {
-            sessionReadyStore.bindProfile(connectionSessionCoordinator.currentProfile()?.id)
             refresh()
             viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
                     stopLiveObservations()
-                    sessionReadyStore.bindProfile(connectionSessionCoordinator.currentProfile()?.id)
-                    sessionLiveStore.clearCache()
-                    sessionStatusLiveStore.clearCache()
-                    permissionLiveStore.clearCache()
-                    questionLiveStore.clearCache()
-                    sessionTodoLiveStore.clearCache()
-                    messageRepository.clearMessageCache()
                     refresh()
                 }
             }
             viewModelScope.launch {
                 connectionSessionCoordinator.profileCleared.collect {
                     stopLiveObservations()
-                    sessionReadyStore.bindProfile(null)
-                    sessionLiveStore.clearCache()
-                    sessionStatusLiveStore.clearCache()
-                    permissionLiveStore.clearCache()
-                    questionLiveStore.clearCache()
-                    sessionTodoLiveStore.clearCache()
-                    messageRepository.clearMessageCache()
                     _uiState.value = MainScreenUiState.Disconnected
                     _serversChrome.value = HomeServersChrome()
                 }
@@ -807,16 +792,9 @@ class MainScreenViewModel
                     .activeSessions()
                     .rootSessions()
                     .sortedByDescending { it.updatedAtEpochMs ?: 0L }
-            val statusBySessionId =
-                runCatching { sessionRepository.getAllSessionStatuses(directory = worktree) }
-                    .getOrDefault(emptyList())
-                    .associateBy { it.sessionId }
             val summaries =
                 sessions.map { session ->
-                    sessionDomainAdapter.toSessionSummary(
-                        session,
-                        statusLabel = statusBySessionId[session.id]?.let(eventDomainAdapter::statusLabel),
-                    )
+                    sessionDomainAdapter.toSessionSummary(session)
                 }
             return ProjectSectionUi(
                 worktree = worktree,
@@ -947,7 +925,7 @@ class MainScreenViewModel
                     viewModelScope.launch {
                         combine(
                             sessionLiveStore.observeSessions(worktree),
-                            sessionStatusLiveStore.observeStatuses(worktree),
+                            sessionStatusLiveStore.observeActivity(worktree),
                             sessionReadyStore.observeReadyIds(worktree),
                         ) { snapshot, statuses, readyIds ->
                             Triple(snapshot, statuses, readyIds)
@@ -976,7 +954,7 @@ class MainScreenViewModel
         private fun updateSectionFromLiveData(
             worktree: String,
             sessions: List<Session>,
-            statuses: Map<String, SessionStatus>,
+            snapshot: SessionActivitySnapshot,
             readyIds: Set<String>,
             sessionsFromCache: Boolean,
         ) {
@@ -990,8 +968,14 @@ class MainScreenViewModel
                     .map { session ->
                         sessionDomainAdapter.toSessionSummary(
                             session,
-                            statusLabel = statuses[session.id]?.let(eventDomainAdapter::statusLabel),
+                            statusLabel =
+                                if (snapshot.seeded || snapshot.fromCache) {
+                                    snapshot.entries[session.id]?.activity?.statusLabel()
+                                } else {
+                                    null
+                                },
                             isReady = session.id in readyIds,
+                            statusStale = snapshot.fromCache && !snapshot.seeded,
                         )
                     }
             val updatedSection =

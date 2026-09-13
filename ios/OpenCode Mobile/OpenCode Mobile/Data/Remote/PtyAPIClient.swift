@@ -14,7 +14,7 @@ nonisolated struct PtyAPIClient: Sendable {
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession = .shared
+        urlSession: URLSession = OpenCodeURLSessions.rest
     ) {
         self.connectionProvider = connectionProvider
         self.urlSession = urlSession

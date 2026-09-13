@@ -36,6 +36,10 @@ final class SessionChatViewModel {
     private let activeConnectionManager: ActiveConnectionManager
     private let connectionProfileStore: any ConnectionProfileStore
     private let liveUpdates: any LiveUpdates
+    private let syncCoordinator: (any SyncCoordinator)?
+    private let clock: any SyncClock
+    private var pendingSend: PendingSend?
+    private var sendInFlight = false
     private var projectLabel: String?
     private var projectLetter: Character?
     private var projectLetterAccent: LetterAccent?
@@ -62,7 +66,9 @@ final class SessionChatViewModel {
         connectionProfileStore: any ConnectionProfileStore,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         liveUpdates: any LiveUpdates = FixedLiveUpdates(),
-        lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil
+        lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil,
+        syncCoordinator: (any SyncCoordinator)? = nil,
+        clock: any SyncClock = SystemSyncClock()
     ) {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
@@ -71,6 +77,8 @@ final class SessionChatViewModel {
         self.activeConnectionManager = activeConnectionManager
         self.connectionProfileStore = connectionProfileStore
         self.liveUpdates = liveUpdates
+        self.syncCoordinator = syncCoordinator
+        self.clock = clock
         self.uiState = .initial(
             sessionID: sessionID,
             sessionTitle: sessionTitle,
@@ -155,6 +163,7 @@ final class SessionChatViewModel {
         }
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID)")
         sessionReadyStore.setFocusedSession(sessionID: sessionID, directory: worktree)
+        syncCoordinator?.markFocused(.transcript(directory: worktree, sessionID: sessionID))
         // Peers may have changed while the screen was away; re-resolve smart label.
         refreshProjectIdentity()
         composer.startCatalogLoads()
@@ -501,7 +510,7 @@ final class SessionChatViewModel {
     func sendPrompt() async {
         guard hasCreatedSession else { return }
         let hasAttachments = !composer.state.composer.attachments.isEmpty
-        guard isConnectionLive else {
+        guard sessionInfo.state.composerEnabled else {
             logChatAction(
                 ProductAnalytics.Action.composerSend,
                 parameters: [
@@ -511,6 +520,11 @@ final class SessionChatViewModel {
             )
             return
         }
+        if pendingSend != nil || sendInFlight || composer.state.isSending {
+            return
+        }
+        sendInFlight = true
+        defer { sendInFlight = false }
         guard inbox.state.permissionRequests.isEmpty, inbox.state.questionRequests.isEmpty else {
             logChatAction(
                 ProductAnalytics.Action.composerSend,
@@ -527,17 +541,28 @@ final class SessionChatViewModel {
             parameters: [ProductAnalytics.Param.hasAttachments: String(hasAttachments)]
         )
         DiagnosticLog.info(.chat, "sendPrompt start session=\(sessionID)")
+        let waitToSend: (() async -> Bool)?
+        if isConnectionLive {
+            waitToSend = nil
+        } else {
+            waitToSend = { [weak self] in
+                await self?.waitForLiveToSend() ?? false
+            }
+        }
         await composer.sendPrompt(
             sessionID: sessionID,
             onOptimisticRows: { [weak self] rows in
                 DiagnosticLog.info(.chat, "sendPrompt optimistic rows=\(rows.count)")
-                // Mark only after composer passes early-return checks.
-                self?.sessionInfo.markOptimisticBusy()
+                if let self, !self.isConnectionLive {
+                    self.pendingSend = PendingSend(queuedAtMs: self.clock.nowMs())
+                }
                 self?.timeline.beginOptimisticSend(rows)
             },
             onSendAccepted: { [weak self] in
                 guard let self else { return }
                 DiagnosticLog.info(.chat, "sendPrompt accepted session=\(self.sessionID)")
+                self.pendingSend = nil
+                self.sessionInfo.setOptimisticActivity(.running)
                 self.commands.consumePendingRevert()
                 self.sessionReadyStore.notifyPromptSent(sessionID: self.sessionID, directory: self.worktree)
                 DiagnosticLog.info(.chat, "sendPrompt reloadAfterSend start")
@@ -554,12 +579,13 @@ final class SessionChatViewModel {
             },
             onSendFailed: { [weak self] optimisticID, error in
                 DiagnosticLog.warning(.chat, "sendPrompt failed error=\(error)")
-                self?.sessionInfo.clearOptimisticBusy()
+                self?.pendingSend = nil
                 self?.composer.setSendError(error)
                 self?.timeline.failOptimisticSend(optimisticID: optimisticID, error: error)
             },
             isSessionBusy: sessionInfo.state.sessionStatusLabel != nil,
-            supportsFollowUp: activeConnectionManager.capabilities.supportsFollowUpDelivery
+            supportsFollowUp: activeConnectionManager.capabilities.supportsFollowUpDelivery,
+            waitToSend: waitToSend
         )
         DiagnosticLog.info(.chat, "sendPrompt end session=\(sessionID)")
     }
@@ -574,7 +600,10 @@ final class SessionChatViewModel {
         guard isConnectionLive else { return }
         await composer.abortSession(timelineIsReady: timeline.state.timeline == .ready)
         if composer.state.abortErrorMessage == nil {
-            sessionInfo.markIdle()
+            sessionInfo.setOptimisticActivity(
+                .idle,
+                ttlMs: SessionActivityPolicy.abortOptimisticTtlMs
+            )
         }
     }
 
@@ -689,6 +718,25 @@ final class SessionChatViewModel {
         sessionInfo.state.canMutate
     }
 
+    private func waitForLiveToSend() async -> Bool {
+        if liveUpdates.chrome.canMutate { return true }
+        return await withTaskGroup(of: Bool.self) { group in
+            group.addTask { [clock] in
+                await clock.sleep(milliseconds: Int(SessionActivityPolicy.pendingSendTimeoutMs))
+                return false
+            }
+            group.addTask { [liveUpdates] in
+                for await chrome in liveUpdates.updates() {
+                    if chrome.canMutate { return true }
+                }
+                return false
+            }
+            let result = await group.next() ?? false
+            group.cancelAll()
+            return result
+        }
+    }
+
     private var hasCreatedSession: Bool {
         !OptimisticSessionCreate.isPlaceholder(sessionID)
     }
@@ -700,6 +748,7 @@ final class SessionChatViewModel {
     func stopObserving() {
         OpenCodeLog.sessionChat.info("stop observing session=\(self.sessionID)")
         composer.flushDraft()
+        pendingSend = nil
         optimisticCreateTask?.cancel()
         optimisticCreateTask = nil
         projectIdentityTask?.cancel()
@@ -709,6 +758,7 @@ final class SessionChatViewModel {
         inbox.stop()
         collapsePreferenceGeneration += 1
         sessionReadyStore.setFocusedSession(sessionID: nil, directory: nil)
+        syncCoordinator?.markFocused(nil)
         reviewChanges.stop()
     }
 
@@ -952,6 +1002,8 @@ final class SessionChatViewModel {
             sessionTodoTotalCount: inboxState.sessionTodos.count,
             connectionStatus: infoState.connectionStatus,
             canMutate: infoState.canMutate,
+            composerEnabled: infoState.composerEnabled,
+            pendingSend: pendingSend,
             messagesFromCache: timelineState.messagesFromCache,
             contextUsageFraction: sessionInfo.contextUsageFraction(
                 messages: timelineState.messages,

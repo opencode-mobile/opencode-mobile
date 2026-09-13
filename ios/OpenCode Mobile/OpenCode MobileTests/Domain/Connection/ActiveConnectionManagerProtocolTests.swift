@@ -93,6 +93,18 @@ struct ActiveConnectionManagerProtocolTests {
         #expect(manager.protocolHint() == .v2)
     }
 
+    @Test func resetProbeFailure_allowsImplicitProbeAgain() async {
+        let probing = CountingProbe(result: .failure(ServerProbeError.transport("unreachable")))
+        let manager = ActiveConnectionManager(connectionProbing: probing)
+        manager.apply(sampleProfile)
+
+        _ = await manager.currentProtocolOrProbe()
+        #expect(probing.calls == 1)
+        manager.resetProbeFailure()
+        _ = await manager.currentProtocolOrProbe()
+        #expect(probing.calls == 2)
+    }
+
     @Test func currentProtocolOrProbe_missingConnectionReturnsV1WithoutProbing() async {
         let probing = CountingProbe(result: .success(.v2))
         let manager = ActiveConnectionManager(connectionProbing: probing)

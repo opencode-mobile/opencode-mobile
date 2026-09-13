@@ -219,6 +219,7 @@ class SessionChatInbox(
         val current = _state.value
         val request = current.questionRequests.firstOrNull { it.id == requestId && it.sessionId == sessionId } ?: return
         if (current.questionSubmittingId != null) return
+        if (!canMutate()) return
         val answers = buildQuestionAnswers(request.questions, current.questionDrafts) ?: return
         _state.update { it.copy(questionSubmittingId = request.id, questionError = null) }
         logI("question reply request=${request.id} session=${request.sessionId}")
@@ -243,6 +244,7 @@ class SessionChatInbox(
         val current = _state.value
         val request = current.questionRequests.firstOrNull { it.id == requestId && it.sessionId == sessionId } ?: return
         if (current.questionSubmittingId != null) return
+        if (!canMutate()) return
         _state.update { it.copy(questionSubmittingId = request.id, questionError = null) }
         logI("question dismiss request=${request.id} session=${request.sessionId}")
         val worktree = boundWorktree

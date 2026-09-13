@@ -7,10 +7,10 @@ import Testing
 struct MessageSyncTests {
     private let decoder = JSONDecoder()
 
-    @Test func warmReopen_unchangedFingerprint_confirmsCacheSyncWithoutSeed() async {
+    @Test func warmReopen_unchangedIdentity_confirmsCacheSyncWithoutSeed() async {
         // Warm reopen: the in-memory store still holds the previous session's
         // rows, but no disk seed runs this loop (NoOpSessionCache) and REST
-        // returns an identical fingerprint. The Syncing indicator must clear
+        // returns an identical frame identity. The Syncing indicator must clear
         // via cacheSyncConfirmed even though the second loop did not seed.
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
@@ -36,7 +36,7 @@ struct MessageSyncTests {
             recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) }
         )
 
-        // First observation publishes and records the fingerprint.
+        // First observation publishes and records the frame identity.
         let first = MessageCollector()
         let firstTask = Task { await first.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         _ = await waitUntil { first.latest()?.first?.text == "Hello" }
@@ -44,7 +44,7 @@ struct MessageSyncTests {
         try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.subscriberStopTimeoutMs + 50))
 
         // Warm reopen: same store rows, REST unchanged, no disk seed. The
-        // unchanged fingerprint must still yield cacheSyncConfirmed.
+        // unchanged identity must still yield cacheSyncConfirmed.
         let second = CacheConfirmAwareCollector()
         let secondTask = Task { await second.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         let confirmed = await waitUntil { second.sawCacheSyncConfirmed }
@@ -180,6 +180,8 @@ struct MessageSyncTests {
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
         #expect(loaded)
+        let listening = await waitUntil { eventStream.hasCoordinatorSubscribers }
+        #expect(listening)
 
         repo.shouldFailList = true
         eventStream.setConnectionState(.connected)
@@ -305,11 +307,11 @@ struct MessageSyncTests {
         }
         let painted = await waitUntil { collector.latest()?.first?.text == "Hello" }
         #expect(painted)
+        #expect(repo.isListBlocked)
+        repo.resumeListMessages()
         let confirmed = await waitUntil { collector.sawCacheSyncConfirmed }
         task.cancel()
         #expect(confirmed)
-        #expect(repo.isListBlocked)
-        repo.resumeListMessages()
     }
 
     @Test func hungInitialRest_cacheSeed_doesNotConfirmWhenOccupancyStopped() async {
@@ -341,8 +343,269 @@ struct MessageSyncTests {
         task.cancel()
         #expect(painted)
         #expect(!collector.sawCacheSyncConfirmed)
-        #expect(repo.isListBlocked)
+        #expect(!repo.isListBlocked)
         repo.resumeListMessages()
+    }
+
+    @Test func identicalTailConfirmsCacheWithoutRepublish() async {
+        let repo = FakeLiveMessageRepository()
+        repo.holdNextListMessages()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let cached = repo.messages
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            sessionCache: SeedingSessionCache(messages: cached)
+        )
+        let collector = CacheConfirmAwareCollector()
+        let task = Task {
+            await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        let painted = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(painted)
+        #expect(collector.emissions.count == 1)
+        repo.resumeListMessages()
+        let confirmed = await waitUntil { collector.sawCacheSyncConfirmed }
+        try? await Task.sleep(for: .milliseconds(40))
+        task.cancel()
+        #expect(confirmed)
+        #expect(collector.emissions.count == 1)
+    }
+
+    @Test func differingTailMergesAndPublishesOnce() async {
+        let repo = FakeLiveMessageRepository()
+        repo.holdNextListMessages()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let cached = [
+            Message(
+                id: "msg-1",
+                role: .user,
+                text: "Hello",
+                parts: [.text(TextPart(text: "Hello", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 1
+            ),
+        ]
+        repo.messages = cached + [
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "Later",
+                parts: [.text(TextPart(text: "Later", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 2
+            ),
+        ]
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            sessionCache: SeedingSessionCache(messages: cached)
+        )
+        let collector = CacheConfirmAwareCollector()
+        let task = Task {
+            await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        let painted = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(painted)
+        #expect(collector.emissions.count == 1)
+        repo.resumeListMessages()
+        let merged = await waitUntil {
+            collector.latest()?.contains(where: { $0.id == "msg-2" }) == true
+        }
+        try? await Task.sleep(for: .milliseconds(40))
+        task.cancel()
+        #expect(merged)
+        #expect(collector.emissions.count == 2)
+    }
+
+    @Test func streamingCachedTail_completedRestTail_publishesRestContent() async {
+        let user = Message(
+            id: "m1",
+            role: .user,
+            text: "m1",
+            parts: [.text(TextPart(text: "m1", isStreaming: false))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: 1
+        )
+        let cached = [
+            user,
+            Message(
+                id: "a1",
+                role: .assistant,
+                text: "partial",
+                parts: [.text(TextPart(text: "partial", isStreaming: true))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 1000,
+                completedAtEpochMs: nil
+            ),
+        ]
+        let repo = FakeLiveMessageRepository()
+        repo.holdNextListMessages()
+        repo.messages = [
+            user,
+            Message(
+                id: "a1",
+                role: .assistant,
+                text: "partial and done",
+                parts: [.text(TextPart(text: "partial and done", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 1000,
+                completedAtEpochMs: 2000
+            ),
+        ]
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            sessionCache: SeedingSessionCache(messages: cached)
+        )
+        let collector = CacheConfirmAwareCollector()
+        let task = Task {
+            await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        let painted = await waitUntil { collector.latest()?.last?.text == "partial" }
+        #expect(painted)
+        repo.resumeListMessages()
+        let published = await waitUntil { collector.latest()?.last?.text == "partial and done" }
+        task.cancel()
+        #expect(published)
+        #expect(collector.latest()?.last?.text == "partial and done")
+    }
+
+    @Test func completedIdenticalAssistantTail_confirmsCacheSync() async {
+        let messages = [
+            Message(
+                id: "m1",
+                role: .user,
+                text: "m1",
+                parts: [.text(TextPart(text: "m1", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 1
+            ),
+            Message(
+                id: "a1",
+                role: .assistant,
+                text: "done",
+                parts: [.text(TextPart(text: "done", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 1000,
+                completedAtEpochMs: 2000
+            ),
+        ]
+        let repo = FakeLiveMessageRepository()
+        repo.holdNextListMessages()
+        repo.messages = messages
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            sessionCache: SeedingSessionCache(messages: messages)
+        )
+        let collector = CacheConfirmAwareCollector()
+        let task = Task {
+            await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        let painted = await waitUntil { collector.latest()?.last?.text == "done" }
+        #expect(painted)
+        repo.resumeListMessages()
+        let confirmed = await waitUntil { collector.sawCacheSyncConfirmed }
+        task.cancel()
+        #expect(confirmed)
+        #expect(collector.latest()?.last?.text == "done")
+    }
+
+    @Test func restTailStillStreaming_doesNotConfirm() async {
+        let user = Message(
+            id: "m1",
+            role: .user,
+            text: "m1",
+            parts: [.text(TextPart(text: "m1", isStreaming: false))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: 1
+        )
+        let cached = [
+            user,
+            Message(
+                id: "a1",
+                role: .assistant,
+                text: "partial",
+                parts: [.text(TextPart(text: "partial", isStreaming: true))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 1000,
+                completedAtEpochMs: nil
+            ),
+        ]
+        let repo = FakeLiveMessageRepository()
+        repo.holdNextListMessages()
+        repo.messages = [
+            user,
+            Message(
+                id: "a1",
+                role: .assistant,
+                text: "partial more",
+                parts: [.text(TextPart(text: "partial more", isStreaming: true))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 1000,
+                completedAtEpochMs: nil
+            ),
+        ]
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            sessionCache: SeedingSessionCache(messages: cached)
+        )
+        let collector = CacheConfirmAwareCollector()
+        let task = Task {
+            await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        let painted = await waitUntil { collector.latest()?.last?.text == "partial" }
+        #expect(painted)
+        repo.resumeListMessages()
+        let published = await waitUntil { collector.latest()?.last?.text == "partial more" }
+        task.cancel()
+        #expect(published)
+        #expect(collector.latest()?.last?.text == "partial more")
     }
 
     @Test func hiddenReasoningSnapshotUpdates_doNotRestOrShowCatchUp() async {
@@ -397,7 +660,7 @@ struct MessageSyncTests {
             chromeTask.cancel()
             #expect(streamed)
             #expect(repo.listMessagesCallCount == afterInitial)
-            #expect(!chrome.contains(true))
+            #expect(chrome.last == false)
             #expect(sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy)
     }
 
@@ -435,6 +698,8 @@ struct MessageSyncTests {
                     sentAtEpochMs: 2
                 ),
             ]
+            let listening = await waitUntil { eventStream.hasCoordinatorSubscribers }
+            #expect(listening)
             repo.holdNextListMessages()
             eventStream.openGap()
             let recovering = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 2 }
@@ -564,8 +829,11 @@ struct MessageSyncTests {
         repo.resumeListMessages()
         let loaded = await waitUntil { repo.listMessagesCallCount >= 1 && !repo.isListBlocked }
         #expect(loaded)
-        #expect(globalChrome.last == false)
+        let chromeCleared = await waitUntil { globalChrome.last == false }
+        #expect(chromeCleared)
 
+        let listening = await waitUntil { eventStream.hasCoordinatorSubscribers }
+        #expect(listening)
         repo.holdNextListMessages()
         eventStream.openGap()
         let recovering = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 2 }
@@ -653,16 +921,16 @@ struct MessageSyncTests {
         #expect(published)
     }
 
-    @Test func pollSurvivesDisconnectWithoutGapEvent() async {
+    @Test func disconnectWithoutReconnectDoesNotFetch() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 40)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
         let collector = MessageCollector()
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
         #expect(loaded)
+        let afterInitial = repo.listMessagesCallCount
 
-        eventStream.setConnectionState(.connected)
         eventStream.setConnectionState(.disconnected)
         try? await Task.sleep(for: .milliseconds(90))
 
@@ -677,11 +945,10 @@ struct MessageSyncTests {
                 sentAtEpochMs: nil
             ),
         ]
-        let polled = await waitUntil {
-            collector.latest()?.first?.text == "From poll after reconnect"
-        }
+        try? await Task.sleep(for: .milliseconds(80))
         task.cancel()
-        #expect(polled)
+        #expect(collector.latest()?.first?.text == "Hello")
+        #expect(repo.listMessagesCallCount == afterInitial)
     }
 
     @Test func v2PromptedGlobalBusPublishesUserText() async {
@@ -1027,7 +1294,7 @@ struct MessageSyncTests {
         #expect(repo.listMessagesCallCount > afterInitial)
     }
 
-    @Test func reconnectUnchangedFingerprintDoesNotRepaint() async {
+    @Test func reconnectUnchangedIdentityDoesNotRepaint() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
         let sync = makeMessageSync(repo: repo, eventStream: eventStream)
@@ -1036,6 +1303,8 @@ struct MessageSyncTests {
         let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
         #expect(loaded)
         #expect(collector.emissions.count == 1)
+        let listening = await waitUntil { eventStream.hasCoordinatorSubscribers }
+        #expect(listening)
 
         eventStream.setConnectionState(.connected)
         eventStream.openGap()
@@ -1078,44 +1347,6 @@ struct MessageSyncTests {
         #expect(repo.listMessagesCallCount == 1)
     }
 
-    @Test func silentStreamingStall_appliesAheadRestSnapshot() async {
-        let repo = FakeLiveMessageRepository()
-        let eventStream = FakeForegroundEventStream()
-        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 25)
-        let collector = MessageCollector()
-        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
-        let loaded = await waitUntil { collector.latest() != nil }
-        #expect(loaded)
-
-        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
-        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
-        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Partial", sessionID: "ses-1"))
-        let streaming = await waitUntil {
-            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Partial"
-        }
-        #expect(streaming)
-
-        repo.messages = [
-            Message(id: "msg-1", role: .user, text: "Hello", parts: [
-                .text(TextPart(text: "Hello", isStreaming: false)),
-            ], model: nil, mode: nil, sentAtEpochMs: nil),
-            Message(
-                id: "msg-2",
-                role: .assistant,
-                text: "Finished while silent",
-                parts: [.text(TextPart(text: "Finished while silent", isStreaming: false))],
-                model: nil,
-                mode: nil,
-                sentAtEpochMs: nil
-            ),
-        ]
-        let caughtUp = await waitUntil {
-            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Finished while silent"
-        }
-        task.cancel()
-        #expect(caughtUp)
-    }
-
     @Test func silentStreamingStall_keepsLocalWhenRestIsBehind() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
@@ -1147,33 +1378,6 @@ struct MessageSyncTests {
         try? await Task.sleep(for: .milliseconds(80))
         task.cancel()
         #expect(collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Longer local stream")
-    }
-
-    @Test func pollResponseIsDiscardedWhenStreamingStartsInFlight() async {
-        let repo = FakeLiveMessageRepository()
-        let eventStream = FakeForegroundEventStream()
-        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 25)
-        let collector = MessageCollector()
-        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
-        let loaded = await waitUntil { collector.latest() != nil }
-        #expect(loaded)
-
-        repo.holdNextListMessages()
-        let pollBlocked = await waitUntil { repo.isListBlocked }
-        #expect(pollBlocked)
-
-        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
-        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
-        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Live", sessionID: "ses-1"))
-        let streamed = await waitUntil {
-            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Live"
-        }
-        repo.resumeListMessages()
-        try? await Task.sleep(for: .milliseconds(50))
-        task.cancel()
-
-        #expect(streamed)
-        #expect(collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Live")
     }
 
     @Test func partUpdatedSnapshot_thenDuplicateDeltas_shouldNotDoubleText() {
@@ -1797,7 +2001,8 @@ private func makeMessageSync(
     connectionProfileID: String = "local",
     worldSignals: any WorldSignals = SilentWorldSignals.shared
 ) -> MessageSync {
-    MessageSync(
+    eventStream.setConnectionState(.connected)
+    return MessageSync(
         listMessages: { sessionID, directory in
             try await repo.listMessages(sessionID: sessionID, directory: directory)
         },

@@ -55,7 +55,8 @@ nonisolated struct SessionDomainAdapter: Sendable {
         from session: Session,
         worktree: String,
         statusLabel: String? = nil,
-        isReady: Bool = false
+        isReady: Bool = false,
+        statusIsStale: Bool = false
     ) -> SessionListItem {
         SessionListItem(
             id: session.id,
@@ -65,6 +66,7 @@ nonisolated struct SessionDomainAdapter: Sendable {
             updatedAtLabel: session.updatedAtEpochMs.map(Self.updatedAtLabel),
             updatedAtEpochMs: session.updatedAtEpochMs,
             isReady: isReady,
+            statusIsStale: statusIsStale,
             parentID: session.parentID
         )
     }

@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated final class EventsAPIClient: Sendable {
+nonisolated final class EventsAPIClient: @unchecked Sendable {
     private static func makeStreamingSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = TimeInterval.infinity
@@ -12,33 +12,30 @@ nonisolated final class EventsAPIClient: Sendable {
     }
 
     private let connectionProvider: @Sendable () -> ServerConnection?
-    private let protocolResolver: (@Sendable () async -> ServerProtocol)?
     private let injectedSession: URLSession?
+    private let sessionLock = NSLock()
+    private var ownedSession: URLSession?
+    private var lastIdentity: String?
 
-    init(
-        connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        protocolResolver: (@Sendable () async -> ServerProtocol)? = nil
-    ) {
+    init(connectionProvider: @escaping @Sendable () -> ServerConnection?) {
         self.connectionProvider = connectionProvider
-        self.protocolResolver = protocolResolver
         self.injectedSession = nil
     }
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession,
-        protocolResolver: (@Sendable () async -> ServerProtocol)? = nil
+        urlSession: URLSession
     ) {
         self.connectionProvider = connectionProvider
-        self.protocolResolver = protocolResolver
         self.injectedSession = urlSession
     }
 
+    @discardableResult
     func streamGlobalEvents(
         onHTTPResponse: (@Sendable (Int) async -> Void)? = nil,
         onActivity: (@Sendable () async -> Void)? = nil,
         onDataLine: @escaping @Sendable (String) async -> Void
-    ) async throws {
+    ) async throws -> SseAttemptOutcome {
         try await streamSubscriptions(
             directories: [],
             onHTTPResponse: onHTTPResponse,
@@ -47,21 +44,20 @@ nonisolated final class EventsAPIClient: Sendable {
         )
     }
 
+    @discardableResult
     func streamSubscriptions(
         directories: [String],
         onHTTPResponse: (@Sendable (Int) async -> Void)? = nil,
         onActivity: (@Sendable () async -> Void)? = nil,
         onDataLine: @escaping @Sendable (String) async -> Void
-    ) async throws {
+    ) async throws -> SseAttemptOutcome {
         guard let connection = connectionProvider() else {
             throw EventsAPIError.noActiveConnection
         }
-        if let protocolResolver {
-            Task { _ = await protocolResolver() }
-        }
         let resolvedProtocol = connection.serverProtocol ?? .v1
         let targets = SseSubscribeTargets.targets(protocol: resolvedProtocol, directories: directories)
-        try await withThrowingTaskGroup(of: Void.self) { group in
+        var last: SseAttemptOutcome = .ended
+        try await withThrowingTaskGroup(of: SseAttemptOutcome.self) { group in
             for target in targets {
                 group.addTask {
                     try await self.streamEvents(
@@ -74,8 +70,11 @@ nonisolated final class EventsAPIClient: Sendable {
                     )
                 }
             }
-            try await group.waitForAll()
+            while let outcome = try await group.next() {
+                last = outcome
+            }
         }
+        return last
     }
 
     private func streamEvents(
@@ -85,7 +84,7 @@ nonisolated final class EventsAPIClient: Sendable {
         onHTTPResponse: (@Sendable (Int) async -> Void)?,
         onActivity: (@Sendable () async -> Void)?,
         onDataLine: @escaping @Sendable (String) async -> Void
-    ) async throws {
+    ) async throws -> SseAttemptOutcome {
         var url = connection.apiBaseURL.appendingPathComponent(path)
         if let directory, !directory.isEmpty {
             var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
@@ -109,42 +108,59 @@ nonisolated final class EventsAPIClient: Sendable {
         }
 
         let startedAt = OpenCodeAPITrace.start(request)
-        let ownedSession = injectedSession == nil
-        let session = injectedSession ?? Self.makeStreamingSession()
-        defer {
-            if ownedSession {
-                session.invalidateAndCancel()
-            }
-        }
+        let session = streamingSession(for: connection)
         let bytes: URLSession.AsyncBytes
         let response: URLResponse
         do {
             (bytes, response) = try await session.bytes(for: request)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
-            throw error
+            return .transport(error)
         }
         guard let http = response as? HTTPURLResponse else {
             OpenCodeAPITrace.invalidResponse(request, startedAt: startedAt)
             throw EventsAPIError.invalidResponse
         }
         OpenCodeAPITrace.finish(request, statusCode: http.statusCode, startedAt: startedAt)
-        guard (200 ..< 300).contains(http.statusCode) else {
-            throw EventsAPIError.httpStatus(http.statusCode)
-        }
         await onHTTPResponse?(http.statusCode)
+        guard (200 ..< 300).contains(http.statusCode) else {
+            return .http(http.statusCode)
+        }
 
         var parser = SSEDataLineParser()
-        for try await line in bytes.lines {
-            // Comments, id/event fields, and incomplete data still prove the
-            // socket is alive. TUI keeps the iterator open on those frames.
-            await onActivity?()
-            for payload in parser.ingest(line) {
+        do {
+            var lineData = Data()
+            for try await byte in bytes {
+                if byte == 10 {
+                    if lineData.last == 13 {
+                        lineData.removeLast()
+                    }
+                    let line = String(data: lineData, encoding: .utf8) ?? ""
+                    lineData.removeAll(keepingCapacity: true)
+                    await onActivity?()
+                    for payload in parser.ingest(line) {
+                        await onDataLine(payload)
+                    }
+                } else {
+                    lineData.append(byte)
+                }
+            }
+            if !lineData.isEmpty {
+                let line = String(data: lineData, encoding: .utf8) ?? ""
+                for payload in parser.ingest(line) {
+                    await onDataLine(payload)
+                }
+            }
+            for payload in parser.finish() {
                 await onDataLine(payload)
             }
-        }
-        for payload in parser.finish() {
-            await onDataLine(payload)
+            return .ended
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            return .transport(error)
         }
     }
 
@@ -160,20 +176,18 @@ nonisolated final class EventsAPIClient: Sendable {
         eventProtocol.wireValue
     }
 
+    @discardableResult
     func streamEvents(
         path: String,
         directory: String?,
         onHTTPResponse: (@Sendable (Int) async -> Void)? = nil,
         onActivity: (@Sendable () async -> Void)? = nil,
         onDataLine: @escaping @Sendable (String) async -> Void
-    ) async throws {
+    ) async throws -> SseAttemptOutcome {
         guard let connection = connectionProvider() else {
             throw EventsAPIError.noActiveConnection
         }
-        if let protocolResolver {
-            Task { _ = await protocolResolver() }
-        }
-        try await streamEvents(
+        return try await streamEvents(
             connection: connection,
             path: path,
             directory: directory,
@@ -181,6 +195,31 @@ nonisolated final class EventsAPIClient: Sendable {
             onActivity: onActivity,
             onDataLine: onDataLine
         )
+    }
+
+    private func streamingSession(for connection: ServerConnection) -> URLSession {
+        if let injectedSession {
+            return injectedSession
+        }
+        let identity = Self.streamingSessionKey(for: connection)
+        sessionLock.lock()
+        defer { sessionLock.unlock() }
+        if let ownedSession, lastIdentity == identity {
+            return ownedSession
+        }
+        ownedSession?.invalidateAndCancel()
+        let session = Self.makeStreamingSession()
+        ownedSession = session
+        lastIdentity = identity
+        return session
+    }
+
+    static func streamingSessionKey(for connection: ServerConnection) -> String {
+        let fingerprint = ConnectionProfileIdentity.credentialFingerprint(
+            username: connection.username,
+            password: connection.password ?? ""
+        )
+        return "\(connection.baseURL.absoluteString)|\(connection.username)|\(fingerprint)"
     }
 
     private static func subscribePath(for serverProtocol: ServerProtocol?) -> String {
@@ -207,7 +246,7 @@ nonisolated struct SSEDataLineParser {
                 dataBuffer.append("\n")
             }
             dataBuffer.append(payload)
-            return isCompleteJSONPayload(dataBuffer) ? finish() : []
+            return []
         }
         if trimmed.first == "{" {
             var payloads = finish()
@@ -222,11 +261,6 @@ nonisolated struct SSEDataLineParser {
         let payload = dataBuffer
         dataBuffer = ""
         return [payload]
-    }
-
-    private func isCompleteJSONPayload(_ payload: String) -> Bool {
-        guard let data = payload.data(using: .utf8) else { return false }
-        return (try? JSONSerialization.jsonObject(with: data)) != nil
     }
 }
 

@@ -817,6 +817,7 @@ struct SessionListItem: Identifiable, Hashable {
     let updatedAtLabel: String?
     let updatedAtEpochMs: Int64?
     let isReady: Bool
+    let statusIsStale: Bool
     /// Unique per optimistic new-session navigation so back-stack entries do not reuse a promoted chat.
     let optimisticNavigationInstanceID: UUID?
     let parentID: String?
@@ -829,6 +830,7 @@ struct SessionListItem: Identifiable, Hashable {
         updatedAtLabel: String? = nil,
         updatedAtEpochMs: Int64? = nil,
         isReady: Bool = false,
+        statusIsStale: Bool = false,
         optimisticNavigationInstanceID: UUID? = nil,
         parentID: String? = nil
     ) {
@@ -839,6 +841,7 @@ struct SessionListItem: Identifiable, Hashable {
         self.updatedAtLabel = updatedAtLabel
         self.updatedAtEpochMs = updatedAtEpochMs
         self.isReady = isReady
+        self.statusIsStale = statusIsStale
         self.optimisticNavigationInstanceID = optimisticNavigationInstanceID
         self.parentID = parentID
     }
@@ -848,8 +851,13 @@ private extension SessionListItem {
     func sessionListStatus(hasPendingPermission: Bool = false) -> SessionListStatus {
         _ = hasPendingPermission // Reserved for a future home Needs approval pill.
         switch statusLabel {
-        case "Working", "Retrying":
+        case "Working":
             return SessionListStatus.running
+        case "Retrying":
+            return SessionListStatus.retrying(attempt: nil)
+        case let label? where label.hasPrefix("Retrying · "):
+            let attempt = Int(label.dropFirst("Retrying · ".count))
+            return SessionListStatus.retrying(attempt: attempt)
         default:
             return isReady ? SessionListStatus.ready : SessionListStatus.idle
         }
@@ -870,6 +878,7 @@ private extension Array where Element == ProjectSectionItem {
                         letterAccent: section.letterAccent,
                         subtitle: section.pathSubtitle,
                         status: session.sessionListStatus(),
+                        statusIsStale: session.statusIsStale,
                         caption: session.updatedAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? "",
                         updatedAtEpochMs: session.updatedAtEpochMs
                     )
@@ -898,6 +907,8 @@ private extension EventStreamConnectionState {
             .live
         case .connecting, .reconnecting:
             .connecting
+        case .authFailed:
+            .authFailed
         case .idle, .disconnected:
             .offline
         }
@@ -1049,5 +1060,5 @@ nonisolated private final class PreviewForegroundEventStream: ForegroundEventStr
 
     func events() -> AsyncStream<OpencodeEvent> { AsyncStream { _ in } }
     func start() {}
-    func stop() {}
+    func stop() async {}
 }

@@ -30,7 +30,21 @@ extension Container {
                 connectionProfileStore: self.connectionProfileStore(),
                 secureCredentialStore: self.secureCredentialStore(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),
-                composerDraftStore: self.composerDraftStore()
+                composerDraftStore: self.composerDraftStore(),
+                eventStream: { Container.shared.foregroundEventStream() },
+                syncCoordinator: { Container.shared.syncCoordinator() },
+                projectionCaches: { Container.shared.projectionCaches() },
+                bindReadyProfile: { profileID in
+                    await MainActor.run {
+                        Container.shared.sessionReadyStore().bindProfile(profileID: profileID)
+                    }
+                },
+                occupancy: { Container.shared.worldSignals().occupancy },
+                emitProfileSwitched: { Container.shared.worldSignals().emitProfileSwitched() },
+                hasActiveConnection: {
+                    let manager = Container.shared.activeConnectionManager()
+                    return manager.connection != nil || manager.currentProfile() != nil
+                }
             )
         }.singleton
     }
@@ -174,6 +188,16 @@ extension Container {
         self { SessionMessageEngine(store: self.messageStore()) }.singleton
     }
 
+    var syncCoordinator: Factory<DefaultSyncCoordinator> {
+        self { @MainActor in
+            DefaultSyncCoordinator(
+                connection: self.foregroundEventStream(),
+                worldSignals: self.worldSignals(),
+                eventStream: self.foregroundEventStream()
+            )
+        }.singleton
+    }
+
     var messageSync: Factory<MessageSync> {
         self { @MainActor in
             let router = self.messageRemote()
@@ -211,7 +235,8 @@ extension Container {
                         username: connection.username
                     )
                 },
-                sessionCache: self.sessionCache()
+                sessionCache: self.sessionCache(),
+                syncCoordinator: self.syncCoordinator()
             )
         }.singleton
     }
@@ -332,10 +357,8 @@ extension Container {
 
     var eventsAPIClient: Factory<EventsAPIClient> {
         self {
-            let manager = self.activeConnectionManager()
-            return EventsAPIClient(
-                connectionProvider: self.connectionProvider(),
-                protocolResolver: { await manager.currentProtocolOrProbe() }
+            EventsAPIClient(
+                connectionProvider: self.connectionProvider()
             )
         }.singleton
     }
@@ -372,7 +395,15 @@ extension Container {
                     guard let connection = manager.connection else { return "" }
                     return "\(ConnectionProfileIdentity.normalizeBaseURL(connection.baseURL.absoluteString))|\(ConnectionProfileIdentity.normalizeUsername(connection.username))"
                 },
+                credentialFingerprint: {
+                    guard let connection = manager.connection else { return "" }
+                    return ConnectionProfileIdentity.credentialFingerprint(
+                        username: connection.username,
+                        password: connection.password ?? ""
+                    )
+                },
                 protocolHint: { manager.protocolHint() },
+                cachedProtocol: { manager.serverProtocol },
                 protocolProbe: { await manager.currentProtocolOrProbe() }
             )
         }.singleton
@@ -387,7 +418,7 @@ extension Container {
                 hasActiveConnection: {
                     manager.connection != nil || manager.currentProfile() != nil
                 },
-                connectionSessionCoordinator: self.connectionSessionCoordinator()
+                activeConnectionManager: manager
             )
         }.singleton
     }
@@ -412,7 +443,9 @@ extension Container {
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
                 eventAdapter: self.eventDomainAdapter(),
-                worldSignals: self.worldSignals()
+                worldSignals: self.worldSignals(),
+                syncCoordinator: self.syncCoordinator(),
+                sessionCache: self.sessionCache()
             )
         }.singleton
     }
@@ -422,7 +455,8 @@ extension Container {
             DefaultPermissionLiveStore(
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
-                worldSignals: self.worldSignals()
+                worldSignals: self.worldSignals(),
+                syncCoordinator: self.syncCoordinator()
             )
         }.singleton
     }
@@ -432,7 +466,8 @@ extension Container {
             DefaultQuestionLiveStore(
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
-                worldSignals: self.worldSignals()
+                worldSignals: self.worldSignals(),
+                syncCoordinator: self.syncCoordinator()
             )
         }.singleton
     }
@@ -442,7 +477,8 @@ extension Container {
             DefaultSessionTodoLiveStore(
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
-                worldSignals: self.worldSignals()
+                worldSignals: self.worldSignals(),
+                syncCoordinator: self.syncCoordinator()
             )
         }.singleton
     }
@@ -463,7 +499,22 @@ extension Container {
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
                 sessionCache: self.sessionCache(),
-                worldSignals: self.worldSignals()
+                worldSignals: self.worldSignals(),
+                syncCoordinator: self.syncCoordinator()
+            )
+        }.singleton
+    }
+
+    var projectionCaches: Factory<ProjectionCaches> {
+        self { @MainActor in
+            ProjectionCaches(
+                sessionLiveStore: self.sessionLiveStore(),
+                sessionStatusLiveStore: self.sessionStatusLiveStore(),
+                permissionLiveStore: self.permissionLiveStore(),
+                questionLiveStore: self.questionLiveStore(),
+                sessionTodoLiveStore: self.sessionTodoLiveStore(),
+                sessionReadyStore: self.sessionReadyStore(),
+                messageRepository: self.messageRepository()
             )
         }.singleton
     }
@@ -556,7 +607,8 @@ extension Container {
                     modelRepository: self.modelRepository()
                 ),
                 liveUpdates: self.liveUpdates(),
-                lastTurnReviewChangesStore: self.lastTurnReviewChangesStore()
+                lastTurnReviewChangesStore: self.lastTurnReviewChangesStore(),
+                syncCoordinator: self.syncCoordinator()
             )
         }
     }
@@ -641,15 +693,7 @@ extension Container {
     @MainActor
     static func clearAllData() {
         Task { @MainActor in
-            shared.foregroundEventStream().stop()
             await shared.connectionSessionCoordinator().clearConnectionData()
-            shared.sessionLiveStore().clearCache()
-            shared.sessionStatusLiveStore().clearCache()
-            shared.permissionLiveStore().clearCache()
-            shared.questionLiveStore().clearCache()
-            shared.sessionTodoLiveStore().clearCache()
-            shared.sessionReadyStore().clearCache()
-            shared.messageRepository().clearMessageCache()
             await shared.sessionCache().clearAll()
             ThemeManager.shared.clearAll()
             HomeDisplayPreferences.shared.clear()
@@ -673,6 +717,7 @@ extension Container {
 
     @MainActor
     static func clearSessionCache() async {
+        shared.projectionCaches().clearAll()
         await shared.sessionCache().clearAll()
     }
 }

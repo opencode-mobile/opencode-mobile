@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.live.LiveStoreScope
+import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
@@ -46,7 +47,8 @@ class MessageSyncWindowedHistoryTest {
                 )
 
             val updates = mutableListOf<MessageListUpdate>()
-            sync.observeMessages("ses-1", "/repo")
+            sync
+                .observeMessages("ses-1", "/repo")
                 .onEach { updates += it }
                 .first { update ->
                     update is MessageListUpdate.CacheSyncConfirmed ||
@@ -58,6 +60,7 @@ class MessageSyncWindowedHistoryTest {
             assertEquals(listOf("tail"), tailCalls)
             val confirmed = updates.filterIsInstance<MessageListUpdate.CacheSyncConfirmed>().lastOrNull()
             assertTrue(lastMessages.hasOlder || confirmed?.hasOlder == true)
+            assertEquals(1, updates.filterIsInstance<MessageListUpdate.Messages>().size)
         }
 
     @Test
@@ -77,12 +80,208 @@ class MessageSyncWindowedHistoryTest {
                 )
 
             val last =
-                sync.observeMessages("ses-1", "/repo")
+                sync
+                    .observeMessages("ses-1", "/repo")
                     .first { update ->
                         update is MessageListUpdate.Messages && !update.isFromCache
                     } as MessageListUpdate.Messages
 
             assertEquals(listOf("x", "y"), last.messages.map { it.id })
+        }
+
+    @Test
+    fun identicalTail_confirmsWithoutRepublish() =
+        runTest(testDispatcher) {
+            val cache = SeededSessionCache(listOf(user("m1"), user("m2")))
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages = listOf(user("m1"), user("m2")),
+                            olderCursor = null,
+                            hasOlder = false,
+                        )
+                    },
+                    sessionCache = cache,
+                )
+            val updates = mutableListOf<MessageListUpdate>()
+            val job =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { updates += it }
+                }
+            advanceUntilIdle()
+            job.cancel()
+            assertEquals(1, updates.filterIsInstance<MessageListUpdate.Messages>().size)
+            assertTrue(updates.any { it is MessageListUpdate.CacheSyncConfirmed })
+        }
+
+    @Test
+    fun differingTail_mergesAndPublishesOnceAfterCache() =
+        runTest(testDispatcher) {
+            val cache = SeededSessionCache(listOf(user("m1")))
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages = listOf(user("m1"), user("m2")),
+                            olderCursor = null,
+                            hasOlder = false,
+                        )
+                    },
+                    sessionCache = cache,
+                )
+            val updates = mutableListOf<MessageListUpdate>()
+            val job =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { updates += it }
+                }
+            advanceUntilIdle()
+            job.cancel()
+            val published = updates.filterIsInstance<MessageListUpdate.Messages>()
+            assertEquals(2, published.size)
+            assertTrue(published.first().isFromCache)
+            assertFalse(published.last().isFromCache)
+            assertEquals(listOf("m1", "m2"), published.last().messages.map { it.id })
+        }
+
+    @Test
+    fun streamingCachedTail_completedRestTail_publishesRestContent() =
+        runTest(testDispatcher) {
+            val cache =
+                SeededSessionCache(
+                    listOf(
+                        user("m1"),
+                        Message(
+                            id = "a1",
+                            role = MessageRole.Assistant,
+                            text = "partial",
+                            parts = listOf(MessagePart.Text(text = "partial", isStreaming = true)),
+                            sentAtEpochMs = 1_000L,
+                            completedAtEpochMs = null,
+                        ),
+                    ),
+                )
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages =
+                                listOf(
+                                    user("m1"),
+                                    Message(
+                                        id = "a1",
+                                        role = MessageRole.Assistant,
+                                        text = "partial and done",
+                                        parts = listOf(MessagePart.Text(text = "partial and done")),
+                                        sentAtEpochMs = 1_000L,
+                                        completedAtEpochMs = 2_000L,
+                                    ),
+                                ),
+                            olderCursor = null,
+                            hasOlder = false,
+                        )
+                    },
+                    sessionCache = cache,
+                )
+            val updates = mutableListOf<MessageListUpdate>()
+            val job =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { updates += it }
+                }
+            advanceUntilIdle()
+            job.cancel()
+            val published = updates.filterIsInstance<MessageListUpdate.Messages>()
+            assertEquals(2, published.size)
+            assertTrue(published.first().isFromCache)
+            assertFalse(published.last().isFromCache)
+            assertEquals(
+                "partial and done",
+                published
+                    .last()
+                    .messages
+                    .last()
+                    .text,
+            )
+        }
+
+    @Test
+    fun completedIdenticalAssistantTail_confirmsWithoutRepublish() =
+        runTest(testDispatcher) {
+            val completed =
+                Message(
+                    id = "a1",
+                    role = MessageRole.Assistant,
+                    text = "done",
+                    parts = listOf(MessagePart.Text(text = "done")),
+                    sentAtEpochMs = 1_000L,
+                    completedAtEpochMs = 2_000L,
+                )
+            val cache = SeededSessionCache(listOf(user("m1"), completed))
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages = listOf(user("m1"), completed),
+                            olderCursor = null,
+                            hasOlder = false,
+                        )
+                    },
+                    sessionCache = cache,
+                )
+            val updates = mutableListOf<MessageListUpdate>()
+            val job =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { updates += it }
+                }
+            advanceUntilIdle()
+            job.cancel()
+            assertEquals(1, updates.filterIsInstance<MessageListUpdate.Messages>().size)
+            assertTrue(updates.any { it is MessageListUpdate.CacheSyncConfirmed })
+        }
+
+    @Test
+    fun restTailStillStreaming_doesNotConfirm() =
+        runTest(testDispatcher) {
+            val streaming =
+                Message(
+                    id = "a1",
+                    role = MessageRole.Assistant,
+                    text = "partial",
+                    parts = listOf(MessagePart.Text(text = "partial", isStreaming = true)),
+                    sentAtEpochMs = 1_000L,
+                    completedAtEpochMs = null,
+                )
+            val cache = SeededSessionCache(listOf(user("m1"), streaming))
+            val restTail =
+                Message(
+                    id = "a1",
+                    role = MessageRole.Assistant,
+                    text = "still going",
+                    parts = listOf(MessagePart.Text(text = "still going", isStreaming = true)),
+                    sentAtEpochMs = 1_000L,
+                    completedAtEpochMs = null,
+                )
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages = listOf(user("m1"), restTail),
+                            olderCursor = null,
+                            hasOlder = false,
+                        )
+                    },
+                    sessionCache = cache,
+                )
+            val updates = mutableListOf<MessageListUpdate>()
+            val job =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { updates += it }
+                }
+            advanceUntilIdle()
+            job.cancel()
+            val published = updates.filterIsInstance<MessageListUpdate.Messages>()
+            assertEquals(2, published.size)
+            assertFalse(updates.any { it is MessageListUpdate.CacheSyncConfirmed })
         }
 
     @Test
@@ -109,19 +308,17 @@ class MessageSyncWindowedHistoryTest {
                 )
 
             val updates = mutableListOf<MessageListUpdate>()
-            sync.observeMessages("ses-1", "/repo")
-                .onEach { updates += it }
-                .first { update ->
-                    update is MessageListUpdate.Messages &&
-                        (update as MessageListUpdate.Messages).messages.firstOrNull()?.role ==
-                        MessageRole.User
+            val job =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { updates += it }
                 }
             advanceUntilIdle()
+            job.cancel()
 
             val published =
                 updates.filterIsInstance<MessageListUpdate.Messages>().map { it.messages.map { message -> message.id } }
-            assertEquals(listOf("a20"), published.first())
-            assertEquals(listOf("u1", "a20"), published.last())
+            assertEquals(listOf("a20"), published.first { it.isNotEmpty() })
+            assertEquals(listOf("u1", "a20"), published.last { it.isNotEmpty() })
             assertEquals(listOf("c1"), olderCalls)
         }
 
@@ -148,7 +345,10 @@ class MessageSyncWindowedHistoryTest {
                     },
                 )
 
+            val job = launch { sync.observeMessages("ses-1", "/repo").collect { } }
+            advanceUntilIdle()
             val refreshed = sync.refreshMessages("ses-1", "/repo")
+            job.cancel()
 
             assertEquals(listOf("u1", "a20"), refreshed.map { it.id })
             assertEquals(listOf("c1"), olderCalls)
@@ -279,8 +479,13 @@ class MessageSyncWindowedHistoryTest {
                     engine = engine,
                     eventStream = FakeForegroundEventStream(),
                     liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
-                    pollIntervalMs = 60_000L,
-                    recoveryDelay = { },
+                    syncCoordinator =
+                        testSyncCoordinator(
+                            eventStream = FakeForegroundEventStream(),
+                            scope = CoroutineScope(SupervisorJob() + testDispatcher),
+                            nowMs = { testDispatcher.scheduler.currentTime },
+                            wait = { kotlinx.coroutines.delay(it) },
+                        ),
                     nowMs = { testDispatcher.scheduler.currentTime },
                 )
 
@@ -363,7 +568,7 @@ class MessageSyncWindowedHistoryTest {
                     },
                 )
 
-            sync.observeMessages("ses-1", "/repo").first()
+            val job = launch { sync.observeMessages("ses-1", "/repo").collect { } }
             advanceUntilIdle()
             sync.loadOlderMessages("ses-1", "/repo")
             assertEquals(listOf("c-tail"), olderCalls)
@@ -376,6 +581,7 @@ class MessageSyncWindowedHistoryTest {
                 )
             sync.refreshMessages("ses-1", "/repo")
             val result = sync.loadOlderMessages("ses-1", "/repo")
+            job.cancel()
 
             assertEquals(listOf("c-tail", "c-reset"), olderCalls)
             assertEquals(listOf("n0", "n1", "n2"), result.messages.map { it.id })
@@ -388,6 +594,9 @@ class MessageSyncWindowedHistoryTest {
         runTest(testDispatcher) {
             var fullCalls = 0
             var tailCalls = 0
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(dev.opencode.mobile.domain.event.EventStreamConnectionState.Connected)
+            val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
             val sync =
                 MessageSync(
                     listMessages = { _, _ ->
@@ -399,16 +608,22 @@ class MessageSyncWindowedHistoryTest {
                         MessagePage(listOf(user("tail")), olderCursor = null, hasOlder = false)
                     },
                     engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
-                    eventStream = FakeForegroundEventStream(),
-                    liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
-                    pollIntervalMs = 60_000L,
-                    recoveryDelay = { },
+                    eventStream = eventStream,
+                    liveStoreScope = scope,
+                    syncCoordinator =
+                        testSyncCoordinator(
+                            eventStream = eventStream,
+                            scope = scope.coroutineScope,
+                            nowMs = { testDispatcher.scheduler.currentTime },
+                            wait = { kotlinx.coroutines.delay(1) },
+                        ),
                     nowMs = { testDispatcher.scheduler.currentTime },
                 )
 
-            sync.observeMessages("ses-1", "/repo").first()
+            val collectJob = launch { sync.observeMessages("ses-1", "/repo").collect { } }
             advanceUntilIdle()
             sync.refreshMessages("ses-1", "/repo")
+            collectJob.cancel()
 
             assertEquals(0, fullCalls)
             assertTrue(tailCalls >= 2)
@@ -421,18 +636,27 @@ class MessageSyncWindowedHistoryTest {
         },
         sessionCache: dev.opencode.mobile.domain.sessioncache.SessionCache =
             dev.opencode.mobile.domain.sessioncache.NoOpSessionCache,
-    ): MessageSync =
-        MessageSync(
+    ): MessageSync {
+        val eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(dev.opencode.mobile.domain.event.EventStreamConnectionState.Connected)
+        val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
+        return MessageSync(
             listMessageTail = listMessageTail,
             listOlderMessages = listOlderMessages,
             engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
-            eventStream = FakeForegroundEventStream(),
-            liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
-            pollIntervalMs = 60_000L,
-            recoveryDelay = { },
+            eventStream = eventStream,
+            liveStoreScope = scope,
+            syncCoordinator =
+                testSyncCoordinator(
+                    eventStream = eventStream,
+                    scope = scope.coroutineScope,
+                    nowMs = { testDispatcher.scheduler.currentTime },
+                    wait = { kotlinx.coroutines.delay(1) },
+                ),
             nowMs = { testDispatcher.scheduler.currentTime },
             sessionCache = sessionCache,
         )
+    }
 
     private fun user(id: String) = Message(id = id, role = MessageRole.User, text = id)
 
@@ -447,6 +671,13 @@ private class SeededSessionCache(
     override suspend fun rememberSessions(
         worktree: String,
         sessions: List<dev.opencode.mobile.domain.session.Session>,
+    ) = Unit
+
+    override suspend fun seedActivity(directory: String) = null
+
+    override suspend fun rememberActivity(
+        directory: String,
+        entries: List<dev.opencode.mobile.domain.sessioncache.SessionActivityCacheEntry>,
     ) = Unit
 
     override fun openMessages(

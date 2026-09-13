@@ -2,7 +2,6 @@ package dev.opencode.mobile.domain.live
 
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
-import dev.opencode.mobile.domain.event.LiveGapReason
 import dev.opencode.mobile.domain.event.FakeWorldSignals
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.SilentWorldSignals
@@ -18,12 +17,15 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.SessionTodoStatus
+import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -360,13 +362,15 @@ class SessionTodoLiveStoreTest {
             advanceUntilIdle()
             repository.listTodosError = SessionError.Http(500, "down")
             world.emit(WorldSignal.Foreground)
-            advanceUntilIdle()
+            advanceTimeBy(50)
+            runCurrent()
             val afterFail = repository.listTodosCallCount
 
             repository.listTodosError = null
             repository.todos = listOf(SessionTodo(0, "B", SessionTodoStatus.Pending, "low"))
             world.emit(WorldSignal.Foreground)
-            advanceUntilIdle()
+            advanceTimeBy(50)
+            runCurrent()
             job.cancel()
 
             assertTrue(repository.listTodosCallCount > afterFail)
@@ -391,9 +395,7 @@ class SessionTodoLiveStoreTest {
             advanceUntilIdle()
             val afterIdle = repository.listTodosCallCount
 
-            eventStream.openGap(LiveGapReason.Reconnect)
-            eventStream.setConnectionState(EventStreamConnectionState.Connected)
-            eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = null, rawProperties = null))
+            eventStream.openGap()
             advanceUntilIdle()
             job.cancel()
 
@@ -404,13 +406,24 @@ class SessionTodoLiveStoreTest {
         repository: SessionRepository,
         eventStream: FakeForegroundEventStream,
         worldSignals: WorldSignals = SilentWorldSignals,
-    ): DefaultSessionTodoLiveStore =
-        DefaultSessionTodoLiveStore(
+    ): DefaultSessionTodoLiveStore {
+        if (eventStream.connectionState.value == EventStreamConnectionState.Idle) {
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+        }
+        return DefaultSessionTodoLiveStore(
             sessionRepository = repository,
             eventStream = eventStream,
             liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
-            worldSignals = worldSignals,
+            syncCoordinator =
+                testSyncCoordinator(
+                    eventStream = eventStream,
+                    worldSignals = worldSignals,
+                    scope = CoroutineScope(SupervisorJob() + testDispatcher),
+                    nowMs = { testDispatcher.scheduler.currentTime },
+                    wait = { kotlinx.coroutines.delay(1) },
+                ),
         )
+    }
 }
 
 private class FakeTodoSessionRepository(

@@ -34,6 +34,7 @@ import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.smartProjectLabel
+import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
@@ -41,6 +42,9 @@ import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionTodoList
+import dev.opencode.mobile.domain.sync.NoOpSyncCoordinator
+import dev.opencode.mobile.domain.sync.ProjectionKey
+import dev.opencode.mobile.domain.sync.SyncCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
@@ -59,8 +63,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 @HiltViewModel
@@ -87,6 +93,7 @@ class SessionChatViewModel
         private val activeConnectionManager: ActiveConnectionManager,
         lastTurnReviewChangesStore: LastTurnReviewChangesStore = LastTurnReviewChangesStore(),
         liveUpdates: LiveUpdates = FixedLiveUpdates(),
+        private val syncCoordinator: SyncCoordinator = NoOpSyncCoordinator,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -173,6 +180,7 @@ class SessionChatViewModel
         private var forkDraftEditReported = false
         private var questionCustomEditReportedRequestId: String? = null
         private var optimisticCreateJob: kotlinx.coroutines.Job? = null
+        private var pendingSend: PendingSend? = null
         private val newSessionModelSelectionResolver = newSessionModelSelectionResolver
         private val connectionSessionCoordinator = connectionSessionCoordinator
 
@@ -249,6 +257,7 @@ class SessionChatViewModel
                 // Peers may have changed while the screen was away; re-resolve smart label.
                 scheduleProjectIdentityRefine(worktree)
                 timeline.restartLiveObservation()
+                syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
                 return
             }
             boundSessionId = sessionId
@@ -274,6 +283,7 @@ class SessionChatViewModel
             reviewChanges.bind(sessionId, worktree)
             commands.bind(sessionId, worktree)
             inbox.bind(sessionId, worktree)
+            syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
             viewModelScope.launch {
                 composer.loadCatalog()
             }
@@ -357,6 +367,7 @@ class SessionChatViewModel
             reviewChanges.bind(sessionId, worktree)
             commands.bind(sessionId, worktree)
             inbox.bind(sessionId, worktree)
+            syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
             viewModelScope.launch {
                 composer.loadCatalog()
             }
@@ -681,7 +692,8 @@ class SessionChatViewModel
                         ProductAnalytics.Param.MODE to composerState.selectedMode,
                     ),
             )
-            if (!isConnectionLive()) return
+            if (!sessionInfo.state.value.composerEnabled) return
+            if (pendingSend != null || composer.state.value.isSending) return
             if (inbox.state.value.permissionRequests.isNotEmpty() ||
                 inbox.state.value.questionRequests.isNotEmpty()
             ) {
@@ -689,27 +701,40 @@ class SessionChatViewModel
             }
             val sessionId = boundSessionId ?: return
             val worktree = boundWorktree ?: return
+            val shouldQueue = !sessionInfo.state.value.canMutate
             composer.sendPrompt(
                 sessionId = sessionId,
                 worktree = worktree,
                 isSessionBusy = sessionInfo.state.value.sessionStatusLabel != null,
                 supportsFollowUp = activeConnectionManager.currentCapabilities().supportsFollowUpDelivery,
+                holdUntil = {
+                    if (!shouldQueue) {
+                        true
+                    } else {
+                        awaitLive(PENDING_SEND_TIMEOUT_MS)
+                    }
+                },
                 onOptimisticRows = { rows ->
-                    // Mark only after composer passes early-return checks.
-                    sessionInfo.markOptimisticBusy()
+                    if (shouldQueue) {
+                        pendingSend = PendingSend(queuedAtMs = System.currentTimeMillis())
+                    }
                     timeline.beginOptimisticSend(rows)
                 },
                 onSendAccepted = {
+                    pendingSend = null
                     commands.consumePendingRevert()
+                    sessionInfo.setOptimistic(SessionActivity.Running)
                     sessionReadyStore.notifyPromptSent(sessionId, worktree)
                     timeline.reloadAfterSend(
                         onComplete = { composer.clearSending() },
                         onReloadFailed = { composer.clearSending() },
                     )
+                    publishUiState()
                 },
                 onSendFailed = { optimisticId, error ->
-                    sessionInfo.clearOptimisticBusy()
+                    pendingSend = null
                     timeline.failOptimisticSend(optimisticId, error)
+                    publishUiState()
                 },
             )
         }
@@ -720,7 +745,10 @@ class SessionChatViewModel
             if (!isConnectionLive()) return
             composer.abort { success ->
                 if (!success) return@abort
-                sessionInfo.markIdle()
+                sessionInfo.setOptimistic(
+                    SessionActivity.Idle,
+                    ttlMs = SessionStatusLiveStore.ABORT_OPTIMISTIC_TTL_MS,
+                )
             }
         }
 
@@ -819,6 +847,14 @@ class SessionChatViewModel
         }
 
         private fun isConnectionLive(): Boolean = sessionInfo.state.value.canMutate
+
+        private suspend fun awaitLive(timeoutMs: Long): Boolean {
+            if (sessionInfo.state.value.canMutate) return true
+            return withTimeoutOrNull(timeoutMs) {
+                sessionInfo.state.first { it.canMutate }
+                true
+            } ?: false
+        }
 
         private fun hasCreatedSession(): Boolean {
             val sessionId = boundSessionId ?: return false
@@ -1040,6 +1076,8 @@ class SessionChatViewModel
                 sessionTodoTotalCount = inboxSnapshot.sessionTodos.size,
                 connectionStatus = infoState.connectionStatus,
                 canMutate = infoState.canMutate,
+                composerEnabled = infoState.composerEnabled,
+                pendingSend = pendingSend,
                 messagesFromCache = timelineState.messagesFromCache,
                 contextUsageFraction =
                     sessionInfo.contextUsageFraction(
@@ -1151,6 +1189,7 @@ class SessionChatViewModel
             composer.flushDraft()
             inbox.stop()
             clearSessionReadyFocus()
+            syncCoordinator.markFocused(null)
             super.onCleared()
         }
 
@@ -1172,6 +1211,7 @@ class SessionChatViewModel
 
         companion object {
             const val ModelFilterThreshold: Int = SessionChatComposer.ModelFilterThreshold
+            const val PENDING_SEND_TIMEOUT_MS = 8_000L
         }
     }
 

@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.event
 
+import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.booleanOrNull
@@ -8,6 +9,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -94,10 +96,38 @@ class EventDomainAdapterTest {
 
         assertEquals("message.part.delta", event?.type)
         assertEquals("ses-1", event?.sessionId)
-        assertEquals("msg-2", event?.rawProperties?.get("messageID")?.jsonPrimitive?.content)
-        assertEquals("prt-1", event?.rawProperties?.get("partID")?.jsonPrimitive?.content)
-        assertEquals("text", event?.rawProperties?.get("field")?.jsonPrimitive?.content)
-        assertEquals("Hi", event?.rawProperties?.get("delta")?.jsonPrimitive?.content)
+        assertEquals(
+            "msg-2",
+            event
+                ?.rawProperties
+                ?.get("messageID")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "prt-1",
+            event
+                ?.rawProperties
+                ?.get("partID")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "text",
+            event
+                ?.rawProperties
+                ?.get("field")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "Hi",
+            event
+                ?.rawProperties
+                ?.get("delta")
+                ?.jsonPrimitive
+                ?.content,
+        )
         assertTrue(event!!.triggersMessageRefresh)
     }
 
@@ -110,8 +140,26 @@ class EventDomainAdapterTest {
 
         assertEquals(listOf("message.updated", "session.status"), events.map { it.type })
         assertEquals("ses-1", events[0].sessionId)
-        assertEquals("assistant", events[0].rawProperties?.get("info")?.jsonObject?.get("role")?.jsonPrimitive?.content)
-        assertEquals("busy", events[1].rawProperties?.get("status")?.jsonObject?.get("type")?.jsonPrimitive?.content)
+        assertEquals(
+            "assistant",
+            events[0]
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("role")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "busy",
+            events[1]
+                .rawProperties
+                ?.get("status")
+                ?.jsonObject
+                ?.get("type")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     @Test
@@ -123,9 +171,36 @@ class EventDomainAdapterTest {
 
         assertEquals("message.updated", event?.type)
         assertEquals("ses-1", event?.sessionId)
-        assertEquals("user", event?.rawProperties?.get("info")?.jsonObject?.get("role")?.jsonPrimitive?.content)
-        assertEquals("msg-1", event?.rawProperties?.get("info")?.jsonObject?.get("id")?.jsonPrimitive?.content)
-        assertEquals(true, event?.rawProperties?.get("info")?.jsonObject?.get("waiting")?.jsonPrimitive?.booleanOrNull)
+        assertEquals(
+            "user",
+            event
+                ?.rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("role")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "msg-1",
+            event
+                ?.rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("id")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            true,
+            event
+                ?.rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("waiting")
+                ?.jsonPrimitive
+                ?.booleanOrNull,
+        )
     }
 
     @Test
@@ -136,9 +211,36 @@ class EventDomainAdapterTest {
             )
 
         assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
-        assertEquals("user", events[0].rawProperties?.get("info")?.jsonObject?.get("role")?.jsonPrimitive?.content)
-        assertEquals(false, events[0].rawProperties?.get("info")?.jsonObject?.get("waiting")?.jsonPrimitive?.booleanOrNull)
-        assertEquals("steer", events[0].rawProperties?.get("info")?.jsonObject?.get("delivery")?.jsonPrimitive?.content)
+        assertEquals(
+            "user",
+            events[0]
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("role")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            false,
+            events[0]
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("waiting")
+                ?.jsonPrimitive
+                ?.booleanOrNull,
+        )
+        assertEquals(
+            "steer",
+            events[0]
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("delivery")
+                ?.jsonPrimitive
+                ?.content,
+        )
         val part = events[1].rawProperties?.get("part")?.jsonObject
         assertEquals("text", part?.get("type")?.jsonPrimitive?.content)
         assertEquals("Hello from CLI", part?.get("text")?.jsonPrimitive?.content)
@@ -154,7 +256,16 @@ class EventDomainAdapterTest {
             )
 
         assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
-        assertEquals("Hello from CLI", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
+        assertEquals(
+            "Hello from CLI",
+            events[1]
+                .rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("text")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     @Test
@@ -216,7 +327,16 @@ class EventDomainAdapterTest {
             )
 
         assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
-        assertEquals("Hello from CLI", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
+        assertEquals(
+            "Hello from CLI",
+            events[1]
+                .rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("text")
+                ?.jsonPrimitive
+                ?.content,
+        )
         assertEquals("ses-1", events[0].sessionId)
     }
 
@@ -228,7 +348,16 @@ class EventDomainAdapterTest {
             )
 
         assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
-        assertEquals("Hello from CLI", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
+        assertEquals(
+            "Hello from CLI",
+            events[1]
+                .rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("text")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     @Test
@@ -239,7 +368,16 @@ class EventDomainAdapterTest {
             )
 
         assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
-        assertEquals("Hello from CLI", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
+        assertEquals(
+            "Hello from CLI",
+            events[1]
+                .rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("text")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     @Test
@@ -250,7 +388,16 @@ class EventDomainAdapterTest {
             )
 
         assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
-        assertEquals("Hello from CLI", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
+        assertEquals(
+            "Hello from CLI",
+            events[1]
+                .rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("text")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     @Test
@@ -261,7 +408,16 @@ class EventDomainAdapterTest {
             )
 
         assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
-        assertEquals("Hello from CLI", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
+        assertEquals(
+            "Hello from CLI",
+            events[1]
+                .rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("text")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     @Test
@@ -272,8 +428,22 @@ class EventDomainAdapterTest {
             )
 
         assertEquals("message.part.delta", event?.type)
-        assertEquals("input", event?.rawProperties?.get("field")?.jsonPrimitive?.content)
-        assertEquals("prt-1", event?.rawProperties?.get("partID")?.jsonPrimitive?.content)
+        assertEquals(
+            "input",
+            event
+                ?.rawProperties
+                ?.get("field")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "prt-1",
+            event
+                ?.rawProperties
+                ?.get("partID")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     @Test
@@ -289,7 +459,15 @@ class EventDomainAdapterTest {
         assertEquals("prt-1", part?.get("id")?.jsonPrimitive?.content)
         assertEquals("task", part?.get("tool")?.jsonPrimitive?.content)
         assertEquals("pending", state?.get("status")?.jsonPrimitive?.content)
-        assertEquals(1_710_000_000_000L, state?.get("time")?.jsonObject?.get("start")?.jsonPrimitive?.longOrNull)
+        assertEquals(
+            1_710_000_000_000L,
+            state
+                ?.get("time")
+                ?.jsonObject
+                ?.get("start")
+                ?.jsonPrimitive
+                ?.longOrNull,
+        )
     }
 
     @Test
@@ -321,7 +499,14 @@ class EventDomainAdapterTest {
 
         assertEquals("message.removed", event?.type)
         assertEquals("ses-1", event?.sessionId)
-        assertEquals("msg-2", event?.rawProperties?.get("messageID")?.jsonPrimitive?.content)
+        assertEquals(
+            "msg-2",
+            event
+                ?.rawProperties
+                ?.get("messageID")
+                ?.jsonPrimitive
+                ?.content,
+        )
         assertTrue(event!!.triggersMessageRefresh)
     }
 
@@ -334,11 +519,56 @@ class EventDomainAdapterTest {
 
         assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
         assertEquals("ses-1", events[0].sessionId)
-        assertEquals("msg-2", events[0].rawProperties?.get("info")?.jsonObject?.get("id")?.jsonPrimitive?.content)
-        assertEquals(true, events[0].rawProperties?.get("info")?.jsonObject?.get("waiting")?.jsonPrimitive?.booleanOrNull)
-        assertEquals("steer", events[0].rawProperties?.get("info")?.jsonObject?.get("delivery")?.jsonPrimitive?.content)
-        assertEquals("Hello from inbox", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
-        assertEquals("msg-2", events[1].rawProperties?.get("part")?.jsonObject?.get("messageID")?.jsonPrimitive?.content)
+        assertEquals(
+            "msg-2",
+            events[0]
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("id")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            true,
+            events[0]
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("waiting")
+                ?.jsonPrimitive
+                ?.booleanOrNull,
+        )
+        assertEquals(
+            "steer",
+            events[0]
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("delivery")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "Hello from inbox",
+            events[1]
+                .rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("text")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "msg-2",
+            events[1]
+                .rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("messageID")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     @Test
@@ -349,8 +579,26 @@ class EventDomainAdapterTest {
             )
 
         assertEquals("message.updated", event?.type)
-        assertEquals(true, event?.rawProperties?.get("info")?.jsonObject?.get("waiting")?.jsonPrimitive?.booleanOrNull)
-        assertEquals("queue", event?.rawProperties?.get("info")?.jsonObject?.get("delivery")?.jsonPrimitive?.content)
+        assertEquals(
+            true,
+            event
+                ?.rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("waiting")
+                ?.jsonPrimitive
+                ?.booleanOrNull,
+        )
+        assertEquals(
+            "queue",
+            event
+                ?.rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("delivery")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     @Test
@@ -363,7 +611,15 @@ class EventDomainAdapterTest {
         assertEquals("message.updated", events[0].type)
         assertEquals(
             1_710_000_000_000L,
-            events[0].rawProperties?.get("info")?.jsonObject?.get("time")?.jsonObject?.get("created")?.jsonPrimitive?.longOrNull,
+            events[0]
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("time")
+                ?.jsonObject
+                ?.get("created")
+                ?.jsonPrimitive
+                ?.longOrNull,
         )
     }
 
@@ -378,21 +634,37 @@ class EventDomainAdapterTest {
         assertEquals("ses-1", events[0].sessionId)
         assertEquals(
             "model overloaded",
-            events[0].rawProperties?.get("error")?.jsonObject?.get("message")?.jsonPrimitive?.content,
+            events[0]
+                .rawProperties
+                ?.get("error")
+                ?.jsonObject
+                ?.get("message")
+                ?.jsonPrimitive
+                ?.content,
         )
     }
 
     @Test
-    fun parseEvents_projectsStepEndedIntoAssistantMessageAndActiveSnapshot() {
+    fun parseEvents_projectsStepEndedIntoAssistantMessageWithoutSnapshot() {
         val events =
             adapter.parseEvents(
                 """{"type":"session.next.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
             )
 
-        assertEquals(listOf("message.updated", "session.active.snapshot"), events.map { it.type })
+        assertEquals(listOf("message.updated"), events.map { it.type })
         assertEquals("ses-1", events[0].sessionId)
-        assertEquals("assistant", events[0].rawProperties?.get("info")?.jsonObject?.get("role")?.jsonPrimitive?.content)
-        assertTrue(events[1].triggersStatusRefresh)
+        assertEquals(
+            "assistant",
+            events[0]
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("role")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertTrue(events.none { it.triggersStatusRefresh })
+        assertTrue(events.none { it.type == "session.active.snapshot" })
     }
 
     @Test
@@ -408,7 +680,13 @@ class EventDomainAdapterTest {
         assertTrue(events.all { deduper.accept(it.id) })
         assertEquals(
             "What are you up to?",
-            events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content,
+            events[1]
+                .rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("text")
+                ?.jsonPrimitive
+                ?.content,
         )
     }
 
@@ -416,7 +694,7 @@ class EventDomainAdapterTest {
     fun parseEvents_stampsDistinctIdsOnProjectedSiblings() {
         val events =
             adapter.parseEvents(
-                """{"id":"evt_step","type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
+                """{"id":"evt_step","type":"session.shell.started","data":{"sessionID":"ses-1","callID":"sh-1","assistantMessageID":"msg-2"}}""",
             )
 
         assertEquals(listOf("evt_step:0", "evt_step:1"), events.map { it.id })
@@ -431,7 +709,14 @@ class EventDomainAdapterTest {
                 """{"type":"session.reasoning.ended","created":2000,"data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"r-1","text":"hmm"}}""",
             )
 
-        val time = events.single().rawProperties?.get("part")?.jsonObject?.get("time")?.jsonObject
+        val time =
+            events
+                .single()
+                .rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("time")
+                ?.jsonObject
         assertNull(time?.get("start"))
         assertEquals(2000L, time?.get("end")?.jsonPrimitive?.longOrNull)
     }
@@ -445,7 +730,16 @@ class EventDomainAdapterTest {
 
         assertEquals("session.status", event?.type)
         assertEquals("ses-1", event?.sessionId)
-        assertEquals("busy", event?.rawProperties?.get("status")?.jsonObject?.get("type")?.jsonPrimitive?.content)
+        assertEquals(
+            "busy",
+            event
+                ?.rawProperties
+                ?.get("status")
+                ?.jsonObject
+                ?.get("type")
+                ?.jsonPrimitive
+                ?.content,
+        )
         assertTrue(event!!.triggersStatusRefresh)
     }
 
@@ -483,9 +777,30 @@ class EventDomainAdapterTest {
             )
 
         assertEquals("message.part.delta", event?.type)
-        assertEquals("reasoning", event?.rawProperties?.get("field")?.jsonPrimitive?.content)
-        assertEquals("hmm", event?.rawProperties?.get("delta")?.jsonPrimitive?.content)
-        assertEquals("r-1", event?.rawProperties?.get("partID")?.jsonPrimitive?.content)
+        assertEquals(
+            "reasoning",
+            event
+                ?.rawProperties
+                ?.get("field")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "hmm",
+            event
+                ?.rawProperties
+                ?.get("delta")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "r-1",
+            event
+                ?.rawProperties
+                ?.get("partID")
+                ?.jsonPrimitive
+                ?.content,
+        )
         assertTrue(event!!.triggersMessageRefresh)
     }
 
@@ -496,10 +811,11 @@ class EventDomainAdapterTest {
                 """{"type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}""",
             )
 
-        assertEquals(listOf("message.updated", "session.active.snapshot"), events.map { it.type })
+        assertEquals(listOf("message.updated"), events.map { it.type })
         assertEquals("ses-1", events[0].sessionId)
         assertTrue(events.none { it.type == "session.idle" })
-        assertTrue(events[1].triggersStatusRefresh)
+        assertTrue(events.none { it.type == "session.active.snapshot" })
+        assertTrue(events.none { it.triggersStatusRefresh })
     }
 
     @Test
@@ -510,8 +826,26 @@ class EventDomainAdapterTest {
             )
 
         assertEquals(listOf("session.status", "message.part.updated"), events.map { it.type })
-        assertEquals("busy", events[0].rawProperties?.get("status")?.jsonObject?.get("type")?.jsonPrimitive?.content)
-        assertEquals("bash", events[1].rawProperties?.get("part")?.jsonObject?.get("tool")?.jsonPrimitive?.content)
+        assertEquals(
+            "busy",
+            events[0]
+                .rawProperties
+                ?.get("status")
+                ?.jsonObject
+                ?.get("type")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "bash",
+            events[1]
+                .rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("tool")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     @Test
@@ -521,8 +855,9 @@ class EventDomainAdapterTest {
                 """{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c"}}""",
             )
 
-        assertEquals(listOf("message.part.updated", "session.active.snapshot"), events.map { it.type })
+        assertEquals(listOf("message.part.updated"), events.map { it.type })
         assertTrue(events.none { it.type == "session.idle" })
+        assertTrue(events.none { it.type == "session.active.snapshot" })
     }
 
     @Test
@@ -545,9 +880,30 @@ class EventDomainAdapterTest {
 
         assertEquals("message.part.delta", event?.type)
         assertEquals("ses-1", event?.sessionId)
-        assertEquals("msg-2", event?.rawProperties?.get("messageID")?.jsonPrimitive?.content)
-        assertEquals("text-0", event?.rawProperties?.get("partID")?.jsonPrimitive?.content)
-        assertEquals("Hi", event?.rawProperties?.get("delta")?.jsonPrimitive?.content)
+        assertEquals(
+            "msg-2",
+            event
+                ?.rawProperties
+                ?.get("messageID")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "text-0",
+            event
+                ?.rawProperties
+                ?.get("partID")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "Hi",
+            event
+                ?.rawProperties
+                ?.get("delta")
+                ?.jsonPrimitive
+                ?.content,
+        )
         assertTrue(event!!.triggersMessageRefresh)
     }
 
@@ -562,7 +918,15 @@ class EventDomainAdapterTest {
         assertEquals("ses-1", event?.sessionId)
         val info = event?.rawProperties?.get("info")?.jsonObject
         assertEquals("msg-2", info?.get("id")?.jsonPrimitive?.content)
-        assertEquals(120, info?.get("tokens")?.jsonObject?.get("input")?.jsonPrimitive?.intOrNull)
+        assertEquals(
+            120,
+            info
+                ?.get("tokens")
+                ?.jsonObject
+                ?.get("input")
+                ?.jsonPrimitive
+                ?.intOrNull,
+        )
         assertTrue(event!!.triggersMessageRefresh)
     }
 
@@ -587,7 +951,13 @@ class EventDomainAdapterTest {
         assertEquals("ses-1", event?.sessionId)
         assertEquals(
             "Testing conversation",
-            event?.rawProperties?.get("info")?.jsonObject?.get("title")?.jsonPrimitive?.content,
+            event
+                ?.rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("title")
+                ?.jsonPrimitive
+                ?.content,
         )
     }
 
@@ -668,6 +1038,22 @@ class EventDomainAdapterTest {
         assertEquals("ses-1", status?.sessionId)
         assertEquals("busy", status?.raw?.get("type"))
         assertEquals("Working", status?.let(adapter::statusLabel))
+        assertEquals(SessionActivity.Running, adapter.sessionActivityFromEvent(event)?.activity)
+    }
+
+    @Test
+    fun sessionActivityFromEvent_parsesRetryPayload() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.retry.scheduled","data":{"sessionID":"ses-1","attempt":2,"next":1234,"message":"backoff"}}""",
+            )
+
+        val parsed = adapter.sessionActivityFromEvent(events.single())
+        assertEquals("ses-1", parsed?.sessionId)
+        assertEquals(
+            SessionActivity.Retrying(attempt = 2, nextAtMs = 1234L, message = "backoff"),
+            parsed?.activity,
+        )
     }
 
     @Test
@@ -701,8 +1087,28 @@ class EventDomainAdapterTest {
 
         assertEquals("message.part.updated", event?.type)
         assertEquals("ses-1", event?.sessionId)
-        assertEquals("bash", event?.rawProperties?.get("part")?.jsonObject?.get("tool")?.jsonPrimitive?.content)
-        assertEquals("running", event?.rawProperties?.get("part")?.jsonObject?.get("state")?.jsonObject?.get("status")?.jsonPrimitive?.content)
+        assertEquals(
+            "bash",
+            event
+                ?.rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("tool")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "running",
+            event
+                ?.rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("state")
+                ?.jsonObject
+                ?.get("status")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     @Test
@@ -712,7 +1118,16 @@ class EventDomainAdapterTest {
                 """{"type":"session.next.tool.called","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","input":{}}}""",
             )
 
-        assertEquals("", event?.rawProperties?.get("part")?.jsonObject?.get("tool")?.jsonPrimitive?.content)
+        assertEquals(
+            "",
+            event
+                ?.rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("tool")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     @Test
@@ -722,7 +1137,16 @@ class EventDomainAdapterTest {
                 """{"type":"session.next.tool.success","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","input":{"questions":[{"question":"One"},{"question":"Two"},{"question":"Three"}]}}}""",
             )
 
-        assertEquals("question", event?.rawProperties?.get("part")?.jsonObject?.get("tool")?.jsonPrimitive?.content)
+        assertEquals(
+            "question",
+            event
+                ?.rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("tool")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     @Test
@@ -732,6 +1156,51 @@ class EventDomainAdapterTest {
                 """{"type":"session.next.tool.success","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","input":{"query":"opencode mobile"}}}""",
             )
 
-        assertEquals("websearch", event?.rawProperties?.get("part")?.jsonObject?.get("tool")?.jsonPrimitive?.content)
+        assertEquals(
+            "websearch",
+            event
+                ?.rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("tool")
+                ?.jsonPrimitive
+                ?.content,
+        )
+    }
+
+    @Test
+    fun assistantMessageCompleted_nullCompletedIsNotFinished() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"message.updated","properties":{"info":{"role":"assistant","time":{"completed":null}}}}""",
+            )
+        assertFalse(adapter.assistantMessageCompleted(event!!))
+    }
+
+    @Test
+    fun assistantMessageCompleted_timestampIsFinished() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"message.updated","properties":{"info":{"role":"assistant","time":{"completed":123}}}}""",
+            )
+        assertTrue(adapter.assistantMessageCompleted(event!!))
+    }
+
+    @Test
+    fun assistantMessageCompleted_missingCompletedIsNotFinished() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"message.updated","properties":{"info":{"role":"assistant","time":{"created":1}}}}""",
+            )
+        assertFalse(adapter.assistantMessageCompleted(event!!))
+    }
+
+    @Test
+    fun assistantMessageCompleted_userRoleIsNotFinished() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"message.updated","properties":{"info":{"role":"user","time":{"completed":123}}}}""",
+            )
+        assertFalse(adapter.assistantMessageCompleted(event!!))
     }
 }

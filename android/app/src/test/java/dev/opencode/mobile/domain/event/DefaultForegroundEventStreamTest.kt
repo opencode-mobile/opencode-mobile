@@ -15,6 +15,8 @@ import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import io.ktor.utils.io.ByteChannel
+import io.ktor.utils.io.writeStringUtf8
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -28,17 +30,18 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class DefaultForegroundEventStreamTest {
     @Test
-    fun coldStart_opensV1HintWithoutWaitingForProbe() =
+    fun coldStart_waitsForProbeBeforeOpeningV2Lease() =
         runBlocking {
             val requests = mutableListOf<HttpRequestData>()
             val opened = CompletableDeferred<Unit>()
+            val probeEntered = CompletableDeferred<Unit>()
             val client =
                 HttpClient(
                     MockEngine { request ->
                         requests += request
                         opened.complete(Unit)
                         respond(
-                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            content = CONNECTED_V1,
                             status = HttpStatusCode.OK,
                             headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
                         )
@@ -49,7 +52,8 @@ class DefaultForegroundEventStreamTest {
                 ActiveConnectionManager(
                     store,
                     ConnectionProbing {
-                        delay(5_000)
+                        probeEntered.complete(Unit)
+                        delay(500)
                         ServerProtocol.V2
                     },
                 )
@@ -66,8 +70,15 @@ class DefaultForegroundEventStreamTest {
                 )
             try {
                 stream.start()
-                withTimeout(1_000) { opened.await() }
-                assertTrue(requests.single().url.encodedPath.contains("/global/event"))
+                probeEntered.await()
+                assertTrue(requests.isEmpty())
+                withTimeout(5_000) { opened.await() }
+                assertTrue(
+                    requests
+                        .single()
+                        .url.encodedPath
+                        .contains("/api/event"),
+                )
             } finally {
                 stream.stop()
                 client.close()
@@ -84,7 +95,7 @@ class DefaultForegroundEventStreamTest {
                     MockEngine { request ->
                         opened.complete(Unit)
                         respond(
-                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            content = CONNECTED_V1,
                             status = HttpStatusCode.OK,
                             headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
                         )
@@ -116,7 +127,7 @@ class DefaultForegroundEventStreamTest {
         }
 
     @Test
-    fun cachedProtocol_opensMatchingSsePath() =
+    fun cachedProtocol_opensWithoutWaitingForProbe() =
         runBlocking {
             val requests = mutableListOf<HttpRequestData>()
             val opened = CompletableDeferred<Unit>()
@@ -126,17 +137,22 @@ class DefaultForegroundEventStreamTest {
                         requests += request
                         opened.complete(Unit)
                         respond(
-                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            content = CONNECTED_V1,
                             status = HttpStatusCode.OK,
                             headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
                         )
                     },
                 )
             val store = FakeProfileStore()
+            val probeEntered = CompletableDeferred<Unit>()
             val manager =
                 ActiveConnectionManager(
                     store,
-                    ConnectionProbing { ServerProtocol.V1 },
+                    ConnectionProbing {
+                        probeEntered.complete(Unit)
+                        delay(5_000)
+                        ServerProtocol.V1
+                    },
                 )
             manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
 
@@ -150,8 +166,14 @@ class DefaultForegroundEventStreamTest {
                 )
             try {
                 stream.start()
-                withTimeout(5_000) { opened.await() }
-                assertTrue(requests.single().url.encodedPath.contains("/api/event"))
+                withTimeout(1_000) { opened.await() }
+                assertTrue(
+                    requests
+                        .single()
+                        .url.encodedPath
+                        .contains("/api/event"),
+                )
+                assertTrue(!probeEntered.isCompleted)
             } finally {
                 stream.stop()
                 client.close()
@@ -173,7 +195,7 @@ class DefaultForegroundEventStreamTest {
                             openedBoth.complete(Unit)
                         }
                         respond(
-                            content = "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n",
+                            content = CONNECTED_V1,
                             status = HttpStatusCode.OK,
                             headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
                         )
@@ -248,7 +270,12 @@ class DefaultForegroundEventStreamTest {
                 stream.start()
                 withTimeout(2_000) { opened.await() }
                 assertEquals(1, requests.size)
-                assertTrue(requests.single().url.encodedPath.contains("/api/event"))
+                assertTrue(
+                    requests
+                        .single()
+                        .url.encodedPath
+                        .contains("/api/event"),
+                )
                 assertEquals(null, requests.single().url.parameters["directory"])
             } finally {
                 stream.stop()
@@ -301,9 +328,312 @@ class DefaultForegroundEventStreamTest {
             }
         }
 
+    @Test
+    fun http401_setsAuthFailedAndStopsRetrying() =
+        runBlocking {
+            val attempts = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine {
+                        attempts.incrementAndGet()
+                        respond(content = "", status = HttpStatusCode.Unauthorized)
+                    },
+                )
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(3_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.AuthFailed }
+                }
+                delay(2_000)
+                assertEquals(1, attempts.get())
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun missingServerConnectedTimesOutAndRetries() =
+        runBlocking {
+            val attempts = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine {
+                        attempts.incrementAndGet()
+                        respond(
+                            content = HEARTBEAT_V1,
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(8_000) {
+                    while (attempts.get() < 2) {
+                        delay(50)
+                    }
+                }
+                assertTrue(attempts.get() >= 2)
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun reconnectWakeDuringBackoffRetriesImmediately() =
+        runBlocking {
+            val attempts = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine {
+                        val n = attempts.incrementAndGet()
+                        if (n == 1) {
+                            respond(content = "", status = HttpStatusCode.NotFound)
+                        } else {
+                            val channel = ByteChannel(autoFlush = true)
+                            channel.writeStringUtf8(CONNECTED_V1)
+                            respond(
+                                content = channel,
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                            )
+                        }
+                    },
+                )
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(3_000) {
+                    while (attempts.get() < 1) {
+                        delay(10)
+                    }
+                }
+                stream.onReconnectWake()
+                withTimeout(3_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.Connected }
+                }
+                assertEquals(2, attempts.get())
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun http403_setsAuthFailedAndStopsRetrying() =
+        runBlocking {
+            val attempts = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine {
+                        attempts.incrementAndGet()
+                        respond(content = "", status = HttpStatusCode.Forbidden)
+                    },
+                )
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(3_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.AuthFailed }
+                }
+                delay(1_500)
+                assertEquals(1, attempts.get())
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun http404_fastRetriesWhileProtocolUnconfirmed() =
+        runBlocking {
+            val attempts = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine {
+                        attempts.incrementAndGet()
+                        respond(content = "", status = HttpStatusCode.NotFound)
+                    },
+                )
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { error("probe failed") },
+                )
+            manager.applyProfile(sampleProfile)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                delay(2_500)
+                assertTrue(attempts.get() >= 3)
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun firstFrameHeartbeat_failsImmediatelyAndRetries() =
+        runBlocking {
+            val attempts = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine {
+                        attempts.incrementAndGet()
+                        val channel = ByteChannel(autoFlush = true)
+                        channel.writeStringUtf8(HEARTBEAT_V1)
+                        respond(
+                            content = channel,
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(2_500) {
+                    while (attempts.get() < 2) {
+                        delay(50)
+                    }
+                }
+                assertTrue(attempts.get() >= 2)
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun http200WithoutFirstFrame_doesNotMarkLive() =
+        runBlocking {
+            val client =
+                HttpClient(
+                    MockEngine {
+                        val channel = ByteChannel(autoFlush = true)
+                        respond(
+                            content = channel,
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                delay(1_000)
+                assertTrue(stream.connectionState.value != EventStreamConnectionState.Connected)
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
     private val sampleProfile =
         ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", password = "x")
 
+    private companion object {
+        private const val CONNECTED_V1 =
+            "data: {\"payload\":{\"type\":\"server.connected\",\"properties\":{}}}\n\n"
+        private const val HEARTBEAT_V1 =
+            "data: {\"payload\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n\n"
+    }
 
     private class HoldingProfileStore(
         private val hold: CompletableDeferred<Unit>,
@@ -351,10 +681,8 @@ class DefaultForegroundEventStreamTest {
 
         override suspend fun clearAll() = Unit
 
-        override fun configurationRevisions(): kotlinx.coroutines.flow.Flow<Unit> =
-            kotlinx.coroutines.flow.emptyFlow()
+        override fun configurationRevisions(): kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow()
     }
-
 
     private class FakeProfileStore(
         private val worktrees: List<String> = emptyList(),

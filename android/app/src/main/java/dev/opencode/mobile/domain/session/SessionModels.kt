@@ -38,12 +38,67 @@ data class SessionSummary(
     val updatedAtLabel: String? = null,
     val updatedAtEpochMs: Long? = null,
     val isReady: Boolean = false,
+    val statusStale: Boolean = false,
 )
 
 data class SessionStatus(
     val sessionId: String,
     val raw: Map<String, String> = emptyMap(),
 )
+
+sealed class SessionActivity {
+    data object Idle : SessionActivity()
+
+    data object Running : SessionActivity()
+
+    data class Retrying(
+        val attempt: Int? = null,
+        val nextAtMs: Long? = null,
+        val message: String? = null,
+    ) : SessionActivity()
+
+    fun isBusy(): Boolean = this is Running || this is Retrying
+
+    fun statusLabel(): String? =
+        when (this) {
+            Idle -> null
+            Running -> "Working"
+            is Retrying -> if (attempt != null) "Retrying · $attempt" else "Retrying"
+        }
+}
+
+enum class SessionActivitySource {
+    Server,
+    Optimistic,
+    Cached,
+}
+
+data class SessionActivityEntry(
+    val activity: SessionActivity,
+    val source: SessionActivitySource,
+    val observedAtMs: Long,
+)
+
+data class SessionActivitySnapshot(
+    val entries: Map<String, SessionActivityEntry> = emptyMap(),
+    val seeded: Boolean = false,
+    val fromCache: Boolean = false,
+)
+
+fun SessionStatus.toSessionActivity(): SessionActivity =
+    when (raw["type"]?.lowercase()) {
+        "busy", "running" -> SessionActivity.Running
+        "retry" ->
+            SessionActivity.Retrying(
+                attempt = raw["attempt"]?.toIntOrNull(),
+                nextAtMs =
+                    raw["next"]?.toLongOrNull()
+                        ?: raw["nextAt"]?.toLongOrNull()
+                        ?: raw["nextAtMs"]?.toLongOrNull(),
+                message = raw["message"],
+            )
+        else -> SessionActivity.Idle
+    }
 
 enum class SessionTodoStatus {
     Pending,

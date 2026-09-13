@@ -2,140 +2,102 @@ package dev.opencode.mobile.domain.event
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LiveOverallPolicyTest {
     @Test
-    fun firstFullyLiveSet_isConnectedWithoutReconnect() {
+    fun firstFullyLiveSet_isConnectedAndPublishesReconnect() {
         val decision =
             LiveOverallPolicy.decide(
                 LiveOverallFlags(),
                 LiveOverallInput(
                     required = listOf("global/event"),
                     live = setOf("global/event"),
-                    pathLost = false,
                 ),
             )
         assertEquals(EventStreamConnectionState.Connected, decision.connectionState)
-        assertFalse(decision.publishReconnect)
-        assertNull(decision.openGap)
+        assertTrue(decision.publishReconnect)
         assertTrue(decision.flags.wasFullyConnected)
-        assertTrue(decision.flags.occupyingConnected)
-        assertTrue(decision.flags.lastAllLive)
     }
 
     @Test
-    fun allLiveAfterFullConnection_publishesReconnectOnce() {
+    fun stayingConnected_doesNotPublishReconnectAgain() {
         val first =
             LiveOverallPolicy.decide(
-                LiveOverallFlags(wasFullyConnected = true),
+                LiveOverallFlags(),
                 LiveOverallInput(
                     required = listOf("global/event"),
                     live = setOf("global/event"),
-                    pathLost = false,
                 ),
             )
-        assertTrue(first.publishReconnect)
-        assertTrue(first.flags.emittedReconnectForCurrentGap)
         val second =
             LiveOverallPolicy.decide(
                 first.flags,
                 LiveOverallInput(
                     required = listOf("global/event"),
                     live = setOf("global/event"),
-                    pathLost = false,
                 ),
+                currentlyConnected = true,
             )
         assertFalse(second.publishReconnect)
+        assertEquals(EventStreamConnectionState.Connected, second.connectionState)
     }
 
     @Test
-    fun coldResumeBarrier_publishesReconnectEvenIfNeverFullyConnected() {
+    fun occupancyResume_publishesReconnectOnFirstConnected() {
         val decision =
             LiveOverallPolicy.decide(
-                LiveOverallFlags(pendingResumeBarrier = true),
+                LiveOverallFlags(wasFullyConnected = true),
                 LiveOverallInput(
                     required = listOf("api/event"),
                     live = setOf("api/event"),
-                    pathLost = false,
                 ),
+                currentlyConnected = false,
             )
         assertTrue(decision.publishReconnect)
-        assertFalse(decision.flags.pendingResumeBarrier)
+        assertEquals(EventStreamConnectionState.Connected, decision.connectionState)
     }
 
     @Test
-    fun requiredGrowth_doesNotOpenGapOrReconnect() {
+    fun requiredGrowth_goesConnectingThenReconnects() {
         val dropped =
             LiveOverallPolicy.decide(
-                LiveOverallFlags(
-                    lastAllLive = true,
-                    lastRequiredTargets = listOf("global/event"),
-                    lastLiveTargets = setOf("global/event"),
-                    wasFullyConnected = true,
-                ),
+                LiveOverallFlags(wasFullyConnected = true),
                 LiveOverallInput(
                     required = listOf("global/event", "event:/tmp/a"),
                     live = setOf("global/event"),
-                    pathLost = false,
                 ),
+                currentlyConnected = true,
             )
         assertEquals(EventStreamConnectionState.Reconnecting, dropped.connectionState)
-        assertNull(dropped.openGap)
-        assertTrue(dropped.flags.suppressReconnectForRequiredGrowth)
+        assertFalse(dropped.publishReconnect)
         val recovered =
             LiveOverallPolicy.decide(
                 dropped.flags,
                 LiveOverallInput(
                     required = listOf("global/event", "event:/tmp/a"),
                     live = setOf("global/event", "event:/tmp/a"),
-                    pathLost = false,
                 ),
+                currentlyConnected = false,
             )
         assertEquals(EventStreamConnectionState.Connected, recovered.connectionState)
-        assertFalse(recovered.publishReconnect)
-        assertFalse(recovered.flags.suppressReconnectForRequiredGrowth)
+        assertTrue(recovered.publishReconnect)
     }
 
     @Test
-    fun incumbentLeaseLost_opensLeaseLostGap() {
+    fun incumbentLeaseLost_isReconnectingWithoutReconnectEvent() {
         val decision =
             LiveOverallPolicy.decide(
-                LiveOverallFlags(
-                    lastAllLive = true,
-                    lastRequiredTargets = listOf("global/event", "event:/tmp/a"),
-                    lastLiveTargets = setOf("global/event", "event:/tmp/a"),
-                    wasFullyConnected = true,
-                ),
+                LiveOverallFlags(wasFullyConnected = true),
                 LiveOverallInput(
                     required = listOf("global/event", "event:/tmp/a"),
                     live = setOf("global/event"),
-                    pathLost = false,
                 ),
+                currentlyConnected = true,
             )
-        assertEquals(LiveGapReason.LeaseLost, decision.openGap)
         assertEquals(EventStreamConnectionState.Reconnecting, decision.connectionState)
         assertFalse(decision.publishReconnect)
-    }
-
-    @Test
-    fun incumbentLostWhilePathUnavailable_opensPathLostGap() {
-        val decision =
-            LiveOverallPolicy.decide(
-                LiveOverallFlags(
-                    lastRequiredTargets = listOf("api/event"),
-                    lastLiveTargets = setOf("api/event"),
-                    wasFullyConnected = true,
-                ),
-                LiveOverallInput(
-                    required = listOf("api/event"),
-                    live = emptySet(),
-                    pathLost = true,
-                ),
-            )
-        assertEquals(LiveGapReason.PathLost, decision.openGap)
     }
 
     @Test
@@ -146,11 +108,9 @@ class LiveOverallPolicyTest {
                 LiveOverallInput(
                     required = listOf("api/event"),
                     live = emptySet(),
-                    pathLost = false,
                 ),
             )
         assertEquals(EventStreamConnectionState.Connecting, decision.connectionState)
-        assertNull(decision.openGap)
         assertFalse(decision.publishReconnect)
     }
 }

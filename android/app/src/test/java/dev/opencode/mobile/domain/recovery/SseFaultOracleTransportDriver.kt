@@ -292,7 +292,7 @@ class SseFaultOracleTransportDriver {
 
         fun close() {
             collectJob?.cancel()
-            stream.stop()
+            runBlocking { stream.stop() }
             client.close()
         }
 

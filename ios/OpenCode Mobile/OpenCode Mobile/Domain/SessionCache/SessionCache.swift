@@ -5,10 +5,17 @@ import Foundation
 nonisolated protocol SessionCache: AnyObject, Sendable {
     func seedSessions(worktree: String) async -> [Session]?
     func rememberSessions(worktree: String, sessions: [Session]) async
+    func seedActivity(directory: String) async -> [SessionActivityCacheEntry]?
+    func rememberActivity(directory: String, entries: [SessionActivityCacheEntry]) async
     func openMessages(sessionID: String, worktree: String) -> SessionMessageCacheHandle
     func purgeWorktree(serverBaseURL: String, worktree: String) async
     func clearAll() async
     func estimatedSizeBytes() async -> Int64
+}
+
+extension SessionCache {
+    func seedActivity(directory: String) async -> [SessionActivityCacheEntry]? { nil }
+    func rememberActivity(directory: String, entries: [SessionActivityCacheEntry]) async {}
 }
 
 nonisolated protocol SessionMessageCacheHandle: AnyObject, Sendable {

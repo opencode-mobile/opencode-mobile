@@ -51,6 +51,7 @@ private val SessionListFallbackBottomSpacer = 168.dp
 enum class SessionListStatus {
     Idle,
     Running,
+    Retrying,
     Ready,
 }
 
@@ -64,6 +65,10 @@ data class SessionListSession(
     val status: SessionListStatus,
     val caption: String,
     val updatedAtEpochMs: Long? = null,
+    /** Retry attempt shown with the Retrying chip, e.g. "Retrying · 2". */
+    val retryAttempt: Int? = null,
+    /** Cached activity that has not been confirmed by REST yet. */
+    val statusStale: Boolean = false,
 )
 
 data class SessionListFilterTab(
@@ -238,7 +243,11 @@ private fun SessionListFeedPage(
             HomeSessionLadder.group(
                 sessions = visibleSessions,
                 updatedAtEpochMs = { it.updatedAtEpochMs },
-                isAttention = { it.status == SessionListStatus.Running || it.status == SessionListStatus.Ready },
+                isAttention = {
+                    it.status == SessionListStatus.Running ||
+                        it.status == SessionListStatus.Retrying ||
+                        it.status == SessionListStatus.Ready
+                },
                 recentWindowHours = recentWindowHours,
                 nowEpochMs = System.currentTimeMillis(),
             )
@@ -413,7 +422,7 @@ private fun SessionListRow(
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
 ) {
-    val status = session.status.toListItemStatus()
+    val status = session.status.toListItemStatus(session.retryAttempt, stale = session.statusStale)
     OpenCodeListItem(
         title = session.title,
         subtitle = compactHomePath(session.subtitle),
@@ -423,7 +432,7 @@ private fun SessionListRow(
             StartDecorator.Letter(
                 character = session.letter,
                 accent = session.letterAccent,
-                statusDot = if (showStatusDot) status.tone else null,
+                statusDot = if (showStatusDot) status?.tone else null,
             ),
         onClick = { onSessionSelected(session) },
         onLongPress = onSessionLongPress?.let { handler -> { handler(session) } },
@@ -456,7 +465,7 @@ private fun rememberStabilizedLadder(
                     previousLastAppliedAtEpochMs = hold.lastAppliedAtEpochMs,
                     desired = desired,
                     itemId = SessionListSession::id,
-                    isAttention = { it.status == SessionListStatus.Running || it.status == SessionListStatus.Ready },
+                    isAttention = { it.status == SessionListStatus.Running || it.status == SessionListStatus.Retrying || it.status == SessionListStatus.Ready },
                     isReady = { it.status == SessionListStatus.Ready },
                     nowEpochMs = System.currentTimeMillis(),
                 )
@@ -480,15 +489,32 @@ fun List<SessionListSession>.visibleForFilter(selectedFilterId: String): List<Se
         filter { it.worktree == selectedFilterId }
     }
 
-private fun SessionListStatus.toListItemStatus(): OpenCodeListItemStatus =
-    when (this) {
-        SessionListStatus.Idle ->
-            OpenCodeListItemStatus(text = "Idle", tone = OpenCodeListItemStatusTone.Info)
-        SessionListStatus.Running ->
-            OpenCodeListItemStatus(text = "Running", tone = OpenCodeListItemStatusTone.Interactive)
-        SessionListStatus.Ready ->
-            OpenCodeListItemStatus(text = "Ready", tone = OpenCodeListItemStatusTone.Success)
+internal fun SessionListStatus.toListItemStatus(
+    retryAttempt: Int? = null,
+    stale: Boolean = false,
+): OpenCodeListItemStatus? {
+    val tone =
+        if (stale) {
+            OpenCodeListItemStatusTone.Stale
+        } else {
+            when (this) {
+                SessionListStatus.Idle -> return null
+                SessionListStatus.Running -> OpenCodeListItemStatusTone.Interactive
+                SessionListStatus.Retrying -> OpenCodeListItemStatusTone.Warning
+                SessionListStatus.Ready -> OpenCodeListItemStatusTone.Success
+            }
+        }
+    return when (this) {
+        SessionListStatus.Idle -> null
+        SessionListStatus.Running -> OpenCodeListItemStatus(text = "Running", tone = tone)
+        SessionListStatus.Retrying ->
+            OpenCodeListItemStatus(
+                text = retryAttempt?.let { "Retrying · $it" } ?: "Retrying",
+                tone = tone,
+            )
+        SessionListStatus.Ready -> OpenCodeListItemStatus(text = "Ready", tone = tone)
     }
+}
 
 internal fun compactHomePath(path: String): String {
     val home = System.getProperty("user.home").orEmpty()

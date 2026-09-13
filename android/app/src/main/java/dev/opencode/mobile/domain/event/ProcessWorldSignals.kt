@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.connection.DeviceNetworkPath
 import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
+import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -27,9 +28,8 @@ class ProcessWorldSignals(
     private val deviceNetworkPath: DeviceNetworkPath,
     private val diagnosticLogger: DiagnosticLogger,
     private val hasActiveConnection: () -> Boolean,
-    private val profileSaved: SharedFlow<Unit>,
-    private val profileCleared: SharedFlow<Unit>,
     private val scope: CoroutineScope,
+    private val activeConnectionManager: ActiveConnectionManager? = null,
     private val stopGraceMs: Long = STOP_GRACE_MS,
 ) : WorldSignals,
     DefaultLifecycleObserver {
@@ -56,16 +56,14 @@ class ProcessWorldSignals(
                 lastPath = status
                 if (previous == null) return@collect
                 when (status) {
-                    DeviceNetworkPathStatus.Ready -> emit(WorldSignal.PathReady)
+                    DeviceNetworkPathStatus.Ready -> {
+                        activeConnectionManager?.resetProbeFailure()
+                        stream.onReconnectWake()
+                        emit(WorldSignal.PathReady)
+                    }
                     DeviceNetworkPathStatus.Unavailable -> emit(WorldSignal.PathLost)
                 }
             }
-        }
-        scope.launch {
-            profileSaved.collect { onProfileSwitched() }
-        }
-        scope.launch {
-            profileCleared.collect { onProfileCleared() }
         }
     }
 
@@ -78,9 +76,14 @@ class ProcessWorldSignals(
     }
 
     fun onForeground() {
+        val fromStopped = _occupancy.value == StreamOccupancy.Stopped
         stopJob?.cancel()
         stopJob = null
         _occupancy.value = StreamOccupancy.Active
+        if (fromStopped) {
+            ResumeTiming.begin(System.currentTimeMillis())
+        }
+        stream.onReconnectWake()
         emit(WorldSignal.Foreground)
         startIfConnected("foreground")
     }
@@ -119,10 +122,12 @@ class ProcessWorldSignals(
         stopJob = null
         _occupancy.value = StreamOccupancy.Stopped
         emit(WorldSignal.BackgroundStop)
-        stream.stop()
+        scope.launch { stream.stop() }
     }
 
     fun onPathReady() {
+        activeConnectionManager?.resetProbeFailure()
+        stream.onReconnectWake()
         emit(WorldSignal.PathReady)
     }
 
@@ -132,18 +137,13 @@ class ProcessWorldSignals(
 
     fun onProfileSwitched() {
         emit(WorldSignal.ProfileSwitched)
-        if (_occupancy.value != StreamOccupancy.Stopped && hasActiveConnection()) {
-            stream.stop()
-            stream.start()
-        }
     }
 
     fun onProfileCleared() {
         emit(WorldSignal.ProfileSwitched)
-        stream.stop()
     }
 
-    private fun emit(signal: WorldSignal) {
+    override fun emit(signal: WorldSignal) {
         diagnosticLogger.info(DiagnosticLogArea.Sse, "world signal=${signal.name}")
         _signals.tryEmit(signal)
     }

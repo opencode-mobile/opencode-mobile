@@ -52,6 +52,7 @@ class MessageDomainAdapter {
             variant = info.variant,
             mode = info.mode ?: info.agent,
             sentAtEpochMs = info.time?.created,
+            completedAtEpochMs = info.time?.completed,
             contextInputTokens = info.tokens?.input,
             contextEstimate = toContextEstimate(info.role, dto.parts),
             followUpDelivery = FollowUpDelivery.fromWire(info.delivery),
@@ -77,6 +78,7 @@ class MessageDomainAdapter {
             variant = info.variant,
             mode = info.mode ?: info.agent,
             sentAtEpochMs = info.time?.created,
+            completedAtEpochMs = info.time?.completed,
             contextInputTokens = info.tokens?.input,
             contextEstimate = MessageContextEstimate(),
             followUpDelivery = FollowUpDelivery.fromWire(info.delivery),
@@ -327,6 +329,7 @@ class MessageDomainAdapter {
             mode = dto.agent ?: agent.ifBlank { null },
             model = dto.model ?: model,
             sentAtEpochMs = dto.time?.created,
+            completedAtEpochMs = dto.time?.completed,
             contextEstimate =
                 MessageContextEstimate(
                     userCharacters =
@@ -360,6 +363,7 @@ class MessageDomainAdapter {
             mode = agent.ifBlank { null },
             model = model,
             sentAtEpochMs = dto.time?.created,
+            completedAtEpochMs = dto.time?.completed,
             contextEstimate = MessageContextEstimate(userCharacters = text.length),
         )
     }
@@ -382,6 +386,7 @@ class MessageDomainAdapter {
             mode = dto.name ?: agent.ifBlank { null },
             model = model,
             sentAtEpochMs = dto.time?.created,
+            completedAtEpochMs = dto.time?.completed,
             contextEstimate = MessageContextEstimate(userCharacters = text.length),
         )
     }
@@ -406,6 +411,7 @@ class MessageDomainAdapter {
                 mode = agent.ifBlank { null },
                 model = model,
                 sentAtEpochMs = dto.time?.created,
+                completedAtEpochMs = dto.time?.completed,
                 contextEstimate = MessageContextEstimate(userCharacters = command.length),
             )
         val assistant =
@@ -426,6 +432,7 @@ class MessageDomainAdapter {
                 mode = agent.ifBlank { null },
                 model = model,
                 sentAtEpochMs = dto.time?.created,
+                completedAtEpochMs = dto.time?.completed,
             )
         return listOf(user, assistant)
     }
@@ -439,7 +446,11 @@ class MessageDomainAdapter {
             dto.content.mapIndexedNotNull { index, content ->
                 toV2AssistantPart(content, fallbackId = "${dto.id}:${content.type}:$index")
             }
-        val errorText = dto.error?.message?.trim().orEmpty()
+        val errorText =
+            dto.error
+                ?.message
+                ?.trim()
+                .orEmpty()
         return messageFromV2(
             id = dto.id,
             role = MessageRole.Assistant,
@@ -450,6 +461,7 @@ class MessageDomainAdapter {
             mode = dto.agent ?: agent.ifBlank { null },
             model = dto.model ?: model,
             sentAtEpochMs = dto.time?.created,
+            completedAtEpochMs = dto.time?.completed,
             contextInputTokens = dto.tokens?.input,
             contextEstimate = v2AssistantContextEstimate(dto.content),
         )
@@ -474,6 +486,7 @@ class MessageDomainAdapter {
             parts = parts,
             mode = "compaction",
             sentAtEpochMs = dto.time?.created,
+            completedAtEpochMs = dto.time?.completed,
             contextEstimate = MessageContextEstimate(assistantCharacters = summary.length),
         )
     }
@@ -488,6 +501,7 @@ class MessageDomainAdapter {
         mode: String? = null,
         model: V2ModelRefDto? = null,
         sentAtEpochMs: Long? = null,
+        completedAtEpochMs: Long? = null,
         contextInputTokens: Long? = null,
         contextEstimate: MessageContextEstimate = MessageContextEstimate(),
     ): Message {
@@ -505,6 +519,7 @@ class MessageDomainAdapter {
             variant = model?.variant,
             mode = mode,
             sentAtEpochMs = sentAtEpochMs,
+            completedAtEpochMs = completedAtEpochMs,
             contextInputTokens = contextInputTokens,
             contextEstimate = contextEstimate,
         )
@@ -575,7 +590,10 @@ class MessageDomainAdapter {
 
     private fun v2FileDataUrl(file: V2FileAttachmentDto): String? {
         file.uri?.takeIf { it.isNotBlank() }?.let { return it }
-        file.source?.uri?.takeIf { it.isNotBlank() }?.let { return it }
+        file.source
+            ?.uri
+            ?.takeIf { it.isNotBlank() }
+            ?.let { return it }
         val mime = file.mime ?: return null
         val base64 = jsonString(file.data) ?: return null
         return AttachmentDataUrl.fromBase64(base64, mime)
@@ -588,8 +606,7 @@ class MessageDomainAdapter {
             else -> null
         }
 
-    private fun jsonString(element: JsonElement?): String? =
-        (element as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+    private fun jsonString(element: JsonElement?): String? = (element as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 
     private fun jsonObjectFromInput(input: JsonElement?): JsonObject? =
         when (input) {

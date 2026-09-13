@@ -23,11 +23,12 @@ internal class LiveStoreRefreshGate {
     suspend fun <T> refresh(
         load: suspend () -> T?,
         commit: suspend (T) -> Unit,
+        isCurrent: () -> Boolean = { true },
     ): LiveStoreRefreshOutcome =
         mutex.withLock {
             val expected = revision()
             val loaded = load() ?: return@withLock LiveStoreRefreshOutcome.FAILED
-            if (revision() != expected) {
+            if (revision() != expected || !isCurrent()) {
                 return@withLock LiveStoreRefreshOutcome.DISCARDED
             }
             commit(loaded)

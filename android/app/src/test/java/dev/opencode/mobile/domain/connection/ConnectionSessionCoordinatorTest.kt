@@ -1,25 +1,50 @@
 package dev.opencode.mobile.domain.connection
 
+import dev.opencode.mobile.data.remote.EventsApi
 import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
+import dev.opencode.mobile.domain.event.DefaultForegroundEventStream
+import dev.opencode.mobile.domain.event.EventDomainAdapter
+import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
-import dev.opencode.mobile.domain.recovery.RecordingForegroundEventStream
+import dev.opencode.mobile.domain.event.FakeWorldSignals
+import dev.opencode.mobile.domain.event.LiveConnection
+import dev.opencode.mobile.domain.event.WorldSignal
+import dev.opencode.mobile.domain.live.ProjectionCaches
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.recovery.RecordingForegroundEventStream
+import dev.opencode.mobile.domain.sync.NoOpSyncCoordinator
+import dev.opencode.mobile.domain.sync.SyncCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ConnectionSessionCoordinatorTest {
@@ -41,7 +66,7 @@ class ConnectionSessionCoordinatorTest {
                 ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", password = ""),
             )
             val coordinator =
-                ConnectionSessionCoordinator(
+                testConnectionSessionCoordinator(
                     activeConnectionManager = activeConnectionManager,
                     connectionProfileStore = connectionProfileStore,
                     secureCredentialStore = FakeSecureCredentialStore(),
@@ -49,7 +74,6 @@ class ConnectionSessionCoordinatorTest {
                     composerDraftStore = draftStore,
                     httpClient = OpencodeHttpClient(json, activeConnectionManager),
                     sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
-                    eventStream = FakeForegroundEventStream(),
                 )
 
             draftStore.save(
@@ -84,7 +108,7 @@ class ConnectionSessionCoordinatorTest {
             val json = Json { ignoreUnknownKeys = true }
             val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
             val coordinator =
-                ConnectionSessionCoordinator(
+                testConnectionSessionCoordinator(
                     activeConnectionManager = activeConnectionManager,
                     connectionProfileStore = connectionProfileStore,
                     secureCredentialStore = FakeSecureCredentialStore(),
@@ -92,7 +116,6 @@ class ConnectionSessionCoordinatorTest {
                     composerDraftStore = InMemoryComposerDraftStore(),
                     httpClient = OpencodeHttpClient(json, activeConnectionManager),
                     sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
-                    eventStream = FakeForegroundEventStream(),
                 )
             val events = mutableListOf<Unit>()
             backgroundScope.launch { coordinator.profileSaved.collect { events += it } }
@@ -133,7 +156,7 @@ class ConnectionSessionCoordinatorTest {
             val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
             val stream = RecordingForegroundEventStream()
             val coordinator =
-                ConnectionSessionCoordinator(
+                testConnectionSessionCoordinator(
                     activeConnectionManager = activeConnectionManager,
                     connectionProfileStore = connectionProfileStore,
                     secureCredentialStore = FakeSecureCredentialStore(),
@@ -164,10 +187,239 @@ class ConnectionSessionCoordinatorTest {
             stream.ops.clear()
             coordinator.switchProfile(home.id)
             advanceUntilIdle()
-            assertEquals(listOf("stop"), stream.ops.toList())
+            assertEquals(listOf("stop", "start"), stream.ops.toList())
             assertEquals("Home", connectionProfileStore.activeProfile()?.name)
         }
+
+    @Test
+    fun applyProfileChange_isOrderedAndAwaitsStop() =
+        runTest {
+            val connectionProfileStore = CatalogConnectionProfileStore()
+            connectionProfileStore.saveProfile(
+                ConnectionProfile(
+                    baseUrl = "http://10.0.0.1:4096/",
+                    username = "opencode",
+                    password = "secret",
+                    name = "Home",
+                ),
+            )
+            connectionProfileStore.saveProfile(
+                ConnectionProfile(
+                    baseUrl = "http://10.0.0.2:4096/",
+                    username = "opencode",
+                    password = "secret",
+                    name = "Work",
+                ),
+            )
+            val home = connectionProfileStore.listProfiles().first { it.name == "Home" }
+            val json = Json { ignoreUnknownKeys = true }
+            val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
+            val order = CopyOnWriteArrayList<String>()
+            val enteredStop = CompletableDeferred<Unit>()
+            val releaseStop = CompletableDeferred<Unit>()
+            val fake = FakeForegroundEventStream()
+            val stream =
+                object : LiveConnection by fake {
+                    override suspend fun stop() {
+                        order += "stop"
+                        enteredStop.complete(Unit)
+                        releaseStop.await()
+                        fake.stop()
+                    }
+
+                    override fun start() {
+                        order += "start"
+                        fake.start()
+                    }
+                }
+            val caches =
+                object : ProjectionCaches {
+                    override fun clearAll() {
+                        order += "clearAll"
+                    }
+
+                    override fun clearLiveProjections() {
+                        order += "clearLiveProjections"
+                    }
+
+                    override fun bindProfile(profileId: String?) {
+                        order += "bindProfile"
+                    }
+                }
+            val sync =
+                object : SyncCoordinator by NoOpSyncCoordinator {
+                    override fun beginProfileSwitch(generation: Long) {
+                        order += "beginProfileSwitch"
+                    }
+                }
+            val world =
+                object : FakeWorldSignals() {
+                    override fun emit(signal: WorldSignal) {
+                        order += signal.name
+                        super.emit(signal)
+                    }
+                }
+            val coordinator =
+                testConnectionSessionCoordinator(
+                    activeConnectionManager = activeConnectionManager,
+                    connectionProfileStore = connectionProfileStore,
+                    secureCredentialStore = FakeSecureCredentialStore(),
+                    sessionModelSelectionStore = FakeSessionModelSelectionStore(),
+                    composerDraftStore = InMemoryComposerDraftStore(),
+                    httpClient = OpencodeHttpClient(json, activeConnectionManager),
+                    sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+                    eventStream = stream,
+                    syncCoordinator = sync,
+                    worldSignals = world,
+                    projectionCaches = caches,
+                )
+            val switch = backgroundScope.async { coordinator.switchProfile(home.id) }
+            enteredStop.await()
+            assertEquals(listOf("stop"), order.toList())
+            releaseStop.complete(Unit)
+            switch.await()
+            advanceUntilIdle()
+            assertEquals(
+                listOf(
+                    "stop",
+                    "beginProfileSwitch",
+                    "clearLiveProjections",
+                    "bindProfile",
+                    "ProfileSwitched",
+                    "start",
+                ),
+                order.toList(),
+            )
+            assertEquals(1, order.count { it == "ProfileSwitched" })
+            assertEquals(1, order.count { it == "stop" })
+            assertEquals(1, order.count { it == "start" })
+        }
+
+    @Test
+    fun concurrentSwitch_isSerializedAndEndsOnLastProfile() =
+        runTest {
+            val connectionProfileStore = CatalogConnectionProfileStore()
+            val json = Json { ignoreUnknownKeys = true }
+            val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
+            val world = FakeWorldSignals()
+            val switched = CopyOnWriteArrayList<WorldSignal>()
+            backgroundScope.launch { world.signals.collect { switched += it } }
+            val coordinator =
+                testConnectionSessionCoordinator(
+                    activeConnectionManager = activeConnectionManager,
+                    connectionProfileStore = connectionProfileStore,
+                    secureCredentialStore = FakeSecureCredentialStore(),
+                    sessionModelSelectionStore = FakeSessionModelSelectionStore(),
+                    composerDraftStore = InMemoryComposerDraftStore(),
+                    httpClient = OpencodeHttpClient(json, activeConnectionManager),
+                    sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+                    worldSignals = world,
+                )
+            coordinator.saveProfile(
+                ConnectionProfile(
+                    baseUrl = "http://10.0.0.1:4096/",
+                    username = "opencode",
+                    password = "secret",
+                    name = "Home",
+                ),
+            )
+            coordinator.saveProfile(
+                ConnectionProfile(
+                    baseUrl = "http://10.0.0.2:4096/",
+                    username = "opencode",
+                    password = "secret",
+                    name = "Work",
+                ),
+            )
+            val home = connectionProfileStore.listProfiles().first { it.name == "Home" }
+            val work = connectionProfileStore.listProfiles().first { it.name == "Work" }
+            switched.clear()
+            val first = async { coordinator.switchProfile(home.id) }
+            val second = async { coordinator.switchProfile(work.id) }
+            first.await()
+            second.await()
+            advanceUntilIdle()
+            assertEquals("Work", connectionProfileStore.activeProfile()?.name)
+            assertEquals(2, switched.count { it == WorldSignal.ProfileSwitched })
+        }
+
+    @Test
+    fun passwordChange_sameUrl_restartsStreamAfterAuthFailed() =
+        runBlocking {
+            val attempts = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine {
+                        val n = attempts.incrementAndGet()
+                        if (n == 1) {
+                            respond(content = "", status = HttpStatusCode.Unauthorized)
+                        } else {
+                            respond(
+                                content = CONNECTED_EVENT,
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                            )
+                        }
+                    },
+                )
+            val connectionProfileStore = CatalogConnectionProfileStore()
+            val json = Json { ignoreUnknownKeys = true }
+            val activeConnectionManager =
+                ActiveConnectionManager(
+                    connectionProfileStore,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(json),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = activeConnectionManager,
+                    connectionProfileStore = connectionProfileStore,
+                )
+            val coordinator =
+                testConnectionSessionCoordinator(
+                    activeConnectionManager = activeConnectionManager,
+                    connectionProfileStore = connectionProfileStore,
+                    secureCredentialStore = FakeSecureCredentialStore(),
+                    sessionModelSelectionStore = FakeSessionModelSelectionStore(),
+                    composerDraftStore = InMemoryComposerDraftStore(),
+                    httpClient = OpencodeHttpClient(json, activeConnectionManager),
+                    sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+                    eventStream = stream,
+                )
+            try {
+                coordinator.saveProfile(
+                    ConnectionProfile(
+                        baseUrl = "http://127.0.0.1:4096/",
+                        username = "opencode",
+                        password = "old",
+                        name = "Local",
+                    ),
+                    serverProtocol = ServerProtocol.V2,
+                )
+                val saved = checkNotNull(connectionProfileStore.activeProfile())
+                assertNotEquals(
+                    ConnectionProfileIdentity.credentialFingerprint("opencode", "old"),
+                    ConnectionProfileIdentity.credentialFingerprint("opencode", "new"),
+                )
+                withTimeout(3_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.AuthFailed }
+                }
+                coordinator.saveProfile(saved.copy(password = "new"), serverProtocol = ServerProtocol.V2)
+                withTimeout(5_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.Connected }
+                }
+                assertTrue(attempts.get() >= 2)
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
 }
+
+private const val CONNECTED_EVENT =
+    "data: {\"payload\":{\"type\":\"server.connected\",\"properties\":{}}}\n\n"
 
 private class FakeSessionModelSelectionStore : SessionModelSelectionStore {
     private val saved = mutableMapOf<String, SessionModelSelection>()

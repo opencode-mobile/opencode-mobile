@@ -60,6 +60,7 @@ class AppRootViewModel
 
         private suspend fun loadInitialState() {
             activeConnectionManager.ensureLoaded()
+            connectionSessionCoordinator.bindActiveProfile()
             eventStream.stop()
             yield()
             httpClient.rebuild()

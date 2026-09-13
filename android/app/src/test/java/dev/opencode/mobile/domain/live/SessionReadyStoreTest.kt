@@ -2,7 +2,10 @@ package dev.opencode.mobile.domain.live
 
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
-import dev.opencode.mobile.domain.session.SessionStatus
+import dev.opencode.mobile.domain.session.SessionActivity
+import dev.opencode.mobile.domain.session.SessionActivityEntry
+import dev.opencode.mobile.domain.session.SessionActivitySnapshot
+import dev.opencode.mobile.domain.session.SessionActivitySource
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -32,9 +35,9 @@ class SessionReadyStoreTest {
             advanceUntilIdle()
 
             store.notifyPromptSent("ses-1", "/repo")
-            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            statusStore.emit("/repo", runningSnapshot())
             advanceUntilIdle()
-            statusStore.emit("/repo", mapOf("ses-1" to status("idle")))
+            statusStore.emit("/repo", idleSnapshot())
             advanceUntilIdle()
             job.cancel()
 
@@ -55,9 +58,9 @@ class SessionReadyStoreTest {
 
             store.setFocusedSession("ses-1", "/repo")
             store.notifyPromptSent("ses-1", "/repo")
-            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            statusStore.emit("/repo", runningSnapshot())
             advanceUntilIdle()
-            statusStore.emit("/repo", mapOf("ses-1" to status("idle")))
+            statusStore.emit("/repo", idleSnapshot())
             advanceUntilIdle()
             job.cancel()
 
@@ -77,10 +80,10 @@ class SessionReadyStoreTest {
             advanceUntilIdle()
 
             store.setFocusedSession("ses-1", "/repo")
-            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            statusStore.emit("/repo", runningSnapshot())
             advanceUntilIdle()
             store.setFocusedSession(null)
-            statusStore.emit("/repo", mapOf("ses-1" to status("idle")))
+            statusStore.emit("/repo", idleSnapshot())
             advanceUntilIdle()
             job.cancel()
 
@@ -126,9 +129,9 @@ class SessionReadyStoreTest {
                 }
             advanceUntilIdle()
 
-            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            statusStore.emit("/repo", runningSnapshot())
             advanceUntilIdle()
-            statusStore.emit("/repo", mapOf("ses-1" to status("idle")))
+            statusStore.emit("/repo", idleSnapshot())
             advanceUntilIdle()
             job.cancel()
 
@@ -148,9 +151,9 @@ class SessionReadyStoreTest {
             advanceUntilIdle()
 
             store.notifyPromptSent("ses-1", "/repo")
-            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            statusStore.emit("/repo", runningSnapshot())
             advanceUntilIdle()
-            statusStore.emit("/repo", mapOf("ses-1" to status("idle")))
+            statusStore.emit("/repo", idleSnapshot())
             advanceUntilIdle()
             assertTrue(emissions.last().contains("ses-1"))
 
@@ -175,10 +178,10 @@ class SessionReadyStoreTest {
             advanceUntilIdle()
 
             store.notifyPromptSent("ses-1", "/repo")
-            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            statusStore.emit("/repo", runningSnapshot())
             advanceUntilIdle()
             // Idle sessions are often absent from the status map.
-            statusStore.emit("/repo", emptyMap())
+            statusStore.emit("/repo", idleSnapshot())
             advanceUntilIdle()
             assertTrue(emissions.last().contains("ses-1"))
 
@@ -192,7 +195,7 @@ class SessionReadyStoreTest {
             advanceUntilIdle()
             store.setFocusedSession(null)
             advanceUntilIdle()
-            statusStore.emit("/repo", emptyMap())
+            statusStore.emit("/repo", idleSnapshot())
             advanceUntilIdle()
             job.cancel()
 
@@ -212,11 +215,11 @@ class SessionReadyStoreTest {
             advanceUntilIdle()
 
             store.notifyPromptSent("ses-1", "/repo")
-            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            statusStore.emit("/repo", runningSnapshot())
             advanceUntilIdle()
-            statusStore.emit("/repo", mapOf("ses-1" to status("idle")))
+            statusStore.emit("/repo", idleSnapshot())
             advanceUntilIdle()
-            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            statusStore.emit("/repo", runningSnapshot())
             advanceUntilIdle()
             job.cancel()
 
@@ -237,11 +240,11 @@ class SessionReadyStoreTest {
 
             store.bindProfile("profile-a")
             store.notifyPromptSent("ses-1", "/repo")
-            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            statusStore.emit("/repo", runningSnapshot())
             advanceUntilIdle()
             store.bindProfile("profile-b")
             advanceUntilIdle()
-            statusStore.emit("/repo", emptyMap())
+            statusStore.emit("/repo", idleSnapshot())
             advanceUntilIdle()
             job.cancel()
 
@@ -268,7 +271,7 @@ class SessionReadyStoreTest {
             advanceUntilIdle()
             second.bindProfile("profile-a")
             advanceUntilIdle()
-            statusStore.emit("/repo", emptyMap())
+            statusStore.emit("/repo", idleSnapshot())
             advanceUntilIdle()
             job.cancel()
 
@@ -289,15 +292,15 @@ class SessionReadyStoreTest {
 
             store.bindProfile("profile-a")
             store.notifyPromptSent("ses-1", "/repo")
-            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            statusStore.emit("/repo", runningSnapshot())
             advanceUntilIdle()
             store.bindProfile("profile-b")
             advanceUntilIdle()
-            statusStore.emit("/repo", emptyMap())
+            statusStore.emit("/repo", idleSnapshot())
             advanceUntilIdle()
             store.bindProfile("profile-a")
             advanceUntilIdle()
-            statusStore.emit("/repo", emptyMap())
+            statusStore.emit("/repo", idleSnapshot())
             advanceUntilIdle()
             job.cancel()
 
@@ -311,9 +314,9 @@ class SessionReadyStoreTest {
             val store = createStore(statusStore)
             store.observeReadyIds("/repo").first()
             store.notifyPromptSent("ses-1", "/repo")
-            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            statusStore.emit("/repo", runningSnapshot())
             advanceUntilIdle()
-            statusStore.emit("/repo", mapOf("ses-1" to status("idle")))
+            statusStore.emit("/repo", idleSnapshot())
             advanceUntilIdle()
 
             store.clearCache()
@@ -330,9 +333,9 @@ class SessionReadyStoreTest {
             val first = createStore(statusStore, persistence = persistence)
             first.observeReadyIds("/repo").first()
             first.notifyPromptSent("ses-1", "/repo")
-            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            statusStore.emit("/repo", runningSnapshot())
             advanceUntilIdle()
-            statusStore.emit("/repo", mapOf("ses-1" to status("idle")))
+            statusStore.emit("/repo", idleSnapshot())
             advanceUntilIdle()
 
             val second = createStore(FakeReadyStatusStore(), persistence = persistence)
@@ -347,7 +350,7 @@ class SessionReadyStoreTest {
             val first = createStore(statusStore, persistence = persistence)
             first.observeReadyIds("/repo").first()
             first.notifyPromptSent("ses-1", "/repo")
-            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            statusStore.emit("/repo", runningSnapshot())
             advanceUntilIdle()
             // Kill before idle: only watched is persisted.
 
@@ -360,7 +363,7 @@ class SessionReadyStoreTest {
                 }
             advanceUntilIdle()
             // Catch-up: session already idle after restart.
-            statusStore2.emit("/repo", emptyMap())
+            statusStore2.emit("/repo", idleSnapshot())
             advanceUntilIdle()
             job.cancel()
 
@@ -377,9 +380,9 @@ class SessionReadyStoreTest {
             val first = createStore(statusStore, persistence = persistence, clock = clock)
             first.observeReadyIds("/repo").first()
             first.notifyPromptSent("ses-1", "/repo")
-            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            statusStore.emit("/repo", runningSnapshot())
             advanceUntilIdle()
-            statusStore.emit("/repo", mapOf("ses-1" to status("idle")))
+            statusStore.emit("/repo", idleSnapshot())
             advanceUntilIdle()
 
             now += DefaultSessionReadyStore.READY_TTL_MS
@@ -401,24 +404,38 @@ class SessionReadyStoreTest {
             clock = clock,
         )
 
-    private fun status(type: String): SessionStatus = SessionStatus(sessionId = "ses-1", raw = mapOf("type" to type))
+    private fun runningSnapshot(): SessionActivitySnapshot =
+        SessionActivitySnapshot(
+            entries =
+                mapOf(
+                    "ses-1" to
+                        SessionActivityEntry(
+                            activity = SessionActivity.Running,
+                            source = SessionActivitySource.Server,
+                            observedAtMs = 0L,
+                        ),
+                ),
+            seeded = true,
+        )
+
+    private fun idleSnapshot(): SessionActivitySnapshot = SessionActivitySnapshot(entries = emptyMap(), seeded = true)
 }
 
 private class FakeReadyStatusStore : SessionStatusLiveStore {
-    private val flows = mutableMapOf<String, MutableSharedFlow<Map<String, SessionStatus>>>()
+    private val flows = mutableMapOf<String, MutableSharedFlow<SessionActivitySnapshot>>()
 
     fun emit(
         directory: String,
-        statuses: Map<String, SessionStatus>,
+        snapshot: SessionActivitySnapshot,
     ) {
-        flow(directory).tryEmit(statuses)
+        flow(directory).tryEmit(snapshot)
     }
 
-    override fun observeStatuses(directory: String): Flow<Map<String, SessionStatus>> = flow(directory)
+    override fun observeActivity(directory: String): Flow<SessionActivitySnapshot> = flow(directory)
 
     override fun clearCache() = Unit
 
-    private fun flow(directory: String): MutableSharedFlow<Map<String, SessionStatus>> =
+    private fun flow(directory: String): MutableSharedFlow<SessionActivitySnapshot> =
         flows.getOrPut(directory) {
             MutableSharedFlow(replay = 1, extraBufferCapacity = 16)
         }

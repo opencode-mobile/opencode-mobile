@@ -4,6 +4,26 @@ import Testing
 
 @MainActor
 struct EventDomainAdapterTests {
+    @Test func isServerConnectedFrame_readsV1WrappedAndV2Shapes() {
+        let adapter = EventDomainAdapter()
+        #expect(
+            adapter.isServerConnectedFrame(
+                #"{"payload":{"type":"server.connected","properties":{}}}"#
+            )
+        )
+        #expect(
+            adapter.isServerConnectedFrame(
+                #"{"directory":"/tmp","payload":{"type":"server.connected","properties":{}}}"#
+            )
+        )
+        #expect(adapter.isServerConnectedFrame(#"{"type":"server.connected","data":{}}"#))
+        #expect(
+            adapter.isServerConnectedFrame(
+                #"{"payload":{"type":"server.heartbeat","properties":{}}}"#
+            ) == false
+        )
+    }
+
     @Test func parseEvent_readsWrappedPayload() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(dataLine: #"{"payload":{"type":"message.updated","properties":{"sessionID":"ses-1"}}}"#)
@@ -362,10 +382,10 @@ struct EventDomainAdapterTests {
         let events = adapter.parseEvents(
             dataLine: #"{"type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
         )
-        #expect(events.map(\.type) == ["message.updated", "session.active.snapshot"])
+        #expect(events.map(\.type) == ["message.updated"])
         #expect(events[0].sessionID == "ses-1")
         #expect(!events.contains(where: { $0.type == "session.idle" }))
-        #expect(events[1].triggersStatusRefresh == true)
+        #expect(!events.contains(where: { $0.type == "session.active.snapshot" }))
     }
 
     @Test func parseEvents_projectsLiveShellStartedIntoBusyAndBashPart() {
@@ -383,8 +403,9 @@ struct EventDomainAdapterTests {
         let events = adapter.parseEvents(
             dataLine: #"{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c"}}"#
         )
-        #expect(events.map(\.type) == ["message.part.updated", "session.active.snapshot"])
+        #expect(events.map(\.type) == ["message.part.updated"])
         #expect(!events.contains(where: { $0.type == "session.idle" }))
+        #expect(!events.contains(where: { $0.type == "session.active.snapshot" }))
     }
 
     @Test func parseEvents_projectsLiveCompactionFailedIntoPartErrorAndIdle() {
@@ -401,10 +422,10 @@ struct EventDomainAdapterTests {
         let events = adapter.parseEvents(
             dataLine: #"{"type":"session.next.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
         )
-        #expect(events.map(\.type) == ["message.updated", "session.active.snapshot"])
+        #expect(events.map(\.type) == ["message.updated"])
         #expect(events[0].sessionID == "ses-1")
         #expect(events[0].rawProperties?["info"]?.dictionaryValue?["role"]?.stringValue == "assistant")
-        #expect(events[1].triggersStatusRefresh == true)
+        #expect(!events.contains(where: { $0.type == "session.active.snapshot" }))
     }
 
     @Test func parseEvents_promptedTextPartSurvivesDeduper() {
@@ -422,9 +443,9 @@ struct EventDomainAdapterTests {
     @Test func parseEvents_stampsDistinctIdsOnProjectedSiblings() {
         let adapter = EventDomainAdapter()
         let events = adapter.parseEvents(
-            dataLine: #"{"id":"evt_step","type":"session.step.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-2"}}"#
+            dataLine: #"{"id":"evt_shell","type":"session.shell.started","data":{"sessionID":"ses-1","callID":"sh-1","assistantMessageID":"msg-2"}}"#
         )
-        #expect(events.map(\.id) == ["evt_step:0", "evt_step:1"])
+        #expect(events.map(\.id) == ["evt_shell:0", "evt_shell:1"])
         let deduper = SseEventDeduper()
         #expect(events.allSatisfy { deduper.accept($0.id) })
     }
@@ -572,6 +593,25 @@ struct EventDomainAdapterTests {
         #expect(status?.sessionID == "ses-1")
         #expect(status?.raw["type"] == "busy")
         #expect(adapter.statusLabel(from: status!) == "Working")
+        #expect(adapter.sessionActivity(from: event!)?.activity == .running)
+    }
+
+    @Test func parseEvents_projectsRetryScheduledIntoRetryingActivity() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.retry.scheduled","data":{"sessionID":"ses-1","attempt":3,"next":5000,"message":"rate limited"}}"#
+        )
+        #expect(event?.type == "session.status")
+        let parsed = adapter.sessionActivity(from: event!)
+        #expect(parsed?.sessionID == "ses-1")
+        if case let .retrying(attempt, nextAtMs, message) = parsed?.activity {
+            #expect(attempt == 3)
+            #expect(nextAtMs == 5_000)
+            #expect(message == "rate limited")
+        } else {
+            Issue.record("expected retrying")
+        }
+        #expect(adapter.statusLabel(from: adapter.sessionStatus(from: event!)!) == "Retrying · 3")
     }
 
     @Test func sessionTitleUpdate_readsInfoTitle() {
@@ -597,10 +637,16 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
     private let lock = NSLock()
     private var _connectionState: EventStreamConnectionState = .idle
     private var _snapshot = LiveConnectionSnapshot()
-    private var gapClock: UInt64 = 0
+    private var generationClock: UInt64 = 0
     private var wasConnected = false
     private var occupying = false
     private var explicitLeaseModeling = false
+
+    init(connected: Bool = true) {
+        if connected {
+            setConnectionState(.connected)
+        }
+    }
     var connectionState: EventStreamConnectionState {
         lock.lock()
         defer { lock.unlock() }
@@ -612,6 +658,8 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
         return _snapshot
     }
     private var continuations: [UUID: AsyncStream<OpencodeEvent>.Continuation] = [:]
+    private var eventBuffer: [OpencodeEvent] = []
+    private let eventBufferLimit = 64
     private var connectionStateContinuations: [UUID: AsyncStream<EventStreamConnectionState>.Continuation] = [:]
     private var snapshotContinuations: [UUID: AsyncStream<LiveConnectionSnapshot>.Continuation] = [:]
 
@@ -657,12 +705,33 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
 
     var hasEventSubscriber: Bool { eventSubscriberCount > 0 }
 
+    var hasConnectionStateSubscriber: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return !connectionStateContinuations.isEmpty
+    }
+
+    var hasSnapshotSubscriber: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return !snapshotContinuations.isEmpty
+    }
+
+    var hasCoordinatorSubscribers: Bool {
+        hasEventSubscriber && hasConnectionStateSubscriber && hasSnapshotSubscriber
+    }
+
     func events() -> AsyncStream<OpencodeEvent> {
         let id = UUID()
         let (stream, continuation) = AsyncStream.makeStream(of: OpencodeEvent.self)
         lock.lock()
         continuations[id] = continuation
+        let pending = eventBuffer
+        eventBuffer.removeAll()
         lock.unlock()
+        for event in pending {
+            continuation.yield(event)
+        }
         continuation.onTermination = { [weak self] _ in
             guard let self else { return }
             self.lock.lock()
@@ -680,18 +749,18 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
             return
         }
         occupying = true
-        openGapLocked(.occupancyStart)
+        bumpGenerationLocked()
         wasConnected = false
         lock.unlock()
         setConnectionState(.connected)
     }
 
-    func stop() {
+    func stop() async {
         lock.lock()
         occupying = false
         wasConnected = false
         _connectionState = .idle
-        openGapLocked(.stopped)
+        bumpGenerationLocked()
         applyLeaseOccupancyLocked(.idle)
         let stateConts = Array(connectionStateContinuations.values)
         let snapshotConts = Array(snapshotContinuations.values)
@@ -705,22 +774,31 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
         }
     }
 
-    func openGap(_ reason: LiveGapReason = .reconnect) {
+    func openGap(_ reason: String? = nil) {
         lock.lock()
-        openGapLocked(reason)
+        bumpGenerationLocked()
         _snapshot.connectionState = _connectionState
         let snapshotConts = Array(snapshotContinuations.values)
         let snapshot = _snapshot
+        let previous = _connectionState
         lock.unlock()
         for continuation in snapshotConts {
             continuation.yield(snapshot)
         }
+        if previous == .connected {
+            setConnectionState(.reconnecting)
+            Task.detached { [weak self] in
+                await Task.yield()
+                self?.setConnectionState(.connected)
+            }
+        }
+        _ = reason
     }
 
-    func openNewerThan(_ generation: UInt64, reason: LiveGapReason = .reconnect) {
+    func openNewerThan(_ generation: UInt64) {
         repeat {
-            openGap(reason)
-        } while (snapshot.gap?.generation ?? 0) <= generation
+            openGap()
+        } while snapshot.generation <= generation
     }
 
     /// Traces that emit `target.open` / `target.close` own live-target occupancy.
@@ -770,11 +848,11 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
 
     func setConnectionState(_ state: EventStreamConnectionState) {
         lock.lock()
-        let dropFromConnected = wasConnected && (state == .idle || state == .disconnected || state == .reconnecting)
+        let dropFromConnected = wasConnected && (state == .idle || state == .disconnected || state == .reconnecting || state == .authFailed)
         occupying = state != .idle && state != .disconnected
         _connectionState = state
         if dropFromConnected {
-            openGapLocked(.reconnect)
+            bumpGenerationLocked()
         }
         applyLeaseOccupancyLocked(state)
         if state == .connected {
@@ -820,6 +898,14 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
     func emit(_ event: OpencodeEvent) {
         lock.lock()
         let conts = Array(continuations.values)
+        if conts.isEmpty {
+            eventBuffer.append(event)
+            if eventBuffer.count > eventBufferLimit {
+                eventBuffer.removeFirst()
+            }
+            lock.unlock()
+            return
+        }
         lock.unlock()
         for continuation in conts {
             continuation.yield(event)
@@ -861,9 +947,8 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
         }
     }
 
-    private func openGapLocked(_ reason: LiveGapReason) {
-        gapClock += 1
-        _snapshot.generation = gapClock
-        _snapshot.gap = LiveGapRevision(generation: gapClock, reason: reason)
+    private func bumpGenerationLocked() {
+        generationClock += 1
+        _snapshot.generation = generationClock
     }
 }

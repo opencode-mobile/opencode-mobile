@@ -83,14 +83,27 @@ class LiveConnectionApplyTest {
         )
     }
 
+    @Test
+    fun change_credentialFingerprint_isIdentity() {
+        assertEquals(
+            LiveConnectionApply.Change.Identity,
+            LiveConnectionApply.change(
+                sample(),
+                sample(credentialFingerprint = "abcd1234abcd1234"),
+            ),
+        )
+    }
+
     private fun sample(
         protocol: ServerProtocol = ServerProtocol.V1,
         directories: List<String> = listOf("/a"),
         connectionIdentity: String = "http://host|opencode",
+        credentialFingerprint: String = "same-fingerprint",
     ) = LiveConnectionConfig(
         profileId = "p1",
         connectionIdentity = connectionIdentity,
         protocol = protocol,
         directories = directories,
+        credentialFingerprint = credentialFingerprint,
     )
 }

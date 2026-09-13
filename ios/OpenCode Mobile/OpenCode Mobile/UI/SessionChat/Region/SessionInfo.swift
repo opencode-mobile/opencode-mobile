@@ -39,6 +39,7 @@ final class SessionInfo {
         state.sessionTitle = sessionTitle
         state.connectionStatus = SessionConnectionStatus(label: liveUpdates.chrome.label)
         state.canMutate = liveUpdates.chrome.canMutate
+        state.composerEnabled = liveUpdates.chrome.composerEnabled
         state.rename = SessionRenameUiState()
         notifyChange()
     }
@@ -88,7 +89,7 @@ final class SessionInfo {
             }
         }
         observationTask = Task {
-            async let statusLoop: Void = info.observeStatuses()
+            async let statusLoop: Void = info.observeActivity()
             async let connectionLoop: Void = info.observeConnectionState()
             _ = await (statusLoop, connectionLoop)
         }
@@ -168,19 +169,14 @@ final class SessionInfo {
         await renameTask?.value
     }
 
-    func markOptimisticBusy() {
+    func setOptimisticActivity(_ activity: SessionActivity, ttlMs: Int64 = SessionActivityPolicy.optimisticTtlMs) {
         guard !state.sessionID.isEmpty else { return }
-        sessionStatusLiveStore.markBusy(directory: worktree, sessionID: state.sessionID)
-    }
-
-    func clearOptimisticBusy() {
-        guard !state.sessionID.isEmpty else { return }
-        sessionStatusLiveStore.clearLocalBusy(directory: worktree, sessionID: state.sessionID)
-    }
-
-    func markIdle() {
-        guard !state.sessionID.isEmpty else { return }
-        sessionStatusLiveStore.markIdle(directory: worktree, sessionID: state.sessionID)
+        sessionStatusLiveStore.setOptimistic(
+            directory: worktree,
+            sessionID: state.sessionID,
+            activity: activity,
+            ttlMs: ttlMs
+        )
     }
 
     func archiveSession() {
@@ -266,20 +262,20 @@ final class SessionInfo {
 
     private static let statusResubscribeLimit = 16
 
-    private func observeStatuses() async {
+    private func observeActivity() async {
         for _ in 0...Self.statusResubscribeLimit {
-            for await statuses in sessionStatusLiveStore.observeStatuses(directory: worktree) {
-                let status = statuses[state.sessionID]
+            for await snapshot in sessionStatusLiveStore.observeActivity(directory: worktree) {
+                let activity = snapshot.entries[state.sessionID]?.activity
                 OpenCodeLog.sessionChat.debug(
-                    "live status session=\(self.state.sessionID) type=\(status?.raw["type"] ?? "-")"
+                    "live status session=\(self.state.sessionID) seeded=\(snapshot.seeded) activity=\(activity.map(String.init(describing:)) ?? "-")"
                 )
                 DiagnosticLog.debug(
                     .session,
-                    "live status session=\(state.sessionID) type=\(status?.raw["type"] ?? "-")"
+                    "live status session=\(state.sessionID) seeded=\(snapshot.seeded)"
                 )
                 state.applyStatus(
-                    authoritative: status.flatMap(eventAdapter.statusLabel(from:)),
-                    hasResolved: true
+                    authoritative: snapshot.statusLabel(for: state.sessionID),
+                    hasResolved: snapshot.seeded
                 )
                 notifyChange()
             }
@@ -310,6 +306,7 @@ final class SessionInfo {
         )
         state.connectionStatus = SessionConnectionStatus(label: chrome.label)
         state.canMutate = chrome.canMutate
+        state.composerEnabled = chrome.composerEnabled
         notifyChange()
     }
 

@@ -17,7 +17,7 @@ struct LiveStoreRevisionGateTests {
         let collector = StatusEmissionCollector(store: store, directory: "/repo")
         defer { collector.cancel() }
 
-        _ = try await collector.awaitEmission { $0["ses-1"]?.raw["type"] == "busy" }
+        _ = try await collector.awaitEmission { $0.entries["ses-1"]?.activity == .running }
         try await poll { eventStream.hasEventSubscriber }
         #expect(canCatchUp(occupancy: .active, snapshot: eventStream.snapshot))
 
@@ -28,7 +28,7 @@ struct LiveStoreRevisionGateTests {
         try await poll { repository.statusFetchCount == 2 }
 
         eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1"))
-        _ = try await collector.awaitEmission { $0["ses-1"] == nil }
+        _ = try await collector.awaitEmission { $0.entries["ses-1"] == nil }
 
         gate.open()
         try await poll { repository.completedFetchCount >= 2 }
@@ -36,7 +36,7 @@ struct LiveStoreRevisionGateTests {
             await Task.yield()
         }
 
-        #expect(collector.emissions.last?["ses-1"] == nil)
+        #expect(collector.emissions.last?.entries["ses-1"] == nil)
     }
 
     @Test func permissionRefreshes_completingOutOfOrder_endWithTheNewestList() async throws {
@@ -120,21 +120,21 @@ private struct GateTimeoutError: Error {}
 
 @MainActor
 private final class StatusEmissionCollector {
-    private(set) var emissions: [[String: SessionStatus]] = []
+    private(set) var emissions: [SessionActivitySnapshot] = []
     private var task: Task<Void, Never>?
 
     init(store: DefaultSessionStatusLiveStore, directory: String) {
         task = Task {
-            for await statuses in store.observeStatuses(directory: directory) {
-                emissions.append(statuses)
+            for await snapshot in store.observeActivity(directory: directory) {
+                emissions.append(snapshot)
             }
         }
     }
 
     func awaitEmission(
         timeout: Duration = .seconds(3),
-        matching predicate: @escaping ([String: SessionStatus]) -> Bool
-    ) async throws -> [String: SessionStatus] {
+        matching predicate: @escaping (SessionActivitySnapshot) -> Bool
+    ) async throws -> SessionActivitySnapshot {
         let deadline = ContinuousClock.now + timeout
         while ContinuousClock.now < deadline {
             if let match = emissions.last(where: predicate) {

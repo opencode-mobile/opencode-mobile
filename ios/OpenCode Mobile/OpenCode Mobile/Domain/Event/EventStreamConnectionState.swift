@@ -6,4 +6,5 @@ nonisolated enum EventStreamConnectionState: Equatable, Sendable {
     case connected
     case disconnected
     case reconnecting
+    case authFailed
 }

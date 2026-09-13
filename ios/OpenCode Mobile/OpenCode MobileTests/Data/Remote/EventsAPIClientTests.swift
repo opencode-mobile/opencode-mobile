@@ -3,6 +3,25 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct EventsAPIClientTests {
+    @Test func streamingSessionKey_usesFingerprintNotRawPassword() {
+        let first = ServerConnection(
+            baseURL: URL(string: "http://127.0.0.1:4096/")!,
+            username: "opencode",
+            password: "super-secret"
+        )
+        let second = ServerConnection(
+            baseURL: URL(string: "http://127.0.0.1:4096/")!,
+            username: "opencode",
+            password: "other-secret"
+        )
+        let firstKey = EventsAPIClient.streamingSessionKey(for: first)
+        let secondKey = EventsAPIClient.streamingSessionKey(for: second)
+        #expect(!firstKey.contains("super-secret"))
+        #expect(!secondKey.contains("other-secret"))
+        #expect(firstKey != secondKey)
+        #expect(firstKey == EventsAPIClient.streamingSessionKey(for: first))
+    }
+
     @Test func streamGlobalEvents_parsesStandardSSEDataLines() async throws {
         let body = "data: {\"payload\":{\"type\":\"server.connected\",\"properties\":{}}}\n\n"
         let client = makeClient(responseBody: body)
@@ -25,16 +44,26 @@ struct EventsAPIClientTests {
         #expect(lines[0].contains("server.connected"))
     }
 
-    @Test func dataLineParser_flushesCompleteDataPayloadsWithoutBlankSeparators() {
+    @Test func dataLineParser_framesOnBlankLineAndJoinsMultilineData() {
+        var parser = SSEDataLineParser()
+        let connected = #"{"payload":{"type":"server.connected","properties":{}}}"#
+
+        #expect(parser.ingest("data: \(connected)") == [])
+        #expect(parser.ingest("") == [connected])
+
+        #expect(parser.ingest("data: {\"a\":") == [])
+        #expect(parser.ingest("data: 1}") == [])
+        #expect(parser.ingest("") == ["{\"a\":\n1}"])
+    }
+
+    @Test func dataLineParser_doesNotFlushCompleteJSONWithoutBlankSeparator() {
         var parser = SSEDataLineParser()
         let connected = #"{"payload":{"type":"server.connected","properties":{}}}"#
         let heartbeat = #"{"payload":{"type":"server.heartbeat","properties":{}}}"#
 
-        let first = parser.ingest("data: \(connected)")
-        let second = parser.ingest("data: \(heartbeat)")
-
-        #expect(first == [connected])
-        #expect(second == [heartbeat])
+        #expect(parser.ingest("data: \(connected)") == [])
+        #expect(parser.ingest("data: \(heartbeat)") == [])
+        #expect(parser.ingest("") == ["\(connected)\n\(heartbeat)"])
     }
 
     @Test func streamGlobalEvents_commentLinesCountAsActivityWithoutPublishingEvents() async throws {
@@ -94,36 +123,41 @@ struct EventsAPIClientTests {
 
     @Test func streamGlobalEvents_cacheMissOpensV1HintPath() async throws {
         let body = "data: {\"type\":\"server.connected\",\"data\":{}}\n\n"
-        let client = makeClient(responseBody: body, serverProtocol: nil, resolvedProtocol: .v2)
+        let client = makeClient(responseBody: body, serverProtocol: nil)
         var lines: [String] = []
-        try await client.streamGlobalEvents { line in
+        _ = try await client.streamGlobalEvents { line in
             lines.append(line)
         }
         #expect(lines.count == 1)
         #expect(MockSSEURLProtocol.lastPath?.hasSuffix("/global/event") == true)
     }
 
+    @Test func streamEvents_returnsHttpOutcomeForUnauthorized() async throws {
+        let client = makeClient(responseBody: "", statusCode: 401)
+        let outcome = try await client.streamEvents(path: "global/event", directory: nil) { _ in }
+        guard case .http(401) = outcome else {
+            Issue.record("Expected HTTP 401 outcome, got \(String(describing: outcome))")
+            return
+        }
+    }
+
     private func makeClient(
         responseBody: String,
         serverProtocol: ServerProtocol? = nil,
-        resolvedProtocol: ServerProtocol? = nil
+        statusCode: Int = 200
     ) -> EventsAPIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockSSEURLProtocol.self]
-        MockSSEURLProtocol.register(responseBody: Data(responseBody.utf8))
+        MockSSEURLProtocol.register(responseBody: Data(responseBody.utf8), statusCode: statusCode)
         let session = URLSession(configuration: configuration)
         let connection = ServerConnection(
             baseURL: URL(string: "http://127.0.0.1:4096/")!,
             password: "secret",
             serverProtocol: serverProtocol
         )
-        let resolver: (@Sendable () async -> ServerProtocol)? = resolvedProtocol.map { value in
-            { value }
-        }
         return EventsAPIClient(
             connectionProvider: { connection },
-            urlSession: session,
-            protocolResolver: resolver
+            urlSession: session
         )
     }
 }
@@ -144,12 +178,14 @@ private struct MockSSERequest: Equatable {
 private final class MockSSEURLProtocol: URLProtocol {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var responseBody = Data()
+    nonisolated(unsafe) private static var statusCode = 200
     nonisolated(unsafe) static var lastPath: String?
     nonisolated(unsafe) static var recordedRequests: [MockSSERequest] = []
 
-    static func register(responseBody: Data) {
+    static func register(responseBody: Data, statusCode: Int = 200) {
         lock.lock()
         self.responseBody = responseBody
+        self.statusCode = statusCode
         self.lastPath = nil
         self.recordedRequests = []
         lock.unlock()
@@ -174,6 +210,7 @@ private final class MockSSEURLProtocol: URLProtocol {
     override func startLoading() {
         Self.lock.lock()
         let body = Self.responseBody
+        let statusCode = Self.statusCode
         Self.lastPath = request.url?.path
         if let path = request.url?.path {
             Self.recordedRequests.append(MockSSERequest(path: path, query: request.url?.query))
@@ -182,7 +219,7 @@ private final class MockSSEURLProtocol: URLProtocol {
 
         let response = HTTPURLResponse(
             url: request.url!,
-            statusCode: 200,
+            statusCode: statusCode,
             httpVersion: "HTTP/1.1",
             headerFields: ["Content-Type": "text/event-stream"]
         )!

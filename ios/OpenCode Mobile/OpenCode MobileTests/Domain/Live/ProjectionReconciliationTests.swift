@@ -9,8 +9,8 @@ struct ProjectionReconciliationTests {
         let repo = ProjectionMessageRepository()
         let eventStream = FakeForegroundEventStream()
         eventStream.setConnectionState(.connected)
-        eventStream.stop()
-        eventStream.setConnectionState(.connecting)
+        await eventStream.stop()
+        eventStream.setConnectionState(.connected)
         repo.messages = [
             Message(id: "msg-1", role: .user, text: "After gap", parts: [], model: nil, mode: nil, sentAtEpochMs: nil),
         ]
@@ -225,7 +225,8 @@ private func makeProjectionSync(
     worldSignals: any WorldSignals = SilentWorldSignals.shared,
     pollIntervalMs: Int = 60_000
 ) -> MessageSync {
-    MessageSync(
+    eventStream.setConnectionState(.connected)
+    return MessageSync(
         listMessages: { sessionID, directory in
             try await repo.listMessages(sessionID: sessionID, directory: directory)
         },

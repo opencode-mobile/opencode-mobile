@@ -9,11 +9,10 @@ import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeWorldSignals
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.ProcessWorldSignals
-import dev.opencode.mobile.domain.event.StreamOccupancy
+import dev.opencode.mobile.domain.event.SseSubscribeTargets
 import dev.opencode.mobile.domain.event.WorldSignal
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.event.composeLiveUpdates
-import dev.opencode.mobile.domain.event.SseSubscribeTargets
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.message.InMemoryMessageStore
 import dev.opencode.mobile.domain.message.Message
@@ -23,14 +22,13 @@ import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageSync
 import dev.opencode.mobile.domain.message.SessionMessageEngine
+import dev.opencode.mobile.domain.sync.ProjectionKey
+import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -38,7 +36,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -73,8 +72,6 @@ class SseFaultOracleDriver(
                     deviceNetworkPath = ReadyDeviceNetworkPath,
                     diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
                     hasActiveConnection = { true },
-                    profileSaved = MutableSharedFlow(),
-                    profileCleared = MutableSharedFlow(),
                     scope = scope.backgroundScope,
                     stopGraceMs = 5_000L,
                 )
@@ -87,6 +84,16 @@ class SseFaultOracleDriver(
             stream.fake.modelLeasesExplicitly()
         }
         stream.fake.applyConfig(profileId.get(), protocol, directories.get())
+        val coordinator =
+            testSyncCoordinator(
+                eventStream = stream,
+                worldSignals = world,
+                scope = scope.backgroundScope,
+                nowMs = { scope.testScheduler.currentTime },
+                wait = { ms ->
+                    if (ms > 200L) delay(25) else Unit
+                },
+            )
         val sync =
             MessageSync(
                 listMessages = { _, _ ->
@@ -100,10 +107,8 @@ class SseFaultOracleDriver(
                 engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
                 eventStream = stream,
                 liveStoreScope = LiveStoreScope(scope.backgroundScope),
-                worldSignals = world,
-                pollIntervalMs = 60_000L,
+                syncCoordinator = coordinator,
                 connectionProfileIdProvider = { profileId.get() },
-                recoveryDelay = { delay(25) },
                 nowMs = { scope.testScheduler.currentTime },
             )
 
@@ -125,6 +130,9 @@ class SseFaultOracleDriver(
                     val observedDirectory = directory.get()
                     observeJobs +=
                         scope.launch {
+                            coordinator.markFocused(
+                                ProjectionKey.Transcript(observedDirectory, observedSession),
+                            )
                             sync.observeMessages(observedSession, observedDirectory).collect { update ->
                                 if (update is MessageListUpdate.Messages) {
                                     transcript.set(
@@ -145,8 +153,10 @@ class SseFaultOracleDriver(
                     scope.runCurrent()
                 }
                 "unobserve" -> {
+                    coordinator.markFocused(null)
                     observeJobs.forEach { it.cancel() }
                     observeJobs.clear()
+                    transcript.set(emptyList())
                 }
                 "world.foreground" -> emitWorld(world, WorldSignal.Foreground)
                 "world.background" -> emitWorld(world, WorldSignal.Background)
@@ -160,17 +170,11 @@ class SseFaultOracleDriver(
                     val state = checkNotNull(step.state) { "connectionState step needs state" }
                     applyConnectionState(stream, state)
                 }
-                "epoch.bump" -> stream.fake.openGap(dev.opencode.mobile.domain.event.LiveGapReason.Reconnect)
-                "openGap" -> {
-                    val reason =
-                        when (step.state) {
-                            "parseFailed" -> dev.opencode.mobile.domain.event.LiveGapReason.ParseFailed
-                            "leaseLost" -> dev.opencode.mobile.domain.event.LiveGapReason.LeaseLost
-                            "pathLost" -> dev.opencode.mobile.domain.event.LiveGapReason.PathLost
-                            "configChanged" -> dev.opencode.mobile.domain.event.LiveGapReason.ConfigChanged
-                            else -> dev.opencode.mobile.domain.event.LiveGapReason.Reconnect
-                        }
-                    stream.fake.openGap(reason)
+                "openGap",
+                "epoch.bump",
+                -> {
+                    coordinator.invalidate(null)
+                    coordinator.bootstrap(dev.opencode.mobile.domain.sync.SyncBootstrapReason.ServerConnected)
                 }
                 "cache.clear" -> sync.clearCache()
                 "protocol.set" -> {
@@ -333,8 +337,7 @@ class SseFaultOracleDriver(
         fun requiredTargets(
             protocol: ServerProtocol,
             directories: List<String>,
-        ): List<String> =
-            SseSubscribeTargets.forProtocol(protocol, directories).map { it.key }
+        ): List<String> = SseSubscribeTargets.forProtocol(protocol, directories).map { it.key }
 
         fun assertSnapshot(
             expected: SseFaultSnapshot,

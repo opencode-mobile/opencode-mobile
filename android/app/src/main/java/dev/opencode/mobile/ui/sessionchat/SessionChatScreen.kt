@@ -700,7 +700,7 @@ fun SessionChatScreen(
                                             !uiState.isSending &&
                                             sessionCreated &&
                                             uiState.timeline != SessionChatTimelineState.Creating &&
-                                            uiState.canMutate,
+                                            uiState.composerEnabled,
                                     attachEnabled =
                                         attachmentSources.isAttachEnabled &&
                                             sessionCreated &&
@@ -1011,6 +1011,7 @@ private fun SessionConnectionStatus.toOpenCodeSessionConnectionStatus(): OpenCod
         SessionConnectionStatus.Live -> OpenCodeSessionConnectionStatus.Live
         SessionConnectionStatus.Connecting -> OpenCodeSessionConnectionStatus.Connecting
         SessionConnectionStatus.Offline -> OpenCodeSessionConnectionStatus.Offline
+        SessionConnectionStatus.AuthFailed -> OpenCodeSessionConnectionStatus.AuthFailed
     }
 
 private fun SessionChatSnackbar.toOpenCodeSnackbarMessage(): OpenCodeSnackbarMessage =

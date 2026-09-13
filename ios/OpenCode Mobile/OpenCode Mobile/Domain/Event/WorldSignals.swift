@@ -20,10 +20,12 @@ nonisolated protocol WorldSignals: AnyObject, Sendable {
     func occupancyUpdates() -> AsyncStream<StreamOccupancy>
     func signals() -> AsyncStream<WorldSignal>
     func register()
+    func emitProfileSwitched()
 }
 
 extension WorldSignals {
     nonisolated func register() {}
+    nonisolated func emitProfileSwitched() {}
 }
 
 nonisolated final class SilentWorldSignals: WorldSignals, @unchecked Sendable {
@@ -128,6 +130,10 @@ nonisolated final class FakeWorldSignals: WorldSignals, @unchecked Sendable {
         }
     }
 
+    func emitProfileSwitched() {
+        emit(.profileSwitched)
+    }
+
     func emit(_ signal: WorldSignal) {
         lock.lock()
         switch signal {
@@ -163,25 +169,9 @@ extension WorldSignal {
     nonisolated var marksStale: Bool {
         self == .backgroundStop || self == .pathLost || self == .profileSwitched
     }
-
-    nonisolated var catchUpReason: String? {
-        switch self {
-        case .foreground:
-            StoreRefreshReason.backgroundReturn
-        case .pathReady:
-            StoreRefreshReason.pathReady
-        default:
-            nil
-        }
-    }
 }
 
 nonisolated enum StoreRefreshReason {
-    static let backgroundReturn = "background-return"
-    static let pathReady = "path-ready"
     static let pullToRefresh = "pull-to-refresh"
     static let initialSubscribe = "initial-subscribe"
-    static let streamReconnected = "stream.reconnected"
-    static let serverConnected = "server.connected"
-    static let connectionSnapshot = "connection-snapshot"
 }

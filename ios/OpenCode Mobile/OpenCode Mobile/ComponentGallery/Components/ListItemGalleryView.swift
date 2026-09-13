@@ -51,6 +51,7 @@ private enum GalleryStatusTone: String, CaseIterable, Identifiable {
     case warning
     case error
     case info
+    case stale
 
     var id: String { rawValue }
 
@@ -63,6 +64,7 @@ private enum GalleryStatusTone: String, CaseIterable, Identifiable {
         case .warning: .warning
         case .error: .error
         case .info: .info
+        case .stale: .stale
         }
     }
 }

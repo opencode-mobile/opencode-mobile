@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.connection.testConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelection
@@ -365,7 +366,7 @@ class ConnectionSetupViewModelTest {
 
     private fun coordinator(store: ConnectionProfileStore): ConnectionSessionCoordinator {
         val activeConnectionManager = ActiveConnectionManager(store)
-        return ConnectionSessionCoordinator(
+        return testConnectionSessionCoordinator(
             activeConnectionManager = activeConnectionManager,
             connectionProfileStore = store,
             secureCredentialStore = NoOpSecureCredentialStore(),

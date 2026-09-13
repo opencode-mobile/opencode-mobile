@@ -3,7 +3,8 @@ package dev.opencode.mobile.domain.live
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.ForegroundEventStream
-import dev.opencode.mobile.domain.session.SessionStatus
+import dev.opencode.mobile.domain.session.SessionActivity
+import dev.opencode.mobile.domain.session.SessionActivitySnapshot
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -78,7 +79,7 @@ class DefaultSessionReadyStore
                     val priorDirectory = focusedDirectory
                     if (priorId != null && priorDirectory != null) {
                         val type = previousTypes[priorDirectory]?.get(priorId)
-                        if (type.isBusyOrRetry()) {
+                        if (type.isBusy()) {
                             startWatchLocked(priorId, priorDirectory, reason = "leave-while-busy")
                         }
                     }
@@ -108,7 +109,7 @@ class DefaultSessionReadyStore
                     }
                     if (directory != null) {
                         val previous = previousTypes.getOrPut(directory) { mutableMapOf() }
-                        if (!previous[sessionId].isBusyOrRetry()) {
+                        if (!previous[sessionId].isBusy()) {
                             previous[sessionId] = "idle"
                         }
                     }
@@ -205,8 +206,8 @@ class DefaultSessionReadyStore
         private fun ensureStatusObservationLocked(directory: String) {
             statusJobs.computeIfAbsent(directory) {
                 liveStoreScope.coroutineScope.launch {
-                    sessionStatusLiveStore.observeStatuses(directory).collect { statuses ->
-                        onStatuses(directory, statuses)
+                    sessionStatusLiveStore.observeActivity(directory).collect { snapshot ->
+                        onActivity(directory, snapshot)
                     }
                 }
             }
@@ -219,24 +220,26 @@ class DefaultSessionReadyStore
             return directories
         }
 
-        private fun onStatuses(
+        private fun onActivity(
             directory: String,
-            statuses: Map<String, SessionStatus>,
+            snapshot: SessionActivitySnapshot,
         ) {
             synchronized(lock) {
                 val prunedDirectories = pruneExpiredLocked()
                 prunedDirectories.forEach { publishReadyLocked(it, prune = false) }
                 val previous = previousTypes.getOrPut(directory) { mutableMapOf() }
                 val watchedIds = watched.filterValues { it.directory == directory }.keys
-                val sessionIds = previous.keys + statuses.keys + watchedIds
+                val sessionIds = previous.keys + snapshot.entries.keys + watchedIds
                 var readyChanged = false
 
                 for (sessionId in sessionIds) {
-                    val type = statuses[sessionId]?.raw?.get("type")
+                    val activity = snapshot.entries[sessionId]?.activity
+                    val type = activity?.wireType()
                     val prev = previous[sessionId]
-                    val isBusy = type.isBusyOrRetry()
-                    val wasBusy = prev.isBusyOrRetry()
+                    val isBusy = activity?.isBusy() == true
+                    val wasBusy = prev.isBusy()
                     val firstSighting = watched[sessionId]?.directory == directory && !previous.containsKey(sessionId)
+                    val observed = snapshot.seeded || snapshot.entries.containsKey(sessionId)
 
                     if (sessionId == focusedSessionId &&
                         directory == focusedDirectory &&
@@ -245,7 +248,7 @@ class DefaultSessionReadyStore
                         startWatchLocked(sessionId, directory, reason = "focused-busy")
                     }
 
-                    if (watched[sessionId]?.directory == directory) {
+                    if (watched[sessionId]?.directory == directory && observed) {
                         val watch = watched[sessionId]
                         val becameIdle = wasBusy && !isBusy
                         val restoredAlreadyIdle =
@@ -257,9 +260,9 @@ class DefaultSessionReadyStore
                         }
                     }
 
-                    if (statuses.containsKey(sessionId)) {
+                    if (snapshot.entries.containsKey(sessionId)) {
                         previous[sessionId] = type
-                    } else if (previous.containsKey(sessionId)) {
+                    } else if (snapshot.seeded && previous.containsKey(sessionId)) {
                         previous.remove(sessionId)
                     }
                 }
@@ -461,4 +464,11 @@ class DefaultSessionReadyStore
         }
     }
 
-private fun String?.isBusyOrRetry(): Boolean = this == "busy" || this == "retry"
+private fun String?.isBusy(): Boolean = this == "busy" || this == "retry"
+
+private fun SessionActivity.wireType(): String =
+    when (this) {
+        SessionActivity.Idle -> "idle"
+        SessionActivity.Running -> "busy"
+        is SessionActivity.Retrying -> "retry"
+    }

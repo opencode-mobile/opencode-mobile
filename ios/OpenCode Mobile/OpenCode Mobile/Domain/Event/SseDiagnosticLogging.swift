@@ -25,8 +25,7 @@ enum SseDiagnosticLogging {
              "file.watcher.updated",
              "file.edited",
              "session.diff",
-             "session.updated",
-             "session.active.snapshot":
+             "session.updated":
             return nil
         case "session.status":
             let status =

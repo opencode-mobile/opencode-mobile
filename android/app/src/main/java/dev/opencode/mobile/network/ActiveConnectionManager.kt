@@ -50,11 +50,17 @@ class ActiveConnectionManager(
             serverProtocol = connection?.serverProtocol ?: profile?.serverProtocol,
         )
 
-    fun disconnect() {
-        connection = null
-        profile = null
+    suspend fun disconnect() {
+        mutex.withLock {
+            connection = null
+            profile = null
+            probeFailed = false
+            completeInFlight(Result.success(ServerProtocol.V1))
+        }
+    }
+
+    fun resetProbeFailure() {
         probeFailed = false
-        completeInFlight(Result.success(ServerProtocol.V1))
     }
 
     fun requireConnection(): ServerConnection = connection ?: error("No active server connection")

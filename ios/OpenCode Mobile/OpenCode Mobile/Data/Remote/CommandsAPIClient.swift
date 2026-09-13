@@ -15,7 +15,7 @@ nonisolated struct CommandsAPIClient: Sendable {
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession = .shared,
+        urlSession: URLSession = OpenCodeURLSessions.rest,
         bodyUploader: DurableJSONUploader? = nil
     ) {
         self.connectionProvider = connectionProvider

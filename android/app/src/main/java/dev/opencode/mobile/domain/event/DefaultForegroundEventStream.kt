@@ -1,25 +1,30 @@
 package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.data.remote.EventsApi
+import dev.opencode.mobile.data.remote.SseAttemptOutcome
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.DeviceNetworkPath
 import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
 import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
-import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.message.ConnectionEpoch
 import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,8 +32,11 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -102,9 +110,15 @@ class DefaultForegroundEventStream
         private val lastDirectoriesByIdentity = mutableMapOf<LiveConnectionConfig.Identity, List<String>>()
         private val eventIngress = SseEventIngress(eventDomainAdapter)
         private var overall = LiveOverallFlags()
-        private var currentGap: LiveGapRevision? = null
-        private val gapClock = AtomicLong(0)
         private val configEpoch = AtomicLong(0)
+        private val authTerminal = AtomicBoolean(false)
+        private val protocolConfirmed = AtomicBoolean(false)
+        private val reconnectWakeEpoch = AtomicLong(0)
+        private val reconnectWake =
+            MutableSharedFlow<Unit>(
+                extraBufferCapacity = 1,
+                onBufferOverflow = BufferOverflow.DROP_OLDEST,
+            )
 
         private val _connectionState = MutableStateFlow(EventStreamConnectionState.Idle)
         override val connectionState: StateFlow<EventStreamConnectionState> = _connectionState.asStateFlow()
@@ -205,35 +219,44 @@ class DefaultForegroundEventStream
                 }
                 is LiveConnectionApply.StartDecision.Retarget -> {
                     if (!stillCurrent(decision.generation)) return
-                    retargetIdentity(decision.config, LiveGapReason.ConfigChanged)
+                    retargetIdentity(decision.config)
                 }
             }
         }
 
-        override fun stop() {
+        override fun onReconnectWake() {
+            reconnectWakeEpoch.incrementAndGet()
+            reconnectWake.tryEmit(Unit)
+        }
+
+        override suspend fun stop() {
             diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream stopping")
             val generation: Long
             val snapshot: LiveConnectionSnapshot
-            val toCancel: Job?
+            val occupancyToJoin: Job?
+            val leaseJobs: List<Job>
+            authTerminal.set(false)
+            protocolConfirmed.set(false)
             synchronized(stateLock) {
-                val pendingResume =
-                    overall.pendingResumeBarrier ||
-                        overall.wasFullyConnected ||
-                        overall.occupyingConnected
+                val wasFullyConnected = overall.wasFullyConnected
                 occupancySerial += 1
                 inFlightStartApplies = 0
                 generation = streamGeneration.incrementAndGet()
-                toCancel = occupancyJob
+                occupancyToJoin = occupancyJob
                 occupancyJob = null
                 pendingStartConfig = null
-                cancelAllLeases()
+                leaseJobs = cancelAllLeases()
                 eventIngress.reset()
                 appliedConfig = null
-                overall = LiveOverallFlags(pendingResumeBarrier = pendingResume)
-                openGapLocked(LiveGapReason.Stopped)
+                overall = LiveOverallFlags(wasFullyConnected = wasFullyConnected)
                 snapshot = buildSnapshotLocked(EventStreamConnectionState.Idle)
             }
-            toCancel?.cancel()
+            occupancyToJoin?.cancel()
+            val toJoin = buildList {
+                occupancyToJoin?.let { add(it) }
+                addAll(leaseJobs)
+            }
+            toJoin.forEach { it.join() }
             setConnectionState(EventStreamConnectionState.Idle, generation)
             _snapshot.value = snapshot
         }
@@ -277,7 +300,7 @@ class DefaultForegroundEventStream
                     pendingStartConfig = null
                     (pending ?: config).also { appliedConfig = it }
                 }
-            val generation = beginGeneration(LiveGapReason.OccupancyStart)
+            val generation = beginGeneration()
             if (!stillCurrent(generation)) return
             publishSnapshot()
             deviceNetworkPath.waitUntilReady()
@@ -292,7 +315,7 @@ class DefaultForegroundEventStream
                 latest = pending ?: appliedConfig ?: merged
                 appliedNow = appliedConfig
                 generationAfterWait = streamGeneration.get()
-                resumeChrome = overall.wasFullyConnected || overall.pendingResumeBarrier
+                resumeChrome = overall.wasFullyConnected
             }
             setConnectionState(
                 if (resumeChrome) {
@@ -302,13 +325,19 @@ class DefaultForegroundEventStream
                 },
                 generationAfterWait,
             )
+            val resolvedConfig =
+                resolveProtocolBeforeLeases(latest).also { resolved ->
+                    synchronized(stateLock) {
+                        appliedConfig = resolved
+                    }
+                }
             if (stillCurrent(generationAfterWait)) {
                 if (appliedNow != null &&
-                    LiveConnectionApply.change(appliedNow, latest) == LiveConnectionApply.Change.Identity
+                    LiveConnectionApply.change(appliedNow, resolvedConfig) == LiveConnectionApply.Change.Identity
                 ) {
-                    retargetIdentity(latest, LiveGapReason.ConfigChanged)
+                    retargetIdentity(resolvedConfig)
                 } else {
-                    reconcileLeases(latest)
+                    reconcileLeases(resolvedConfig)
                 }
             }
             val collectorGeneration = streamGeneration.get()
@@ -336,16 +365,35 @@ class DefaultForegroundEventStream
         }
 
         private suspend fun probeProtocolWhileOccupying(generation: Long) {
+            val hadCached = activeConnectionManager.currentProtocol() != null
             val resolved = activeConnectionManager.currentProtocolOrProbe()
             if (!stillCurrent(generation)) return
+            if (hadCached || activeConnectionManager.currentProtocol() != null) {
+                protocolConfirmed.set(true)
+            }
             val applied = appliedConfig ?: return
             if (resolved != applied.protocol) {
                 diagnosticLogger.info(
                     DiagnosticLogArea.Sse,
                     "SSE protocol resolved ${applied.protocol.wireValue} -> ${resolved.wireValue}; reconnecting",
                 )
-                retargetIdentity(applied.copy(protocol = resolved), LiveGapReason.ConfigChanged)
+                protocolConfirmed.set(true)
+                retargetIdentity(applied.copy(protocol = resolved))
             }
+        }
+
+        private suspend fun resolveProtocolBeforeLeases(config: LiveConnectionConfig): LiveConnectionConfig {
+            val hadCached = activeConnectionManager.currentProtocol() != null
+            if (hadCached) {
+                protocolConfirmed.set(true)
+                val cached = activeConnectionManager.currentProtocol() ?: config.protocol
+                return config.copy(protocol = cached)
+            }
+            val resolved = activeConnectionManager.currentProtocolOrProbe()
+            if (activeConnectionManager.currentProtocol() != null) {
+                protocolConfirmed.set(true)
+            }
+            return config.copy(protocol = resolved)
         }
 
         private suspend fun onConfigurationRevision(generation: Long) {
@@ -375,58 +423,32 @@ class DefaultForegroundEventStream
             }
             when (LiveConnectionApply.change(applied, effective)) {
                 LiveConnectionApply.Change.Identity ->
-                    retargetIdentity(effective, LiveGapReason.ConfigChanged)
+                    retargetIdentity(effective)
                 LiveConnectionApply.Change.Directories -> reconcileLeases(effective)
                 LiveConnectionApply.Change.None -> Unit
             }
         }
 
-        private fun retargetIdentity(
-            config: LiveConnectionConfig,
-            reason: LiveGapReason,
-        ) {
+        private fun retargetIdentity(config: LiveConnectionConfig) {
             if (!isOccupying()) return
-            val generation = beginGeneration(reason)
+            val generation = beginGeneration()
             if (!stillCurrent(generation)) return
             synchronized(stateLock) {
                 if (generation != streamGeneration.get()) return
                 appliedConfig = config
                 eventIngress.reset()
-                overall =
-                    overall.copy(
-                        occupyingConnected = false,
-                        emittedReconnectForCurrentGap = false,
-                        suppressReconnectForRequiredGrowth = false,
-                    )
                 cancelAllLeases()
             }
             if (!stillCurrent(generation)) return
             reconcileLeases(config)
         }
 
-        private fun beginGeneration(reason: LiveGapReason): Long =
+        private fun beginGeneration(): Long =
             synchronized(stateLock) {
                 val generation = streamGeneration.incrementAndGet()
                 connectionEpoch.bump()
-                openGapLocked(reason)
                 generation
             }
-
-        private fun openGap(reason: LiveGapReason) {
-            synchronized(stateLock) {
-                openGapLocked(reason)
-            }
-        }
-
-        private fun recordGapLocked(reason: LiveGapReason) {
-            val revision = gapClock.incrementAndGet()
-            currentGap = LiveGapRevision(revision, reason)
-        }
-
-        private fun openGapLocked(reason: LiveGapReason) {
-            recordGapLocked(reason)
-            overall = overall.copy(emittedReconnectForCurrentGap = false)
-        }
 
         private fun reconcileLeases(config: LiveConnectionConfig) {
             val generation = streamGeneration.get()
@@ -462,45 +484,106 @@ class DefaultForegroundEventStream
                 scope.launch {
                     var retryAttempt = 0
                     while (generation == streamGeneration.get() && occupancyJob?.isActive == true) {
+                        if (authTerminal.get()) return@launch
                         if (!isRequired(target.key)) return@launch
                         deviceNetworkPath.waitUntilReady()
                         if (generation != streamGeneration.get() || !isRequired(target.key)) return@launch
+                        if (authTerminal.get()) return@launch
                         val lastActivityMs = lease.lastActivityMs
                         lastActivityMs.set(System.currentTimeMillis())
                         val attemptId = lease.nextAttempt()
+                        val wakeAtStart = reconnectWakeEpoch.get()
+                        val attempt = SseLeaseAttempt()
+                        val serverConnected = CompletableDeferred<Unit>()
+                        val headersOpened = CompletableDeferred<Boolean>()
+                        val attemptOutcome = CompletableDeferred<SseAttemptOutcome>()
                         val streamJob =
                             launch {
-                                try {
-                                    val path = "/${target.path}"
-                                    eventsApi.streamEvents(
-                                        path = target.path,
-                                        directory = target.directory,
-                                        onHTTPResponse = { statusCode ->
-                                            if (lease.currentAttempt() == attemptId) {
-                                                lastActivityMs.set(System.currentTimeMillis())
-                                                diagnosticLogger.info(
-                                                    DiagnosticLogArea.Sse,
-                                                    "GET $path opened status=$statusCode protocol=${appliedConfig?.protocol?.wireValue}",
-                                                )
-                                                markLeaseLive(lease, generation)
-                                                retryAttempt = 0
+                                val path = "/${target.path}"
+                                val readJob = currentCoroutineContext()[Job]!!
+                                val handshakeTimeout =
+                                    launch {
+                                        try {
+                                            val opened = headersOpened.await()
+                                            if (!opened) return@launch
+                                            withTimeout(FIRST_FRAME_TIMEOUT_MS) {
+                                                serverConnected.await()
                                             }
-                                        },
-                                        onActivity = {
-                                            lastActivityMs.set(System.currentTimeMillis())
-                                        },
-                                    ) { dataLine ->
-                                        lastActivityMs.set(System.currentTimeMillis())
-                                        publishDataLine(dataLine, generation)
+                                        } catch (_: TimeoutCancellationException) {
+                                            if (lease.currentAttempt() == attemptId) {
+                                                diagnosticLogger.warning(
+                                                    DiagnosticLogArea.Sse,
+                                                    "SSE first frame timeout target=${target.key}",
+                                                )
+                                            }
+                                            readJob.cancel(
+                                                CancellationException(FIRST_FRAME_FAILED),
+                                            )
+                                        }
                                     }
+                                try {
+                                    val outcome =
+                                        eventsApi.streamEvents(
+                                            path = target.path,
+                                            directory = target.directory,
+                                            onHTTPResponse = { statusCode ->
+                                                if (lease.currentAttempt() == attemptId) {
+                                                    lastActivityMs.set(System.currentTimeMillis())
+                                                    diagnosticLogger.info(
+                                                        DiagnosticLogArea.Sse,
+                                                        "GET $path status=$statusCode target=${target.key} protocol=${appliedConfig?.protocol?.wireValue}",
+                                                    )
+                                                    headersOpened.complete(attempt.onHttpStatus(statusCode))
+                                                }
+                                            },
+                                            onActivity = {
+                                                lastActivityMs.set(System.currentTimeMillis())
+                                            },
+                                        ) { dataLine ->
+                                            lastActivityMs.set(System.currentTimeMillis())
+                                            if (!attempt.serverConnected) {
+                                                val parsed = eventDomainAdapter.parseEvents(dataLine)
+                                                when (attempt.onFirstDataEvents(parsed)) {
+                                                    SseFirstFrameResult.Rejected -> {
+                                                        diagnosticLogger.warning(
+                                                            DiagnosticLogArea.Sse,
+                                                            "SSE first frame is not server.connected target=${target.key}",
+                                                        )
+                                                        attemptOutcome.complete(
+                                                            SseAttemptOutcome.Transport(null),
+                                                        )
+                                                        readJob.cancel(
+                                                            CancellationException(FIRST_FRAME_FAILED),
+                                                        )
+                                                        return@streamEvents
+                                                    }
+                                                    SseFirstFrameResult.Connected -> {
+                                                        serverConnected.complete(Unit)
+                                                        markLeaseLive(lease, generation)
+                                                        retryAttempt = 0
+                                                    }
+                                                    SseFirstFrameResult.Subsequent -> Unit
+                                                }
+                                            }
+                                            publishDataLine(dataLine, generation)
+                                        }
+                                    attemptOutcome.complete(attempt.terminalOutcome(outcome))
                                 } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (throwable: Throwable) {
-                                    diagnosticLogger.warning(
-                                        DiagnosticLogArea.Sse,
-                                        "foreground SSE stream failed target=${target.key}",
-                                        throwable,
-                                    )
+                                    if (!attemptOutcome.isCompleted) {
+                                        attemptOutcome.complete(
+                                            if (cancelled.message == FIRST_FRAME_FAILED) {
+                                                SseAttemptOutcome.Transport(cancelled)
+                                            } else {
+                                                SseAttemptOutcome.Cancelled
+                                            },
+                                        )
+                                    }
+                                    if (cancelled.message != FIRST_FRAME_FAILED) {
+                                        throw cancelled
+                                    }
+                                } finally {
+                                    headersOpened.complete(false)
+                                    handshakeTimeout.cancel()
                                 }
                             }
                         lease.streamJob = streamJob
@@ -528,42 +611,127 @@ class DefaultForegroundEventStream
                                     }
                                 }
                             }
-                        try {
-                            streamJob.join()
-                        } catch (cancelled: CancellationException) {
-                            if (generation != streamGeneration.get() || !isRequired(target.key)) {
+                        val outcome =
+                            try {
+                                streamJob.join()
+                                if (attemptOutcome.isCompleted) {
+                                    attempt.terminalOutcome(attemptOutcome.await())
+                                } else {
+                                    SseAttemptOutcome.Transport(null)
+                                }
+                            } catch (cancelled: CancellationException) {
+                                if (generation != streamGeneration.get() || !isRequired(target.key)) {
+                                    watchJob.cancel()
+                                    pathWatchJob.cancel()
+                                    throw cancelled
+                                }
+                                if (attemptOutcome.isCompleted) {
+                                    attempt.terminalOutcome(attemptOutcome.await())
+                                } else {
+                                    SseAttemptOutcome.Cancelled
+                                }
+                            } finally {
                                 watchJob.cancel()
                                 pathWatchJob.cancel()
-                                throw cancelled
+                                if (lease.currentAttempt() == attemptId) {
+                                    lease.streamJob = null
+                                    markLeaseDead(lease, generation)
+                                }
                             }
-                        } catch (throwable: Throwable) {
-                            diagnosticLogger.warning(
-                                DiagnosticLogArea.Sse,
-                                "foreground SSE stream failed target=${target.key}",
-                                throwable,
-                            )
-                        } finally {
-                            watchJob.cancel()
-                            pathWatchJob.cancel()
-                            if (lease.currentAttempt() == attemptId) {
-                                lease.streamJob = null
-                                markLeaseDead(lease, generation)
-                            }
-                        }
                         if (generation != streamGeneration.get() || !isRequired(target.key)) return@launch
-                        if (deviceNetworkPath.status.value == DeviceNetworkPathStatus.Unavailable) {
-                            continue
+                        if (authTerminal.get()) return@launch
+                        if (lease.currentAttempt() == attemptId) {
+                            logAttemptOutcome(target.key, outcome)
                         }
-                        retryAttempt += 1
-                        val backoffMs = (1_000L * retryAttempt).coerceAtMost(10_000L)
-                        diagnosticLogger.debug(
-                            DiagnosticLogArea.Sse,
-                            "foreground SSE retry target=${target.key} in ${backoffMs}ms",
-                        )
-                        delay(backoffMs)
+                        when (
+                            val decision =
+                                SseAttemptPolicy.decide(
+                                    outcome = outcome,
+                                    protocolConfirmed = protocolConfirmed.get(),
+                                    attempt = retryAttempt + 1,
+                                )
+                        ) {
+                            SseRetryDecision.AuthFailed -> {
+                                val status =
+                                    (outcome as? SseAttemptOutcome.Http)?.statusCode ?: 0
+                                markAuthFailed(generation, target.key, status)
+                                return@launch
+                            }
+                            is SseRetryDecision.Retry -> {
+                                if (deviceNetworkPath.status.value == DeviceNetworkPathStatus.Unavailable) {
+                                    continue
+                                }
+                                if (reconnectWakeEpoch.get() != wakeAtStart) {
+                                    retryAttempt = 0
+                                    continue
+                                }
+                                retryAttempt += 1
+                                diagnosticLogger.debug(
+                                    DiagnosticLogArea.Sse,
+                                    "foreground SSE retry target=${target.key} attempt=$retryAttempt backoffMs=${decision.delayMs}",
+                                )
+                                val wokeEarly = awaitReconnectWakeOrDelay(decision.delayMs)
+                                if (wokeEarly) {
+                                    retryAttempt = 0
+                                }
+                            }
+                        }
                     }
                 }
             return lease
+        }
+
+        private suspend fun awaitReconnectWakeOrDelay(backoffMs: Long): Boolean =
+            if (backoffMs <= 0L) {
+                false
+            } else {
+                withTimeoutOrNull(backoffMs) {
+                    reconnectWake.first()
+                    true
+                } == true
+            }
+
+        private fun markAuthFailed(
+            generation: Long,
+            targetKey: String,
+            statusCode: Int,
+        ) {
+            authTerminal.set(true)
+            diagnosticLogger.warning(
+                DiagnosticLogArea.Sse,
+                "SSE auth failed target=$targetKey status=$statusCode; stopping retries",
+            )
+            setConnectionState(EventStreamConnectionState.AuthFailed, generation)
+            cancelAllLeases()
+        }
+
+        private fun logAttemptOutcome(
+            targetKey: String,
+            outcome: SseAttemptOutcome,
+        ) {
+            when (outcome) {
+                SseAttemptOutcome.Ended ->
+                    diagnosticLogger.debug(
+                        DiagnosticLogArea.Sse,
+                        "SSE attempt ended target=$targetKey",
+                    )
+                SseAttemptOutcome.Cancelled ->
+                    diagnosticLogger.debug(
+                        DiagnosticLogArea.Sse,
+                        "SSE attempt cancelled target=$targetKey",
+                    )
+                is SseAttemptOutcome.Http ->
+                    diagnosticLogger.info(
+                        DiagnosticLogArea.Sse,
+                        "SSE attempt http target=$targetKey status=${outcome.statusCode}",
+                    )
+                is SseAttemptOutcome.Transport ->
+                    diagnosticLogger.warning(
+                        DiagnosticLogArea.Sse,
+                        "SSE attempt transport target=$targetKey",
+                        outcome.cause,
+                    )
+            }
         }
 
         private suspend fun publishDataLine(
@@ -578,7 +746,6 @@ class DefaultForegroundEventStream
                     SseDiagnosticLogging.parseFailedMessage(dataLine),
                 )
                 if (result.parseFailed) {
-                    openGap(LiveGapReason.ParseFailed)
                     publishSnapshot()
                     for (event in result.toEmit) {
                         emitIfCurrent(event, generation)
@@ -625,10 +792,6 @@ class DefaultForegroundEventStream
         ) {
             if (generation != streamGeneration.get()) return
             lease.live.set(false)
-            synchronized(stateLock) {
-                if (generation != streamGeneration.get()) return
-                overall = overall.copy(occupyingConnected = false)
-            }
             refreshOverallState(generation)
         }
 
@@ -656,6 +819,14 @@ class DefaultForegroundEventStream
 
         private fun decideOverallStateLocked(generation: Long): OverallDecision? {
             if (generation != streamGeneration.get()) return null
+            if (_connectionState.value == EventStreamConnectionState.AuthFailed) {
+                return OverallDecision(
+                    generation = generation,
+                    connectionState = EventStreamConnectionState.AuthFailed,
+                    publishReconnect = false,
+                    snapshot = buildSnapshotLocked(EventStreamConnectionState.AuthFailed),
+                )
+            }
             val config = appliedConfig
             val required =
                 if (config == null) {
@@ -667,16 +838,17 @@ class DefaultForegroundEventStream
                 synchronized(leaseLock) {
                     leases.filterValues { it.live.get() }.keys.toSet()
                 }
+            val currentlyConnected =
+                _connectionState.value == EventStreamConnectionState.Connected
             val decided =
                 LiveOverallPolicy.decide(
                     overall,
                     LiveOverallInput(
                         required = required,
                         live = live,
-                        pathLost = deviceNetworkPath.status.value == DeviceNetworkPathStatus.Unavailable,
                     ),
+                    currentlyConnected = currentlyConnected,
                 )
-            decided.openGap?.let { recordGapLocked(it) }
             overall = decided.flags
             return OverallDecision(
                 generation = generation,
@@ -721,7 +893,6 @@ class DefaultForegroundEventStream
                 config = config,
                 generation = streamGeneration.get(),
                 connectionState = connectionState,
-                gap = currentGap,
                 requiredTargets = required,
                 liveTargets = live,
             )
@@ -742,27 +913,32 @@ class DefaultForegroundEventStream
             return SseSubscribeTargets.forProtocol(config.protocol, config.directories).any { it.key == key }
         }
 
-        private fun cancelAllLeases() {
+        private fun cancelAllLeases(): List<Job> {
             synchronized(leaseLock) {
+                val jobs =
+                    leases.values.flatMap { lease ->
+                        listOfNotNull(lease.loopJob, lease.streamJob)
+                    }
                 leases.values.forEach { it.cancel() }
                 leases.clear()
+                return jobs
             }
         }
 
         private fun bootstrapConfig(): LiveConnectionConfig {
             val profile = activeConnectionManager.currentProfile()
             val protocol = activeConnectionManager.protocolHint()
-            val (profileId, identity) = profileIdentity(profile)
+            val resolved = profileIdentity(profile)
             val directories =
                 synchronized(stateLock) {
-                    lastDirectoriesByIdentity[LiveConnectionConfig.Identity(profileId, identity, protocol)]
-                        .orEmpty()
+                    lastDirectoriesByIdentity[resolved.identity(protocol)].orEmpty()
                 }
             return LiveConnectionConfig(
-                profileId = profileId,
-                connectionIdentity = identity,
+                profileId = resolved.profileId,
+                connectionIdentity = resolved.connectionIdentity,
                 protocol = protocol,
                 directories = directories,
+                credentialFingerprint = resolved.credentialFingerprint,
             )
         }
 
@@ -770,23 +946,51 @@ class DefaultForegroundEventStream
             val profile = activeConnectionManager.currentProfile()
             val protocol = activeConnectionManager.protocolHint()
             val directories = instanceDirectories()
-            val (profileId, identity) = profileIdentity(profile)
+            val resolved = profileIdentity(profile)
             return LiveConnectionConfig(
-                profileId = profileId,
-                connectionIdentity = identity,
+                profileId = resolved.profileId,
+                connectionIdentity = resolved.connectionIdentity,
                 protocol = protocol,
                 directories = directories,
+                credentialFingerprint = resolved.credentialFingerprint,
             )
         }
 
-        private fun profileIdentity(profile: ConnectionProfile?): Pair<String, String> {
-            val identity =
+        private fun profileIdentity(profile: ConnectionProfile?): ProfileIdentity {
+            val connectionIdentity =
                 if (profile == null) {
                     ""
                 } else {
-                    "${ConnectionProfileIdentity.normalizeBaseUrl(profile.baseUrl)}|${ConnectionProfileIdentity.normalizeUsername(profile.username)}"
+                    "${ConnectionProfileIdentity.normalizeBaseUrl(
+                        profile.baseUrl,
+                    )}|${ConnectionProfileIdentity.normalizeUsername(profile.username)}"
                 }
-            return (profile?.id?.ifBlank { identity } ?: identity) to identity
+            val profileId = profile?.id?.ifBlank { connectionIdentity } ?: connectionIdentity
+            val fingerprint =
+                if (profile == null) {
+                    ""
+                } else {
+                    ConnectionProfileIdentity.credentialFingerprint(profile.username, profile.password)
+                }
+            return ProfileIdentity(
+                profileId = profileId,
+                connectionIdentity = connectionIdentity,
+                credentialFingerprint = fingerprint,
+            )
+        }
+
+        private data class ProfileIdentity(
+            val profileId: String,
+            val connectionIdentity: String,
+            val credentialFingerprint: String,
+        ) {
+            fun identity(protocol: ServerProtocol) =
+                LiveConnectionConfig.Identity(
+                    profileId = profileId,
+                    connectionIdentity = connectionIdentity,
+                    protocol = protocol,
+                    credentialFingerprint = credentialFingerprint,
+                )
         }
 
         private suspend fun instanceDirectories(): List<String> {
@@ -818,5 +1022,7 @@ class DefaultForegroundEventStream
 
         private companion object {
             const val DEFAULT_IDLE_TIMEOUT_MS = 45_000L
+            const val FIRST_FRAME_TIMEOUT_MS = 3_000L
+            const val FIRST_FRAME_FAILED = "SSE first frame failed"
         }
     }

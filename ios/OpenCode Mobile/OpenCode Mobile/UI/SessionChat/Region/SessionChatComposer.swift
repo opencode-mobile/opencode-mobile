@@ -594,7 +594,8 @@ final class SessionChatComposer {
         onSendAccepted: () async -> Void,
         onSendFailed: (String, String) -> Void,
         isSessionBusy: Bool,
-        supportsFollowUp: Bool
+        supportsFollowUp: Bool,
+        waitToSend: (() async -> Bool)? = nil
     ) async {
         let submittedText = state.composer.text
         let submittedMentions = state.composer.agentMentions
@@ -683,6 +684,23 @@ final class SessionChatComposer {
         state.errorMessage = nil
         notifyChange()
         await onOptimisticRows(enriched)
+
+        if let waitToSend {
+            let proceed = await waitToSend()
+            if !proceed {
+                restoreFailedSubmission(
+                    textRevision: submittedDraftRevision,
+                    submittedText: submittedText,
+                    submittedMentions: submittedMentions,
+                    submittedAttachments: submittedAttachments,
+                    submittedAttachmentRevisions: submittedAttachmentRevisions
+                )
+                let message = "Couldn't send. Retry when the connection is live."
+                setSendError(message)
+                onSendFailed(optimistic.id, message)
+                return
+            }
+        }
 
         do {
             let intent = ComposerSubmitRouting.resolve(

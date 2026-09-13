@@ -13,6 +13,7 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
     let variant: String?
     let mode: String?
     let sentAtEpochMs: Int64?
+    let completedAtEpochMs: Int64?
     let contextInputTokens: Int64?
     let contextEstimate: MessageContextEstimate
     let followUpDelivery: FollowUpDelivery?
@@ -35,6 +36,7 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         variant: String? = nil,
         mode: String?,
         sentAtEpochMs: Int64?,
+        completedAtEpochMs: Int64? = nil,
         contextInputTokens: Int64? = nil,
         contextEstimate: MessageContextEstimate = MessageContextEstimate(),
         followUpDelivery: FollowUpDelivery? = nil,
@@ -52,6 +54,7 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         self.variant = variant
         self.mode = mode
         self.sentAtEpochMs = sentAtEpochMs
+        self.completedAtEpochMs = completedAtEpochMs
         self.contextInputTokens = contextInputTokens
         self.contextEstimate = contextEstimate
         self.followUpDelivery = followUpDelivery

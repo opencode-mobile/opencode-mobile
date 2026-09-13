@@ -27,6 +27,7 @@ interface SessionCacheStore {
 enum class SessionCacheKind {
     SessionList,
     MessageTimeline,
+    Activity,
 }
 
 data class SessionCacheKey(
@@ -40,6 +41,7 @@ data class SessionCacheKey(
             when (kind) {
                 SessionCacheKind.SessionList -> "$connectionId|$worktree|list"
                 SessionCacheKind.MessageTimeline -> "$connectionId|$worktree|msg|$entryId"
+                SessionCacheKind.Activity -> "$connectionId|$worktree|activity"
             }
 }
 

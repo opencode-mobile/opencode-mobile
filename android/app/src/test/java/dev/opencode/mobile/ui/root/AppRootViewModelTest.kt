@@ -4,8 +4,8 @@ import dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileCatalog
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
-import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
+import dev.opencode.mobile.domain.connection.testConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.StreamOccupancy
 import dev.opencode.mobile.domain.event.WorldSignal
 import dev.opencode.mobile.domain.event.WorldSignals
@@ -64,7 +64,7 @@ class AppRootViewModelTest {
             val httpClient = OpencodeHttpClient(json, manager)
             val sseHttpClient = OpencodeSseHttpClient(json, manager)
             val coordinator =
-                ConnectionSessionCoordinator(
+                testConnectionSessionCoordinator(
                     activeConnectionManager = manager,
                     connectionProfileStore = store,
                     secureCredentialStore = EmptySecureCredentialStore(),

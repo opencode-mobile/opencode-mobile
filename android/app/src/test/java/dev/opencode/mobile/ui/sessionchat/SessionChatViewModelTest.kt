@@ -7,19 +7,25 @@ import dev.opencode.mobile.domain.command.CommandRunOptions
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
 import dev.opencode.mobile.domain.connection.ConnectionProfile
-import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.connection.testConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
+import dev.opencode.mobile.domain.event.FixedLiveUpdates
+import dev.opencode.mobile.domain.event.LiveUpdates
+import dev.opencode.mobile.domain.event.LiveUpdatesChrome
 import dev.opencode.mobile.domain.event.LiveUpdatesLabel
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.event.SilentWorldSignals
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
+import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
+import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
@@ -60,6 +66,7 @@ import dev.opencode.mobile.markdown.OpenCodeTextMateHighlightingEngine
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CompletableDeferred
@@ -2778,6 +2785,7 @@ class SessionChatViewModelTest {
             assertEquals(SessionConnectionStatus.Live, LiveUpdatesLabel.Live.toSessionConnectionStatus())
             assertEquals(SessionConnectionStatus.Connecting, LiveUpdatesLabel.Connecting.toSessionConnectionStatus())
             assertEquals(SessionConnectionStatus.Offline, LiveUpdatesLabel.Offline.toSessionConnectionStatus())
+            assertEquals(SessionConnectionStatus.AuthFailed, LiveUpdatesLabel.AuthFailed.toSessionConnectionStatus())
         }
 
     @Test
@@ -3713,36 +3721,37 @@ class SessionChatViewModelTest {
                     abortErrorsById =
                         mapOf("ses-child" to SessionError.Http(statusCode = 500, message = "child abort failed")),
                 )
+            val repository =
+                FakeMessageRepository(
+                    messages =
+                        listOf(
+                            Message(
+                                id = "msg-1",
+                                role = MessageRole.Assistant,
+                                text = "",
+                                parts =
+                                    listOf(
+                                        MessagePart.Tool(
+                                            toolName = "subagent",
+                                            status = ToolStatus.Running,
+                                            id = "prt-1",
+                                            input =
+                                                buildJsonObject {
+                                                    put("agent", "explore")
+                                                    put("description", "Find git projects")
+                                                },
+                                            metadata =
+                                                buildJsonObject {
+                                                    put("sessionID", "ses-child")
+                                                },
+                                        ),
+                                    ),
+                            ),
+                        ),
+                )
             val viewModel =
                 createViewModel(
-                    repository =
-                        FakeMessageRepository(
-                            messages =
-                                listOf(
-                                    Message(
-                                        id = "msg-1",
-                                        role = MessageRole.Assistant,
-                                        text = "",
-                                        parts =
-                                            listOf(
-                                                MessagePart.Tool(
-                                                    toolName = "subagent",
-                                                    status = ToolStatus.Running,
-                                                    id = "prt-1",
-                                                    input =
-                                                        buildJsonObject {
-                                                            put("agent", "explore")
-                                                            put("description", "Find git projects")
-                                                        },
-                                                    metadata =
-                                                        buildJsonObject {
-                                                            put("sessionID", "ses-child")
-                                                        },
-                                                ),
-                                            ),
-                                    ),
-                                ),
-                        ),
+                    repository = repository,
                     sessionRepository = sessionRepository,
                 )
             viewModel.bind("ses-1", "Title", "/repo")
@@ -3751,7 +3760,9 @@ class SessionChatViewModelTest {
             assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
 
             viewModel.abort()
-            advanceUntilIdle()
+            runCurrent()
+            repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            runCurrent()
 
             assertEquals(setOf("ses-1", "ses-child"), sessionRepository.abortSessionIds.toSet())
             assertNull(viewModel.uiState.value.sessionStatusLabel)
@@ -3942,6 +3953,83 @@ class SessionChatViewModelTest {
             assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
         }
 
+    @Test
+    fun sendPrompt_whileConnecting_queuesUntilLive() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val liveUpdates =
+                FixedLiveUpdates(
+                    LiveUpdatesChrome(
+                        label = LiveUpdatesLabel.Connecting,
+                        canMutate = false,
+                        composerEnabled = true,
+                    ),
+                )
+            val viewModel = createViewModel(repository, liveUpdates = liveUpdates)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.composerEnabled)
+            assertFalse(viewModel.uiState.value.canMutate)
+
+            viewModel.updateComposerText("Queued prompt")
+            viewModel.sendPrompt()
+            runCurrent()
+
+            assertFalse(repository.sendPromptAsyncCalled)
+            assertTrue(viewModel.uiState.value.isSending)
+            assertTrue(viewModel.uiState.value.messages.any { it.text == "Queued prompt" && it.isPending })
+
+            viewModel.updateComposerText("Second")
+            viewModel.sendPrompt()
+            runCurrent()
+            assertFalse(repository.sendPromptAsyncCalled)
+
+            liveUpdates.set(
+                LiveUpdatesChrome(
+                    label = LiveUpdatesLabel.Live,
+                    canMutate = true,
+                    composerEnabled = true,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertTrue(repository.sendPromptAsyncCalled)
+            assertEquals("Queued prompt", repository.sentOptions?.text)
+            assertEquals(false, viewModel.uiState.value.isSending)
+        }
+
+    @Test
+    fun sendPrompt_whileConnecting_timesOutAfter8s() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val liveUpdates =
+                FixedLiveUpdates(
+                    LiveUpdatesChrome(
+                        label = LiveUpdatesLabel.Connecting,
+                        canMutate = false,
+                        composerEnabled = true,
+                    ),
+                )
+            val viewModel = createViewModel(repository, liveUpdates = liveUpdates)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("Queued prompt")
+            viewModel.sendPrompt()
+            advanceTimeBy(SessionChatViewModel.PENDING_SEND_TIMEOUT_MS)
+            advanceUntilIdle()
+
+            assertFalse(repository.sendPromptAsyncCalled)
+            assertEquals(false, viewModel.uiState.value.isSending)
+            assertEquals(
+                SessionChatComposer.PENDING_SEND_TIMEOUT_ERROR,
+                viewModel.uiState.value.snackbar?.message,
+            )
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertTrue(viewModel.uiState.value.messages.none { it.text == "Queued prompt" })
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+        }
+
     private fun createViewModel(
         repository: FakeMessageRepository,
         modelRepository: FakeModelRepository = FakeModelRepository(),
@@ -3956,11 +4044,34 @@ class SessionChatViewModelTest {
         sessionReadyStore: SessionReadyStore = EmptySessionReadyStore,
         connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
         serverProtocol: ServerProtocol = ServerProtocol.V1,
+        liveUpdates: LiveUpdates = FixedLiveUpdates(),
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
         val json = Json { ignoreUnknownKeys = true }
-        val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope, EventDomainAdapter(json))
+        val sessionStatusLiveStore =
+            DefaultSessionStatusLiveStore(
+                sessionRepository,
+                eventStream,
+                liveStoreScope,
+                EventDomainAdapter(json),
+                SilentWorldSignals,
+                testSyncCoordinator(
+                    eventStream = eventStream,
+                    scope = liveStoreScope.coroutineScope,
+                    nowMs = { testDispatcher.scheduler.currentTime },
+                    wait = {
+                        // Failed REST retries under canCatchUp would never idle the
+                        // test scheduler (500ms, 1s, 2s… forever). Chat tests only
+                        // need a single loader attempt.
+                        throw kotlinx.coroutines.CancellationException("test-no-retry")
+                    },
+                ),
+                nowMs = { testDispatcher.scheduler.currentTime },
+                wait = { ms ->
+                    if (ms < LiveStoreRefreshPolicy.STATUS_RUNNING_RECONCILE_MS) delay(ms)
+                },
+            )
         val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
         runBlocking {
             val profile =
@@ -3969,7 +4080,7 @@ class SessionChatViewModelTest {
             activeConnectionManager.applyProfile(profile, serverProtocol = serverProtocol)
         }
         val connectionSessionCoordinator =
-            ConnectionSessionCoordinator(
+            testConnectionSessionCoordinator(
                 activeConnectionManager = activeConnectionManager,
                 connectionProfileStore = connectionProfileStore,
                 secureCredentialStore = FakeSecureCredentialStore(),
@@ -4001,6 +4112,7 @@ class SessionChatViewModelTest {
                 ),
             connectionProfileStore = connectionProfileStore,
             activeConnectionManager = activeConnectionManager,
+            liveUpdates = liveUpdates,
         ).apply {
             ioDispatcher = testDispatcher
             // Mutations (send/rename/fork/new) require Live; default fakes start Connected.
