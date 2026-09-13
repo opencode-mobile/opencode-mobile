@@ -1,6 +1,6 @@
 ---
 name: synced-native-feature
-description: Feature Slice development across both native apps. Use when coordinating synchronized iOS and Android planning or implementation, or when recording cross-platform progress and parity.
+description: Feature Slice development across both native apps. Use when coordinating synchronized iOS and Android planning or implementation.
 ---
 
 # Feature Slice Development
@@ -10,79 +10,63 @@ implementations.
 
 ## Route The Work
 
-Identify the feature directory and requested phase, then read only the applicable
-sections of [`docs/features/README.md`](../../../docs/features/README.md):
+Identify the Linear issue when the work is ticket-backed, the requested phase,
+and the affected platforms. Read existing repository documentation only when it
+helps explain a stable constraint. It is background material, not a ledger to
+update during implementation.
 
-- read the artifact overview and `plan.md` section for planning or status;
-- read the `parity-gaps.md` section when a platform mismatch exists;
-- read the `decisions.md` section when a local decision must be recorded.
-
-That README is the single source of truth for feature artifacts and their
-schemas. Routing is complete when the feature directory, active phase, affected
-platforms, and required canonical sections are identified.
+Do not create or update repository documentation unless the user explicitly
+requests documentation.
 
 ## Steps
 
-1. **Close the shared plan before implementation.**
-   Create or update the feature artifacts required by the canonical schema.
-   Define observable shared behavior while keeping native navigation and
-   implementation choices platform-specific. Align domain terms, UI state and
-   actions, copy, errors, and permission behavior where they express the same
-   product concept.
+1. **Establish the shared behavior.**
+   Use the user's request and the Linear issue as the plan. Define observable
+   shared behavior while keeping native navigation and implementation choices
+   platform-specific. Align domain terms, UI state and actions, copy, errors,
+   and permission behavior where they express the same product concept.
 
-   Planning is complete when every applicable `plan.md` field is populated,
-   every non-applicable field has a reason, every in-scope behavior has a
-   checkable expected result, and both native entry points are accounted for.
+   Planning is complete when in-scope behavior has checkable expected results
+   and both native entry points are accounted for.
 
 2. **Classify every reusable-UI need.**
    Classify each required visual element as an existing Component Collection
    primitive, a reusable component or variant to create or extend, or
-   feature-local UI. Record the chosen existing component or the reason local UI
-   is not reusable.
+   feature-local UI.
 
    When reusable UI is missing, delegate it through
    [`design-system-component`](../design-system-component/SKILL.md). Do not
-   resume dependent feature implementation until every applicable item in that
-   skill's completion ledger is complete. If the delegated work is blocked,
-   record the blocker in feature progress and stop the dependent work.
+   resume dependent feature implementation until its required implementation is
+   complete. If the delegated work is blocked, stop the dependent work and
+   report the blocker.
 
    Classification is complete when every required visual element has exactly
-   one category and every delegated dependency is complete or blocks the
-   dependent feature work explicitly.
+   one category and every delegated dependency is complete or explicitly
+   blocked.
 
 3. **Implement the shared behavior on both platforms.**
-    Implement each planned behavior through the native domain adapter,
-    repository or service, Screen Model, and screen layers it affects. After
-    each platform change, update `plan.md` only if the durable product
-    state changed.
+   Implement each planned behavior through the native domain adapter,
+   repository or service, Screen Model, and screen layers it affects.
 
    Implementation is complete when every planned behavior is present on iOS
-   and Android, or each missing platform item is recorded as unfinished work
-   and, when it creates observable divergence, as a parity gap.
+   and Android, or each missing platform item is reported as unfinished work.
 
-4. **Classify differences and decisions as they appear.**
-   For every observed iOS/Android difference, either align the implementations
-   or use the canonical parity-gap schema to record it immediately. Move an
-   intentional, persistent design-system difference to
-   [`docs/design-system/divergences.md`](../../../docs/design-system/divergences.md).
-   Record feature-local decisions using the canonical decisions guidance.
+4. **Classify platform differences.**
+   Align observable iOS/Android differences unless native platform behavior
+   makes the difference intentional. Express durable behavior in code and tests.
+   Put temporary gaps and follow-up work in Linear when ticket updates are in
+   scope; otherwise report them in the handoff.
 
-   This step is complete when every observed difference is resolved, temporary
-   with an owner or next action, or intentional with its durable rationale in
-   the correct document; every durable local decision is recorded once.
+   This step is complete when every observed difference is resolved,
+   intentional and covered by the implementation, or reported with a next
+   action.
 
 5. **Account for affected checks.**
    Identify checks from the platforms and layers changed, run every applicable
    build, lint, test, or preview check, and report the result in the handoff.
-    Do not add check runs or transient evidence to feature docs.
 
    Checking is complete when every affected platform and layer has a passing
-   result, a justified `not applicable` result, or a documented blocker.
-
-6. **Close the Feature Slice ledger.**
-    Account for shared planning, reusable UI, iOS, Android, and parity.
-    Record only durable product state in `plan.md`. A temporary parity gap
-    counts as unfinished platform work.
+   result, a justified `not applicable` result, or a reported blocker.
 
 The Feature Slice is complete when both platforms implement the shared
-behavior or each gap is recorded, and affected checks pass.
+behavior or each gap is reported, and affected checks pass.

@@ -13,9 +13,11 @@ not drop v1 servers.
 
 - [`android/`](../android/) — Compose, Material 3
 - [`ios/OpenCode Mobile/`](../ios/OpenCode%20Mobile/)
-- Checks and builds: [`ci-pr-gating`](features/ci-pr-gating/)
-- Android Play internal + Firebase: [`android-release-distribution`](features/android-release-distribution/)
-- iOS TestFlight internal + Firebase: [`ios-release-distribution`](features/ios-release-distribution/)
+- Checks and builds: [CI branch-protection rules](features/ci-pr-gating/ruleset.md)
+- Android Play internal + Firebase:
+  [operator runbook](features/android-release-distribution/operator-runbook.md)
+- iOS TestFlight internal + Firebase:
+  [operator runbook](features/ios-release-distribution/operator-runbook.md)
 
 ```mermaid
 flowchart TB
@@ -71,8 +73,7 @@ mutually exclusive. Persistent chrome stays on the composite root.
 `SessionChatViewModel` is a facade. `SessionChatTimeline`,
 `SessionChatComposer`, `SessionInfo`, `SessionChatReviewChanges`,
 `SessionChatCommands`, and `SessionChatInbox` own behavior. New logic goes
-in a region, not the facade. See
-[session-chat/decisions.md](features/session-chat/decisions.md).
+in a region, not the facade.
 
 Home (`MainScreenViewModel` / `ProjectListHomeViewModel`) is the same
 shape: `HomeSessionActions` owns the long-press sheet, rename / fork
@@ -128,8 +129,6 @@ repositories, and mark a store dirty for pull-to-refresh. Process
 lifecycle and Device network path adapters publish world signals. Those
 signals start and stop the foreground event stream and mark stores stale.
 REST catch-up after a gap lives inside `MessageSync` and the Live Stores.
-Contract:
-[reactive-data-layer](features/reactive-data-layer/plan.md).
 
 ## Foreground events
 
@@ -147,7 +146,7 @@ Session Chat UX tracks TUI v2.
 inbox and reasoning) into the v1 product vocabulary. `MessageSync` merges
 message/part events incrementally. In-flight REST must not overwrite a
 newer store revision. Which REST runs after background or path restore is
-the store's job; see [reactive-data-layer](features/reactive-data-layer/).
+the store's job.
 
 ## Logging
 
@@ -156,5 +155,5 @@ credentials, prompts, or bodies. Tags filterable in Console / logcat.
 
 ## Parity
 
-Feature work is a synchronized slice on both apps. Differences go in
-`parity-gaps.md` or `docs/design-system/divergences.md`.
+Feature work is a synchronized slice on both apps. Track temporary gaps and
+follow-up work in Linear. Express intentional native behavior in code and tests.

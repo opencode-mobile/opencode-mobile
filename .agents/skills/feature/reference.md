@@ -10,9 +10,8 @@ the first case-insensitive match of `ope[-_/]<number>` as the issue anchor.
 When resolving a branch to a ticket:
 
 1. Parse the current branch for an issue key.
-2. If absent, inspect recent commits and changed `docs/features/` paths for a
-   feature slug.
-3. Search Linear by that slug or feature title.
+2. If absent, inspect recent commits for an issue key or feature title.
+3. Search Linear by that feature title.
 4. If evidence identifies multiple issues or none, ask for the issue key before
    ticket-linked mutations.
 
@@ -43,14 +42,11 @@ Evaluate these invariants only when applicable to the feature:
 - the branch name contains the normalized issue key;
 - the diff contains only the intended feature scope and preserves unrelated
   user changes;
-- the canonical docs path is named by the Linear issue or pull-request body;
-- planned, completed, and remaining work agree between repository docs and
-  Linear;
-- decisions and parity gaps introduced by the diff are recorded by their owning
-  skills;
+- planned, completed, and remaining work agree with Linear when ticket state is
+  part of the request;
 - relevant automated checks have a recorded pass, fail, or explicit skip reason;
-- the pull-request summary, when one exists, states scope, docs path, automated
-  checks, and remaining risks.
+- the pull-request summary, when one exists, states scope, automated checks, and
+  remaining risks.
 
 Completion criterion: every applicable invariant has current evidence and a
 pass, fail, or not-applicable result; no failed invariant is hidden by the
@@ -74,9 +70,6 @@ unavailable:
 ## Summary
 - ...
 
-## Docs
-- `docs/features/<feature-slug>/plan.md`
-
 ## Checks
 - ...
 
@@ -87,9 +80,9 @@ unavailable:
 - ...
 ```
 
-7. Use `linear-project-tracking` to add the pull-request link to Linear, then
-   verify that the pull request links the issue and canonical docs path.
+7. Use `linear-project-tracking` to add the pull-request link to Linear when the
+   work is ticket-backed and that mutation was requested.
 
 Completion criterion: the requested commit, push, and pull-request operations
 each have a concrete identifier or URL, staged scope matches the reviewed diff,
-and every required backlink is verified or named as missing.
+and every requested backlink is verified or named as missing.

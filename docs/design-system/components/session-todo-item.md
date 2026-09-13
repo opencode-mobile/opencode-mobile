@@ -61,5 +61,4 @@ outline only.
 
 Shared mark semantics, typography role, and accessibility phrases. No
 intentional platform divergence is planned for the row itself. Sheet-level
-progress-header spacing remains a Session Chat concern (see feature
-parity-gaps).
+progress-header spacing remains a Session Chat concern.

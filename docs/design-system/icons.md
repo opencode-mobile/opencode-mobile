@@ -78,7 +78,7 @@ Some catalog icons have a stable product meaning beyond gallery samples:
 | `call_split` | `git-fork` | Commands tile **Fork** |
 | `vertical_align_center` | `fold-vertical` | Commands tile **Compact** |
 
-Feature decisions live under `docs/features/<feature-slug>/decisions.md`.
+Track feature-specific icon follow-ups in Linear.
 
 ## Adding an icon
 

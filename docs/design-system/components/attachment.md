@@ -65,5 +65,4 @@ before a chip is created and send progress belongs to the composer.
 
 ## Parity And Divergence
 
-No intentional divergence is defined. Temporary differences belong in
-`docs/design-system/divergences.md` or the live feature dir.
+No intentional divergence is defined. Track temporary differences in Linear.

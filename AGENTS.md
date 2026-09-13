@@ -1,18 +1,15 @@
 # opencode-mobile Agent Guide
 
-`opencode-mobile` is the planning home for two future native mobile apps, one
-for iOS and one for Android, that remotely control opencode sessions through an
-opencode server.
+`opencode-mobile` contains native iOS and Android apps that remotely control
+opencode sessions through an opencode server.
 
-This repository documents product scope, feasibility, and native app
-architecture. App shells exist: `android/` (Kotlin, Jetpack Compose, Material 3)
-and `ios/OpenCode Mobile/` (SwiftUI, SwiftData template). Running API client
-generators, broad feature UI, and release infrastructure are not started unless
-the docs say otherwise.
+The implementations live under `android/` (Kotlin, Jetpack Compose, Material 3)
+and `ios/OpenCode Mobile/` (SwiftUI). Both apps, API generation, CI, and private
+release distribution are active.
 
 ## Product Direction
 
-- Build native mobile clients for opencode.
+- Maintain native mobile clients for opencode.
 - Use the headless opencode server API as the primary integration surface.
 - Treat `/tui/*` endpoints as optional compatibility for a user who already has
   the terminal UI running.
@@ -23,8 +20,8 @@ the docs say otherwise.
 
 ## Native App Architecture
 
-- Future apps should be native SwiftUI on iOS and Kotlin with Jetpack Compose
-  plus Material 3 on Android.
+- Use native SwiftUI on iOS and Kotlin with Jetpack Compose plus Material 3 on
+  Android.
 - Keep architecture conceptually aligned across platforms while implementing it
   separately with each platform's native tools.
 - Generated API clients should remain behind a small domain adapter. Feature
@@ -64,16 +61,14 @@ the docs say otherwise.
 - Feature UI must follow the component-first fallback order: use an existing
   Component Collection primitive when one fits; create or extend a reusable
   component through the design-system workflow when one is missing; use
-  feature-local custom UI only after those options are unsuitable, and document
-  why.
+  feature-local custom UI only after those options are unsuitable.
 - When a feature needs a reusable primitive, component, or semantic variant,
   add it through the design-system component workflow before composing the
   feature screen.
 - Feature work should proceed as a synchronized Feature Slice across both apps.
-  Document progress and Parity Gaps under `docs/features/<feature-slug>/` as
-  work happens. Live contracts only — see `docs/features/README.md`.
-- Record intentional platform differences in the same change that introduces
-  them.
+- Track plans, status, remaining work, and temporary platform gaps in Linear.
+- Do not create or update repository documentation during implementation unless
+  the user explicitly asks for documentation.
 - On iOS, do not place design-system list components (OpenCodeListItem, etc.)
   inside SwiftUI `List`. The components have their own padding, background, and
   tap handling. Use `ScrollView` + `VStack` with manual section headers instead
@@ -108,7 +103,7 @@ the docs say otherwise.
 - Require `OPENCODE_SERVER_PASSWORD` for supported use.
 - Use the default Basic Auth username `opencode` unless the user configures
   `OPENCODE_SERVER_USERNAME`.
-- Future apps should store credentials in iOS Keychain and Android Keystore.
+- Store credentials in iOS Keychain and Android Keystore.
 - Do not document plain public HTTP exposure as safe. Users are responsible for
   trusted transport such as LAN, VPN, HTTPS, or a tunnel.
 
@@ -141,7 +136,6 @@ them.
   previews, or gallery entries.
 - Use `.agents/skills/synced-native-feature/SKILL.md` when planning or
   implementing a feature that should exist in both native apps.
-  Feature docs follow `docs/features/README.md`.
 - Use `.agents/skills/run-github-actions/SKILL.md` when triggering GitHub
   Actions, checking workflow status, or troubleshooting failed CI runs.
 - Use `.agents/skills/pull-app-logs/SKILL.md` when reading Android logcat or
@@ -149,7 +143,7 @@ them.
 - Use `.agents/skills/linear-project-tracking/SKILL.md` when reading or
   updating Linear. Tickets live in Linear; do not copy them into `docs/`.
 - Use `.agents/skills/feature/SKILL.md` when linking a Linear ticket, branch,
-  feature docs directory, merge checklist, and pull request for a feature task.
+  merge checklist, and pull request for a feature task.
 - Use `.agents/skills/publish-prototype/SKILL.md` when building a throwaway
   browser prototype and publishing it to the artifact server for remote review.
 - Use `.agents/skills/publish-ui-snapshots/SKILL.md` when the user asks to
@@ -179,30 +173,27 @@ Detailed resolution and publication rules live in
 ### Issue tracker
 
 Issues are tracked in Linear; use `gh` for GitHub repository and pull-request
-operations. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Triage uses the five default canonical labels. See
-`docs/agents/triage-labels.md`.
+operations. See `.agents/skills/linear-project-tracking/`.
 
 ### Domain docs
 
-Domain documentation uses the single-context layout. See
-`docs/agents/domain.md`.
+Use the product vocabulary in `CONTEXT.md`.
 
 ## Documentation Rules
 
-- Keep `CONTEXT.md` focused on domain terms meaningful to users and product
-  collaborators.
-- Keep implementation feasibility and API evidence in `docs/feasibility.md`.
-- Keep future app architecture in `docs/architecture.md`.
-- Keep the canonical design-system planning source under `docs/design-system/`.
-- Keep current feature state in `docs/features/<feature-slug>/plan.md`.
-  Add `decisions.md` / `parity-gaps.md` only when they still constrain work.
-  Do not add progress logs, ticket plans, or research dumps.
-- Commit durable documentation artifacts. Keep scratch notes, debug dumps,
-  temporary investigations, and reproducible generated noise out of git.
+- Repository documentation is reference material, not an implementation ledger.
+- Do not create, update, or expand documentation during implementation unless
+  the user explicitly requests documentation.
+- Linear owns feature scope, acceptance criteria, plans, status, remaining work,
+  and temporary iOS/Android gaps. Do not mirror that state into the repository.
+- Code and tests own implemented behavior. Git and pull requests own shipped
+  history.
+- Keep `CONTEXT.md` limited to stable product vocabulary. Treat
+  `docs/architecture.md` and `docs/design-system/` as background references,
+  not files that must track every code change.
+- Keep operator runbooks current only through explicit operations work.
+- Do not add feature ledgers, progress logs, ticket plans, research dumps,
+  generated reports, or prototypes to `docs/`.
 - Do not couple domain language to generated code names unless the server API has
   made that language part of the user-facing model.
 
