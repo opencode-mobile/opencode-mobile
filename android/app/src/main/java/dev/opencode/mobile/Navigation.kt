@@ -76,6 +76,7 @@ import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionTodoItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionTodosPillGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SkeletonIllustrationGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SnackbarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SyncingPillGalleryScreen
@@ -107,10 +108,10 @@ import dev.opencode.mobile.ui.settings.ServersViewModel
 import dev.opencode.mobile.ui.settings.SettingsScreen
 import dev.opencode.mobile.ui.settings.SettingsViewModel
 import dev.opencode.mobile.ui.settings.SyntaxHighlightPickerScreen
-import dev.opencode.mobile.ui.settings.ThemePickerScreen
 import dev.opencode.mobile.ui.settings.TextMateLanguagesRoute
 import dev.opencode.mobile.ui.settings.TextMateLogbookScreen
 import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
+import dev.opencode.mobile.ui.settings.ThemePickerScreen
 import dev.opencode.mobile.ui.terminal.TerminalScreen
 import dev.opencode.mobile.ui.terminal.TerminalsCatalogScreen
 
@@ -479,6 +480,8 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.Colors -> ColorGalleryScreen()
                                                         ComponentGalleryEntryId.Typography -> TypographyGalleryScreen()
                                                         ComponentGalleryEntryId.Icons -> IconsGalleryScreen()
+                                                        ComponentGalleryEntryId.SkeletonIllustration ->
+                                                            SkeletonIllustrationGalleryScreen()
                                                         ComponentGalleryEntryId.Attachment -> AttachmentGalleryScreen()
                                                         ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()
                                                         ComponentGalleryEntryId.AssistantMessage -> AssistantMessageGalleryScreen()

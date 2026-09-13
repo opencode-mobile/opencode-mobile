@@ -19,6 +19,7 @@ enum class ComponentGalleryEntryId {
     Colors,
     Typography,
     Icons,
+    SkeletonIllustration,
     Attachment,
     OutgoingMessage,
     AssistantMessage,
@@ -74,6 +75,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.Icons,
             title = "Icons",
             description = "Lucide catalog synced from icons/manifest.yaml.",
+            category = ComponentGalleryCategory.Foundations,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.SkeletonIllustration,
+            title = "Skeleton Illustration",
+            description = "Wireframe hero with one spotlit element for onboarding, tutorials, and hints.",
             category = ComponentGalleryCategory.Foundations,
         ),
         ComponentGalleryEntry(
