@@ -11,6 +11,7 @@ import dev.opencode.mobile.domain.event.LiveConnectionSnapshot
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.SilentWorldSignals
 import dev.opencode.mobile.domain.event.StoreRefreshReason
+import dev.opencode.mobile.domain.event.StreamOccupancy
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.event.asLiveConnection
 import dev.opencode.mobile.domain.event.canCatchUp
@@ -154,7 +155,14 @@ class MessageSync(
                 }
                 is ReloadResult.Failure -> {
                     authority.fail(begun)
-                    healthByKey[key] = MessageSyncHealth.Recovering(MessageSyncRecoveryReason.ReloadFailed)
+                    healthByKey[key] =
+                        if (worldSignals.occupancy.value != StreamOccupancy.Active &&
+                            lastPublishedFrames.containsKey(key.storeSlot)
+                        ) {
+                            MessageSyncHealth.Stale(MessageSyncRecoveryReason.TransportUnavailable)
+                        } else {
+                            MessageSyncHealth.Recovering(MessageSyncRecoveryReason.ReloadFailed)
+                        }
                     throw result.error
                 }
             }
@@ -602,6 +610,18 @@ class MessageSync(
                 var backoffMs = MessageSyncRecoveryPolicy.INITIAL_BACKOFF_MS
                 while (isActive && observationStillCurrent()) {
                     applyQueuedIncrementalEvents()
+                    if (reason != MessageSyncRecoveryReason.Overflow &&
+                        !canCatchUp(worldSignals.occupancy.value, currentSnapshot())
+                    ) {
+                        if (lastPublishedFrames.containsKey(storeSlot)) {
+                            publishHealth(
+                                MessageSyncHealth.Stale(MessageSyncRecoveryReason.TransportUnavailable),
+                            )
+                        }
+                        recoveryDelay(backoffMs)
+                        backoffMs = minOf(backoffMs * 2, MessageSyncRecoveryPolicy.MAX_BACKOFF_MS)
+                        continue
+                    }
                     beginAuthorityWindow()
                     val fingerprintBefore = lastFingerprints[storeSlot]
                     when (
@@ -656,6 +676,14 @@ class MessageSync(
                         }
                         is ReloadResult.Failure -> {
                             completeAuthorityWindow(AuthorityWindowOutcome.Failed)
+                            if (reason != MessageSyncRecoveryReason.Overflow &&
+                                !canCatchUp(worldSignals.occupancy.value, currentSnapshot()) &&
+                                lastPublishedFrames.containsKey(storeSlot)
+                            ) {
+                                publishHealth(
+                                    MessageSyncHealth.Stale(MessageSyncRecoveryReason.TransportUnavailable),
+                                )
+                            }
                             if (isMissingSessionError(result.error)) {
                                 terminalSessionKeys.add(key)
                                 publishHealth(MessageSyncHealth.Healthy)
@@ -1091,6 +1119,7 @@ class MessageSync(
                 if (streaming && !stalled) continue
                 // TUI does not poll GET …/message while the event iterator is live.
                 // Keep the watchdog for transport drop and stalled streaming only.
+                if (worldSignals.occupancy.value != StreamOccupancy.Active) continue
                 val connected = eventStream.connectionState.value == EventStreamConnectionState.Connected
                 if (connected && !stalled) continue
                 val expectedRevision = engine.revision(storeSlot)

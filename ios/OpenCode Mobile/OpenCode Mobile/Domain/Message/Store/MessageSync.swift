@@ -165,7 +165,11 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 return messages
             case .failure(let error):
                 authority.fail(begun)
-                setHealth(.recovering(.reloadFailed), for: key)
+                if worldSignals.occupancy != .active, publishedFrame(for: key.storeSlot) != nil {
+                    setHealth(.stale(.transportUnavailable), for: key)
+                } else {
+                    setHealth(.recovering(.reloadFailed), for: key)
+                }
                 throw error
             }
         }
@@ -730,6 +734,16 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 key: key,
                 publishMessages: publishMessages
             )
+            if reason != .overflow,
+               !canCatchUp(occupancy: worldSignals.occupancy, snapshot: gapState.liveConnection.snapshot) {
+                if publishedFrame(for: key.storeSlot) != nil {
+                    staging.enterStale(.transportUnavailable)
+                    setHealth(.stale(.transportUnavailable), for: key)
+                }
+                await recoveryDelay(backoffMs)
+                backoffMs = min(backoffMs * 2, MessageSyncRecoveryPolicy.maxBackoffMs)
+                continue
+            }
             staging.beginAuthorityWindow()
             let fingerprintBefore = fingerprint(for: key.storeSlot)
             let result = await fullReloadResult(
@@ -782,7 +796,17 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 setHealth(staging.currentHealth, for: key)
             case .failure(let error):
                 _ = staging.completeAuthorityWindow(.failed)
-                setHealth(staging.currentHealth, for: key)
+                if reason != .overflow,
+                   !canCatchUp(
+                    occupancy: worldSignals.occupancy,
+                    snapshot: gapState.liveConnection.snapshot
+                   ),
+                   publishedFrame(for: key.storeSlot) != nil {
+                    staging.enterStale(.transportUnavailable)
+                    setHealth(.stale(.transportUnavailable), for: key)
+                } else {
+                    setHealth(staging.currentHealth, for: key)
+                }
                 if isMissingSessionError(error) {
                     markTerminal(key: key)
                     staging.clearRecoveringLatch()
@@ -1447,6 +1471,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             }
             // TUI does not poll GET …/message while the event iterator is live.
             // Keep the watchdog for transport drop and stalled streaming only.
+            if worldSignals.occupancy != .active { continue }
             if eventStream.connectionState == .connected && !stalled { continue }
             let expectedRevision = store.revision(sessionID: key.storeSlot)
             let directory = key.directory.isEmpty ? nil : key.directory

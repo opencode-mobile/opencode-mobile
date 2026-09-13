@@ -23,6 +23,76 @@ struct ProjectionReconciliationTests {
         #expect(repo.listMessagesCallCount == 1)
     }
 
+    @Test func occupancyStopped_doesNotPollRest() async {
+        let repo = ProjectionMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let world = FakeWorldSignals()
+        let sync = makeProjectionSync(
+            repo: repo,
+            eventStream: eventStream,
+            worldSignals: world,
+            pollIntervalMs: 30
+        )
+        let collector = ProjectionMessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+        eventStream.setConnectionState(.connected)
+        try? await Task.sleep(for: .milliseconds(40))
+        let afterInitial = repo.listMessagesCallCount
+
+        world.emit(.backgroundStop)
+        eventStream.setConnectionState(.idle)
+        try? await Task.sleep(for: .milliseconds(120))
+        task.cancel()
+        #expect(repo.listMessagesCallCount == afterInitial)
+    }
+
+    @Test func reconnectFailureAfterStop_staysStaleWithoutRetryGet() async {
+        let repo = ProjectionMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let world = FakeWorldSignals()
+        let sync = makeProjectionSync(repo: repo, eventStream: eventStream, worldSignals: world)
+        let collector = ProjectionMessageCollector()
+        var chrome = false
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let chromeTask = Task {
+            for await value in sync.observeCatchUpChrome(sessionID: "ses-1", directory: "/repo") {
+                chrome = value
+            }
+        }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+        eventStream.setConnectionState(.connected)
+        try? await Task.sleep(for: .milliseconds(40))
+        let afterInitial = repo.listMessagesCallCount
+
+        repo.holdNextListMessages()
+        eventStream.openGap()
+        eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: nil, rawProperties: nil))
+        let blocked = await waitUntil { repo.isListBlocked }
+        #expect(blocked)
+
+        world.emit(.backgroundStop)
+        eventStream.setConnectionState(.idle)
+        repo.shouldFail = true
+        repo.resumeListMessages()
+        let finished = await waitUntil { !repo.isListBlocked }
+        #expect(finished)
+        try? await Task.sleep(for: .milliseconds(80))
+        task.cancel()
+        chromeTask.cancel()
+
+        if case .stale = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+            #expect(true)
+        } else {
+            Issue.record("expected stale health after reconnect failure while stopped")
+        }
+        #expect(repo.listMessagesCallCount == afterInitial + 1)
+        #expect(chrome)
+        #expect(collector.latest()?.first?.text == "Hello")
+    }
+
     @Test func worldAndReconnectPair_yieldsOneGet() async {
         let repo = ProjectionMessageRepository()
         let eventStream = FakeForegroundEventStream()
