@@ -5,6 +5,10 @@ nonisolated struct EventDomainAdapter: Sendable {
         parseEvents(dataLine: dataLine).first
     }
 
+    func isServerConnectedFrame(_ dataLine: String) -> Bool {
+        parseEvents(dataLine: dataLine).first?.type == "server.connected"
+    }
+
     func parseEvents(dataLine: String) -> [OpencodeEvent] {
         guard let data = dataLine.data(using: .utf8) else { return [] }
         guard

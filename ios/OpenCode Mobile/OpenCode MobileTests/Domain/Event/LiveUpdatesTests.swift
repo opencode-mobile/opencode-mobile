@@ -90,4 +90,15 @@ struct LiveUpdatesTests {
         #expect(chrome.label == .connecting)
         #expect(chrome.canMutate)
     }
+
+    @Test func authFailedIsOwnChromeAndBlocksMutations() {
+        let chrome = composeLiveUpdates(
+            connectionState: .authFailed,
+            path: .ready,
+            occupancy: .active,
+            hasConnection: true
+        )
+        #expect(chrome.label == .authFailed)
+        #expect(!chrome.canMutate)
+    }
 }

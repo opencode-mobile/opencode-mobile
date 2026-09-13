@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.connection.DeviceNetworkPath
 import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
+import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -30,6 +31,7 @@ class ProcessWorldSignals(
     private val profileSaved: SharedFlow<Unit>,
     private val profileCleared: SharedFlow<Unit>,
     private val scope: CoroutineScope,
+    private val activeConnectionManager: ActiveConnectionManager? = null,
     private val stopGraceMs: Long = STOP_GRACE_MS,
 ) : WorldSignals,
     DefaultLifecycleObserver {
@@ -56,7 +58,11 @@ class ProcessWorldSignals(
                 lastPath = status
                 if (previous == null) return@collect
                 when (status) {
-                    DeviceNetworkPathStatus.Ready -> emit(WorldSignal.PathReady)
+                    DeviceNetworkPathStatus.Ready -> {
+                        activeConnectionManager?.resetProbeFailure()
+                        stream.onReconnectWake()
+                        emit(WorldSignal.PathReady)
+                    }
                     DeviceNetworkPathStatus.Unavailable -> emit(WorldSignal.PathLost)
                 }
             }
@@ -81,6 +87,7 @@ class ProcessWorldSignals(
         stopJob?.cancel()
         stopJob = null
         _occupancy.value = StreamOccupancy.Active
+        stream.onReconnectWake()
         emit(WorldSignal.Foreground)
         startIfConnected("foreground")
     }
@@ -123,6 +130,8 @@ class ProcessWorldSignals(
     }
 
     fun onPathReady() {
+        activeConnectionManager?.resetProbeFailure()
+        stream.onReconnectWake()
         emit(WorldSignal.PathReady)
     }
 

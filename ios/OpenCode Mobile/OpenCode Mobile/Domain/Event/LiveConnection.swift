@@ -104,6 +104,8 @@ nonisolated final class AdaptedLiveConnection: LiveConnection, @unchecked Sendab
 
     func stop() { stream.stop() }
 
+    func onReconnectWake() { stream.onReconnectWake() }
+
     var snapshot: LiveConnectionSnapshot {
         LiveConnectionSnapshot(connectionState: stream.connectionState)
     }

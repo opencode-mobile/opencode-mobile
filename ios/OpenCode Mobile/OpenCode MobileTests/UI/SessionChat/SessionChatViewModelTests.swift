@@ -1867,6 +1867,8 @@ struct SessionChatViewModelTests {
         #expect(SessionConnectionStatus(label: .live) == .live)
         #expect(SessionConnectionStatus(label: .connecting) == .connecting)
         #expect(SessionConnectionStatus(label: .offline) == .offline)
+        #expect(SessionConnectionStatus(label: .authFailed) == .authFailed)
+        #expect(SessionConnectionStatus.authFailed.openCodeStatus == .authFailed)
     }
 
     // MARK: - isStreaming propagation

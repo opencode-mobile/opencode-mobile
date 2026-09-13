@@ -4,17 +4,21 @@ import Foundation
 /// Starts and stops `ForegroundEventStream`. Does not call feature REST.
 nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
     nonisolated static let stopGraceMs = 5_000
+    nonisolated static let inactiveGraceMs = 2_000
 
     private let stream: any ForegroundEventStream
     private let deviceNetworkPath: any DeviceNetworkPath
     private let hasActiveConnection: @Sendable () -> Bool
     private let connectionSessionCoordinator: ConnectionSessionCoordinator?
+    private let activeConnectionManager: ActiveConnectionManager?
     private let stopGrace: Duration
+    private let inactiveGrace: Duration
     private let lock = NSLock()
     private var continuations: [UUID: AsyncStream<WorldSignal>.Continuation] = [:]
     private var buffer: [WorldSignal] = []
     private let bufferLimit = 32
     private var stopTask: Task<Void, Never>?
+    private var inactiveTask: Task<Void, Never>?
     private var registered = false
     private var _occupancy: StreamOccupancy = .active
     private var occupancyContinuations: [UUID: AsyncStream<StreamOccupancy>.Continuation] = [:]
@@ -24,13 +28,17 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
         deviceNetworkPath: any DeviceNetworkPath,
         hasActiveConnection: @escaping @Sendable () -> Bool,
         connectionSessionCoordinator: ConnectionSessionCoordinator? = nil,
-        stopGrace: Duration = .milliseconds(stopGraceMs)
+        activeConnectionManager: ActiveConnectionManager? = nil,
+        stopGrace: Duration = .milliseconds(stopGraceMs),
+        inactiveGrace: Duration = .milliseconds(inactiveGraceMs)
     ) {
         self.stream = stream
         self.deviceNetworkPath = deviceNetworkPath
         self.hasActiveConnection = hasActiveConnection
         self.connectionSessionCoordinator = connectionSessionCoordinator
+        self.activeConnectionManager = activeConnectionManager
         self.stopGrace = stopGrace
+        self.inactiveGrace = inactiveGrace
     }
 
     func register() {
@@ -56,6 +64,7 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
                 }
                 switch status {
                 case .ready:
+                    self.wakeReconnect()
                     self.emit(.pathReady)
                 case .unavailable:
                     self.emit(.pathLost)
@@ -75,6 +84,8 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
 
     func onForeground() {
         lock.lock()
+        inactiveTask?.cancel()
+        inactiveTask = nil
         stopTask?.cancel()
         stopTask = nil
         _occupancy = .active
@@ -83,8 +94,21 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
         for continuation in occupancySubscribers {
             continuation.yield(.active)
         }
+        wakeReconnect()
         emit(.foreground)
         startIfConnected(reason: "foreground")
+    }
+
+    func onInactive() {
+        lock.lock()
+        inactiveTask?.cancel()
+        let grace = inactiveGrace
+        inactiveTask = Task { [weak self] in
+            try? await Task.sleep(for: grace)
+            guard !Task.isCancelled else { return }
+            self?.onBackground()
+        }
+        lock.unlock()
     }
 
     private func startIfConnected(reason: String) {
@@ -98,6 +122,8 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
 
     func onBackground() {
         lock.lock()
+        inactiveTask?.cancel()
+        inactiveTask = nil
         stopTask?.cancel()
         _occupancy = .grace
         let occupancySubscribers = Array(occupancyContinuations.values)
@@ -118,6 +144,8 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
 
     func onBackgroundStop() {
         lock.lock()
+        inactiveTask?.cancel()
+        inactiveTask = nil
         stopTask?.cancel()
         stopTask = nil
         lock.unlock()
@@ -127,6 +155,7 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
     }
 
     func onPathReady() {
+        wakeReconnect()
         emit(.pathReady)
     }
 
@@ -168,6 +197,11 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
                 self.lock.unlock()
             }
         }
+    }
+
+    private func wakeReconnect() {
+        activeConnectionManager?.resetProbeFailure()
+        stream.onReconnectWake()
     }
 
     private func setOccupancy(_ occupancy: StreamOccupancy) {

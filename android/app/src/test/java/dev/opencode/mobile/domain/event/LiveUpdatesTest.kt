@@ -99,6 +99,20 @@ class LiveUpdatesTest {
     }
 
     @Test
+    fun authFailedBlocksMutations() {
+        val chrome =
+            composeLiveUpdates(
+                connectionState = EventStreamConnectionState.AuthFailed,
+                path = DeviceNetworkPathStatus.Ready,
+                occupancy = StreamOccupancy.Active,
+                hasConnection = true,
+            )
+        assertEquals(LiveUpdatesLabel.AuthFailed, chrome.label)
+        assertEquals("Authentication failed", chrome.label.label)
+        assertFalse(chrome.canMutate)
+    }
+
+    @Test
     fun connectingAllowsMutationsWhenPathIsReady() {
         val chrome =
             composeLiveUpdates(

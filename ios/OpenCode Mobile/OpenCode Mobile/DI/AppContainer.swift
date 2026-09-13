@@ -332,10 +332,8 @@ extension Container {
 
     var eventsAPIClient: Factory<EventsAPIClient> {
         self {
-            let manager = self.activeConnectionManager()
-            return EventsAPIClient(
-                connectionProvider: self.connectionProvider(),
-                protocolResolver: { await manager.currentProtocolOrProbe() }
+            EventsAPIClient(
+                connectionProvider: self.connectionProvider()
             )
         }.singleton
     }
@@ -373,6 +371,7 @@ extension Container {
                     return "\(ConnectionProfileIdentity.normalizeBaseURL(connection.baseURL.absoluteString))|\(ConnectionProfileIdentity.normalizeUsername(connection.username))"
                 },
                 protocolHint: { manager.protocolHint() },
+                cachedProtocol: { manager.serverProtocol },
                 protocolProbe: { await manager.currentProtocolOrProbe() }
             )
         }.singleton
@@ -387,7 +386,8 @@ extension Container {
                 hasActiveConnection: {
                     manager.connection != nil || manager.currentProfile() != nil
                 },
-                connectionSessionCoordinator: self.connectionSessionCoordinator()
+                connectionSessionCoordinator: self.connectionSessionCoordinator(),
+                activeConnectionManager: manager
             )
         }.singleton
     }

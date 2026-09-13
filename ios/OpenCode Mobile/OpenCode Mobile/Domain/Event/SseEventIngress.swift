@@ -23,6 +23,10 @@ nonisolated final class SseEventIngress: @unchecked Sendable {
         deduper.clear()
     }
 
+    func isServerConnectedFrame(_ dataLine: String) -> Bool {
+        adapter.isServerConnectedFrame(dataLine)
+    }
+
     func accept(_ dataLine: String) -> Result {
         let parsed = adapter.parseEvents(dataLine: dataLine)
         if parsed.isEmpty {

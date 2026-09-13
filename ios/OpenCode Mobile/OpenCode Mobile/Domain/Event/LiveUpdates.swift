@@ -4,6 +4,7 @@ nonisolated enum LiveUpdatesLabel: String, Sendable, Equatable {
     case live
     case connecting
     case offline
+    case authFailed
 }
 
 nonisolated struct LiveUpdatesChrome: Sendable, Equatable {
@@ -67,6 +68,9 @@ nonisolated func composeLiveUpdates(
     occupancy: StreamOccupancy,
     hasConnection: Bool
 ) -> LiveUpdatesChrome {
+    if connectionState == .authFailed {
+        return LiveUpdatesChrome(label: .authFailed, canMutate: false)
+    }
     let canMutate = hasConnection && path == .ready && occupancy != .stopped
     let label: LiveUpdatesLabel
     if !hasConnection {

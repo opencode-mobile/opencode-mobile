@@ -273,6 +273,7 @@ enum SseFaultOracleDriver {
         case "connected": .connected
         case "disconnected": .disconnected
         case "reconnecting": .reconnecting
+        case "authFailed": .authFailed
         default: fatalError("Unknown connection state \(value)")
         }
     }

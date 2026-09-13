@@ -4,6 +4,26 @@ import Testing
 
 @MainActor
 struct EventDomainAdapterTests {
+    @Test func isServerConnectedFrame_readsV1WrappedAndV2Shapes() {
+        let adapter = EventDomainAdapter()
+        #expect(
+            adapter.isServerConnectedFrame(
+                #"{"payload":{"type":"server.connected","properties":{}}}"#
+            )
+        )
+        #expect(
+            adapter.isServerConnectedFrame(
+                #"{"directory":"/tmp","payload":{"type":"server.connected","properties":{}}}"#
+            )
+        )
+        #expect(adapter.isServerConnectedFrame(#"{"type":"server.connected","data":{}}"#))
+        #expect(
+            adapter.isServerConnectedFrame(
+                #"{"payload":{"type":"server.heartbeat","properties":{}}}"#
+            ) == false
+        )
+    }
+
     @Test func parseEvent_readsWrappedPayload() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(dataLine: #"{"payload":{"type":"message.updated","properties":{"sessionID":"ses-1"}}}"#)
@@ -770,7 +790,7 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
 
     func setConnectionState(_ state: EventStreamConnectionState) {
         lock.lock()
-        let dropFromConnected = wasConnected && (state == .idle || state == .disconnected || state == .reconnecting)
+        let dropFromConnected = wasConnected && (state == .idle || state == .disconnected || state == .reconnecting || state == .authFailed)
         occupying = state != .idle && state != .disconnected
         _connectionState = state
         if dropFromConnected {

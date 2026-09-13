@@ -86,6 +86,12 @@ final class ActiveConnectionManager: @unchecked Sendable {
         serverProtocol ?? .v1
     }
 
+    func resetProbeFailure() {
+        lock.lock()
+        probeFailed = false
+        lock.unlock()
+    }
+
     /// Implicit protocol resolution for repository remotes.
     /// Cache hit returns immediately. Cache miss probes the active connection,
     /// caches the result, and returns it. Missing connection, missing probe, or

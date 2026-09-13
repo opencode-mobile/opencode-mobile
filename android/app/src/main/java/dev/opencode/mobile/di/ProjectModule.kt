@@ -111,6 +111,7 @@ abstract class EventStreamModule {
                 profileSaved = connectionSessionCoordinator.profileSaved,
                 profileCleared = connectionSessionCoordinator.profileCleared,
                 scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+                activeConnectionManager = activeConnectionManager,
             )
 
         @Provides

@@ -4,6 +4,7 @@ enum OpenCodeSessionConnectionStatus: String, Equatable, Sendable, CaseIterable 
     case live
     case connecting
     case offline
+    case authFailed = "Authentication failed"
 }
 
 struct OpenCodeConnectionStatusLabel: View {
@@ -31,8 +32,18 @@ private extension OpenCodeSessionConnectionStatus {
             OpenCodeColors.success
         case .connecting:
             OpenCodeColors.warning
-        case .offline:
+        case .offline, .authFailed:
             OpenCodeColors.error
         }
     }
+}
+
+#Preview("Connection status") {
+    VStack(alignment: .leading, spacing: 8) {
+        ForEach(OpenCodeSessionConnectionStatus.allCases, id: \.self) { status in
+            OpenCodeConnectionStatusLabel(status: status)
+        }
+    }
+    .padding(16)
+    .openCodeTheme()
 }

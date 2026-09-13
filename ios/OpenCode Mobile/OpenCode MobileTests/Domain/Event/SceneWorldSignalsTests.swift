@@ -73,7 +73,7 @@ struct SceneWorldSignalsTests {
         signals.onProfileSwitched()
         try? await Task.sleep(for: .milliseconds(20))
         #expect(stream.connectionState == .connected)
-        #expect(stream.ops == ["start", "stop", "start"])
+        #expect(stream.ops == ["wake", "start", "stop", "start"])
     }
 
     @Test func occupancyTracksForegroundGraceAndStop() async {
@@ -92,15 +92,65 @@ struct SceneWorldSignalsTests {
         #expect(stream.connectionState == .connected)
     }
 
+    @Test func inactiveLongerThanGraceStartsBackgroundGrace() async {
+        let stream = FakeForegroundEventStream()
+        let signals = sceneWorldSignals(
+            stream: stream,
+            stopGrace: .milliseconds(80),
+            inactiveGrace: .milliseconds(40)
+        )
+        signals.onForeground()
+        signals.onInactive()
+        try? await Task.sleep(for: .milliseconds(20))
+        #expect(signals.occupancy == .active)
+        let graced = await waitUntil { signals.occupancy == .grace }
+        #expect(graced)
+        let stopped = await waitUntil { signals.occupancy == .stopped }
+        #expect(stopped)
+        #expect(stream.connectionState == .idle)
+    }
+
+    @Test func activeBeforeInactiveGraceCancelsBackground() async {
+        let stream = FakeForegroundEventStream()
+        let signals = sceneWorldSignals(
+            stream: stream,
+            stopGrace: .milliseconds(80),
+            inactiveGrace: .milliseconds(80)
+        )
+        signals.onForeground()
+        signals.onInactive()
+        try? await Task.sleep(for: .milliseconds(20))
+        signals.onForeground()
+        try? await Task.sleep(for: .milliseconds(120))
+        #expect(signals.occupancy == .active)
+        #expect(stream.connectionState == .connected)
+    }
+
+    @Test func foregroundAndPathReadyWakeTheStream() async {
+        let stream = RecordingForegroundEventStream()
+        let signals = SceneWorldSignals(
+            stream: stream,
+            deviceNetworkPath: ReadyDeviceNetworkPath(),
+            hasActiveConnection: { true },
+            stopGrace: .milliseconds(50)
+        )
+        signals.onForeground()
+        signals.onPathReady()
+        try? await Task.sleep(for: .milliseconds(20))
+        #expect(stream.ops.filter { $0 == "wake" }.count == 2)
+    }
+
     private func sceneWorldSignals(
         stream: FakeForegroundEventStream,
-        stopGrace: Duration
+        stopGrace: Duration,
+        inactiveGrace: Duration = .milliseconds(2_000)
     ) -> SceneWorldSignals {
         SceneWorldSignals(
             stream: stream,
             deviceNetworkPath: ReadyDeviceNetworkPath(),
             hasActiveConnection: { true },
-            stopGrace: stopGrace
+            stopGrace: stopGrace,
+            inactiveGrace: inactiveGrace
         )
     }
 

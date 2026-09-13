@@ -499,6 +499,7 @@ enum class SessionConnectionStatus(
     Live("live"),
     Connecting("connecting"),
     Offline("offline"),
+    AuthFailed("Authentication failed"),
 }
 
 fun LiveUpdatesLabel.toSessionConnectionStatus(): SessionConnectionStatus =
@@ -506,6 +507,7 @@ fun LiveUpdatesLabel.toSessionConnectionStatus(): SessionConnectionStatus =
         LiveUpdatesLabel.Live -> SessionConnectionStatus.Live
         LiveUpdatesLabel.Connecting -> SessionConnectionStatus.Connecting
         LiveUpdatesLabel.Offline -> SessionConnectionStatus.Offline
+        LiveUpdatesLabel.AuthFailed -> SessionConnectionStatus.AuthFailed
     }
 
 enum class SessionChatTimelineState {

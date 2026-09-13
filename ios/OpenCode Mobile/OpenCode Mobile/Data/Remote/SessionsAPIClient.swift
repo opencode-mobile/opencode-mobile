@@ -14,7 +14,7 @@ nonisolated struct SessionsAPIClient: Sendable {
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession = .shared
+        urlSession: URLSession = OpenCodeURLSessions.rest
     ) {
         self.connectionProvider = connectionProvider
         self.urlSession = urlSession
@@ -163,7 +163,7 @@ nonisolated struct SessionsAPIClient: Sendable {
         var request = try requireConnection().authorizedRequest(path: "session/\(id)/summarize", method: "POST", directory: directory)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
-        // Compaction can run longer than URLSession.shared's 60s default.
+        // Compaction can run longer than OpenCodeURLSessions.rest's 15s request timeout.
         request.timeoutInterval = .infinity
         let data = try await data(for: request)
         if let value = try? decoder.decode(Bool.self, from: data) {

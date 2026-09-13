@@ -27,6 +27,7 @@ enum class OpenCodeSessionConnectionStatus(
     Live("live"),
     Connecting("connecting"),
     Offline("offline"),
+    AuthFailed("Authentication failed"),
 }
 
 @Composable
@@ -63,5 +64,7 @@ internal fun OpenCodeSessionConnectionStatus.dotColor(): Color =
     when (this) {
         OpenCodeSessionConnectionStatus.Live -> openCodeColor("success")
         OpenCodeSessionConnectionStatus.Connecting -> openCodeColor("warning")
-        OpenCodeSessionConnectionStatus.Offline -> openCodeColor("error")
+        OpenCodeSessionConnectionStatus.Offline,
+        OpenCodeSessionConnectionStatus.AuthFailed,
+        -> openCodeColor("error")
     }

@@ -29,16 +29,14 @@ class EventsApi private constructor(
         onHTTPResponse: suspend (Int) -> Unit = {},
         onActivity: suspend () -> Unit = {},
         onDataLine: suspend (String) -> Unit,
-    ) {
-        val path = if (protocol == ServerProtocol.V2) "api/event" else "global/event"
+    ): SseAttemptOutcome =
         streamEvents(
-            path = path,
+            path = if (protocol == ServerProtocol.V2) "api/event" else "global/event",
             directory = null,
             onHTTPResponse = onHTTPResponse,
             onActivity = onActivity,
             onDataLine = onDataLine,
         )
-    }
 
     suspend fun streamEvents(
         path: String,
@@ -46,7 +44,7 @@ class EventsApi private constructor(
         onHTTPResponse: suspend (Int) -> Unit = {},
         onActivity: suspend () -> Unit = {},
         onDataLine: suspend (String) -> Unit,
-    ) {
+    ): SseAttemptOutcome =
         try {
             httpClient
                 .get()
@@ -56,17 +54,16 @@ class EventsApi private constructor(
                     header(HttpHeaders.AcceptEncoding, "identity")
                     applyDirectory(directory)
                 }.execute { response ->
-                    if (response.status.value !in 200..299) {
-                        throw IllegalStateException("SSE HTTP ${response.status.value}")
+                    val statusCode = response.status.value
+                    onHTTPResponse(statusCode)
+                    if (statusCode !in 200..299) {
+                        return@execute SseAttemptOutcome.Http(statusCode)
                     }
-                    onHTTPResponse(response.status.value)
                     val channel = response.bodyAsChannel()
                     val parser = SseDataLineParser()
                     try {
                         while (!channel.isClosedForRead) {
                             val line = channel.readUTF8Line() ?: break
-                            // Comments, id/event fields, and incomplete data still prove the
-                            // socket is alive. TUI keeps the iterator open on those frames.
                             onActivity()
                             for (payload in parser.ingest(line)) {
                                 onDataLine(payload)
@@ -75,17 +72,16 @@ class EventsApi private constructor(
                         for (payload in parser.finish()) {
                             onDataLine(payload)
                         }
+                        SseAttemptOutcome.Ended
                     } catch (error: CancellationException) {
                         throw error
-                    } catch (_: Exception) {
-                        // Socket abort, closed engine, or chunked-read EOF: the lease
-                        // loop retries. Do not let OkHttp/Ktor IO kill the occupancy job.
+                    } catch (error: Exception) {
+                        SseAttemptOutcome.Transport(error)
                     }
                 }
         } catch (error: CancellationException) {
             throw error
-        } catch (_: Exception) {
-            // Connect/reset before the read loop: the lease loop retries.
+        } catch (error: Exception) {
+            SseAttemptOutcome.Transport(error)
         }
-    }
 }

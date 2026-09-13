@@ -108,6 +108,7 @@ private final class TransportHost: @unchecked Sendable {
             profileID: { profileID.value },
             connectionIdentity: { connectionIdentity.value },
             protocolHint: { connectionBox.value.serverProtocol ?? .v1 },
+            cachedProtocol: { connectionBox.value.serverProtocol },
             protocolProbe: { connectionBox.value.serverProtocol ?? .v1 }
         )
         self.revisions = revisions

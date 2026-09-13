@@ -898,6 +898,8 @@ private extension EventStreamConnectionState {
             .live
         case .connecting, .reconnecting:
             .connecting
+        case .authFailed:
+            .authFailed
         case .idle, .disconnected:
             .offline
         }

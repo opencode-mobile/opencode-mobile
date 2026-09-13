@@ -621,6 +621,7 @@ enum SessionConnectionStatus: String, Equatable, Sendable {
     case live
     case connecting
     case offline
+    case authFailed
 
     init(label: LiveUpdatesLabel) {
         switch label {
@@ -630,6 +631,8 @@ enum SessionConnectionStatus: String, Equatable, Sendable {
             self = .connecting
         case .offline:
             self = .offline
+        case .authFailed:
+            self = .authFailed
         }
     }
 
@@ -641,6 +644,8 @@ enum SessionConnectionStatus: String, Equatable, Sendable {
             .connecting
         case .offline:
             .offline
+        case .authFailed:
+            .authFailed
         }
     }
 }

@@ -2778,6 +2778,7 @@ class SessionChatViewModelTest {
             assertEquals(SessionConnectionStatus.Live, LiveUpdatesLabel.Live.toSessionConnectionStatus())
             assertEquals(SessionConnectionStatus.Connecting, LiveUpdatesLabel.Connecting.toSessionConnectionStatus())
             assertEquals(SessionConnectionStatus.Offline, LiveUpdatesLabel.Offline.toSessionConnectionStatus())
+            assertEquals(SessionConnectionStatus.AuthFailed, LiveUpdatesLabel.AuthFailed.toSessionConnectionStatus())
         }
 
     @Test

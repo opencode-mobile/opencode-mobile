@@ -11,6 +11,7 @@ enum class LiveUpdatesLabel(
     Live("live"),
     Connecting("connecting"),
     Offline("offline"),
+    AuthFailed("Authentication failed"),
 }
 
 data class LiveUpdatesChrome(
@@ -49,11 +50,18 @@ fun composeLiveUpdates(
             occupancy != StreamOccupancy.Stopped
     val label =
         when {
+            connectionState == EventStreamConnectionState.AuthFailed -> LiveUpdatesLabel.AuthFailed
             !hasConnection -> LiveUpdatesLabel.Offline
             path == DeviceNetworkPathStatus.Unavailable -> LiveUpdatesLabel.Offline
             occupancy == StreamOccupancy.Stopped -> LiveUpdatesLabel.Offline
             connectionState == EventStreamConnectionState.Connected -> LiveUpdatesLabel.Live
             else -> LiveUpdatesLabel.Connecting
         }
-    return LiveUpdatesChrome(label = label, canMutate = canMutate)
+    val effectiveCanMutate =
+        if (connectionState == EventStreamConnectionState.AuthFailed) {
+            false
+        } else {
+            canMutate
+        }
+    return LiveUpdatesChrome(label = label, canMutate = effectiveCanMutate)
 }

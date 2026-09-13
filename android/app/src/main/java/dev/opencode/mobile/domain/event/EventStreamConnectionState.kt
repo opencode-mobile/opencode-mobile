@@ -6,4 +6,5 @@ enum class EventStreamConnectionState {
     Connected,
     Disconnected,
     Reconnecting,
+    AuthFailed,
 }

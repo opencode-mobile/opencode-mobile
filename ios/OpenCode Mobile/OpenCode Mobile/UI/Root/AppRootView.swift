@@ -120,7 +120,7 @@ struct AppRootView: View {
             case .background:
                 world.onBackground()
             case .inactive:
-                break
+                world.onInactive()
             @unknown default:
                 break
             }
