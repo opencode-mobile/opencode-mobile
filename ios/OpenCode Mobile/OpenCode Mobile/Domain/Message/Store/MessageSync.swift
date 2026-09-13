@@ -491,6 +491,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         }
 
         @Sendable func loadTail() async throws {
+            let generation = syncCoordinator.profileGeneration
             staging.beginAuthorityWindow()
             do {
                 let fingerprintBeforeReload = fingerprint(for: key.storeSlot)
@@ -502,6 +503,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     directory: key.directory.isEmpty ? nil : key.directory,
                     reason: StoreRefreshReason.initialSubscribe
                 )
+                guard syncCoordinator.profileGeneration == generation else {
+                    _ = staging.completeAuthorityWindow(.accepted)
+                    return
+                }
                 rememberTailWindow(page, for: key.storeSlot)
                 SessionPerformanceProbe.emit("history_request_finished")
                 await applyQueuedIncrementalEvents(
@@ -509,6 +514,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     key: key,
                     publishMessages: { publishMessages($0, false) }
                 )
+                guard syncCoordinator.profileGeneration == generation else {
+                    _ = staging.completeAuthorityWindow(.accepted)
+                    return
+                }
                 let overflowed = staging.needsAuthoritativeRecovery
                 if overflowed {
                     OpenCodeLog.messageContent.info(

@@ -28,4 +28,9 @@ interface SyncCoordinator {
         key: ProjectionKey,
         visible: Boolean,
     )
+
+    fun beginProfileSwitch(generation: Long) = Unit
+
+    val profileGeneration: Long
+        get() = 0
 }

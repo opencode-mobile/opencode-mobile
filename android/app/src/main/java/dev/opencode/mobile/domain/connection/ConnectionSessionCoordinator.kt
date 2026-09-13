@@ -2,16 +2,39 @@ package dev.opencode.mobile.domain.connection
 
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.StreamOccupancy
+import dev.opencode.mobile.domain.event.WorldSignal
+import dev.opencode.mobile.domain.event.WorldSignals
+import dev.opencode.mobile.domain.live.ProjectionCaches
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.sync.SyncCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.yield
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
+
+sealed class ProfileChange {
+    data class Switch(
+        val id: String,
+    ) : ProfileChange()
+
+    data class Saved(
+        val profile: ConnectionProfile,
+    ) : ProfileChange()
+
+    data class Removed(
+        val id: String,
+    ) : ProfileChange()
+
+    data object Cleared : ProfileChange()
+}
 
 @Singleton
 class ConnectionSessionCoordinator
@@ -25,7 +48,16 @@ class ConnectionSessionCoordinator
         private val httpClient: OpencodeHttpClient,
         private val sseHttpClient: OpencodeSseHttpClient,
         private val eventStream: ForegroundEventStream,
+        private val syncCoordinator: SyncCoordinator,
+        private val worldSignals: WorldSignals,
+        private val projectionCaches: ProjectionCaches,
     ) {
+        private val mutex = Mutex()
+        private val switchGeneration = AtomicLong(0)
+
+        val profileGeneration: Long
+            get() = switchGeneration.get()
+
         private val profileSavedEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         val profileSaved: SharedFlow<Unit> = profileSavedEvents.asSharedFlow()
 
@@ -36,61 +68,89 @@ class ConnectionSessionCoordinator
 
         suspend fun listProfiles(): List<ConnectionProfile> = connectionProfileStore.listProfiles()
 
+        fun bindActiveProfile() {
+            projectionCaches.bindProfile(activeConnectionManager.currentProfile()?.id)
+        }
+
         suspend fun saveProfile(
             profile: ConnectionProfile,
             serverProtocol: ServerProtocol? = null,
         ) {
             val stamped = profile.copy(serverProtocol = serverProtocol ?: profile.serverProtocol)
-            val wasNew = stamped.id.isBlank()
-            connectionProfileStore.saveProfile(stamped)
-            val active = connectionProfileStore.activeProfile()
-            val savedIsActive = wasNew || (stamped.id.isNotBlank() && active?.id == stamped.id)
-            if (savedIsActive) {
-                rebindActive()
-                profileSavedEvents.emit(Unit)
+            mutex.withLock {
+                val wasNew = stamped.id.isBlank()
+                connectionProfileStore.saveProfile(stamped)
+                val active = connectionProfileStore.activeProfile()
+                val savedIsActive = wasNew || (stamped.id.isNotBlank() && active?.id == stamped.id)
+                if (savedIsActive) {
+                    applyProfileChangeLocked(ProfileChange.Saved(stamped))
+                }
             }
         }
 
         suspend fun switchProfile(id: String) {
-            connectionProfileStore.applyProfile(id)
-            rebindActive()
-            profileSavedEvents.emit(Unit)
+            mutex.withLock {
+                applyProfileChangeLocked(ProfileChange.Switch(id))
+            }
         }
 
         suspend fun removeProfile(id: String) {
-            connectionProfileStore.removeProfile(id)
-            if (connectionProfileStore.activeProfile() == null) {
-                activeConnectionManager.disconnect()
-                rebuildClients()
-                profileClearedEvents.tryEmit(Unit)
-            } else {
-                rebindActive()
-                profileSavedEvents.emit(Unit)
+            mutex.withLock {
+                applyProfileChangeLocked(ProfileChange.Removed(id))
             }
         }
 
         suspend fun clearConnectionData() {
-            secureCredentialStore.clearAll()
-            connectionProfileStore.clearAll()
-            sessionModelSelectionStore.clearAll()
-            composerDraftStore.clearAll()
-            activeConnectionManager.disconnect()
-            rebuildClients()
-            profileClearedEvents.tryEmit(Unit)
+            mutex.withLock {
+                applyProfileChangeLocked(ProfileChange.Cleared)
+            }
         }
 
-        private suspend fun rebindActive() {
+        private suspend fun applyProfileChangeLocked(target: ProfileChange) {
+            val generation = switchGeneration.incrementAndGet()
             eventStream.stop()
-            yield()
-            activeConnectionManager.reloadFromStore()
+            syncCoordinator.beginProfileSwitch(generation)
+            when (target) {
+                is ProfileChange.Switch -> connectionProfileStore.applyProfile(target.id)
+                is ProfileChange.Saved -> Unit
+                is ProfileChange.Removed -> connectionProfileStore.removeProfile(target.id)
+                is ProfileChange.Cleared -> {
+                    secureCredentialStore.clearAll()
+                    connectionProfileStore.clearAll()
+                    sessionModelSelectionStore.clearAll()
+                    composerDraftStore.clearAll()
+                }
+            }
+            val active =
+                if (target is ProfileChange.Cleared) {
+                    null
+                } else {
+                    connectionProfileStore.activeProfile()
+                }
+            if (active == null) {
+                projectionCaches.clearAll()
+            } else {
+                projectionCaches.clearLiveProjections()
+            }
+            projectionCaches.bindProfile(active?.id)
+            if (active == null) {
+                activeConnectionManager.disconnect()
+            } else {
+                activeConnectionManager.reloadFromStore()
+            }
             httpClient.rebuild()
             sseHttpClient.rebuild()
-        }
-
-        private suspend fun rebuildClients() {
-            eventStream.stop()
-            yield()
-            httpClient.rebuild()
-            sseHttpClient.rebuild()
+            worldSignals.emit(WorldSignal.ProfileSwitched)
+            if (
+                worldSignals.occupancy.value != StreamOccupancy.Stopped &&
+                activeConnectionManager.current() != null
+            ) {
+                eventStream.start()
+            }
+            if (active == null) {
+                profileClearedEvents.emit(Unit)
+            } else {
+                profileSavedEvents.emit(Unit)
+            }
         }
     }

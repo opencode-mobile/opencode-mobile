@@ -9,15 +9,23 @@ data class LiveConnectionConfig(
     val connectionIdentity: String,
     val protocol: ServerProtocol,
     val directories: List<String>,
+    val credentialFingerprint: String = "",
 ) {
     data class Identity(
         val profileId: String,
         val connectionIdentity: String,
         val protocol: ServerProtocol,
+        val credentialFingerprint: String = "",
     )
 
     val identity: Identity
-        get() = Identity(profileId, connectionIdentity, protocol)
+        get() =
+            Identity(
+                profileId = profileId,
+                connectionIdentity = connectionIdentity,
+                protocol = protocol,
+                credentialFingerprint = credentialFingerprint,
+            )
 }
 
 data class LiveConnectionSnapshot(

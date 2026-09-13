@@ -24,7 +24,7 @@ struct DefaultForegroundEventStreamTests {
         await Task.yield()
         harness.stream.start()
         let becameConnected = await waitUntil(timeoutMs: 2_000) { states.contains(.connected) }
-        harness.stream.stop()
+        await harness.stream.stop()
         stateTask.cancel()
 
         #expect(becameConnected)
@@ -43,7 +43,7 @@ struct DefaultForegroundEventStreamTests {
         }
         harness.stream.start()
         try? await Task.sleep(for: .milliseconds(200))
-        harness.stream.stop()
+        await harness.stream.stop()
         stateTask.cancel()
         #expect(!states.contains(.connected))
     }
@@ -68,7 +68,7 @@ struct DefaultForegroundEventStreamTests {
         let receivedMessage = await waitUntil(timeoutMs: 2_000) {
             states.contains(.connected) && events.contains { $0.type == "message.updated" && $0.sessionID == "ses-1" }
         }
-        harness.stream.stop()
+        await harness.stream.stop()
         stateTask.cancel()
         eventTask.cancel()
 
@@ -90,7 +90,7 @@ struct DefaultForegroundEventStreamTests {
         await Task.yield()
         harness.stream.start()
         let becameConnected = await waitUntil(timeoutMs: 2_000) { states.contains(.connected) }
-        harness.stream.stop()
+        await harness.stream.stop()
         stateTask.cancel()
         await hold.release()
         #expect(becameConnected)
@@ -108,7 +108,7 @@ struct DefaultForegroundEventStreamTests {
         let failed = await waitUntil(timeoutMs: 2_000) { states.contains(.authFailed) }
         try? await Task.sleep(for: .milliseconds(250))
         let requestCount = MockForegroundSSEURLProtocol.requestCount(streamID: harness.streamID)
-        harness.stream.stop()
+        await harness.stream.stop()
         stateTask.cancel()
         #expect(failed)
         #expect(requestCount == 1)
@@ -124,7 +124,7 @@ struct DefaultForegroundEventStreamTests {
         let retried = await waitUntil(timeoutMs: 2_500) {
             MockForegroundSSEURLProtocol.requestCount(streamID: harness.streamID) >= 2
         }
-        harness.stream.stop()
+        await harness.stream.stop()
         #expect(retried)
     }
 
@@ -142,7 +142,7 @@ struct DefaultForegroundEventStreamTests {
         }
         harness.stream.start()
         try? await Task.sleep(for: .milliseconds(180))
-        harness.stream.stop()
+        await harness.stream.stop()
         stateTask.cancel()
         #expect(!states.contains(.connected))
         #expect(MockForegroundSSEURLProtocol.requestCount(streamID: harness.streamID) >= 1)
@@ -159,7 +159,7 @@ struct DefaultForegroundEventStreamTests {
         let second = await waitUntil(timeoutMs: 400) {
             MockForegroundSSEURLProtocol.requestCount(streamID: harness.streamID) >= 2
         }
-        harness.stream.stop()
+        await harness.stream.stop()
         #expect(second)
     }
 
@@ -182,7 +182,7 @@ struct DefaultForegroundEventStreamTests {
         let openedV2 = await waitUntil(timeoutMs: 2_000) {
             MockForegroundSSEURLProtocol.paths(streamID: harness.streamID).contains { $0.hasSuffix("/api/event") }
         }
-        harness.stream.stop()
+        await harness.stream.stop()
         #expect(openedV2)
         #expect(
             MockForegroundSSEURLProtocol.paths(streamID: harness.streamID)
@@ -206,12 +206,44 @@ struct DefaultForegroundEventStreamTests {
         let opened = await waitUntil(timeoutMs: 2_000) {
             MockForegroundSSEURLProtocol.paths(streamID: harness.streamID).contains { $0.hasSuffix("/api/event") }
         }
-        harness.stream.stop()
+        await harness.stream.stop()
         #expect(opened)
         #expect(
             MockForegroundSSEURLProtocol.paths(streamID: harness.streamID)
                 .contains { $0.contains("/global/event") } == false
         )
+    }
+
+    @Test func passwordChangeAfterAuthFailedRestartsToLive() async {
+        let fingerprint = LockedBox("old-fingerprint")
+        let harness = makeStream(
+            responses: [""],
+            statusCode: 401,
+            credentialFingerprint: { fingerprint.value }
+        )
+        var states: [EventStreamConnectionState] = []
+        let stateTask = Task { @MainActor in
+            for await state in harness.stream.connectionStateUpdates() {
+                states.append(state)
+            }
+        }
+        harness.stream.start()
+        let failed = await waitUntil(timeoutMs: 2_000) { states.contains(.authFailed) }
+        #expect(failed)
+        await harness.stream.stop()
+        fingerprint.value = "new-fingerprint"
+        MockForegroundSSEURLProtocol.register(
+            streamID: harness.streamID,
+            responses: [Data(Self.connectedFrame.utf8)],
+            statusCode: 200,
+            holdOpen: false
+        )
+        harness.stream.start()
+        let live = await waitUntil(timeoutMs: 2_000) { states.contains(.connecting) && states.contains(.connected) }
+        await harness.stream.stop()
+        stateTask.cancel()
+        #expect(live)
+        #expect(states.last == .idle || states.contains(.connected))
     }
 
     private struct StreamHarness {
@@ -231,7 +263,8 @@ struct DefaultForegroundEventStreamTests {
         cachedProtocol: (@Sendable () -> ServerProtocol?)? = nil,
         protocolProbe: (@Sendable () async -> ServerProtocol)? = nil,
         profileID: (@Sendable () async -> String)? = nil,
-        connectionIdentity: (@Sendable () async -> String)? = nil
+        connectionIdentity: (@Sendable () async -> String)? = nil,
+        credentialFingerprint: (@Sendable () async -> String)? = nil
     ) -> StreamHarness {
         let streamID = UUID().uuidString
         let configuration = URLSessionConfiguration.ephemeral
@@ -257,6 +290,7 @@ struct DefaultForegroundEventStreamTests {
             configurationRevisions: configurationRevisions ?? { AsyncStream { $0.finish() } },
             profileID: profileID ?? { "" },
             connectionIdentity: connectionIdentity,
+            credentialFingerprint: credentialFingerprint,
             protocolHint: protocolHint,
             cachedProtocol: cachedProtocol,
             protocolProbe: protocolProbe
@@ -290,16 +324,24 @@ private final class ProbeGate: @unchecked Sendable {
     }
 
     func wait() async {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            lock.lock()
-            entered = true
-            if released {
-                lock.unlock()
-                continuation.resume()
-            } else {
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                lock.lock()
+                entered = true
+                if released || Task.isCancelled {
+                    lock.unlock()
+                    continuation.resume()
+                    return
+                }
                 self.continuation = continuation
                 lock.unlock()
             }
+        } onCancel: {
+            lock.lock()
+            let continuation = self.continuation
+            self.continuation = nil
+            lock.unlock()
+            continuation?.resume()
         }
     }
 
@@ -353,10 +395,23 @@ private final class HoldingDirectories: @unchecked Sendable {
         let count = resolves
         lock.unlock()
         if count == 1 {
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            await withTaskCancellationHandler {
+                await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                    lock.lock()
+                    if Task.isCancelled {
+                        lock.unlock()
+                        continuation.resume()
+                        return
+                    }
+                    holdContinuation = continuation
+                    lock.unlock()
+                }
+            } onCancel: {
                 lock.lock()
-                holdContinuation = continuation
+                let continuation = holdContinuation
+                holdContinuation = nil
                 lock.unlock()
+                continuation?.resume()
             }
             return initial
         }
@@ -444,5 +499,7 @@ private final class MockForegroundSSEURLProtocol: URLProtocol {
         }
     }
 
-    override func stopLoading() {}
+    override func stopLoading() {
+        client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+    }
 }

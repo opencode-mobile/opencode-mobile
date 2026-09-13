@@ -93,11 +93,13 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
         let lastEmitted = PermissionEmitCache()
 
         @Sendable func loadAndCommit() async throws {
+            let generation = syncCoordinator.profileGeneration
             let outcome = await gate.refresh(
                 load: { () async -> [PermissionRequest]? in
                     try? await sessionRepository.listPendingPermissions(directory: directory)
                 },
                 commit: { requests in
+                    guard syncCoordinator.profileGeneration == generation else { return }
                     DiagnosticLog.info(.permission, "permission refresh count=\(requests.count)")
                     guard lastEmitted.shouldEmit(requests) else {
                         DiagnosticLog.info(.permission, "permission emit skip cause=unchanged")

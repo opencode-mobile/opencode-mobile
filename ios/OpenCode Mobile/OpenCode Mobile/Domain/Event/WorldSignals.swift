@@ -20,10 +20,12 @@ nonisolated protocol WorldSignals: AnyObject, Sendable {
     func occupancyUpdates() -> AsyncStream<StreamOccupancy>
     func signals() -> AsyncStream<WorldSignal>
     func register()
+    func emitProfileSwitched()
 }
 
 extension WorldSignals {
     nonisolated func register() {}
+    nonisolated func emitProfileSwitched() {}
 }
 
 nonisolated final class SilentWorldSignals: WorldSignals, @unchecked Sendable {
@@ -126,6 +128,10 @@ nonisolated final class FakeWorldSignals: WorldSignals, @unchecked Sendable {
         for continuation in occupancySubscribers {
             continuation.yield(occupancy)
         }
+    }
+
+    func emitProfileSwitched() {
+        emit(.profileSwitched)
     }
 
     func emit(_ signal: WorldSignal) {

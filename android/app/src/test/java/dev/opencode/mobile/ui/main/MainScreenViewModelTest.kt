@@ -2,8 +2,8 @@ package dev.opencode.mobile.ui.main
 
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
-import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
+import dev.opencode.mobile.domain.connection.testConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
@@ -1042,7 +1042,7 @@ class MainScreenViewModelTest {
             )
         }
         val coordinator =
-            ConnectionSessionCoordinator(
+            testConnectionSessionCoordinator(
                 activeConnectionManager = activeConnectionManager,
                 connectionProfileStore = connectionProfileStore,
                 secureCredentialStore = FakeSecureCredentialStore(),

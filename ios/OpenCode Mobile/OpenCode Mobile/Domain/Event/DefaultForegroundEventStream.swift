@@ -28,6 +28,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private let configurationRevisions: @Sendable () -> AsyncStream<Void>
     private let profileID: @Sendable () async -> String
     private let connectionIdentity: @Sendable () async -> String
+    private let credentialFingerprint: @Sendable () async -> String
     private let protocolHint: @Sendable () -> ServerProtocol
     private let cachedProtocol: @Sendable () -> ServerProtocol?
     private let protocolProbe: (@Sendable () async -> ServerProtocol)?
@@ -67,6 +68,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         connectionEpoch: ConnectionEpoch = .shared,
         profileID: @escaping @Sendable () async -> String = { "" },
         connectionIdentity: (@Sendable () async -> String)? = nil,
+        credentialFingerprint: (@Sendable () async -> String)? = nil,
         protocolHint: (@Sendable () -> ServerProtocol)? = nil,
         cachedProtocol: (@Sendable () -> ServerProtocol?)? = nil,
         protocolProbe: (@Sendable () async -> ServerProtocol)? = nil
@@ -81,6 +83,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         self.connectionEpoch = connectionEpoch
         self.profileID = profileID
         self.connectionIdentity = connectionIdentity ?? profileID
+        self.credentialFingerprint = credentialFingerprint ?? { "" }
         self.protocolHint = protocolHint ?? { api.eventProtocol }
         self.cachedProtocol = cachedProtocol ?? { nil }
         self.protocolProbe = protocolProbe
@@ -171,7 +174,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         _ = connectionEpoch.bump()
     }
 
-    func stop() {
+    func stop() async {
         lock.lock()
         let hadTask = occupancyTask != nil
         let state = _connectionState
@@ -180,16 +183,19 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         inFlightStartApplies = 0
         streamGeneration += 1
         let generation = streamGeneration
-        occupancyTask?.cancel()
+        let occupancy = occupancyTask
         occupancyTask = nil
-        revisionTask?.cancel()
+        occupancy?.cancel()
+        let revision = revisionTask
         revisionTask = nil
-        protocolProbeTask?.cancel()
+        revision?.cancel()
+        let probe = protocolProbeTask
         protocolProbeTask = nil
+        probe?.cancel()
         pendingStartConfig = nil
         authTerminal = false
         protocolConfirmed = false
-        cancelAllLeasesLocked()
+        let leaseWork = cancelAllLeasesLocked()
         eventIngress.reset()
         appliedConfig = nil
         overall = LiveOverallFlags(wasFullyConnected: wasFullyConnected)
@@ -197,8 +203,59 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         if hadTask || state != .idle {
             DiagnosticLog.info(.sse, "foreground SSE stream stopping")
         }
+        occupancy?.cancel()
+        revision?.cancel()
+        probe?.cancel()
+        if let occupancy {
+            await Self.joinWithTimeout(occupancy)
+        }
+        if let revision {
+            await Self.joinWithTimeout(revision)
+        }
+        if let probe {
+            await Self.joinWithTimeout(probe)
+        }
+        for loop in leaseWork.loops {
+            await Self.joinWithTimeout(loop)
+        }
+        for stream in leaseWork.streams {
+            await Self.joinWithTimeout(stream)
+        }
         applyConnectionState(.idle, generation: generation)
         publishSnapshot()
+    }
+
+    /// Race-join a cancelled task. `TaskGroup` cannot be used here: it waits for
+    /// every child, so a non-cooperative `await task.result` would ignore the
+    /// timeout sibling and hang `stop()`.
+    private static func joinWithTimeout<Success, Failure: Error>(
+        _ task: Task<Success, Failure>,
+        timeout: Duration = .milliseconds(1_500)
+    ) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let once = ResumeOnce()
+            Task {
+                _ = await task.result
+                once.resume(continuation)
+            }
+            Task {
+                try? await Task.sleep(for: timeout)
+                once.resume(continuation)
+            }
+        }
+    }
+
+    private final class ResumeOnce: @unchecked Sendable {
+        private let lock = NSLock()
+        private var resumed = false
+
+        func resume(_ continuation: CheckedContinuation<Void, Never>) {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !resumed else { return }
+            resumed = true
+            continuation.resume()
+        }
     }
 
     func onReconnectWake() {
@@ -352,14 +409,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         lock.lock()
         protocolConfirmed = true
         lock.unlock()
-        retargetIdentity(
-            LiveConnectionConfig(
-                profileID: applied.profileID,
-                connectionIdentity: applied.connectionIdentity,
-                serverProtocol: resolved,
-                directories: applied.directories
-            )
-        )
+        retargetIdentity(applied.with(serverProtocol: resolved))
     }
 
     private func resolveProtocolBeforeLeases(_ config: LiveConnectionConfig) async -> LiveConnectionConfig {
@@ -367,12 +417,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             lock.lock()
             protocolConfirmed = true
             lock.unlock()
-            return LiveConnectionConfig(
-                profileID: config.profileID,
-                connectionIdentity: config.connectionIdentity,
-                serverProtocol: cached,
-                directories: config.directories
-            )
+            return config.with(serverProtocol: cached)
         }
         guard let protocolProbe else { return config }
         let resolved = await protocolProbe()
@@ -381,12 +426,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             protocolConfirmed = true
             lock.unlock()
         }
-        return LiveConnectionConfig(
-            profileID: config.profileID,
-            connectionIdentity: config.connectionIdentity,
-            serverProtocol: resolved,
-            directories: config.directories
-        )
+        return config.with(serverProtocol: resolved)
     }
 
     private func onConfigurationRevision(generation: UInt64) async {
@@ -811,10 +851,12 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         let profile = await profileID()
         let identity = await connectionIdentity()
         let serverProtocol = currentServerProtocol()
+        let fingerprint = await credentialFingerprint()
         let key = LiveConnectionConfig.Identity(
             profileID: profile,
             connectionIdentity: identity,
-            serverProtocol: serverProtocol
+            serverProtocol: serverProtocol,
+            credentialFingerprint: fingerprint
         )
         lock.lock()
         let directories = lastDirectoriesByIdentity[key] ?? []
@@ -823,7 +865,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             profileID: profile,
             connectionIdentity: identity,
             serverProtocol: serverProtocol,
-            directories: directories
+            directories: directories,
+            credentialFingerprint: fingerprint
         )
     }
 
@@ -849,12 +892,14 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         let directories = await instanceDirectories()
         let profile = await profileID()
         let identity = await connectionIdentity()
+        let fingerprint = await credentialFingerprint()
         let serverProtocol = currentServerProtocol()
         return LiveConnectionConfig(
             profileID: profile,
             connectionIdentity: identity,
             serverProtocol: serverProtocol,
-            directories: directories
+            directories: directories,
+            credentialFingerprint: fingerprint
         )
     }
 
@@ -907,9 +952,22 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         return protocolConfirmed
     }
 
-    private func cancelAllLeasesLocked() {
-        leases.values.forEach { $0.cancel() }
+    @discardableResult
+    private func cancelAllLeasesLocked() -> CancelledLeaseWork {
+        var loops: [Task<Void, Never>] = []
+        var streams: [Task<SseAttemptOutcome, any Error>] = []
+        for lease in leases.values {
+            let taken = lease.cancel()
+            if let loop = taken.loop { loops.append(loop) }
+            if let stream = taken.stream { streams.append(stream) }
+        }
         leases.removeAll()
+        return CancelledLeaseWork(loops: loops, streams: streams)
+    }
+
+    private struct CancelledLeaseWork {
+        let loops: [Task<Void, Never>]
+        let streams: [Task<SseAttemptOutcome, any Error>]
     }
 
     private final class Lease: @unchecked Sendable {
@@ -951,12 +1009,16 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             liveLock.unlock()
         }
 
-        func cancel() {
+        @discardableResult
+        func cancel() -> (loop: Task<Void, Never>?, stream: Task<SseAttemptOutcome, any Error>?) {
             setLive(false)
-            streamTask?.cancel()
-            loopTask?.cancel()
-            streamTask = nil
+            let loop = loopTask
+            let stream = streamTask
+            loop?.cancel()
+            stream?.cancel()
             loopTask = nil
+            streamTask = nil
+            return (loop, stream)
         }
     }
 

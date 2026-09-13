@@ -41,10 +41,10 @@ final class RecordingForegroundEventStream: LiveConnection, @unchecked Sendable 
         fake.onReconnectWake()
     }
 
-    func stop() {
+    func stop() async {
         lock.lock()
         _ops.append("stop")
         lock.unlock()
-        fake.stop()
+        await fake.stop()
     }
 }

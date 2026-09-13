@@ -132,31 +132,16 @@ class MainScreenViewModel
         private var forkDraftEditReported = false
 
         init {
-            sessionReadyStore.bindProfile(connectionSessionCoordinator.currentProfile()?.id)
             refresh()
             viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
                     stopLiveObservations()
-                    sessionReadyStore.bindProfile(connectionSessionCoordinator.currentProfile()?.id)
-                    sessionLiveStore.clearCache()
-                    sessionStatusLiveStore.clearCache()
-                    permissionLiveStore.clearCache()
-                    questionLiveStore.clearCache()
-                    sessionTodoLiveStore.clearCache()
-                    messageRepository.clearMessageCache()
                     refresh()
                 }
             }
             viewModelScope.launch {
                 connectionSessionCoordinator.profileCleared.collect {
                     stopLiveObservations()
-                    sessionReadyStore.bindProfile(null)
-                    sessionLiveStore.clearCache()
-                    sessionStatusLiveStore.clearCache()
-                    permissionLiveStore.clearCache()
-                    questionLiveStore.clearCache()
-                    sessionTodoLiveStore.clearCache()
-                    messageRepository.clearMessageCache()
                     _uiState.value = MainScreenUiState.Disconnected
                     _serversChrome.value = HomeServersChrome()
                 }

@@ -19,6 +19,13 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
     private var pendingBatch: SyncBootstrapReason?
     private var coalesceTask: Task<Void, Never>?
     private var collectors: [Task<Void, Never>] = []
+    private var _profileGeneration: UInt64 = 0
+
+    var profileGeneration: UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return _profileGeneration
+    }
 
     init(
         connection: any LiveConnection,
@@ -49,6 +56,35 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
         for record in records {
             record.retryTask?.cancel()
             record.loadTask?.cancel()
+        }
+    }
+
+    func beginProfileSwitch(generation: UInt64) {
+        lock.lock()
+        _profileGeneration = generation
+        focused = nil
+        pendingBatch = nil
+        coalesceTask?.cancel()
+        coalesceTask = nil
+        var waiters: [CheckedContinuation<Void, Never>] = []
+        let keys = Array(records.keys)
+        for key in keys {
+            guard var record = records[key] else { continue }
+            record.staleSerial &+= 1
+            record.retryTask?.cancel()
+            record.retryTask = nil
+            record.retryAttempt = 0
+            record.loadTask?.cancel()
+            record.loadTask = nil
+            record.inFlight = false
+            record.state = .stale
+            waiters.append(contentsOf: record.takeWaiters())
+            records[key] = record
+        }
+        lock.unlock()
+        resume(waiters)
+        for key in keys {
+            publishState(key, .stale)
         }
     }
 
@@ -268,10 +304,11 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
         case .foreground:
             onForeground()
         case .pathReady:
+            let generation = profileGeneration
             Task.detached { [weak self] in
-                guard let self else { return }
+                guard let self, self.profileGeneration == generation else { return }
                 await self.waitUntilCanCatchUp()
-                guard self.canCatchUpNow() else { return }
+                guard self.profileGeneration == generation, self.canCatchUpNow() else { return }
                 await self.bootstrap(.serverConnected)
             }
         case .background:
@@ -295,12 +332,13 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
         let now = clock.nowMs()
         lock.lock()
         let last = lastBootstrapOrActivityMs
+        let generation = _profileGeneration
         lock.unlock()
         guard now - last >= SyncRetryBackoff.foregroundQuietMs else { return }
         Task.detached { [weak self] in
-            guard let self else { return }
+            guard let self, self.profileGeneration == generation else { return }
             await self.waitUntilCanCatchUp()
-            guard self.canCatchUpNow() else { return }
+            guard self.profileGeneration == generation, self.canCatchUpNow() else { return }
             await self.bootstrap(.foregroundQuiet)
         }
     }
@@ -311,12 +349,15 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
             lock.unlock()
             return
         }
+        let generation = _profileGeneration
         coalesceTask = Task.detached { [weak self] in
             guard let self else { return }
             await self.clock.sleep(milliseconds: SyncRetryBackoff.coalesceMs)
             self.lock.lock()
             self.coalesceTask = nil
+            let stillCurrent = self._profileGeneration == generation
             self.lock.unlock()
+            guard stillCurrent else { return }
             await self.bootstrap(.serverConnected)
         }
         lock.unlock()
@@ -335,8 +376,10 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
         }
         lock.unlock()
         guard can, !was, hasStaleVisible else { return }
+        let generation = profileGeneration
         Task.detached { [weak self] in
-            await self?.bootstrap(.serverConnected)
+            guard let self, self.profileGeneration == generation else { return }
+            await self.bootstrap(.serverConnected)
         }
     }
 
@@ -350,8 +393,10 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
         }
         lock.unlock()
         guard can, !was, hasStaleVisible else { return }
+        let generation = profileGeneration
         Task.detached { [weak self] in
-            await self?.bootstrap(.serverConnected)
+            guard let self, self.profileGeneration == generation else { return }
+            await self.bootstrap(.serverConnected)
         }
     }
 
@@ -440,12 +485,13 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
             return
         }
         let serial = record.staleSerial
+        let generation = _profileGeneration
         let loader = record.loader
         record.inFlight = true
         record.state = .syncing
         let loadTask = Task.detached { [weak self] in
             guard let self else { return }
-            await self.performLoad(key: key, serial: serial, loader: loader)
+            await self.performLoad(key: key, serial: serial, generation: generation, loader: loader)
         }
         record.loadTask = loadTask
         records[key] = record
@@ -457,17 +503,18 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
     private func performLoad(
         key: ProjectionKey,
         serial: UInt64,
+        generation: UInt64,
         loader: @escaping @Sendable () async throws -> Void
     ) async {
         do {
             try await loader()
-            finishLoad(key: key, serial: serial, succeeded: true)
+            finishLoad(key: key, serial: serial, generation: generation, succeeded: true)
         } catch {
-            finishLoad(key: key, serial: serial, succeeded: false)
+            finishLoad(key: key, serial: serial, generation: generation, succeeded: false)
         }
     }
 
-    private func finishLoad(key: ProjectionKey, serial: UInt64, succeeded: Bool) {
+    private func finishLoad(key: ProjectionKey, serial: UInt64, generation: UInt64, succeeded: Bool) {
         lock.lock()
         guard var record = records[key] else {
             lock.unlock()
@@ -477,11 +524,13 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
         record.loadTask = nil
         let waiters = record.takeWaiters()
         let currentSerial = record.staleSerial
+        let currentGeneration = _profileGeneration
+        let generationMatches = currentGeneration == generation
         if succeeded {
             record.retryAttempt = 0
             record.retryTask?.cancel()
             record.retryTask = nil
-            if currentSerial == serial {
+            if currentSerial == serial, generationMatches {
                 record.state = .fresh
                 lastBootstrapOrActivityMs = clock.nowMs()
             } else {
@@ -489,7 +538,7 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
             }
             records[key] = record
             let nextState = record.state
-            let shouldReload = record.state == .stale && canCatchUpLocked()
+            let shouldReload = record.state == .stale && generationMatches && canCatchUpLocked()
             lock.unlock()
             publishState(key, nextState)
             resume(waiters)
@@ -503,20 +552,20 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
         record.state = .stale
         record.retryAttempt += 1
         let attempt = record.retryAttempt
-        let shouldRetry = canCatchUpLocked()
+        let shouldRetry = generationMatches && canCatchUpLocked()
         records[key] = record
         lock.unlock()
         publishState(key, .stale)
         resume(waiters)
         if shouldRetry {
-            scheduleRetry(key: key, serial: currentSerial, attempt: attempt)
+            scheduleRetry(key: key, serial: currentSerial, generation: generation, attempt: attempt)
         }
     }
 
-    private func scheduleRetry(key: ProjectionKey, serial: UInt64, attempt: Int) {
+    private func scheduleRetry(key: ProjectionKey, serial: UInt64, generation: UInt64, attempt: Int) {
         let delay = SyncRetryBackoff.delayMs(attempt: attempt)
         lock.lock()
-        guard records[key]?.staleSerial == serial else {
+        guard records[key]?.staleSerial == serial, _profileGeneration == generation else {
             lock.unlock()
             return
         }
@@ -527,6 +576,7 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
             guard !Task.isCancelled else { return }
             self.lock.lock()
             let stillSame = self.records[key]?.staleSerial == serial
+                && self._profileGeneration == generation
             self.lock.unlock()
             guard stillSame, self.canCatchUpNow() else { return }
             await self.runLoader(key)

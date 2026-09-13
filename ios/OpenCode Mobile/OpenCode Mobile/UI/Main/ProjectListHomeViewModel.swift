@@ -192,25 +192,11 @@ final class ProjectListHomeViewModel {
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
                 self?.stopLiveObservations()
-                self?.sessionReadyStore.bindProfile(profileID: self?.activeConnectionManager.currentProfile()?.id)
-                self?.sessionLiveStore.clearCache()
-                self?.sessionStatusLiveStore.clearCache()
-                self?.permissionLiveStore.clearCache()
-                self?.questionLiveStore.clearCache()
-                self?.sessionTodoLiveStore.clearCache()
-                self?.messageRepository.clearMessageCache()
                 await self?.refresh()
             }
         }
         connectionSessionCoordinator.onProfileCleared { [weak self] in
             Task { @MainActor in
-                self?.sessionReadyStore.bindProfile(profileID: nil)
-                self?.sessionLiveStore.clearCache()
-                self?.sessionStatusLiveStore.clearCache()
-                self?.permissionLiveStore.clearCache()
-                self?.questionLiveStore.clearCache()
-                self?.sessionTodoLiveStore.clearCache()
-                self?.messageRepository.clearMessageCache()
                 self?.stopLiveObservations()
                 self?.state = .disconnected
                 self?.serversChrome = HomeServersChrome()

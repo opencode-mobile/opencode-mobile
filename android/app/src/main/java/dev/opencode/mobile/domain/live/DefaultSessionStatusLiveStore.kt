@@ -208,6 +208,7 @@ class DefaultSessionStatusLiveStore
 
                 val registration =
                     syncCoordinator.register(key) {
+                        val generation = syncCoordinator.profileGeneration
                         val outcome =
                             gate.refresh(
                                 load = {
@@ -216,6 +217,7 @@ class DefaultSessionStatusLiveStore
                                     }.getOrNull()
                                 },
                                 commit = { loaded -> commitLoaded(loaded) },
+                                isCurrent = { syncCoordinator.profileGeneration == generation },
                             )
                         if (outcome == LiveStoreRefreshOutcome.FAILED) {
                             error("status refresh failed directory=$directory")

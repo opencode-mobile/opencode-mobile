@@ -5,6 +5,7 @@ import dev.opencode.mobile.data.remote.SseAttemptOutcome
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.DeviceNetworkPath
 import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
 import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
@@ -228,11 +229,12 @@ class DefaultForegroundEventStream
             reconnectWake.tryEmit(Unit)
         }
 
-        override fun stop() {
+        override suspend fun stop() {
             diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream stopping")
             val generation: Long
             val snapshot: LiveConnectionSnapshot
-            val toCancel: Job?
+            val occupancyToJoin: Job?
+            val leaseJobs: List<Job>
             authTerminal.set(false)
             protocolConfirmed.set(false)
             synchronized(stateLock) {
@@ -240,16 +242,21 @@ class DefaultForegroundEventStream
                 occupancySerial += 1
                 inFlightStartApplies = 0
                 generation = streamGeneration.incrementAndGet()
-                toCancel = occupancyJob
+                occupancyToJoin = occupancyJob
                 occupancyJob = null
                 pendingStartConfig = null
-                cancelAllLeases()
+                leaseJobs = cancelAllLeases()
                 eventIngress.reset()
                 appliedConfig = null
                 overall = LiveOverallFlags(wasFullyConnected = wasFullyConnected)
                 snapshot = buildSnapshotLocked(EventStreamConnectionState.Idle)
             }
-            toCancel?.cancel()
+            occupancyToJoin?.cancel()
+            val toJoin = buildList {
+                occupancyToJoin?.let { add(it) }
+                addAll(leaseJobs)
+            }
+            toJoin.forEach { it.join() }
             setConnectionState(EventStreamConnectionState.Idle, generation)
             _snapshot.value = snapshot
         }
@@ -906,27 +913,32 @@ class DefaultForegroundEventStream
             return SseSubscribeTargets.forProtocol(config.protocol, config.directories).any { it.key == key }
         }
 
-        private fun cancelAllLeases() {
+        private fun cancelAllLeases(): List<Job> {
             synchronized(leaseLock) {
+                val jobs =
+                    leases.values.flatMap { lease ->
+                        listOfNotNull(lease.loopJob, lease.streamJob)
+                    }
                 leases.values.forEach { it.cancel() }
                 leases.clear()
+                return jobs
             }
         }
 
         private fun bootstrapConfig(): LiveConnectionConfig {
             val profile = activeConnectionManager.currentProfile()
             val protocol = activeConnectionManager.protocolHint()
-            val (profileId, identity) = profileIdentity(profile)
+            val resolved = profileIdentity(profile)
             val directories =
                 synchronized(stateLock) {
-                    lastDirectoriesByIdentity[LiveConnectionConfig.Identity(profileId, identity, protocol)]
-                        .orEmpty()
+                    lastDirectoriesByIdentity[resolved.identity(protocol)].orEmpty()
                 }
             return LiveConnectionConfig(
-                profileId = profileId,
-                connectionIdentity = identity,
+                profileId = resolved.profileId,
+                connectionIdentity = resolved.connectionIdentity,
                 protocol = protocol,
                 directories = directories,
+                credentialFingerprint = resolved.credentialFingerprint,
             )
         }
 
@@ -934,17 +946,18 @@ class DefaultForegroundEventStream
             val profile = activeConnectionManager.currentProfile()
             val protocol = activeConnectionManager.protocolHint()
             val directories = instanceDirectories()
-            val (profileId, identity) = profileIdentity(profile)
+            val resolved = profileIdentity(profile)
             return LiveConnectionConfig(
-                profileId = profileId,
-                connectionIdentity = identity,
+                profileId = resolved.profileId,
+                connectionIdentity = resolved.connectionIdentity,
                 protocol = protocol,
                 directories = directories,
+                credentialFingerprint = resolved.credentialFingerprint,
             )
         }
 
-        private fun profileIdentity(profile: ConnectionProfile?): Pair<String, String> {
-            val identity =
+        private fun profileIdentity(profile: ConnectionProfile?): ProfileIdentity {
+            val connectionIdentity =
                 if (profile == null) {
                     ""
                 } else {
@@ -952,7 +965,32 @@ class DefaultForegroundEventStream
                         profile.baseUrl,
                     )}|${ConnectionProfileIdentity.normalizeUsername(profile.username)}"
                 }
-            return (profile?.id?.ifBlank { identity } ?: identity) to identity
+            val profileId = profile?.id?.ifBlank { connectionIdentity } ?: connectionIdentity
+            val fingerprint =
+                if (profile == null) {
+                    ""
+                } else {
+                    ConnectionProfileIdentity.credentialFingerprint(profile.username, profile.password)
+                }
+            return ProfileIdentity(
+                profileId = profileId,
+                connectionIdentity = connectionIdentity,
+                credentialFingerprint = fingerprint,
+            )
+        }
+
+        private data class ProfileIdentity(
+            val profileId: String,
+            val connectionIdentity: String,
+            val credentialFingerprint: String,
+        ) {
+            fun identity(protocol: ServerProtocol) =
+                LiveConnectionConfig.Identity(
+                    profileId = profileId,
+                    connectionIdentity = connectionIdentity,
+                    protocol = protocol,
+                    credentialFingerprint = credentialFingerprint,
+                )
         }
 
         private suspend fun instanceDirectories(): List<String> {

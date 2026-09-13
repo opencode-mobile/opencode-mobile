@@ -732,7 +732,7 @@ final class FakeForegroundEventStream: LiveConnection, @unchecked Sendable {
         setConnectionState(.connected)
     }
 
-    func stop() {
+    func stop() async {
         lock.lock()
         occupying = false
         wasConnected = false

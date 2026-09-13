@@ -5,15 +5,58 @@ nonisolated struct LiveConnectionConfig: Equatable, Sendable {
         let profileID: String
         let connectionIdentity: String
         let serverProtocol: ServerProtocol
+        let credentialFingerprint: String
+
+        init(
+            profileID: String,
+            connectionIdentity: String,
+            serverProtocol: ServerProtocol,
+            credentialFingerprint: String = ""
+        ) {
+            self.profileID = profileID
+            self.connectionIdentity = connectionIdentity
+            self.serverProtocol = serverProtocol
+            self.credentialFingerprint = credentialFingerprint
+        }
     }
 
     let profileID: String
     let connectionIdentity: String
     let serverProtocol: ServerProtocol
     let directories: [String]
+    let credentialFingerprint: String
+
+    init(
+        profileID: String,
+        connectionIdentity: String,
+        serverProtocol: ServerProtocol,
+        directories: [String],
+        credentialFingerprint: String = ""
+    ) {
+        self.profileID = profileID
+        self.connectionIdentity = connectionIdentity
+        self.serverProtocol = serverProtocol
+        self.directories = directories
+        self.credentialFingerprint = credentialFingerprint
+    }
 
     var identity: Identity {
-        Identity(profileID: profileID, connectionIdentity: connectionIdentity, serverProtocol: serverProtocol)
+        Identity(
+            profileID: profileID,
+            connectionIdentity: connectionIdentity,
+            serverProtocol: serverProtocol,
+            credentialFingerprint: credentialFingerprint
+        )
+    }
+
+    func with(serverProtocol: ServerProtocol) -> LiveConnectionConfig {
+        LiveConnectionConfig(
+            profileID: profileID,
+            connectionIdentity: connectionIdentity,
+            serverProtocol: serverProtocol,
+            directories: directories,
+            credentialFingerprint: credentialFingerprint
+        )
     }
 }
 
@@ -85,7 +128,7 @@ nonisolated final class AdaptedLiveConnection: LiveConnection, @unchecked Sendab
 
     func start() { stream.start() }
 
-    func stop() { stream.stop() }
+    func stop() async { await stream.stop() }
 
     func onReconnectWake() { stream.onReconnectWake() }
 

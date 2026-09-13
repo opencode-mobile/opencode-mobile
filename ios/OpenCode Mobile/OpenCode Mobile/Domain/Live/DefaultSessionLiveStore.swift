@@ -106,6 +106,7 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         let gate = LiveStoreRefreshGate()
 
         @Sendable func loadAndCommit() async throws {
+            let generation = syncCoordinator.profileGeneration
             let outcome = await gate.refresh(
                 load: { () async -> [Session]? in
                     await Self.loadSessions(
@@ -114,6 +115,7 @@ final class DefaultSessionLiveStore: SessionLiveStore {
                     )
                 },
                 commit: { sessions in
+                    guard syncCoordinator.profileGeneration == generation else { return }
                     await sessionCache.rememberSessions(worktree: directory, sessions: sessions)
                     yield(SessionListSnapshot(sessions: sessions, isFromCache: false))
                     DiagnosticLog.info(

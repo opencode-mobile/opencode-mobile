@@ -184,6 +184,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         }
 
         @Sendable func loadAndCommit() async throws {
+            let generation = syncCoordinator.profileGeneration
             let outcome = await gate.refresh(
                 load: { () async -> [String: SessionActivity]? in
                     await Self.loadActivities(
@@ -192,6 +193,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                     )
                 },
                 commit: { loaded in
+                    guard syncCoordinator.profileGeneration == generation else { return }
                     DiagnosticLog.info(.session, "statusLiveStore refresh directory=\(directory)")
                     commitLoaded(loaded)
                 }

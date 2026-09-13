@@ -53,6 +53,7 @@ class DefaultSyncCoordinator(
     private var coalesceJob: Job? = null
     private var bootstrapJob: Job? = null
     private var bootstrapQueued: SyncBootstrapReason? = null
+    private val generation = AtomicLong(0)
 
     init {
         scope.launch {
@@ -191,6 +192,26 @@ class DefaultSyncCoordinator(
     ) {
         val entry = entries.getOrPut(key) { Entry(key) }
         entry.visible = visible
+    }
+
+    override val profileGeneration: Long
+        get() = generation.get()
+
+    override fun beginProfileSwitch(generation: Long) {
+        this.generation.set(generation)
+        coalesceJob?.cancel()
+        coalesceJob = null
+        bootstrapJob?.cancel()
+        bootstrapJob = null
+        bootstrapQueued = null
+        pendingForegroundQuiet = false
+        focused = null
+        for (entry in entries.values) {
+            entry.flight?.cancel()
+            entry.hasSucceededOnce = false
+            entry.staleSerial.incrementAndGet()
+            entry.state.value = ProjectionState.Stale
+        }
     }
 
     private fun onForeground() {
@@ -350,12 +371,17 @@ class DefaultSyncCoordinator(
             }
         var attempt = 0
         while (true) {
+            val startedGeneration = profileGeneration
             if (entry.staleSerial.get() != serial) {
                 entry.state.value = ProjectionState.Stale
                 return
             }
             try {
                 loader()
+                if (profileGeneration != startedGeneration) {
+                    entry.state.value = ProjectionState.Stale
+                    return
+                }
                 lastActivityMs = nowMs()
                 entry.hasSucceededOnce = true
                 if (entry.staleSerial.get() == serial) {

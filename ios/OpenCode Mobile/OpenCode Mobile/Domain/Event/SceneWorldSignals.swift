@@ -9,7 +9,6 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
     private let stream: any ForegroundEventStream
     private let deviceNetworkPath: any DeviceNetworkPath
     private let hasActiveConnection: @Sendable () -> Bool
-    private let connectionSessionCoordinator: ConnectionSessionCoordinator?
     private let activeConnectionManager: ActiveConnectionManager?
     private let stopGrace: Duration
     private let inactiveGrace: Duration
@@ -27,7 +26,6 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
         stream: any ForegroundEventStream,
         deviceNetworkPath: any DeviceNetworkPath,
         hasActiveConnection: @escaping @Sendable () -> Bool,
-        connectionSessionCoordinator: ConnectionSessionCoordinator? = nil,
         activeConnectionManager: ActiveConnectionManager? = nil,
         stopGrace: Duration = .milliseconds(stopGraceMs),
         inactiveGrace: Duration = .milliseconds(inactiveGraceMs)
@@ -35,7 +33,6 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
         self.stream = stream
         self.deviceNetworkPath = deviceNetworkPath
         self.hasActiveConnection = hasActiveConnection
-        self.connectionSessionCoordinator = connectionSessionCoordinator
         self.activeConnectionManager = activeConnectionManager
         self.stopGrace = stopGrace
         self.inactiveGrace = inactiveGrace
@@ -69,15 +66,6 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
                 case .unavailable:
                     self.emit(.pathLost)
                 }
-            }
-        }
-        guard let coordinator = connectionSessionCoordinator else { return }
-        Task { @MainActor [weak self] in
-            coordinator.onProfileSaved {
-                self?.onProfileSwitched()
-            }
-            coordinator.onProfileCleared {
-                self?.onProfileCleared()
             }
         }
     }
@@ -133,7 +121,7 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
             guard !Task.isCancelled else { return }
             self?.setOccupancy(.stopped)
             self?.emit(.backgroundStop)
-            self?.stream.stop()
+            await self?.stream.stop()
         }
         lock.unlock()
         for continuation in occupancySubscribers {
@@ -142,7 +130,7 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
         emit(.background)
     }
 
-    func onBackgroundStop() {
+    func onBackgroundStop() async {
         lock.lock()
         inactiveTask?.cancel()
         inactiveTask = nil
@@ -151,7 +139,7 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
         lock.unlock()
         setOccupancy(.stopped)
         emit(.backgroundStop)
-        stream.stop()
+        await stream.stop()
     }
 
     func onPathReady() {
@@ -164,16 +152,15 @@ nonisolated final class SceneWorldSignals: WorldSignals, @unchecked Sendable {
     }
 
     func onProfileSwitched() {
-        emit(.profileSwitched)
-        if occupancy != .stopped, hasActiveConnection() {
-            stream.stop()
-            stream.start()
-        }
+        emitProfileSwitched()
     }
 
     func onProfileCleared() {
+        emitProfileSwitched()
+    }
+
+    func emitProfileSwitched() {
         emit(.profileSwitched)
-        stream.stop()
     }
 
     var occupancy: StreamOccupancy {

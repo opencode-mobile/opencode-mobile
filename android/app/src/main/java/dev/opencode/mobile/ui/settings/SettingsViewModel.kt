@@ -4,31 +4,24 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
-import dev.opencode.mobile.network.ActiveConnectionManager
-import dev.opencode.mobile.theme.LetterAccent
-import dev.opencode.mobile.theme.letterAccentForWorktree
-import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
-import dev.opencode.mobile.domain.event.ForegroundEventStream
-import dev.opencode.mobile.domain.live.PermissionLiveStore
-import dev.opencode.mobile.domain.live.QuestionLiveStore
-import dev.opencode.mobile.domain.live.SessionLiveStore
-import dev.opencode.mobile.domain.live.SessionReadyStore
-import dev.opencode.mobile.domain.live.SessionStatusLiveStore
-import dev.opencode.mobile.domain.live.SessionTodoLiveStore
+import dev.opencode.mobile.domain.live.ProjectionCaches
 import dev.opencode.mobile.domain.message.BlockDecorationCache
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageContentPreparer
-import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
-import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.textmate.TextMateLogbook
+import dev.opencode.mobile.network.ActiveConnectionManager
+import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.ThemeManager
+import dev.opencode.mobile.theme.letterAccentForWorktree
+import dev.opencode.mobile.theme.letterCharacterForProject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,14 +34,7 @@ class SettingsViewModel
     constructor(
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
         private val activeConnectionManager: ActiveConnectionManager,
-        private val foregroundEventStream: ForegroundEventStream,
-        private val permissionLiveStore: PermissionLiveStore,
-        private val questionLiveStore: QuestionLiveStore,
-        private val sessionLiveStore: SessionLiveStore,
-        private val sessionStatusLiveStore: SessionStatusLiveStore,
-        private val sessionTodoLiveStore: SessionTodoLiveStore,
-        private val sessionReadyStore: SessionReadyStore,
-        private val messageRepository: MessageRepository,
+        private val projectionCaches: ProjectionCaches,
         private val messageContentPreparer: MessageContentPreparer,
         private val textMateLogbook: TextMateLogbook,
         private val diagnosticLogBuffer: DiagnosticLogBuffer,
@@ -89,15 +75,8 @@ class SettingsViewModel
 
         fun clearAllData() {
             viewModelScope.launch {
-                foregroundEventStream.stop()
                 connectionSessionCoordinator.clearConnectionData()
-                permissionLiveStore.clearCache()
-                questionLiveStore.clearCache()
-                sessionLiveStore.clearCache()
-                sessionStatusLiveStore.clearCache()
-                sessionTodoLiveStore.clearCache()
-                sessionReadyStore.clearCache()
-                messageRepository.clearMessageCache()
+                projectionCaches.clearAll()
                 runCatching { sessionCache.clearAll() }
                 ThemeManager.clearAll()
                 HomeDisplayPreferences.clear()

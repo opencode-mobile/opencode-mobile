@@ -10,7 +10,6 @@ import dev.opencode.mobile.domain.event.FakeWorldSignals
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.ProcessWorldSignals
 import dev.opencode.mobile.domain.event.SseSubscribeTargets
-import dev.opencode.mobile.domain.event.StreamOccupancy
 import dev.opencode.mobile.domain.event.WorldSignal
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.event.composeLiveUpdates
@@ -29,7 +28,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -38,7 +36,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -75,8 +72,6 @@ class SseFaultOracleDriver(
                     deviceNetworkPath = ReadyDeviceNetworkPath,
                     diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
                     hasActiveConnection = { true },
-                    profileSaved = MutableSharedFlow(),
-                    profileCleared = MutableSharedFlow(),
                     scope = scope.backgroundScope,
                     stopGraceMs = 5_000L,
                 )
@@ -96,8 +91,8 @@ class SseFaultOracleDriver(
                 scope = scope.backgroundScope,
                 nowMs = { scope.testScheduler.currentTime },
                 wait = { ms ->
-                if (ms > 200L) delay(25) else Unit
-            },
+                    if (ms > 200L) delay(25) else Unit
+                },
             )
         val sync =
             MessageSync(

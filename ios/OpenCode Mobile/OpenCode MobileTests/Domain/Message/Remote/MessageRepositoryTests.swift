@@ -60,5 +60,5 @@ private final class RepositoryTestEventStream: ForegroundEventStream {
     func connectionStateUpdates() -> AsyncStream<EventStreamConnectionState> { AsyncStream { _ in } }
     func events() -> AsyncStream<OpencodeEvent> { AsyncStream { _ in } }
     func start() {}
-    func stop() {}
+    func stop() async {}
 }

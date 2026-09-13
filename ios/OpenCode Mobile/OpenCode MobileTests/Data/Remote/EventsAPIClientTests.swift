@@ -3,6 +3,25 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct EventsAPIClientTests {
+    @Test func streamingSessionKey_usesFingerprintNotRawPassword() {
+        let first = ServerConnection(
+            baseURL: URL(string: "http://127.0.0.1:4096/")!,
+            username: "opencode",
+            password: "super-secret"
+        )
+        let second = ServerConnection(
+            baseURL: URL(string: "http://127.0.0.1:4096/")!,
+            username: "opencode",
+            password: "other-secret"
+        )
+        let firstKey = EventsAPIClient.streamingSessionKey(for: first)
+        let secondKey = EventsAPIClient.streamingSessionKey(for: second)
+        #expect(!firstKey.contains("super-secret"))
+        #expect(!secondKey.contains("other-secret"))
+        #expect(firstKey != secondKey)
+        #expect(firstKey == EventsAPIClient.streamingSessionKey(for: first))
+    }
+
     @Test func streamGlobalEvents_parsesStandardSSEDataLines() async throws {
         let body = "data: {\"payload\":{\"type\":\"server.connected\",\"properties\":{}}}\n\n"
         let client = makeClient(responseBody: body)

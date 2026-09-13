@@ -111,24 +111,24 @@ enum SseFaultOracleDriver {
                 observeTasks.forEach { $0.cancel() }
                 observeTasks.removeAll()
             case "world.foreground":
-                emitWorld(world, .foreground)
+                await emitWorld(world, .foreground)
             case "world.background":
-                emitWorld(world, .background)
+                await emitWorld(world, .background)
             case "world.backgroundStop":
-                emitWorld(world, .backgroundStop)
+                await emitWorld(world, .backgroundStop)
             case "world.pathReady":
-                emitWorld(world, .pathReady)
+                await emitWorld(world, .pathReady)
             case "world.pathLost":
-                emitWorld(world, .pathLost)
+                await emitWorld(world, .pathLost)
             case "world.profileSwitched":
-                emitWorld(world, .profileSwitched)
+                await emitWorld(world, .profileSwitched)
             case "stream.start":
                 if let fake = world as? FakeWorldSignals {
                     fake.setOccupancy(.active)
                 }
                 stream.start()
             case "stream.stop":
-                stream.stop()
+                await stream.stop()
             case "connectionState":
                 let state = try unwrap(step.state, "connectionState step needs state")
                 applyConnectionState(stream, state)
@@ -173,7 +173,7 @@ enum SseFaultOracleDriver {
                 if let scene = world as? SceneWorldSignals {
                     scene.onProfileSwitched()
                 } else {
-                    emitWorld(world, .profileSwitched)
+                    await emitWorld(world, .profileSwitched)
                 }
             case "directories.set":
                 directories.value = step.directories ?? []
@@ -215,7 +215,7 @@ enum SseFaultOracleDriver {
         observeTasks.forEach { $0.cancel() }
     }
 
-    private static func emitWorld(_ world: any WorldSignals, _ signal: WorldSignal) {
+    private static func emitWorld(_ world: any WorldSignals, _ signal: WorldSignal) async {
         if let scene = world as? SceneWorldSignals {
             switch signal {
             case .foreground:
@@ -223,7 +223,7 @@ enum SseFaultOracleDriver {
             case .background:
                 scene.onBackground()
             case .backgroundStop:
-                scene.onBackgroundStop()
+                await scene.onBackgroundStop()
             case .pathReady:
                 scene.onPathReady()
             case .pathLost:

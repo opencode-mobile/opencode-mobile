@@ -201,7 +201,7 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
         if let injectedSession {
             return injectedSession
         }
-        let identity = "\(connection.baseURL.absoluteString)|\(connection.username)|\(connection.password ?? "")"
+        let identity = Self.streamingSessionKey(for: connection)
         sessionLock.lock()
         defer { sessionLock.unlock() }
         if let ownedSession, lastIdentity == identity {
@@ -212,6 +212,14 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
         ownedSession = session
         lastIdentity = identity
         return session
+    }
+
+    static func streamingSessionKey(for connection: ServerConnection) -> String {
+        let fingerprint = ConnectionProfileIdentity.credentialFingerprint(
+            username: connection.username,
+            password: connection.password ?? ""
+        )
+        return "\(connection.baseURL.absoluteString)|\(connection.username)|\(fingerprint)"
     }
 
     private static func subscribePath(for serverProtocol: ServerProtocol?) -> String {

@@ -375,6 +375,7 @@ class MessageSync(
 
             val registration =
                 syncCoordinator.register(projection) {
+                    val generation = syncCoordinator.profileGeneration
                     applyQueuedIncrementalEvents()
                     val previous = lastFingerprints[storeSlot]
                     when (
@@ -383,12 +384,18 @@ class MessageSync(
                                 key,
                                 reason = "transcript",
                                 mergeExisting = true,
-                                beforeCommit = { applyQueuedIncrementalEvents() },
+                                beforeCommit = {
+                                    if (syncCoordinator.profileGeneration == generation) {
+                                        applyQueuedIncrementalEvents()
+                                    }
+                                },
+                                stillCurrent = { syncCoordinator.profileGeneration == generation },
                             )
                     ) {
                         is ReloadResult.Accepted,
                         is ReloadResult.Discarded,
                         -> {
+                            if (syncCoordinator.profileGeneration != generation) return@register
                             if (overflowed.getAndSet(false)) {
                                 throw IllegalStateException("event staging overflow")
                             }
@@ -699,6 +706,7 @@ class MessageSync(
         reason: String,
         mergeExisting: Boolean = false,
         beforeCommit: suspend () -> Unit = {},
+        stillCurrent: () -> Boolean = { true },
     ): ReloadResult {
         var page: MessagePage? = null
         var failure: Throwable? = null
@@ -712,6 +720,9 @@ class MessageSync(
                     .onFailure { failure = it }
             }
         beforeCommit()
+        if (!stillCurrent()) {
+            return ReloadResult.Discarded(engine.messages(storeSlot))
+        }
         val loaded = page
         if (loaded == null) {
             logW("fullReload failed session=${key.sessionId} reason=$reason ms=$elapsedMs")

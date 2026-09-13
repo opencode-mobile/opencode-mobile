@@ -28,8 +28,6 @@ class ProcessWorldSignals(
     private val deviceNetworkPath: DeviceNetworkPath,
     private val diagnosticLogger: DiagnosticLogger,
     private val hasActiveConnection: () -> Boolean,
-    private val profileSaved: SharedFlow<Unit>,
-    private val profileCleared: SharedFlow<Unit>,
     private val scope: CoroutineScope,
     private val activeConnectionManager: ActiveConnectionManager? = null,
     private val stopGraceMs: Long = STOP_GRACE_MS,
@@ -66,12 +64,6 @@ class ProcessWorldSignals(
                     DeviceNetworkPathStatus.Unavailable -> emit(WorldSignal.PathLost)
                 }
             }
-        }
-        scope.launch {
-            profileSaved.collect { onProfileSwitched() }
-        }
-        scope.launch {
-            profileCleared.collect { onProfileCleared() }
         }
     }
 
@@ -126,7 +118,7 @@ class ProcessWorldSignals(
         stopJob = null
         _occupancy.value = StreamOccupancy.Stopped
         emit(WorldSignal.BackgroundStop)
-        stream.stop()
+        scope.launch { stream.stop() }
     }
 
     fun onPathReady() {
@@ -141,18 +133,13 @@ class ProcessWorldSignals(
 
     fun onProfileSwitched() {
         emit(WorldSignal.ProfileSwitched)
-        if (_occupancy.value != StreamOccupancy.Stopped && hasActiveConnection()) {
-            stream.stop()
-            stream.start()
-        }
     }
 
     fun onProfileCleared() {
         emit(WorldSignal.ProfileSwitched)
-        stream.stop()
     }
 
-    private fun emit(signal: WorldSignal) {
+    override fun emit(signal: WorldSignal) {
         diagnosticLogger.info(DiagnosticLogArea.Sse, "world signal=${signal.name}")
         _signals.tryEmit(signal)
     }

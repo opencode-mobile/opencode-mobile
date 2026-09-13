@@ -9,7 +9,6 @@ import dev.opencode.mobile.data.remote.EventsApi
 import dev.opencode.mobile.data.remote.FilesystemApi
 import dev.opencode.mobile.data.remote.HealthApi
 import dev.opencode.mobile.data.remote.ProjectsApi
-import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.ConnectivityDeviceNetworkPath
 import dev.opencode.mobile.domain.connection.DeviceNetworkPath
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
@@ -107,15 +106,12 @@ abstract class EventStreamModule {
             deviceNetworkPath: DeviceNetworkPath,
             diagnosticLogger: DiagnosticLogger,
             activeConnectionManager: ActiveConnectionManager,
-            connectionSessionCoordinator: ConnectionSessionCoordinator,
         ): WorldSignals =
             ProcessWorldSignals(
                 stream = stream,
                 deviceNetworkPath = deviceNetworkPath,
                 diagnosticLogger = diagnosticLogger,
                 hasActiveConnection = { activeConnectionManager.current() != null },
-                profileSaved = connectionSessionCoordinator.profileSaved,
-                profileCleared = connectionSessionCoordinator.profileCleared,
                 scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
                 activeConnectionManager = activeConnectionManager,
             )

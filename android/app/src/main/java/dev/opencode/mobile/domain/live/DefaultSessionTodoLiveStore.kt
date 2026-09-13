@@ -122,6 +122,7 @@ class DefaultSessionTodoLiveStore
             val projection = projection(key)
             val registration =
                 syncCoordinator.register(projection) {
+                    val generation = syncCoordinator.profileGeneration
                     val directory = key.directory.ifEmpty { null }
                     val todos =
                         runCatching {
@@ -133,6 +134,7 @@ class DefaultSessionTodoLiveStore
                                 throw error
                             }
                         }
+                    if (syncCoordinator.profileGeneration != generation) return@register
                     replace(state, todos, markCache = true)
                 }
             state.registration = registration

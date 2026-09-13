@@ -29,6 +29,8 @@ interface WorldSignals {
     fun register() {}
 
     fun onConnectionAvailable() {}
+
+    fun emit(signal: WorldSignal) {}
 }
 
 object SilentWorldSignals : WorldSignals {
@@ -37,13 +39,13 @@ object SilentWorldSignals : WorldSignals {
         MutableStateFlow(StreamOccupancy.Active)
 }
 
-class FakeWorldSignals : WorldSignals {
+open class FakeWorldSignals : WorldSignals {
     private val _signals = MutableSharedFlow<WorldSignal>(extraBufferCapacity = 64)
     override val signals: SharedFlow<WorldSignal> = _signals.asSharedFlow()
     private val _occupancy = MutableStateFlow(StreamOccupancy.Active)
     override val occupancy: StateFlow<StreamOccupancy> = _occupancy.asStateFlow()
 
-    fun emit(signal: WorldSignal) {
+    override fun emit(signal: WorldSignal) {
         when (signal) {
             WorldSignal.Foreground -> _occupancy.value = StreamOccupancy.Active
             WorldSignal.Background -> _occupancy.value = StreamOccupancy.Grace

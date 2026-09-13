@@ -241,22 +241,51 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     private let secureCredentialStore: SecureCredentialStore
     private let sessionModelSelectionStore: SessionModelSelectionStore
     private let composerDraftStore: ComposerDraftStore
+    private let eventStream: @Sendable () -> (any ForegroundEventStream)?
+    private let syncCoordinator: @Sendable () -> (any SyncCoordinator)?
+    private let projectionCaches: @Sendable () -> (any ProjectionCaching)?
+    private let bindReadyProfile: @Sendable (String?) async -> Void
+    private let occupancy: @Sendable () -> StreamOccupancy
+    private let emitProfileSwitched: @Sendable () -> Void
+    private let hasActiveConnection: @Sendable () -> Bool
+    private let profileChangeGate = ProfileChangeGate()
     private let lock = NSLock()
     private var profileSavedHandlers: [() -> Void] = []
     private var profileClearedHandlers: [() -> Void] = []
+    private var switchGeneration: UInt64 = 0
+
+    var profileGeneration: UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return switchGeneration
+    }
 
     init(
         activeConnectionManager: ActiveConnectionManager,
         connectionProfileStore: ConnectionProfileStore,
         secureCredentialStore: SecureCredentialStore = KeychainCredentialStore(),
         sessionModelSelectionStore: SessionModelSelectionStore = UserDefaultsSessionModelSelectionStore(),
-        composerDraftStore: ComposerDraftStore = UserDefaultsComposerDraftStore()
+        composerDraftStore: ComposerDraftStore = UserDefaultsComposerDraftStore(),
+        eventStream: @escaping @Sendable () -> (any ForegroundEventStream)? = { nil },
+        syncCoordinator: @escaping @Sendable () -> (any SyncCoordinator)? = { nil },
+        projectionCaches: @escaping @Sendable () -> (any ProjectionCaching)? = { nil },
+        bindReadyProfile: @escaping @Sendable (String?) async -> Void = { _ in },
+        occupancy: @escaping @Sendable () -> StreamOccupancy = { .active },
+        emitProfileSwitched: @escaping @Sendable () -> Void = {},
+        hasActiveConnection: @escaping @Sendable () -> Bool = { false }
     ) {
         self.activeConnectionManager = activeConnectionManager
         self.connectionProfileStore = connectionProfileStore
         self.secureCredentialStore = secureCredentialStore
         self.sessionModelSelectionStore = sessionModelSelectionStore
         self.composerDraftStore = composerDraftStore
+        self.eventStream = eventStream
+        self.syncCoordinator = syncCoordinator
+        self.projectionCaches = projectionCaches
+        self.bindReadyProfile = bindReadyProfile
+        self.occupancy = occupancy
+        self.emitProfileSwitched = emitProfileSwitched
+        self.hasActiveConnection = hasActiveConnection
     }
 
     func onProfileSaved(_ handler: @escaping () -> Void) {
@@ -276,33 +305,94 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     }
 
     func saveProfile(_ profile: ConnectionProfile, serverProtocol: ServerProtocol? = nil) async throws {
-        var stamped = profile
-        stamped.serverProtocol = serverProtocol ?? profile.serverProtocol
-        let wasNew = stamped.id.isEmpty
-        try await connectionProfileStore.saveProfile(stamped)
-        let active = await connectionProfileStore.activeProfile()
-        let savedIsActive = wasNew || (!stamped.id.isEmpty && active?.id == stamped.id)
-        if savedIsActive {
-            await rebindActive()
-            notifySaved()
+        try await profileChangeGate.run {
+            var stamped = profile
+            stamped.serverProtocol = serverProtocol ?? profile.serverProtocol
+            let wasNew = stamped.id.isEmpty
+            try await self.connectionProfileStore.saveProfile(stamped)
+            let active = await self.connectionProfileStore.activeProfile()
+            let savedIsActive = wasNew || (!stamped.id.isEmpty && active?.id == stamped.id)
+            if savedIsActive {
+                await self.applyActiveProfileChange(notify: .saved)
+            }
         }
     }
 
     func switchProfile(id: String) async {
-        await connectionProfileStore.applyProfile(id: id)
-        await rebindActive()
-        notifySaved()
+        await profileChangeGate.run {
+            await self.connectionProfileStore.applyProfile(id: id)
+            await self.applyActiveProfileChange(notify: .saved)
+        }
     }
 
     func removeProfile(id: String) async {
-        await connectionProfileStore.removeProfile(id: id)
-        if await connectionProfileStore.activeProfile() == nil {
+        await profileChangeGate.run {
+            await self.connectionProfileStore.removeProfile(id: id)
+            if await self.connectionProfileStore.activeProfile() == nil {
+                await self.applyActiveProfileChange(notify: .cleared)
+            } else {
+                await self.applyActiveProfileChange(notify: .saved)
+            }
+        }
+    }
+
+    func clearConnectionData() async {
+        await profileChangeGate.run {
+            self.secureCredentialStore.clearAll()
+            await self.connectionProfileStore.clearAll()
+            await self.sessionModelSelectionStore.clearAll()
+            self.composerDraftStore.clearAll()
+            await self.applyActiveProfileChange(notify: .cleared)
+        }
+    }
+
+    func currentProfile() -> ConnectionProfile? {
+        activeConnectionManager.currentProfile()
+    }
+
+    private enum ProfileNotify {
+        case saved
+        case cleared
+    }
+
+    private func applyActiveProfileChange(notify: ProfileNotify) async {
+        lock.lock()
+        switchGeneration += 1
+        let generation = switchGeneration
+        lock.unlock()
+
+        if let stream = eventStream() {
+            await stream.stop()
+        }
+        syncCoordinator()?.beginProfileSwitch(generation: generation)
+
+        let nextProfile = await connectionProfileStore.activeProfile()
+        await MainActor.run {
+            if notify == .cleared {
+                self.projectionCaches()?.clearAll()
+            } else {
+                self.projectionCaches()?.clearLiveProjections()
+            }
+        }
+        await bindReadyProfile(nextProfile?.id)
+
+        if nextProfile == nil {
             activeConnectionManager.disconnect()
-            let handlers = profileClearedHandlers
-            handlers.forEach { $0() }
         } else {
             await rebindActive()
+        }
+
+        emitProfileSwitched()
+
+        if occupancy() != .stopped, hasActiveConnection(), let stream = eventStream() {
+            stream.start()
+        }
+
+        switch notify {
+        case .saved:
             notifySaved()
+        case .cleared:
+            notifyCleared()
         }
     }
 
@@ -322,18 +412,17 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         handlers.forEach { $0() }
     }
 
-    func clearConnectionData() async {
-        secureCredentialStore.clearAll()
-        await connectionProfileStore.clearAll()
-        await sessionModelSelectionStore.clearAll()
-        composerDraftStore.clearAll()
-        activeConnectionManager.disconnect()
+    private func notifyCleared() {
+        lock.lock()
         let handlers = profileClearedHandlers
+        lock.unlock()
         handlers.forEach { $0() }
     }
+}
 
-    func currentProfile() -> ConnectionProfile? {
-        activeConnectionManager.currentProfile()
+private actor ProfileChangeGate {
+    func run<T: Sendable>(_ operation: @Sendable () async throws -> T) async rethrows -> T {
+        try await operation()
     }
 }
 

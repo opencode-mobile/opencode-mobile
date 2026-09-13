@@ -163,7 +163,7 @@ class FakeForegroundEventStream : LiveConnection {
         setConnectionState(EventStreamConnectionState.Connected)
     }
 
-    override fun stop() {
+    override suspend fun stop() {
         occupying = false
         wasConnected = false
         _connectionState.value = EventStreamConnectionState.Idle

@@ -30,7 +30,21 @@ extension Container {
                 connectionProfileStore: self.connectionProfileStore(),
                 secureCredentialStore: self.secureCredentialStore(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),
-                composerDraftStore: self.composerDraftStore()
+                composerDraftStore: self.composerDraftStore(),
+                eventStream: { Container.shared.foregroundEventStream() },
+                syncCoordinator: { Container.shared.syncCoordinator() },
+                projectionCaches: { Container.shared.projectionCaches() },
+                bindReadyProfile: { profileID in
+                    await MainActor.run {
+                        Container.shared.sessionReadyStore().bindProfile(profileID: profileID)
+                    }
+                },
+                occupancy: { Container.shared.worldSignals().occupancy },
+                emitProfileSwitched: { Container.shared.worldSignals().emitProfileSwitched() },
+                hasActiveConnection: {
+                    let manager = Container.shared.activeConnectionManager()
+                    return manager.connection != nil || manager.currentProfile() != nil
+                }
             )
         }.singleton
     }
@@ -381,6 +395,13 @@ extension Container {
                     guard let connection = manager.connection else { return "" }
                     return "\(ConnectionProfileIdentity.normalizeBaseURL(connection.baseURL.absoluteString))|\(ConnectionProfileIdentity.normalizeUsername(connection.username))"
                 },
+                credentialFingerprint: {
+                    guard let connection = manager.connection else { return "" }
+                    return ConnectionProfileIdentity.credentialFingerprint(
+                        username: connection.username,
+                        password: connection.password ?? ""
+                    )
+                },
                 protocolHint: { manager.protocolHint() },
                 cachedProtocol: { manager.serverProtocol },
                 protocolProbe: { await manager.currentProtocolOrProbe() }
@@ -397,7 +418,6 @@ extension Container {
                 hasActiveConnection: {
                     manager.connection != nil || manager.currentProfile() != nil
                 },
-                connectionSessionCoordinator: self.connectionSessionCoordinator(),
                 activeConnectionManager: manager
             )
         }.singleton
@@ -480,6 +500,20 @@ extension Container {
                 sessionCache: self.sessionCache(),
                 worldSignals: self.worldSignals(),
                 syncCoordinator: self.syncCoordinator()
+            )
+        }.singleton
+    }
+
+    var projectionCaches: Factory<ProjectionCaches> {
+        self { @MainActor in
+            ProjectionCaches(
+                sessionLiveStore: self.sessionLiveStore(),
+                sessionStatusLiveStore: self.sessionStatusLiveStore(),
+                permissionLiveStore: self.permissionLiveStore(),
+                questionLiveStore: self.questionLiveStore(),
+                sessionTodoLiveStore: self.sessionTodoLiveStore(),
+                sessionReadyStore: self.sessionReadyStore(),
+                messageRepository: self.messageRepository()
             )
         }.singleton
     }
@@ -658,15 +692,7 @@ extension Container {
     @MainActor
     static func clearAllData() {
         Task { @MainActor in
-            shared.foregroundEventStream().stop()
             await shared.connectionSessionCoordinator().clearConnectionData()
-            shared.sessionLiveStore().clearCache()
-            shared.sessionStatusLiveStore().clearCache()
-            shared.permissionLiveStore().clearCache()
-            shared.questionLiveStore().clearCache()
-            shared.sessionTodoLiveStore().clearCache()
-            shared.sessionReadyStore().clearCache()
-            shared.messageRepository().clearMessageCache()
             await shared.sessionCache().clearAll()
             ThemeManager.shared.clearAll()
             HomeDisplayPreferences.shared.clear()
@@ -690,6 +716,7 @@ extension Container {
 
     @MainActor
     static func clearSessionCache() async {
+        shared.projectionCaches().clearAll()
         await shared.sessionCache().clearAll()
     }
 }

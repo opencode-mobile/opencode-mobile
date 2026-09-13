@@ -239,6 +239,33 @@ struct SyncCoordinatorTests {
         task.cancel()
         #expect(states.latest == .stale)
     }
+
+    @Test func beginProfileSwitchDiscardsInFlightLoaderFromOldGeneration() async {
+        let env = CoordinatorHarness()
+        let key = ProjectionKey.sessionList(directory: "/repo")
+        let started = Locked(false)
+        let gate = LoaderGate()
+        let registration = env.coordinator.register(key: key) { @Sendable in
+            started.mutate { $0 = true }
+            await gate.wait()
+        }
+        defer { env.coordinator.unregister(registration) }
+        env.coordinator.visible(key, true)
+
+        let load = Task.detached { await env.coordinator.ensureFresh(key) }
+        _ = await coordinatorWaitUntil { started.value }
+        env.coordinator.beginProfileSwitch(generation: 7)
+        gate.release()
+        _ = await load.value
+
+        var state: ProjectionState = .fresh
+        for await current in env.coordinator.observe(key) {
+            state = current
+            break
+        }
+        #expect(state == .stale)
+        #expect(env.coordinator.profileGeneration == 7)
+    }
 }
 
 private final class CoordinatorHarness: @unchecked Sendable {
@@ -339,4 +366,32 @@ private func coordinatorWaitUntil(
         }
         return predicate()
     }.value
+}
+
+private final class LoaderGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var released = false
+
+    func wait() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            lock.lock()
+            if released {
+                lock.unlock()
+                continuation.resume()
+            } else {
+                self.continuation = continuation
+                lock.unlock()
+            }
+        }
+    }
+
+    func release() {
+        lock.lock()
+        released = true
+        let continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.resume()
+    }
 }

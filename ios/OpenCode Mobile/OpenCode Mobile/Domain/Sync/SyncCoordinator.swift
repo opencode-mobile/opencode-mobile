@@ -1,6 +1,8 @@
 import Foundation
 
 nonisolated protocol SyncCoordinator: AnyObject, Sendable {
+    var profileGeneration: UInt64 { get }
+    func beginProfileSwitch(generation: UInt64)
     func register(
         key: ProjectionKey,
         loader: @escaping @Sendable () async throws -> Void
@@ -12,4 +14,9 @@ nonisolated protocol SyncCoordinator: AnyObject, Sendable {
     func bootstrap(_ reason: SyncBootstrapReason) async
     func markFocused(_ sessionKey: ProjectionKey?)
     func visible(_ key: ProjectionKey, _ isVisible: Bool)
+}
+
+extension SyncCoordinator {
+    var profileGeneration: UInt64 { 0 }
+    func beginProfileSwitch(generation _: UInt64) {}
 }

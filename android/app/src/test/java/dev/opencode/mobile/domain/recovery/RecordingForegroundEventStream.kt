@@ -14,7 +14,7 @@ class RecordingForegroundEventStream(
         fake.start()
     }
 
-    override fun stop() {
+    override suspend fun stop() {
         ops += "stop"
         fake.stop()
     }

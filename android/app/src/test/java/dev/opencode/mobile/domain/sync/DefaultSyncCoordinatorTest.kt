@@ -16,7 +16,6 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
@@ -151,6 +150,7 @@ class DefaultSyncCoordinatorTest {
         runTest(dispatcher) {
             val env = env()
             val order = CopyOnWriteArrayList<String>()
+
             suspend fun loader(name: String): suspend () -> Unit =
                 {
                     order += "start:$name"
@@ -270,6 +270,34 @@ class DefaultSyncCoordinatorTest {
             env.stream.setConnectionState(EventStreamConnectionState.Reconnecting)
             runCurrent()
             assertEquals(ProjectionState.Stale, env.coordinator.observe(key).first())
+        }
+
+    @Test
+    fun beginProfileSwitch_discardsInFlightLoaderFromOldGeneration() =
+        runTest(dispatcher) {
+            val env = env()
+            val key = ProjectionKey.SessionList("/repo")
+            val started = CompletableDeferred<Unit>()
+            val finish = CompletableDeferred<Unit>()
+            var committed = false
+            env.coordinator.register(key) {
+                started.complete(Unit)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                    finish.await()
+                    committed = true
+                }
+            }
+            env.coordinator.visible(key, true)
+            val job = async { env.coordinator.ensureFresh(key) }
+            runCurrent()
+            started.await()
+            env.coordinator.beginProfileSwitch(2)
+            job.cancel()
+            finish.complete(Unit)
+            runCurrent()
+            assertTrue(committed)
+            assertEquals(ProjectionState.Stale, env.coordinator.observe(key).first())
+            assertEquals(2, env.coordinator.profileGeneration)
         }
 
     private fun TestScope.env(startMs: Long = dispatcher.scheduler.currentTime): Env {

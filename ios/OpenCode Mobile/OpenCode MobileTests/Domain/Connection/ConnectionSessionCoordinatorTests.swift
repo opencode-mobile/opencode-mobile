@@ -43,6 +43,114 @@ import Testing
             ) == nil
         )
     }
+
+    @Test @MainActor func applyProfileChange_ordersStopCachesRebindSignalStart() async throws {
+        let log = TransactionLog()
+        let store = CatalogConnectionProfileStore()
+        let manager = ActiveConnectionManager(profileStore: store)
+        let stream = DelayedRecordingStream(log: log)
+        let sync = RecordingSyncCoordinator(log: log)
+        let caches = RecordingProjectionCaches(log: log)
+        let world = FakeWorldSignals()
+        let coordinator = ConnectionSessionCoordinator(
+            activeConnectionManager: manager,
+            connectionProfileStore: store,
+            secureCredentialStore: InMemorySecureCredentialStore(),
+            sessionModelSelectionStore: InMemorySessionModelSelectionStore(),
+            eventStream: { stream },
+            syncCoordinator: { sync },
+            projectionCaches: { caches },
+            bindReadyProfile: { id in log.append("bind:\(id ?? "nil")") },
+            occupancy: { world.occupancy },
+            emitProfileSwitched: {
+                log.append("profileSwitched")
+                world.emitProfileSwitched()
+            },
+            hasActiveConnection: { manager.connection != nil || manager.currentProfile() != nil }
+        )
+        var savedCount = 0
+        coordinator.onProfileSaved {
+            log.append("uiSaved")
+            savedCount += 1
+        }
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://10.0.0.1:4096/", username: "opencode", password: "a", name: "A")
+        )
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://10.0.0.2:4096/", username: "opencode", password: "b", name: "B")
+        )
+        let profiles = await store.listProfiles()
+        let profileA = profiles.first { $0.name == "A" }!
+        log.reset()
+        savedCount = 0
+        world.setOccupancy(.active)
+        stream.start()
+        log.reset()
+
+        await coordinator.switchProfile(id: profileA.id)
+
+        #expect(savedCount == 1)
+        #expect(coordinator.currentProfile()?.id == profileA.id)
+        #expect(coordinator.profileGeneration >= 1)
+        let steps = log.snapshot()
+        #expect(steps.contains("stop"))
+        #expect(steps.contains("beginSwitch"))
+        #expect(steps.contains("clear"))
+        #expect(steps.contains("bind:\(profileA.id)"))
+        #expect(steps.contains("profileSwitched"))
+        #expect(steps.contains("start"))
+        #expect(steps.contains("uiSaved"))
+        #expect(index(of: "stop", in: steps) < index(of: "clear", in: steps))
+        #expect(index(of: "clear", in: steps) < index(of: "bind:\(profileA.id)", in: steps))
+        #expect(index(of: "bind:\(profileA.id)", in: steps) < index(of: "profileSwitched", in: steps))
+        #expect(index(of: "profileSwitched", in: steps) < index(of: "start", in: steps))
+        #expect(index(of: "start", in: steps) < index(of: "uiSaved", in: steps))
+        #expect(steps.filter { $0 == "profileSwitched" }.count == 1)
+        #expect(steps.filter { $0 == "stop" }.count == 1)
+        #expect(steps.filter { $0 == "start" }.count == 1)
+        #expect(world.occupancy == .active)
+    }
+
+    @Test @MainActor func concurrentSwitchProfile_serializesAndEndsOnLast() async throws {
+        let log = TransactionLog()
+        let store = CatalogConnectionProfileStore()
+        let manager = ActiveConnectionManager(profileStore: store)
+        let stream = DelayedRecordingStream(log: log, stopDelayMs: 40)
+        let sync = RecordingSyncCoordinator(log: log)
+        let caches = RecordingProjectionCaches(log: log)
+        let switched = Locked(0)
+        let coordinator = ConnectionSessionCoordinator(
+            activeConnectionManager: manager,
+            connectionProfileStore: store,
+            secureCredentialStore: InMemorySecureCredentialStore(),
+            sessionModelSelectionStore: InMemorySessionModelSelectionStore(),
+            eventStream: { stream },
+            syncCoordinator: { sync },
+            projectionCaches: { caches },
+            occupancy: { .active },
+            emitProfileSwitched: { switched.mutate { $0 += 1 } },
+            hasActiveConnection: { true }
+        )
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://10.0.0.1:4096/", username: "opencode", password: "a", name: "A")
+        )
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://10.0.0.2:4096/", username: "opencode", password: "b", name: "B")
+        )
+        let profiles = await store.listProfiles()
+        let profileA = profiles.first { $0.name == "A" }!
+        let profileB = profiles.first { $0.name == "B" }!
+        switched.value = 0
+
+        async let first: Void = coordinator.switchProfile(id: profileA.id)
+        try? await Task.sleep(for: .milliseconds(10))
+        async let second: Void = coordinator.switchProfile(id: profileB.id)
+        await first
+        await second
+
+        #expect(coordinator.currentProfile()?.id == profileB.id)
+        #expect(switched.value == 2)
+    }
 }
 
 private final class InMemoryComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
@@ -237,4 +345,116 @@ private final class InMemorySecureCredentialStore: SecureCredentialStore, @unche
     func deletePassword(serverBaseURL: String) {}
 
     func clearAll() {}
+}
+
+private final class TransactionLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var steps: [String] = []
+
+    func append(_ step: String) {
+        lock.lock()
+        steps.append(step)
+        lock.unlock()
+    }
+
+    func reset() {
+        lock.lock()
+        steps.removeAll()
+        lock.unlock()
+    }
+
+    func snapshot() -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return steps
+    }
+}
+
+private func index(of step: String, in steps: [String]) -> Int {
+    steps.firstIndex(of: step) ?? .max
+}
+
+private final class DelayedRecordingStream: LiveConnection, @unchecked Sendable {
+    private let log: TransactionLog
+    private let stopDelayMs: Int
+    private let fake = FakeForegroundEventStream(connected: false)
+
+    init(log: TransactionLog, stopDelayMs: Int = 0) {
+        self.log = log
+        self.stopDelayMs = stopDelayMs
+    }
+
+    var connectionState: EventStreamConnectionState { fake.connectionState }
+    var snapshot: LiveConnectionSnapshot { fake.snapshot }
+
+    func connectionStateUpdates() -> AsyncStream<EventStreamConnectionState> {
+        fake.connectionStateUpdates()
+    }
+
+    func snapshotUpdates() -> AsyncStream<LiveConnectionSnapshot> {
+        fake.snapshotUpdates()
+    }
+
+    func events() -> AsyncStream<OpencodeEvent> { fake.events() }
+
+    func start() {
+        log.append("start")
+        fake.start()
+    }
+
+    func stop() async {
+        log.append("stop")
+        if stopDelayMs > 0 {
+            try? await Task.sleep(for: .milliseconds(stopDelayMs))
+        }
+        await fake.stop()
+    }
+}
+
+private final class RecordingSyncCoordinator: SyncCoordinator, @unchecked Sendable {
+    private let log: TransactionLog
+    private(set) var profileGeneration: UInt64 = 0
+
+    init(log: TransactionLog) {
+        self.log = log
+    }
+
+    func beginProfileSwitch(generation: UInt64) {
+        profileGeneration = generation
+        log.append("beginSwitch")
+    }
+
+    func register(
+        key _: ProjectionKey,
+        loader _: @escaping @Sendable () async throws -> Void
+    ) -> SyncRegistration {
+        SyncRegistration(id: UUID(), key: .sessionList(directory: "/"))
+    }
+
+    func unregister(_: SyncRegistration) {}
+    func observe(_: ProjectionKey) -> AsyncStream<ProjectionState> {
+        AsyncStream { $0.finish() }
+    }
+    func ensureFresh(_: ProjectionKey) async {}
+    func invalidate(_: ProjectionKey?) {}
+    func bootstrap(_: SyncBootstrapReason) async {}
+    func markFocused(_: ProjectionKey?) {}
+    func visible(_: ProjectionKey, _: Bool) {}
+}
+
+@MainActor
+private final class RecordingProjectionCaches: ProjectionCaching {
+    private let log: TransactionLog
+
+    init(log: TransactionLog) {
+        self.log = log
+    }
+
+    func clearAll() {
+        log.append("clearAll")
+    }
+
+    func clearLiveProjections() {
+        log.append("clear")
+    }
 }

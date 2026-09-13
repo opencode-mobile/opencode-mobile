@@ -7,8 +7,8 @@ import dev.opencode.mobile.domain.command.CommandRunOptions
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
 import dev.opencode.mobile.domain.connection.ConnectionProfile
-import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.connection.testConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
@@ -4080,7 +4080,7 @@ class SessionChatViewModelTest {
             activeConnectionManager.applyProfile(profile, serverProtocol = serverProtocol)
         }
         val connectionSessionCoordinator =
-            ConnectionSessionCoordinator(
+            testConnectionSessionCoordinator(
                 activeConnectionManager = activeConnectionManager,
                 connectionProfileStore = connectionProfileStore,
                 secureCredentialStore = FakeSecureCredentialStore(),

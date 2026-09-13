@@ -9,7 +9,7 @@ struct ProjectionReconciliationTests {
         let repo = ProjectionMessageRepository()
         let eventStream = FakeForegroundEventStream()
         eventStream.setConnectionState(.connected)
-        eventStream.stop()
+        await eventStream.stop()
         eventStream.setConnectionState(.connected)
         repo.messages = [
             Message(id: "msg-1", role: .user, text: "After gap", parts: [], model: nil, mode: nil, sentAtEpochMs: nil),

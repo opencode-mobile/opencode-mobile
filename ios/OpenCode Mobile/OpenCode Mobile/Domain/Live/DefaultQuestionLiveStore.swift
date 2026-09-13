@@ -93,11 +93,13 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
         let lastEmitted = QuestionEmitCache()
 
         @Sendable func loadAndCommit() async throws {
+            let generation = syncCoordinator.profileGeneration
             let outcome = await gate.refresh(
                 load: { () async -> [QuestionRequest]? in
                     try? await sessionRepository.listPendingQuestions(directory: directory)
                 },
                 commit: { requests in
+                    guard syncCoordinator.profileGeneration == generation else { return }
                     DiagnosticLog.info(.question, "question refresh count=\(requests.count)")
                     guard lastEmitted.shouldEmit(requests) else {
                         DiagnosticLog.info(.question, "question emit skip cause=unchanged")

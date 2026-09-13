@@ -8,7 +8,7 @@ nonisolated protocol ForegroundEventStream: AnyObject, Sendable {
     func connectionStateUpdates() -> AsyncStream<EventStreamConnectionState>
     func events() -> AsyncStream<OpencodeEvent>
     func start()
-    func stop()
+    func stop() async
     func onReconnectWake()
 }
 

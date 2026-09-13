@@ -73,11 +73,14 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
                 let observedSessions = self.observedSessions
                 if directoryRegistrations[key.directory] == nil {
                     let registration = coordinator.register(key: projection) { [weak self] in
+                        let generation = coordinator.profileGeneration
                         try await Self.loadDirectory(
                             directory: key.directory,
                             sessionRepository: sessionRepository,
                             observedSessions: observedSessions,
-                            store: self
+                            store: self,
+                            generation: generation,
+                            syncCoordinator: coordinator
                         )
                     }
                     coordinator.visible(projection, true)
@@ -183,7 +186,9 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
         directory: String,
         sessionRepository: any SessionRepository,
         observedSessions: DirectorySessionSet,
-        store: DefaultSessionTodoLiveStore?
+        store: DefaultSessionTodoLiveStore?,
+        generation: UInt64,
+        syncCoordinator: any SyncCoordinator
     ) async throws {
         let sessionIDs = observedSessions.sessions(in: directory)
         var failed = false
@@ -196,6 +201,7 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
                 failed = true
                 continue
             }
+            guard syncCoordinator.profileGeneration == generation else { return }
             await MainActor.run {
                 store?.replace(
                     todos: todos,

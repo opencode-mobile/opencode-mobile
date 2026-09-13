@@ -58,7 +58,7 @@ struct SceneWorldSignalsTests {
         job.cancel()
     }
 
-    @Test func profileSwitchWhileOccupyingRetargetsStream() async {
+    @Test func profileHandlerEmitsOnlyWithoutStopOrStart() async {
         let stream = RecordingForegroundEventStream()
         let signals = SceneWorldSignals(
             stream: stream,
@@ -73,7 +73,13 @@ struct SceneWorldSignalsTests {
         signals.onProfileSwitched()
         try? await Task.sleep(for: .milliseconds(20))
         #expect(stream.connectionState == .connected)
-        #expect(stream.ops == ["wake", "start", "stop", "start"])
+        #expect(stream.ops == ["wake", "start"])
+
+        let before = stream.ops
+        signals.onProfileCleared()
+        try? await Task.sleep(for: .milliseconds(20))
+        #expect(stream.ops == before)
+        #expect(stream.connectionState == .connected)
     }
 
     @Test func occupancyTracksForegroundGraceAndStop() async {

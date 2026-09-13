@@ -87,6 +87,7 @@ class DefaultSessionLiveStore
                 val gate = LiveStoreRefreshGate()
                 val registration =
                     syncCoordinator.register(key) {
+                        val generation = syncCoordinator.profileGeneration
                         val outcome =
                             gate.refresh(
                                 load = {
@@ -100,6 +101,7 @@ class DefaultSessionLiveStore
                                         "sessionLiveStore refresh directory=$directory count=${sessions.size}",
                                     )
                                 },
+                                isCurrent = { syncCoordinator.profileGeneration == generation },
                             )
                         if (outcome == LiveStoreRefreshOutcome.FAILED) {
                             error("session list refresh failed directory=$directory")
