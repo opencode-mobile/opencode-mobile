@@ -77,6 +77,12 @@ final class TimelineScrollController {
         requestScrollToEnd(animated: false)
     }
 
+    func noteObservedMessageCount(_ messageCount: Int) {
+        autoFollowState.observeCount(messageCount)
+        self.messageCount = messageCount
+        refreshDerivedState()
+    }
+
     func notifyContentGrew() {
         guard autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled: autoFollowEnabled) else {
             return

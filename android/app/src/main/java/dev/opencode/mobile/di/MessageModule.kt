@@ -14,6 +14,8 @@ import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageDomainAdapter
 import dev.opencode.mobile.domain.message.MessageRemote
 import dev.opencode.mobile.domain.message.MessageRepository
+import dev.opencode.mobile.domain.message.MessageHistoryQuery
+import dev.opencode.mobile.domain.message.MessageHistoryWindow
 import dev.opencode.mobile.domain.message.MessageSync
 import dev.opencode.mobile.domain.message.ProtocolSelectedMessageRemote
 import dev.opencode.mobile.domain.message.SessionMessageEngine
@@ -63,6 +65,29 @@ abstract class MessageModule {
                 listMessages = { sessionId, directory ->
                     runCatching { messageRemote.listMessages(sessionId, directory) }
                         .getOrElse { throw adapter.mapError(it) }
+                },
+                listMessageTail = { sessionId, directory ->
+                    runCatching {
+                        messageRemote.listMessagePage(sessionId, directory, MessageHistoryQuery.tail())
+                    }.getOrElse { throw adapter.mapError(it) }
+                },
+                listOlderMessages = { sessionId, directory, cursor ->
+                    runCatching {
+                        messageRemote.listMessagePage(
+                            sessionId,
+                            directory,
+                            MessageHistoryQuery.older(cursor),
+                        )
+                    }.getOrElse { throw adapter.mapError(it) }
+                },
+                listSplitTurnMessages = { sessionId, directory, cursor ->
+                    runCatching {
+                        messageRemote.listMessagePage(
+                            sessionId,
+                            directory,
+                            MessageHistoryQuery.older(cursor, MessageHistoryWindow.TAIL_LIMIT),
+                        )
+                    }.getOrElse { throw adapter.mapError(it) }
                 },
                 engine = engine,
                 eventStream = eventStream,

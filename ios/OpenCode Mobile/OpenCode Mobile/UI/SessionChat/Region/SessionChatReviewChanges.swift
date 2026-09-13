@@ -8,25 +8,37 @@ final class SessionChatReviewChanges {
 
     private var sessionID: String
     private let worktree: String
-    private let sessionRepository: any SessionRepository
     private let supportsSessionMessageDiff: () -> Bool
-    private var requestTask: Task<Void, Never>?
+    private let lastTurnReviewChangesStore: LastTurnReviewChangesStore
     private var candidateMessageID: String?
+    private var storeObservation: UUID?
 
-    init(sessionID: String, worktree: String, sessionRepository: any SessionRepository, supportsSessionMessageDiff: @escaping () -> Bool = { true }) {
+    init(
+        sessionID: String,
+        worktree: String,
+        supportsSessionMessageDiff: @escaping () -> Bool = { true },
+        lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil
+    ) {
         self.sessionID = sessionID
         self.worktree = worktree
-        self.sessionRepository = sessionRepository
         self.supportsSessionMessageDiff = supportsSessionMessageDiff
+        self.lastTurnReviewChangesStore = lastTurnReviewChangesStore ?? LastTurnReviewChangesStore()
+        storeObservation = self.lastTurnReviewChangesStore.observe { [weak self] changedSessionID in
+            guard let self, changedSessionID == self.sessionID else { return }
+            let previous = self.state
+            self.applyPublishedSnapshot()
+            if self.state != previous {
+                self.notifyChange()
+            }
+        }
     }
 
     func rebind(sessionID: String) {
         guard sessionID != self.sessionID else { return }
-        requestTask?.cancel()
-        requestTask = nil
         candidateMessageID = nil
         self.sessionID = sessionID
         state = SessionChatReviewChangesRegionState()
+        applyPublishedSnapshot()
         notifyChange()
     }
 
@@ -40,62 +52,32 @@ final class SessionChatReviewChanges {
             $0.role == .user && !$0.isPending && !$0.isStreaming
         })?.id
         let eligibleMessageID = supportsSessionMessageDiff() && hasResolvedSessionStatus && !isTurnActive && !isSending ? messageID : nil
-        guard eligibleMessageID != candidateMessageID else { return }
-
-        requestTask?.cancel()
-        candidateMessageID = eligibleMessageID
-        state = SessionChatReviewChangesRegionState()
-        guard let eligibleMessageID else { return }
-
-        requestTask = Task { [weak self] in
-            guard let self else { return }
-            let startedAt = Date()
-            do {
-                let files = try await sessionRepository.getSessionDiff(
-                    id: sessionID,
-                    messageID: eligibleMessageID,
-                    directory: worktree
-                )
-                guard !Task.isCancelled, candidateMessageID == eligibleMessageID else { return }
-                let summary = ReviewChangesSummary(files: files)
-                state = SessionChatReviewChangesRegionState(
-                    messageID: eligibleMessageID,
-                    summary: summary
-                )
-                logRequest(summary: summary, result: "success", startedAt: startedAt)
-                notifyChange()
-            } catch is CancellationError {
-                return
-            } catch {
-                guard candidateMessageID == eligibleMessageID else { return }
-                state = SessionChatReviewChangesRegionState()
-                logRequest(summary: nil, result: "failure:\(failureCategory(error))", startedAt: startedAt)
-                notifyChange()
-            }
+        let previous = state
+        if eligibleMessageID != candidateMessageID {
+            candidateMessageID = eligibleMessageID
+            // Bind does not fetch last-turn diff. The Changes screen owns that GET.
+            // Without a loaded summary the pill stays hidden.
+            state = SessionChatReviewChangesRegionState(messageID: eligibleMessageID, summary: nil)
+        }
+        applyPublishedSnapshot()
+        if state != previous {
+            notifyChange()
         }
     }
 
     func stop() {
-        requestTask?.cancel()
-        requestTask = nil
+        if let storeObservation {
+            lastTurnReviewChangesStore.stopObserving(storeObservation)
+        }
+        storeObservation = nil
         candidateMessageID = nil
         state = SessionChatReviewChangesRegionState()
     }
 
-    private func failureCategory(_ error: Error) -> String {
-        switch error as? SessionError {
-        case .transport: "transport"
-        case .http(let statusCode, _): "http-\(statusCode)"
-        case .decoding: "decoding"
-        case nil: "unexpected"
-        }
-    }
-
-    private func logRequest(summary: ReviewChangesSummary?, result: String, startedAt: Date) {
-        let duration = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
-        OpenCodeLog.sessionChat.info(
-            "pill-summary source=last-turn session=\(self.sessionID) directory=\(self.worktree) files=\(summary?.fileCount ?? 0) additions=\(summary?.additions ?? 0) deletions=\(summary?.deletions ?? 0) result=\(result) durationMs=\(duration)"
-        )
+    private func applyPublishedSnapshot() {
+        guard let snapshot = lastTurnReviewChangesStore.snapshot(sessionID: sessionID) else { return }
+        guard snapshot.messageID == candidateMessageID else { return }
+        state = SessionChatReviewChangesRegionState(messageID: snapshot.messageID, summary: snapshot.summary)
     }
 
     private func notifyChange() {

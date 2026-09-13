@@ -297,6 +297,77 @@ struct ChangesViewModelTests {
         #expect(FileViewerState(file: FileDiff(path: "image.png", patch: nil, additions: 0, deletions: 0, status: .modified)).hasPreview == false)
     }
 
+    @Test func lastTurnLoadPublishesReviewChangesSummary() async {
+        let store = LastTurnReviewChangesStore()
+        let repository = ChangesSessionRepository(results: [.success([Self.file("A.swift", additions: 2, deletions: 1)])])
+        let viewModel = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/repo",
+            messageID: "user-1",
+            repository: repository,
+            lastTurnReviewChangesStore: store
+        )
+        await viewModel.load()
+
+        let snapshot = store.snapshot(sessionID: "s")
+        #expect(snapshot?.messageID == "user-1")
+        #expect(snapshot?.summary == ReviewChangesSummary(fileCount: 1, additions: 2, deletions: 1, messageID: "user-1"))
+    }
+
+    @Test func emptyOrFailedLastTurnKeepsSummaryHidden() async {
+        let emptyStore = LastTurnReviewChangesStore()
+        let empty = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/repo",
+            messageID: "user-1",
+            repository: ChangesSessionRepository(results: [.success([])]),
+            lastTurnReviewChangesStore: emptyStore
+        )
+        await empty.load()
+        #expect(emptyStore.snapshot(sessionID: "s")?.messageID == "user-1")
+        #expect(emptyStore.snapshot(sessionID: "s")?.summary == nil)
+
+        let failedStore = LastTurnReviewChangesStore()
+        let failed = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/repo",
+            messageID: "user-1",
+            repository: ChangesSessionRepository(results: [.failure(SessionError.transport("offline"))]),
+            lastTurnReviewChangesStore: failedStore
+        )
+        await failed.load()
+        #expect(failedStore.snapshot(sessionID: "s")?.summary == nil)
+    }
+
+    @Test func workingTreeLoadDoesNotPublishLastTurnSummary() async {
+        let store = LastTurnReviewChangesStore()
+        let repository = ChangesSessionRepository(
+            results: [],
+            vcsInfoResults: [.success(VcsInfo(currentBranch: "feature", defaultBranch: "main"))],
+            vcsDiffResults: [.success([Self.file("git.swift")])]
+        )
+        let viewModel = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/repo",
+            messageID: "user-1",
+            initialSource: .workingTree,
+            repository: repository,
+            lastTurnReviewChangesStore: store
+        )
+        await viewModel.load()
+        #expect(store.snapshot(sessionID: "s") == nil)
+        #expect(viewModel.state.selectedSource == .workingTree)
+    }
+
+    @Test func workingTreeOverflowWorksWithoutLastTurnPill() {
+        var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
+        state.timeline = .ready
+        state.messages = [row("user", .user), row("assistant", .assistant)]
+        #expect(state.changesNavigationTarget(worktree: "/repo").initialSource == .workingTree)
+        #expect(state.reviewChangesNavigationTarget(worktree: "/repo") == nil)
+        #expect(!ReviewChangesPillVisibility.shouldShow(summary: state.reviewChangesSummary))
+    }
+
     @Test func entryPointsChooseGitAndLastTurn() {
         var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
         state.timeline = .ready

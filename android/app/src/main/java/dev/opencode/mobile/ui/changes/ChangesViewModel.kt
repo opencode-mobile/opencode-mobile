@@ -17,6 +17,8 @@ import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
 import dev.opencode.mobile.ui.components.UnifiedDiffDocument
 import dev.opencode.mobile.ui.components.UnifiedDiffParser
+import dev.opencode.mobile.ui.sessionchat.LastTurnReviewChangesStore
+import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -138,17 +140,24 @@ data class FileViewerState(
 class ChangesViewModel(
     private val repository: SessionRepository,
     private val capabilitiesProvider: () -> ServerCapabilities,
+    private val lastTurnReviewChangesStore: LastTurnReviewChangesStore = LastTurnReviewChangesStore(),
 ) : ViewModel() {
     @Inject
     constructor(
         repository: SessionRepository,
         activeConnectionManager: ActiveConnectionManager,
-    ) : this(repository, { activeConnectionManager.currentCapabilities() })
+        lastTurnReviewChangesStore: LastTurnReviewChangesStore,
+    ) : this(repository, { activeConnectionManager.currentCapabilities() }, lastTurnReviewChangesStore)
 
     constructor(
         repository: SessionRepository,
         capabilities: ServerCapabilities = ServerCapabilities.forProtocol(ServerProtocol.V1),
     ) : this(repository, { capabilities })
+
+    constructor(
+        repository: SessionRepository,
+        lastTurnReviewChangesStore: LastTurnReviewChangesStore,
+    ) : this(repository, { ServerCapabilities.forProtocol(ServerProtocol.V1) }, lastTurnReviewChangesStore)
 
     private val capabilities: ServerCapabilities
         get() = capabilitiesProvider()
@@ -285,6 +294,7 @@ class ChangesViewModel(
                         }
                     val sortedFiles = files.sortedBy(FileDiff::path)
                     logLoad(selectedSource, target, sortedFiles.size, if (sortedFiles.isEmpty()) "empty" else "success", startedAt)
+                    publishLastTurnSummary(target, selectedSource, sortedFiles, failed = false)
                     _uiState.value =
                         ChangesUiState(
                             phase =
@@ -304,6 +314,9 @@ class ChangesViewModel(
                         "load source=${activeSource.logValue()} session=${target.sessionId} directory=${target.worktree} files=0 result=failure durationMs=${System.currentTimeMillis() - startedAt}",
                         error,
                     )
+                    if (activeSource == ChangeSource.LastTurn) {
+                        publishLastTurnSummary(target, ChangeSource.LastTurn, emptyList(), failed = true)
+                    }
                     _uiState.value =
                         if (preservedPhase != null) {
                             val restoredPhase =
@@ -370,6 +383,21 @@ class ChangesViewModel(
                 }
             ChangeSource.WorkingTree -> repository.getVcsDiff(VcsDiffMode.WorkingTree, target.worktree, context = 12)
         }
+
+    private fun publishLastTurnSummary(
+        target: Target,
+        source: ChangeSource,
+        files: List<FileDiff>,
+        failed: Boolean,
+    ) {
+        if (source != ChangeSource.LastTurn) return
+        val messageId = target.messageId ?: return
+        lastTurnReviewChangesStore.publish(
+            sessionId = target.sessionId,
+            messageId = messageId,
+            summary = if (failed) null else ReviewChangesSummary.from(files, messageId),
+        )
+    }
 
     private fun logLoad(
         source: ChangeSource,

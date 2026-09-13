@@ -4,6 +4,7 @@ sealed interface DisplayMessageListUpdate {
     data class Messages(
         val messages: List<DisplayMessage>,
         val isFromCache: Boolean = false,
+        val hasOlder: Boolean = false,
     ) : DisplayMessageListUpdate
 
     data class LoadFailed(
@@ -11,5 +12,7 @@ sealed interface DisplayMessageListUpdate {
     ) : DisplayMessageListUpdate
 
     /** Network confirmed cache without a second UI snapshot (fingerprint unchanged). */
-    data object CacheSyncConfirmed : DisplayMessageListUpdate
+    data class CacheSyncConfirmed(
+        val hasOlder: Boolean = false,
+    ) : DisplayMessageListUpdate
 }

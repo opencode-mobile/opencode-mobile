@@ -5,6 +5,8 @@ struct SessionChatTimelineViewProps {
     let messages: [SessionChatRow]
     let timelineFrame: TimelineFrame
     let isRefreshing: Bool
+    let hasOlder: Bool
+    let isLoadingOlder: Bool
     let errorMessage: String?
     let reviewChangesSummary: ReviewChangesSummary?
     let syncingIndicatorLabel: String?
@@ -18,6 +20,7 @@ struct SessionChatTimelineViewProps {
     /// Extra bottom inset so the timeline can scroll under a floating composer.
     let bottomOverlayInset: CGFloat
     let onRefresh: () async -> Void
+    let onLoadOlder: () -> Void
     let onReviewChangesTap: () -> Void
     let onSessionTodosTap: () -> Void
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
@@ -33,6 +36,8 @@ struct SessionChatTimelineViewProps {
         messages: [SessionChatRow],
         timelineFrame: TimelineFrame = .empty,
         isRefreshing: Bool,
+        hasOlder: Bool = false,
+        isLoadingOlder: Bool = false,
         errorMessage: String?,
         reviewChangesSummary: ReviewChangesSummary?,
         syncingIndicatorLabel: String? = nil,
@@ -45,6 +50,7 @@ struct SessionChatTimelineViewProps {
         hideFloatStack: Bool = false,
         bottomOverlayInset: CGFloat = 0,
         onRefresh: @escaping () async -> Void,
+        onLoadOlder: @escaping () -> Void = {},
         onReviewChangesTap: @escaping () -> Void,
         onSessionTodosTap: @escaping () -> Void = {},
         onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
@@ -59,6 +65,8 @@ struct SessionChatTimelineViewProps {
         self.messages = messages
         self.timelineFrame = timelineFrame
         self.isRefreshing = isRefreshing
+        self.hasOlder = hasOlder
+        self.isLoadingOlder = isLoadingOlder
         self.errorMessage = errorMessage
         self.reviewChangesSummary = reviewChangesSummary
         self.syncingIndicatorLabel = syncingIndicatorLabel
@@ -71,6 +79,7 @@ struct SessionChatTimelineViewProps {
         self.hideFloatStack = hideFloatStack
         self.bottomOverlayInset = bottomOverlayInset
         self.onRefresh = onRefresh
+        self.onLoadOlder = onLoadOlder
         self.onReviewChangesTap = onReviewChangesTap
         self.onSessionTodosTap = onSessionTodosTap
         self.onMessageActionsTap = onMessageActionsTap
@@ -191,6 +200,8 @@ private struct SessionChatTimelineReadyView: View {
                 scrollController: scrollController,
                 onRefresh: props.onRefresh,
                 onUserScrollDismissKeyboard: props.onUserScrollDismissKeyboard,
+                canLoadOlder: props.hasOlder && !props.isLoadingOlder,
+                onNearOldestVisible: props.onLoadOlder,
                 bottomContentPadding: 0,
                 bottomOverlayInset: props.bottomOverlayInset,
                 topOverlayInset: topOverlayInset

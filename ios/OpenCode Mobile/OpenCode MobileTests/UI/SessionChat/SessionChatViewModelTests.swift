@@ -431,7 +431,7 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.sessionTitle == "Title")
     }
 
-    @Test func completedLatestTurnLoadsReviewChangesSummaryWithWorktree() async {
+    @Test func completedLatestTurnDoesNotFetchReviewChangesDiffOnBind() async {
         let sessionRepository = FakeChatSessionRepository(
             sessionDiffs: [
                 FileDiff(path: "one.swift", patch: nil, additions: 1, deletions: 2, status: .modified),
@@ -448,10 +448,10 @@ struct SessionChatViewModelTests {
         defer { viewModel.stopObserving() }
 
         await viewModel.loadMessages()
-        await waitUntil { viewModel.uiState.reviewChangesSummary != nil }
+        try? await Task.sleep(for: .milliseconds(50))
 
-        #expect(viewModel.uiState.reviewChangesSummary == ReviewChangesSummary(fileCount: 2, additions: 4, deletions: 2))
-        #expect(sessionRepository.diffRequest == .init(sessionID: "ses-1", messageID: "user-1", directory: "/repo"))
+        #expect(viewModel.uiState.reviewChangesSummary == nil)
+        #expect(sessionRepository.diffRequest == nil)
     }
 
     @Test func v2DoesNotLoadLastTurnReviewChangesSummary() async {
@@ -479,19 +479,9 @@ struct SessionChatViewModelTests {
     }
 
     @Test func newerLatestTurnCancelsStaleReviewChangesSummary() async {
-        let sessionRepository = FakeChatSessionRepository(
-            sessionDiffProvider: { messageID in
-                if messageID == "user-1" {
-                    try await Task.sleep(for: .seconds(1))
-                    return [FileDiff(path: "stale.swift", patch: nil, additions: 99, deletions: 99, status: .modified)]
-                }
-                return [FileDiff(path: "latest.swift", patch: nil, additions: 5, deletions: 3, status: .modified)]
-            }
-        )
         let region = SessionChatReviewChanges(
             sessionID: "ses-1",
-            worktree: "/repo",
-            sessionRepository: sessionRepository
+            worktree: "/repo"
         )
 
         region.updateCandidate(
@@ -507,9 +497,36 @@ struct SessionChatViewModelTests {
             isTurnActive: false,
             isSending: false
         )
-        await waitUntil { region.state.messageID == "user-2" }
 
-        #expect(region.state.summary == ReviewChangesSummary(fileCount: 1, additions: 5, deletions: 3))
+        #expect(region.state.messageID == "user-2")
+        #expect(region.state.summary == nil)
+    }
+
+    @Test func publishedLastTurnSummaryShowsPillWithoutBindFetch() async {
+        let store = LastTurnReviewChangesStore()
+        let region = SessionChatReviewChanges(
+            sessionID: "ses-1",
+            worktree: "/repo",
+            lastTurnReviewChangesStore: store
+        )
+        region.updateCandidate(
+            messages: [reviewChangesRow(id: "user-1")],
+            hasResolvedSessionStatus: true,
+            isTurnActive: false,
+            isSending: false
+        )
+
+        #expect(region.state.summary == nil)
+
+        store.publish(
+            sessionID: "ses-1",
+            messageID: "user-1",
+            summary: ReviewChangesSummary(fileCount: 2, additions: 4, deletions: 1, messageID: "user-1")
+        )
+
+        #expect(region.state.summary == ReviewChangesSummary(fileCount: 2, additions: 4, deletions: 1, messageID: "user-1"))
+        #expect(region.state.messageID == "user-1")
+        #expect(ReviewChangesPillVisibility.shouldShow(summary: region.state.summary))
     }
 
     @Test func failedReviewChangesCountStaysHidden() async {
@@ -524,8 +541,9 @@ struct SessionChatViewModelTests {
         defer { viewModel.stopObserving() }
 
         await viewModel.loadMessages()
-        await waitUntil { sessionRepository.diffRequest != nil }
+        try? await Task.sleep(for: .milliseconds(50))
 
+        #expect(sessionRepository.diffRequest == nil)
         #expect(viewModel.uiState.reviewChangesSummary == nil)
     }
 
@@ -2058,6 +2076,7 @@ struct SessionChatViewModelTests {
         let withMessages = makeViewModel(messageRepository: FakeMessageRepository())
         defer { withMessages.stopObserving() }
         await withMessages.loadMessages()
+        _ = await waitUntil { withMessages.uiState.visibleClientSlashActions.contains(.compact) }
         let visible = withMessages.uiState.visibleClientSlashActions
         #expect(visible.contains(.new))
         #expect(visible.contains(.terminal))
@@ -2666,6 +2685,7 @@ struct SessionChatViewModelTests {
         )
         defer { viewModel.stopObserving() }
         await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.visibleClientSlashActions.contains(.compact) }
         #expect(viewModel.uiState.visibleClientSlashActions.contains(.compact))
 
         viewModel.runClientSlashAction(.compact)

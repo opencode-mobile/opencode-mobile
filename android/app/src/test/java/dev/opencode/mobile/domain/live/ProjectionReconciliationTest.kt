@@ -11,6 +11,8 @@ import dev.opencode.mobile.domain.message.MessageDomainAdapter
 import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageSync
+import dev.opencode.mobile.domain.message.MessageSyncHealth
+import dev.opencode.mobile.domain.message.MessageSyncRecoveryReason
 import dev.opencode.mobile.domain.message.SessionMessageEngine
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -73,6 +75,57 @@ class ProjectionReconciliationTest {
             eventStream.emit(OpencodeEvent(type = "server.connected"))
             advanceTimeBy(350)
             job.cancel()
+            assertEquals(afterInitial + 1, repository.listMessagesCallCount)
+        }
+
+    @Test
+    fun occupancyStopped_doesNotPollRest() =
+        runTest(testDispatcher) {
+            val repository = RecordingMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val world = FakeWorldSignals()
+            val sync = createSync(repository, eventStream, world, pollIntervalMs = 30)
+            val job = launch { sync.observeMessages("ses-1", "/repo").collect { } }
+            advanceTimeBy(1)
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(1)
+            val afterInitial = repository.listMessagesCallCount
+            world.emit(WorldSignal.BackgroundStop)
+            eventStream.setConnectionState(EventStreamConnectionState.Idle)
+            advanceTimeBy(120)
+            job.cancel()
+            assertEquals(afterInitial, repository.listMessagesCallCount)
+        }
+
+    @Test
+    fun reconnectFailureAfterStop_staysStaleWithoutRetryGet() =
+        runTest(testDispatcher) {
+            val repository = RecordingMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val world = FakeWorldSignals()
+            val sync = createSync(repository, eventStream, world)
+            val job = launch { sync.observeMessages("ses-1", "/repo").collect { } }
+            advanceTimeBy(1)
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(1)
+            val afterInitial = repository.listMessagesCallCount
+            val gate = CompletableDeferred<Unit>()
+            repository.nextLoadGate = gate
+            eventStream.openGap()
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
+            advanceTimeBy(1)
+            world.emit(WorldSignal.BackgroundStop)
+            eventStream.setConnectionState(EventStreamConnectionState.Idle)
+            repository.shouldFail = true
+            gate.complete(Unit)
+            advanceTimeBy(80)
+            job.cancel()
+            val health = sync.syncHealth("ses-1", "/repo")
+            assertTrue(health is MessageSyncHealth.Stale)
+            assertEquals(
+                MessageSyncRecoveryReason.TransportUnavailable,
+                (health as MessageSyncHealth.Stale).reason,
+            )
             assertEquals(afterInitial + 1, repository.listMessagesCallCount)
         }
 

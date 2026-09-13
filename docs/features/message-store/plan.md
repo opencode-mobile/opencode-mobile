@@ -15,18 +15,21 @@ tokenize run in a content-preparation layer so UI receives almost-ready rows.
   reconnect clocks. Policy: [decisions.md](decisions.md).
 - `MessageContentPreparer` + `DisplayMessagePipeline` — parse, highlight, cache → `DisplayMessage`.
 - `MessageRepository.observeDisplayMessages` / `refreshDisplayMessages` / `prepareOptimisticUserMessage`.
+- Windowed history: newest 20-message seed, bounded split-turn backfill,
+  200-message older pages, and tail-only authoritative reconciliation.
 - Session Chat timeline depends on display-message APIs only (no UI-layer markdown mapper).
 
 ## Out Of Scope
 
 - SQLite / Room / SwiftData persistence.
-- Paginated history (`limit` / `before` / `x-next-cursor`).
 - Per-message `getMessage` reconcile on every SSE tick.
 - Markdown in the raw message store.
 
 ## Server APIs Involved
 
-- `GET /session/:id/message` — seed and reload history.
+- v1 `GET /session/:id/message` — `limit` / `before` windowed history.
+- v2 `GET /api/session/:id/message` — `limit` / `order` / `cursor`
+  windowed history.
 - v1 `GET /global/event` and instance `GET /event?directory=`, v2
   `GET /api/event` (via `ForegroundEventStream` / `LiveConnection`) —
   ordered live patches, connection events, and reconnect signals.
@@ -130,18 +133,27 @@ display pipeline emit (debounced while parts are streaming).
 
 Observation registers for foreground events before requesting initial history,
 so events that arrive during the REST request are buffered and merged after the
-snapshot. REST responses replace the store only when its revision still matches
-the revision captured before the request; an intervening SSE patch makes that
-response stale and it is discarded. Failed or discarded REST does not
-acknowledge the current `GapAuthority` revision; accepted replace or
-equality confirmation does. A newer gap during REST stays pending.
+snapshot. Initial REST loads the newest 20 messages and fetches at most three
+additional 20-message pages when the first page starts mid-turn. The store keeps
+the resulting chronological history window and loads one 200-message older page
+per user scroll toward its oldest edge.
+
+Tail REST applies only when the store revision still matches the revision
+captured before the request; an intervening SSE patch makes that response stale
+and it is discarded. An accepted tail updates its overlap and newer rows while
+preserving loaded rows older than the overlap. A non-empty tail with no overlap
+resets the window instead of joining an unproven gap. Poll, refresh, reconnect,
+and recovery use the same bounded tail and never drain complete history.
+Failed or discarded REST does not acknowledge the current `GapAuthority`
+revision; accepted merge or equality confirmation does. A newer gap during REST
+stays pending.
 `session.idle` with an incomplete last assistant, and `sse.parse.failed`,
 are authoritative REST barriers. Failed idle authority stays recovering.
 
 REST mapping retains stable part identities so selective updates do not consume
 the event loop with a reload or lose subsequent deltas. Legacy parts without a
-server ID use the safe full-reload fallback. A newer live snapshot must never
-wait for stale history enrichment to finish.
+server ID use the bounded tail-authority fallback. A newer live snapshot must
+never wait for stale history enrichment to finish.
 
 **Not in scope for the store:** tokenizer, parser, or highlighter — those live
 in `MessageContentPreparer` (backed by KMP markdown on Android and the native
@@ -151,6 +163,8 @@ bridge on iOS).
 
 - Session Chat receives loading, ready, empty, and load-failed outcomes through
   the existing timeline state.
+- Timeline state exposes whether older history exists and whether an older page
+  is loading. Scrolling toward the oldest loaded row requests one page.
 - Explicit refresh uses `refreshDisplayMessages`; send uses
   `prepareOptimisticUserMessage` followed by the repository send API.
 - Live and watchdog updates are quiet timeline updates and must not clear an
@@ -166,6 +180,8 @@ bridge on iOS).
 ## Error States
 
 - Initial history failure produces a load-failed update.
+- Older-page failure keeps the loaded window and allows another user-scroll
+  attempt.
 - Explicit refresh failure is returned to the caller.
 - SSE or reconciliation failure keeps the last good snapshot.
 - Failed idle or parse-failure authority stays recovering until accepted
@@ -185,9 +201,12 @@ and streaming state.
 ## Validation
 
 - Android: `MessageSyncTest`, `DisplayMessagePipelinePacingTest`,
-  `MessageContentPreparerTest`, and `SessionChatViewModelTest`.
+  `MessageSyncWindowedHistoryTest`, `MessageWindowMergeTest`,
+  `MessageListOlderHistoryTest`, `MessageContentPreparerTest`, and
+  `SessionChatViewModelTest`.
 - iOS: `MessageSyncTests`, `DisplayMessagePipelinePacingTests`, and
-  `SessionChatViewModelTests`.
+  `MessageSyncWindowTests`, `MessageHistoryMergeTests`,
+  `MessageListTimelineHostOlderScrollTests`, and `SessionChatViewModelTests`.
 - Both message-sync suites cover events buffered during initial REST, stale
   in-flight poll rejection, and event → store → display streaming/final
   behavior.

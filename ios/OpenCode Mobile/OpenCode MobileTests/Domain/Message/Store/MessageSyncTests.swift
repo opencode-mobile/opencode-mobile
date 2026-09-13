@@ -282,6 +282,69 @@ struct MessageSyncTests {
         #expect(collector.latest()?.first?.text == "Hello")
     }
 
+    @Test func hungInitialRest_cacheSeed_confirmsSyncWhileSseConnected() async {
+        let repo = FakeLiveMessageRepository()
+        repo.holdNextListMessages()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let cached = repo.messages
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            pollIntervalMs: 20,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            sessionCache: SeedingSessionCache(messages: cached)
+        )
+        let collector = CacheConfirmAwareCollector()
+        let task = Task {
+            await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        let painted = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(painted)
+        let confirmed = await waitUntil { collector.sawCacheSyncConfirmed }
+        task.cancel()
+        #expect(confirmed)
+        #expect(repo.isListBlocked)
+        repo.resumeListMessages()
+    }
+
+    @Test func hungInitialRest_cacheSeed_doesNotConfirmWhenOccupancyStopped() async {
+        let repo = FakeLiveMessageRepository()
+        repo.holdNextListMessages()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.disconnected)
+        let world = FakeWorldSignals()
+        world.setOccupancy(.stopped)
+        let cached = repo.messages
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            worldSignals: world,
+            pollIntervalMs: 20,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            sessionCache: SeedingSessionCache(messages: cached)
+        )
+        let collector = CacheConfirmAwareCollector()
+        let task = Task {
+            await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        let painted = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        try? await Task.sleep(for: .milliseconds(80))
+        task.cancel()
+        #expect(painted)
+        #expect(!collector.sawCacheSyncConfirmed)
+        #expect(repo.isListBlocked)
+        repo.resumeListMessages()
+    }
+
     @Test func hiddenReasoningSnapshotUpdates_doNotRestOrShowCatchUp() async {
             let repo = FakeLiveMessageRepository()
             repo.messages = hiddenReasoningTranscript()
@@ -1831,4 +1894,34 @@ private final class FakeLiveMessageRepository: MessageRepository, @unchecked Sen
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message { fatalError() }
     func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message { fatalError() }
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
+}
+
+private final class SeedingSessionCache: SessionCache, @unchecked Sendable {
+    private let messages: [Message]
+
+    init(messages: [Message]) {
+        self.messages = messages
+    }
+
+    func seedSessions(worktree: String) async -> [Session]? { nil }
+    func rememberSessions(worktree: String, sessions: [Session]) async {}
+    func openMessages(sessionID: String, worktree: String) -> any SessionMessageCacheHandle {
+        SeedingSessionMessageCacheHandle(messages: messages)
+    }
+    func purgeWorktree(serverBaseURL: String, worktree: String) async {}
+    func clearAll() async {}
+    func estimatedSizeBytes() async -> Int64 { 0 }
+}
+
+private final class SeedingSessionMessageCacheHandle: SessionMessageCacheHandle, @unchecked Sendable {
+    private let messages: [Message]
+
+    init(messages: [Message]) {
+        self.messages = messages
+    }
+
+    func seed() async -> [Message]? { messages }
+    func note(messages: [Message]) {}
+    func flush() async {}
+    func close() {}
 }

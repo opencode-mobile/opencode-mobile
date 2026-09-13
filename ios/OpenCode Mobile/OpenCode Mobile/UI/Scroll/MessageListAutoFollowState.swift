@@ -34,4 +34,8 @@ struct MessageListAutoFollowState {
         observedMessageCount = messageCount
         return shouldFollow
     }
+
+    mutating func observeCount(_ messageCount: Int) {
+        observedMessageCount = messageCount
+    }
 }

@@ -5,6 +5,15 @@ mutations to `MainActor`; these are platform-specific concurrency mechanisms
 for the same atomic merge and revision-check contract, not a product behavior
 difference.
 
+## Windowed history scroll mechanism (intentional)
+
+Both platforms request one 200-message page only after a user scroll toward the
+oldest loaded row. Android detects that gesture through reverse-layout
+`LazyColumn` indices and restores its visible item anchor. iOS detects it in the
+`UICollectionView` host and restores the visible item plus offset after the
+diffable apply. These native mechanisms implement the same request count,
+viewport, retry, and auto-follow behavior.
+
 ## Warm reopen prepared-markdown cache (intentional)
 
 iOS `DisplayMessagePipeline` keeps a prepared-markdown map across leave/reopen,

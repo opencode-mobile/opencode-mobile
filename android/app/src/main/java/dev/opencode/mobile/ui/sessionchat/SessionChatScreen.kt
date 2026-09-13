@@ -463,6 +463,8 @@ fun SessionChatScreen(
                             messages = uiState.messages,
                             timelineFrame = uiState.timelineFrame,
                             isRefreshing = uiState.isRefreshing,
+                            hasOlder = uiState.hasOlder,
+                            isLoadingOlder = uiState.isLoadingOlder,
                             errorMessage = uiState.errorMessage,
                             reviewChangesSummary = uiState.reviewChangesSummary,
                             syncingIndicatorLabel = uiState.syncingIndicatorLabel,
@@ -477,6 +479,7 @@ fun SessionChatScreen(
                             // (no extra scrollToEndPillBottomPadding).
                             bottomOverlayInset = timelineBottomInset,
                             onRefresh = viewModel::refreshMessages,
+                            onLoadOlder = viewModel::loadOlderMessages,
                             onReviewChangesClick = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES)
                                 uiState.reviewChangesNavigationTarget(worktree)?.let(onReviewChangesClick)

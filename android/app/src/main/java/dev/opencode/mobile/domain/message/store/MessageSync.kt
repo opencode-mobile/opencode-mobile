@@ -11,6 +11,7 @@ import dev.opencode.mobile.domain.event.LiveConnectionSnapshot
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.SilentWorldSignals
 import dev.opencode.mobile.domain.event.StoreRefreshReason
+import dev.opencode.mobile.domain.event.StreamOccupancy
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.event.asLiveConnection
 import dev.opencode.mobile.domain.event.canCatchUp
@@ -53,10 +54,15 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.system.measureTimeMillis
 
 typealias MessageListFetcher = suspend (sessionId: String, directory: String?) -> List<Message>
+typealias MessageTailFetcher = suspend (sessionId: String, directory: String?) -> MessagePage
+typealias MessageOlderFetcher = suspend (sessionId: String, directory: String?, cursor: String) -> MessagePage
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class MessageSync(
-    private val listMessages: MessageListFetcher,
+    listMessages: MessageListFetcher? = null,
+    listMessageTail: MessageTailFetcher? = null,
+    listOlderMessages: MessageOlderFetcher? = null,
+    listSplitTurnMessages: MessageOlderFetcher? = null,
     private val engine: SessionMessageEngine,
     private val eventStream: ForegroundEventStream,
     private val liveStoreScope: LiveStoreScope,
@@ -69,6 +75,21 @@ class MessageSync(
     private val nowMs: () -> Long = { System.currentTimeMillis() },
     private val sessionCache: SessionCache = NoOpSessionCache,
 ) {
+    private val listTail: MessageTailFetcher =
+        listMessageTail
+            ?: { sessionId, directory ->
+                val messages =
+                    requireNotNull(listMessages) { "listMessages or listMessageTail required" }(
+                        sessionId,
+                        directory,
+                    )
+                MessagePage(messages = messages, olderCursor = null, hasOlder = false)
+            }
+    private val listOlder: MessageOlderFetcher =
+        listOlderMessages
+            ?: { _, _, _ -> MessagePage(messages = emptyList(), olderCursor = null, hasOlder = false) }
+    private val listSplitTurn: MessageOlderFetcher = listSplitTurnMessages ?: listOlder
+
     private val liveConnection = eventStream.asLiveConnection()
     private val observationCache = ConcurrentHashMap<MessageSessionKey, SharedFlow<MessageListUpdate>>()
     private val lastFingerprints = ConcurrentHashMap<String, String>()
@@ -86,6 +107,9 @@ class MessageSync(
     private val restAttempts = CopyOnWriteArrayList<String>()
     private val authorities = ConcurrentHashMap<MessageSessionKey, GapAuthority>()
     private val invalidationBus = StoreInvalidationBus()
+    private val historyWindows = ConcurrentHashMap<String, HistoryWindow>()
+    private val extraPublishes = ConcurrentHashMap<String, kotlinx.coroutines.flow.MutableSharedFlow<MessageListUpdate>>()
+    private val olderLoadsInFlight = ConcurrentHashMap.newKeySet<String>()
 
     fun observeMessages(
         sessionId: String,
@@ -122,7 +146,8 @@ class MessageSync(
                         )
                     if (!newerUnpaid) {
                         healthByKey[key] = MessageSyncHealth.Healthy
-                        return result.messages
+                        backfillSplitTurnIfNeeded(key) { }
+                        return engine.messages(key.storeSlot)
                     }
                     begun = authority.tryBegin(liveConnection.snapshot.value)
                         ?: return result.messages
@@ -133,7 +158,14 @@ class MessageSync(
                 }
                 is ReloadResult.Failure -> {
                     authority.fail(begun)
-                    healthByKey[key] = MessageSyncHealth.Recovering(MessageSyncRecoveryReason.ReloadFailed)
+                    healthByKey[key] =
+                        if (worldSignals.occupancy.value != StreamOccupancy.Active &&
+                            lastPublishedFrames.containsKey(key.storeSlot)
+                        ) {
+                            MessageSyncHealth.Stale(MessageSyncRecoveryReason.TransportUnavailable)
+                        } else {
+                            MessageSyncHealth.Recovering(MessageSyncRecoveryReason.ReloadFailed)
+                        }
                     throw result.error
                 }
             }
@@ -142,6 +174,38 @@ class MessageSync(
 
     /** Production REST attempt reasons, recorded before the fetch succeeds or throws. */
     fun recordedRestAttempts(): List<String> = restAttempts.toList()
+
+    suspend fun loadOlderMessages(
+        sessionId: String,
+        directory: String?,
+    ): OlderLoadResult {
+        val key = sessionKey(sessionId, directory)
+        val storeSlot = key.storeSlot
+        if (!olderLoadsInFlight.add(storeSlot)) {
+            val current = engine.messages(storeSlot)
+            return OlderLoadResult(current, historyWindow(storeSlot).hasOlder, addedCount = 0)
+        }
+        try {
+            val window = historyWindow(storeSlot)
+            if (!window.hasOlder || window.olderCursor.isNullOrBlank()) {
+                return OlderLoadResult(engine.messages(storeSlot), hasOlder = false, addedCount = 0)
+            }
+            restAttempts += "load-older"
+            val page = listOlder(key.sessionId, key.directory.ifEmpty { null }, window.olderCursor)
+            val beforeIds = engine.messages(storeSlot).map { it.id }.toSet()
+            var applied = false
+            while (!applied) {
+                applied = engine.prependOlderIfRevision(storeSlot, page.messages, engine.revision(storeSlot))
+            }
+            val after = engine.messages(storeSlot)
+            val added = after.count { it.id !in beforeIds }
+            rememberHistoryWindow(storeSlot, page)
+            rememberPublishedFrame(storeSlot, after)
+            return OlderLoadResult(after, historyWindow(storeSlot).hasOlder, addedCount = added)
+        } finally {
+            olderLoadsInFlight.remove(storeSlot)
+        }
+    }
 
     fun invalidate(
         sessionId: String,
@@ -165,6 +229,9 @@ class MessageSync(
         awaitingCacheSyncConfirm.clear()
         lastPublishedProfileId.set(null)
         authorities.clear()
+        historyWindows.clear()
+        extraPublishes.clear()
+        olderLoadsInFlight.clear()
         messageCacheHandles.keys.toList().forEach { closeMessageCacheHandle(it) }
         engine.clear()
     }
@@ -218,7 +285,47 @@ class MessageSync(
         merge(
             incrementalMessageFlow(key),
             timelinePollFlow(key),
+            extraPublishFlow(key.storeSlot),
         )
+
+    private fun extraPublishFlow(storeSlot: String): kotlinx.coroutines.flow.MutableSharedFlow<MessageListUpdate> =
+        extraPublishes.getOrPut(storeSlot) {
+            kotlinx.coroutines.flow.MutableSharedFlow(extraBufferCapacity = 8)
+        }
+
+    private data class HistoryWindow(
+        val olderCursor: String? = null,
+        val hasOlder: Boolean = false,
+    )
+
+    private fun historyWindow(storeSlot: String): HistoryWindow =
+        historyWindows[storeSlot] ?: HistoryWindow()
+
+    private fun rememberHistoryWindow(
+        storeSlot: String,
+        page: MessagePage,
+        preserveOlderThanTail: Boolean = false,
+    ) {
+        val current = historyWindows[storeSlot]
+        val local = engine.messages(storeSlot)
+        val noOverlapReset =
+            page.messages.isNotEmpty() &&
+                !MessageWindowMerge.hasOverlap(local, page.messages)
+        if (
+            preserveOlderThanTail &&
+            !noOverlapReset &&
+            current != null &&
+            current.hasOlder &&
+            !current.olderCursor.isNullOrBlank()
+        ) {
+            return
+        }
+        historyWindows[storeSlot] =
+            HistoryWindow(
+                olderCursor = page.olderCursor,
+                hasOlder = page.hasOlder,
+            )
+    }
 
     private fun messageCacheHandle(key: MessageSessionKey): SessionMessageCacheHandle =
         messageCacheHandles.computeIfAbsent(key) {
@@ -269,6 +376,7 @@ class MessageSync(
             suspend fun emitMessages(
                 messages: List<Message>,
                 isFromCache: Boolean = false,
+                hasOlder: Boolean = historyWindow(storeSlot).hasOlder,
             ) {
                 if (isFromCache) {
                     awaitingCacheSyncConfirm.add(storeSlot)
@@ -277,7 +385,13 @@ class MessageSync(
                     cacheHandle.note(messages)
                 }
                 lastPublishedProfileId.set(key.connectionProfileId)
-                send(MessageListUpdate.Messages(messages = messages, isFromCache = isFromCache))
+                send(
+                    MessageListUpdate.Messages(
+                        messages = messages,
+                        isFromCache = isFromCache,
+                        hasOlder = hasOlder,
+                    ),
+                )
             }
 
             fun noteQueued(cost: Int) {
@@ -418,7 +532,7 @@ class MessageSync(
 
             suspend fun confirmCacheSyncIfAwaiting() {
                 if (!awaitingCacheSyncConfirm.remove(storeSlot)) return
-                send(MessageListUpdate.CacheSyncConfirmed)
+                send(MessageListUpdate.CacheSyncConfirmed(hasOlder = historyWindow(storeSlot).hasOlder))
             }
 
             val producer =
@@ -499,6 +613,18 @@ class MessageSync(
                 var backoffMs = MessageSyncRecoveryPolicy.INITIAL_BACKOFF_MS
                 while (isActive && observationStillCurrent()) {
                     applyQueuedIncrementalEvents()
+                    if (reason != MessageSyncRecoveryReason.Overflow &&
+                        !canCatchUp(worldSignals.occupancy.value, currentSnapshot())
+                    ) {
+                        if (lastPublishedFrames.containsKey(storeSlot)) {
+                            publishHealth(
+                                MessageSyncHealth.Stale(MessageSyncRecoveryReason.TransportUnavailable),
+                            )
+                        }
+                        recoveryDelay(backoffMs)
+                        backoffMs = minOf(backoffMs * 2, MessageSyncRecoveryPolicy.MAX_BACKOFF_MS)
+                        continue
+                    }
                     beginAuthorityWindow()
                     val fingerprintBefore = lastFingerprints[storeSlot]
                     when (
@@ -528,6 +654,13 @@ class MessageSync(
                                     )
                                     confirmCacheSyncIfAwaiting()
                                 }
+                                backfillSplitTurnIfNeeded(
+                                    key,
+                                    stillCurrent = { observationStillCurrent() },
+                                    emitMessages = { frame ->
+                                        emitMessages(frame, isFromCache = false)
+                                    },
+                                )
                             }
                             val newerUnpaid =
                                 acknowledgeExactGeneration(
@@ -553,6 +686,14 @@ class MessageSync(
                         }
                         is ReloadResult.Failure -> {
                             completeAuthorityWindow(AuthorityWindowOutcome.Failed)
+                            if (reason != MessageSyncRecoveryReason.Overflow &&
+                                !canCatchUp(worldSignals.occupancy.value, currentSnapshot()) &&
+                                lastPublishedFrames.containsKey(storeSlot)
+                            ) {
+                                publishHealth(
+                                    MessageSyncHealth.Stale(MessageSyncRecoveryReason.TransportUnavailable),
+                                )
+                            }
                             if (isMissingSessionError(result.error)) {
                                 terminalSessionKeys.add(key)
                                 publishHealth(MessageSyncHealth.Healthy)
@@ -663,6 +804,13 @@ class MessageSync(
                                             "source=message.part.updated-rest-seeded",
                                     )
                                     emitMessages(result.messages)
+                                    backfillSplitTurnIfNeeded(
+                                        key,
+                                        stillCurrent = { observationStillCurrent() },
+                                        emitMessages = { frame ->
+                                            emitMessages(frame, isFromCache = false)
+                                        },
+                                    )
                                     if (!healthy) {
                                         performClosedLoopRecovery(MessageSyncRecoveryReason.RacedAuthority)
                                     }
@@ -717,6 +865,13 @@ class MessageSync(
                                             "source=message.part.removed-rest-seeded",
                                     )
                                     emitMessages(result.messages)
+                                    backfillSplitTurnIfNeeded(
+                                        key,
+                                        stillCurrent = { observationStillCurrent() },
+                                        emitMessages = { frame ->
+                                            emitMessages(frame, isFromCache = false)
+                                        },
+                                    )
                                     if (!healthy) {
                                         performClosedLoopRecovery(MessageSyncRecoveryReason.RacedAuthority)
                                     }
@@ -818,12 +973,12 @@ class MessageSync(
                             wakeGapEvaluation(StoreRefreshReason.CONNECTION_SNAPSHOT)
                         }
                     }
-                var loaded: List<Message>? = null
+                var loadedPage: MessagePage? = null
                 var failure: Throwable? = null
                 val elapsedMs =
                     measureTimeMillis {
-                        runCatching { fetchMessages(key.sessionId, directory, StoreRefreshReason.INITIAL_SUBSCRIBE) }
-                            .onSuccess { loaded = it }
+                        runCatching { fetchTail(key.sessionId, directory, StoreRefreshReason.INITIAL_SUBSCRIBE) }
+                            .onSuccess { loadedPage = it }
                             .onFailure { failure = it }
                     }
                 applyQueuedIncrementalEvents()
@@ -835,8 +990,8 @@ class MessageSync(
                     )
                     performClosedLoopRecovery(MessageSyncRecoveryReason.Overflow)
                 } else {
-                    val messages = loaded
-                    if (messages == null) {
+                    val page = loadedPage
+                    if (page == null) {
                         authority.fail(begun)
                         if (lastPublishedFrames.containsKey(storeSlot)) {
                             publishHealth(MessageSyncHealth.Recovering(MessageSyncRecoveryReason.ReloadFailed))
@@ -850,14 +1005,19 @@ class MessageSync(
                             )
                         }
                     } else {
+                        rememberHistoryWindow(
+                            storeSlot,
+                            page,
+                            preserveOlderThanTail = engine.messages(storeSlot).isNotEmpty(),
+                        )
                         val previousFingerprint = lastFingerprints[storeSlot]
                         val local = engine.messages(storeSlot)
                         val acceptRemote =
                             engine.revision(storeSlot) == expectedRevision &&
-                                MessageSnapshotAuthority.isAheadOrEqual(remote = messages, local = local)
+                                MessageWindowMerge.isTailAcceptable(remote = page.messages, local = local)
                         val applied =
                             acceptRemote &&
-                                engine.replaceAllIfRevision(storeSlot, messages, expectedRevision)
+                                engine.applyTailIfRevision(storeSlot, page.messages, expectedRevision)
                         val merged = engine.messages(storeSlot)
                         rememberPublishedFrame(storeSlot, merged)
                         logI(
@@ -881,8 +1041,15 @@ class MessageSync(
                                 "observeMessages skip session=${key.sessionId} count=${merged.size} " +
                                     "source=initial-subscribe fingerprint-unchanged",
                             )
-                            send(MessageListUpdate.CacheSyncConfirmed)
+                            send(MessageListUpdate.CacheSyncConfirmed(hasOlder = historyWindow(storeSlot).hasOlder))
                         }
+                        backfillSplitTurnIfNeeded(
+                            key,
+                            stillCurrent = { observationStillCurrent() },
+                            emitMessages = { frame ->
+                                emitMessages(frame, isFromCache = false)
+                            },
+                        )
                         if (applied) {
                             authority.acknowledge(begun)
                         } else {
@@ -983,10 +1150,11 @@ class MessageSync(
                 if (streaming && !stalled) continue
                 // TUI does not poll GET …/message while the event iterator is live.
                 // Keep the watchdog for transport drop and stalled streaming only.
+                if (worldSignals.occupancy.value != StreamOccupancy.Active) continue
                 val connected = eventStream.connectionState.value == EventStreamConnectionState.Connected
                 if (connected && !stalled) continue
                 val expectedRevision = engine.revision(storeSlot)
-                val load = runCatching { fetchMessages(key.sessionId, directory, "poll") }
+                val load = runCatching { fetchTail(key.sessionId, directory, "poll") }
                 if (load.isFailure) {
                     val error = load.exceptionOrNull()
                     if (error != null && isMissingSessionError(error)) {
@@ -995,18 +1163,26 @@ class MessageSync(
                     }
                     continue
                 }
-                val messages = load.getOrThrow()
+                val page = load.getOrThrow()
+                rememberHistoryWindow(
+                    storeSlot,
+                    page,
+                    preserveOlderThanTail = engine.messages(storeSlot).isNotEmpty(),
+                )
+                val messages = page.messages
                 if (streaming) {
                     val local = engine.messages(storeSlot)
-                    if (!MessageSnapshotAuthority.isAheadOrEqual(remote = messages, local = local)) {
+                    if (!MessageWindowMerge.isTailAcceptable(remote = messages, local = local)) {
                         continue
                     }
                     logI("streaming stall catch-up session=${key.sessionId}")
                 }
-                val fp = messageFingerprint(messages)
+                val local = engine.messages(storeSlot)
+                if (!MessageWindowMerge.isTailAcceptable(remote = messages, local = local)) continue
+                if (!engine.applyTailIfRevision(storeSlot, messages, expectedRevision)) continue
+                val merged = engine.messages(storeSlot)
+                val fp = messageFingerprint(merged)
                 if (fp != lastFingerprints[storeSlot]) {
-                    if (!engine.replaceAllIfRevision(storeSlot, messages, expectedRevision)) continue
-                    val merged = engine.messages(storeSlot)
                     noteMessageActivity(storeSlot)
                     rememberPublishedFrame(storeSlot, merged)
                     logD(
@@ -1015,16 +1191,22 @@ class MessageSync(
                     )
                     messageCacheHandle(key).note(merged)
                     awaitingCacheSyncConfirm.remove(storeSlot)
-                    send(MessageListUpdate.Messages(messages = merged, isFromCache = false))
+                    send(
+                        MessageListUpdate.Messages(
+                            messages = merged,
+                            isFromCache = false,
+                            hasOlder = historyWindow(storeSlot).hasOlder,
+                        ),
+                    )
                 } else if (awaitingCacheSyncConfirm.remove(storeSlot)) {
                     // Initial REST may still be hung after reconnect; poll already
                     // agrees with the cache — clear Syncing without a second paint.
-                    messageCacheHandle(key).note(messages)
+                    messageCacheHandle(key).note(merged)
                     logI(
-                        "observeMessages skip session=${key.sessionId} count=${messages.size} " +
+                        "observeMessages skip session=${key.sessionId} count=${merged.size} " +
                             "source=poll fingerprint-unchanged",
                     )
-                    send(MessageListUpdate.CacheSyncConfirmed)
+                    send(MessageListUpdate.CacheSyncConfirmed(hasOlder = historyWindow(storeSlot).hasOlder))
                 }
             }
         }
@@ -1047,9 +1229,50 @@ class MessageSync(
         sessionId: String,
         directory: String?,
         reason: String,
-    ): List<Message> {
+    ): List<Message> = fetchTail(sessionId, directory, reason).messages
+
+    private suspend fun fetchTail(
+        sessionId: String,
+        directory: String?,
+        reason: String,
+    ): MessagePage {
         restAttempts += reason
-        return listMessages(sessionId, directory)
+        return listTail(sessionId, directory)
+    }
+
+    private suspend fun backfillSplitTurnIfNeeded(
+        key: MessageSessionKey,
+        stillCurrent: () -> Boolean = { true },
+        emitMessages: suspend (List<Message>) -> Unit,
+    ) {
+        val storeSlot = key.storeSlot
+        val directory = key.directory.ifEmpty { null }
+        var extra = 0
+        while (extra < MessageHistoryWindow.SPLIT_TURN_MAX_PAGES) {
+            if (!stillCurrent()) return
+            val local = engine.messages(storeSlot)
+            if (!beginsMidTurn(local)) return
+            val window = historyWindow(storeSlot)
+            if (!window.hasOlder || window.olderCursor.isNullOrBlank()) return
+            restAttempts += "split-turn"
+            val older =
+                runCatching { listSplitTurn(key.sessionId, directory, window.olderCursor) }
+                    .getOrElse {
+                        logW("splitTurnBackfill failed session=${key.sessionId}")
+                        return
+                    }
+            if (older.messages.isEmpty()) return
+            var applied = false
+            while (!applied) {
+                applied = engine.prependOlderIfRevision(storeSlot, older.messages, engine.revision(storeSlot))
+            }
+            rememberHistoryWindow(storeSlot, older)
+            val merged = engine.messages(storeSlot)
+            rememberPublishedFrame(storeSlot, merged)
+            logI("splitTurnBackfill session=${key.sessionId} extra=${extra + 1} count=${merged.size}")
+            emitMessages(merged)
+            extra += 1
+        }
     }
 
     /**
@@ -1069,63 +1292,45 @@ class MessageSync(
     private fun gapAuthority(key: MessageSessionKey): GapAuthority =
         authorities.getOrPut(key) { GapAuthority() }
 
-    private suspend fun fullReloadOrThrow(
-        key: MessageSessionKey,
-        reason: String,
-    ): List<Message> {
-        var messages: List<Message>? = null
-        val storeSlot = key.storeSlot
-        val directory = key.directory.ifEmpty { null }
-        val expectedRevision = engine.revision(storeSlot)
-        val elapsedMs =
-            measureTimeMillis {
-                messages = fetchMessages(key.sessionId, directory, reason)
-            }
-        engine.replaceAllIfRevision(storeSlot, messages!!, expectedRevision)
-        val merged = engine.messages(storeSlot)
-        rememberPublishedFrame(storeSlot, merged)
-        logI(
-            "fullReload session=${key.sessionId} reason=$reason count=${merged.size} ms=$elapsedMs",
-        )
-        return merged
-    }
-
     private suspend fun fullReloadResult(
         key: MessageSessionKey,
         reason: String,
         mergeExisting: Boolean = false,
         beforeCommit: suspend () -> Unit = {},
     ): ReloadResult {
-        var messages: List<Message>? = null
+        var page: MessagePage? = null
         var failure: Throwable? = null
         val storeSlot = key.storeSlot
         val directory = key.directory.ifEmpty { null }
         val expectedRevision = engine.revision(storeSlot)
         val elapsedMs =
             measureTimeMillis {
-                runCatching { fetchMessages(key.sessionId, directory, reason) }
-                    .onSuccess { messages = it }
+                runCatching { fetchTail(key.sessionId, directory, reason) }
+                    .onSuccess { page = it }
                     .onFailure { failure = it }
             }
         beforeCommit()
-        val loaded = messages
+        val loaded = page
         if (loaded == null) {
             logW("fullReload failed session=${key.sessionId} reason=$reason ms=$elapsedMs")
             return ReloadResult.Failure(failure ?: IllegalStateException("Message load failed"))
         }
+        rememberHistoryWindow(
+            storeSlot,
+            loaded,
+            preserveOlderThanTail = engine.messages(storeSlot).isNotEmpty(),
+        )
         val local = engine.messages(storeSlot)
         val acceptRemote =
             engine.revision(storeSlot) == expectedRevision &&
-                MessageSnapshotAuthority.isAheadOrEqual(remote = loaded, local = local)
+                MessageWindowMerge.isTailAcceptable(remote = loaded.messages, local = local)
         val applied =
             acceptRemote &&
-                (
-                    if (mergeExisting) {
-                        engine.mergeAuthoritativeIfRevision(storeSlot, loaded, expectedRevision)
-                    } else {
-                        engine.replaceAllIfRevision(storeSlot, loaded, expectedRevision)
-                    }
-                )
+                if (mergeExisting) {
+                    engine.mergeTailAuthoritativeIfRevision(storeSlot, loaded.messages, expectedRevision)
+                } else {
+                    engine.applyTailIfRevision(storeSlot, loaded.messages, expectedRevision)
+                }
         val merged = engine.messages(storeSlot)
         rememberPublishedFrame(storeSlot, merged)
         logI(
