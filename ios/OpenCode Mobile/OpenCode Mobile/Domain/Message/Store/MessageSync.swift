@@ -154,7 +154,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 )
                 if !newerUnpaid {
                     setHealth(.healthy, for: key)
-                    return messages
+                    await backfillSplitTurnIfNeeded(key: key, publishMessages: { _ in })
+                    return store.messages(sessionID: key.storeSlot)
                 }
                 guard let next = authority.tryBegin(liveConnection.snapshot) else {
                     return messages
@@ -770,6 +771,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     } else {
                         confirmCacheSync()
                     }
+                    await backfillSplitTurnIfNeeded(key: key, publishMessages: publishMessages)
                 }
                 let newerUnpaid = acknowledgeExactGeneration(
                     gapState.authority,
@@ -1124,7 +1126,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             if staging.needsAuthoritativeRecovery {
                 return
             }
-            if staging.currentHealth != .healthy {
+            if case .recovering(.reconnect) = staging.currentHealth {
                 staging.clearCatchUpLatch()
                 setHealth(.healthy, for: key)
             }
@@ -1495,13 +1497,14 @@ nonisolated final class MessageSync: @unchecked Sendable {
             // Hung initial REST must not leave Syncing on a painted cache while SSE
             // is already live. Confirm without another GET — poll GET also hangs
             // on the same dead URLSession.
+            if worldSignals.occupancy != .active { continue }
             if isAwaitingCacheSyncConfirm(for: key.storeSlot),
-               fingerprint(for: key.storeSlot) != nil {
+               fingerprint(for: key.storeSlot) != nil,
+               eventStream.connectionState == .connected {
                 confirmCacheSync()
             }
             // TUI does not poll GET …/message while the event iterator is live.
             // Keep the watchdog for transport drop and stalled streaming only.
-            if worldSignals.occupancy != .active { continue }
             if eventStream.connectionState == .connected && !stalled { continue }
             let expectedRevision = store.revision(sessionID: key.storeSlot)
             let directory = key.directory.isEmpty ? nil : key.directory

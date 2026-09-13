@@ -312,6 +312,39 @@ struct MessageSyncTests {
         repo.resumeListMessages()
     }
 
+    @Test func hungInitialRest_cacheSeed_doesNotConfirmWhenOccupancyStopped() async {
+        let repo = FakeLiveMessageRepository()
+        repo.holdNextListMessages()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.disconnected)
+        let world = FakeWorldSignals()
+        world.setOccupancy(.stopped)
+        let cached = repo.messages
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            worldSignals: world,
+            pollIntervalMs: 20,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            sessionCache: SeedingSessionCache(messages: cached)
+        )
+        let collector = CacheConfirmAwareCollector()
+        let task = Task {
+            await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        let painted = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        try? await Task.sleep(for: .milliseconds(80))
+        task.cancel()
+        #expect(painted)
+        #expect(!collector.sawCacheSyncConfirmed)
+        #expect(repo.isListBlocked)
+        repo.resumeListMessages()
+    }
+
     @Test func hiddenReasoningSnapshotUpdates_doNotRestOrShowCatchUp() async {
             let repo = FakeLiveMessageRepository()
             repo.messages = hiddenReasoningTranscript()

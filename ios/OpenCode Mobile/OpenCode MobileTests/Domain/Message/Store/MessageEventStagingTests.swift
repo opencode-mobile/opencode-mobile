@@ -40,6 +40,13 @@ import Testing
         #expect(staging.currentHealth == .recovering(.racedAuthority))
     }
 
+    @Test func clearCatchUpLatch_keepsStaleHealth() {
+        let staging = MessageEventStaging(capacity: 8, byteCapacity: 10_000)
+        staging.enterStale(.transportUnavailable)
+        staging.clearCatchUpLatch()
+        #expect(staging.currentHealth == .stale(.transportUnavailable))
+    }
+
     @Test func enqueue_ignoresNonMessageIntakeTypes() {
         let staging = MessageEventStaging(capacity: 64, byteCapacity: 200)
         staging.enqueue(

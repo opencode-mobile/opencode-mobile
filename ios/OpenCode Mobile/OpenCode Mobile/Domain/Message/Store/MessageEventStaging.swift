@@ -190,9 +190,9 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         switch health {
-        case .recovering, .stale:
+        case .recovering:
             health = .healthy
-        case .healthy:
+        case .stale, .healthy:
             break
         }
         pendingRecoveryWhileIdle = false

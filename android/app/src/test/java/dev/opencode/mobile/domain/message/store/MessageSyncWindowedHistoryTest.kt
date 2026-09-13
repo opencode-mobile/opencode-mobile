@@ -126,6 +126,35 @@ class MessageSyncWindowedHistoryTest {
         }
 
     @Test
+    fun refresh_backfillsSplitTurnAfterTail() =
+        runTest(testDispatcher) {
+            val olderCalls = mutableListOf<String>()
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages = listOf(assistant("a20")),
+                            olderCursor = "c1",
+                            hasOlder = true,
+                        )
+                    },
+                    listOlderMessages = { _, _, cursor ->
+                        olderCalls += cursor
+                        MessagePage(
+                            messages = listOf(user("u1"), assistant("a20")),
+                            olderCursor = "c0",
+                            hasOlder = true,
+                        )
+                    },
+                )
+
+            val refreshed = sync.refreshMessages("ses-1", "/repo")
+
+            assertEquals(listOf("u1", "a20"), refreshed.map { it.id })
+            assertEquals(listOf("c1"), olderCalls)
+        }
+
+    @Test
     fun loadOlder_prependsAndStopsAtHistoryEnd() =
         runTest(testDispatcher) {
             val olderCalls = mutableListOf<String>()

@@ -146,7 +146,8 @@ class MessageSync(
                         )
                     if (!newerUnpaid) {
                         healthByKey[key] = MessageSyncHealth.Healthy
-                        return result.messages
+                        backfillSplitTurnIfNeeded(key) { }
+                        return engine.messages(key.storeSlot)
                     }
                     begun = authority.tryBegin(liveConnection.snapshot.value)
                         ?: return result.messages
@@ -653,6 +654,13 @@ class MessageSync(
                                     )
                                     confirmCacheSyncIfAwaiting()
                                 }
+                                backfillSplitTurnIfNeeded(
+                                    key,
+                                    stillCurrent = { observationStillCurrent() },
+                                    emitMessages = { frame ->
+                                        emitMessages(frame, isFromCache = false)
+                                    },
+                                )
                             }
                             val newerUnpaid =
                                 acknowledgeExactGeneration(
@@ -796,6 +804,13 @@ class MessageSync(
                                             "source=message.part.updated-rest-seeded",
                                     )
                                     emitMessages(result.messages)
+                                    backfillSplitTurnIfNeeded(
+                                        key,
+                                        stillCurrent = { observationStillCurrent() },
+                                        emitMessages = { frame ->
+                                            emitMessages(frame, isFromCache = false)
+                                        },
+                                    )
                                     if (!healthy) {
                                         performClosedLoopRecovery(MessageSyncRecoveryReason.RacedAuthority)
                                     }
@@ -850,6 +865,13 @@ class MessageSync(
                                             "source=message.part.removed-rest-seeded",
                                     )
                                     emitMessages(result.messages)
+                                    backfillSplitTurnIfNeeded(
+                                        key,
+                                        stillCurrent = { observationStillCurrent() },
+                                        emitMessages = { frame ->
+                                            emitMessages(frame, isFromCache = false)
+                                        },
+                                    )
                                     if (!healthy) {
                                         performClosedLoopRecovery(MessageSyncRecoveryReason.RacedAuthority)
                                     }

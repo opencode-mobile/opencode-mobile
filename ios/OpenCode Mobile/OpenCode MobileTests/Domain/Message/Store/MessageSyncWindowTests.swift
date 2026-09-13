@@ -183,6 +183,28 @@ struct MessageSyncWindowTests {
         ])
     }
 
+    @Test func refreshBackfillsSplitTurnAfterTail() async throws {
+        let pages = WindowPageRepository(pages: [
+            MessageHistoryPage(
+                messages: [windowMessage("a20", role: .assistant)],
+                olderCursor: "c1",
+                hasOlder: true
+            ),
+            MessageHistoryPage(
+                messages: [windowMessage("u1", role: .user), windowMessage("a20", role: .assistant)],
+                olderCursor: "c0",
+                hasOlder: true
+            ),
+        ])
+        let sync = makeWindowSync(pages: pages, store: InMemoryMessageStore())
+        let refreshed = try await sync.refreshMessages(sessionID: "ses-1", directory: "/repo")
+        #expect(refreshed.map(\.id) == ["u1", "a20"])
+        #expect(pages.queries == [
+            .newest(limit: 20),
+            .older(cursor: "c1", limit: 20),
+        ])
+    }
+
     @Test func pollAndRefreshPreserveFurtherBackOlderCursor() async throws {
         let newest = MessageHistoryPage(
             messages: [windowMessage("m3", role: .user, text: "live")],
