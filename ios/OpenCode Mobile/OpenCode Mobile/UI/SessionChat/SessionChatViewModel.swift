@@ -843,8 +843,12 @@ final class SessionChatViewModel {
         inbox.refilterOrphans()
         let inboxState = inbox.state
         let timelineState = timeline.state
-        let composerState = composer.state
         let infoState = sessionInfo.state
+        composer.tryApplyInitialSelection(
+            timelineState: timelineState,
+            historyHints: timeline.modelSelectionHistoryHints()
+        )
+        let composerState = composer.state
         commands.updateVisibility(
             messages: timelineState.messages,
             hasSelectedComposerModel: composerState.composer.selectedModel != nil
@@ -861,10 +865,6 @@ final class SessionChatViewModel {
             || !inboxState.permissionRequests.isEmpty
             || !inboxState.questionRequests.isEmpty
         inbox.setLive(isLive)
-        composer.tryApplyInitialSelection(
-            timelineState: timelineState,
-            historyHints: timeline.modelSelectionHistoryHints()
-        )
         reviewChanges.updateCandidate(
             messages: timelineState.messages,
             hasResolvedSessionStatus: infoState.hasResolvedSessionStatus,
