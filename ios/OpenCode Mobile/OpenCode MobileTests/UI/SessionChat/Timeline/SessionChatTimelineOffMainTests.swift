@@ -62,6 +62,46 @@ struct SessionChatTimelineOffMainTests {
         timeline.reset()
     }
 
+    @Test func reloadAfterSend_invokesOnCompleteWhenApplyIsStale() async {
+        let repository = OffMainTimelineMessageRepository(
+            messages: [
+                Message(id: "m1", role: .user, text: "one", model: nil, mode: nil, sentAtEpochMs: 1),
+            ]
+        )
+        let timeline = SessionChatTimeline(
+            sessionID: "ses-stale-send",
+            worktree: "/repo",
+            messageRepository: repository
+        )
+        await timeline.loadMessages()
+
+        var holdFirst = true
+        var firstHeld: CheckedContinuation<Void, Never>?
+        SessionChatTimeline.applyTestGate = {
+            guard holdFirst else { return }
+            holdFirst = false
+            await withCheckedContinuation { continuation in
+                firstHeld = continuation
+            }
+        }
+        defer { SessionChatTimeline.applyTestGate = nil }
+
+        var completed = false
+        let reload = Task {
+            await timeline.reloadAfterSend(
+                onComplete: { completed = true },
+                onReloadFailed: { Issue.record("reload failed") }
+            )
+        }
+        let held = await waitUntil { firstHeld != nil }
+        #expect(held)
+        await timeline.refreshMessages()
+        firstHeld?.resume()
+        await reload.value
+        #expect(completed)
+        timeline.reset()
+    }
+
     @Test func applyLoadedDisplayMessages_dropsStaleDetachedResult() async {
         let repository = OffMainTimelineMessageRepository(
             messages: [
