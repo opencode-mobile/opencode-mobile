@@ -1,40 +1,81 @@
 ---
 name: linear-project-tracking
-description: Read and update Linear when the user asks about issues, backlog, or ticket refinement. Linear owns ticket detail.
+description: "Linear: use to read issues or backlog, create or split tickets, refine scope, update state or links, or load an implementation contract."
 ---
 
-# Linear Project Tracking
+# Linear project tracking
 
-**Linear owns the ticket.** Description, acceptance, remaining work, status,
-and refinements live on the issue. Do not copy a ticket into
-`docs/features/` or create `plan.md` just to stay “in sync.”
+Linear owns ticket scope, acceptance, Remaining, status, refinements, and
+temporary platform gaps. Keep that state on the issue. Do not copy Linear into
+`docs/`.
 
-Repo docs own only the durable product contract (`plan.md` current state,
-still-binding decisions, open parity). Update those when the *product*
-changed, not when a ticket is refined.
+Use the Linear tools available in this session. Read current state before
+answering or mutating it. If Linear is unavailable, report that blocker. Do not
+invent Linear state.
 
-Use the available Linear app or connector. If Linear is unavailable, say so
-and do not invent issue state.
+## 1. Route the request
 
-## When the user asks about a ticket
+Choose every requested route:
 
-1. Read the Linear issue (and parent/children if needed).
-2. Answer from Linear. Optionally mention `docs/features/<slug>/` if a
-   product contract exists.
-3. If they refine the ticket, update **Linear**, not markdown.
+- Read: issue, backlog, parent, children, project, or current state.
+- Implement: load the issue as the implementation contract.
+- Create or split: create work or divide existing scope.
+- Refine: change title, outcome, acceptance, Remaining, priority, labels,
+  milestone, or relationships.
+- Update: change status or links after external work.
 
-## When implementing from a ticket
+Read [workspace conventions](reference.md) before Create or split, or when
+Refine requires classification or state mapping.
 
-1. Read the Linear issue first.
-2. Read `docs/features/<slug>/plan.md` only if it still constrains the
-   product.
-3. After the work ships, update Linear status. Touch `plan.md` only if the
-   durable “now / remaining” product state changed.
+**Completion criterion:** Every requested action maps to one route, every
+mutation has an explicit target issue, and unrequested routes are excluded.
 
-## When the user asks to create or split tickets
+## 2. Read
 
-Create or update issues in Linear. Link the feature docs path if one already
-exists. Do not add ticket-plan files to the repo.
+Read the issue and any parent, children, project, milestone, or relationships
+needed to answer the request. Answer from current Linear state. Use Refine when
+the user asks to change that state.
 
-Workspace conventions (team, project, labels) live in
-[reference.md](reference.md) and `docs/agents/issue-tracker.md`.
+**Completion criterion:** Every requested issue or backlog fact is supported by
+current Linear data, and every unavailable fact is named without inference.
+
+## 3. Load the implementation contract
+
+Read the issue before implementation. Use its outcome, acceptance criteria, and
+Remaining with current code and tests as the contract. Keep repository
+documentation unchanged unless the user explicitly asked for documentation.
+
+**Completion criterion:** Every in-scope implementation decision maps to the
+issue, current code or tests, or an explicit user decision. Every unresolved
+scope conflict is reported before it changes implementation.
+
+## 4. Create or split
+
+Read [workspace conventions](reference.md), then create or update issues in
+Linear. Keep independently scheduled work in linked issues. Keep unscheduled
+incomplete work in Remaining. Do not add ticket plans to the repository.
+
+**Completion criterion:** Every requested issue matches the workspace
+conventions, has the applicable durable labels and relationships, and owns each
+incomplete item exactly once through Remaining or a linked child.
+
+## 5. Refine
+
+Update the named issue in Linear. Apply the issue shape, labels, state mapping,
+priority, and relationship rules from
+[workspace conventions](reference.md) only where the requested refinement needs
+them. Preserve facts the user did not ask to change.
+
+**Completion criterion:** Every requested refinement appears in current Linear
+state, every Remaining item is actionable and unique, and no unrequested field
+changed.
+
+## 6. Update state or links
+
+After external work, update status or links only when requested. Derive status
+from the current issue and the state mapping, not from an assumed workflow.
+Read the issue again after mutation.
+
+**Completion criterion:** Every requested status or link is confirmed from
+Linear, and any rejected or unavailable mutation is reported with the unchanged
+current value.

@@ -10,7 +10,7 @@ This repository holds both app shells, shared product docs, design-system planni
 |---|---|
 | `android/` | Kotlin, Jetpack Compose, Material 3 app |
 | `ios/OpenCode Mobile/` | SwiftUI app |
-| `docs/` | Architecture, feasibility, design system, feature slices |
+| `docs/` | Architecture, design-system references, operator runbooks |
 | `.agents/` | Shared agent guidance and canonical skills under `.agents/skills/` |
 | `scripts/` | Icon sync, OpenAPI fetch/generate, agent symlink setup |
 | `AGENTS.md` | Agent and contributor guide |
@@ -77,7 +77,7 @@ Build and iOS Build stay manual.
 
 To block merges, require status checks `android-checks` and `ios-checks` on
 `main` (repository ruleset or branch protection, strict up-to-date). See
-[`docs/features/ci-pr-gating/`](docs/features/ci-pr-gating/).
+[the CI branch-protection rules](docs/features/ci-pr-gating/ruleset.md).
 
 Manual runs:
 
@@ -108,8 +108,13 @@ After cloning, run `./scripts/sync-agent-links.sh` if agent symlinks are missing
 - [CONTEXT.md](CONTEXT.md) — product terms and domain language
 - [AGENTS.md](AGENTS.md) — scope, architecture rules, skill usage
 - [docs/architecture.md](docs/architecture.md) — native app architecture
-- [docs/design-system/](docs/design-system/) — shared UI system
-- [docs/features/](docs/features/) — live feature contracts
+- [docs/design-system/](docs/design-system/) — shared UI reference
+- [docs/features/](docs/features/) — CI and release operations references
+
+Repository documentation is not an implementation ledger. Feature planning,
+status, remaining work, and temporary platform gaps live in Linear. Code and
+tests own implemented behavior. Do not update docs during implementation unless
+the user explicitly requests documentation.
 
 ## Agent skills
 

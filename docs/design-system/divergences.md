@@ -1,10 +1,11 @@
 # Design System Divergences
 
-Use this document to record intentional design-system differences between iOS
-and Android.
+This historical reference records intentional design-system differences between
+iOS and Android.
 
 Do not use this file for unfinished work. Temporary mismatches during feature
-implementation belong in the feature's `parity-gaps.md`.
+implementation belong in Linear. Do not update this page during implementation
+unless the user explicitly requests documentation.
 
 ## Divergence Template
 

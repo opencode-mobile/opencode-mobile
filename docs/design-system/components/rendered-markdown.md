@@ -106,5 +106,5 @@ variants.
 
 ## Parity And Divergence
 
-No intentional visual divergence is defined. Temporary differences belong in the
-Rendered Markdown feature parity gaps.
+No intentional visual divergence is defined. Track temporary differences in
+Linear.

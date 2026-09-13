@@ -60,5 +60,4 @@ Ring size is locked at ~32pt in the implementation.
 
 ## Parity And Divergence
 
-None. Temporary feature wiring gaps live under the live feature dir or
-`docs/design-system/divergences.md`.
+None. Track temporary feature wiring gaps in Linear.

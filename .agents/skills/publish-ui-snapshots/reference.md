@@ -1,8 +1,71 @@
-# Throwaway snapshot templates
+# Snapshot recipes and templates
 
-Do not commit these files. Write them into the gitignored paths in SKILL.md.
+Read only the platform branch needed by the snapshot matrix. Keep these files
+throwaway. Write them into the gitignored paths below and leave them out of
+commits.
 
-## iOS — assistant message
+## Paths
+
+| Kind | Path |
+| --- | --- |
+| iOS throwaway tests | `ios/OpenCode Mobile/OpenCode MobileTests/GeneratedSnapshotEvidence/*SnapshotEvidence.swift` |
+| Android throwaway tests | `android/screenshot/src/test/java/dev/opencode/mobile/ui/snapshot/GeneratedSnapshotEvidence/*SnapshotEvidence.kt` |
+| Android Paparazzi goldens | `android/screenshot/src/test/snapshots/images/` |
+| Output | `.snapshot-evidence/out/` |
+| iOS helper | `OpenCode MobileTests/SnapshotEvidenceRenderer.swift` |
+| Hosts/mocks | iOS `OpenCode Mobile/SnapshotEvidence/`, Android `ui/snapshot/` |
+
+## iOS generation
+
+From `ios/OpenCode Mobile`, after writing the throwaway test:
+
+```bash
+OUT="$REPO/.snapshot-evidence/out"
+mkdir -p "$OUT"
+xcodebuild test \
+  -project "OpenCode Mobile.xcodeproj" \
+  -scheme "OpenCode Mobile" \
+  -destination "platform=iOS Simulator,name=iPhone 16" \
+  -only-testing:"OpenCode MobileTests/AssistantMessageSnapshotEvidence" \
+  SNAPSHOT_EVIDENCE_OUT="$OUT" \
+  CODE_SIGNING_ALLOWED=NO
+```
+
+If the simulator name is wrong, use `.github/scripts/select-ios-simulator.sh` /
+`xcrun simctl list`. Skip iOS on Linux.
+
+**Completion criterion:** Every requested iOS frame and appearance has a PNG in
+`.snapshot-evidence/out/`, or the result names the unavailable simulator,
+platform, or failing test.
+
+## Android generation
+
+From `android/`, after writing the throwaway test:
+
+```bash
+OUT="$REPO/.snapshot-evidence/out"
+mkdir -p "$OUT"
+./gradlew :screenshot:recordPaparazziDebug \
+  --tests 'dev.opencode.mobile.ui.snapshot.GeneratedSnapshotEvidence.*'
+SNAP_DIR="$REPO/android/screenshot/src/test/snapshots/images"
+for png in "$SNAP_DIR"/*.png; do
+  name="$(basename "$png" | sed -n 's/.*_\(android-[^.]*\)\.png$/\1/p')"
+  [ -n "$name" ] || continue
+  cp "$png" "$OUT/${name}.png"
+done
+```
+
+Paparazzi lives on `:screenshot`, not `:app`. Applying it to `:app` breaks AGP 9
++ Hilt artifact transforms. Paparazzi 2 needs a Java 21 Gradle JVM, so
+`:screenshot` stays out of the default project graph on JDK 17. Keep
+`verifyPaparazzi*` and `:screenshot:testDebugUnitTest` out of Android Checks.
+Do not run `verifyPaparazziDebug`.
+
+**Completion criterion:** Every requested Android frame and appearance has a
+copied PNG under `.snapshot-evidence/out/`, and no verification task or
+`:app` Paparazzi configuration was used.
+
+## iOS, assistant message
 
 `ios/OpenCode Mobile/OpenCode MobileTests/GeneratedSnapshotEvidence/AssistantMessageSnapshotEvidence.swift`
 
@@ -44,7 +107,7 @@ struct AssistantMessageSnapshotEvidence {
 
 For dark, duplicate with `appearance: .dark` and names `ios-isolated-dark` / `ios-in-session-dark`.
 
-## Android — text input
+## Android, text input
 
 `:screenshot` compiles theme, icons, and a small set of field-chrome components (see
 `android/screenshot/src/main/java/.../ui/components/` symlinks). Add a symlink
@@ -132,13 +195,12 @@ class TextInputSnapshotEvidence {
 }
 ```
 
-Copy recorded files whose names end in `_android-isolated-light.png` (etc.) to
-`.snapshot-evidence/out/android-isolated-light.png`. Never run
-`verifyPaparazziDebug`.
+Copy recorded files whose names end in `_android-isolated-light.png`, and so on,
+to `.snapshot-evidence/out/android-isolated-light.png`.
 
 ## Other subjects
 
-Add committed mocks next to `SnapshotEvidenceMocks` (same copy on both platforms)
-when the subject lives in Session Chat. Isolated view must be the subject chrome.
-On Android, only Hilt-free components that `:screenshot` compiles are available
-until a new symlink is added.
+When the subject lives in Session Chat, add committed mocks next to
+`SnapshotEvidenceMocks` with the same copy on both platforms. The isolated view
+must be the subject chrome. On Android, only Hilt-free components compiled by
+`:screenshot` are available until a new symlink is added.

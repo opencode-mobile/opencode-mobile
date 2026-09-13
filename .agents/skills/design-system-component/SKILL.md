@@ -1,88 +1,74 @@
 ---
 name: design-system-component
-description: Design-system development for opencode-mobile. Use when changing semantic or component tokens; defining typography roles or platform mappings; adding or changing reusable native components, variants, states, previews, or galleries; or when feature work needs reusable UI.
+description: "Design System: use for token or typography changes, reusable component work, or Feature Slice UI dependencies."
 ---
 
-# Design System Development
+# Design system
 
-Keep one conceptual Design System across the native apps while using native
-SwiftUI and Material 3 implementations.
+One Design System. SwiftUI on iOS, Material 3 on Android. Same meaning, native mapping.
 
-## Route The Work
+## 1. Route the work
 
-Classify the request into every applicable branch, then load only that branch's
-reference:
+Assign every requested change to a branch:
 
-| Branch | Use for | Required reference |
-| --- | --- | --- |
-| Token | Semantic or component tokens, theme resolution, platform token mappings | Read the relevant sections of [`docs/design-system/tokens.md`](../../../docs/design-system/tokens.md). |
-| Typography | Semantic type roles, fonts, or platform typography mappings | Read [`docs/design-system/typography.md`](../../../docs/design-system/typography.md). |
-| Component | Reusable component intent, API, variants, states, implementation, gallery, or previews | Read [`docs/design-system/components/README.md`](../../../docs/design-system/components/README.md) and the component's existing document, if any. |
+- Token: semantic or component tokens, theme resolution, platform mappings.
+- Typography: semantic type roles, fonts, or platform mappings.
+- Component: reusable intent, public interface, variants, states,
+  implementation, gallery, or previews.
 
-For a Component branch, also consult the token or typography reference when the
-component selects, adds, or changes those roles. Read
-[`docs/design-system/divergences.md`](../../../docs/design-system/divergences.md)
-only when the work introduces, changes, or discovers different native behavior.
+`docs/design-system/` can explain why something exists. It is not a ledger.
+Read it only when stable background affects the change. Keep implementation
+state in code and Linear. Do not edit repository docs unless the user asked for
+docs.
 
-Routing is complete when every requested change has a branch, affected
-platforms and canonical documents are identified, and every loaded reference
-is required by an active branch.
+**Completion criterion:** Every requested change has one branch, every affected
+platform is named, and every code location is identified.
 
-## Steps
+## 2. Define the shared interface
 
-1. **Define the shared contract before implementation.**
-   - Token: specify its semantic purpose, level, light/dark behavior, and both
-     platform mappings.
-   - Typography: specify the role's meaning and both native mappings.
-   - Component: specify intent, public API, variants, applicable states,
-     content, behavior, and accessibility using the Component Documentation
-     contract.
+- Token: semantic purpose, level, light/dark behavior, and both platform
+  mappings.
+- Typography: role meaning and both native mappings.
+- Component: intent, public interface, variants, applicable states, content,
+  behavior, and accessibility.
 
-   This step is complete when every changed public decision has one shared
-   meaning and an iOS and Android mapping, or an explicit `not applicable`
-   reason.
+Native public interfaces and tests win when they disagree with older docs.
 
-2. **Update the canonical design-system documents before dependent code.**
-   Update `tokens.md`, `typography.md`, or
-   `components/<component-name>.md` for the active branches. For Component work,
-   use the template and authoritative Definition of Done in the Component
-   Documentation reference.
+**Completion criterion:** Every changed public decision has one shared meaning
+and an iOS and Android mapping, or an explicit `not applicable` reason.
 
-   This step is complete when every changed semantic decision has one
-   authoritative document and component documents point to token, typography,
-   gallery, and state contracts instead of redefining them.
+## 3. Implement the native mappings
 
-3. **Implement the requested native changes.**
-   Keep iOS and Android behavior aligned to the shared contract. For Component
-   work, implement against the Component Contract in the Component
-   Documentation reference.
+Keep iOS and Android aligned to the shared interface. For Component work, keep
+variant and state names aligned across platforms.
 
-   This step is complete when every affected platform implements the contract,
-   or a concrete blocker is recorded in the completion ledger.
+**Completion criterion:** Every affected platform implements every mapped
+decision, or a concrete blocker names the missing decision and platform.
 
-4. **Add review surfaces for Component work.**
-   Apply the gallery and preview contract from the Component Documentation
-   reference. Do not create gallery or preview work for Token or Typography
-   branches unless the requested change needs a visual review surface.
+## 4. Add Component Collection evidence
 
-   This step is complete when every applicable native gallery and preview item
-   satisfies that contract, and each omitted surface has a reason.
+For Component work, add or update native gallery and preview entries when
+visual review applies. For Token or Typography work, add them only when the
+change needs a visual check.
 
-5. **Classify every platform difference.**
-   Record intentional design-system differences in `divergences.md`. Record a
-   temporary mismatch caused by feature implementation in that feature's
-   `parity-gaps.md`; do not place unfinished work in `divergences.md`.
+**Completion criterion:** Every applicable gallery and preview item opens, and
+each omitted item has a specific reason.
 
-   This step is complete when every observed iOS/Android mismatch is resolved,
-   intentional with a divergence entry, temporary with a parity-gap entry, or
-   blocked with evidence.
+## 5. Reconcile platform differences
 
-6. **Close the completion ledger.**
-   Account for canonical docs, iOS, Android, variants and applicable states,
-   gallery and previews, divergences or parity gaps, and automated checks. Mark
-   each item `complete`, `not applicable` with a reason, or `blocked` with
-   evidence. Run the build, lint, test, or preview checks affected by the
-   change; do not claim completion while any applicable ledger item is blocked.
+Align observable differences unless native platform behavior makes them
+intentional. Put intentional behavior in native implementation and tests. Put
+temporary mismatches in Linear when ticket updates are in scope. Otherwise,
+report them in the handoff.
 
-The work is complete only when every ledger item is accounted for and every
-applicable item is complete.
+**Completion criterion:** Every observed iOS/Android mismatch is resolved,
+intentional and implemented, temporary with a next action, or blocked with
+evidence.
+
+## 6. Check the change
+
+Run every affected build, lint, test, or preview check. Cover iOS, Android,
+variants, applicable states, gallery entries, and previews where they apply.
+
+**Completion criterion:** Every affected implementation and check passes, has a
+justified `not applicable` result, or has a reported blocker with evidence.

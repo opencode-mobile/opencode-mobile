@@ -245,5 +245,5 @@ resize motion can be reviewed in a realistic Session Chat placement.
 ## Parity And Divergence
 
 Intentional Floating Chrome material difference (iOS Liquid Glass vs Android
-raised Surface) is documented in `../divergences.md`. Temporary feature
-mismatches belong in `docs/design-system/divergences.md`.
+raised Surface) is documented in `../divergences.md`. Track temporary feature
+mismatches in Linear.
