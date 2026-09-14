@@ -68,10 +68,10 @@ Evaluate these invariants only when they apply:
 `pass`, `fail`, or `not applicable` result. The readiness summary includes every
 failed invariant.
 
-## Publication fallback
+## Publication steps
 
-Use this only when the user requested publication and GitHub `yeet` is
-unavailable:
+Use this only when the user requested publication. A harness-provided GitHub
+publish tool may perform steps 2–5, but the result must match them:
 
 1. Review the current branch, status, and diff.
 

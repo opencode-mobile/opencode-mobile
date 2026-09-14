@@ -80,9 +80,10 @@ PNG under the exact filename convention, and `index.html` labels every image.
 
 ## 6. Publish the sketch
 
-Load `~/.agents/skills/publish-artifact/SKILL.md`. Publish
-`.snapshot-evidence/out/` as a sketch with `--type plan`, then paste the
-returned URLs.
+Load `~/.agents/skills/publish-artifact/SKILL.md` (a user-level skill on the
+developer's machine, not part of this repository; stop and report if it is
+missing). Publish `.snapshot-evidence/out/` as a sketch with `--type plan`,
+then paste the returned URLs.
 
 **Completion criterion:** The artifact is published, and the response contains
 every returned access URL.

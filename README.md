@@ -17,7 +17,8 @@ This repository holds both app shells, shared product docs, design-system planni
 
 ## Prerequisites
 
-- **Android:** JDK 17, Android SDK (compile SDK 36)
+- **Android:** JDK 17, Android SDK (compile SDK 36). The optional `:screenshot`
+  Paparazzi module needs JDK 21; see [android/README.md](android/README.md).
 - **iOS:** Xcode with iOS 17.5+ simulator support
 - **Dev tooling:** Node.js for repo scripts (`npm install` at repo root)
 
@@ -86,9 +87,9 @@ gh workflow run "Android Checks" --ref main
 gh workflow run "Android Release" --ref main -f version_name=0.1.0
 gh workflow run "Android Test Lab" --ref main -f release_run_id=<android-release-run-id>
 gh workflow run "Android App Distribution" --ref main
-gh workflow run "Android App Distribution" --ref feature/ope-146-server-api-v2
+gh workflow run "Android App Distribution" --ref feature/ope-<number>-<slug>
 gh workflow run "iOS App Distribution" --ref main
-gh workflow run "iOS App Distribution" --ref feature/ope-146-server-api-v2
+gh workflow run "iOS App Distribution" --ref feature/ope-<number>-<slug>
 ```
 
 Android Release, Android App Distribution, and Android Test Lab use the

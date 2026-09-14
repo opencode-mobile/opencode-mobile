@@ -36,13 +36,17 @@ release distribution are active.
 
 ## Xcode MCP
 
-- Xcode's MCP bridge is configured for Codex as the `xcode` server. Use its
-  tools when iOS work benefits from Xcode context or capabilities: project
-  navigation, source reads and edits, compiler diagnostics, builds, tests,
-  SwiftUI preview rendering, build logs, and Apple documentation search.
-- Before using Xcode MCP tools, ensure the intended iOS project is open in
-  Xcode. The bridge operates on Xcode's active workspace rather than treating
-  the filesystem as the project model.
+- Which server is available depends on the harness. Codex: Xcode's own MCP
+ bridge as the `xcode` server (project navigation, source reads and edits,
+ compiler diagnostics, builds, tests, SwiftUI preview rendering, build logs,
+ Apple documentation search). Cursor: `XcodeBuildMCP` (simulator build, run,
+ test, screenshots, UI automation, LLDB; configured in
+ `.xcodebuildmcp/config.yaml`). Use whichever is connected in the session; do
+ not assume the other exists.
+- Before using Xcode's own MCP bridge, ensure the intended iOS project is open
+ in Xcode. That bridge operates on Xcode's active workspace rather than
+ treating the filesystem as the project model. `XcodeBuildMCP` works from the
+ filesystem project path.
 - Prefer Xcode MCP for Xcode-owned actions such as building, testing, project
   navigator changes, and preview rendering. Use normal repository tools for
   cross-platform and plain filesystem work.
@@ -223,12 +227,14 @@ section only adds caveats.
 - **Toolchain detection.** The project pins `jvmToolchain(17)`; Gradle
   auto-detects the JDK 17 toolchain, so builds work even when a shell defaults to
   another JDK.
-- **Pre-existing check failures (not environment issues).** On the current
-  committed tree, `./gradlew ktlintCheck` and `./gradlew lintDebug` report
-  violations (ktlint style nits plus `NewApi` lint errors with no lint baseline).
-  Android Checks soft-fails those steps and hard-fails on unit tests until a
-  follow-up makes lint green. Do not treat the soft-fail as a broken environment.
-- **Flaky unit tests.** A few coroutine-timing tests are non-deterministic across
+- **Pre-existing check failures (not environment issues).** As of September
+ 2026, `./gradlew ktlintCheck` and `./gradlew lintDebug` report violations
+ (ktlint style nits plus `NewApi` lint errors with no lint baseline). Android
+ Checks soft-fails those steps (`continue-on-error`) and hard-fails on unit
+ tests until a follow-up makes lint green. Do not treat the soft-fail as a
+ broken environment. If `android-checks.yml` no longer soft-fails, this note is
+ stale.
+- **Flaky unit tests.** As of September 2026, a few coroutine-timing tests are non-deterministic across
   runs (e.g. some `SessionChatViewModelTest` and `ConnectionProfileStoreTest`
   cases) because background work runs off the test scheduler. Re-run the task or
   run the class in isolation. `shared/markdown-core` and the core `domain.*` /
