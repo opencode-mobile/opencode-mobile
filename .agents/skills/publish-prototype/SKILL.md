@@ -20,8 +20,12 @@ HTML:
 - Scale the whole device to fit height and preserve its aspect ratio.
 - Allow the inner screen to scroll while the page around the phone stays fixed.
 
-The full phone CSS pattern lives in
-`homelab/artifact-publisher/skill/`.
+The full phone CSS pattern is the **Phone mockup layout (exact-spec)** section
+of `~/.agents/skills/publish-artifact/SKILL.md`.
+
+Both `prototype` and `publish-artifact` are user-level skills on the
+developer's machine, not part of this repository. If either is missing, stop
+and report it; do not substitute an ad-hoc publish path.
 
 **Completion criterion:** The prototype answers the requested design question,
 runs in a browser, and every phone mockup satisfies the exact layout rules.

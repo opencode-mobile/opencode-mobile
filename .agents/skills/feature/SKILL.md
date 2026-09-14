@@ -28,8 +28,8 @@ is explicit, and no unrequested mutation is included.
 
 ## Ownership
 
-This skill resolves anchors, changes branches in Start, checks links, and uses
-the publication fallback when needed. Other state changes belong to the owning
+This skill resolves anchors, changes branches in Start, checks links, and runs
+the publication steps in Publish. Other state changes belong to the owning
 skill:
 
 - `linear-project-tracking` creates or updates Linear issues, statuses, and
@@ -37,8 +37,11 @@ skill:
 - `synced-native-feature` owns cross-platform feature implementation and parity.
 - `design-system-component` owns reusable UI, tokens, variants, previews, and
   galleries.
-- GitHub `yeet` stages, commits, pushes, and opens pull requests when it is
-  available. This skill's publication fallback applies only when `yeet` is not.
+- Publication runs through `git` and `gh` per
+  [publication steps](reference.md#publication-steps). If the harness provides
+  a GitHub publish tool (for example Codex `yeet`), it may replace the manual
+  `git`/`gh` commands but must produce the same commit, branch, and pull-request
+  shape.
 
 Branch create or switch stays in this skill's Start route. After an owning
 skill mutates state, read the result and verify the requested link.
@@ -95,9 +98,8 @@ merge blocker or accepted risk.
 
 ## 6. Publish
 
-Publish only on an explicit commit, push, or pull-request request. Use GitHub
-`yeet` when available. If it is unavailable, read and execute
-[publication fallback](reference.md#publication-fallback). Use
+Publish only on an explicit commit, push, or pull-request request. Read and
+execute [publication steps](reference.md#publication-steps). Use
 `linear-project-tracking` for the Linear backlink after a pull request exists.
 
 **Completion criterion:** Every requested publication action has a commit
