@@ -73,7 +73,7 @@ nonisolated enum SessionChatTimelineProjector {
             } else {
                 serverRows
             }
-        let rows = merged.filter { !isHiddenQueuePending($0) }
+        let rows = merged.filter { !isHiddenPendingPrompt($0) }
 
         let previousIDs = Set(previousByID.keys)
         let nextIDs = Set(rows.map(\.id))
@@ -227,11 +227,12 @@ nonisolated enum SessionChatTimelineProjector {
 
     // MARK: - Optimistic merge (ported from SessionChatTimeline)
 
-    /// Queue-pending echoes stay in `mergeWithPending` so they can drop a matching
-    /// optimistic row, then leave the displayed set. Optimistic `isPending` rows
-    /// are not hidden by this rule.
-    private static func isHiddenQueuePending(_ row: TimelineRow) -> Bool {
-        !row.isPending && row.role == .user && row.pendingDelivery == .queue
+    /// Pending-prompt echoes stay in `mergeWithPending` so they can drop a matching
+    /// optimistic row, then leave the displayed set. After merge, hide any user
+    /// row whose `pendingDelivery` is set (steer or queue), including optimistic
+    /// `isPending` rows — the strip is the only surface for inbox items.
+    private static func isHiddenPendingPrompt(_ row: TimelineRow) -> Bool {
+        row.role == .user && row.pendingDelivery != nil
     }
 
     private static func mergeWithPending(
@@ -240,10 +241,32 @@ nonisolated enum SessionChatTimelineProjector {
         baselineSignatureCounts: [String: Int]
     ) -> [TimelineRow] {
         guard !pendingRows.isEmpty else { return serverRows }
+        let pendingToKeep = unmatchedPending(
+            pendingRows,
+            serverRows: serverRows,
+            baselineSignatureCounts: baselineSignatureCounts
+        )
+        let keptIDs = Set(pendingToKeep.map(\.id))
+        let dropped = pendingRows.filter { !keptIDs.contains($0.id) }
+        return splicePending(
+            applyPendingChrome(serverRows, dropped: dropped),
+            pendingToKeep: pendingToKeep
+        )
+    }
+
+    /// Pending optimistic rows that no new server echo accounts for yet. A row is
+    /// matched by exact signature when the server count exceeds the send-time
+    /// baseline; attachment rows fall back to a text-only match. Shared with
+    /// `SessionChatTimeline` so reconciliation and merge agree on "acknowledged".
+    static func unmatchedPending(
+        _ pendingRows: [TimelineRow],
+        serverRows: [TimelineRow],
+        baselineSignatureCounts: [String: Int]
+    ) -> [TimelineRow] {
         var serverExact = signatureCounts(serverRows)
         var serverTextOnly = textOnlySignatureCounts(serverRows)
         let baselineTextOnly = textOnlySignatureCounts(fromExact: baselineSignatureCounts)
-        let pendingToKeep = pendingRows.filter { pending in
+        return pendingRows.filter { pending in
             let exact = optimisticSignature(pending)
             if serverExact[exact, default: 0] > baselineSignatureCounts[exact, default: 0] {
                 serverExact[exact, default: 0] -= 1
@@ -259,12 +282,6 @@ nonisolated enum SessionChatTimelineProjector {
             serverTextOnly[text, default: 0] -= 1
             return false
         }
-        let keptIDs = Set(pendingToKeep.map(\.id))
-        let dropped = pendingRows.filter { !keptIDs.contains($0.id) }
-        return splicePending(
-            applyPendingChrome(serverRows, dropped: dropped),
-            pendingToKeep: pendingToKeep
-        )
     }
 
     private static func splicePending(

@@ -15,8 +15,7 @@ struct SessionChatView: View {
     @State private var menuExpanded = false
     @State private var showDeleteConfirmation = false
     @State private var messageActionsTarget: SessionChatMessageActionsTarget?
-    @State private var pendingSteerTarget: SessionChatPendingSteerTarget?
-    @State private var showQueuedPromptsSheet = false
+    @State private var showPendingPromptsSheet = false
     @State private var toolDetailTarget: SessionChatToolDetailTarget?
     @State private var toolGroupTarget: SessionChatToolGroupTarget?
     @State private var childSessionTarget: ChildSessionNavigationTarget?
@@ -206,14 +205,6 @@ struct SessionChatView: View {
                             )
                             messageActionsTarget = target
                         },
-                        onPendingSteerTap: { target in
-                            ProductAnalytics.logScreenView(
-                                screenId: ProductAnalytics.Screen.sessionPendingSteer,
-                                presentation: ProductAnalytics.Presentation.sheet,
-                                trigger: ProductAnalytics.Trigger.present
-                            )
-                            pendingSteerTarget = target
-                        },
                         onToolDetailTap: { target in
                             logChatAction(ProductAnalytics.Action.chatOpenToolDetail)
                             ProductAnalytics.logScreenView(
@@ -311,21 +302,20 @@ struct SessionChatView: View {
                             )
                             .padding(.horizontal, 12)
                             .padding(.bottom, 4)
-                        } else if !viewModel.uiState.queuedPrompts.isEmpty {
-                            OpenCodeQueuedPromptsDock(
-                                count: viewModel.uiState.queuedPrompts.count,
-                                preview: viewModel.uiState.queuedPrompts.first?.text,
+                        } else if !viewModel.uiState.pendingPrompts.isEmpty {
+                            OpenCodePendingPromptsStrip(
+                                prompts: viewModel.uiState.pendingPrompts,
                                 onTap: {
                                     ProductAnalytics.logScreenView(
-                                        screenId: ProductAnalytics.Screen.sessionQueuedPrompts,
+                                        screenId: ProductAnalytics.Screen.sessionPendingPrompts,
                                         presentation: ProductAnalytics.Presentation.sheet,
                                         trigger: ProductAnalytics.Trigger.present
                                     )
-                                    showQueuedPromptsSheet = true
+                                    showPendingPromptsSheet = true
                                 }
                             )
                             .padding(.horizontal, 12)
-                            .padding(.bottom, 4)
+                            .padding(.bottom, 6)
                         }
                     }
                     composer
@@ -363,25 +353,17 @@ struct SessionChatView: View {
             target: $messageActionsTarget,
             onRevertMessage: { viewModel.revertMessage($0) }
         )
-        .sessionChatPendingSteerSheet(
-            target: $pendingSteerTarget,
-            onMoveToQueue: { viewModel.queuePendingPrompt($0) },
-            onDelete: { viewModel.cancelPendingPrompt($0) }
-        )
-        .sessionChatQueuedPromptsSheet(
-            isPresented: $showQueuedPromptsSheet,
-            prompts: viewModel.uiState.queuedPrompts,
+        .sessionChatPendingPromptsSheet(
+            isPresented: $showPendingPromptsSheet,
+            prompts: viewModel.uiState.pendingPrompts,
             onSteer: { viewModel.steerPendingPrompt($0) },
-            onDelete: { viewModel.cancelPendingPrompt($0) }
+            onQueue: { viewModel.queuePendingPrompt($0) },
+            onDelete: { viewModel.cancelPendingPrompt($0) },
+            onClearAll: { viewModel.clearPendingPrompts() }
         )
-        .onChange(of: viewModel.uiState.queuedPrompts.count) { _, count in
+        .onChange(of: viewModel.uiState.pendingPrompts.count) { _, count in
             if count == 0 {
-                showQueuedPromptsSheet = false
-            }
-        }
-        .onChange(of: shouldDismissPendingSteerTarget) { _, shouldDismiss in
-            if shouldDismiss {
-                pendingSteerTarget = nil
+                showPendingPromptsSheet = false
             }
         }
         .sessionChatToolDetailSheet(target: $toolDetailTarget)
@@ -664,14 +646,6 @@ struct SessionChatView: View {
 
     private var sessionTodosPillVisible: Bool {
         viewModel.uiState.sessionTodosVisible || holdingFinishedTodos
-    }
-
-    private var shouldDismissPendingSteerTarget: Bool {
-        shouldDismissPendingSteerSheet(
-            targetId: pendingSteerTarget?.id,
-            timeline: viewModel.uiState.timeline,
-            messages: viewModel.uiState.messages
-        )
     }
 
     private func dismissSessionTodosSheetIfBlocked() {

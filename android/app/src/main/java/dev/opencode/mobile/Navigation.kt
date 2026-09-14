@@ -67,7 +67,7 @@ import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.MessageListGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.QueuedPromptsDockGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.PendingPromptsStripGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ServerAddressInputGalleryScreen
@@ -485,8 +485,8 @@ fun MainNavigation() {
                                                             SkeletonIllustrationGalleryScreen()
                                                         ComponentGalleryEntryId.Attachment -> AttachmentGalleryScreen()
                                                         ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()
-                                                        ComponentGalleryEntryId.QueuedPromptsDock ->
-                                                            QueuedPromptsDockGalleryScreen()
+                                                        ComponentGalleryEntryId.PendingPromptsStrip ->
+                                                            PendingPromptsStripGalleryScreen()
                                                         ComponentGalleryEntryId.AssistantMessage -> AssistantMessageGalleryScreen()
                                                         ComponentGalleryEntryId.ToolCallCard -> ToolCallCardGalleryScreen()
                                                         ComponentGalleryEntryId.ChildSessionRow -> ChildSessionRowGalleryScreen()

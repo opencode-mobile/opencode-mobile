@@ -43,7 +43,6 @@ import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
-import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionTodoList
@@ -62,7 +61,7 @@ import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
 import dev.opencode.mobile.ui.components.OpenCodeLayout
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
-import dev.opencode.mobile.ui.components.OpenCodeQueuedPromptsDock
+import dev.opencode.mobile.ui.components.OpenCodePendingPromptsStrip
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
@@ -83,11 +82,8 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatPendingSteerSheet
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatPendingSteerTarget
-import dev.opencode.mobile.ui.sessionchat.view.shouldDismissPendingSteerSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatPendingPromptsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatQueuedPromptsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
@@ -143,8 +139,7 @@ fun SessionChatScreen(
     var activeModelProviderId by remember { mutableStateOf<String?>(null) }
     var modelFilterText by remember { mutableStateOf("") }
     var messageActionsTarget by remember { mutableStateOf<SessionChatMessageActionsTarget?>(null) }
-    var pendingSteerTarget by remember { mutableStateOf<SessionChatPendingSteerTarget?>(null) }
-    var showQueuedPromptsSheet by rememberSaveable { mutableStateOf(false) }
+    var showPendingPromptsSheet by rememberSaveable { mutableStateOf(false) }
     var toolDetailTarget by remember { mutableStateOf<SessionChatToolDetailTarget?>(null) }
     var showSessionTodosSheet by rememberSaveable { mutableStateOf(false) }
     var holdingFinishedTodos by remember { mutableStateOf(false) }
@@ -171,27 +166,9 @@ fun SessionChatScreen(
         }
     }
 
-    LaunchedEffect(uiState.queuedPrompts.size) {
-        if (uiState.queuedPrompts.isEmpty()) {
-            showQueuedPromptsSheet = false
-        }
-    }
-
-    val pendingSteerTargetId = pendingSteerTarget?.id
-    val pendingSteerStillWaiting =
-        pendingSteerTargetId != null &&
-            uiState.messages.any {
-                it.id == pendingSteerTargetId && it.pendingDelivery == FollowUpDelivery.Steer
-            }
-    LaunchedEffect(pendingSteerTargetId, uiState.timeline, pendingSteerStillWaiting) {
-        if (
-            shouldDismissPendingSteerSheet(
-                targetId = pendingSteerTargetId,
-                timeline = uiState.timeline,
-                messages = uiState.messages,
-            )
-        ) {
-            pendingSteerTarget = null
+    LaunchedEffect(uiState.pendingPrompts.size) {
+        if (uiState.pendingPrompts.isEmpty()) {
+            showPendingPromptsSheet = false
         }
     }
 
@@ -526,7 +503,6 @@ fun SessionChatScreen(
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_MESSAGE_ACTIONS)
                                 messageActionsTarget = it
                             },
-                            onPendingSteerTap = { pendingSteerTarget = it },
                             onToolDetailTap = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
                                 toolDetailTarget = it
@@ -644,15 +620,14 @@ fun SessionChatScreen(
                                             .padding(horizontal = 12.dp)
                                             .padding(bottom = 4.dp),
                                 )
-                            uiState.queuedPrompts.isNotEmpty() ->
-                                OpenCodeQueuedPromptsDock(
-                                    count = uiState.queuedPrompts.size,
-                                    preview = uiState.queuedPrompts.first().text,
-                                    onClick = { showQueuedPromptsSheet = true },
+                            uiState.pendingPrompts.isNotEmpty() ->
+                                OpenCodePendingPromptsStrip(
+                                    prompts = uiState.pendingPrompts,
+                                    onClick = { showPendingPromptsSheet = true },
                                     modifier =
                                         Modifier
                                             .padding(horizontal = 12.dp)
-                                            .padding(bottom = 4.dp),
+                                            .padding(bottom = 6.dp),
                                 )
                         }
                     }
@@ -836,19 +811,14 @@ fun SessionChatScreen(
             onRevertMessage = viewModel::revertMessage,
         )
 
-        SessionChatPendingSteerSheet(
-            target = pendingSteerTarget,
-            onDismiss = { pendingSteerTarget = null },
-            onMoveToQueue = viewModel::queuePendingPrompt,
-            onDelete = viewModel::cancelPendingPrompt,
-        )
-
-        SessionChatQueuedPromptsSheet(
-            visible = showQueuedPromptsSheet,
-            prompts = uiState.queuedPrompts,
-            onDismiss = { showQueuedPromptsSheet = false },
+        SessionChatPendingPromptsSheet(
+            visible = showPendingPromptsSheet,
+            prompts = uiState.pendingPrompts,
+            onDismiss = { showPendingPromptsSheet = false },
             onSteer = viewModel::steerPendingPrompt,
+            onQueue = viewModel::queuePendingPrompt,
             onDelete = viewModel::cancelPendingPrompt,
+            onClearAll = viewModel::clearPendingPrompts,
         )
 
         SessionChatToolDetailSheet(

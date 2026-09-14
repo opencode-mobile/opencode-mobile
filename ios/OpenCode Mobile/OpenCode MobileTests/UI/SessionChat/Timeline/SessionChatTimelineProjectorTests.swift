@@ -750,15 +750,44 @@ struct SessionChatTimelineProjectorTests {
         #expect(frame.rows.isEmpty)
     }
 
-    @Test func project_includesSteerPendingUserMessage() {
+    @Test func project_excludesSteerPendingUserMessage() {
         let message = userMessage(
             id: "msg-user",
             text: "Waiting to steer"
         ).withPickupState(isWaitingForPickup: true, followUpDelivery: .steer)
         let frame = project(displayFrame(messages: [DisplayMessage(message: message)]))
-        #expect(frame.rows.count == 1)
-        #expect(frame.rows[0].text == "Waiting to steer")
-        #expect(frame.rows[0].pendingDelivery == .steer)
+        #expect(frame.rows.isEmpty)
+    }
+
+    @Test func project_excludesOptimisticPendingDeliveryRow() {
+        let pending = TimelineRow(
+            id: "optimistic-1",
+            role: .user,
+            text: "Hello",
+            metadataLabel: "build · deepseek-v4-flash-free · high · 10:21 AM",
+            pendingDelivery: .steer,
+            isPending: true,
+            blocks: [
+                .text(
+                    blockID: PresentationBlockId.messageFallback("optimistic-1"),
+                    text: "Hello",
+                    renderedMarkdown: nil
+                ),
+            ],
+            contentRevision: ContentRevision.of("Hello"),
+            layoutRevision: 1
+        )
+        let earlier = userMessage(id: "msg-user-0", text: "Earlier")
+        let signature = SessionChatTimelineProjector.optimisticSignature(pending)
+        let frame = project(
+            displayFrame(revision: 1, messages: [DisplayMessage(message: earlier)]),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: [signature: 0],
+                mergePending: true
+            )
+        )
+        #expect(frame.rows.map(\.id) == ["msg-user-0"])
     }
 
     @Test func optimisticThenQueuePendingEcho_dropsOptimisticAndHidesEcho() {

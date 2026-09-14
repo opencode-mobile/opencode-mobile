@@ -54,18 +54,14 @@ struct OpenCodeOutgoingMessage: View {
     let content: [OpenCodeOutgoingMessageContent]
     let renderedMarkdown: NativeMarkdownDocument?
     let metadataLabel: String
-    let pendingDelivery: FollowUpDelivery?
     let onTap: (() -> Void)?
     let onLongPress: (() -> Void)?
-
-    private var isPending: Bool { pendingDelivery != nil }
 
     init(
         text: String,
         renderedMarkdown: NativeMarkdownDocument? = nil,
         attachments: [OpenCodeAttachmentPresentation] = [],
         metadataLabel: String,
-        pendingDelivery: FollowUpDelivery? = nil,
         onTap: (() -> Void)? = nil,
         onLongPress: (() -> Void)? = nil
     ) {
@@ -74,7 +70,6 @@ struct OpenCodeOutgoingMessage: View {
         ]
         self.renderedMarkdown = renderedMarkdown
         self.metadataLabel = metadataLabel
-        self.pendingDelivery = pendingDelivery
         self.onTap = onTap
         self.onLongPress = onLongPress
     }
@@ -83,14 +78,12 @@ struct OpenCodeOutgoingMessage: View {
         content: [OpenCodeOutgoingMessageContent],
         renderedMarkdown: NativeMarkdownDocument? = nil,
         metadataLabel: String,
-        pendingDelivery: FollowUpDelivery? = nil,
         onTap: (() -> Void)? = nil,
         onLongPress: (() -> Void)? = nil
     ) {
         self.content = content
         self.renderedMarkdown = renderedMarkdown
         self.metadataLabel = metadataLabel
-        self.pendingDelivery = pendingDelivery
         self.onTap = onTap
         self.onLongPress = onLongPress
     }
@@ -118,7 +111,7 @@ struct OpenCodeOutgoingMessage: View {
             .padding(.horizontal, outgoingMessagePaddingHorizontal)
             .padding(.vertical, outgoingMessagePaddingVertical)
             .background(
-                isPending ? OpenCodeColors.surfaceRaisedBase : OpenCodeColors.surfaceInteractiveWeak,
+                OpenCodeColors.surfaceInteractiveWeak,
                 in: RoundedRectangle(cornerRadius: 8)
             )
             .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -167,20 +160,20 @@ struct OpenCodeOutgoingMessage: View {
                 document: renderedMarkdown,
                 variant: .outgoingMessage
             )
-            .foregroundStyle(isPending ? OpenCodeColors.textWeak : OpenCodeColors.textStrong)
+            .foregroundStyle(OpenCodeColors.textStrong)
         } else {
-            Text(attributedCommandDisplayText(text, isPending: isPending))
+            Text(attributedCommandDisplayText(text))
                 .font(OpenCodeTypography.body)
-                .foregroundStyle(isPending ? OpenCodeColors.textWeak : OpenCodeColors.textStrong)
+                .foregroundStyle(OpenCodeColors.textStrong)
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
 
-private func attributedCommandDisplayText(_ text: String, isPending: Bool) -> AttributedString {
+private func attributedCommandDisplayText(_ text: String) -> AttributedString {
     var attributed = AttributedString(text)
-    let bodyColor = isPending ? OpenCodeColors.textWeak : OpenCodeColors.textStrong
+    let bodyColor = OpenCodeColors.textStrong
     guard text.hasPrefix("[/"), let end = text.firstIndex(of: "]") else {
         attributed.foregroundColor = bodyColor
         return attributed
@@ -199,16 +192,6 @@ private func attributedCommandDisplayText(_ text: String, isPending: Bool) -> At
     OpenCodeOutgoingMessage(
         text: "Based on the standard 2026 pricing for DHL in Germany, confirm the package class.",
         metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM"
-    )
-        .padding()
-        .openCodeTheme()
-}
-
-#Preview("Pending") {
-    OpenCodeOutgoingMessage(
-        text: "Also check the compact path.",
-        metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM",
-        pendingDelivery: .steer
     )
         .padding()
         .openCodeTheme()

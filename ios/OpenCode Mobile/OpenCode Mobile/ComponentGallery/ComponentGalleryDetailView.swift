@@ -88,8 +88,8 @@ struct ComponentGalleryDetailView: View {
             AttachmentGalleryView()
         case .outgoingMessage:
             OutgoingMessageGalleryView()
-        case .queuedPromptsDock:
-            QueuedPromptsDockGalleryView()
+        case .pendingPromptsStrip:
+            PendingPromptsStripGalleryView()
         case .assistantMessage:
             AssistantMessageGalleryView()
         case .toolCallCard:

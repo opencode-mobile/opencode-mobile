@@ -28,7 +28,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.command.commandTokenHighlightRange
-import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -54,7 +53,6 @@ sealed interface OpenCodeOutgoingMessageContent {
 fun OpenCodeOutgoingMessage(
     text: String,
     metadataLabel: String,
-    pendingDelivery: FollowUpDelivery? = null,
     modifier: Modifier = Modifier,
     renderedMarkdown: MarkdownDocument? = null,
     attachments: List<OpenCodeAttachmentPresentation> = emptyList(),
@@ -72,19 +70,8 @@ fun OpenCodeOutgoingMessage(
                 if (text.isNotBlank()) add(OpenCodeOutgoingMessageContent.Text(text, renderedMarkdown))
                 attachments.forEach { add(OpenCodeOutgoingMessageContent.Attachment(it)) }
             }
-        val isPending = pendingDelivery != null
-        val bubbleColor =
-            if (isPending) {
-                openCodeColor("surface-raised-base")
-            } else {
-                openCodeColor("surface-interactive-weak")
-            }
-        val bubbleTextColor =
-            if (isPending) {
-                openCodeColor("text-weak")
-            } else {
-                openCodeColor("text-strong")
-            }
+        val bubbleColor = openCodeColor("surface-interactive-weak")
+        val bubbleTextColor = openCodeColor("text-strong")
 
         Column(
             modifier = Modifier.widthIn(max = maxBubbleWidth),
@@ -202,18 +189,6 @@ private fun OpenCodeOutgoingMessageShortPreview() {
         OpenCodeOutgoingMessage(
             text = "Based on the standard 2026 pricing for DHL in Germany, confirm the package class.",
             metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun OpenCodeOutgoingMessagePendingPreview() {
-    OpenCodeTheme(darkTheme = false) {
-        OpenCodeOutgoingMessage(
-            text = "Also check the compact path.",
-            metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
-            pendingDelivery = FollowUpDelivery.Steer,
         )
     }
 }

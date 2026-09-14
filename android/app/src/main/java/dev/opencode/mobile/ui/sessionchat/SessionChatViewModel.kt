@@ -715,6 +715,13 @@ class SessionChatViewModel
             }
         }
 
+        fun clearPendingPrompts() {
+            _uiState.value.pendingPrompts
+                .filter { !it.isSettling }
+                .map { it.id }
+                .forEach(::cancelPendingPrompt)
+        }
+
         private fun runPendingPromptAction(
             actionId: String,
             inboxId: String,
@@ -1122,7 +1129,11 @@ class SessionChatViewModel
                 sessionTitle = infoState.sessionTitle,
                 timeline = timelineState.timeline,
                 messages = messages,
-                queuedPrompts = queuedPromptsFrom(timeline.loadedMessages()),
+                pendingPrompts =
+                    pendingPromptsFrom(
+                        loaded = timeline.loadedMessages(),
+                        optimistic = timeline.pendingOptimisticItems(),
+                    ),
                 timelineFrame = timelineFrame,
                 composer =
                     composerState.composer.copy(
@@ -1286,13 +1297,54 @@ class SessionChatViewModel
         }
     }
 
-private fun queuedPromptsFrom(messages: List<Message>): List<QueuedPrompt> =
-    messages
-        .filter {
-            it.role == MessageRole.User &&
-                it.isWaitingForPickup &&
-                it.followUpDelivery == FollowUpDelivery.Queue
-        }.map { QueuedPrompt(id = it.id, text = it.text) }
+/**
+ * Union of server inbox rows and still-unmerged optimistic busy sends.
+ * [optimistic] must already be the merge leftover (echo dropped the matching
+ * optimistic row, often under a different id). This function only skips
+ * optimistic ids that are already in [loaded].
+ */
+internal fun pendingPromptsFrom(
+    loaded: List<Message>,
+    optimistic: List<SessionChatMessageItem>,
+): List<PendingPrompt> {
+    val fromLoaded =
+        loaded
+            .filter { message ->
+                message.role == MessageRole.User &&
+                    message.isWaitingForPickup &&
+                    message.followUpDelivery != null
+            }.map { message ->
+                PendingPrompt(
+                    id = message.id,
+                    text = message.text,
+                    delivery = requireNotNull(message.followUpDelivery),
+                    isSettling = false,
+                )
+            }
+    val loadedIds = fromLoaded.map { it.id }.toSet()
+    val fromOptimistic =
+        optimistic
+            .filter { item ->
+                item.role == MessageRole.User &&
+                    item.isPending &&
+                    item.pendingDelivery != null &&
+                    item.id !in loadedIds
+            }.map { item ->
+                PendingPrompt(
+                    id = item.id,
+                    text = item.text,
+                    delivery = requireNotNull(item.pendingDelivery),
+                    isSettling = true,
+                )
+            }
+    val steers =
+        fromLoaded.filter { it.delivery == FollowUpDelivery.Steer } +
+            fromOptimistic.filter { it.delivery == FollowUpDelivery.Steer }
+    val queued =
+        fromLoaded.filter { it.delivery == FollowUpDelivery.Queue } +
+            fromOptimistic.filter { it.delivery == FollowUpDelivery.Queue }
+    return steers + queued
+}
 
 private val ClientSlashAction.productActionId: String
     get() =

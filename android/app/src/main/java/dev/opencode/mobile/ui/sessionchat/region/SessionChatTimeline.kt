@@ -380,6 +380,9 @@ class SessionChatTimeline(
 
     fun loadedMessages(): List<Message> = lastLoadedMessages
 
+    fun pendingOptimisticItems(): List<SessionChatMessageItem> =
+        pendingOptimisticRows.ifEmpty { _state.value.messages.filter { it.isPending } }
+
     internal fun pendingPromptPatchCount(): Int = pendingPromptPatches.size
 
     fun applyOptimisticPendingPrompt(
@@ -733,7 +736,7 @@ class SessionChatTimeline(
                     },
             )
         }
-        clearOptimisticIfReconciled(stamped.rows)
+        clearOptimisticIfReconciled()
         onPublished?.invoke()
     }
 
@@ -775,19 +778,43 @@ class SessionChatTimeline(
         }
     }
 
-    private fun clearOptimisticIfReconciled(rows: List<TimelineRow>) {
+    /**
+     * Hidden pending-prompt rows leave the displayed frame before this runs, so
+     * reconciliation cannot use displayed ids. An optimistic send is done when
+     * every pending item has a new server echo (id absent from the send-time
+     * baseline) with the same user text — the same match [TimelineProjector]
+     * uses to drop the optimistic row, often under a different id.
+     */
+    private fun clearOptimisticIfReconciled() {
         if (!mergePendingWhileSending) return
-        val pendingIds = pendingOptimisticRows.map { it.id }.toSet()
-        val stillPending =
-            if (pendingIds.isNotEmpty()) {
-                rows.any { it.id in pendingIds }
-            } else {
-                rows.any { it.isPending }
+        val pendingItems = pendingOptimisticItems()
+        if (pendingItems.isEmpty()) {
+            mergePendingWhileSending = false
+            pendingOptimisticRows = emptyList()
+            pendingBaselineSignatures = emptyMap()
+            return
+        }
+        val stillUnacked =
+            pendingItems.any { pending ->
+                lastLoadedMessages.none { server -> isNewServerEchoOf(server, pending) }
             }
-        if (stillPending) return
+        if (stillUnacked) return
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
         pendingBaselineSignatures = emptyMap()
+    }
+
+    private fun isNewServerEchoOf(
+        server: Message,
+        pending: SessionChatMessageItem,
+    ): Boolean {
+        if (server.role != MessageRole.User ||
+            server.text != pending.text ||
+            pending.text.isBlank()
+        ) {
+            return false
+        }
+        return server.id !in pendingBaselineSignatures
     }
 
     private data class PendingPromptPatch(

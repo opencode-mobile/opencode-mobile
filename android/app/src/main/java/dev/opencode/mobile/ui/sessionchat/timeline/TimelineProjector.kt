@@ -99,7 +99,7 @@ object TimelineProjector {
         val merged = mergeWithPending(authoritative, optimisticInputs)
         return diffFrame(
             frameRevision = frame.frameRevision,
-            rows = merged.filterNot(::isHiddenQueuePending),
+            rows = merged.filterNot(::isHiddenPendingPrompt),
             previous = previous,
         )
     }
@@ -312,14 +312,12 @@ object TimelineProjector {
     )
 
     /**
-     * Queue-pending echoes stay in [mergeWithPending] so they can drop a matching
-     * optimistic row, then leave the displayed set. Optimistic [TimelineRow.isPending]
-     * rows are not hidden by this rule.
+     * Pending-prompt rows stay in [mergeWithPending] so a server echo can replace a
+     * matching optimistic row, then leave the displayed set. The timeline shows
+     * delivered history only — Steer and Queue, including optimistic rows.
      */
-    private fun isHiddenQueuePending(row: TimelineRow): Boolean =
-        !row.isPending &&
-            row.role == MessageRole.User &&
-            row.pendingDelivery == FollowUpDelivery.Queue
+    private fun isHiddenPendingPrompt(row: TimelineRow): Boolean =
+        row.role == MessageRole.User && row.pendingDelivery != null
 
     private fun mergeWithPending(
         serverRows: List<TimelineRow>,

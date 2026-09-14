@@ -4,7 +4,6 @@ private enum OutgoingMessageSample: String, CaseIterable {
     case short = "Short"
     case long = "Long"
     case attachments = "Attachments"
-    case pending = "Pending"
 
     var text: String {
         switch self {
@@ -14,8 +13,6 @@ private enum OutgoingMessageSample: String, CaseIterable {
             "Based on the standard 2026 pricing for DHL in Germany, compare the Alleskoenner package to the smaller parcel options. Include the likely dimensions, weight limits, and the tradeoffs a customer should consider before choosing it. Keep the answer practical and note where pricing depends on the booking channel or destination. Then summarize the recommendation in one concise sentence for a mobile chat user."
         case .attachments:
             ""
-        case .pending:
-            "Also check the compact path."
         }
     }
 }
@@ -49,7 +46,6 @@ struct OutgoingMessageGalleryView: View {
                     .init(id: "text", filename: "notes.md", variant: .text),
                 ] : [],
                 metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM",
-                pendingDelivery: sample == .pending ? .steer : nil,
                 onTap: {}
             )
         }

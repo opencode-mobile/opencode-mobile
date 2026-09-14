@@ -1314,16 +1314,48 @@ class TimelineProjectorTest {
     }
 
     @Test
-    fun project_includesSteerPendingUserMessage() {
+    fun project_excludesOptimisticPendingUserMessage() {
+        val pending =
+            TimelineProjector.rowFromMessageItem(
+                SessionChatMessageItem(
+                    id = "optimistic-1",
+                    role = MessageRole.User,
+                    text = "Hello",
+                    metadataLabel = "build · deepseek-v4-flash-free · high · 10:21 AM",
+                    pendingDelivery = FollowUpDelivery.Steer,
+                    isPending = true,
+                    blocks =
+                        listOf(
+                            SessionChatTimelineBlock.Text(
+                                blockID = PresentationBlockId.messageFallback("optimistic-1"),
+                                text = "Hello",
+                            ),
+                        ),
+                ),
+            )
+        val frame =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages = emptyList(),
+                    ),
+                optimisticInputs = OptimisticInputs(pendingRows = listOf(pending)),
+            )
+        assertTrue(frame.rows.isEmpty())
+    }
+
+    @Test
+    fun project_excludesSteerPendingUserMessage() {
         val frame =
             projectUser(
                 text = "Waiting to steer",
                 isWaitingForPickup = true,
                 followUpDelivery = FollowUpDelivery.Steer,
             )
-        val row = frame.rows.single()
-        assertEquals("Waiting to steer", row.text)
-        assertEquals(FollowUpDelivery.Steer, row.pendingDelivery)
+        assertTrue(frame.rows.isEmpty())
     }
 
     @Test

@@ -22,7 +22,7 @@ enum class ComponentGalleryEntryId {
     SkeletonIllustration,
     Attachment,
     OutgoingMessage,
-    QueuedPromptsDock,
+    PendingPromptsStrip,
     AssistantMessage,
     ToolCallCard,
     ChildSessionRow,
@@ -217,9 +217,9 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(
-            id = ComponentGalleryEntryId.QueuedPromptsDock,
-            title = "Queued Prompts Dock",
-            description = "Subdued composer-adjacent row for prompts held until the session is idle.",
+            id = ComponentGalleryEntryId.PendingPromptsStrip,
+            title = "Pending Prompts Strip",
+            description = "Compact capsule between the timeline and composer for prompts waiting in the inbox.",
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(
