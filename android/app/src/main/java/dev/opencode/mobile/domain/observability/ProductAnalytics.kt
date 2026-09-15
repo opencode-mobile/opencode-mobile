@@ -103,6 +103,7 @@ object ProductAnalytics {
         const val HOME_OPEN_PROJECT_PICKER = "home_open_project_picker"
         const val HOME_ADD_PROJECT = "home_add_project"
         const val HOME_REMOVE_PROJECT = "home_remove_project"
+        const val HOME_REORDER_PROJECTS = "home_reorder_projects"
         const val HOME_SELECT_SESSION_FILTER = "home_select_session_filter"
         const val HOME_DISMISS_REMOVAL_SNACKBAR = "home_dismiss_removal_snackbar"
         const val HOME_CONNECT = "home_connect"

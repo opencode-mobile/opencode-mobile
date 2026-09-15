@@ -377,6 +377,34 @@ class MainScreenViewModel
             HomeDisplayPreferences.setLastHomeHiddenAtEpochMs(null)
         }
 
+        /**
+         * Applies a new added-project order from the project picker. The order
+         * shows immediately and persists to the Connection Profile; the dock,
+         * home sections, and new-session picker all derive from it.
+         */
+        fun reorderProjects(worktrees: List<String>) {
+            val state = _uiState.value as? MainScreenUiState.Loaded ?: return
+            val current = state.sections.map { it.worktree }
+            if (current == worktrees || current.size != worktrees.size || current.toSet() != worktrees.toSet()) return
+            val byWorktree = state.sections.associateBy { it.worktree }
+            _uiState.update { latest ->
+                if (latest is MainScreenUiState.Loaded) {
+                    latest.copy(sections = worktrees.mapNotNull { byWorktree[it] })
+                } else {
+                    latest
+                }
+            }
+            if (observedWorktrees.isNotEmpty()) {
+                observedWorktrees = worktrees
+            }
+            logAction(ProductAnalytics.Screen.HOME_FILTER_PROJECT_PICKER, ProductAnalytics.Action.HOME_REORDER_PROJECTS)
+            val serverBaseUrl = serverBaseUrl
+            viewModelScope.launch {
+                runCatching { connectionProfileStore.setAddedWorktrees(serverBaseUrl, worktrees) }
+                    .onFailure { logI("reorder projects persist failed: ${it.message}") }
+            }
+        }
+
         fun requestRemoveProject(worktree: String) {
             logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_REMOVE_PROJECT)
             _uiState.update { state ->

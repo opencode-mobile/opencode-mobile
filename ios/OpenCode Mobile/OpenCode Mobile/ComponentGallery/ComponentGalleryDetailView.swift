@@ -110,6 +110,8 @@ struct ComponentGalleryDetailView: View {
             ListItemGalleryView()
         case .listGroup:
             ListGroupGalleryView()
+        case .reorderableList:
+            ReorderableListGalleryView()
         case .choiceBadge:
             ChoiceBadgeGalleryView()
         case .filterTabs:
