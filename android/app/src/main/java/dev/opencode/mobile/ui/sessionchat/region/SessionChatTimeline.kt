@@ -308,6 +308,11 @@ class SessionChatTimeline(
         val displayedRows = displayedItems.map(TimelineProjector::rowFromMessageItem)
         val previous = lastTimelineFrame
         val hadPriorRows = _state.value.messages.isNotEmpty() || !previous?.rows.isNullOrEmpty()
+        val markReady =
+            TimelineProjector.shouldMarkTimelineReadyAfterOptimisticSend(
+                displayedItems = displayedItems,
+                hadPriorDisplayedRows = hadPriorRows,
+            )
         if (displayedRows.isEmpty()) {
             val frame =
                 if (hadPriorRows) {
@@ -328,6 +333,12 @@ class SessionChatTimeline(
             }
             _state.update {
                 it.copy(
+                    timeline =
+                        if (markReady) {
+                            SessionChatTimelineState.Ready
+                        } else {
+                            it.timeline
+                        },
                     timelineFrame = frame ?: it.timelineFrame,
                     errorMessage = null,
                 )

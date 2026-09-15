@@ -348,8 +348,9 @@ nonisolated enum SessionChatTimelineProjector {
         }
     }
 
-    /// Blank-text attachment send: match a new server row by file identity
-    /// (count + id/filename), not an arbitrary blank user row with no files.
+    /// Blank-text attachment send: match a new blank-text server row by file
+    /// identity (count + id/filename). A captioned reuse of the same files is
+    /// not an echo.
     private static func consumeNewAttachmentEcho(
         _ pending: TimelineRow,
         serverRows: [TimelineRow],
@@ -357,7 +358,7 @@ nonisolated enum SessionChatTimelineProjector {
         baselineSignatureCounts: [String: Int]
     ) -> Bool {
         for server in serverRows where server.role == .user {
-            guard attachmentsCorrespond(server, pending) else { continue }
+            guard textSignature(server).isEmpty, attachmentsCorrespond(server, pending) else { continue }
             let exact = optimisticSignature(server)
             guard serverExact[exact, default: 0] > baselineSignatureCounts[exact, default: 0] else {
                 continue
@@ -433,6 +434,7 @@ nonisolated enum SessionChatTimelineProjector {
             guard let target = serverRows.last(where: { server in
                 server.role == .user
                     && pendingByServerID[server.id] == nil
+                    && textSignature(server).isEmpty
                     && attachmentsCorrespond(server, pending)
             }) else { continue }
             pendingByServerID[target.id] = pending

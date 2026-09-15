@@ -1012,6 +1012,53 @@ struct SessionChatTimelineProjectorTests {
         #expect(leftover.map(\.id) == ["optimistic-file"])
     }
 
+    @Test func unmatchedPending_blankTextDoesNotMatchCaptionedAttachmentRow() {
+        let pendingFile = FilePart(
+            id: "local-file",
+            filename: "notes.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "local"
+        )
+        let pending = TimelineRow(
+            id: "optimistic-file",
+            role: .user,
+            text: "",
+            metadataLabel: "",
+            isPending: true,
+            blocks: [
+                .attachment(blockID: PresentationBlockId.direct("local-file"), file: pendingFile),
+            ],
+            contentRevision: ContentRevision.of(""),
+            layoutRevision: 1
+        )
+        let captioned = userMessage(
+            id: "msg-captioned",
+            text: "See notes",
+            parts: [
+                text("u-caption", "See notes"),
+                .file(
+                    FilePart(
+                        id: "server-file",
+                        filename: "notes.txt",
+                        mime: "text/plain",
+                        kind: .text,
+                        dataURL: "https://example.test/notes.txt"
+                    )
+                ),
+            ]
+        )
+        let serverRow = SessionChatTimelineProjector.serverRows(
+            from: displayFrame(messages: [DisplayMessage(message: captioned)])
+        ).first!
+        let leftover = SessionChatTimelineProjector.unmatchedPending(
+            [pending],
+            serverRows: [serverRow],
+            baselineSignatureCounts: [:]
+        )
+        #expect(leftover.map(\.id) == ["optimistic-file"])
+    }
+
     @Test func displayedOptimisticSendRows_excludesHiddenPendingRows() {
         let hidden = SessionChatRow(
             id: "pending-1",

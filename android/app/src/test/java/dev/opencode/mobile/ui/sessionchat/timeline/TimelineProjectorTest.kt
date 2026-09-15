@@ -1696,6 +1696,53 @@ class TimelineProjectorTest {
     }
 
     @Test
+    fun unmatchedPending_blankTextDoesNotMatchCaptionedAttachmentRow() {
+        val pendingAttachment =
+            SessionChatAttachmentItem(
+                id = "local-file",
+                filename = "notes.txt",
+                variant = OpenCodeAttachmentVariant.Text,
+                signature = "local",
+            )
+        val serverAttachment =
+            SessionChatAttachmentItem(
+                id = "server-file",
+                filename = "notes.txt",
+                variant = OpenCodeAttachmentVariant.Text,
+                signature = "https://example.test/notes.txt",
+            )
+        val pending =
+            TimelineProjector.rowFromMessageItem(
+                SessionChatMessageItem(
+                    id = "optimistic-file",
+                    role = MessageRole.User,
+                    text = "",
+                    metadataLabel = "",
+                    isPending = true,
+                    attachments = listOf(pendingAttachment),
+                ),
+            )
+        val captioned =
+            TimelineProjector.rowFromMessageItem(
+                SessionChatMessageItem(
+                    id = "msg-captioned",
+                    role = MessageRole.User,
+                    text = "See notes",
+                    metadataLabel = "",
+                    attachments = listOf(serverAttachment),
+                ),
+            )
+        assertFalse(TimelineProjector.matchesOptimistic(captioned, pending))
+        val leftover =
+            TimelineProjector.unmatchedPending(
+                pendingRows = listOf(pending),
+                serverRows = listOf(captioned),
+                baselineSignatures = emptyMap(),
+            )
+        assertEquals(listOf("optimistic-file"), leftover.map { it.id })
+    }
+
+    @Test
     fun displayedOptimisticSendItems_excludesHiddenPendingRows() {
         val hidden =
             SessionChatMessageItem(

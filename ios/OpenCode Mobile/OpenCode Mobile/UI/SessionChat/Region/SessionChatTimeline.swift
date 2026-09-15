@@ -312,7 +312,12 @@ final class SessionChatTimeline {
         let displayed = SessionChatTimelineProjector.displayedOptimisticSendRows(rows)
         let hadPriorRows = !state.messages.isEmpty || !timelineFrame.rows.isEmpty
         if displayed.isEmpty {
-            if hadPriorRows {
+            state.errorMessage = nil
+            if SessionChatTimelineProjector.shouldMarkTimelineReadyAfterOptimisticSend(
+                displayedRows: displayed,
+                hadPriorDisplayedRows: hadPriorRows
+            ) {
+                state.timeline = .ready
                 publishSyntheticTimelineFrame(
                     messages: state.messages,
                     insertedRowIDs: [],
