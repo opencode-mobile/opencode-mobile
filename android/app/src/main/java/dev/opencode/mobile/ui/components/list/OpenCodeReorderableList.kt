@@ -38,7 +38,10 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -228,6 +231,11 @@ fun <T> OpenCodeReorderableList(
                                 spotColor = Color.Black.copy(alpha = 0.18f * elevation),
                             ).background(surfaceRaised.copy(alpha = surfaceRaised.alpha * highlightAlpha), shape)
                             .semantics {
+                                role = Role.Button
+                                onClick(label = null) {
+                                    onSelect(item)
+                                    true
+                                }
                                 val actions = mutableListOf<CustomAccessibilityAction>()
                                 if (onContextAction != null && supportsContextAction(item)) {
                                     actions +=
