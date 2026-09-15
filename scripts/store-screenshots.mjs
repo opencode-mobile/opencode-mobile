@@ -23,6 +23,8 @@ import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
+import { IOS_EXPECTED, IOS_OUTPUT_TARGET, readPngSize } from "./store-screenshots/png.mjs";
+import { writeGallery } from "./store-screenshots/write-gallery.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FIXTURE_SERVER = join(REPO_ROOT, "scripts/store-screenshots/fixture-server.mjs");
@@ -30,8 +32,6 @@ const AVDS_JSON = join(REPO_ROOT, "scripts/store-screenshots/avds.json");
 const IOS_PROJECT_DIR = join(REPO_ROOT, "ios/OpenCode Mobile");
 const ANDROID_DIR = join(REPO_ROOT, "android");
 const IOS_SIM_NAME = "iPhone 16 Pro Max";
-const IOS_OUTPUT_TARGET = "ios-6.9";
-const IOS_EXPECTED = { width: 1320, height: 2868 };
 const SERVER_USER = "opencode";
 const SERVER_PASSWORD = "store-screenshots";
 const DEVICE_SCREENSHOT_DIR = "/sdcard/Android/data/dev.opencode.mobile/files/store-screenshots";
@@ -67,6 +67,7 @@ Options:
   --keep-emulator       Leave the Android emulator running after the run
   --headless            Start the emulator with -no-window
   --out <dir>           Output root (default: store-screenshots)
+  --no-gallery          Skip writing store-screenshots/index.html
   --avd-only            Create, boot, and configure Android AVDs; report wm size/density
   --sim-only            Boot the iPhone 16 Pro Max simulator and apply status-bar overrides
   --help, -h`);
@@ -85,6 +86,7 @@ function parseArgs(argv) {
     avdOnly: false,
     simOnly: false,
     selfTest: false,
+    noGallery: false,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -128,6 +130,9 @@ function parseArgs(argv) {
         break;
       case "--self-test":
         args.selfTest = true;
+        break;
+      case "--no-gallery":
+        args.noGallery = true;
         break;
       case "--help":
       case "-h":
@@ -254,18 +259,6 @@ function encodeMinimalPng(width, height) {
     pngChunk("IDAT", idat),
     pngChunk("IEND", Buffer.alloc(0)),
   ]);
-}
-
-function readPngSize(filePath) {
-  const buf = readFileSync(filePath);
-  if (buf.length < 24) return null;
-  const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-  if (!buf.subarray(0, 8).equals(sig)) return null;
-  if (buf.subarray(12, 16).toString("ascii") !== "IHDR") return null;
-  return {
-    width: buf.readUInt32BE(16),
-    height: buf.readUInt32BE(20),
-  };
 }
 
 function inspectPng(filePath, { expectedWidth, expectedHeight, playAspectRule }) {
@@ -1211,11 +1204,21 @@ async function main() {
     await cleanup({ keepEmulator: false });
     console.error(error.message ?? error);
     process.exitCode = 1;
-    return;
   }
 
-  cleaned = true;
-  killProcess(serverProc);
+  if (!args.avdOnly && !args.simOnly && !args.noGallery) {
+    try {
+      const galleryPath = writeGallery(outDir);
+      console.log(`gallery: ${galleryPath}`);
+    } catch (error) {
+      console.error(`gallery write failed: ${error.message ?? error}`);
+    }
+  }
+
+  if (!cleaned) {
+    cleaned = true;
+    killProcess(serverProc);
+  }
 }
 
 main().catch((error) => {
