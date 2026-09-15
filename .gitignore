@@ -67,6 +67,7 @@ icons/cache/
 
 # Theme research
 research/
+research/
 
 # Throwaway on-demand UI snapshot evidence (OPE-161)
 .snapshot-evidence/
@@ -82,3 +83,6 @@ android/screenshot/src/test/snapshots/
 shared/markdown-core/native/build/
 shared/markdown-core/native/libs/
 shared/markdown-core/native/oniguruma-src/
+
+# Store screenshot capture output
+/store-screenshots/

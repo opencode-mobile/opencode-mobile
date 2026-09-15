@@ -255,6 +255,7 @@ struct SessionList<EmptyContent: View>: View {
         .openCodeReadableColumn()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
+        .accessibilityIdentifier("homeContent")
         .background {
             GeometryReader { geometry in
                 Color.clear

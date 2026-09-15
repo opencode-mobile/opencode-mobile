@@ -221,6 +221,16 @@ struct OpenCodeSessionComposer: View {
         .padding(.horizontal, 12)
         .padding(.bottom, 4)
         .animation(.easeInOut(duration: 0.24), value: contentKind)
+        .accessibilityIdentifier(composerAccessibilityIdentifier)
+    }
+
+    private var composerAccessibilityIdentifier: String {
+        switch state {
+        case .permission:
+            "sessionChatPermission"
+        default:
+            "sessionChatComposer"
+        }
     }
 
     @ViewBuilder

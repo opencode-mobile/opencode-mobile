@@ -53,6 +53,8 @@ struct OpenCode_MobileApp: App {
             ReviewChangesPillUITestView()
         } else if ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_MESSAGE_LIST"] == "1" {
             MessageListGalleryUITestView()
+        } else if StoreScreenshotLaunchEnvironment.isEnabled {
+            StoreScreenshotSeedingHost()
         } else {
             AppRootView()
         }

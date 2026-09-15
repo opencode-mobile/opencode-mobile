@@ -22,6 +22,7 @@ struct OpenCodeConnectionStatusLabel: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Live updates \(status.rawValue)")
+        .accessibilityIdentifier("liveUpdatesStatus")
     }
 }
 

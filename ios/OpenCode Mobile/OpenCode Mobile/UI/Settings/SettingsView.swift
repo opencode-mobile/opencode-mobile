@@ -391,6 +391,7 @@ struct SettingsView: View {
                 }
             }
             .openCodeReadableColumn()
+            .accessibilityIdentifier("settingsContent")
         }
         .navigationBarBackButtonHidden(true)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

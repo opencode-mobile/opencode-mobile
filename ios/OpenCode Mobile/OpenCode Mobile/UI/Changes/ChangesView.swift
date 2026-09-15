@@ -183,6 +183,7 @@ struct ChangesView: View {
             }
             .padding(16)
         }
+        .accessibilityIdentifier("changesContent")
         .id(viewModel.state.selectedSource)
         .refreshable {
             logAction(ProductAnalytics.Action.changesRefresh)
