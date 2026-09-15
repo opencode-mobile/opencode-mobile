@@ -1,0 +1,22 @@
+{
+  "home": {
+    "headline": "Your Sessions, Anywhere",
+    "subtitle": "Pick up any opencode session running on your dev machine"
+  },
+  "chat-code": {
+    "headline": "Follow Along Live",
+    "subtitle": "Watch replies and code stream in as the agent works"
+  },
+  "chat-permission": {
+    "headline": "Approve From Anywhere",
+    "subtitle": "Allow or deny tool calls the moment the agent asks"
+  },
+  "changes": {
+    "headline": "Review Every Diff",
+    "subtitle": "See what changed, file by file, before you push"
+  },
+  "settings": {
+    "headline": "Made For Your Setup",
+    "subtitle": "Connect your servers, pick a theme, tune how chat flows"
+  }
+}

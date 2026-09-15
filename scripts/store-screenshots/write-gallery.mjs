@@ -12,6 +12,7 @@ import { IOS_EXPECTED, IOS_OUTPUT_TARGET, readPngSize } from "./png.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const AVDS_PATH = join(dirname(fileURLToPath(import.meta.url)), "avds.json");
+const COPY_PATH = join(dirname(fileURLToPath(import.meta.url)), "copy.json");
 const DEFAULT_OUT = "store-screenshots";
 const APPEARANCES = ["light", "dark"];
 const SCENES = ["01-home", "02-chat-code", "03-chat-permission", "04-changes", "05-settings"];
@@ -47,6 +48,28 @@ function escapeHtml(value) {
 
 function formatMtime(mtime) {
   return mtime.toISOString().replace("T", " ").replace(/\.\d{3}Z$/, " UTC");
+}
+
+function sceneCopyKey(scene) {
+  return String(scene).replace(/^\d+-/, "");
+}
+
+function loadCopy() {
+  if (!existsSync(COPY_PATH)) return {};
+  try {
+    const parsed = JSON.parse(readFileSync(COPY_PATH, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function copyForScene(copy, scene) {
+  const entry = copy?.[sceneCopyKey(scene)];
+  return {
+    headline: entry?.headline ?? "",
+    subtitle: entry?.subtitle ?? "",
+  };
 }
 
 function loadTargetSpecs() {
@@ -98,7 +121,7 @@ function collectGallery(outDir) {
   });
   const presentCount = targets.reduce((sum, target) => sum + target.present, 0);
   const slotCount = targets.reduce((sum, target) => sum + target.present + target.missing, 0);
-  return { targets, presentCount, slotCount };
+  return { targets, presentCount, slotCount, copy: loadCopy() };
 }
 
 function sizeBadge(slot, expected) {
@@ -111,10 +134,11 @@ function sizeBadge(slot, expected) {
   return "";
 }
 
-function renderCard(slot, expected, targetId, appearance) {
+function renderCard(slot, expected, targetId, appearance, copy) {
   const aspect = expected.width / expected.height;
   const sizeLabel = slot.present && slot.width && slot.height ? `${slot.width}×${slot.height}` : "—";
   const mtime = slot.present ? `<div class="mtime">${escapeHtml(slot.mtime)}</div>` : "";
+  const { headline, subtitle } = copyForScene(copy, slot.scene);
   const media = slot.present
     ? `<button type="button" class="thumb" data-src="${escapeHtml(slot.rel)}" data-target="${escapeHtml(targetId)}" data-appearance="${escapeHtml(appearance)}" data-scene="${escapeHtml(slot.scene)}" aria-label="Open ${escapeHtml(slot.scene)}">
         <img src="${escapeHtml(slot.rel)}" alt="${escapeHtml(slot.scene)}" height="520" />
@@ -123,6 +147,8 @@ function renderCard(slot, expected, targetId, appearance) {
   return `<article class="card" style="--aspect:${aspect}" data-scene="${escapeHtml(slot.scene)}">
     ${media}
     <div class="meta">
+      <div class="headline">${escapeHtml(headline)}</div>
+      <div class="subtitle">${escapeHtml(subtitle)}</div>
       <div class="caption">${escapeHtml(slot.scene)}</div>
       <div class="size">${escapeHtml(sizeLabel)}</div>
       ${mtime}
@@ -131,7 +157,7 @@ function renderCard(slot, expected, targetId, appearance) {
   </article>`;
 }
 
-function renderTarget(target) {
+function renderTarget(target, copy) {
   const expected = `${target.expected.width}×${target.expected.height}`;
   const pill = target.complete
     ? `<span class="pill ok">all files present</span>`
@@ -139,7 +165,7 @@ function renderTarget(target) {
   const rows = target.appearances
     .map((row) => {
       const cards = row.slots
-        .map((slot) => renderCard(slot, target.expected, target.id, row.appearance))
+        .map((slot) => renderCard(slot, target.expected, target.id, row.appearance, copy))
         .join("\n");
       return `<div class="appearance-row" data-appearance="${row.appearance}">
         <h3>${row.appearance}</h3>
@@ -161,7 +187,7 @@ function renderTarget(target) {
 
 function renderHtml(data) {
   const generated = formatMtime(new Date());
-  const sections = data.targets.map(renderTarget).join("\n");
+  const sections = data.targets.map((target) => renderTarget(target, data.copy)).join("\n");
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -212,8 +238,9 @@ function renderHtml(data) {
     .thumb img { display: block; height: 520px; width: auto; max-width: none; }
     .missing-slot { cursor: default; background: repeating-linear-gradient(-45deg, #16181b, #16181b 8px, #1c1f23 8px, #1c1f23 16px); }
     .meta { margin-top: 8px; }
-    .caption { font-weight: 600; }
-    .size, .mtime { color: var(--muted); font-size: 12px; }
+    .headline { font-weight: 600; font-size: 15px; color: var(--text); }
+    .subtitle { font-size: 13px; color: var(--muted); }
+    .caption, .size, .mtime { color: var(--muted); font-size: 12px; }
     .badge { display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; background: #3a1d1a; color: #ffb4a8; }
     footer.legend { margin-top: 32px; color: var(--muted); font-size: 12px; }
     #lightbox { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.86); z-index: 20; padding: 24px; }
@@ -250,7 +277,7 @@ function renderHtml(data) {
     </div>
   </div>
   ${sections}
-  <footer class="legend">Layout: &lt;out&gt;/&lt;target&gt;/&lt;appearance&gt;/NN-scene.png · scenes 01-home, 02-chat-code, 03-chat-permission, 04-changes, 05-settings · click an image for natural size; ←/→ cycle the same target and appearance; Esc closes.</footer>
+  <footer class="legend">Layout: &lt;out&gt;/&lt;target&gt;/&lt;appearance&gt;/NN-scene.png · scenes 01-home, 02-chat-code, 03-chat-permission, 04-changes, 05-settings · click an image for natural size; ←/→ cycle the same target and appearance; Esc closes. Copy comes from scripts/store-screenshots/copy.json.</footer>
   <div id="lightbox" hidden>
     <img alt="" />
     <div class="hint">← → cycle · Esc close</div>
