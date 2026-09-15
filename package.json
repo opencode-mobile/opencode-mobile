@@ -14,7 +14,10 @@
     "api:fetch": "node scripts/fetch-openapi.mjs",
     "api:generate": "node scripts/generate-api-clients.mjs",
     "api:sync": "npm run api:fetch && npm run api:generate",
-    "sse:capture": "node scripts/capture-sse.mjs"
+    "sse:capture": "node scripts/capture-sse.mjs",
+    "store:screenshots": "node scripts/store-screenshots.mjs",
+    "store:fixture-server:test": "node --test scripts/store-screenshots/*.test.mjs",
+    "store:screenshots:gallery": "node scripts/store-screenshots/write-gallery.mjs"
   },
   "devDependencies": {
     "@openapitools/openapi-generator-cli": "^2.18.4",

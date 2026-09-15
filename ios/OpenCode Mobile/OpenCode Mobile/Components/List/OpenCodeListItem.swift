@@ -129,6 +129,7 @@ struct OpenCodeListItem<Trailing: View>: View {
                             )
                     }
                     .allowsHitTesting(enabled)
+                    .accessibilityAddTraits(.isButton)
             } else if let action {
                 Button(action: action) {
                     content

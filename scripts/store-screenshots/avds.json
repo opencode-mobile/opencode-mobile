@@ -1,0 +1,5 @@
+{
+  "android-phone": {"avd": "store_phone", "width": 1080, "height": 2424, "density": 420, "device": "pixel_9", "playAspectRule": "warn"},
+  "android-tab7":  {"avd": "store_tab7",  "width": 1200, "height": 1920, "density": 320, "device": "pixel_tablet"},
+  "android-tab10": {"avd": "store_tab10", "width": 1600, "height": 2560, "density": 320, "device": "pixel_tablet"}
+}

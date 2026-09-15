@@ -1,0 +1,699 @@
+{
+  "health": {
+    "healthy": true,
+    "version": "1.1.8",
+    "pid": 4242
+  },
+  "bootDirectory": "/Users/ivan/Projects/opencode-mobile",
+  "projects": [
+    {
+      "id": "prj_opencode-mobile",
+      "worktree": "/Users/ivan/Projects/opencode-mobile",
+      "directory": "/Users/ivan/Projects/opencode-mobile",
+      "vcs": "git",
+      "workspaceID": "ws_opencode-mobile",
+      "branch": {
+        "current": "main",
+        "default": "main"
+      },
+      "fs": [
+        { "path": "android", "type": "directory" },
+        { "path": "ios", "type": "directory" },
+        { "path": "docs", "type": "directory" },
+        { "path": "scripts", "type": "directory" },
+        { "path": "AGENTS.md", "type": "file" },
+        { "path": "CONTEXT.md", "type": "file" }
+      ]
+    },
+    {
+      "id": "prj_artifact-publisher",
+      "worktree": "/Users/ivan/Projects/artifact-publisher",
+      "directory": "/Users/ivan/Projects/artifact-publisher",
+      "vcs": "git",
+      "workspaceID": "ws_artifact-publisher",
+      "branch": {
+        "current": "main",
+        "default": "main"
+      },
+      "fs": [
+        { "path": "src", "type": "directory" },
+        { "path": "package.json", "type": "file" },
+        { "path": "README.md", "type": "file" }
+      ]
+    }
+  ],
+  "sessions": [
+    {
+      "id": "ses_code",
+      "title": "Code samples request",
+      "projectID": "prj_opencode-mobile",
+      "cost": 0.0842,
+      "tokens": {
+        "input": 4120,
+        "output": 986,
+        "reasoning": 214,
+        "cache": { "read": 0, "write": 0 }
+      },
+      "timeCreatedOffsetMs": -10800000,
+      "timeUpdatedOffsetMs": -300000,
+      "location": {
+        "directory": "/Users/ivan/Projects/opencode-mobile",
+        "workspaceID": "ws_opencode-mobile"
+      },
+      "active": { "type": "busy" }
+    },
+    {
+      "id": "ses_permission",
+      "title": "Showing app permission dialog",
+      "projectID": "prj_opencode-mobile",
+      "cost": 0.0114,
+      "tokens": {
+        "input": 860,
+        "output": 142,
+        "reasoning": 0,
+        "cache": { "read": 0, "write": 0 }
+      },
+      "timeCreatedOffsetMs": -10800000,
+      "timeUpdatedOffsetMs": -3600000,
+      "location": {
+        "directory": "/Users/ivan/Projects/opencode-mobile",
+        "workspaceID": "ws_opencode-mobile"
+      }
+    },
+    {
+      "id": "ses_git",
+      "title": "Git status check",
+      "projectID": "prj_opencode-mobile",
+      "cost": 0.0048,
+      "tokens": {
+        "input": 420,
+        "output": 96,
+        "reasoning": 0,
+        "cache": { "read": 0, "write": 0 }
+      },
+      "timeCreatedOffsetMs": -10800000,
+      "timeUpdatedOffsetMs": -10740000,
+      "location": {
+        "directory": "/Users/ivan/Projects/opencode-mobile",
+        "workspaceID": "ws_opencode-mobile"
+      }
+    },
+    {
+      "id": "ses_proto",
+      "title": "Prototype child page navigation",
+      "projectID": "prj_artifact-publisher",
+      "cost": 0.0061,
+      "tokens": {
+        "input": 510,
+        "output": 128,
+        "reasoning": 0,
+        "cache": { "read": 0, "write": 0 }
+      },
+      "timeCreatedOffsetMs": -57600000,
+      "timeUpdatedOffsetMs": -57600000,
+      "location": {
+        "directory": "/Users/ivan/Projects/artifact-publisher",
+        "workspaceID": "ws_artifact-publisher"
+      }
+    },
+    {
+      "id": "ses_info",
+      "title": "Session screen project info display",
+      "projectID": "prj_opencode-mobile",
+      "cost": 0.0032,
+      "tokens": {
+        "input": 280,
+        "output": 74,
+        "reasoning": 0,
+        "cache": { "read": 0, "write": 0 }
+      },
+      "timeCreatedOffsetMs": -86400000,
+      "timeUpdatedOffsetMs": -86400000,
+      "location": {
+        "directory": "/Users/ivan/Projects/opencode-mobile",
+        "workspaceID": "ws_opencode-mobile"
+      }
+    },
+    {
+      "id": "ses_prs",
+      "title": "Check pull requests",
+      "projectID": "prj_opencode-mobile",
+      "cost": 0.0029,
+      "tokens": {
+        "input": 240,
+        "output": 68,
+        "reasoning": 0,
+        "cache": { "read": 0, "write": 0 }
+      },
+      "timeCreatedOffsetMs": -93600000,
+      "timeUpdatedOffsetMs": -93600000,
+      "location": {
+        "directory": "/Users/ivan/Projects/opencode-mobile",
+        "workspaceID": "ws_opencode-mobile"
+      }
+    },
+    {
+      "id": "ses_openprs",
+      "title": "Check open PRs",
+      "projectID": "prj_opencode-mobile",
+      "cost": 0.0026,
+      "tokens": {
+        "input": 210,
+        "output": 54,
+        "reasoning": 0,
+        "cache": { "read": 0, "write": 0 }
+      },
+      "timeCreatedOffsetMs": -104400000,
+      "timeUpdatedOffsetMs": -104400000,
+      "location": {
+        "directory": "/Users/ivan/Projects/opencode-mobile",
+        "workspaceID": "ws_opencode-mobile"
+      }
+    }
+  ],
+  "messages": {
+    "ses_code": [
+      {
+        "id": "msg_code_user_1",
+        "type": "user",
+        "text": "Show me a design-system component (variant-first)",
+        "agent": "build",
+        "model": { "id": "grok-4.5", "providerID": "xai" },
+        "timeCreatedOffsetMs": -10800000,
+        "timeCompletedOffsetMs": -10800000
+      },
+      {
+        "id": "msg_code_asst_1",
+        "type": "assistant",
+        "agent": "build",
+        "model": { "id": "grok-4.5", "providerID": "xai" },
+        "cost": 0.0618,
+        "tokens": {
+          "input": 2680,
+          "output": 742,
+          "reasoning": 180,
+          "cache": { "read": 0, "write": 0 }
+        },
+        "timeCreatedOffsetMs": -10680000,
+        "timeCompletedOffsetMs": -10620000,
+        "content": [
+          {
+            "type": "text",
+            "id": "prt_code_text_1",
+            "textLines": [
+              "Here is a variant-first button primitive that keeps the public API on the sealed variant instead of one-off colors or radii.",
+              "",
+              "```kotlin",
+              "sealed interface OpenCodeButtonVariant {",
+              "    data class FullWidthText(val title: String) : OpenCodeButtonVariant",
+              "    data class CompactText(val title: String) : OpenCodeButtonVariant",
+              "    data class IconSquare(",
+              "        val imageVector: ImageVector,",
+              "        val contentDescription: String? = null,",
+              "    ) : OpenCodeButtonVariant",
+              "}",
+              "",
+              "@Composable",
+              "fun OpenCodeButton(",
+              "    variant: OpenCodeButtonVariant,",
+              "    onClick: () -> Unit,",
+              "    contrast: OpenCodeButtonContrast,",
+              "    size: OpenCodeButtonSize,",
+              ")",
+              "```",
+              "",
+              "Should this also expose an IconCircle variant, or keep the public set to these three?"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "msg_code_user_2",
+        "type": "user",
+        "text": "Now ask question using quest tool",
+        "agent": "build",
+        "model": { "id": "grok-4.5", "providerID": "xai" },
+        "timeCreatedOffsetMs": -900000,
+        "timeCompletedOffsetMs": -900000
+      },
+      {
+        "id": "msg_code_asst_2",
+        "type": "assistant",
+        "agent": "build",
+        "model": { "id": "grok-4.5", "providerID": "xai" },
+        "cost": 0.0224,
+        "tokens": {
+          "input": 1440,
+          "output": 244,
+          "reasoning": 34,
+          "cache": { "read": 0, "write": 0 }
+        },
+        "timeCreatedOffsetMs": -840000,
+        "timeCompletedOffsetMs": -780000,
+        "content": [
+          {
+            "type": "text",
+            "id": "prt_code_text_2",
+            "text": "I can ask that with the question tool on the next turn if you want a structured choice between the three public variants and an optional IconCircle."
+          }
+        ]
+      }
+    ],
+    "ses_permission": [
+      {
+        "id": "msg_permission_user",
+        "type": "user",
+        "text": "Push the branch when tests pass",
+        "agent": "build",
+        "model": { "id": "grok-4.5", "providerID": "xai" },
+        "timeCreatedOffsetMs": -10800000,
+        "timeCompletedOffsetMs": -10800000
+      },
+      {
+        "id": "msg_permission_assistant",
+        "type": "assistant",
+        "agent": "build",
+        "model": { "id": "grok-4.5", "providerID": "xai" },
+        "cost": 0.0114,
+        "tokens": {
+          "input": 860,
+          "output": 142,
+          "reasoning": 0,
+          "cache": { "read": 0, "write": 0 }
+        },
+        "timeCreatedOffsetMs": -3660000,
+        "content": [
+          {
+            "type": "text",
+            "id": "prt_permission_text",
+            "text": "Tests passed. Requesting permission to push the branch."
+          },
+          {
+            "type": "tool",
+            "id": "call_bash_push",
+            "name": "bash",
+            "state": {
+              "status": "pending",
+              "input": {
+                "command": "git push origin feature/ope-248-store-screenshot-mode"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "ses_git": [
+      {
+        "id": "msg_git_user",
+        "type": "user",
+        "text": "What is the git status?",
+        "agent": "build",
+        "model": { "id": "grok-4.5", "providerID": "xai" },
+        "timeCreatedOffsetMs": -10800000,
+        "timeCompletedOffsetMs": -10800000
+      },
+      {
+        "id": "msg_git_asst",
+        "type": "assistant",
+        "agent": "build",
+        "model": { "id": "grok-4.5", "providerID": "xai" },
+        "cost": 0.0048,
+        "tokens": {
+          "input": 420,
+          "output": 96,
+          "reasoning": 0,
+          "cache": { "read": 0, "write": 0 }
+        },
+        "timeCreatedOffsetMs": -10740000,
+        "timeCompletedOffsetMs": -10740000,
+        "content": [
+          {
+            "type": "text",
+            "id": "prt_git_text",
+            "text": "On branch main. The working tree has the button files from the last turn."
+          }
+        ]
+      }
+    ],
+    "ses_proto": [
+      {
+        "id": "msg_proto_user",
+        "type": "user",
+        "text": "Open the prototype child page.",
+        "agent": "build",
+        "model": { "id": "grok-4.5", "providerID": "xai" },
+        "timeCreatedOffsetMs": -57600000,
+        "timeCompletedOffsetMs": -57600000
+      },
+      {
+        "id": "msg_proto_asst",
+        "type": "assistant",
+        "agent": "build",
+        "model": { "id": "grok-4.5", "providerID": "xai" },
+        "cost": 0.0061,
+        "tokens": {
+          "input": 510,
+          "output": 128,
+          "reasoning": 0,
+          "cache": { "read": 0, "write": 0 }
+        },
+        "timeCreatedOffsetMs": -57540000,
+        "timeCompletedOffsetMs": -57540000,
+        "content": [
+          {
+            "type": "text",
+            "id": "prt_proto_text",
+            "text": "Opened the artifact-publisher child page. Navigation now routes through the prototype stack."
+          }
+        ]
+      }
+    ],
+    "ses_info": [
+      {
+        "id": "msg_info_user",
+        "type": "user",
+        "text": "Show the project info on this session screen.",
+        "agent": "build",
+        "model": { "id": "grok-4.5", "providerID": "xai" },
+        "timeCreatedOffsetMs": -86400000,
+        "timeCompletedOffsetMs": -86400000
+      },
+      {
+        "id": "msg_info_asst",
+        "type": "assistant",
+        "agent": "build",
+        "model": { "id": "grok-4.5", "providerID": "xai" },
+        "cost": 0.0032,
+        "tokens": {
+          "input": 280,
+          "output": 74,
+          "reasoning": 0,
+          "cache": { "read": 0, "write": 0 }
+        },
+        "timeCreatedOffsetMs": -86340000,
+        "timeCompletedOffsetMs": -86340000,
+        "content": [
+          {
+            "type": "text",
+            "id": "prt_info_text",
+            "text": "This session is bound to opencode-mobile on branch main."
+          }
+        ]
+      }
+    ],
+    "ses_prs": [
+      {
+        "id": "msg_prs_user",
+        "type": "user",
+        "text": "Check pull requests for this repo.",
+        "agent": "build",
+        "model": { "id": "grok-4.5", "providerID": "xai" },
+        "timeCreatedOffsetMs": -93600000,
+        "timeCompletedOffsetMs": -93600000
+      },
+      {
+        "id": "msg_prs_asst",
+        "type": "assistant",
+        "agent": "build",
+        "model": { "id": "grok-4.5", "providerID": "xai" },
+        "cost": 0.0029,
+        "tokens": {
+          "input": 240,
+          "output": 68,
+          "reasoning": 0,
+          "cache": { "read": 0, "write": 0 }
+        },
+        "timeCreatedOffsetMs": -93540000,
+        "timeCompletedOffsetMs": -93540000,
+        "content": [
+          {
+            "type": "text",
+            "id": "prt_prs_text",
+            "text": "There are no open pull requests on origin/main."
+          }
+        ]
+      }
+    ],
+    "ses_openprs": [
+      {
+        "id": "msg_openprs_user",
+        "type": "user",
+        "text": "Check open PRs.",
+        "agent": "build",
+        "model": { "id": "grok-4.5", "providerID": "xai" },
+        "timeCreatedOffsetMs": -104400000,
+        "timeCompletedOffsetMs": -104400000
+      },
+      {
+        "id": "msg_openprs_asst",
+        "type": "assistant",
+        "agent": "build",
+        "model": { "id": "grok-4.5", "providerID": "xai" },
+        "cost": 0.0026,
+        "tokens": {
+          "input": 210,
+          "output": 54,
+          "reasoning": 0,
+          "cache": { "read": 0, "write": 0 }
+        },
+        "timeCreatedOffsetMs": -104340000,
+        "timeCompletedOffsetMs": -104340000,
+        "content": [
+          {
+            "type": "text",
+            "id": "prt_openprs_text",
+            "text": "No open PRs. The store-screenshot branch is local only."
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": [
+    {
+      "id": "per_push",
+      "sessionID": "ses_permission",
+      "action": "bash",
+      "resources": ["git push origin feature/ope-248-store-screenshot-mode"],
+      "save": [],
+      "metadata": {
+        "command": "git push origin feature/ope-248-store-screenshot-mode",
+        "title": "git push"
+      },
+      "source": {
+        "type": "tool",
+        "messageID": "msg_permission_assistant",
+        "callID": "call_bash_push"
+      }
+    }
+  ],
+  "questions": [],
+  "forms": [],
+  "providers": [
+    { "id": "anthropic", "name": "Anthropic", "disabled": false },
+    { "id": "openai", "name": "OpenAI", "disabled": false },
+    { "id": "xai", "name": "xAI", "disabled": false }
+  ],
+  "models": [
+    {
+      "id": "claude-sonnet-4.5",
+      "modelID": "claude-sonnet-4.5",
+      "providerID": "anthropic",
+      "name": "Claude Sonnet 4.5",
+      "enabled": true,
+      "status": "active",
+      "variants": [{ "id": "default" }],
+      "capabilities": { "tools": true, "input": ["text", "image"] },
+      "limit": { "context": 200000, "output": 64000 }
+    },
+    {
+      "id": "claude-opus-4.1",
+      "modelID": "claude-opus-4.1",
+      "providerID": "anthropic",
+      "name": "Claude Opus 4.1",
+      "enabled": true,
+      "status": "active",
+      "variants": [{ "id": "default" }],
+      "capabilities": { "tools": true, "input": ["text", "image"] },
+      "limit": { "context": 200000, "output": 32000 }
+    },
+    {
+      "id": "gpt-5",
+      "modelID": "gpt-5",
+      "providerID": "openai",
+      "name": "GPT-5",
+      "enabled": true,
+      "status": "active",
+      "variants": [{ "id": "default" }],
+      "capabilities": { "tools": true, "input": ["text", "image"] },
+      "limit": { "context": 400000, "output": 32000 }
+    },
+    {
+      "id": "grok-4.5",
+      "modelID": "grok-4.5",
+      "providerID": "xai",
+      "name": "Grok 4.5",
+      "enabled": true,
+      "status": "active",
+      "variants": [{ "id": "default" }],
+      "capabilities": { "tools": true, "input": ["text", "image"] },
+      "limit": { "context": 256000, "output": 64000 }
+    }
+  ],
+  "defaultModel": {
+    "id": "grok-4.5",
+    "modelID": "grok-4.5",
+    "providerID": "xai"
+  },
+  "agents": [
+    {
+      "id": "build",
+      "description": "Primary coding agent",
+      "mode": "primary",
+      "hidden": false
+    },
+    {
+      "id": "plan",
+      "description": "Read-only planning agent",
+      "mode": "primary",
+      "hidden": false
+    },
+    {
+      "id": "general",
+      "description": "General-purpose subagent",
+      "mode": "subagent",
+      "hidden": false
+    }
+  ],
+  "commands": [
+    {
+      "name": "init",
+      "template": "/init",
+      "description": "Initialize project instructions",
+      "agent": "build",
+      "source": "system",
+      "subtask": false
+    },
+    {
+      "name": "review",
+      "template": "/review",
+      "description": "Review the current changes",
+      "agent": "plan",
+      "source": "system",
+      "subtask": false
+    }
+  ],
+  "skills": [],
+  "diffs": {
+    "ses_code": [
+      {
+        "file": "android/app/src/main/java/dev/opencode/mobile/ui/components/OpenCodeButton.kt",
+        "path": "android/app/src/main/java/dev/opencode/mobile/ui/components/OpenCodeButton.kt",
+        "status": "modified",
+        "additions": 42,
+        "deletions": 7,
+        "patchLines": [
+          "@@ -52,14 +52,49 @@ sealed interface OpenCodeButtonVariant {",
+          "     data class FullWidthText(",
+          "         val title: String,",
+          "     ) : OpenCodeButtonVariant",
+          " ",
+          "     data class CompactText(",
+          "         val title: String,",
+          "     ) : OpenCodeButtonVariant",
+          " ",
+          "     data class IconSquare(",
+          "         val imageVector: ImageVector,",
+          "         val contentDescription: String? = null,",
+          "     ) : OpenCodeButtonVariant",
+          "-}",
+          "+",
+          "+    data class IconCircle(",
+          "+        val imageVector: ImageVector,",
+          "+        val contentDescription: String? = null,",
+          "+    ) : OpenCodeButtonVariant",
+          "+}",
+          "+",
+          "+enum class OpenCodeButtonContrast {",
+          "+    High,",
+          "+    Low,",
+          "+    Accent,",
+          "+}",
+          "+",
+          "+enum class OpenCodeButtonSize {",
+          "+    Large,",
+          "+    Medium,",
+          "+}",
+          " ",
+          " @Composable",
+          " fun OpenCodeButton(",
+          "     variant: OpenCodeButtonVariant,",
+          "     onClick: () -> Unit,",
+          "-    modifier: Modifier = Modifier,",
+          "-    enabled: Boolean = true,",
+          "     contrast: OpenCodeButtonContrast = OpenCodeButtonContrast.High,",
+          "     size: OpenCodeButtonSize = OpenCodeButtonSize.Medium,",
+          "-    onLongClick: (() -> Unit)? = null,",
+          " ) {",
+          "+    val container = when (contrast) {",
+          "+        OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.surfaceVariant",
+          "+        OpenCodeButtonContrast.Accent -> openCodeColor(\"interactive\")",
+          "+        else -> MaterialTheme.colorScheme.onSurface",
+          "+    }",
+          "+"
+        ]
+      },
+      {
+        "file": "ios/OpenCode Mobile/OpenCode Mobile/UI/Components/OpenCodeButton.swift",
+        "path": "ios/OpenCode Mobile/OpenCode Mobile/UI/Components/OpenCodeButton.swift",
+        "status": "modified",
+        "additions": 38,
+        "deletions": 5,
+        "patchLines": [
+          "@@ -12,10 +12,20 @@ enum OpenCodeButtonVariant {",
+          "     case fullWidthText(title: String)",
+          "     case compactText(title: String)",
+          "     case iconSquare(image: Image, contentDescription: String?)",
+          "+    case iconCircle(image: Image, contentDescription: String?)",
+          " }",
+          " ",
+          " struct OpenCodeButton: View {",
+          "     let variant: OpenCodeButtonVariant",
+          "     let action: () -> Void",
+          "+    var contrast: OpenCodeButtonContrast = .high",
+          "+    var size: OpenCodeButtonSize = .medium",
+          " }"
+        ]
+      },
+      {
+        "file": "docs/design-system/button.md",
+        "path": "docs/design-system/button.md",
+        "status": "added",
+        "additions": 20,
+        "deletions": 0,
+        "patchLines": [
+          "@@ -0,0 +1,20 @@",
+          "+# Button",
+          "+",
+          "+Variant-first public API. Do not expose raw colors or radii.",
+          "+",
+          "+## Variants",
+          "+",
+          "+- FullWidthText",
+          "+- CompactText",
+          "+- IconSquare",
+          "+",
+          "+## Contrast",
+          "+",
+          "+High, Low, Accent.",
+          "+",
+          "+## Size",
+          "+",
+          "+Large, Medium.",
+          "+",
+          "+Keep both platforms aligned on semantic meaning.",
+          "+"
+        ]
+      }
+    ]
+  }
+}
