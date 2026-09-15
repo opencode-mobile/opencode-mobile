@@ -230,7 +230,7 @@ fun <T> OpenCodeReorderableList(
                                 ambientColor = Color.Black.copy(alpha = 0.18f * elevation),
                                 spotColor = Color.Black.copy(alpha = 0.18f * elevation),
                             ).background(surfaceRaised.copy(alpha = surfaceRaised.alpha * highlightAlpha), shape)
-                            .semantics {
+                            .semantics(mergeDescendants = true) {
                                 role = Role.Button
                                 onClick(label = null) {
                                     onSelect(item)
