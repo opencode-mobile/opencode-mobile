@@ -200,7 +200,7 @@ struct SessionChatUiState: Equatable {
     var projectLetterAccent: LetterAccent? = nil
     var timeline: SessionChatTimelineState
     var messages: [SessionChatRow]
-    var queuedPrompts: [QueuedPrompt] = []
+    var pendingPrompts: [PendingPrompt] = []
     /// Projected timeline frame with declared ID sets. Reused when only
     /// composer / session-info / review / command republish.
     var timelineFrame: TimelineFrame = .empty
@@ -658,9 +658,11 @@ enum SessionChatPickers {
     static let modelFilterThreshold = 10
 }
 
-struct QueuedPrompt: Equatable, Identifiable, Sendable {
+struct PendingPrompt: Equatable, Identifiable, Sendable {
     let id: String
     let text: String
+    let delivery: FollowUpDelivery
+    var isSettling: Bool = false
 }
 
 extension SessionChatRow {

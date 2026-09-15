@@ -537,6 +537,12 @@ final class SessionChatViewModel {
         }
     }
 
+    func clearPendingPrompts() {
+        for id in uiState.pendingPrompts.filter({ !$0.isSettling }).map(\.id) {
+            cancelPendingPrompt(id)
+        }
+    }
+
     private func runPendingPromptAction(
         actionId: String,
         inboxID _: String,
@@ -1033,7 +1039,10 @@ final class SessionChatViewModel {
             projectLetterAccent: projectLetterAccent,
             timeline: timelineState.timeline,
             messages: timelineState.messages,
-            queuedPrompts: Self.queuedPrompts(from: timeline.loadedMessages()),
+            pendingPrompts: Self.pendingPrompts(
+                loaded: timeline.loadedMessages(),
+                optimistic: timeline.pendingOptimisticItems()
+            ),
             timelineFrame: timelineFrame,
             composer: {
                 var next = composer.state.composer
@@ -1150,10 +1159,35 @@ final class SessionChatViewModel {
         )
     }
 
-    private static func queuedPrompts(from messages: [Message]) -> [QueuedPrompt] {
-        messages
-            .filter { $0.role == .user && $0.isWaitingForPickup && $0.followUpDelivery == .queue }
-            .map { QueuedPrompt(id: $0.id, text: $0.text) }
+    /// Union of server inbox rows and still-unmerged optimistic busy sends.
+    /// `optimistic` must already be the merge leftover (echo dropped the matching
+    /// optimistic row, often under a different id). This function only skips
+    /// optimistic ids that are already in `loaded`.
+    static func pendingPrompts(
+        loaded: [Message],
+        optimistic: [SessionChatRow]
+    ) -> [PendingPrompt] {
+        let fromLoaded = loaded
+            .filter { $0.role == .user && $0.isWaitingForPickup && $0.followUpDelivery != nil }
+            .compactMap { message -> PendingPrompt? in
+                guard let delivery = message.followUpDelivery else { return nil }
+                return PendingPrompt(id: message.id, text: message.text, delivery: delivery, isSettling: false)
+            }
+        let loadedIDs = Set(fromLoaded.map(\.id))
+        let fromOptimistic = optimistic
+            .filter { row in
+                row.role == .user
+                    && row.isPending
+                    && row.pendingDelivery != nil
+                    && !loadedIDs.contains(row.id)
+            }
+            .compactMap { row -> PendingPrompt? in
+                guard let delivery = row.pendingDelivery else { return nil }
+                return PendingPrompt(id: row.id, text: row.text, delivery: delivery, isSettling: true)
+            }
+        let steers = fromLoaded.filter { $0.delivery == .steer } + fromOptimistic.filter { $0.delivery == .steer }
+        let queued = fromLoaded.filter { $0.delivery == .queue } + fromOptimistic.filter { $0.delivery == .queue }
+        return steers + queued
     }
 
     private static let pendingPromptFailure = "Couldn't update pending prompt"

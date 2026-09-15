@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
@@ -1314,16 +1315,48 @@ class TimelineProjectorTest {
     }
 
     @Test
-    fun project_includesSteerPendingUserMessage() {
+    fun project_excludesOptimisticPendingUserMessage() {
+        val pending =
+            TimelineProjector.rowFromMessageItem(
+                SessionChatMessageItem(
+                    id = "optimistic-1",
+                    role = MessageRole.User,
+                    text = "Hello",
+                    metadataLabel = "build · deepseek-v4-flash-free · high · 10:21 AM",
+                    pendingDelivery = FollowUpDelivery.Steer,
+                    isPending = true,
+                    blocks =
+                        listOf(
+                            SessionChatTimelineBlock.Text(
+                                blockID = PresentationBlockId.messageFallback("optimistic-1"),
+                                text = "Hello",
+                            ),
+                        ),
+                ),
+            )
+        val frame =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages = emptyList(),
+                    ),
+                optimisticInputs = OptimisticInputs(pendingRows = listOf(pending)),
+            )
+        assertTrue(frame.rows.isEmpty())
+    }
+
+    @Test
+    fun project_excludesSteerPendingUserMessage() {
         val frame =
             projectUser(
                 text = "Waiting to steer",
                 isWaitingForPickup = true,
                 followUpDelivery = FollowUpDelivery.Steer,
             )
-        val row = frame.rows.single()
-        assertEquals("Waiting to steer", row.text)
-        assertEquals(FollowUpDelivery.Steer, row.pendingDelivery)
+        assertTrue(frame.rows.isEmpty())
     }
 
     @Test
@@ -1460,6 +1493,353 @@ class TimelineProjectorTest {
         assertFalse(reconciled.rows.any { it.id == "optimistic-1" })
         assertFalse(reconciled.rows.any { it.id == "msg-user-1" })
     }
+
+    @Test
+    fun unmatchedPending_keepsOptimisticWhenBaselineHasHiddenInboxSameText() {
+        val pending = userRow(id = "optimistic-1", text = "Hold this", isPending = true)
+        val inbox = userRow(id = "msg-inbox", text = "Hold this", pendingDelivery = FollowUpDelivery.Queue)
+        val leftover =
+            TimelineProjector.unmatchedPending(
+                pendingRows = listOf(pending),
+                serverRows = listOf(inbox),
+                baselineSignatures =
+                    mapOf(inbox.id to TimelineProjector.reconciliationSignature(inbox)),
+            )
+        assertEquals(listOf("optimistic-1"), leftover.map { it.id })
+    }
+
+    @Test
+    fun unmatchedPending_dropsOptimisticWhenNewEchoArrives() {
+        val pending = userRow(id = "optimistic-1", text = "Hold this", isPending = true)
+        val inbox = userRow(id = "msg-inbox", text = "Hold this", pendingDelivery = FollowUpDelivery.Queue)
+        val echo = userRow(id = "msg-echo", text = "Hold this", pendingDelivery = FollowUpDelivery.Queue)
+        val leftover =
+            TimelineProjector.unmatchedPending(
+                pendingRows = listOf(pending),
+                serverRows = listOf(inbox, echo),
+                baselineSignatures =
+                    mapOf(inbox.id to TimelineProjector.reconciliationSignature(inbox)),
+            )
+        assertTrue(leftover.isEmpty())
+    }
+
+    @Test
+    fun project_keepsOptimisticWhenBaselineHasHiddenInboxSameText() {
+        val pending = userRow(id = "optimistic-1", text = "Hold this", isPending = true)
+        val inboxBody = userBody(id = "msg-inbox", text = "Hold this", waiting = FollowUpDelivery.Queue)
+        val inboxRow = TimelineProjector.projectServerRows(listOf(inboxBody)).single()
+        val frame =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages = listOf(inboxBody),
+                    ),
+                optimisticInputs =
+                    OptimisticInputs(
+                        pendingRows = listOf(pending),
+                        baselineSignatures =
+                            mapOf(inboxRow.id to TimelineProjector.reconciliationSignature(inboxRow)),
+                    ),
+            )
+        assertEquals(listOf("optimistic-1"), frame.rows.map { it.id })
+    }
+
+    @Test
+    fun project_dropsOptimisticWhenNewEchoArrives() {
+        val pending = userRow(id = "optimistic-1", text = "Hold this", isPending = true)
+        val inboxBody = userBody(id = "msg-inbox", text = "Hold this", waiting = FollowUpDelivery.Queue)
+        val echoBody = userBody(id = "msg-echo", text = "Hold this", waiting = FollowUpDelivery.Queue)
+        val inboxRow = TimelineProjector.projectServerRows(listOf(inboxBody)).single()
+        val frame =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 2L,
+                        sourceRevision = 0L,
+                        messages = listOf(inboxBody, echoBody),
+                    ),
+                optimisticInputs =
+                    OptimisticInputs(
+                        pendingRows = listOf(pending),
+                        baselineSignatures =
+                            mapOf(inboxRow.id to TimelineProjector.reconciliationSignature(inboxRow)),
+                    ),
+            )
+        assertTrue(frame.rows.isEmpty())
+        assertFalse(frame.rows.any { it.id == "optimistic-1" })
+    }
+
+    @Test
+    fun project_attachmentOnlyOptimistic_dropsWhenMatchingAttachmentEchoArrives() {
+        val pendingAttachment =
+            SessionChatAttachmentItem(
+                id = "local-file",
+                filename = "notes.txt",
+                variant = OpenCodeAttachmentVariant.Text,
+                signature = "local-data-url",
+            )
+        val serverAttachment =
+            SessionChatAttachmentItem(
+                id = "server-file",
+                filename = "notes.txt",
+                variant = OpenCodeAttachmentVariant.Text,
+                signature = "https://example.test/notes.txt",
+            )
+        val pending =
+            TimelineProjector.rowFromMessageItem(
+                SessionChatMessageItem(
+                    id = "optimistic-file",
+                    role = MessageRole.User,
+                    text = "",
+                    metadataLabel = "Build · 10:21 AM",
+                    isPending = true,
+                    blocks =
+                        listOf(
+                            SessionChatTimelineBlock.Attachment(
+                                blockID = PresentationBlockId.direct("local-file"),
+                                attachment = pendingAttachment,
+                            ),
+                        ),
+                    attachments = listOf(pendingAttachment),
+                ),
+            )
+        val withOptimistic =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages = emptyList(),
+                    ),
+                optimisticInputs = OptimisticInputs(pendingRows = listOf(pending)),
+            )
+        assertEquals(listOf("optimistic-file"), withOptimistic.rows.map { it.id })
+
+        val reconciled =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 2L,
+                        sourceRevision = 0L,
+                        messages =
+                            listOf(
+                                DisplayMessageBody(
+                                    message =
+                                        Message(
+                                            id = "msg-file",
+                                            role = MessageRole.User,
+                                            text = "",
+                                            parts =
+                                                listOf(
+                                                    MessagePart.File(
+                                                        id = "server-file",
+                                                        filename = "notes.txt",
+                                                        mime = "text/plain",
+                                                        kind = AttachmentKind.Text,
+                                                        dataUrl = "https://example.test/notes.txt",
+                                                    ),
+                                                ),
+                                        ),
+                                    blocks =
+                                        listOf(
+                                            SessionChatTimelineBlock.Attachment(
+                                                blockID = PresentationBlockId.direct("server-file"),
+                                                attachment = serverAttachment,
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+                optimisticInputs = OptimisticInputs(pendingRows = listOf(pending)),
+                previous = withOptimistic,
+            )
+        assertEquals(listOf("msg-file"), reconciled.rows.map { it.id })
+        assertFalse(reconciled.rows.any { it.id == "optimistic-file" })
+        assertEquals(setOf("optimistic-file"), reconciled.removedRowIDs)
+    }
+
+    @Test
+    fun matchesOptimistic_blankTextDoesNotMatchAttachmentlessServerRow() {
+        val pendingAttachment =
+            SessionChatAttachmentItem(
+                id = "local-file",
+                filename = "notes.txt",
+                variant = OpenCodeAttachmentVariant.Text,
+                signature = "local",
+            )
+        val pending =
+            TimelineProjector.rowFromMessageItem(
+                SessionChatMessageItem(
+                    id = "optimistic-file",
+                    role = MessageRole.User,
+                    text = "",
+                    metadataLabel = "",
+                    isPending = true,
+                    attachments = listOf(pendingAttachment),
+                ),
+            )
+        val blankServer = userRow(id = "msg-blank", text = "")
+        assertFalse(TimelineProjector.matchesOptimistic(blankServer, pending))
+        val leftover =
+            TimelineProjector.unmatchedPending(
+                pendingRows = listOf(pending),
+                serverRows = listOf(blankServer),
+                baselineSignatures = emptyMap(),
+            )
+        assertEquals(listOf("optimistic-file"), leftover.map { it.id })
+    }
+
+    @Test
+    fun unmatchedPending_blankTextDoesNotMatchCaptionedAttachmentRow() {
+        val pendingAttachment =
+            SessionChatAttachmentItem(
+                id = "local-file",
+                filename = "notes.txt",
+                variant = OpenCodeAttachmentVariant.Text,
+                signature = "local",
+            )
+        val serverAttachment =
+            SessionChatAttachmentItem(
+                id = "server-file",
+                filename = "notes.txt",
+                variant = OpenCodeAttachmentVariant.Text,
+                signature = "https://example.test/notes.txt",
+            )
+        val pending =
+            TimelineProjector.rowFromMessageItem(
+                SessionChatMessageItem(
+                    id = "optimistic-file",
+                    role = MessageRole.User,
+                    text = "",
+                    metadataLabel = "",
+                    isPending = true,
+                    attachments = listOf(pendingAttachment),
+                ),
+            )
+        val captioned =
+            TimelineProjector.rowFromMessageItem(
+                SessionChatMessageItem(
+                    id = "msg-captioned",
+                    role = MessageRole.User,
+                    text = "See notes",
+                    metadataLabel = "",
+                    attachments = listOf(serverAttachment),
+                ),
+            )
+        assertFalse(TimelineProjector.matchesOptimistic(captioned, pending))
+        val leftover =
+            TimelineProjector.unmatchedPending(
+                pendingRows = listOf(pending),
+                serverRows = listOf(captioned),
+                baselineSignatures = emptyMap(),
+            )
+        assertEquals(listOf("optimistic-file"), leftover.map { it.id })
+    }
+
+    @Test
+    fun displayedOptimisticSendItems_excludesHiddenPendingRows() {
+        val hidden =
+            SessionChatMessageItem(
+                id = "pending-1",
+                role = MessageRole.User,
+                text = "Hold this",
+                metadataLabel = "",
+                pendingDelivery = FollowUpDelivery.Steer,
+                isPending = true,
+            )
+        val visible =
+            SessionChatMessageItem(
+                id = "pending-2",
+                role = MessageRole.User,
+                text = "Just sent",
+                metadataLabel = "",
+                isPending = true,
+            )
+        assertEquals(
+            listOf("pending-2"),
+            TimelineProjector.displayedOptimisticSendItems(listOf(hidden, visible)).map { it.id },
+        )
+        assertFalse(
+            TimelineProjector.shouldMarkTimelineReadyAfterOptimisticSend(
+                displayedItems = emptyList(),
+                hadPriorDisplayedRows = false,
+            ),
+        )
+        assertTrue(
+            TimelineProjector.shouldMarkTimelineReadyAfterOptimisticSend(
+                displayedItems = emptyList(),
+                hadPriorDisplayedRows = true,
+            ),
+        )
+    }
+
+    @Test
+    fun projectServerRows_baselineIncludesWaitingForPickupUser() {
+        val inboxBody = userBody(id = "msg-inbox", text = "Hold this", waiting = FollowUpDelivery.Queue)
+        val earlierBody = userBody(id = "msg-earlier", text = "Earlier")
+        val rows = TimelineProjector.projectServerRows(listOf(earlierBody, inboxBody))
+        val baseline = TimelineProjector.reconciliationSignaturesById(rows)
+        assertEquals(setOf("msg-earlier", "msg-inbox"), baseline.keys)
+        assertEquals(
+            TimelineProjector.reconciliationSignature(rows.single { it.id == "msg-inbox" }),
+            baseline["msg-inbox"],
+        )
+        assertTrue(rows.single { it.id == "msg-inbox" }.pendingDelivery == FollowUpDelivery.Queue)
+    }
+
+    private fun userRow(
+        id: String,
+        text: String,
+        isPending: Boolean = false,
+        pendingDelivery: FollowUpDelivery? = null,
+    ): TimelineRow =
+        TimelineProjector.rowFromMessageItem(
+            SessionChatMessageItem(
+                id = id,
+                role = MessageRole.User,
+                text = text,
+                metadataLabel = "",
+                pendingDelivery = pendingDelivery,
+                isPending = isPending,
+                blocks =
+                    listOf(
+                        SessionChatTimelineBlock.Text(
+                            blockID = PresentationBlockId.direct(id),
+                            text = text,
+                        ),
+                    ),
+            ),
+        )
+
+    private fun userBody(
+        id: String,
+        text: String,
+        waiting: FollowUpDelivery? = null,
+    ): DisplayMessageBody =
+        DisplayMessageBody(
+            message =
+                Message(
+                    id = id,
+                    role = MessageRole.User,
+                    text = text,
+                    parts = listOf(MessagePart.Text(text, id = "prt-$id")),
+                    isWaitingForPickup = waiting != null,
+                    followUpDelivery = waiting,
+                ),
+            blocks =
+                listOf(
+                    SessionChatTimelineBlock.Text(
+                        blockID = PresentationBlockId.direct("prt-$id"),
+                        text = text,
+                    ),
+                ),
+        )
 
     private fun projectUser(
         text: String,

@@ -56,12 +56,7 @@ nonisolated enum SessionChatTimelineProjector {
             uniqueKeysWithValues: (previous?.rows ?? []).map { ($0.id, $0) }
         )
 
-        var serverRows: [TimelineRow] = []
-        serverRows.reserveCapacity(frame.messages.count)
-        for body in frame.messages {
-            let built = makeRow(from: body, previous: previousByID[body.id], metadataLabel: resolveLabel)
-            serverRows.append(built)
-        }
+        let serverRows = serverRows(from: frame, previousByID: previousByID, metadataLabel: resolveLabel)
 
         let merged: [TimelineRow] =
             if optimistic.mergePending {
@@ -73,7 +68,7 @@ nonisolated enum SessionChatTimelineProjector {
             } else {
                 serverRows
             }
-        let rows = merged.filter { !isHiddenQueuePending($0) }
+        let rows = merged.filter { !isHiddenPendingPrompt($0) }
 
         let previousIDs = Set(previousByID.keys)
         let nextIDs = Set(rows.map(\.id))
@@ -118,6 +113,64 @@ nonisolated enum SessionChatTimelineProjector {
             decorateRowIDs: decorate,
             isRequired: false
         )
+    }
+
+    /// Project server bodies without hiding inbox rows. Used for send-time baselines.
+    static func serverRows(
+        from frame: DisplayFrame,
+        previous: TimelineFrame? = nil,
+        metadataLabel: (@Sendable (Message) -> String)? = nil
+    ) -> [TimelineRow] {
+        let resolveLabel = metadataLabel ?? { message in Self.metadataLabel(for: message) }
+        let previousByID = Dictionary(
+            uniqueKeysWithValues: (previous?.rows ?? []).map { ($0.id, $0) }
+        )
+        return serverRows(from: frame, previousByID: previousByID, metadataLabel: resolveLabel)
+    }
+
+    static func signatureCounts(
+        fromDisplayMessages messages: [DisplayMessage],
+        sessionKey: String,
+        serverCommands: [ServerCommand] = [],
+        collapseConsecutiveToolCalls: Bool = false
+    ) -> [String: Int] {
+        let frame = DisplayFrameBuilder.build(
+            sessionKey: sessionKey,
+            frameRevision: 0,
+            sourceRevision: 0,
+            displayMessages: messages,
+            serverCommands: serverCommands,
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls
+        )
+        return signatureCounts(serverRows(from: frame))
+    }
+
+    static func isHiddenPendingPrompt(_ row: SessionChatRow) -> Bool {
+        row.role == .user && row.pendingDelivery != nil
+    }
+
+    static func displayedOptimisticSendRows(_ rows: [SessionChatRow]) -> [SessionChatRow] {
+        rows.filter { !isHiddenPendingPrompt($0) }
+    }
+
+    static func shouldMarkTimelineReadyAfterOptimisticSend(
+        displayedRows: [SessionChatRow],
+        hadPriorDisplayedRows: Bool
+    ) -> Bool {
+        !displayedRows.isEmpty || hadPriorDisplayedRows
+    }
+
+    private static func serverRows(
+        from frame: DisplayFrame,
+        previousByID: [String: TimelineRow],
+        metadataLabel: @Sendable (Message) -> String
+    ) -> [TimelineRow] {
+        var serverRows: [TimelineRow] = []
+        serverRows.reserveCapacity(frame.messages.count)
+        for body in frame.messages {
+            serverRows.append(makeRow(from: body, previous: previousByID[body.id], metadataLabel: metadataLabel))
+        }
+        return serverRows
     }
 
     // MARK: - Row build + return-previous
@@ -227,11 +280,12 @@ nonisolated enum SessionChatTimelineProjector {
 
     // MARK: - Optimistic merge (ported from SessionChatTimeline)
 
-    /// Queue-pending echoes stay in `mergeWithPending` so they can drop a matching
-    /// optimistic row, then leave the displayed set. Optimistic `isPending` rows
-    /// are not hidden by this rule.
-    private static func isHiddenQueuePending(_ row: TimelineRow) -> Bool {
-        !row.isPending && row.role == .user && row.pendingDelivery == .queue
+    /// Pending-prompt echoes stay in `mergeWithPending` so they can drop a matching
+    /// optimistic row, then leave the displayed set. After merge, hide any user
+    /// row whose `pendingDelivery` is set (steer or queue), including optimistic
+    /// `isPending` rows — the strip is the only surface for inbox items.
+    static func isHiddenPendingPrompt(_ row: TimelineRow) -> Bool {
+        row.role == .user && row.pendingDelivery != nil
     }
 
     private static func mergeWithPending(
@@ -240,31 +294,101 @@ nonisolated enum SessionChatTimelineProjector {
         baselineSignatureCounts: [String: Int]
     ) -> [TimelineRow] {
         guard !pendingRows.isEmpty else { return serverRows }
-        var serverExact = signatureCounts(serverRows)
-        var serverTextOnly = textOnlySignatureCounts(serverRows)
-        let baselineTextOnly = textOnlySignatureCounts(fromExact: baselineSignatureCounts)
-        let pendingToKeep = pendingRows.filter { pending in
-            let exact = optimisticSignature(pending)
-            if serverExact[exact, default: 0] > baselineSignatureCounts[exact, default: 0] {
-                serverExact[exact, default: 0] -= 1
-                return false
-            }
-            let text = textSignature(pending)
-            guard pending.hasAttachments,
-                  !text.isEmpty,
-                  serverTextOnly[text, default: 0] > baselineTextOnly[text, default: 0]
-            else {
-                return true
-            }
-            serverTextOnly[text, default: 0] -= 1
-            return false
-        }
+        let pendingToKeep = unmatchedPending(
+            pendingRows,
+            serverRows: serverRows,
+            baselineSignatureCounts: baselineSignatureCounts
+        )
         let keptIDs = Set(pendingToKeep.map(\.id))
         let dropped = pendingRows.filter { !keptIDs.contains($0.id) }
         return splicePending(
             applyPendingChrome(serverRows, dropped: dropped),
             pendingToKeep: pendingToKeep
         )
+    }
+
+    /// Pending optimistic rows that no new server echo accounts for yet. A row is
+    /// matched by exact signature when the server count exceeds the send-time
+    /// baseline; attachment rows fall back to a text-only match. Shared with
+    /// `SessionChatTimeline` so reconciliation and merge agree on "acknowledged".
+    static func unmatchedPending(
+        _ pendingRows: [TimelineRow],
+        serverRows: [TimelineRow],
+        baselineSignatureCounts: [String: Int]
+    ) -> [TimelineRow] {
+        var serverExact = signatureCounts(serverRows)
+        var serverTextOnly = textOnlySignatureCounts(serverRows)
+        let baselineTextOnly = textOnlySignatureCounts(fromExact: baselineSignatureCounts)
+        return pendingRows.filter { pending in
+            let exact = optimisticSignature(pending)
+            if serverExact[exact, default: 0] > baselineSignatureCounts[exact, default: 0] {
+                serverExact[exact, default: 0] -= 1
+                return false
+            }
+            let text = textSignature(pending)
+            if pending.hasAttachments,
+               !text.isEmpty,
+               serverTextOnly[text, default: 0] > baselineTextOnly[text, default: 0]
+            {
+                serverTextOnly[text, default: 0] -= 1
+                return false
+            }
+            if pending.hasAttachments,
+               text.isEmpty,
+               consumeNewAttachmentEcho(
+                   pending,
+                   serverRows: serverRows,
+                   serverExact: &serverExact,
+                   baselineSignatureCounts: baselineSignatureCounts
+               )
+            {
+                return false
+            }
+            return true
+        }
+    }
+
+    /// Blank-text attachment send: match a new blank-text server row by file
+    /// identity (count + id/filename). A captioned reuse of the same files is
+    /// not an echo.
+    private static func consumeNewAttachmentEcho(
+        _ pending: TimelineRow,
+        serverRows: [TimelineRow],
+        serverExact: inout [String: Int],
+        baselineSignatureCounts: [String: Int]
+    ) -> Bool {
+        for server in serverRows where server.role == .user {
+            guard textSignature(server).isEmpty, attachmentsCorrespond(server, pending) else { continue }
+            let exact = optimisticSignature(server)
+            guard serverExact[exact, default: 0] > baselineSignatureCounts[exact, default: 0] else {
+                continue
+            }
+            serverExact[exact, default: 0] -= 1
+            return true
+        }
+        return false
+    }
+
+    private static func attachments(of row: TimelineRow) -> [FilePart] {
+        row.blocks.compactMap { block in
+            if case .attachment(_, let file) = block { return file }
+            return nil
+        }
+    }
+
+    private static func attachmentsMatch(_ left: FilePart, _ right: FilePart) -> Bool {
+        if left.id == right.id { return true }
+        let leftName = left.filename.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rightName = right.filename.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !leftName.isEmpty, leftName == rightName { return true }
+        return leftName.isEmpty || rightName.isEmpty
+    }
+
+    static func attachmentsCorrespond(_ left: TimelineRow, _ right: TimelineRow) -> Bool {
+        let leftFiles = attachments(of: left)
+        let rightFiles = attachments(of: right)
+        guard leftFiles.count == rightFiles.count, !leftFiles.isEmpty else { return false }
+        return zip(leftFiles, rightFiles).allSatisfy { attachmentsMatch($0, $1) }
     }
 
     private static func splicePending(
@@ -297,12 +421,21 @@ nonisolated enum SessionChatTimelineProjector {
         }
         for pending in remaining where pending.hasAttachments {
             let text = textSignature(pending)
-            guard !text.isEmpty else { continue }
+            if !text.isEmpty {
+                guard let target = serverRows.last(where: { server in
+                    server.role == .user
+                        && !server.hasAttachments
+                        && pendingByServerID[server.id] == nil
+                        && textSignature(server) == text
+                }) else { continue }
+                pendingByServerID[target.id] = pending
+                continue
+            }
             guard let target = serverRows.last(where: { server in
                 server.role == .user
-                    && !server.hasAttachments
                     && pendingByServerID[server.id] == nil
-                    && textSignature(server) == text
+                    && textSignature(server).isEmpty
+                    && attachmentsCorrespond(server, pending)
             }) else { continue }
             pendingByServerID[target.id] = pending
         }

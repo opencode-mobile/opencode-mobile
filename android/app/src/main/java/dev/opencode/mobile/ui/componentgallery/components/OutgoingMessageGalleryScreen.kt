@@ -13,7 +13,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentPresentation
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
@@ -45,10 +44,6 @@ private enum class OutgoingMessageSample(
                 OpenCodeAttachmentPresentation("text", "notes.md", OpenCodeAttachmentVariant.Text),
             ),
     ),
-    Pending(
-        label = "Pending",
-        text = "Also check the compact path.",
-    ),
 }
 
 @Composable
@@ -76,7 +71,6 @@ fun OutgoingMessageGalleryScreen(modifier: Modifier = Modifier) {
         OpenCodeOutgoingMessage(
             text = sample.text,
             metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
-            pendingDelivery = FollowUpDelivery.Steer.takeIf { sample == OutgoingMessageSample.Pending },
             attachments = sample.attachments,
             modifier = Modifier.fillMaxWidth(),
             onClick = {},

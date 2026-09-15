@@ -51,7 +51,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
-import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
@@ -116,7 +115,6 @@ internal data class SessionChatTimelineViewProps(
     val onReviewChangesClick: () -> Unit,
     val onSessionTodosClick: () -> Unit = {},
     val onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
-    val onPendingSteerTap: (SessionChatPendingSteerTarget) -> Unit = {},
     val onToolDetailTap: (SessionChatToolDetailTarget) -> Unit = {},
     val onToolGroupTap: (SessionChatToolGroupTarget) -> Unit = {},
     val onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit = { _, _ -> },
@@ -199,7 +197,6 @@ internal fun SessionChatTimelineView(
                 onReviewChangesClick = props.onReviewChangesClick,
                 onSessionTodosClick = props.onSessionTodosClick,
                 onMessageActionsTap = props.onMessageActionsTap,
-                onPendingSteerTap = props.onPendingSteerTap,
                 onToolDetailTap = props.onToolDetailTap,
                 onToolGroupTap = props.onToolGroupTap,
                 onChildSessionTap = props.onChildSessionTap,
@@ -234,7 +231,6 @@ private fun SessionChatTimelineReadyView(
     onReviewChangesClick: () -> Unit,
     onSessionTodosClick: () -> Unit,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
-    onPendingSteerTap: (SessionChatPendingSteerTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
@@ -409,7 +405,6 @@ private fun SessionChatTimelineReadyView(
                 SessionChatMessageRow(
                     message = message,
                     onMessageActionsTap = onMessageActionsTap,
-                    onPendingSteerTap = onPendingSteerTap,
                     onToolDetailTap = onToolDetailTap,
                     onToolGroupTap = onToolGroupTap,
                     onChildSessionTap = onChildSessionTap,
@@ -504,7 +499,6 @@ private fun SessionChatTimelineReadyView(
 private fun SessionChatMessageRow(
     message: SessionChatMessageItem,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
-    onPendingSteerTap: (SessionChatPendingSteerTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
@@ -545,26 +539,17 @@ private fun SessionChatMessageRow(
                     text = message.text,
                     renderedMarkdown = message.renderedMarkdown,
                     metadataLabel = message.metadataLabel,
-                    pendingDelivery = message.pendingDelivery,
                     content = message.outgoingContent(),
                     modifier = Modifier.fillMaxWidth(),
                     onClick =
-                        if (message.pendingDelivery == FollowUpDelivery.Steer) {
-                            { onPendingSteerTap(message.toPendingSteerTarget()) }
-                        } else if (message.renderedMarkdown == null) {
+                        if (message.renderedMarkdown == null) {
                             { openMessageActions(showsRevertMessage = true) }
                         } else {
                             null
                         },
                     // Always long-pressable so plain and markdown bubbles match;
                     // markdown still uses tap only for links (parent onClick stays null).
-                    onLongClick = {
-                        if (message.pendingDelivery == FollowUpDelivery.Steer) {
-                            onPendingSteerTap(message.toPendingSteerTarget())
-                        } else {
-                            openMessageActions(showsRevertMessage = true)
-                        }
-                    },
+                    onLongClick = { openMessageActions(showsRevertMessage = true) },
                 )
 
             MessageRole.Assistant ->
@@ -942,6 +927,3 @@ private fun FallbackMessageBubble(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
-
-private fun SessionChatMessageItem.toPendingSteerTarget(): SessionChatPendingSteerTarget =
-    SessionChatPendingSteerTarget(id = id, text = text)

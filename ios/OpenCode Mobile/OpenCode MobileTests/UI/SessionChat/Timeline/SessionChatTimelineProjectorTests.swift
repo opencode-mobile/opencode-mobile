@@ -750,15 +750,44 @@ struct SessionChatTimelineProjectorTests {
         #expect(frame.rows.isEmpty)
     }
 
-    @Test func project_includesSteerPendingUserMessage() {
+    @Test func project_excludesSteerPendingUserMessage() {
         let message = userMessage(
             id: "msg-user",
             text: "Waiting to steer"
         ).withPickupState(isWaitingForPickup: true, followUpDelivery: .steer)
         let frame = project(displayFrame(messages: [DisplayMessage(message: message)]))
-        #expect(frame.rows.count == 1)
-        #expect(frame.rows[0].text == "Waiting to steer")
-        #expect(frame.rows[0].pendingDelivery == .steer)
+        #expect(frame.rows.isEmpty)
+    }
+
+    @Test func project_excludesOptimisticPendingDeliveryRow() {
+        let pending = TimelineRow(
+            id: "optimistic-1",
+            role: .user,
+            text: "Hello",
+            metadataLabel: "build · deepseek-v4-flash-free · high · 10:21 AM",
+            pendingDelivery: .steer,
+            isPending: true,
+            blocks: [
+                .text(
+                    blockID: PresentationBlockId.messageFallback("optimistic-1"),
+                    text: "Hello",
+                    renderedMarkdown: nil
+                ),
+            ],
+            contentRevision: ContentRevision.of("Hello"),
+            layoutRevision: 1
+        )
+        let earlier = userMessage(id: "msg-user-0", text: "Earlier")
+        let signature = SessionChatTimelineProjector.optimisticSignature(pending)
+        let frame = project(
+            displayFrame(revision: 1, messages: [DisplayMessage(message: earlier)]),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: [signature: 0],
+                mergePending: true
+            )
+        )
+        #expect(frame.rows.map(\.id) == ["msg-user-0"])
     }
 
     @Test func optimisticThenQueuePendingEcho_dropsOptimisticAndHidesEcho() {
@@ -814,6 +843,277 @@ struct SessionChatTimelineProjectorTests {
         #expect(!reconciled.rows.contains { $0.id == "msg-user-1" })
     }
 
+    @Test func unmatchedPending_keepsOptimisticWhenBaselineHasHiddenInboxSameText() {
+        let pending = pendingUserRow(id: "optimistic-1", text: "Hold this")
+        let inbox = userMessage(id: "msg-inbox", text: "Hold this")
+            .withPickupState(isWaitingForPickup: true, followUpDelivery: .queue)
+        let inboxRow = SessionChatTimelineProjector.serverRows(
+            from: displayFrame(messages: [DisplayMessage(message: inbox)])
+        ).first!
+        let leftover = SessionChatTimelineProjector.unmatchedPending(
+            [pending],
+            serverRows: [inboxRow],
+            baselineSignatureCounts: [SessionChatTimelineProjector.optimisticSignature(inboxRow): 1]
+        )
+        #expect(leftover.map(\.id) == ["optimistic-1"])
+    }
+
+    @Test func unmatchedPending_dropsOptimisticWhenNewEchoArrives() {
+        let pending = pendingUserRow(id: "optimistic-1", text: "Hold this")
+        let inbox = userMessage(id: "msg-inbox", text: "Hold this")
+            .withPickupState(isWaitingForPickup: true, followUpDelivery: .queue)
+        let echo = userMessage(id: "msg-echo", text: "Hold this")
+            .withPickupState(isWaitingForPickup: true, followUpDelivery: .queue)
+        let serverRows = SessionChatTimelineProjector.serverRows(
+            from: displayFrame(messages: [
+                DisplayMessage(message: inbox),
+                DisplayMessage(message: echo),
+            ])
+        )
+        let inboxSignature = SessionChatTimelineProjector.optimisticSignature(serverRows[0])
+        let leftover = SessionChatTimelineProjector.unmatchedPending(
+            [pending],
+            serverRows: serverRows,
+            baselineSignatureCounts: [inboxSignature: 1]
+        )
+        #expect(leftover.isEmpty)
+    }
+
+    @Test func project_keepsOptimisticWhenBaselineHasHiddenInboxSameText() {
+        let pending = pendingUserRow(id: "optimistic-1", text: "Hold this")
+        let inbox = userMessage(id: "msg-inbox", text: "Hold this")
+            .withPickupState(isWaitingForPickup: true, followUpDelivery: .queue)
+        let inboxRow = SessionChatTimelineProjector.serverRows(
+            from: displayFrame(messages: [DisplayMessage(message: inbox)])
+        ).first!
+        let frame = project(
+            displayFrame(messages: [DisplayMessage(message: inbox)]),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: [SessionChatTimelineProjector.optimisticSignature(inboxRow): 1],
+                mergePending: true
+            )
+        )
+        #expect(frame.rows.map(\.id) == ["optimistic-1"])
+    }
+
+    @Test func project_dropsOptimisticWhenNewEchoArrives() {
+        let pending = pendingUserRow(id: "optimistic-1", text: "Hold this")
+        let inbox = userMessage(id: "msg-inbox", text: "Hold this")
+            .withPickupState(isWaitingForPickup: true, followUpDelivery: .queue)
+        let echo = userMessage(id: "msg-echo", text: "Hold this")
+            .withPickupState(isWaitingForPickup: true, followUpDelivery: .queue)
+        let inboxRow = SessionChatTimelineProjector.serverRows(
+            from: displayFrame(messages: [DisplayMessage(message: inbox)])
+        ).first!
+        let frame = project(
+            displayFrame(messages: [
+                DisplayMessage(message: inbox),
+                DisplayMessage(message: echo),
+            ]),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: [SessionChatTimelineProjector.optimisticSignature(inboxRow): 1],
+                mergePending: true
+            )
+        )
+        #expect(frame.rows.isEmpty)
+        #expect(!frame.rows.contains { $0.id == "optimistic-1" })
+    }
+
+    @Test func project_attachmentOnlyOptimistic_dropsWhenMatchingAttachmentEchoArrives() {
+        let pendingFile = FilePart(
+            id: "local-file",
+            filename: "notes.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "data:text/plain;base64,abc"
+        )
+        let pending = TimelineRow(
+            id: "optimistic-file",
+            role: .user,
+            text: "",
+            metadataLabel: "Build · 10:21 AM",
+            isPending: true,
+            blocks: [
+                .attachment(blockID: PresentationBlockId.direct("local-file"), file: pendingFile),
+            ],
+            contentRevision: ContentRevision.of(""),
+            layoutRevision: 1
+        )
+        let withOptimistic = project(
+            displayFrame(messages: []),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: [:],
+                mergePending: true
+            )
+        )
+        #expect(withOptimistic.rows.map(\.id) == ["optimistic-file"])
+
+        let serverUser = userMessage(
+            id: "msg-file",
+            text: "",
+            parts: [
+                .file(
+                    FilePart(
+                        id: "server-file",
+                        filename: "notes.txt",
+                        mime: "text/plain",
+                        kind: .text,
+                        dataURL: "https://example.test/notes.txt"
+                    )
+                ),
+            ]
+        )
+        let reconciled = project(
+            displayFrame(revision: 2, messages: [DisplayMessage(message: serverUser)]),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: [:],
+                mergePending: true
+            ),
+            previous: withOptimistic
+        )
+        #expect(reconciled.rows.map(\.id) == ["msg-file"])
+        #expect(!reconciled.rows.contains { $0.id == "optimistic-file" })
+        #expect(reconciled.removedRowIDs.contains("optimistic-file"))
+    }
+
+    @Test func unmatchedPending_blankTextDoesNotMatchAttachmentlessServerRow() {
+        let pendingFile = FilePart(
+            id: "local-file",
+            filename: "notes.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "local"
+        )
+        let pending = TimelineRow(
+            id: "optimistic-file",
+            role: .user,
+            text: "",
+            metadataLabel: "",
+            isPending: true,
+            blocks: [
+                .attachment(blockID: PresentationBlockId.direct("local-file"), file: pendingFile),
+            ],
+            contentRevision: ContentRevision.of(""),
+            layoutRevision: 1
+        )
+        let blank = userMessage(id: "msg-blank", text: "", parts: [text("u-blank", "")])
+        let blankRow = SessionChatTimelineProjector.serverRows(
+            from: displayFrame(messages: [DisplayMessage(message: blank)])
+        ).first
+        let leftover = SessionChatTimelineProjector.unmatchedPending(
+            [pending],
+            serverRows: blankRow.map { [$0] } ?? [],
+            baselineSignatureCounts: [:]
+        )
+        #expect(leftover.map(\.id) == ["optimistic-file"])
+    }
+
+    @Test func unmatchedPending_blankTextDoesNotMatchCaptionedAttachmentRow() {
+        let pendingFile = FilePart(
+            id: "local-file",
+            filename: "notes.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "local"
+        )
+        let pending = TimelineRow(
+            id: "optimistic-file",
+            role: .user,
+            text: "",
+            metadataLabel: "",
+            isPending: true,
+            blocks: [
+                .attachment(blockID: PresentationBlockId.direct("local-file"), file: pendingFile),
+            ],
+            contentRevision: ContentRevision.of(""),
+            layoutRevision: 1
+        )
+        let captioned = userMessage(
+            id: "msg-captioned",
+            text: "See notes",
+            parts: [
+                text("u-caption", "See notes"),
+                .file(
+                    FilePart(
+                        id: "server-file",
+                        filename: "notes.txt",
+                        mime: "text/plain",
+                        kind: .text,
+                        dataURL: "https://example.test/notes.txt"
+                    )
+                ),
+            ]
+        )
+        let serverRow = SessionChatTimelineProjector.serverRows(
+            from: displayFrame(messages: [DisplayMessage(message: captioned)])
+        ).first!
+        let leftover = SessionChatTimelineProjector.unmatchedPending(
+            [pending],
+            serverRows: [serverRow],
+            baselineSignatureCounts: [:]
+        )
+        #expect(leftover.map(\.id) == ["optimistic-file"])
+    }
+
+    @Test func displayedOptimisticSendRows_excludesHiddenPendingRows() {
+        let hidden = SessionChatRow(
+            id: "pending-1",
+            role: .user,
+            text: "Hold this",
+            metadataLabel: "",
+            pendingDelivery: .steer,
+            isPending: true
+        )
+        let visible = SessionChatRow(
+            id: "pending-2",
+            role: .user,
+            text: "Just sent",
+            metadataLabel: "",
+            isPending: true
+        )
+        #expect(
+            SessionChatTimelineProjector.displayedOptimisticSendRows([hidden, visible]).map(\.id)
+                == ["pending-2"]
+        )
+        #expect(
+            !SessionChatTimelineProjector.shouldMarkTimelineReadyAfterOptimisticSend(
+                displayedRows: [],
+                hadPriorDisplayedRows: false
+            )
+        )
+        #expect(
+            SessionChatTimelineProjector.shouldMarkTimelineReadyAfterOptimisticSend(
+                displayedRows: [],
+                hadPriorDisplayedRows: true
+            )
+        )
+    }
+
+    @Test func signatureCounts_fromDisplayMessages_includesWaitingForPickupUser() {
+        let earlier = userMessage(id: "msg-earlier", text: "Earlier")
+        let inbox = userMessage(id: "msg-inbox", text: "Hold this")
+            .withPickupState(isWaitingForPickup: true, followUpDelivery: .queue)
+        let counts = SessionChatTimelineProjector.signatureCounts(
+            fromDisplayMessages: [
+                DisplayMessage(message: earlier),
+                DisplayMessage(message: inbox),
+            ],
+            sessionKey: "session-a"
+        )
+        let inboxRow = SessionChatTimelineProjector.serverRows(
+            from: displayFrame(messages: [DisplayMessage(message: inbox)])
+        ).first!
+        #expect(counts[SessionChatTimelineProjector.optimisticSignature(inboxRow)] == 1)
+        let earlierRow = SessionChatTimelineProjector.serverRows(
+            from: displayFrame(messages: [DisplayMessage(message: earlier)])
+        ).first!
+        #expect(counts[SessionChatTimelineProjector.optimisticSignature(earlierRow)] == 1)
+    }
+
     // MARK: - Helpers
 
     private func project(
@@ -856,6 +1156,25 @@ struct SessionChatTimelineProjectorTests {
             model: nil,
             mode: nil,
             sentAtEpochMs: sentAtEpochMs
+        )
+    }
+
+    private func pendingUserRow(id: String, text: String) -> TimelineRow {
+        TimelineRow(
+            id: id,
+            role: .user,
+            text: text,
+            metadataLabel: "",
+            isPending: true,
+            blocks: [
+                .text(
+                    blockID: PresentationBlockId.direct(id),
+                    text: text,
+                    renderedMarkdown: nil
+                ),
+            ],
+            contentRevision: ContentRevision.of(text),
+            layoutRevision: 1
         )
     }
 
