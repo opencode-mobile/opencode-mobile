@@ -284,6 +284,40 @@ struct MessageSyncTests {
         #expect(collector.latest()?.first?.text == "Hello")
     }
 
+    @Test func refreshMessages_whileHealthy_doesNotShowCatchUpChrome() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+        #expect(sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy)
+
+        var chrome: [Bool] = []
+        let chromeTask = Task {
+            for await value in sync.observeCatchUpChrome(sessionID: "ses-1", directory: "/repo") {
+                chrome.append(value)
+            }
+        }
+        let quiet = await waitUntil { chrome.last == false }
+        #expect(quiet)
+
+        repo.holdNextListMessages()
+        let refresh = Task { try await sync.refreshMessages(sessionID: "ses-1", directory: "/repo") }
+        let blocked = await waitUntil { repo.isListBlocked }
+        #expect(blocked)
+        #expect(chrome.contains(true) == false)
+        #expect(sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy)
+
+        repo.resumeListMessages()
+        _ = try? await refresh.value
+        chromeTask.cancel()
+        task.cancel()
+        #expect(chrome.contains(true) == false)
+        #expect(sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy)
+    }
+
     @Test func hungInitialRest_cacheSeed_confirmsSyncWhileSseConnected() async {
         let repo = FakeLiveMessageRepository()
         repo.holdNextListMessages()

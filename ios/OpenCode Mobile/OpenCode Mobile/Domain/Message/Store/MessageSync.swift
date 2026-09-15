@@ -30,6 +30,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private var messageCacheHandles: [MessageSessionKey: any SessionMessageCacheHandle] = [:]
     /// Store slots that painted from cache and still need network confirmation.
     private var awaitingCacheSyncConfirm: Set<String> = []
+    /// Live send/pull `refreshMessages` hops. Coordinator still goes stale→syncing;
+    /// catch-up chrome stays off (OPE-253).
+    private var quietRefreshSlots: Set<String> = []
+    private var lastCoordinatorState: [MessageSessionKey: ProjectionState] = [:]
     private var observationGeneration = 0
     private var terminalSessionKeys: Set<MessageSessionKey> = []
     private var startedGenerationByKey: [MessageSessionKey: Int] = [:]
@@ -150,6 +154,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
         let observing = observationCache[key] != nil
         lock.unlock()
         if observing {
+            setQuietRefresh(true, for: key.storeSlot)
+            defer { finishQuietRefresh(for: key) }
             syncCoordinator.invalidate(projection)
             await syncCoordinator.ensureFresh(projection)
             lock.lock()
@@ -360,6 +366,61 @@ nonisolated final class MessageSync: @unchecked Sendable {
         lock.lock()
         lastIdentity[storeSlot] = value
         lock.unlock()
+    }
+
+    /// Reconnect and cache-confirm raise Syncing. A live send/pull
+    /// `refreshMessages` also goes stale→syncing→fresh; keep that hop
+    /// quiet so the pill does not flash (OPE-253).
+    private func applyCoordinatorHealth(_ state: ProjectionState, for key: MessageSessionKey) {
+        lock.lock()
+        lastCoordinatorState[key] = state
+        let quiet = quietRefreshSlots.contains(key.storeSlot)
+        lock.unlock()
+        if quiet, state != .fresh, !isAwaitingCacheSyncConfirm(for: key.storeSlot) {
+            return
+        }
+        let catchingUp = canCatchUp(
+            occupancy: worldSignals.occupancy,
+            snapshot: liveConnection.snapshot
+        )
+        switch state {
+        case .fresh:
+            if isAwaitingCacheSyncConfirm(for: key.storeSlot) {
+                setHealth(.recovering(.reconnect), for: key)
+            } else {
+                setHealth(.healthy, for: key)
+            }
+        case .syncing:
+            setHealth(.recovering(.reconnect), for: key)
+        case .stale:
+            if catchingUp {
+                setHealth(.recovering(.reconnect), for: key)
+            } else if publishedFrame(for: key.storeSlot) != nil {
+                setHealth(.stale(.transportUnavailable), for: key)
+            } else {
+                setHealth(.recovering(.reconnect), for: key)
+            }
+        }
+    }
+
+    private func setQuietRefresh(_ quiet: Bool, for storeSlot: String) {
+        lock.lock()
+        if quiet {
+            quietRefreshSlots.insert(storeSlot)
+        } else {
+            quietRefreshSlots.remove(storeSlot)
+        }
+        lock.unlock()
+    }
+
+    private func finishQuietRefresh(for key: MessageSessionKey) {
+        setQuietRefresh(false, for: key.storeSlot)
+        lock.lock()
+        let pending = lastCoordinatorState[key]
+        lock.unlock()
+        if let pending {
+            applyCoordinatorHealth(pending, for: key)
+        }
     }
 
     private func isAwaitingCacheSyncConfirm(for storeSlot: String) -> Bool {
@@ -621,28 +682,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             guard let self else { return }
             for await state in self.syncCoordinator.observe(projection) {
                 guard self.observationStillCurrent(key: key, startedGeneration: startedGeneration) else { return }
-                let catchingUp = canCatchUp(
-                    occupancy: self.worldSignals.occupancy,
-                    snapshot: self.liveConnection.snapshot
-                )
-                switch state {
-                case .fresh:
-                    if self.isAwaitingCacheSyncConfirm(for: key.storeSlot) {
-                        self.setHealth(.recovering(.reconnect), for: key)
-                    } else {
-                        self.setHealth(.healthy, for: key)
-                    }
-                case .syncing:
-                    self.setHealth(.recovering(.reconnect), for: key)
-                case .stale:
-                    if catchingUp {
-                        self.setHealth(.recovering(.reconnect), for: key)
-                    } else if self.publishedFrame(for: key.storeSlot) != nil {
-                        self.setHealth(.stale(.transportUnavailable), for: key)
-                    } else {
-                        self.setHealth(.recovering(.reconnect), for: key)
-                    }
-                }
+                self.applyCoordinatorHealth(state, for: key)
             }
         }
         defer {

@@ -461,6 +461,48 @@ class MessageSyncTest {
         }
 
     @Test
+    fun refreshMessages_whileHealthy_doesNotShowCatchUpChrome() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(MessageSyncHealth.Fresh, sync.syncHealth("ses-1", "/repo"))
+
+            val chrome = mutableListOf<Boolean>()
+            val chromeJob =
+                launch {
+                    sync.observeCatchUpChrome("ses-1", "/repo").collect { chrome.add(it) }
+                }
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(false, chrome.lastOrNull())
+
+            val refreshHold = CompletableDeferred<Unit>()
+            repository.nextLoadGate = refreshHold
+            val refreshJob = launch { sync.refreshMessages("ses-1", "/repo") }
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(1, repository.listHoldsEntered.get())
+            assertFalse(chrome.contains(true))
+            assertEquals(MessageSyncHealth.Fresh, sync.syncHealth("ses-1", "/repo"))
+
+            refreshHold.complete(Unit)
+            advanceTimeBy(1)
+            runCurrent()
+            refreshJob.join()
+            chromeJob.cancel()
+            collectJob.cancel()
+            assertFalse(chrome.contains(true))
+            assertEquals(MessageSyncHealth.Fresh, sync.syncHealth("ses-1", "/repo"))
+        }
+
+    @Test
     fun observeMessages_hiddenReasoningSnapshotUpdates_doNotRestOrShowCatchUp() =
         runTest(testDispatcher) {
             val seed = hiddenReasoningTranscript()

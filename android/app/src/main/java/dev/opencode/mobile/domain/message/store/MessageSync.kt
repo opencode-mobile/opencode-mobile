@@ -86,6 +86,10 @@ class MessageSync(
     /** Store slots that painted from cache and still need network confirmation. */
     private val awaitingCacheSyncConfirm = ConcurrentHashMap.newKeySet<String>()
 
+    /** Live send/pull `refreshMessages` hops. Coordinator still goes stale→syncing; chrome stays off (OPE-253). */
+    private val quietRefreshSlots = ConcurrentHashMap.newKeySet<String>()
+    private val lastCoordinatorState = ConcurrentHashMap<MessageSessionKey, ProjectionState>()
+
     private val observationGeneration = AtomicInteger(0)
     private val terminalSessionKeys = ConcurrentHashMap.newKeySet<MessageSessionKey>()
     private val lastMessageEventAtMs = ConcurrentHashMap<String, Long>()
@@ -117,9 +121,16 @@ class MessageSync(
     ): List<Message> {
         val key = sessionKey(sessionId, directory)
         val projection = transcriptKey(key)
-        syncCoordinator.invalidate(projection)
-        syncCoordinator.ensureFresh(projection)
-        return engine.messages(key.storeSlot)
+        val storeSlot = key.storeSlot
+        quietRefreshSlots.add(storeSlot)
+        try {
+            syncCoordinator.invalidate(projection)
+            syncCoordinator.ensureFresh(projection)
+            return engine.messages(storeSlot)
+        } finally {
+            quietRefreshSlots.remove(storeSlot)
+            lastCoordinatorState[key]?.let { applyCoordinatorHealth(key, storeSlot, it) }
+        }
     }
 
     /** Production REST attempt reasons, recorded before the fetch succeeds or throws. */
@@ -197,15 +208,9 @@ class MessageSync(
         sessionId: String,
         directory: String?,
     ): Flow<Boolean> {
-        val key = sessionKey(sessionId, directory)
-        val projection = transcriptKey(key)
-        val slot = key.storeSlot
-        return kotlinx.coroutines.flow.combine(
-            syncCoordinator.observe(projection),
-            catchUpSlots,
-        ) { state, slots ->
-            state != ProjectionState.Fresh || slot in slots
-        }.distinctUntilChanged()
+        val slot = sessionKey(sessionId, directory).storeSlot
+        // Slots only. Coordinator stale during a live `refreshMessages` is not catch-up chrome.
+        return catchUpSlots.map { slot in it }.distinctUntilChanged()
     }
 
     private fun setCatchUpSlot(
@@ -215,6 +220,32 @@ class MessageSync(
         catchUpSlots.update { current ->
             if (catchingUp) current + key.storeSlot else current - key.storeSlot
         }
+    }
+
+    /** Reconnect and cache-confirm raise Syncing. A live send/pull refresh stays quiet (OPE-253). */
+    private fun applyCoordinatorHealth(
+        key: MessageSessionKey,
+        storeSlot: String,
+        state: ProjectionState,
+    ) {
+        lastCoordinatorState[key] = state
+        val awaitingCache = storeSlot in awaitingCacheSyncConfirm
+        if (storeSlot in quietRefreshSlots &&
+            state != ProjectionState.Fresh &&
+            !awaitingCache
+        ) {
+            return
+        }
+        healthByKey[key] =
+            when (state) {
+                ProjectionState.Fresh -> MessageSyncHealth.Fresh
+                ProjectionState.Stale -> MessageSyncHealth.Stale
+                ProjectionState.Syncing -> MessageSyncHealth.Syncing
+            }
+        setCatchUpSlot(
+            key,
+            state != ProjectionState.Fresh || awaitingCache,
+        )
     }
 
     private fun sessionKey(
@@ -443,16 +474,7 @@ class MessageSync(
             val healthWatcher =
                 launch {
                     syncCoordinator.observe(projection).collect { state ->
-                        healthByKey[key] =
-                            when (state) {
-                                ProjectionState.Fresh -> MessageSyncHealth.Fresh
-                                ProjectionState.Stale -> MessageSyncHealth.Stale
-                                ProjectionState.Syncing -> MessageSyncHealth.Syncing
-                            }
-                        setCatchUpSlot(
-                            key,
-                            state != ProjectionState.Fresh || storeSlot in awaitingCacheSyncConfirm,
-                        )
+                        applyCoordinatorHealth(key, storeSlot, state)
                     }
                 }
 
