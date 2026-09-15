@@ -24,6 +24,11 @@ import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
 import { IOS_EXPECTED, IOS_OUTPUT_TARGET, readPngSize } from "./store-screenshots/png.mjs";
+import {
+  defaultStoreShotsUrl,
+  loadCopy,
+  pushAll,
+} from "./store-screenshots/push-store-shots.mjs";
 import { writeGallery } from "./store-screenshots/write-gallery.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -68,6 +73,10 @@ Options:
   --headless            Start the emulator with -no-window
   --out <dir>           Output root (default: store-screenshots)
   --no-gallery          Skip writing store-screenshots/index.html
+  --push-store-shots [url]
+                        After a successful capture, upload PNGs to store-shots
+                        (default: $STORE_SHOTS_URL or http://ivans-mac-mini-1:8790)
+  --force-copy          Overwrite store-shots headlines/subtitles from copy.json
   --avd-only            Create, boot, and configure Android AVDs; report wm size/density
   --sim-only            Boot the iPhone 16 Pro Max simulator and apply status-bar overrides
   --help, -h`);
@@ -87,6 +96,8 @@ function parseArgs(argv) {
     simOnly: false,
     selfTest: false,
     noGallery: false,
+    pushStoreShots: null,
+    forceCopy: false,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -133,6 +144,17 @@ function parseArgs(argv) {
         break;
       case "--no-gallery":
         args.noGallery = true;
+        break;
+      case "--push-store-shots":
+        if (next && !next.startsWith("-")) {
+          args.pushStoreShots = next;
+          i += 1;
+        } else {
+          args.pushStoreShots = defaultStoreShotsUrl();
+        }
+        break;
+      case "--force-copy":
+        args.forceCopy = true;
         break;
       case "--help":
       case "-h":
@@ -1098,6 +1120,8 @@ async function main() {
   process.on("SIGINT", onSignal);
   process.on("SIGTERM", onSignal);
 
+  let captureOk = true;
+  let validatedTargets = [];
   try {
     if (startServer) {
       serverProc = startFixtureServer(args.serverPort, join(logDir, "fixture-server.log"));
@@ -1197,21 +1221,46 @@ async function main() {
     }
 
     if (!args.avdOnly && !args.simOnly) {
-      const validateTargets = args.simOnly ? [] : requested.filter((t) => (t === "ios" ? iosWanted : androidNeeded));
-      validateOutputs(outDir, validateTargets, appearances, scenes);
+      validatedTargets = requested.filter((t) => (t === "ios" ? iosWanted : androidNeeded));
+      validateOutputs(outDir, validatedTargets, appearances, scenes);
     }
   } catch (error) {
+    captureOk = false;
     await cleanup({ keepEmulator: false });
     console.error(error.message ?? error);
     process.exitCode = 1;
   }
 
+  let galleryOk = true;
   if (!args.avdOnly && !args.simOnly && !args.noGallery) {
     try {
       const galleryPath = writeGallery(outDir);
       console.log(`gallery: ${galleryPath}`);
     } catch (error) {
+      galleryOk = false;
       console.error(`gallery write failed: ${error.message ?? error}`);
+    }
+  }
+
+  if (args.pushStoreShots && captureOk && galleryOk && !args.avdOnly && !args.simOnly) {
+    try {
+      await pushAll({
+        baseUrl: args.pushStoreShots,
+        targets: validatedTargets.map(outputTargetName),
+        appearances,
+        scenes,
+        dir: outDir,
+        copy: loadCopy(),
+        forceCopy: args.forceCopy,
+      });
+    } catch (error) {
+      if (error instanceof AggregateError) {
+        for (const inner of error.errors) {
+          console.error(inner.message ?? inner);
+        }
+      }
+      console.error(error.message ?? error);
+      process.exitCode = 1;
     }
   }
 
