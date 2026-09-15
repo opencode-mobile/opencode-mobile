@@ -87,8 +87,7 @@ class MessageSync(
     private val awaitingCacheSyncConfirm = ConcurrentHashMap.newKeySet<String>()
 
     /** Live send/pull `refreshMessages` hops. Coordinator still goes stale→syncing; chrome stays off (OPE-253). */
-    private val quietRefreshSlots = ConcurrentHashMap.newKeySet<String>()
-    private val lastCoordinatorState = ConcurrentHashMap<MessageSessionKey, ProjectionState>()
+    private val quietRefreshDepth = ConcurrentHashMap<String, Int>()
 
     private val observationGeneration = AtomicInteger(0)
     private val terminalSessionKeys = ConcurrentHashMap.newKeySet<MessageSessionKey>()
@@ -122,14 +121,18 @@ class MessageSync(
         val key = sessionKey(sessionId, directory)
         val projection = transcriptKey(key)
         val storeSlot = key.storeSlot
-        quietRefreshSlots.add(storeSlot)
+        quietRefreshDepth.merge(storeSlot, 1) { current, increment -> current + increment }
         try {
             syncCoordinator.invalidate(projection)
             syncCoordinator.ensureFresh(projection)
             return engine.messages(storeSlot)
         } finally {
-            quietRefreshSlots.remove(storeSlot)
-            lastCoordinatorState[key]?.let { applyCoordinatorHealth(key, storeSlot, it) }
+            // After the window closes, a failed refresh is re-published by the coordinator retry as
+            // Syncing, and the caller receives the error.
+            quietRefreshDepth.compute(storeSlot) { _, current ->
+                val next = (current ?: 0) - 1
+                if (next > 0) next else null
+            }
         }
     }
 
@@ -228,9 +231,8 @@ class MessageSync(
         storeSlot: String,
         state: ProjectionState,
     ) {
-        lastCoordinatorState[key] = state
         val awaitingCache = storeSlot in awaitingCacheSyncConfirm
-        if (storeSlot in quietRefreshSlots &&
+        if ((quietRefreshDepth[storeSlot] ?: 0) > 0 &&
             state != ProjectionState.Fresh &&
             !awaitingCache
         ) {

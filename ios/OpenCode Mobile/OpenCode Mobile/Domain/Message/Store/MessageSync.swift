@@ -31,9 +31,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
     /// Store slots that painted from cache and still need network confirmation.
     private var awaitingCacheSyncConfirm: Set<String> = []
     /// Live send/pull `refreshMessages` hops. Coordinator still goes stale→syncing;
-    /// catch-up chrome stays off (OPE-253).
-    private var quietRefreshSlots: Set<String> = []
-    private var lastCoordinatorState: [MessageSessionKey: ProjectionState] = [:]
+    /// catch-up chrome stays off (OPE-253). Nested refreshes share a depth counter.
+    private var quietRefreshDepth: [String: Int] = [:]
     private var observationGeneration = 0
     private var terminalSessionKeys: Set<MessageSessionKey> = []
     private var startedGenerationByKey: [MessageSessionKey: Int] = [:]
@@ -155,7 +154,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
         lock.unlock()
         if observing {
             setQuietRefresh(true, for: key.storeSlot)
-            defer { finishQuietRefresh(for: key) }
+            // After the window closes, a failed refresh is re-published by the
+            // coordinator retry as `.syncing`; the uncatchable case is already
+            // handled at the end of `refreshMessages`.
+            defer { setQuietRefresh(false, for: key.storeSlot) }
             syncCoordinator.invalidate(projection)
             await syncCoordinator.ensureFresh(projection)
             lock.lock()
@@ -373,10 +375,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
     /// quiet so the pill does not flash (OPE-253).
     private func applyCoordinatorHealth(_ state: ProjectionState, for key: MessageSessionKey) {
         lock.lock()
-        lastCoordinatorState[key] = state
-        let quiet = quietRefreshSlots.contains(key.storeSlot)
+        let quiet = (quietRefreshDepth[key.storeSlot] ?? 0) > 0
+        let awaitingCache = awaitingCacheSyncConfirm.contains(key.storeSlot)
         lock.unlock()
-        if quiet, state != .fresh, !isAwaitingCacheSyncConfirm(for: key.storeSlot) {
+        if quiet, state != .fresh, !awaitingCache {
             return
         }
         let catchingUp = canCatchUp(
@@ -385,7 +387,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         )
         switch state {
         case .fresh:
-            if isAwaitingCacheSyncConfirm(for: key.storeSlot) {
+            if awaitingCache {
                 setHealth(.recovering(.reconnect), for: key)
             } else {
                 setHealth(.healthy, for: key)
@@ -406,21 +408,16 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private func setQuietRefresh(_ quiet: Bool, for storeSlot: String) {
         lock.lock()
         if quiet {
-            quietRefreshSlots.insert(storeSlot)
+            quietRefreshDepth[storeSlot, default: 0] += 1
         } else {
-            quietRefreshSlots.remove(storeSlot)
+            let next = (quietRefreshDepth[storeSlot] ?? 0) - 1
+            if next <= 0 {
+                quietRefreshDepth.removeValue(forKey: storeSlot)
+            } else {
+                quietRefreshDepth[storeSlot] = next
+            }
         }
         lock.unlock()
-    }
-
-    private func finishQuietRefresh(for key: MessageSessionKey) {
-        setQuietRefresh(false, for: key.storeSlot)
-        lock.lock()
-        let pending = lastCoordinatorState[key]
-        lock.unlock()
-        if let pending {
-            applyCoordinatorHealth(pending, for: key)
-        }
     }
 
     private func isAwaitingCacheSyncConfirm(for storeSlot: String) -> Bool {
