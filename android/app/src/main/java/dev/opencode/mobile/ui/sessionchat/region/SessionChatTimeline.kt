@@ -303,18 +303,42 @@ class SessionChatTimeline(
         mergePendingWhileSending = true
         pendingOptimisticRows = enrichedRows
         pendingBaselineSignatures =
-            _state.value.messages
-                .filterNot { it.isPending }
-                .associate { item ->
-                    item.id to TimelineProjector.reconciliationSignature(TimelineProjector.rowFromMessageItem(item))
-                }
-        val pendingRows = enrichedRows.map(TimelineProjector::rowFromMessageItem)
+            TimelineProjector.reconciliationSignaturesById(lastLoadedServerRows())
+        val displayedItems = TimelineProjector.displayedOptimisticSendItems(enrichedRows)
+        val displayedRows = displayedItems.map(TimelineProjector::rowFromMessageItem)
         val previous = lastTimelineFrame
+        val hadPriorRows = _state.value.messages.isNotEmpty() || !previous?.rows.isNullOrEmpty()
+        if (displayedRows.isEmpty()) {
+            val frame =
+                if (hadPriorRows) {
+                    previous?.copy(
+                        frameRevision = nextFrameRevision++,
+                        insertedRowIDs = emptySet(),
+                        changedRowIDs = emptySet(),
+                        removedRowIDs = emptySet(),
+                        layoutChangedRowIDs = emptySet(),
+                        grewBottomRowIDs = emptySet(),
+                        decorateRowIDs = emptySet(),
+                    )
+                } else {
+                    previous
+                }
+            if (frame != null) {
+                lastTimelineFrame = frame
+            }
+            _state.update {
+                it.copy(
+                    timelineFrame = frame ?: it.timelineFrame,
+                    errorMessage = null,
+                )
+            }
+            return
+        }
         val frame =
             TimelineFrame(
                 frameRevision = nextFrameRevision++,
-                rows = (previous?.rows.orEmpty()) + pendingRows,
-                insertedRowIDs = pendingRows.map { it.id }.toSet(),
+                rows = (previous?.rows.orEmpty()) + displayedRows,
+                insertedRowIDs = displayedRows.map { it.id }.toSet(),
                 changedRowIDs = emptySet(),
                 removedRowIDs = emptySet(),
                 layoutChangedRowIDs = emptySet(),
@@ -322,7 +346,7 @@ class SessionChatTimeline(
         lastTimelineFrame = frame
         _state.update {
             it.copy(
-                messages = it.messages + enrichedRows,
+                messages = it.messages + displayedItems,
                 timelineFrame = frame,
                 timeline = SessionChatTimelineState.Ready,
                 errorMessage = null,
@@ -781,9 +805,9 @@ class SessionChatTimeline(
     /**
      * Hidden pending-prompt rows leave the displayed frame before this runs, so
      * reconciliation cannot use displayed ids. An optimistic send is done when
-     * every pending item has a new server echo (id absent from the send-time
-     * baseline) with the same user text — the same match [TimelineProjector]
-     * uses to drop the optimistic row, often under a different id.
+     * every pending item has a new server echo relative to the send-time
+     * baseline — the same match [TimelineProjector] uses to drop the optimistic
+     * row, often under a different id.
      */
     private fun clearOptimisticIfReconciled() {
         if (!mergePendingWhileSending) return
@@ -795,27 +819,24 @@ class SessionChatTimeline(
             return
         }
         val stillUnacked =
-            pendingItems.any { pending ->
-                lastLoadedMessages.none { server -> isNewServerEchoOf(server, pending) }
-            }
+            TimelineProjector
+                .unmatchedPending(
+                    pendingRows = pendingItems.map(TimelineProjector::rowFromMessageItem),
+                    serverRows = lastLoadedServerRows(),
+                    baselineSignatures = pendingBaselineSignatures,
+                ).isNotEmpty()
         if (stillUnacked) return
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
         pendingBaselineSignatures = emptyMap()
     }
 
-    private fun isNewServerEchoOf(
-        server: Message,
-        pending: SessionChatMessageItem,
-    ): Boolean {
-        if (server.role != MessageRole.User ||
-            server.text != pending.text ||
-            pending.text.isBlank()
-        ) {
-            return false
-        }
-        return server.id !in pendingBaselineSignatures
-    }
+    private fun lastLoadedServerRows(): List<TimelineRow> =
+        TimelineProjector.projectServerRows(
+            lastLoadedDisplayMessages.mapNotNull { display ->
+                displayMessageBody(display, previous = null)
+            },
+        )
 
     private data class PendingPromptPatch(
         val delivery: FollowUpDelivery?,

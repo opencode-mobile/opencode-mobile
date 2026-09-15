@@ -4,6 +4,26 @@ import Testing
 
 @MainActor
 struct PendingPromptsFromTests {
+    @Test func optimisticAttachmentOnlyBusySend_isSettling() {
+        let prompts = SessionChatViewModel.pendingPrompts(
+            loaded: [],
+            optimistic: [
+                SessionChatRow(
+                    id: "pending-file",
+                    role: .user,
+                    text: "",
+                    metadataLabel: "",
+                    pendingDelivery: .steer,
+                    isPending: true
+                ),
+            ]
+        )
+        #expect(prompts.count == 1)
+        #expect(prompts[0].id == "pending-file")
+        #expect(prompts[0].text == "")
+        #expect(prompts[0].isSettling)
+    }
+
     @Test func optimisticBusySend_isSettling() {
         let prompts = SessionChatViewModel.pendingPrompts(
             loaded: [],

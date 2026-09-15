@@ -104,6 +104,47 @@ object TimelineProjector {
         )
     }
 
+    /** Project server bodies without hiding inbox rows. Used for send-time baselines. */
+    fun projectServerRows(bodies: List<DisplayMessageBody>): List<TimelineRow> =
+        bodies.mapNotNull { body -> projectRow(body, previous = null) }
+
+    fun reconciliationSignaturesById(rows: List<TimelineRow>): Map<String, String> =
+        rows.associate { row -> row.id to reconciliationSignature(row) }
+
+    fun isHiddenPendingPrompt(item: SessionChatMessageItem): Boolean =
+        item.role == MessageRole.User && item.pendingDelivery != null
+
+    fun displayedOptimisticSendItems(items: List<SessionChatMessageItem>): List<SessionChatMessageItem> =
+        items.filterNot(::isHiddenPendingPrompt)
+
+    fun shouldMarkTimelineReadyAfterOptimisticSend(
+        displayedItems: List<SessionChatMessageItem>,
+        hadPriorDisplayedRows: Boolean,
+    ): Boolean = displayedItems.isNotEmpty() || hadPriorDisplayedRows
+
+    /**
+     * Pending rows that no new server echo accounts for yet. Same match
+     * [mergeWithPending] and [SessionChatTimeline] reconciliation use.
+     */
+    fun unmatchedPending(
+        pendingRows: List<TimelineRow>,
+        serverRows: List<TimelineRow>,
+        baselineSignatures: Map<String, String>,
+    ): List<TimelineRow> =
+        pendingRows.filter { pending ->
+            serverRows.none { server ->
+                isNewServerEchoOf(server, pending, baselineSignatures)
+            }
+        }
+
+    fun isNewServerEchoOf(
+        server: TimelineRow,
+        pending: TimelineRow,
+        baselineSignatures: Map<String, String>,
+    ): Boolean =
+        baselineSignatures[server.id] != reconciliationSignature(server) &&
+            matchesOptimistic(server, pending)
+
     fun rowFromMessageItem(
         item: SessionChatMessageItem,
         previous: TimelineRow? = null,
@@ -316,7 +357,7 @@ object TimelineProjector {
      * matching optimistic row, then leave the displayed set. The timeline shows
      * delivered history only — Steer and Queue, including optimistic rows.
      */
-    private fun isHiddenPendingPrompt(row: TimelineRow): Boolean =
+    fun isHiddenPendingPrompt(row: TimelineRow): Boolean =
         row.role == MessageRole.User && row.pendingDelivery != null
 
     private fun mergeWithPending(
@@ -327,12 +368,11 @@ object TimelineProjector {
         if (pendingRows.isEmpty()) return serverRows
         val baselineSignatures = optimisticInputs.baselineSignatures
         val pendingToKeep =
-            pendingRows.filter { pending ->
-                !serverRows.any { server ->
-                    baselineSignatures[server.id] != reconciliationSignature(server) &&
-                        matchesOptimistic(server, pending)
-                }
-            }
+            unmatchedPending(
+                pendingRows = pendingRows,
+                serverRows = serverRows,
+                baselineSignatures = baselineSignatures,
+            )
         val dropped = pendingRows.filter { pending -> pendingToKeep.none { it.id == pending.id } }
         return splicePending(
             applyPendingMetadata(serverRows, dropped, baselineSignatures),
@@ -392,18 +432,36 @@ object TimelineProjector {
         }
     }
 
-    private fun matchesOptimistic(
+    /**
+     * Text-equal user rows match. Blank text is an attachment-only send: both
+     * sides must carry the same files. A blank server row with no attachments is
+     * not an echo of an attachment-only pending row — [MessageDomainAdapter]
+     * leaves [Message.text] empty for file-only parts and still projects those
+     * files onto the row.
+     */
+    fun matchesOptimistic(
         server: TimelineRow,
         pending: TimelineRow,
     ): Boolean {
-        if (server.role != MessageRole.User || server.text != pending.text || pending.text.isBlank()) {
+        if (server.role != MessageRole.User || server.text != pending.text) {
             return false
         }
+        if (pending.text.isBlank()) {
+            return attachmentsCorrespond(server, pending)
+        }
         if (server.attachments.isEmpty()) return true
-        return server.attachments.size == pending.attachments.size &&
-            server.attachments.zip(pending.attachments).all { (left, right) ->
-                attachmentsMatch(left, right)
-            }
+        return attachmentsCorrespond(server, pending)
+    }
+
+    private fun attachmentsCorrespond(
+        server: TimelineRow,
+        pending: TimelineRow,
+    ): Boolean {
+        if (server.attachments.size != pending.attachments.size) return false
+        if (server.attachments.isEmpty()) return false
+        return server.attachments.zip(pending.attachments).all { (left, right) ->
+            attachmentsMatch(left, right)
+        }
     }
 
     private fun attachmentsMatch(

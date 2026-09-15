@@ -303,11 +303,31 @@ final class SessionChatTimeline {
     func beginOptimisticSend(_ rows: [SessionChatRow]) {
         mergePendingWhileSending = true
         pendingOptimisticRows = rows
-        pendingBaselineSignatureCounts = signatureCounts(state.messages.filter { !$0.isPending })
-        state.messages.append(contentsOf: rows)
+        pendingBaselineSignatureCounts = SessionChatTimelineProjector.signatureCounts(
+            fromDisplayMessages: lastLoadedDisplayMessages,
+            sessionKey: sessionID,
+            serverCommands: serverCommands,
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls
+        )
+        let displayed = SessionChatTimelineProjector.displayedOptimisticSendRows(rows)
+        let hadPriorRows = !state.messages.isEmpty || !timelineFrame.rows.isEmpty
+        if displayed.isEmpty {
+            if hadPriorRows {
+                publishSyntheticTimelineFrame(
+                    messages: state.messages,
+                    insertedRowIDs: [],
+                    changedRowIDs: [],
+                    removedRowIDs: [],
+                    layoutChangedRowIDs: []
+                )
+            }
+            notifyChange()
+            return
+        }
+        state.messages.append(contentsOf: displayed)
         state.timeline = .ready
         state.errorMessage = nil
-        let inserted = Set(rows.map(\.id))
+        let inserted = Set(displayed.map(\.id))
         publishSyntheticTimelineFrame(
             messages: state.messages,
             insertedRowIDs: inserted,
@@ -616,16 +636,17 @@ final class SessionChatTimeline {
             pendingBaselineSignatureCounts = [:]
             return
         }
-        // Server rows here carry text only, so an attachment send is matched by the
-        // projector's text-only fallback rather than its exact signature.
-        let serverRows = lastLoadedMessages.map { message in
-            TimelineRow.fromSessionChatRow(
-                SessionChatRow(id: message.id, role: message.role, text: message.text, metadataLabel: "")
-            )
-        }
+        let frame = DisplayFrameBuilder.build(
+            sessionKey: sessionID,
+            frameRevision: 0,
+            sourceRevision: 0,
+            displayMessages: lastLoadedDisplayMessages,
+            serverCommands: serverCommands,
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls
+        )
         let stillUnacked = SessionChatTimelineProjector.unmatchedPending(
             pendingItems.map { TimelineRow.fromSessionChatRow($0) },
-            serverRows: serverRows,
+            serverRows: SessionChatTimelineProjector.serverRows(from: frame),
             baselineSignatureCounts: pendingBaselineSignatureCounts
         )
         guard stillUnacked.isEmpty else { return }
@@ -728,10 +749,6 @@ final class SessionChatTimeline {
         }), let mode = message.mode
         else { return nil }
         return LatestAgentHint(mode: mode, sentAtEpochMs: message.sentAtEpochMs)
-    }
-
-    private func signatureCounts(_ rows: [SessionChatRow]) -> [String: Int] {
-        SessionChatTimelineProjector.signatureCounts(fromSessionChatRows: rows)
     }
 
     private func errorMessage(_ error: Error) -> String {

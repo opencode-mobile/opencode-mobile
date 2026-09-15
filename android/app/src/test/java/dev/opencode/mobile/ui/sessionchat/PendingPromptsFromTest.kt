@@ -10,6 +10,29 @@ import org.junit.Test
 
 class PendingPromptsFromTest {
     @Test
+    fun optimisticAttachmentOnlyBusySend_isSettling() {
+        val prompts =
+            pendingPromptsFrom(
+                loaded = emptyList(),
+                optimistic =
+                    listOf(
+                        SessionChatMessageItem(
+                            id = "pending-file",
+                            role = MessageRole.User,
+                            text = "",
+                            metadataLabel = "",
+                            pendingDelivery = FollowUpDelivery.Steer,
+                            isPending = true,
+                        ),
+                    ),
+            )
+        val prompt = prompts.single()
+        assertEquals("pending-file", prompt.id)
+        assertEquals("", prompt.text)
+        assertTrue(prompt.isSettling)
+    }
+
+    @Test
     fun optimisticBusySend_isSettling() {
         val prompts =
             pendingPromptsFrom(
