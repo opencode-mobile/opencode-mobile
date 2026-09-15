@@ -268,7 +268,7 @@ function readPngSize(filePath) {
   };
 }
 
-function inspectPng(filePath, { expectedWidth, expectedHeight, playAspect }) {
+function inspectPng(filePath, { expectedWidth, expectedHeight, playAspectRule }) {
   if (!existsSync(filePath)) {
     return { status: "MISSING", label: "-", detail: "" };
   }
@@ -278,22 +278,32 @@ function inspectPng(filePath, { expectedWidth, expectedHeight, playAspect }) {
   }
   const { width, height } = size;
   const label = `${width}x${height}`;
-  const problems = [];
   if (width !== expectedWidth || height !== expectedHeight) {
-    problems.push(`expected ${expectedWidth}x${expectedHeight}`);
+    return {
+      status: "MISMATCH",
+      label,
+      detail: `expected ${expectedWidth}x${expectedHeight}`,
+    };
   }
-  if (playAspect) {
+  if (playAspectRule) {
     const longSide = Math.max(width, height);
     const shortSide = Math.min(width, height);
     if (longSide > 2 * shortSide) {
-      problems.push(`long side ${longSide} > 2 × short ${shortSide}`);
+      if (playAspectRule === "warn") {
+        return {
+          status: "WARN",
+          label,
+          detail: "long side > 2x short; frame before Play upload",
+        };
+      }
+      return {
+        status: "MISMATCH",
+        label,
+        detail: `long side ${longSide} > 2 × short ${shortSide}`,
+      };
     }
   }
-  return {
-    status: problems.length ? "MISMATCH" : "OK",
-    label,
-    detail: problems.join("; "),
-  };
+  return { status: "OK", label, detail: "" };
 }
 
 function formatValidationRow(target, appearance, file, result) {
@@ -310,8 +320,8 @@ function runSelfTest() {
   writeFileSync(okPath, encodeMinimalPng(1080, 1920));
   writeFileSync(badPath, encodeMinimalPng(1080, 2400));
 
-  const ok = inspectPng(okPath, { expectedWidth: 1080, expectedHeight: 1920, playAspect: true });
-  const bad = inspectPng(badPath, { expectedWidth: 1080, expectedHeight: 2400, playAspect: true });
+  const ok = inspectPng(okPath, { expectedWidth: 1080, expectedHeight: 1920, playAspectRule: "error" });
+  const bad = inspectPng(badPath, { expectedWidth: 1080, expectedHeight: 2400, playAspectRule: "error" });
   console.log(formatValidationRow("android-phone", "light", "ok-1080x1920.png", ok));
   console.log(formatValidationRow("android-phone", "light", "bad-1080x2400.png", bad));
 
@@ -496,8 +506,46 @@ function patchAvdConfig(avdName, spec) {
   writeFileSync(path, `${next.filter((line, i, arr) => line !== "" || arr[i - 1] !== "").join("\n").replace(/\n+$/, "")}\n`);
 }
 
+function readAvdIni(avdName) {
+  const path = avdConfigPath(avdName);
+  const values = {};
+  if (!existsSync(path)) return values;
+  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+    const eq = line.indexOf("=");
+    if (eq < 0 || line.startsWith("#")) continue;
+    values[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+  }
+  return values;
+}
+
+function avdConfigDrifted(avdName, spec) {
+  const ini = readAvdIni(avdName);
+  return (
+    ini["hw.lcd.width"] !== String(spec.width) ||
+    ini["hw.lcd.height"] !== String(spec.height) ||
+    ini["hw.lcd.density"] !== String(spec.density) ||
+    ini["hw.device.name"] !== spec.device
+  );
+}
+
+function deleteAvd(tools, avdName) {
+  try {
+    execOk(tools.avdmanager, ["delete", "avd", "-n", avdName], {
+      env: { ...process.env, ANDROID_HOME: tools.sdk, ANDROID_SDK_ROOT: tools.sdk },
+    });
+  } catch (error) {
+    const stderr = error.stderr?.toString?.() ?? "";
+    const stdout = error.stdout?.toString?.() ?? "";
+    throw new Error(`avdmanager delete failed for ${avdName}:\n${stdout}${stderr}`);
+  }
+}
+
 function ensureAvd(tools, image, spec) {
-  if (!avdExists(spec.avd)) {
+  if (avdExists(spec.avd) && avdConfigDrifted(spec.avd, spec)) {
+    console.log(`recreating AVD ${spec.avd} (config changed)`);
+    deleteAvd(tools, spec.avd);
+    createAvd(tools, spec.avd, image.package, spec.device);
+  } else if (!avdExists(spec.avd)) {
     createAvd(tools, spec.avd, image.package, spec.device);
   }
   patchAvdConfig(spec.avd, spec);
@@ -873,7 +921,12 @@ async function configureAndroidDevice(tools, serial, appearance) {
   adbShell(tools, serial, "settings put global animator_duration_scale 0");
   adbShell(tools, serial, `cmd uimode night ${appearance === "dark" ? "yes" : "no"}`);
   adbShell(tools, serial, "settings put global sysui_demo_allowed 1");
-  adbShell(tools, serial, "svc wifi disable");
+  adbShell(tools, serial, "settings put global airplane_mode_radios cell");
+  adbShell(tools, serial, "settings put global airplane_mode_on 1");
+  adbShell(tools, serial, "settings put global captive_portal_mode 0");
+  adbShell(tools, serial, "settings put global captive_portal_detection_enabled 0");
+  adbShell(tools, serial, "svc wifi enable");
+  adbShell(tools, serial, "settings put secure icon_blacklist wifi,satellite");
   await sleep(1000);
   demoBroadcast(tools, serial, "-e command exit");
   await sleep(300);
@@ -972,23 +1025,29 @@ function expectedSizeFor(target) {
   return { width: spec.width, height: spec.height };
 }
 
+function playAspectRuleFor(target) {
+  if (target === "ios" || target === IOS_OUTPUT_TARGET) return undefined;
+  const spec = loadAvds()[target];
+  return spec?.playAspectRule ?? "error";
+}
+
 function validateOutputs(outDir, targets, appearances, scenes) {
   console.log("target           app    file                     WxH        result");
   let failed = 0;
   for (const target of targets) {
     const name = outputTargetName(target);
     const expected = expectedSizeFor(target);
-    const playAspect = target !== "ios";
+    const playAspectRule = playAspectRuleFor(target);
     for (const appearance of appearances) {
       for (const scene of scenes) {
         const filePath = join(outDir, name, appearance, scene.file);
         const result = inspectPng(filePath, {
           expectedWidth: expected.width,
           expectedHeight: expected.height,
-          playAspect,
+          playAspectRule,
         });
         console.log(formatValidationRow(name, appearance, scene.file, result));
-        if (result.status !== "OK") failed += 1;
+        if (result.status !== "OK" && result.status !== "WARN") failed += 1;
       }
     }
   }
