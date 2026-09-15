@@ -99,6 +99,7 @@ enum ProductAnalytics {
         static let homeOpenProjectPicker = "home_open_project_picker"
         static let homeAddProject = "home_add_project"
         static let homeRemoveProject = "home_remove_project"
+        static let homeReorderProjects = "home_reorder_projects"
         static let homeSelectSessionFilter = "home_select_session_filter"
         static let homeDismissRemovalSnackbar = "home_dismiss_removal_snackbar"
         static let homeConnect = "home_connect"

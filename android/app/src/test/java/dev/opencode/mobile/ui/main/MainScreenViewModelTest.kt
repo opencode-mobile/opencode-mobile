@@ -153,6 +153,46 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun reorderProjects_reordersSectionsAndPersistsOrder() =
+        runTest(testDispatcher) {
+            val store = FakeConnectionProfileStore(initial = listOf("/one", "/two", "/three"))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = store,
+                    sessionsByWorktree = mapOf("/one" to emptyList(), "/two" to emptyList(), "/three" to emptyList()),
+                )
+            advanceUntilIdle()
+
+            viewModel.reorderProjects(listOf("/three", "/one", "/two"))
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(listOf("/three", "/one", "/two"), loaded.sections.map { it.worktree })
+
+            advanceUntilIdle()
+            assertEquals(listOf("/three", "/one", "/two"), store.added(serverUrl))
+        }
+
+    @Test
+    fun reorderProjects_ignoresOrdersThatChangeTheProjectSet() =
+        runTest(testDispatcher) {
+            val store = FakeConnectionProfileStore(initial = listOf("/one", "/two"))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = store,
+                    sessionsByWorktree = mapOf("/one" to emptyList(), "/two" to emptyList()),
+                )
+            advanceUntilIdle()
+
+            viewModel.reorderProjects(listOf("/two"))
+            viewModel.reorderProjects(listOf("/two", "/one", "/extra"))
+            viewModel.reorderProjects(listOf("/one", "/two"))
+            advanceUntilIdle()
+
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(listOf("/one", "/two"), loaded.sections.map { it.worktree })
+            assertEquals(listOf("/one", "/two"), store.added(serverUrl))
+        }
+
+    @Test
     fun requestRemoveProject_setsPendingRemoval() =
         runTest(testDispatcher) {
             val viewModel =

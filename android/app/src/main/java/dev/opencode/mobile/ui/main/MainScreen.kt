@@ -163,6 +163,7 @@ fun MainScreen(
         onNewSession = viewModel::createSession,
         onConsumePendingOpenSession = viewModel::consumePendingOpenSession,
         onRemoveProject = viewModel::requestRemoveProject,
+        onReorderProjects = viewModel::reorderProjects,
         onConfirmRemoveProject = viewModel::confirmRemoveProject,
         onDismissProjectRemoval = viewModel::dismissProjectRemoval,
         onConsumeProjectRemovalSnackbar = viewModel::consumeProjectRemovalSnackbar,
@@ -207,6 +208,7 @@ internal fun MainScreen(
     onDismissProjectRemoval: () -> Unit,
     onConsumeProjectRemovalSnackbar: () -> Unit,
     modifier: Modifier = Modifier,
+    onReorderProjects: (List<String>) -> Unit = {},
     isRefreshing: Boolean = false,
     sessionActions: HomeSessionActionsUiState = HomeSessionActionsUiState(),
     sessionActionsCallbacks: HomeSessionActionsCallbacks = HomeSessionActionsCallbacks(),
@@ -396,6 +398,7 @@ internal fun MainScreen(
                         },
                         onCreateSession = onNewSession,
                         onRemoveProject = onRemoveProject,
+                        onReorderProjects = onReorderProjects,
                         removalSnackbar = removalSnackbar,
                         onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
                         revealNewestToken = revealNewestToken,
@@ -842,6 +845,7 @@ private fun HomeProjectsContent(
     onRequestNewSessionProjectPicker: () -> Unit,
     onCreateSession: (String) -> Unit,
     onRemoveProject: (String) -> Unit,
+    onReorderProjects: (List<String>) -> Unit,
     removalSnackbar: OpenCodeSnackbarMessage?,
     onSessionLongPress: (SessionListSession) -> Unit,
     revealNewestToken: Int = 0,
@@ -991,6 +995,7 @@ private fun HomeProjectsContent(
                     showProjectPicker = false
                 },
                 onRemoveProject = onRemoveProject,
+                onReorderProjects = onReorderProjects,
             )
         }
     }

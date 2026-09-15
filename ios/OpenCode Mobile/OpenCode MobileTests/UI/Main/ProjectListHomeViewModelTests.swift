@@ -236,6 +236,46 @@ struct ProjectListHomeViewModelTests {
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one", "/two"])
     }
 
+    @Test func reorderProjects_reordersSectionsAndPersistsOrder() async {
+        let store = FakeConnectionProfileStore(initial: ["/one", "/two", "/three"])
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+
+        viewModel.reorderProjects(worktrees: ["/three", "/one", "/two"])
+
+        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        #expect(sections.map(\.worktree) == ["/three", "/one", "/two"])
+        await viewModel.projectOrderPersistence?.value
+        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/three", "/one", "/two"])
+    }
+
+    @Test func reorderProjects_ignoresOrdersThatChangeTheProjectSet() async {
+        let store = FakeConnectionProfileStore(initial: ["/one", "/two"])
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+
+        viewModel.reorderProjects(worktrees: ["/two"])
+        viewModel.reorderProjects(worktrees: ["/two", "/one", "/extra"])
+        viewModel.reorderProjects(worktrees: ["/one", "/two"])
+
+        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        #expect(sections.map(\.worktree) == ["/one", "/two"])
+        #expect(viewModel.projectOrderPersistence == nil)
+        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one", "/two"])
+    }
+
     @Test func requestRemoveProject_setsPendingRemoval() async {
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),

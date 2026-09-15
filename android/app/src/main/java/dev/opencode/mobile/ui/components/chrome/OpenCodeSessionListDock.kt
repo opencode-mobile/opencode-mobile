@@ -605,30 +605,50 @@ fun SessionListScopeCountBadge(
     )
 }
 
+/**
+ * Project picker rows. Tap selects a scope; long-press on a project row lifts
+ * it for drag reordering when [onReorderProjects] is set, and releasing it
+ * without moving offers [onRemoveProject]. The "All" row stays pinned first.
+ */
 @Composable
 fun SessionListProjectPickerRows(
     tabs: List<SessionListFilterTab>,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
     onRemoveProject: ((String) -> Unit)? = null,
+    onReorderProjects: ((List<String>) -> Unit)? = null,
 ) {
-    tabs.forEach { tab ->
+    OpenCodeReorderableList(
+        items = tabs,
+        key = { it.id },
+        onSelect = { onSelect(it.id) },
+        canMove = { !it.isAll },
+        onMove =
+            onReorderProjects?.let { reorder ->
+                { from, to -> reorder(reorderedProjectPickerWorktrees(tabs, from, to)) }
+            },
+        onContextAction = onRemoveProject?.let { remove -> { tab -> remove(tab.id) } },
+        supportsContextAction = { !it.isAll },
+        modifier = modifier,
+    ) { tab ->
         OpenCodeListItem(
             title = tab.pickerTitle,
             subtitle = displayedScopeSubtitle(tab),
             startDecorator = pickerStartDecorator(tab),
-            onClick = { onSelect(tab.id) },
-            onLongPress =
-                if (tab.isAll) {
-                    null
-                } else {
-                    onRemoveProject?.let { remove -> { remove(tab.id) } }
-                },
             trailing = { SessionListScopeCountBadge(count = tab.count) },
-            modifier = modifier,
         )
     }
 }
+
+fun reorderedProjectPickerWorktrees(
+    tabs: List<SessionListFilterTab>,
+    from: Int,
+    to: Int,
+): List<String> =
+    ReorderableListMath
+        .move(tabs, from, to)
+        .filterNot { it.isAll }
+        .map { it.id }
 
 private fun displayedScopeSubtitle(tab: SessionListFilterTab): String = if (tab.isAll) tab.subtitle else compactHomePath(tab.subtitle)
 

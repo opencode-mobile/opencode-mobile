@@ -184,6 +184,9 @@ struct ProjectListHomeView: View {
                     },
                     onRemoveProject: { worktree in
                         viewModel.requestRemoveProject(worktree: worktree)
+                    },
+                    onReorderProjects: { worktrees in
+                        viewModel.reorderProjects(worktrees: worktrees)
                     }
                 )
             }

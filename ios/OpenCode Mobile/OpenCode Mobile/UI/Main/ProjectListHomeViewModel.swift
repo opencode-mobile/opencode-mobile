@@ -444,6 +444,41 @@ final class ProjectListHomeViewModel {
         HomeDisplayPreferences.shared.setLastHomeHiddenAtEpochMs(nil)
     }
 
+    /// Applies a new added-project order from the project picker. The order
+    /// is shown immediately and persisted to the Connection Profile; the dock,
+    /// home sections, and new-session picker all derive from it.
+    func reorderProjects(worktrees: [String]) {
+        guard case let .loaded(sections, showAdd, navigator, createError) = state else { return }
+        let current = sections.map(\.worktree)
+        guard current != worktrees,
+              current.count == worktrees.count,
+              Set(current) == Set(worktrees)
+        else { return }
+        let byWorktree = Dictionary(uniqueKeysWithValues: sections.map { ($0.worktree, $0) })
+        state = .loaded(
+            sections: worktrees.compactMap { byWorktree[$0] },
+            showAddProjectSheet: showAdd,
+            navigator: navigator,
+            projectSessionCreateError: createError
+        )
+        if !observedWorktrees.isEmpty {
+            observedWorktrees = worktrees
+        }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.homeFilterProjectPicker,
+            actionId: ProductAnalytics.Action.homeReorderProjects
+        )
+        let serverBaseURL = serverBaseURL
+        let store = connectionProfileStore
+        projectOrderPersistence = Task {
+            await store.setAddedWorktrees(serverBaseURL: serverBaseURL, worktrees: worktrees)
+        }
+    }
+
+    /// In-flight persistence of the last `reorderProjects` call, for callers
+    /// that need to observe the Connection Profile after a reorder.
+    private(set) var projectOrderPersistence: Task<Void, Never>?
+
     func requestRemoveProject(worktree: String) {
         guard case let .loaded(sections, _, _, _) = state,
               let section = sections.first(where: { $0.worktree == worktree })
