@@ -42,6 +42,18 @@ if (releaseArtifactTaskRequested) {
 val releaseVersionCode = releaseEnvironment.getValue("ANDROID_VERSION_CODE")?.toIntOrNull()
 val releaseVersionName = releaseEnvironment.getValue("ANDROID_VERSION_NAME")
 val semanticVersionPattern = Regex("^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$")
+val appVersionFile = rootProject.projectDir.resolve("../VERSION")
+val defaultVersionName =
+    appVersionFile
+        .takeIf { it.isFile }
+        ?.readText()
+        ?.trim()
+        .orEmpty()
+if (defaultVersionName.isEmpty() || !Regex("^[0-9]+\\.[0-9]+\\.[0-9]+$").matches(defaultVersionName)) {
+    throw GradleException(
+        "Repo VERSION must be MAJOR.MINOR.PATCH with integers only (got: '$defaultVersionName').",
+    )
+}
 val verifyCrashlyticsValue =
     providers
         .environmentVariable("ANDROID_VERIFY_CRASHLYTICS")
@@ -83,7 +95,7 @@ android {
         minSdk = 24
         targetSdk = 36
         versionCode = releaseVersionCode ?: 1
-        versionName = releaseVersionName ?: "1.0"
+        versionName = releaseVersionName ?: defaultVersionName
     }
 
     signingConfigs {

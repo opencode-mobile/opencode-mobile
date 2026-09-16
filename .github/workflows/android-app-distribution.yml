@@ -68,8 +68,9 @@ jobs:
             echo "App Distribution versionCode exceeds the Android limit." >&2
             exit 1
           fi
+          marketing_version="$(../scripts/read-app-version.sh)"
           echo "ANDROID_VERSION_CODE=$version_code" >> "$GITHUB_ENV"
-          echo "ANDROID_VERSION_NAME=0.1.0-merge.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+          echo "ANDROID_VERSION_NAME=${marketing_version}-merge.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
