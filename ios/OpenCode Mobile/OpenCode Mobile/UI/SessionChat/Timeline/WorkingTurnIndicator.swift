@@ -6,9 +6,10 @@ import Foundation
 /// or question dock is waiting on the user. When the last painted row
 /// is Thinking, keep this label so the timeline can collapse the reserved
 /// Working row in place — do not drop the list identity.
-/// Do not hide for settled Thought, tools, or streaming text.
+/// After busy ends, show Idle for 5s, then collapse. A new send snaps back.
 enum WorkingTurnIndicator {
-    static let idleHoldMilliseconds: Int64 = 1_000
+    static let idleLabel = "Idle"
+    static let idleHoldMilliseconds: Int64 = 5_000
 
     struct Chrome: Equatable {
         var label: String?
@@ -19,9 +20,7 @@ enum WorkingTurnIndicator {
     }
 
     struct Hold: Equatable {
-        var label: String
         var startedAtMs: Int64
-        var fromCollapsed: Bool
     }
 
     struct Resolution: Equatable {
@@ -79,27 +78,17 @@ enum WorkingTurnIndicator {
         if previous.label == nil, hold == nil {
             return Resolution(chrome: .unmounted, hold: nil)
         }
-        let nextHold = hold ?? Hold(
-            label: previous.label ?? "",
-            startedAtMs: nowMs,
-            fromCollapsed: previous.collapsed
-        )
-        if nextHold.fromCollapsed {
-            return Resolution(
-                chrome: Chrome(label: nextHold.label, collapsed: true, fading: false),
-                hold: nextHold
-            )
-        }
+        let nextHold = hold ?? Hold(startedAtMs: nowMs)
         let remainingMs = idleHoldMilliseconds - (nowMs - nextHold.startedAtMs)
         if remainingMs > 0 {
             return Resolution(
-                chrome: Chrome(label: nextHold.label, collapsed: false, fading: true),
+                chrome: Chrome(label: idleLabel, collapsed: false, fading: false),
                 hold: nextHold,
                 wakeAfterMs: remainingMs
             )
         }
         return Resolution(
-            chrome: Chrome(label: nextHold.label, collapsed: true, fading: false),
+            chrome: Chrome(label: idleLabel, collapsed: true, fading: false),
             hold: nextHold
         )
     }

@@ -9,10 +9,11 @@ import dev.opencode.mobile.domain.message.PromptSendProgress
  * or question dock is waiting on the user. When the last painted row
  * is Thinking, keep this label so the timeline can collapse the reserved
  * Working row in place — do not drop the list identity.
- * Do not hide for settled Thought, tools, or streaming text.
+ * After busy ends, show Idle for 5s, then collapse. A new send snaps back.
  */
 object WorkingTurnIndicator {
-    const val IDLE_HOLD_MS = 1_000L
+    const val IDLE_LABEL = "Idle"
+    const val IDLE_HOLD_MS = 5_000L
 
     data class Chrome(
         val label: String?,
@@ -25,9 +26,7 @@ object WorkingTurnIndicator {
     }
 
     data class Hold(
-        val label: String,
         val startedAtMs: Long,
-        val fromCollapsed: Boolean,
     )
 
     data class Resolution(
@@ -85,31 +84,15 @@ object WorkingTurnIndicator {
         if (previous.label == null && hold == null) {
             return Resolution(chrome = Chrome.Unmounted, hold = null)
         }
-        val nextHold =
-            hold ?: Hold(
-                label = checkNotNull(previous.label),
-                startedAtMs = nowMs,
-                fromCollapsed = previous.collapsed,
-            )
-        if (nextHold.fromCollapsed) {
-            return Resolution(
-                chrome =
-                    Chrome(
-                        label = nextHold.label,
-                        collapsed = true,
-                        fading = false,
-                    ),
-                hold = nextHold,
-            )
-        }
+        val nextHold = hold ?: Hold(startedAtMs = nowMs)
         val remainingMs = IDLE_HOLD_MS - (nowMs - nextHold.startedAtMs)
         return if (remainingMs > 0) {
             Resolution(
                 chrome =
                     Chrome(
-                        label = nextHold.label,
+                        label = IDLE_LABEL,
                         collapsed = false,
-                        fading = true,
+                        fading = false,
                     ),
                 hold = nextHold,
                 wakeAfterMs = remainingMs,
@@ -118,7 +101,7 @@ object WorkingTurnIndicator {
             Resolution(
                 chrome =
                     Chrome(
-                        label = nextHold.label,
+                        label = IDLE_LABEL,
                         collapsed = true,
                         fading = false,
                     ),
