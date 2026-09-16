@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Last-timeline-row Session Running chrome. Show iff this session's
@@ -46,6 +47,15 @@ enum WorkingTurnIndicator {
 
     static func showsIdleMark(label: String) -> Bool {
         label == idleLabel
+    }
+
+    /// Space the timeline must lift so the SwiftUI Working overlay sits on the
+    /// composer pin line instead of inside the collection view's bottom inset.
+    static let overlayFallbackHeight: CGFloat = 36
+
+    static func overlayLift(label: String?, collapsed: Bool, measuredHeight: CGFloat) -> CGFloat {
+        guard label != nil, !collapsed else { return 0 }
+        return measuredHeight > 0.5 ? measuredHeight : overlayFallbackHeight
     }
 
     static func labelForActiveTurn(

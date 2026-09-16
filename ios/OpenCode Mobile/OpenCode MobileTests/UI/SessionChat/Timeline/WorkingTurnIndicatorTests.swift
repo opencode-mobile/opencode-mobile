@@ -145,6 +145,22 @@ struct WorkingTurnIndicatorTests {
         #expect(WorkingTurnIndicator.showsIdleMark(label: SessionCompactChrome.statusLabel) == false)
     }
 
+    @Test func overlayLift_reservesMeasuredHeightWhenExpanded() {
+        #expect(
+            WorkingTurnIndicator.overlayLift(label: "Working", collapsed: false, measuredHeight: 40) == 40
+        )
+        #expect(
+            WorkingTurnIndicator.overlayLift(label: "Working", collapsed: false, measuredHeight: 0)
+                == WorkingTurnIndicator.overlayFallbackHeight
+        )
+        #expect(
+            WorkingTurnIndicator.overlayLift(label: "Working", collapsed: true, measuredHeight: 40) == 0
+        )
+        #expect(
+            WorkingTurnIndicator.overlayLift(label: nil, collapsed: false, measuredHeight: 40) == 0
+        )
+    }
+
     @Test func lastIsThinking_trueWhenLastBlockIsStreamingReasoning() {
         #expect(
             WorkingTurnIndicator.lastIsThinking(messages: [
