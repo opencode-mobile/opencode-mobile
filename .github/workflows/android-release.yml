@@ -45,8 +45,8 @@ jobs:
           set -euo pipefail
           if [[ -z "${ANDROID_VERSION_NAME:-}" ]]; then
             ANDROID_VERSION_NAME="$(./scripts/read-app-version.sh)"
-            echo "ANDROID_VERSION_NAME=$ANDROID_VERSION_NAME" >> "$GITHUB_ENV"
           fi
+          echo "ANDROID_VERSION_NAME=$ANDROID_VERSION_NAME" >> "$GITHUB_ENV"
 
       - name: Validate release inputs
         shell: bash
@@ -132,7 +132,7 @@ jobs:
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
           tracks: internal
           status: completed
-          releaseName: OpenCode Mobile ${{ inputs.version_name }} (${{ github.run_number }})
+          releaseName: OpenCode Mobile ${{ env.ANDROID_VERSION_NAME }} (${{ github.run_number }})
 
       - name: Remove temporary keystore
         if: always()

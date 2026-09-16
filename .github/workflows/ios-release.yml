@@ -46,8 +46,8 @@ jobs:
           set -euo pipefail
           if [[ -z "${IOS_MARKETING_VERSION:-}" ]]; then
             IOS_MARKETING_VERSION="$(./scripts/read-app-version.sh)"
-            echo "IOS_MARKETING_VERSION=$IOS_MARKETING_VERSION" >> "$GITHUB_ENV"
           fi
+          echo "IOS_MARKETING_VERSION=$IOS_MARKETING_VERSION" >> "$GITHUB_ENV"
 
       - name: Validate release inputs
         shell: bash
