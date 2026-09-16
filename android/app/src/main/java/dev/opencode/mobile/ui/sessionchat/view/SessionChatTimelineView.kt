@@ -741,22 +741,24 @@ private fun AssistantMessageContent(
                                 },
                         )
                     is SessionChatTimelineBlock.Reasoning ->
-                        ReasoningBlock(
-                            text = block.text,
-                            isStreaming = block.isStreaming,
-                            durationMs = block.durationMs,
-                            onClick =
-                                block.text.takeIf { it.isNotBlank() }?.let { body ->
-                                    {
-                                        onToolDetailTap(
-                                            SessionChatToolDetailTarget(
-                                                title = if (block.isStreaming) "Thinking" else "Thought",
-                                                body = body,
-                                            ),
-                                        )
-                                    }
-                                },
-                        )
+                        if (!block.isStreaming) {
+                            ReasoningBlock(
+                                text = block.text,
+                                isStreaming = false,
+                                durationMs = block.durationMs,
+                                onClick =
+                                    block.text.takeIf { it.isNotBlank() }?.let { body ->
+                                        {
+                                            onToolDetailTap(
+                                                SessionChatToolDetailTarget(
+                                                    title = "Thought",
+                                                    body = body,
+                                                ),
+                                            )
+                                        }
+                                    },
+                            )
+                        }
                 }
             }
         }

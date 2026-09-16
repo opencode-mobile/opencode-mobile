@@ -1102,13 +1102,16 @@ class SessionChatViewModel
                 }
             val awaitingUser =
                 inboxSnapshot.permissionRequests.isNotEmpty() || inboxSnapshot.questionRequests.isNotEmpty()
-            val lastIsThinking = WorkingTurnIndicator.lastIsThinking(messages)
+            val lastIsThinking =
+                WorkingTurnIndicator.isStreamingThinking(timeline.loadedMessages()) ||
+                    WorkingTurnIndicator.lastIsThinking(messages)
             val activeWorkingLabel =
                 WorkingTurnIndicator.labelForActiveTurn(
                     statusLabel = sessionStatusLabel,
                     isCompacting = isCompacting,
                     isAwaitingUser = awaitingUser,
                     sendProgressPercent = composerState.sendProgressPercent,
+                    isThinking = lastIsThinking,
                 )
             val workingResolution =
                 WorkingTurnIndicator.resolveFooter(

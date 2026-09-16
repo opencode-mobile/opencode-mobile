@@ -94,15 +94,27 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
-    @Test func labelForActiveTurn_keepsWorkingWhenLastIsThinking() {
+    @Test func labelForActiveTurn_ignoresThinkingWhenIdleStatus() {
         #expect(
-            WorkingTurnIndicator.labelForActiveTurn(statusLabel: "Working") == "Working"
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: nil,
+                isThinking: true
+            ) == nil
+        )
+    }
+
+    @Test func labelForActiveTurn_showsThinkingInPlace() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                isThinking: true
+            ) == WorkingTurnIndicator.thinkingLabel
         )
         #expect(
             WorkingTurnIndicator.shouldCollapseReservedRow(
                 lastIsThinking: true,
-                label: "Working"
-            )
+                label: WorkingTurnIndicator.thinkingLabel
+            ) == false
         )
     }
 
@@ -110,14 +122,15 @@ struct WorkingTurnIndicatorTests {
         #expect(
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel: "Working",
-                isCompacting: true
+                isCompacting: true,
+                isThinking: true
             ) == SessionCompactChrome.statusLabel
         )
         #expect(
             WorkingTurnIndicator.shouldCollapseReservedRow(
                 lastIsThinking: true,
                 label: SessionCompactChrome.statusLabel
-            )
+            ) == false
         )
     }
 
@@ -139,10 +152,42 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
+    @Test func mountedLabel_dropsCollapsedFooter() {
+        #expect(
+            WorkingTurnIndicator.mountedLabel(label: "Idle", collapsed: true) == nil
+        )
+        #expect(
+            WorkingTurnIndicator.mountedLabel(label: "Working", collapsed: false) == "Working"
+        )
+        #expect(
+            WorkingTurnIndicator.mountedLabel(label: nil, collapsed: false) == nil
+        )
+    }
+
     @Test func showsIdleMark_onlyForIdleLabel() {
         #expect(WorkingTurnIndicator.showsIdleMark(label: WorkingTurnIndicator.idleLabel))
         #expect(WorkingTurnIndicator.showsIdleMark(label: "Working") == false)
+        #expect(WorkingTurnIndicator.showsIdleMark(label: WorkingTurnIndicator.thinkingLabel) == false)
         #expect(WorkingTurnIndicator.showsIdleMark(label: SessionCompactChrome.statusLabel) == false)
+    }
+
+    @Test func workingRowHeightEstimate_matchesFixedRowHeight() {
+        let expanded = SessionChatRow(
+            id: SessionChatStatusChrome.workingRowID,
+            role: .assistant,
+            text: "Working",
+            metadataLabel: ""
+        )
+        #expect(expanded.timelineRowHeightEstimate == WorkingTurnIndicator.rowHeight)
+
+        let collapsed = SessionChatRow(
+            id: SessionChatStatusChrome.workingRowID,
+            role: .assistant,
+            text: "Working",
+            metadataLabel: "",
+            isLayoutCollapsed: true
+        )
+        #expect(collapsed.timelineRowHeightEstimate == 0)
     }
 
     @Test func lastIsThinking_trueWhenLastBlockIsStreamingReasoning() {
@@ -176,6 +221,42 @@ struct WorkingTurnIndicatorTests {
         #expect(WorkingTurnIndicator.lastIsThinking(messages: []) == false)
     }
 
+    @Test func isStreamingThinking_trueForEmptyStreamingReasoning() {
+        #expect(
+            WorkingTurnIndicator.isStreamingThinking(messages: [
+                Message(
+                    id: "a1",
+                    role: .assistant,
+                    text: "",
+                    parts: [
+                        .reasoning(ReasoningPart(id: "r1", text: "", isStreaming: true)),
+                    ],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ])
+        )
+    }
+
+    @Test func isStreamingThinking_falseWhenSettled() {
+        #expect(
+            WorkingTurnIndicator.isStreamingThinking(messages: [
+                Message(
+                    id: "a1",
+                    role: .assistant,
+                    text: "",
+                    parts: [
+                        .reasoning(ReasoningPart(id: "r1", text: "done", isStreaming: false)),
+                    ],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]) == false
+        )
+    }
+
     @Test func resolveFooter_freshIdleStaysUnmounted() {
         let resolved = resolve(activeLabel: nil, previous: .unmounted, hold: nil)
         #expect(resolved.chrome == .unmounted)
@@ -194,9 +275,15 @@ struct WorkingTurnIndicatorTests {
         #expect(resolved.wakeAfterMs == nil)
     }
 
-    @Test func resolveFooter_activeWorkingAndThinkingCollapsesWithoutFade() {
-        let resolved = resolve(activeLabel: "Working", lastIsThinking: true)
-        #expect(resolved.chrome == WorkingTurnIndicator.Chrome(label: "Working", collapsed: true, fading: false))
+    @Test func resolveFooter_activeThinkingStaysExpanded() {
+        let resolved = resolve(activeLabel: WorkingTurnIndicator.thinkingLabel, lastIsThinking: true)
+        #expect(
+            resolved.chrome == WorkingTurnIndicator.Chrome(
+                label: WorkingTurnIndicator.thinkingLabel,
+                collapsed: false,
+                fading: false
+            )
+        )
         #expect(resolved.hold == nil)
         #expect(resolved.wakeAfterMs == nil)
     }

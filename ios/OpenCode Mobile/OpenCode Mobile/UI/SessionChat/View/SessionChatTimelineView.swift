@@ -150,8 +150,7 @@ private struct SessionChatTimelineReadyView: View {
     @State private var sessionTodosPillCompletedCount = 0
     @State private var sessionTodosPillTotalCount = 1
     @State private var sessionTodosPillActivePreview: String?
-    @State private var previousWorkingIndicatorLabel: String?
-    @State private var previousWorkingIndicatorCollapsed = false
+    @State private var previousMountedWorkingLabel: String?
     @State private var previousWorkingIndicatorFading = false
     @State private var topOverlayInset: CGFloat = 0
 
@@ -171,16 +170,22 @@ private struct SessionChatTimelineReadyView: View {
         props.syncingIndicatorLabel != nil || showSessionTodosPill || showReviewChanges
     }
 
+    private var mountedWorkingLabel: String? {
+        WorkingTurnIndicator.mountedLabel(
+            label: props.workingIndicatorLabel,
+            collapsed: props.workingIndicatorCollapsed
+        )
+    }
+
     private var displayMessages: [SessionChatRow] {
         var rows = props.messages
-        if let label = props.workingIndicatorLabel {
+        if let label = mountedWorkingLabel {
             rows.append(
                 SessionChatRow(
                     id: SessionChatStatusChrome.workingRowID,
                     role: .assistant,
                     text: label,
-                    metadataLabel: "",
-                    isLayoutCollapsed: props.workingIndicatorCollapsed
+                    metadataLabel: ""
                 )
             )
         }
@@ -196,10 +201,8 @@ private struct SessionChatTimelineReadyView: View {
                 // row without clearing the packet (OPE-136).
                 applyPacket: .from(
                     props.timelineFrame,
-                    workingIndicatorLabel: props.workingIndicatorLabel,
-                    previousWorkingIndicatorLabel: previousWorkingIndicatorLabel,
-                    workingIndicatorCollapsed: props.workingIndicatorCollapsed,
-                    previousWorkingIndicatorCollapsed: previousWorkingIndicatorCollapsed,
+                    workingIndicatorLabel: mountedWorkingLabel,
+                    previousWorkingIndicatorLabel: previousMountedWorkingLabel,
                     workingIndicatorFading: props.workingIndicatorFading,
                     previousWorkingIndicatorFading: previousWorkingIndicatorFading
                 ),
@@ -280,18 +283,14 @@ private struct SessionChatTimelineReadyView: View {
             refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
         }
         .onAppear {
-            previousWorkingIndicatorLabel = props.workingIndicatorLabel
-            previousWorkingIndicatorCollapsed = props.workingIndicatorCollapsed
+            previousMountedWorkingLabel = mountedWorkingLabel
             previousWorkingIndicatorFading = props.workingIndicatorFading
             refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
             scrollController.autoFollowEnabled = true
             logScroll("appear count=\(props.messages.count) pinned=\(scrollController.isPinnedToEnd)")
         }
-        .onChange(of: props.workingIndicatorLabel) { _, newValue in
-            previousWorkingIndicatorLabel = newValue
-        }
-        .onChange(of: props.workingIndicatorCollapsed) { _, newValue in
-            previousWorkingIndicatorCollapsed = newValue
+        .onChange(of: mountedWorkingLabel) { _, newValue in
+            previousMountedWorkingLabel = newValue
         }
         .onChange(of: props.workingIndicatorFading) { _, newValue in
             previousWorkingIndicatorFading = newValue
@@ -419,12 +418,11 @@ private struct SessionChatWorkingIndicatorRow: View {
         }
         .opacity(collapsed ? 0 : (fading ? 0.35 : 1))
         .padding(.leading, collapsed ? 0 : 4)
-        .padding(.top, collapsed ? 0 : 12)
-        .padding(.bottom, collapsed ? 0 : 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         // Hosted cells with minSize 0 treated `frame(height: nil)` as 0 and
-        // never painted Working / Idle. Expanded chrome must keep a real floor.
-        .frame(minHeight: collapsed ? 0 : 36, maxHeight: collapsed ? 0 : nil)
+        // never painted Working / Idle. Fixed expanded height matches the
+        // list estimate so pin-to-end needs no estimate→real correction.
+        .frame(height: collapsed ? 0 : WorkingTurnIndicator.rowHeight)
         .clipped()
         .accessibilityElement(children: .ignore)
         .accessibilityHidden(collapsed)
@@ -678,20 +676,22 @@ private struct AssistantMessageContent: View {
                         }
                     )
                 case .reasoning(_, let text, let isStreaming, let durationMs):
-                    ReasoningBlock(
-                        text: text,
-                        isStreaming: isStreaming,
-                        durationMs: durationMs,
-                        onTap: {
-                            guard !text.isEmpty else { return }
-                            onToolDetailTap(
-                                SessionChatToolDetailTarget(
-                                    title: isStreaming ? "Thinking" : "Thought",
-                                    body: text
+                    if !isStreaming {
+                        ReasoningBlock(
+                            text: text,
+                            isStreaming: false,
+                            durationMs: durationMs,
+                            onTap: {
+                                guard !text.isEmpty else { return }
+                                onToolDetailTap(
+                                    SessionChatToolDetailTarget(
+                                        title: "Thought",
+                                        body: text
+                                    )
                                 )
-                            )
-                        }
-                    )
+                            }
+                        )
+                    }
                 }
             }
         }

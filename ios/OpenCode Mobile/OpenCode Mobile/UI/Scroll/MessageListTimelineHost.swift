@@ -143,6 +143,39 @@ where Item.ID == String {
     var testContentOffsetY: CGFloat { collectionView.contentOffset.y }
     /// Test seam: true bottom pin offset for simulating a UIKit jump-to-end.
     var testBottomContentOffsetY: CGFloat { bottomContentOffsetY() }
+    /// Test seam: composer overlay line in view coordinates.
+    var testComposerLineY: CGFloat {
+        collectionView.bounds.height - collectionView.adjustedContentInset.bottom
+    }
+    /// Test seam: last item frame in view coordinates.
+    var testLastItemFrame: CGRect? {
+        guard !orderedIDs.isEmpty else { return nil }
+        return itemFrameInViewCoordinates(at: orderedIDs.count - 1)
+    }
+    /// Test seam: item frame in view coordinates for an arbitrary ID.
+    func testItemFrame(id: String) -> CGRect? {
+        guard let index = orderedIDs.firstIndex(of: id) else { return nil }
+        return itemFrameInViewCoordinates(at: index)
+    }
+    /// Test seam: collection `adjustedContentInset.bottom`.
+    var testAdjustedContentInsetBottom: CGFloat { collectionView.adjustedContentInset.bottom }
+    /// Test seam: collection `contentSize.height`.
+    var testContentHeight: CGFloat { collectionView.contentSize.height }
+    /// Test seam: collection `bounds.height`.
+    var testBoundsHeight: CGFloat { collectionView.bounds.height }
+
+    private func itemFrameInViewCoordinates(at index: Int) -> CGRect? {
+        guard collectionView.numberOfSections > 0,
+              collectionView.numberOfItems(inSection: 0) > index,
+              let attributes = collectionView.layoutAttributesForItem(
+                  at: IndexPath(item: index, section: 0)
+              )
+        else { return nil }
+        return attributes.frame.offsetBy(
+            dx: -collectionView.contentOffset.x,
+            dy: -collectionView.contentOffset.y
+        )
+    }
 
     func testSetContentOffsetY(_ y: CGFloat) {
         collectionView.setContentOffset(CGPoint(x: 0, y: y), animated: false)

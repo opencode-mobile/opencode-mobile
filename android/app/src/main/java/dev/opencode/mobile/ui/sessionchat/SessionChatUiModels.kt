@@ -123,7 +123,7 @@ data class SessionChatUiState(
     val sessionStatusLabel: String? = null,
     /** In-chat Working/Thinking/Retrying label for an active turn. */
     val workingIndicatorLabel: String? = null,
-    /** True while Working is reserved but collapsed under last-row Thinking. */
+    /** True after the Idle hold when the reserved footer has collapsed. */
     val workingIndicatorCollapsed: Boolean = false,
     /** True while the reserved Working lamp/label is fading through the idle hold. */
     val workingIndicatorFading: Boolean = false,
