@@ -455,6 +455,101 @@ class MessageSyncTest {
                 }
             advanceTimeBy(1)
             assertEquals(true, chrome.lastOrNull())
+
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-1", text = "Hello"))
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(true, chrome.lastOrNull())
+            assertTrue(sync.syncHealth("ses-1", "/repo") is MessageSyncHealth.Stale)
+            chromeJob.cancel()
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun refreshMessages_whileHealthy_doesNotShowCatchUpChrome() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(MessageSyncHealth.Fresh, sync.syncHealth("ses-1", "/repo"))
+
+            val chrome = mutableListOf<Boolean>()
+            val chromeJob =
+                launch {
+                    sync.observeCatchUpChrome("ses-1", "/repo").collect { chrome.add(it) }
+                }
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(false, chrome.lastOrNull())
+
+            val refreshHold = CompletableDeferred<Unit>()
+            repository.nextLoadGate = refreshHold
+            val refreshJob = launch { sync.refreshMessages("ses-1", "/repo") }
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(1, repository.listHoldsEntered.get())
+            assertFalse(chrome.contains(true))
+            assertEquals(MessageSyncHealth.Fresh, sync.syncHealth("ses-1", "/repo"))
+
+            refreshHold.complete(Unit)
+            advanceTimeBy(1)
+            runCurrent()
+            refreshJob.join()
+            runCurrent()
+            advanceTimeBy(1)
+            runCurrent()
+            chromeJob.cancel()
+            collectJob.cancel()
+            assertFalse(chrome.contains(true))
+            assertEquals(MessageSyncHealth.Fresh, sync.syncHealth("ses-1", "/repo"))
+        }
+
+    @Test
+    fun refreshMessages_overlappingRefreshes_doNotShowCatchUpChrome() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(MessageSyncHealth.Fresh, sync.syncHealth("ses-1", "/repo"))
+
+            val chrome = mutableListOf<Boolean>()
+            val chromeJob =
+                launch {
+                    sync.observeCatchUpChrome("ses-1", "/repo").collect { chrome.add(it) }
+                }
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(false, chrome.lastOrNull())
+
+            val refreshHold = CompletableDeferred<Unit>()
+            repository.nextLoadGate = refreshHold
+            val firstRefresh = launch { sync.refreshMessages("ses-1", "/repo") }
+            val secondRefresh = launch { sync.refreshMessages("ses-1", "/repo") }
+            advanceTimeBy(1)
+            runCurrent()
+            assertFalse(chrome.contains(true))
+
+            refreshHold.complete(Unit)
+            advanceTimeBy(1)
+            runCurrent()
+            firstRefresh.join()
+            secondRefresh.join()
+            runCurrent()
+            assertFalse(chrome.contains(true))
+            assertEquals(MessageSyncHealth.Fresh, sync.syncHealth("ses-1", "/repo"))
             chromeJob.cancel()
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)

@@ -30,6 +30,9 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private var messageCacheHandles: [MessageSessionKey: any SessionMessageCacheHandle] = [:]
     /// Store slots that painted from cache and still need network confirmation.
     private var awaitingCacheSyncConfirm: Set<String> = []
+    /// Live send/pull `refreshMessages` hops. Coordinator still goes stale→syncing;
+    /// catch-up chrome stays off (OPE-253). Nested refreshes share a depth counter.
+    private var quietRefreshDepth: [String: Int] = [:]
     private var observationGeneration = 0
     private var terminalSessionKeys: Set<MessageSessionKey> = []
     private var startedGenerationByKey: [MessageSessionKey: Int] = [:]
@@ -150,11 +153,21 @@ nonisolated final class MessageSync: @unchecked Sendable {
         let observing = observationCache[key] != nil
         lock.unlock()
         if observing {
+            setQuietRefresh(true, for: key.storeSlot)
             syncCoordinator.invalidate(projection)
             await syncCoordinator.ensureFresh(projection)
             lock.lock()
             let error = lastLoadErrorBySlot[key.storeSlot]
             lock.unlock()
+            // Leave quiet up while a serial-mismatch retry is still syncing;
+            // Fresh (or a failed/uncatchable hop) clears it. Do not wait here:
+            // a second observe can let `.loadFailed` paint send-reload errors.
+            if error != nil || !canCatchUp(
+                occupancy: worldSignals.occupancy,
+                snapshot: liveConnection.snapshot
+            ) {
+                setQuietRefresh(false, for: key.storeSlot)
+            }
             if let error { throw error }
         } else {
             switch await fullReloadResult(key: key, reason: reason) {
@@ -359,6 +372,64 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private func setIdentity(_ value: MessageFrameIdentity, for storeSlot: String) {
         lock.lock()
         lastIdentity[storeSlot] = value
+        lock.unlock()
+    }
+
+    /// Reconnect and cache-confirm raise Syncing. A live send/pull
+    /// `refreshMessages` also goes stale→syncing→fresh; keep that hop
+    /// quiet so the pill does not flash (OPE-253).
+    private func applyCoordinatorHealth(_ state: ProjectionState, for key: MessageSessionKey) {
+        lock.lock()
+        let quiet = (quietRefreshDepth[key.storeSlot] ?? 0) > 0
+        let awaitingCache = awaitingCacheSyncConfirm.contains(key.storeSlot)
+        lock.unlock()
+        if quiet, state != .fresh, !awaitingCache {
+            return
+        }
+        let catchingUp = canCatchUp(
+            occupancy: worldSignals.occupancy,
+            snapshot: liveConnection.snapshot
+        )
+        switch state {
+        case .fresh:
+            clearQuietRefresh(for: key.storeSlot)
+            if awaitingCache {
+                setHealth(.recovering(.reconnect), for: key)
+            } else {
+                setHealth(.healthy, for: key)
+            }
+        case .syncing:
+            setHealth(.recovering(.reconnect), for: key)
+        case .stale:
+            if catchingUp {
+                setHealth(.recovering(.reconnect), for: key)
+            } else if publishedFrame(for: key.storeSlot) != nil {
+                clearQuietRefresh(for: key.storeSlot)
+                setHealth(.stale(.transportUnavailable), for: key)
+            } else {
+                setHealth(.recovering(.reconnect), for: key)
+            }
+        }
+    }
+
+    private func setQuietRefresh(_ quiet: Bool, for storeSlot: String) {
+        lock.lock()
+        if quiet {
+            quietRefreshDepth[storeSlot, default: 0] += 1
+        } else {
+            let next = (quietRefreshDepth[storeSlot] ?? 0) - 1
+            if next <= 0 {
+                quietRefreshDepth.removeValue(forKey: storeSlot)
+            } else {
+                quietRefreshDepth[storeSlot] = next
+            }
+        }
+        lock.unlock()
+    }
+
+    private func clearQuietRefresh(for storeSlot: String) {
+        lock.lock()
+        quietRefreshDepth.removeValue(forKey: storeSlot)
         lock.unlock()
     }
 
@@ -621,28 +692,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             guard let self else { return }
             for await state in self.syncCoordinator.observe(projection) {
                 guard self.observationStillCurrent(key: key, startedGeneration: startedGeneration) else { return }
-                let catchingUp = canCatchUp(
-                    occupancy: self.worldSignals.occupancy,
-                    snapshot: self.liveConnection.snapshot
-                )
-                switch state {
-                case .fresh:
-                    if self.isAwaitingCacheSyncConfirm(for: key.storeSlot) {
-                        self.setHealth(.recovering(.reconnect), for: key)
-                    } else {
-                        self.setHealth(.healthy, for: key)
-                    }
-                case .syncing:
-                    self.setHealth(.recovering(.reconnect), for: key)
-                case .stale:
-                    if catchingUp {
-                        self.setHealth(.recovering(.reconnect), for: key)
-                    } else if self.publishedFrame(for: key.storeSlot) != nil {
-                        self.setHealth(.stale(.transportUnavailable), for: key)
-                    } else {
-                        self.setHealth(.recovering(.reconnect), for: key)
-                    }
-                }
+                self.applyCoordinatorHealth(state, for: key)
             }
         }
         defer {
