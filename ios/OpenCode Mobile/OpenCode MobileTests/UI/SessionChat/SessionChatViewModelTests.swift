@@ -2791,12 +2791,14 @@ struct SessionChatViewModelTests {
 
         await hold.open()
         await waitUntil { viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess }
+        await waitUntil { viewModel.uiState.workingIndicatorLabel == WorkingTurnIndicator.idleLabel }
+        #expect(viewModel.uiState.workingIndicatorCollapsed == false)
         try? await clock.awaitWaiter(milliseconds: Int(WorkingTurnIndicator.idleHoldMilliseconds))
         clock.now += WorkingTurnIndicator.idleHoldMilliseconds
         clock.release(milliseconds: Int(WorkingTurnIndicator.idleHoldMilliseconds))
         await waitUntil { viewModel.uiState.workingIndicatorCollapsed }
         #expect(viewModel.uiState.sessionStatusLabel == nil)
-        #expect(viewModel.uiState.workingIndicatorLabel == SessionCompactChrome.statusLabel)
+        #expect(viewModel.uiState.workingIndicatorLabel == WorkingTurnIndicator.idleLabel)
         #expect(viewModel.uiState.workingIndicatorCollapsed)
         #expect(viewModel.uiState.workingIndicatorFading == false)
     }
@@ -2817,15 +2819,15 @@ struct SessionChatViewModelTests {
 
         eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1"))
         await waitUntil { viewModel.uiState.sessionStatusLabel == nil }
-        #expect(viewModel.uiState.workingIndicatorLabel == "Working")
-        #expect(viewModel.uiState.workingIndicatorFading)
+        #expect(viewModel.uiState.workingIndicatorLabel == WorkingTurnIndicator.idleLabel)
+        #expect(viewModel.uiState.workingIndicatorFading == false)
         #expect(viewModel.uiState.workingIndicatorCollapsed == false)
 
         try? await clock.awaitWaiter(milliseconds: Int(WorkingTurnIndicator.idleHoldMilliseconds))
         clock.now += WorkingTurnIndicator.idleHoldMilliseconds
         clock.release(milliseconds: Int(WorkingTurnIndicator.idleHoldMilliseconds))
         await waitUntil { viewModel.uiState.workingIndicatorCollapsed }
-        #expect(viewModel.uiState.workingIndicatorLabel == "Working")
+        #expect(viewModel.uiState.workingIndicatorLabel == WorkingTurnIndicator.idleLabel)
         #expect(viewModel.uiState.workingIndicatorFading == false)
         #expect(viewModel.uiState.sessionStatusLabel == nil)
 

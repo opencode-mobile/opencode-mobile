@@ -252,7 +252,7 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
-    fun resolveFooter_visibleWorkingIdleStartsFadeHold() {
+    fun resolveFooter_visibleWorkingIdleShowsIdle() {
         val resolved =
             resolve(
                 activeLabel = null,
@@ -260,27 +260,27 @@ class WorkingTurnIndicatorTest {
                 nowMs = 10_000L,
             )
         assertEquals(
-            WorkingTurnIndicator.Chrome(label = "Working", collapsed = false, fading = true),
+            WorkingTurnIndicator.Chrome(label = WorkingTurnIndicator.IDLE_LABEL, collapsed = false, fading = false),
             resolved.chrome,
         )
         assertEquals(
-            WorkingTurnIndicator.Hold(label = "Working", startedAtMs = 10_000L, fromCollapsed = false),
+            WorkingTurnIndicator.Hold(startedAtMs = 10_000L),
             resolved.hold,
         )
         assertEquals(WorkingTurnIndicator.IDLE_HOLD_MS, resolved.wakeAfterMs)
     }
 
     @Test
-    fun resolveFooter_visibleHoldAt999StillFading() {
+    fun resolveFooter_visibleHoldBeforeDeadlineStillIdle() {
         val resolved =
             resolve(
                 activeLabel = null,
                 previous = fadingWorking(),
                 hold = visibleHold(startedAtMs = 10_000L),
-                nowMs = 10_999L,
+                nowMs = 14_999L,
             )
         assertEquals(
-            WorkingTurnIndicator.Chrome(label = "Working", collapsed = false, fading = true),
+            WorkingTurnIndicator.Chrome(label = WorkingTurnIndicator.IDLE_LABEL, collapsed = false, fading = false),
             resolved.chrome,
         )
         assertEquals(visibleHold(startedAtMs = 10_000L), resolved.hold)
@@ -288,16 +288,16 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
-    fun resolveFooter_visibleHoldAt1000CollapsesAndKeepsLabel() {
+    fun resolveFooter_visibleHoldAtDeadlineCollapsesIdle() {
         val resolved =
             resolve(
                 activeLabel = null,
                 previous = fadingWorking(),
                 hold = visibleHold(startedAtMs = 10_000L),
-                nowMs = 11_000L,
+                nowMs = 15_000L,
             )
         assertEquals(
-            WorkingTurnIndicator.Chrome(label = "Working", collapsed = true, fading = false),
+            WorkingTurnIndicator.Chrome(label = WorkingTurnIndicator.IDLE_LABEL, collapsed = true, fading = false),
             resolved.chrome,
         )
         assertEquals(visibleHold(startedAtMs = 10_000L), resolved.hold)
@@ -305,7 +305,7 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
-    fun resolveFooter_collapsedThinkingIdleStaysCollapsed() {
+    fun resolveFooter_collapsedThinkingIdleShowsIdle() {
         val resolved =
             resolve(
                 activeLabel = null,
@@ -313,14 +313,14 @@ class WorkingTurnIndicatorTest {
                 nowMs = 10_000L,
             )
         assertEquals(
-            WorkingTurnIndicator.Chrome(label = "Working", collapsed = true, fading = false),
+            WorkingTurnIndicator.Chrome(label = WorkingTurnIndicator.IDLE_LABEL, collapsed = false, fading = false),
             resolved.chrome,
         )
         assertEquals(
-            WorkingTurnIndicator.Hold(label = "Working", startedAtMs = 10_000L, fromCollapsed = true),
+            WorkingTurnIndicator.Hold(startedAtMs = 10_000L),
             resolved.hold,
         )
-        assertNull(resolved.wakeAfterMs)
+        assertEquals(WorkingTurnIndicator.IDLE_HOLD_MS, resolved.wakeAfterMs)
     }
 
     @Test
@@ -374,7 +374,7 @@ class WorkingTurnIndicatorTest {
         WorkingTurnIndicator.Chrome(label = "Working", collapsed = false, fading = true)
 
     private fun visibleHold(startedAtMs: Long = 0L): WorkingTurnIndicator.Hold =
-        WorkingTurnIndicator.Hold(label = "Working", startedAtMs = startedAtMs, fromCollapsed = false)
+        WorkingTurnIndicator.Hold(startedAtMs = startedAtMs)
 
     private fun message(vararg blocks: SessionChatTimelineBlock): SessionChatMessageItem =
         SessionChatMessageItem(

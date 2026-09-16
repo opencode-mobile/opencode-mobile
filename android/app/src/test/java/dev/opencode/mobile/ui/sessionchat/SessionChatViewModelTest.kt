@@ -3859,13 +3859,18 @@ class SessionChatViewModelTest {
             assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.workingIndicatorLabel)
 
             hold.complete(Unit)
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals(SessionCompactChrome.FALLBACK_SUCCESS, viewModel.uiState.value.snackbar?.message)
             assertNull(viewModel.uiState.value.sessionStatusLabel)
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.workingIndicatorLabel)
-            assertTrue(viewModel.uiState.value.workingIndicatorCollapsed)
+            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertFalse(viewModel.uiState.value.workingIndicatorCollapsed)
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
+
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.IDLE_HOLD_MS)
+            runCurrent()
+            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertTrue(viewModel.uiState.value.workingIndicatorCollapsed)
         }
 
     @Test
@@ -3887,20 +3892,20 @@ class SessionChatViewModelTest {
             repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
             runCurrent()
 
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
-            assertTrue(viewModel.uiState.value.workingIndicatorFading)
+            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertFalse(viewModel.uiState.value.workingIndicatorFading)
             assertFalse(viewModel.uiState.value.workingIndicatorCollapsed)
             assertNull(viewModel.uiState.value.sessionStatusLabel)
 
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.IDLE_HOLD_MS - 1)
             runCurrent()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
-            assertTrue(viewModel.uiState.value.workingIndicatorFading)
+            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertFalse(viewModel.uiState.value.workingIndicatorFading)
             assertFalse(viewModel.uiState.value.workingIndicatorCollapsed)
 
             testDispatcher.scheduler.advanceTimeBy(1)
             runCurrent()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
             assertTrue(viewModel.uiState.value.workingIndicatorCollapsed)
             assertNull(viewModel.uiState.value.sessionStatusLabel)

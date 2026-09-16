@@ -427,8 +427,14 @@ private struct SessionChatWorkingIndicatorRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityHidden(collapsed)
         .accessibilityLabel(label)
-        .animation(.easeInOut(duration: 0.22), value: collapsed)
-        .animation(.easeInOut(duration: 0.22), value: fading)
+        .transaction { transaction in
+            // Host clears animations so cells do not animate on open. Re-enable
+            // only the Idle dismiss so Working/Thinking still snap.
+            transaction.animation =
+                collapsed && label == WorkingTurnIndicator.idleLabel
+                ? .easeInOut(duration: 0.22)
+                : nil
+        }
     }
 }
 

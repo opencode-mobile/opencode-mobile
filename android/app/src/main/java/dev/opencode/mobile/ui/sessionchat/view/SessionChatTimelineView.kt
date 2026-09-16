@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -81,6 +82,7 @@ import dev.opencode.mobile.ui.scroll.messageListTimelineItemSpacing
 import dev.opencode.mobile.ui.scroll.rememberMessageListTimeline
 import dev.opencode.mobile.ui.scroll.rememberMessageListUserScroll
 import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
+import dev.opencode.mobile.ui.sessionchat.WorkingTurnIndicator
 import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
@@ -837,6 +839,8 @@ private fun SessionChatWorkingIndicatorRow(
     fading: Boolean = false,
     collapsed: Boolean = false,
 ) {
+    val animateOut = collapsed && label == WorkingTurnIndicator.IDLE_LABEL
+    val collapseSpec = if (animateOut) tween<Float>(durationMillis = 220) else snap<Float>()
     val contentAlpha by animateFloatAsState(
         targetValue =
             when {
@@ -844,12 +848,12 @@ private fun SessionChatWorkingIndicatorRow(
                 fading -> 0.35f
                 else -> 1f
             },
-        animationSpec = tween(durationMillis = 220),
+        animationSpec = collapseSpec,
         label = "session-chat-working-fade",
     )
     val heightFactor by animateFloatAsState(
         targetValue = if (collapsed) 0f else 1f,
-        animationSpec = tween(durationMillis = 220),
+        animationSpec = collapseSpec,
         label = "session-chat-working-collapse",
     )
     Layout(
