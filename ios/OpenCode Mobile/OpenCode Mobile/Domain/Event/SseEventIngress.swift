@@ -31,6 +31,7 @@ nonisolated final class SseEventIngress: @unchecked Sendable {
         let parsed = adapter.parseEvents(dataLine: dataLine)
         if parsed.isEmpty {
             let failed = !dataLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !adapter.recognizes(dataLine)
             return Result(
                 parsed: [],
                 toEmit: failed ? [OpencodeEvent(type: "sse.parse.failed", sessionID: nil)] : [],

@@ -23,7 +23,7 @@ internal class SseEventIngress(
     fun accept(dataLine: String): Result {
         val parsed = adapter.parseEvents(dataLine)
         if (parsed.isEmpty()) {
-            val failed = dataLine.isNotBlank()
+            val failed = dataLine.isNotBlank() && !adapter.recognizes(dataLine)
             return Result(
                 parsed = emptyList(),
                 toEmit = if (failed) listOf(OpencodeEvent(type = "sse.parse.failed")) else emptyList(),

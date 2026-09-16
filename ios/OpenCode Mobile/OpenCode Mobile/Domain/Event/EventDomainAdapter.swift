@@ -5,23 +5,22 @@ nonisolated struct EventDomainAdapter: Sendable {
         parseEvents(dataLine: dataLine).first
     }
 
+    func recognizes(_ dataLine: String) -> Bool {
+        eventType(dataLine) != nil
+    }
+
     func isServerConnectedFrame(_ dataLine: String) -> Bool {
         parseEvents(dataLine: dataLine).first?.type == "server.connected"
     }
 
     func parseEvents(dataLine: String) -> [OpencodeEvent] {
-        guard let data = dataLine.data(using: .utf8) else { return [] }
-        guard
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return [] }
+        guard let json = jsonObject(dataLine) else { return [] }
 
         let payload = json["payload"] as? [String: Any]
         let dataProperties = properties(fromData: json["data"])
-        let type = string(in: payload, key: "type")
-            ?? json["type"] as? String
-            ?? json["event"] as? String
-            ?? dataProperties.flatMap { string(in: $0, key: "type") }
-        guard let type else { return [] }
+        guard let type = eventType(json: json, payload: payload, dataProperties: dataProperties) else {
+            return []
+        }
 
         let eventProperties = withEnvelopeCreated(
             resolveProperties(payload: payload, raw: json, dataProperties: dataProperties),
@@ -42,6 +41,32 @@ nonisolated struct EventDomainAdapter: Sendable {
             project(type: canonicalEventType(type), properties: eventProperties),
             id: string(in: payload, key: "id") ?? json["id"] as? String
         )
+    }
+
+    private func jsonObject(_ dataLine: String) -> [String: Any]? {
+        guard let data = dataLine.data(using: .utf8) else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    }
+
+    private func eventType(_ dataLine: String) -> String? {
+        guard let json = jsonObject(dataLine) else { return nil }
+        let payload = json["payload"] as? [String: Any]
+        return eventType(
+            json: json,
+            payload: payload,
+            dataProperties: properties(fromData: json["data"])
+        )
+    }
+
+    private func eventType(
+        json: [String: Any],
+        payload: [String: Any]?,
+        dataProperties: [String: Any]?
+    ) -> String? {
+        string(in: payload, key: "type")
+            ?? json["type"] as? String
+            ?? json["event"] as? String
+            ?? dataProperties.flatMap { string(in: $0, key: "type") }
     }
 
     private func stampEnvelopeId(_ events: [OpencodeEvent], id: String?) -> [OpencodeEvent] {

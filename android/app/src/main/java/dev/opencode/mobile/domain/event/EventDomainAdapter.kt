@@ -24,16 +24,17 @@ class EventDomainAdapter(
 ) {
     fun parseEvent(dataLine: String): OpencodeEvent? = parseEvents(dataLine).firstOrNull()
 
+    fun recognizes(dataLine: String): Boolean {
+        val raw = runCatching { json.parseToJsonElement(dataLine) }.getOrNull() as? JsonObject ?: return false
+        val payload = raw["payload"] as? JsonObject
+        return eventType(raw, payload, propertiesFromData(raw["data"])) != null
+    }
+
     fun parseEvents(dataLine: String): List<OpencodeEvent> {
         val raw = runCatching { json.parseToJsonElement(dataLine) }.getOrNull() as? JsonObject ?: return emptyList()
         val payload = raw["payload"] as? JsonObject
         val dataProperties = propertiesFromData(raw["data"])
-        val type =
-            stringIn(payload, "type")
-                ?: stringIn(raw, "type")
-                ?: stringIn(raw, "event")
-                ?: stringIn(dataProperties, "type")
-                ?: return emptyList()
+        val type = eventType(raw, payload, dataProperties) ?: return emptyList()
         val properties = withEnvelopeCreated(resolveProperties(payload, raw, dataProperties), raw)
         if (canonicalEventType(type) == "sync") {
             val syncEvent =
@@ -66,6 +67,16 @@ class EventDomainAdapter(
             }
         }
     }
+
+    private fun eventType(
+        raw: JsonObject,
+        payload: JsonObject?,
+        dataProperties: JsonObject?,
+    ): String? =
+        stringIn(payload, "type")
+            ?: stringIn(raw, "type")
+            ?: stringIn(raw, "event")
+            ?: stringIn(dataProperties, "type")
 
     private fun propertiesFromData(data: JsonElement?): JsonObject? =
         when (data) {

@@ -54,4 +54,36 @@ class SseEventIngressTest {
         assertTrue(result.parseFailed)
         assertEquals(listOf("sse.parse.failed"), result.toEmit.map { it.type })
     }
+
+    @Test
+    fun droppedUsageUpdated_isNotAParseFailure() {
+        val result =
+            ingress.accept(
+                """{"type":"session.usage.updated","data":{"sessionID":"ses-1","tokens":{"input":120,"output":4}}}""",
+            )
+        assertTrue(result.parsed.isEmpty())
+        assertTrue(result.toEmit.isEmpty())
+        assertFalse(result.parseFailed)
+    }
+
+    @Test
+    fun droppedUsageUpdated_v2Envelope_isNotAParseFailure() {
+        val result =
+            ingress.accept(
+                """{"payload":{"type":"session.usage.updated","properties":{"sessionID":"ses-1","tokens":{"input":120,"output":4},"cost":0.01}}}""",
+            )
+        assertTrue(result.parsed.isEmpty())
+        assertTrue(result.toEmit.isEmpty())
+        assertFalse(result.parseFailed)
+    }
+
+    @Test
+    fun projectedUsageUpdated_emitsMessageUpdated() {
+        val result =
+            ingress.accept(
+                """{"type":"session.usage.updated","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","tokens":{"input":120,"output":4,"reasoning":0}}}""",
+            )
+        assertFalse(result.parseFailed)
+        assertEquals(listOf("message.updated"), result.toEmit.map { it.type })
+    }
 }

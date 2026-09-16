@@ -741,11 +741,11 @@ class DefaultForegroundEventStream
             if (generation != streamGeneration.get()) return
             val result = eventIngress.accept(dataLine)
             if (result.parsed.isEmpty()) {
-                diagnosticLogger.warning(
-                    DiagnosticLogArea.Sse,
-                    SseDiagnosticLogging.parseFailedMessage(dataLine),
-                )
                 if (result.parseFailed) {
+                    diagnosticLogger.warning(
+                        DiagnosticLogArea.Sse,
+                        SseDiagnosticLogging.parseFailedMessage(dataLine),
+                    )
                     publishSnapshot()
                     for (event in result.toEmit) {
                         emitIfCurrent(event, generation)
