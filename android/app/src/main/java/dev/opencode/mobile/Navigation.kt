@@ -35,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import dev.opencode.mobile.domain.app.AppVersion
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
@@ -254,6 +255,8 @@ fun MainNavigation() {
                                             LaunchedEffect(Unit) {
                                                 settingsViewModel.refreshServersSummary()
                                             }
+                                            val context = LocalContext.current
+                                            val appVersion = remember(context) { AppVersion.from(context) }
                                             SettingsScreen(
                                                 onComponentGalleryClick = { backStack.add(ComponentGalleryHome) },
                                                 onTextMateLanguagesClick = { backStack.add(TextMateLanguagesHome) },
@@ -276,6 +279,8 @@ fun MainNavigation() {
                                                 onClearSessionCache = settingsViewModel::clearSessionCache,
                                                 sessionCacheSizeLabel = sessionCacheSizeLabel,
                                                 onRefreshSessionCacheSize = settingsViewModel::refreshSessionCacheSize,
+                                                version = appVersion.version,
+                                                build = appVersion.build,
                                                 hideUserDirectoryPrefix =
                                                     HomeDisplayPreferences.hideUserDirectoryPrefix,
                                                 onHideUserDirectoryPrefixChange =

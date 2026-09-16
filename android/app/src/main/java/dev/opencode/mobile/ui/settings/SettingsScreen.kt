@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.settings
 
+import android.content.ClipData
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -62,6 +64,8 @@ fun SettingsScreen(
     onClearSessionCache: () -> Unit,
     sessionCacheSizeLabel: String,
     onRefreshSessionCacheSize: () -> Unit,
+    version: String,
+    build: String,
     hideUserDirectoryPrefix: Boolean,
     onHideUserDirectoryPrefixChange: (Boolean) -> Unit,
     recentWindowHours: Int,
@@ -411,6 +415,26 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
+                SectionHeader(title = "About")
+
+                OpenCodeListItem(
+                    title = "Version",
+                    subtitle = version,
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Version"),
+                    onClick = { copyAboutValueToClipboard(context, label = "Version", value = version) },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                OpenCodeListItem(
+                    title = "Build",
+                    subtitle = build,
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Settings, "Build"),
+                    onClick = { copyAboutValueToClipboard(context, label = "Build", value = build) },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
                 if (DeveloperToolsPreferences.unlocked) {
                     SectionHeader(title = "Developer Tools")
 
@@ -594,6 +618,15 @@ private fun logSettingsAction(actionId: String) {
     )
 }
 
+private fun copyAboutValueToClipboard(
+    context: Context,
+    label: String,
+    value: String,
+) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
+}
+
 private fun logSettingsToggle(
     actionId: String,
     enabled: Boolean,
@@ -638,6 +671,8 @@ private fun SettingsScreenLightPreview() {
             onClearSessionCache = {},
             sessionCacheSizeLabel = "Empty",
             onRefreshSessionCacheSize = {},
+            version = "1.0",
+            build = "1",
             hideUserDirectoryPrefix = HomeDisplayPreferences.hideUserDirectoryPrefix,
             onHideUserDirectoryPrefixChange = {},
             recentWindowHours = HomeDisplayPreferences.recentWindowHours,
@@ -677,6 +712,8 @@ private fun SettingsScreenDarkPreview() {
             onClearSessionCache = {},
             sessionCacheSizeLabel = "Empty",
             onRefreshSessionCacheSize = {},
+            version = "1.0",
+            build = "1",
             hideUserDirectoryPrefix = HomeDisplayPreferences.hideUserDirectoryPrefix,
             onHideUserDirectoryPrefixChange = {},
             recentWindowHours = HomeDisplayPreferences.recentWindowHours,
